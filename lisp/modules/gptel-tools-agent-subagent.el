@@ -755,14 +755,14 @@ Monthly subscription: LLM selection finds best targets each run."
   :type 'directory
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-time-budget 900
-  "Time budget per experiment in seconds (default: 15 min).
+(defcustom gptel-auto-experiment-time-budget 300
+  "Time budget per experiment in seconds (default: 5 min).
 
-Reduced from 2400s to 900s because:
-1. Provider failures (Curl 28 timeout) caused 25-min waits per attempt
-2. Retries × 5 × 2400s = 3.3h per failing experiment
-3. 900s covers 2-3 normal LLM calls at 300s each
-4. Stuck experiments fail fast, retry mechanism handles transient issues"
+Reduced from 900s to 300s because:
+1. DeepSeek thinking mode + multi-step agents stretch to 700+ seconds
+2. 300s is enough for 2-3 LLM calls at 60-100s each
+3. Stuck experiments fail fast instead of wasting 15 min
+4. Dying experiments free the pipeline for productive ones"
   :type 'integer
   :safe #'integerp
   :group 'gptel-tools-agent)
