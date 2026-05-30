@@ -2,7 +2,6 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
-(require 'gptel-auto-workflow-strategic)
 
 (defconst gptel-auto-experiment--axis-names
   '(("A" . "Error Handling")
@@ -1043,7 +1042,7 @@ Returns a compact lambda-notation string ready for the LLM."
      "| ¬doc_only | ¬comment_only | Δ(code) ≡ required\n"
      "| 1st_line ≡ \"HYPOTHESIS: [what changes & why]\"\n"
      (if focus (concat "  " focus "\n") "")
-     "| use(Edit) | minimal(change) | ¬git(add,commit,push) — workflow handles\n"
+      "| use(Edit,Write) — text-only responses will be rejected | minimal(change) | ¬git(add,commit,push)\n"
      (concat "| verify: " (or sexp "emacs --batch --eval '...'")
              " && ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh\n")
      "\nOUTPUT:  CHANGED(file+fn) EVIDENCE(1-2 diffs) VERIFY(cmds) COMMIT(\"not committed\")\n"
@@ -1076,7 +1075,7 @@ Returns template string or fallback hardcoded template."
         | ¬doc_only | ¬comment_only | Δ(code) ≡ required
         | 1st_line ≡ \"HYPOTHESIS: [what changes & why]\"
         {{focus-line}}
-        | use(Edit) | minimal(change) | ¬git(add,commit,push) — workflow handles
+        | use(Edit,Write) — text-only responses will be rejected | minimal(change) | ¬git(add,commit,push)
         | verify: {{sexp-check-command}} && ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
 
         OUTPUT:

@@ -66,26 +66,32 @@
 
 (defun gptel-auto-experiment--validate-all-modified-files (worktree)
   "Validate all modified .el files in WORKTREE.
-Returns nil if all pass, or error message string for first failure."
+Returns nil if all pass, or error message string for first failure.
+Also fails if NO files were modified (agent made no actual edits)."
   (let ((default-directory worktree)
         (modified-files (ignore-errors
                           (split-string
                            (shell-command-to-string
                             "git diff --name-only HEAD 2>/dev/null")
                            "\n" t))))
-    (catch 'validation-error
-      (dolist (file modified-files)
-        (when (and (string-suffix-p ".el" file)
-                   (not (string-suffix-p "-autoloads.el" file)))
-          (let ((full-path (expand-file-name file worktree)))
-            (when (file-exists-p full-path)
-              (let ((error (gptel-auto-experiment--validate-code full-path)))
-                (when error
-                  (message "[auto-exp] ✗ Validation failed for %s: %s"
-                           file
-                           (my/gptel--sanitize-for-logging error 120))
-                  (throw 'validation-error
-                         (format "%s in %s" error file)))))))))))
+    ;; CRITICAL: Agent must actually make file edits, not just output text
+    (if (null modified-files)
+        (progn
+          (message "[auto-exp] ✗ Validation failed: agent made no file modifications")
+          "Agent made no code changes. Use Edit or Write tools to modify files.")
+      (catch 'validation-error
+        (dolist (file modified-files)
+          (when (and (string-suffix-p ".el" file)
+                     (not (string-suffix-p "-autoloads.el" file)))
+            (let ((full-path (expand-file-name file worktree)))
+              (when (file-exists-p full-path)
+                (let ((error (gptel-auto-experiment--validate-code full-path)))
+                  (when error
+                    (message "[auto-exp] ✗ Validation failed for %s: %s"
+                             file
+                             (my/gptel--sanitize-for-logging error 120))
+                    (throw 'validation-error
+                           (format "%s in %s" error file))))))))))))
 
 (defun gptel-auto-experiment--maybe-failover-main-backend ()
   "Switch `gptel-backend' to a fallback if the current one is rate-limited.
