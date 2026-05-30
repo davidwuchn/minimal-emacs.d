@@ -95,13 +95,26 @@
 ;; Backup and auto-save settings are configured in init-files.el
 
 ;; ==============================================================================
-;; DEBUG: Runtime error backtrace capture
+;; DEBUG: Auto-capture backtrace for mode-line errors
 ;; ==============================================================================
-;; "Wrong type argument: stringp, nil" occurs during mode-line updates (window
-;; resize, mouse interaction). To capture a backtrace:
-;;    M-x toggle-debug-on-error RET
-;; Then drag a window divider. Check *Backtrace* buffer. Disable with:
-;;    M-x toggle-debug-on-error RET
+;; "Wrong type argument: stringp, nil" occurs during mode-line updates.
+;; Catch it in format-mode-line and log a full backtrace.
+(defvar my/backtrace-log
+  (expand-file-name "var/log/backtrace-mode-line.log" user-emacs-directory))
+(defun my/format-mode-line-backtrace (orig-fn format &optional face window buffer)
+  (condition-case err
+      (funcall orig-fn format face window buffer)
+    (wrong-type-argument
+     (when (string-match-p "stringp, nil" (error-message-string err))
+       (with-temp-file my/backtrace-log
+         (prin1 (format-time-string "%Y-%m-%dT%T ") (current-buffer))
+         (prin1 err (current-buffer))
+         (terpri (current-buffer))
+         (let ((standard-output (current-buffer))
+               (debug-on-error nil))
+           (backtrace))))
+     (signal (car err) (cdr err)))))
+(advice-add 'format-mode-line :around #'my/format-mode-line-backtrace)
 
 ;; ==============================================================================
 ;; PERSONAL CUSTOMIZATIONS (Add your own below)
