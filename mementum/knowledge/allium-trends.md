@@ -1,8 +1,7 @@
 ### Allium Issue Trends
 **Recurring patterns** across all strategies:
 
-- **Target descriptions**: 1 occurrence(s)
-- **Previous distillation attempts**: 1 occurrence(s)
-- **Hypothesis list**: 1 occurrence(s)
-- **Raw experiment outputs**: 1 occurrence(s)
+- **Risk assessment**: 1 occurrence(s)
+- **Dependency map**: 1 occurrence(s)
+- **Hypothesis framework**: 1 occurrence(s)
 

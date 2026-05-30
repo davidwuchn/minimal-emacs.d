@@ -171,66 +171,76 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Distillation
+# Distillation
 
-The provided data appears to be a **template with no populated results**:
+This appears to be an **incomplete research template** with:
 
-| Field | Status |
-|-------|--------|
-| Research strategy | `template-default` |
-| Experiments | 34 across 8 targets |
-| Kept hypotheses | *(empty)* |
-| Discarded hypotheses | *(empty)* |
+- **Research strategy:** template-default
+- **34 experiments** across 8 target files (all GPTel-related)
+- **Kept/Discarded hypotheses sections:** Empty
 
-**To distill this effectively, I need the actual hypothesis content** that was tested in those 34 experiments.
+## Issue
 
-Please provide:
-1. The hypotheses that were evaluated
-2. The outcomes/metrics from the experiments
-3. Which hypotheses were kept vs. discarded
+The "Kept hypotheses" and "Discarded hypotheses" fields are **blank** — there's no content to distill.
 
-Once you share the actual hypothesis data, I can summarize patterns, learnings, and strategic insights.
+## Request
+
+Could you provide:
+
+1. **The hypotheses themselves** (what was tested, results, etc.)
+2. **Context** — what research question are you investigating?
+3. **Any patterns** you want me to identify across the experiments
+
+Or are you asking me to help you **populate** this template based on the file contents listed?
 ```
 
 ### Check Issues
 
-# Analysis of Your Research Distillation Request
+# Acknowledged
 
-I can see what you're showing me. Here's what's happening:
+I see what you've shared — a distillation summary for a **GPTel-related research template** with 34 experiments across 8 files.
 
 ## What I Observe
 
-The table you shared shows a **meta-level summary** rather than actual research content:
+The template is structured but **empty**:
+- ✅ Experiment count and file references are populated
+- ❌ Hypotheses (kept/discarded) are blank
+- ❌ Research question / context is missing
 
-| Issue | Details |
-|-------|---------|
-| **Strategy status** | `template-default` — indicates no custom strategy was applied |
-| **Experiment count** | 34 experiments across 8 targets — this is concrete |
-| **Hypothesis fields** | Both empty — the core content is missing |
+## How I Can Help
 
-## What This Means
+**Option A:** If you have the raw experiment data or notes, paste them here and I'll:
+- Extract the hypotheses
+- Summarize results
+- Categorize into kept/discarded
 
-Someone (or some system) generated a **shell document** that describes the *structure* of research that *should* exist, but no one populated it with the actual hypotheses, results, or decisions.
+**Option B:** If you want me to design hypotheses for a GPTel research agenda, I can:
+- Propose testable hypotheses
+- Suggest experimental approaches
 
-## What I Need to Help You
+**Option C:** If this is a template you want me to fill out based on a specific research question, tell me what you're investigating.
 
-If you want me to assist with research distillation, I'd need one of the following:
+---
 
-1. **Raw experiment outputs** — The raw results from your 34 experiments
-2. **Hypothesis list** — The specific hypotheses that were tested
-3. **Previous distillation attempts** — If you've already tried summarizing and want me to refine it
-4. **Target descriptions** — What the 8 targets are and what you're researching
-
-## What I Can Do Once You Share Data
-
-- Identify patterns across experiments
-- Distinguish signal from noise
-- Extract actionable insights
-- Suggest next steps based on what worked
-
-**What would you like to share?**
+**What would you like me to do?**

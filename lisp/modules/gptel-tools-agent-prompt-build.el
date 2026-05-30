@@ -2694,21 +2694,76 @@ output, including <think> blocks.  Stores results in
                        :criteria (nreverse criteria))
                  gptel-auto-experiment--grader-insights)))))
 
+(defun gptel-auto-experiment--get-category-failure-reasons (category &optional n)
+  "Aggregate failure reasons from ALL targets in CATEGORY.
+Returns alist of (REASON . COUNT) for the N most common, or nil."
+  (let ((results-file (gptel-auto-workflow--results-file-path))
+        (reasons (make-hash-table :test 'equal)))
+    (when (and results-file (file-exists-p results-file)
+               (fboundp 'gptel-auto-workflow--categorize-target))
+      (with-temp-buffer
+        (insert-file-contents results-file)
+        (goto-char (point-min))
+        (forward-line 1)
+        (while (not (eobp))
+          (let* ((fields (split-string
+                          (buffer-substring (line-beginning-position) (line-end-position))
+                          "\t"))
+                 (r-target (nth 1 fields))
+                 (r-reason (nth 12 fields)))
+            (when (and r-target r-reason (not (string-empty-p r-reason))
+                       (eq (gptel-auto-workflow--categorize-target r-target) category))
+              (let ((short (car (split-string r-reason ":" t))))
+                (when (and short (not (string= short "N/A")))
+                  (puthash short (1+ (gethash short reasons 0)) reasons))))
+            (forward-line 1)))))
+    ;; Return top N sorted by count
+    (when (> (hash-table-count reasons) 0)
+      (let ((sorted (sort (let (result)
+                            (maphash (lambda (k v) (push (cons k v) result)) reasons)
+                            result)
+                          (lambda (a b) (> (cdr a) (cdr b))))))
+        (seq-take sorted (or n 3))))))
+
 (defun gptel-auto-experiment--format-ontology-guidance (target)
   "Format ontology-based guidance for TARGET based on its category.
-Returns category-specific string with optimization priorities, or empty string."
+Includes category-specific Focus/Avoid, failure patterns from other
+targets in the same category, and category-level performance data."
   (when (and target (fboundp 'gptel-auto-workflow--categorize-target))
-    (let ((category (gptel-auto-workflow--categorize-target target)))
-      (pcase category
-        (:agentic
-         "agentic — tool dispatch, state management, async workflows\n  Focus: error recovery paths, tool call lifecycle, state cleanup\n  Avoid: removing error handlers, changing async callback contracts")
-        (:programming
-         "programming — algorithms, data flow, edge cases\n  Focus: performance optimization, edge case handling, code deduplication\n  Avoid: style-only changes, comment/doc additions, reindentation")
-        (:tool-calls
-         "tool-calls — sandbox execution, file operations\n  Focus: error handling robustness, tool dispatch safety, timeout handling\n  Avoid: changing tool argument schemas, removing safety guards")
-        (:natural-language
-         "natural-language — prompt templates, text processing, context management\n  Focus: prompt quality, context window efficiency, text pipeline edge cases\n  Avoid: changing prompt format, removing fallback text handlers")
-        (_ "")))))
+    (let* ((category (gptel-auto-workflow--categorize-target target))
+           (base (pcase category
+                   (:agentic
+                    "agentic — tool dispatch, state management, async workflows")
+                   (:programming
+                    "programming — algorithms, data flow, edge cases")
+                   (:tool-calls
+                    "tool-calls — sandbox execution, file operations")
+                   (:natural-language
+                    "natural-language — prompt templates, text processing, context management")
+                   (_ nil)))
+           (focus (pcase category
+                    (:agentic "error recovery paths, tool call lifecycle, state cleanup")
+                    (:programming "performance optimization, edge case handling, code deduplication")
+                    (:tool-calls "error handling robustness, tool dispatch safety, timeout handling")
+                    (:natural-language "prompt quality, context window efficiency, text pipeline edge cases")
+                    (_ nil)))
+           (avoid (pcase category
+                    (:agentic "removing error handlers, changing async callback contracts")
+                    (:programming "style-only changes, comment/doc additions, reindentation")
+                    (:tool-calls "changing tool argument schemas, removing safety guards")
+                    (:natural-language "changing prompt format, removing fallback text handlers")
+                    (_ nil)))
+           (cat-failures (gptel-auto-experiment--get-category-failure-reasons category 2))
+           (parts (list base (concat "  Focus: " focus) (concat "  Avoid: " avoid))))
+      ;; Add category-level failure patterns from other targets
+      (when cat-failures
+        (push (concat "  Common failures across " (pcase category (:agentic "agentic") (:programming "programming") (:tool-calls "tool-calls") (:natural-language "NLP") (_ "other"))
+                      " targets:\n"
+                      (mapconcat (lambda (pair)
+                                   (format "    - %s (%d×)" (car pair) (cdr pair)))
+                                 cat-failures "\n"))
+              parts))
+      (mapconcat #'identity (nreverse parts) "\n"))))
 
 (defun gptel-auto-experiment--format-failure-patterns (target)
   "Format common failure patterns for TARGET as prompt guidance.
