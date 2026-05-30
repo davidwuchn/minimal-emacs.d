@@ -27,9 +27,25 @@
 3. Verification gate rejects despite high grader score
 
 ### Next Steps
-1. Next pipeline at 19:00 — first run with verification evidence extraction
+1. **Next pipeline at 19:00** — first run with verification evidence extraction
 2. Monitor if grader now counts think-block verification as PASS
 3. If still failing, consider: (a) run verification in pipeline after executor, or (b) lower verification requirement
+
+### Fix Validation
+- `gptel-auto-experiment--extract-verify-evidence` tested: correctly extracts verification lines from `<think>` blocks (syntax, byte-compile, load-test commands)
+- Grader criteria updated to check `VERIFICATION EVIDENCE FROM <think>` section
+- Executor prompt now warns VERIFY section must appear outside `<think>`
+- Duplicated function `get-category-failure-reasons` in remote code removed
+
+### Comparator Fix
+- `experiment-core.el`: When eight-keys score is nil or < 0.1 but grader passed, use normalized grader score as the after-score for the comparator. This prevents valid changes from being rejected because the structural scorer returned 0.0.
+- `prompt-analyze.el`: Lowered strong-grade-pass threshold 85%→70% so grade bypass triggers more readily.
+
+### Remote Sync (98c54d02 — 6 commits)
+- `⊘ debug: add benchmark verification tracing` — Pi5 also debugging verification-failed gate
+- `⊘ fix: add projects.el to reload-live-support, analyzer timeout 120→240s` (DeepSeek thinking)
+- `⚒ route: executor fallback chain DeepSeek→MiniMax→moonshot (DashScope removed, quota exhausted)`
+- GPG cache prime moved to init-ai.el (immediate on daemon start)
 - Consider switching grader model if MiniMax continues ignoring format instructions
 
 ---

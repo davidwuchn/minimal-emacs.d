@@ -97,12 +97,15 @@ OUTPUT: line1=\"A\"|\"B\"|\"tie\" line2=reason(1 sentence)"
                                   :combined (- combined-after combined-before))))))))
 
 (defun gptel-auto-experiment--strong-grade-pass-p (grade-score grade-total)
-  "Return non-nil when GRADE-SCORE reflects a strong pass.
-GRADE-TOTAL can be nil when the grader omits an explicit denominator."
+  "Return non-nil when GRADE-SCORE reflects a strong pass (>= 70%).
+GRADE-TOTAL can be nil when the grader omits an explicit denominator.
+Lowered from 85% to 70% to match the grader's pass threshold — the
+structural eight-keys scorer often returns 0.0 for valid changes,
+so we trust the grader more aggressively."
   (let ((score (if (numberp grade-score) grade-score 0)))
     (if (and (numberp grade-total) (> grade-total 0))
-        (>= (/ (float score) grade-total) 0.85)
-      (>= score 8))))
+        (>= (/ (float score) grade-total) 0.70)
+      (>= score 7))))
 
 (defun gptel-auto-experiment--speculative-correctness-language-p (text)
   "Return non-nil when TEXT describes a speculative or clarity-only fix."

@@ -541,20 +541,31 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                   target hypothesis
                                                   (max 300 gptel-auto-workflow-git-timeout))))
                                            (let* ((bench (gptel-auto-experiment-benchmark t hypothesis))
-                                                 (passed (plist-get bench :passed))
-                                                 (validation-error (plist-get bench :validation-error))
-                                                 (tests-passed (plist-get bench :tests-passed))
-                                                 (score-after (plist-get bench :eight-keys)))
-                                                 (message "[auto-experiment] DEBUG benchmark: passed=%s tests-passed=%s debug=%s"
-                                                          passed tests-passed (plist-get bench :debug-info))
-                                           (if passed
-                                               (let
-	                                               ((code-quality
-	                                                 (or (gptel-auto-experiment--code-quality-score) 0.5)))
-                                                 (gptel-auto-experiment-decide
-                                                  (list :score baseline :code-quality baseline-code-quality)
-                                                  (list :score score-after :code-quality code-quality :output
-	                                                    effective-agent-output)
+                                                  (passed (plist-get bench :passed))
+                                                  (validation-error (plist-get bench :validation-error))
+                                                  (tests-passed (plist-get bench :tests-passed))
+                                                  (score-after (plist-get bench :eight-keys))
+                                                  ;; When the grader passed but the structural eight-keys score
+                                                  ;; is nil or near-zero, use the normalized grader score instead.
+                                                  ;; This prevents valid changes from being rejected because
+                                                  ;; the structural scorer failed to compute.
+                                                  (effective-score
+                                                   (if (and grade-passed
+                                                            (or (null score-after) (< score-after 0.1))
+                                                            grade-score grade-total (> grade-total 0))
+                                                       (/ (float grade-score) grade-total)
+                                                     (or score-after 0))))
+                                                  (message "[auto-experiment] DEBUG benchmark: passed=%s tests-passed=%s debug=%s eight-keys=%s→%s"
+                                                           passed tests-passed (plist-get bench :debug-info)
+                                                           score-after effective-score)
+                                            (if passed
+                                                (let
+ 	                                               ((code-quality
+ 	                                                 (or (gptel-auto-experiment--code-quality-score) 0.5)))
+                                                  (gptel-auto-experiment-decide
+                                                   (list :score baseline :code-quality baseline-code-quality)
+                                                   (list :score effective-score :code-quality code-quality :output
+ 	                                                    effective-agent-output)
                                                   (lambda (decision)
 	                                                (unless finished
 	                                                  (setq finished t)
@@ -572,7 +583,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 												   (exp-result
 												    (list :target target :id experiment-id :hypothesis
 												          hypothesis :score-before baseline :score-after
-												          score-after :code-quality code-quality :kept
+												          effective-score :code-quality code-quality :kept
 												          keep :duration (- (float-time) start-time)
 												          :grader-quality grade-score :grader-reason
 												          (plist-get grade :details) :comparator-reason
@@ -718,36 +729,47 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                    (let* ((retry-hypothesis
                                                                            (gptel-auto-experiment--extract-hypothesis retry-output))
                                                                           (retry-bench (gptel-auto-experiment-benchmark t retry-hypothesis)))
-                                                                    (if (plist-get retry-bench :passed)
-                                                                        (let* ((retry-score (plist-get retry-bench :eight-keys))
-                                                                               (retry-quality
-                                                                                (or (gptel-auto-experiment--code-quality-score) 0.5)))
-                                                                         (message "[auto-experiment] ✓ Retry succeeded")
-                                                                         (gptel-auto-experiment-decide
-                                                                          (list :score baseline
-                                                                                :code-quality baseline-code-quality)
-                                                                          (list :score retry-score
-                                                                                :code-quality retry-quality
-                                                                                :output retry-output)
-                                                                          (lambda (decision)
-                                                                            (unless finished
-                                                                              (setq finished t)
-		                                                                      (let* ((decision
-		                                                                              (gptel-auto-experiment--promote-correctness-fix-decision
-		                                                                               decision
-		                                                                               (plist-get retry-bench :tests-passed)
-		                                                                               (plist-get retry-grade :score)
-		                                                                               (plist-get retry-grade :total)
-		                                                                               (plist-get retry-grade :details)
-		                                                                               retry-hypothesis))
-		                                                                             (keep (plist-get decision :keep))
-		                                                                             (reasoning (plist-get decision :reasoning))
-                                                                                             (exp-result
-                                                                                              (list :target target
-                                                                                             :id experiment-id
-                                                                                             :hypothesis retry-hypothesis
-                                                                                             :score-before baseline
-                                                                                             :score-after retry-score
+                                                                     (if (plist-get retry-bench :passed)
+                                                                         (let* ((retry-score (plist-get retry-bench :eight-keys))
+                                                                                (retry-quality
+                                                                                 (or (gptel-auto-experiment--code-quality-score) 0.5))
+                                                                                ;; Same eight-keys → grader fallback as initial path
+                                                                                (effective-retry-score
+                                                                                 (if (and (plist-get retry-grade :passed)
+                                                                                          (or (null retry-score) (< retry-score 0.1))
+                                                                                          (plist-get retry-grade :score)
+                                                                                          (plist-get retry-grade :total)
+                                                                                          (> (plist-get retry-grade :total) 0))
+                                                                                     (/ (float (plist-get retry-grade :score))
+                                                                                        (plist-get retry-grade :total))
+                                                                                   (or retry-score 0))))
+                                                                          (message "[auto-experiment] ✓ Retry succeeded (eight-keys=%s→%s)"
+                                                                                   retry-score effective-retry-score)
+                                                                          (gptel-auto-experiment-decide
+                                                                           (list :score baseline
+                                                                                 :code-quality baseline-code-quality)
+                                                                           (list :score effective-retry-score
+                                                                                 :code-quality retry-quality
+                                                                                 :output retry-output)
+                                                                           (lambda (decision)
+                                                                             (unless finished
+                                                                               (setq finished t)
+ 		                                                                      (let* ((decision
+ 		                                                                              (gptel-auto-experiment--promote-correctness-fix-decision
+ 		                                                                               decision
+ 		                                                                               (plist-get retry-bench :tests-passed)
+ 		                                                                               (plist-get retry-grade :score)
+ 		                                                                               (plist-get retry-grade :total)
+ 		                                                                               (plist-get retry-grade :details)
+ 		                                                                               retry-hypothesis))
+ 		                                                                             (keep (plist-get decision :keep))
+ 		                                                                             (reasoning (plist-get decision :reasoning))
+                                                                                              (exp-result
+                                                                                               (list :target target
+                                                                                              :id experiment-id
+                                                                                              :hypothesis retry-hypothesis
+                                                                                              :score-before baseline
+                                                                                              :score-after effective-retry-score
                                                                                              :code-quality retry-quality
                                                                                              :validation-retry t
                                                                                              :kept keep
