@@ -65,10 +65,7 @@ These targets may need different research patterns or the research findings were
 
 
 
-
-
-
-
+<<<<<<< Updated upstream
 
 
 
@@ -90,168 +87,89 @@ These targets may need different research patterns or the research findings were
 >>>>>>> Stashed changes
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
 <<<<<<< Updated upstream
-## Research Distillation
+# Research Strategy Distillation
 
-**Strategy:** Template-default approach
+## Summary
 
-**Scope:** 22 experiments across 7 targets:
-- 3 LISP modules (gptel-tools-agent-prompt-build, gptel-auto-workflow-strategic, gptel-auto-workflow-projects)
-- 3 Staging targets (staging-review, staging-merge, staging-verification)
-- 1 Research integration module
+| Field | Value |
+|-------|-------|
+| **Strategy Type** | template-default |
+| **Total Experiments** | 22 |
+| **Targets** | 7 files |
 
-**Status:** 
-- Results pending (hypotheses sections empty)
-- Awaiting hypothesis outcomes from experiments
+## Experiment Targets
 
-**Need:** Fill in "Kept hypotheses" and "Discarded hypotheses" with your experimental findings to complete the distillation.
-=======
-# Research Strategy: Template-Default Distillation
+### Elisp Modules (4)
+1. `lisp/modules/gptel-tools-agent-prompt-build.el`
+2. `lisp/modules/gptel-auto-workflow-strategic.el`
+3. `lisp/modules/gptel-auto-workflow-projects.el`
+4. `lisp/modules/gptel-auto-workflow-research-integration.el`
 
-## Scope
-**216 experiments** across 29 target files, evaluating hypotheses for performance, clarity, safety, and vitality improvements.
+### Staging Workflows (3)
+1. `staging-review`
+2. `staging-merge`
+3. `staging-verification`
 
-## Kept Hypotheses (18 validated)
+## Hypothesis Tracking
 
-### Performance
-| Change | Benefit |
-|--------|---------|
-| Precompute cycle thresholds in `gptel-benchmark-evolution-check-capabilities` | Eliminates 5x redundant multiplication per invocation |
-| Use `hash-table-count` for empty-check in `my/gptel-show-permits` | O(1) vs O(n) for common case |
+| Status | Count | Details |
+|--------|-------|---------|
+| **Kept** | — | Not yet documented |
+| **Discarded** | — | Not yet documented |
 
-### Safety/Vitality (Error Resilience)
-| Change | Target |
-|--------|--------|
-| `stringp` validation for hash-key collection | `my/gptel-show-permits` |
-| `processp` guard | `my/gptel-health-check` |
-| `proper-list-p` validation | `gptel-health-check`, benchmark extractors |
-| Nil guards + path-separator sanitization | `gptel-auto-workflow--mementum-write-memory` |
-| `vectorp` guard + `member` vs `memq` | `my/gptel--sanitize-multimodal-content` |
-| Nil/validity validation | Entry points, benchmark cache, strategy evaluation |
+---
 
-### Clarity (Explicit Assumptions)
-- Extract shared `my/gptel--mode-label` helper (fixes "CONFIRM" vs "CONFIRM-ALL" inconsistency)
-- Add `(vectorp content-vec)` guard for multimodal content
-- Make TSV field count validation explicit
-
-## Discarded Hypotheses (47 rejected)
-
-### Not Worth It
-| Rejected | Reason |
-|----------|--------|
-| `cl-letf` + `symbol-function` → `cl-labels` | Non-standard but functional; not compelling |
-| Extract common traversal setup | Adds indirection without clear benefit |
-| Regex fast-path for JSON sanitization | Marginal gains; complexity cost high |
-| Memoization cache for `gptel-benchmark--read-version-file` | Unclear call patterns |
-
-### Bug Fixes (kept separately)
-Several bug fixes were **moved to separate tickets** rather than bundled:
-- `copy-tree` vs `copy-sequence` data corruption fix
-- `gethash` always returning nil in effectiveness report
-- Frontmatter-skipping bug in knowledge retrieval
-- FSM ID scientific notation formatting
-
-## Key Patterns
-
-1. **Safety/Vitality wins**: Nil guards, proper-list-p, and explicit validation consistently approved
-2. **Performance tradeoffs**: Micro-optimizations (regex, memoization) often rejected when complexity outweighs gains
-3. **Clarity wins**: Explicit assumptions, shared helpers, removing dead code approved
-4. **Bug fixes separated**: Substantive correctness fixes extracted from optimization work
-
-**Net**: Focus on **explicit validation** and **clarity** improvements; treat performance optimizations skeptically unless clearly warranted.
->>>>>>> Stashed changes
+**Action Items:**
+- Document kept hypotheses as they emerge
+- Record discarded hypotheses with reasoning for future reference
+- Track which hypotheses map to which targets/experiments
 ```
 
 ### Check Issues
 
-<<<<<<< Updated upstream
-# Research Distillation Review
+# Document Review: Research Strategy Distillation
 
-## Document Analysis
+## Observations
 
-Your distillation template shows:
-=======
-# Review: Research Strategy
+### ✅ What's Present
+- **Clear structure** — well-organized with tables for experiments and hypothesis tracking
+- **Specific targets** — 4 named Elisp modules and 3 staging workflows
+- **Experiment count** — 22 total experiments mapped to 7 targets
 
-## Overall Assessment
-Well-structured document, but has some gaps and inconsistencies worth addressing.
+### ⚠️ Issues / Gaps
 
----
->>>>>>> Stashed changes
-
-| Field | Status |
+| Issue | Detail |
 |-------|--------|
-| Strategy | ✓ Defined (template-default) |
-| Scope | ✓ Defined (22 experiments, 7 targets) |
-| Modules | 3 LISP + 3 Staging + 1 Research |
-| Hypotheses | ✗ Empty |
+| **No hypotheses documented** | The tracking section is empty — can't assess what's working |
+| **Missing experiment breakdown** | "22 experiments" has no mapping — which target got how many runs? |
+| **No results/success criteria** | No metrics or outcomes recorded |
+| **Staging workflows lack detail** | What triggers each? What do they verify? |
 
-<<<<<<< Updated upstream
-## Observation
-
-I'm not able to fill in experimental findings I don't have access to. The document correctly states "Results pending."
-
-## Options to Proceed
-
-**If you have experimental results:**
-Paste your findings here and I'll structure them into:
-- **Kept hypotheses** → evidence that supported retention
-- **Discarded hypotheses** → evidence that led to rejection
-
-**If you need a template:**
-I can provide a hypothesis framework for each target type:
-- LISP modules (prompt/workflow behavior)
-- Staging targets (review/merge/verification)
-- Research integration
-
-**If this is a system prompt:**
-Ensure experiment results are appended to this document before calling the distillation step.
-
----
-=======
-### 1. Category Inconsistencies
-| Entry | Issue |
-|-------|-------|
-| "CONFIRM" vs "CONFIRM-ALL" fix | This is a **bug fix**, not clarity. Why was it retained while other bug fixes were separated? |
-| "Make TSV field count validation explicit" | Vague. Which file? What constitutes valid? |
-| Multiple `proper-list-p` entries | Are these the same validation copied, or genuinely separate validations? |
-
-### 2. Missing Information
+## Suggestions
 
 ```
-□ Risk/impact assessment for approved changes
-□ Priority ranking (18 changes ≠ 18 equally important)
-□ Testing strategy for approved changes
-□ Estimated effort for implementation
+1. Add experiment-to-target mapping:
+   - e.g., gptel-tools-agent-prompt-build.el: 8 experiments
+   - staging-review: 3 experiments
+   
+2. Document hypothesis schema:
+   - Hypothesis: "Adding X will improve Y by Z%"
+   - Experiment: which file/run tested this
+   - Result: outcome (kept/discarded)
+   - Reasoning: why
+
+3. Add status column to Experiment Targets table:
+   - Not Started / In Progress / Complete / Blocked
 ```
 
-### 3. The 5x Multiplication Claim
-> "Precompute cycle thresholds... Eliminates 5x redundant multiplication"
+## Questions to Consider
 
-This is oddly specific. Is the 5x figure:
-- Measured?
-- Per call or aggregate?
-- Across the benchmark run?
+- What defines success for these experiments?
+- Is there a target date for hypothesis documentation?
+- Should discarded hypotheses be auto-archived or reviewed first?
 
-Same for O(1) vs O(n) claim—need quantification.
-
-### 4. Rejection Reasons Are Uneven
-| Entry | Problem |
-|-------|---------|
-| "Adds indirection without clear benefit" | Subjective; indirection can aid maintainability |
-| "Unclear call patterns" | Shouldn't you investigate first? |
-
----
-
-## Recommendations
-
-1. **Move "CONFIRM" fix to bug tickets** for consistency
-2. **Quantify performance claims** or soften to "likely reduces redundant work"
-3. **Add priority/effort columns** to the kept hypotheses table
-4. **Clarify the 47 rej
->>>>>>> Stashed changes
-
-*What would you like to do?*
+Would you like me to propose a more detailed template or help populate the hypothesis tracking section?

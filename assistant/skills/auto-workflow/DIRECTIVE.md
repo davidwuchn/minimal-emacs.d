@@ -3,11 +3,7 @@ name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
 version: 2026.05.30
 total-experiments: 870
-<<<<<<< Updated upstream
-total-kept: 0
-=======
-total-kept: 17
->>>>>>> Stashed changes
+total-kept: 5
 ---
 
 # Auto-Workflow Program
@@ -28,26 +24,14 @@ total-kept: 17
 | `lisp/modules/gptel-auto-workflow-strategic.el` | 0% | 6 | 0 | ❌ Plateaued |
 | `staging-merge` | 0% | 1 | 0 | ⏳ Insufficient data |
 | `staging-review` | 0% | 1 | 0 | ⏳ Insufficient data |
-| `lisp/modules/gptel-tools-agent-prompt-build.el` | 0% | 2 | 0 | ⏳ Insufficient data |
-=======
-| `lisp/modules/gptel-benchmark-integrate.el` | 50% | 2 | 1 | ✅ High yield |
-| `lisp/modules/gptel-ext-tool-permits.el` | 50% | 8 | 4 | ✅ High yield |
-| `lisp/modules/gptel-ext-core.el` | 40% | 5 | 2 | ✅ High yield |
-| `lisp/modules/gptel-tools-agent-strategy-harness.el` | 33% | 6 | 2 | ✅ High yield |
-| `lisp/modules/gptel-auto-workflow-mementum.el` | 25% | 4 | 1 | 🟡 Active |
-| `lisp/modules/gptel-tools-agent-validation.el` | 20% | 10 | 2 | 🟡 Active |
-| `lisp/modules/gptel-benchmark-comparator.el` | 20% | 10 | 2 | 🟡 Active |
-| `lisp/modules/gptel-benchmark-evolution.el` | 18% | 11 | 2 | 🟡 Active |
-| `lisp/modules/gptel-auto-workflow-research-integration.el` | 3% | 29 | 1 | ❌ Plateaued |
-| `lisp/modules/gptel-auto-workflow-ontology-strategy.el` | 0% | 7 | 0 | ❌ Plateaued |
->>>>>>> Stashed changes
+| `lisp/modules/gptel-tools-agent-prompt-build.el` | 0% | 1 | 0 | ⏳ Insufficient data |
 
 ## 🧬 Meta-Learned Patterns
 
 <!-- AUTO-UPDATED: From git history + mementum analysis -->
 *These patterns were automatically extracted from successful experiments.*
 
-- **manual-fix** (60× from git)
+- **manual-fix** (66× from git)
 - **Application for us** (24× from mementum)
 - **Source type** (24× from mementum)
 - **Description** (24× from mementum)
@@ -55,10 +39,6 @@ total-kept: 17
 - **Implementation sketch** (20× from mementum)
 - **nil-guard-pattern** (19× from git)
 - **How it works** (18× from mementum)
-<<<<<<< Updated upstream
-- **Apply to us** (16× from mementum)
-=======
->>>>>>> Stashed changes
 
 ## 🛠️ Effective Techniques
 
@@ -75,8 +55,7 @@ total-kept: 17
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-<<<<<<< Updated upstream
-- **other** (15×): Investigate root cause
+- **other** (14×): Investigate root cause
 - **timeout** (4×): Add smaller batch sizes or chunked processing
 - **test-failure** (2×): Run tests before committing experiments
 - **validation-failed** (2×): Improve pre-grade validation prompts
@@ -92,6 +71,7 @@ total-kept: 17
 
 <!-- AUTO-UPDATED: From mementum knowledge -->
 - Extract helper functions for repeated logic
+- Improve error handling and recovery mechanisms
 
 ## Failed Patterns
 
@@ -103,16 +83,11 @@ total-kept: 17
 ## Next Hypotheses
 
 <!-- AUTO-UPDATED: From experiment insights -->
-<<<<<<< Updated upstream
-- **lisp/modules/gptel-auto-workflow-projects.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-auto-workflow-strategic.el**: Try validation guards or error handling improvements (previous experiments discarded)
-=======
-- **lisp/modules/gptel-ext-tool-permits.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 50%)
-- **lisp/modules/gptel-ext-core.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 40%)
-- **lisp/modules/gptel-tools-agent-strategy-harness.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 33%)
-- **lisp/modules/gptel-benchmark-evolution.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-auto-workflow-research-integration.el**: Try validation guards or error handling improvements (previous experiments discarded)
->>>>>>> Stashed changes
+- **lisp/modules/gptel-benchmark-comparator.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 50%)
+- **lisp/modules/gptel-tools-agent.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-tools-agent-error.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-ext-fsm-utils.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-ext-retry.el**: Try validation guards or error handling improvements (previous experiments discarded)
 
 ## Immutable Files
 
@@ -138,8 +113,4 @@ var/elpa/**
 
 ---
 
-<<<<<<< Updated upstream
-*This directive was auto-generated from 870 experiments (0 kept locally across 23 local records). It evolves every self-evolution cycle.*
-=======
-*This directive was auto-generated from 870 experiments (17 kept locally across 216 local records). It evolves every self-evolution cycle.*
->>>>>>> Stashed changes
+*This directive was auto-generated from 870 experiments (0 kept locally across 22 local records). It evolves every self-evolution cycle.*
