@@ -330,14 +330,11 @@ clean_stale_socket "ov5-researcher"
 
 # ─── Pull latest code so daemon restart picks up fixes ───
 log "Pulling latest code from origin..."
-# Resolve any stale merge conflicts in auto-generated files first
-git -C "$DIR" checkout --theirs -- mementum/knowledge/ assistant/skills/ 2>/dev/null || true
-git -C "$DIR" reset HEAD -- mementum/knowledge/ assistant/skills/ 2>/dev/null || true
-# Stash dirty auto-generated files so git pull doesn't fail
-git -C "$DIR" stash push -- mementum/knowledge/ assistant/skills/ mementum/memories/ mementum/state.md 2>/dev/null || true
+# Discard all local changes to auto-generated files — they are upstream-dominant
+# and local edits only cause merge conflicts. checkout HEAD ensures a clean slate
+# (unlike --theirs which only resolves conflict markers).
+git -C "$DIR" checkout HEAD -- mementum/knowledge/ assistant/skills/ 2>/dev/null || true
 git -C "$DIR" pull --ff-only 2>&1 || log "WARNING: git pull failed, continuing with current code"
-# On success, drop the stash (auto-generated files are always upstream-dominant)
-git -C "$DIR" stash drop 2>/dev/null || true
 
 # ─── Stop any existing daemons to ensure fresh code is loaded ───
 log "Stopping any existing daemons to load latest code..."
@@ -532,15 +529,10 @@ if [ "${PIPELINE_SKIP_PRE_EVOLUTION:-no}" != "yes" ]; then
     unset -f clean_ov5_sockets
     # Clear workflow status so auto-workflow can start a fresh daemon
     rm -f "$DIR/var/tmp/cron/auto-workflow-status.sexp" 2>/dev/null || true
-    # Resolve any stale merge conflicts in auto-generated files first
-    git -C "$DIR" checkout --theirs -- mementum/knowledge/ assistant/skills/ 2>/dev/null || true
-    git -C "$DIR" reset HEAD -- mementum/knowledge/ assistant/skills/ 2>/dev/null || true
-    # Stash dirty auto-generated files so git pull doesn't fail
-    git -C "$DIR" stash push -- mementum/knowledge/ assistant/skills/ mementum/memories/ mementum/state.md 2>/dev/null || true
+    # Discard all local changes to auto-generated files — they are upstream-dominant
+    git -C "$DIR" checkout HEAD -- mementum/knowledge/ assistant/skills/ 2>/dev/null || true
     # Pull any commits pushed by evolution cycle
     git -C "$DIR" pull --ff-only 2>&1 || log "WARNING: post-evolution git pull failed"
-    # Auto-generated files are always upstream-dominant — discard local version
-    git -C "$DIR" stash drop 2>/dev/null || true
     sleep 2
 else
     log "=== Step 3: Skipped (PIPELINE_SKIP_PRE_EVOLUTION=yes) ==="
