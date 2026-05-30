@@ -3,7 +3,7 @@ title: Research Insights - template-default
 status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
-insight-quality: 0.9/10
+insight-quality: 0.8/10
 allium-issues: 0
 allium-severity: 0.00
 allium-status: coherent
@@ -11,44 +11,42 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 192 experiments (9% keep rate).*
+*Consolidated from 212 experiments (8% keep rate).*
 
-**Performance:** 18 kept / 44 discarded / 12 failed (EXTRACTED — from TSV)
+**Performance:** 17 kept / 41 discarded / 21 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
-- `lisp/modules/gptel-tools-agent-prompt-build.el` (1 kept / 3 discarded)
-- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 3 discarded)
-- `lisp/modules/gptel-tools-agent-runtime.el` (1 kept / 1 discarded / 2 failed)
-- `lisp/modules/gptel-benchmark-core.el` (5 kept / 7 discarded / 2 failed)
-- `lisp/modules/gptel-ext-tool-permits.el` (3 kept / 2 discarded)
-- `lisp/modules/gptel-benchmark-comparator.el` (1 kept / 1 discarded)
-- `lisp/modules/gptel-tools-memory.el` (2 kept / 6 discarded)
-- `lisp/modules/gptel-workflow-benchmark.el` (1 kept / 2 discarded / 5 failed)
-- `lisp/modules/gptel-benchmark-principles.el` (2 kept / 1 discarded)
-- `lisp/modules/gptel-tools-agent-staging-baseline.el` (1 kept / 3 discarded)
+- `lisp/modules/gptel-benchmark-evolution.el` (2 kept / 6 discarded)
+- `lisp/modules/gptel-ext-tool-permits.el` (4 kept / 2 discarded / 1 failed)
+- `lisp/modules/gptel-auto-workflow-mementum.el` (1 kept / 1 discarded / 1 failed)
+- `lisp/modules/gptel-benchmark-comparator.el` (2 kept / 1 discarded)
+- `lisp/modules/gptel-benchmark-integrate.el` (1 kept / 1 discarded)
+- `lisp/modules/gptel-auto-workflow-research-integration.el` (1 kept / 15 discarded / 1 failed)
+- `lisp/modules/gptel-ext-core.el` (2 kept / 1 discarded / 1 failed)
+- `lisp/modules/gptel-tools-agent-validation.el` (2 kept / 3 discarded / 1 failed)
+- `lisp/modules/gptel-tools-agent-strategy-harness.el` (2 kept / 2 discarded / 1 failed)
 
 ### Structure (deterministic scan)
 
 ```elisp-structure
-defuns: gptel-auto-workflow--knowledge-cache-get, gptel-auto-workflow--knowledge-cache-set, gptel-auto-workflow--knowledge-cache-invalidate, gptel-auto-workflow--knowledge-cache-stats, gptel-auto-workflow--load-token-efficiency-data, gptel-auto-workflow--adapt-prompt-compression, gptel-auto-experiment--prompt-structure-score, gptel-auto-experiment--kibcm-axis, gptel-auto-experiment--forge-fixed-point, gptel-auto-experiment--compile-score, gptel-auto-experiment--decompile-score, gptel-auto-experiment--nucleus-compiler-prompt, gptel-auto-experiment--forge-lambda-fixed-point, gptel-auto-experiment--edn-richness-score, gptel-auto-experiment--count-edn-elements, gptel-auto-experiment--use-lambda-prompts-p, gptel-auto-experiment--lambda-compress-prompt, gptel-auto-experiment--resolve-prompt, gptel-auto-experiment--allium-compiler-prompt, gptel-auto-experiment--allium-distill
-defvars: gptel-auto-workflow--skills), gptel-auto-experiment-large-target-byte-threshold), gptel-auto-workflow--last-prompt-sections), gptel-auto-workflow--current-research-context), gptel-auto-experiment-time-budget), gptel-auto-workflow-use-staging), gptel-auto-workflow--running), gptel-auto-workflow--stats), gptel-auto-experiment-validation-retry-active-grace), gptel-auto-workflow--legacy-validation-retry-active-grace), gptel-auto-workflow--current-validation-retry-active-grace), my/gptel-subagent-stream), gptel-auto-workflow--knowledge-cache, gptel-auto-workflow--knowledge-cache-max-age, gptel-auto-workflow--topic-knowledge-max-chars, gptel-auto-experiment--lambda-verified-backends, gptel-auto-experiment--allium-research-cache, gptel-auto-workflow--ab-test-sections, gptel-auto-workflow--ab-test-omit-rate, gptel-auto-workflow--ab-test-min-samples
-requires: cl-lib, seq, subr-x
-provides: gptel-tools-agent-prompt-build
-declares: gptel-agent-read-file, gptel-auto-workflow--valid-strategy-name-p, gptel-auto-workflow-load-research-findings, gptel-benchmark--detect-task-type, my/gptel-get-model-metadata, gptel-auto-workflow--current-run-id, gptel-auto-workflow--ensure-results-file, gptel-auto-workflow--make-idempotent-callback, gptel-auto-workflow--non-empty-string-p, gptel-auto-workflow--plist-get, gptel-auto-workflow--results-file-path, gptel-auto-workflow--worktree-base-root, gptel-auto-experiment--eight-keys-scores, gptel-auto-workflow--project-root, gptel-auto-workflow--persist-status, my/gptel--sanitize-for-logging, gptel-auto-workflow--extract-mutation-templates, gptel-auto-workflow--format-weakest-keys, gptel-auto-workflow-skill-suggest-hypothesis, gptel-auto-experiment--inspection-thrash-result-p
-errors: Error, error, error, error, error, Error, signal, signal, error, error
-handlers: nil, nil, err, err, err, err, err, err, nil
+defuns: gptel-benchmark-evolution-cycle, gptel-benchmark-evolution-observe, gptel-benchmark-evolution--deficient-p, gptel-benchmark-evolution-orient, gptel-benchmark-evolution-decide, gptel-benchmark-evolution-act, gptel-benchmark-evolution-mutate, gptel-benchmark-evolution-feed-forward, gptel-benchmark-evolution-check-capabilities, gptel-benchmark-evolution-emergence-rate, gptel-benchmark-evolution-track-correction, gptel-benchmark-evolution-status-report, gptel-benchmark-evolution-check-complete, gptel-benchmark-detect-anti-patterns, gptel-benchmark-apply-anti-pattern-remedy, gptel-benchmark-evolution-balance, gptel-benchmark-evolution-pathway, gptel-benchmark-evolution-next-capability, gptel-benchmark-evolution-discover, gptel-benchmark-evolution-self-improve
+defvars: gptel-benchmark-evolution-cycle-threshold, gptel-benchmark-evolution-state
+requires: cl-lib, gptel-benchmark-core, gptel-benchmark-principles, gptel-benchmark-memory
+provides: gptel-benchmark-evolution
+errors: error
+handlers: err
 ```
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-auto-workflow-strategic.el` (1 discarded / 1 failed)
-- `lisp/modules/gptel-auto-workflow-evolution.el` (1 failed)
-- `lisp/modules/gptel-tools-agent-runtime.el` (1 kept / 1 discarded / 2 failed)
-- `lisp/modules/gptel-benchmark-core.el` (5 kept / 7 discarded / 2 failed)
-- `lisp/modules/gptel-tools-agent-subagent.el` (1 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (4 failed)
+- `lisp/modules/gptel-auto-workflow-strategic.el` (5 failed)
+- `lisp/modules/gptel-ext-context.el` (1 failed)
+- `lisp/modules/gptel-auto-workflow-research-integration.el` (1 kept / 15 discarded / 1 failed)
+- `lisp/modules/gptel-auto-workflow-research-benchmark.el` (2 failed)
 
 ## Meta-Learning Recommendations (INFERRED — from pattern analysis)
 
@@ -59,66 +57,63 @@ These targets may need different research patterns or the research findings were
 
 
 
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-**Research Strategy: template-default**
+# Research Strategy: Template-Default
 
-**87 experiments across 20 targets** — gptel modules for workflow automation, benchmarking, tools/agents, and extensions.
+**212 experiments across 28 targets** | 17 kept hypotheses | 30+ discarded
 
-**Kept (5 hypotheses):**
-- Nil summary validation in benchmark comparison → prevent `wrong-type-argument`
-- Negative caching fix → O(1) instead of O(n) disk hits for missing files
-- `proper-list-p` validation before `last` → prevent crash on improper lists
-- `stringp` validation in skill loader → explicit type contracts
-- Nil guards before `string-match`/`split-string` → error resilience
+## Kept Hypotheses (17)
 
-**Discarded (14 hypotheses):**
-- `error-message-string` formatting, hash table removal, symbol map derivation, benchmark summary caching, `proper-list-p` replacement, module path caching, nil guards for `feature-name`, FSM logging, `seen` hash table reuse, redundant validation removal, regexp `bound-and-true-p`, `cl-remove` fix, memoization for error categorization
+| ID | Target | Change | Improvement |
+|----|--------|--------|-------------|
+| 1 | `gptel-benchmark-evolution-check-capabilities` | Precompute cycle thresholds once vs 5×/invocation | Performance |
+| 2 | `my/gptel-toggle-confirm`, `my/gptel-health-check` | Extract shared `my/gptel--mode-label` helper | Clarity (fix CONFIRM vs CONFIRM-ALL mismatch) |
+| 3 | `my/gptel-show-permits` | Add `stringp` validation for hash keys before `string-join` | Safety (prevent crashes on corrupted state) |
+| 4 | `my/gptel-toggle-confirm` | Fix permit count displayed after clearing (always 0); add `processp` guard | Clarity + Vitality |
+| 5 | `my/gptel-health-check` | Add `proper-list-p` validation for gptel-tools | Safety |
+| 6 | `gptel-auto-workflow--mementum-write-memory` | Nil guard for `content`; sanitize `/` in `slug` | Vitality + Vigilance |
+| 7 | `gptel-benchmark--read-version-file` | Validate `name` parameter | Safety |
+| 8 | `gptel-benchmark--extract-score` / `--apply-with-verification` | `proper-list-p` + nil guard for `after-results` | Vitality + Clarity |
+| 9 | 3 entry-point functions | Nil/empty validation guards | Vitality + Clarity |
+| 10 | `my/gptel--sanitize-multimodal-content` | Add `(vectorp content-vec)` guard | Vitality + Clarity |
+| 11 | `my/gptel--sanitize-multimodal-content` | Replace `memq` with `member` (fix `eq` vs `equal` for strings) | Vitality |
+| 12 | `gptel-benchmark--cache-put` | Nil validation for cache entries | Clarity + Vitality |
+| 13 | `gptel-auto-experiment--introduced-undefined-call` | `proper-list-p` validation for `forms` | Vitality + Clarity |
+| 14 | `gptel-auto-experiment--call-symbols-in-forms` | Nil guard for `forms` | Vitality |
+| 15 | Helper functions | Simplify redundant guard conditions | Clarity |
+| 16 | `gptel-auto-workflow--record-strategy-evaluation` | Nil/validity validation | Vitality + Clarity |
+| 17 | `gptel-auto-workflow--synthesize-global-patterns` | Nil guards + field count validation for TSV parsing | Vitality + Clarity |
 
-**Focus:** Safety, Vitality (error resilience), Performance (caching), Clarity (explicit contracts).
+## Discarded Hypotheses (30+)
+
+### Performance (6)
+- **Combine duplicate list iterations** in `extract-deficient-elements` + `find-opportunity` into single-pass helper
+- **Eliminate redundant `(>= cycle t1)` check** in `check-capabilities` (duplicate condition)
+- **Replace per-buffer `condition-case`** with `buffer-live-p` pre-check in `my/gptel--sync-to-upstream`
+- **Use `hash-table-count`** for empty-check in `my/gptel-show-permits` (O(1) vs O(n) list alloc)
+- **Memoization cache** for `gptel-benchmark--read-version-file`
+- **Regex-based fast path** in `my/gptel--sanitize-string-for-json` (char-by-char vs regex)
+
+### Correctness Bugs (10)
+- **`copy-tree` vs `copy-sequence`** in `--top-research-priority` (in-place sort mutating shared cons cells)
+- **Hash table reference bug** in `research-source-effectiveness-report`: `(gethash s (make-hash-table))` always returns nil; count must be in stats alist
+- **Champion lookup** in `update-research-strategy-champion`: incorrect accessor chain returns cons pair instead of keep-rate number
+- **Frontmatter-skipping bug** in `mementum-get-knowledge-for-prompt`: `buffer-string` ignored point position
+- **Nil data access** in `research-source-effectiveness-report`: always shows empty count data
+- **Applied count bug** in `cl-incf applied` placement (tracks attempts vs successes)
+- **Missing `cl-lib` require** + stale-path crashes in `gptel-tools-agent--module-dir`
+- **FSM ID generation**: use `%.0f` instead of `%s` to avoid scientific notation
+
+### Validation Gaps (6)
+- **Listp validation** for `class` in `ontology-research-gaps`
+- **Plistp validation** for `latest` in `--research-autotts-stop-early-p`
+- **String literal filtering** in `call-symbols-in-line` (prevent false positives from docstrings)
+- **Proper-list-p validation** for observation plists in `extract-deficient-elements`
+- **Nil guards for plist fields** (ont
+-- ... truncated ...
 ```
 
-### Check Issues
-
-# Review: Research Strategy Summary
-
-## Math Check
-| Category | Count |
-|----------|-------|
-| Kept | 5 |
-| Discarded | 14 |
-| **Total listed** | **19** |
-| Stated total | 87 |
-
-**⚠️ Discrepancy:** 19 listed vs 87 stated — missing 68 experiments.
-
-## Validation
-
-**The 5 kept hypotheses** are sound defensive coding practices:
-- ✅ All address runtime error prevention
-- ✅ Cover the four focus areas (Safety, Vitality, Performance, Clarity)
-
-**The 14 discarded** are reasonable to discard:
-- ✅ Micro-optimizations without evidence of bottleneck
-- ✅ Refactorings that don't improve user-facing behavior
-
-## Questions
-
-1. **Where are the other 68 experiments categorized?**
-2. **What's the acceptance criteria for "kept" vs "discarded"?**
-3. **Were 87 experiments actually run, or is this aspirational?**
-
-## Verdict
-
-The framework is coherent. The hypothesis classifications appear reasonable. The main issue is the count mismatch with the 87-experiment claim.
