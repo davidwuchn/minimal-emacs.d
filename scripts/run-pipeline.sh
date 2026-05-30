@@ -273,7 +273,7 @@ verify_research_feedback_loop() {
 log_rotate "$PIPELINE_LOG"
 log_rotate "$LOG_DIR/ov5-researcher.log"
 log_rotate "$LOG_DIR/ov5-auto-workflow.log"
-log_rotate "$LOG_DIR/evolution-backtrace.log"
+log_rotate "$LOG_DIR/evolution-backtrace.log" 51200  # Rotate at 50KB (grows fast)
 
 # ─── Clean stale PID/lock files older than 12h ───
 find "$DIR/var/tmp" -type f \( -name "*.pid" -o -name "*.lock" \) -mtime +0 -delete 2>/dev/null || true
