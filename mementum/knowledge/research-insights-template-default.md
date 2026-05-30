@@ -164,45 +164,6 @@ These targets may need different research patterns or the research findings were
 
 
 
-## Allium Behavioral Spec (auto-generated, v3)
-
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
-
-```allium
-# Research Distillation Template
-
-This appears to be a **template structure** for documenting experimental research. Here's what's being captured:
-
-## Structure Breakdown
-
-| Field | Purpose |
-|-------|---------|
-| **Research strategy** | Overall approach (e.g., template-default) |
-| **Experiments** | Number of trials conducted |
-| **Targets** | Files/modules being tested |
-| **Kept hypotheses** | Validated/confirmed assumptions |
-| **Discarded hypotheses** | Rejected/invalidated assumptions |
-
-## The Target
-
-```
-lisp/modules/gptel-auto-workflow-projects.el
-```
-This is an **Emacs Lisp module** (part of gptel package for AI interactions with project workflows).
-
----
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -221,82 +182,38 @@ This is an **Emacs Lisp module** (part of gptel package for AI interactions with
 
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*5 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-## Distilled Research Strategy
+The content you've provided appears to be a **template structure** rather than distillable research content. The fields are:
 
-**Research Strategy:** template-default  
-**Total Experiments:** 34  
-**Targets:** 8
+- **Research strategy**: Just labels "template-default"
+- **3 experiments across targets**: References a file path `lisp/modules/gptel-auto-workflow-projects.el`
+- **Kept hypotheses**: Empty
+- **Discarded hypotheses**: Empty
 
-### Targets Analyzed:
-```
-lisp/modules/gptel-auto-workflow-research-integration.el
-lisp/modules/gptel-auto-workflow-strategic.el
-lisp/modules/gptel-auto-workflow-projects.el
-lisp/modules/gptel-tools-agent-error.el
-lisp/modules/gptel-tools-agent-prompt-build.el
-staging-verification
-staging-merge
-staging-review
-```
+**To distill something meaningful, I'd need:**
 
-### Status:
-| Section | Status |
-|---------|--------|
-| Kept hypotheses | Empty |
-| Discarded hypotheses | Empty |
+1. Actual experimental results or findings
+2. Hypotheses that were tested
+3. Research observations or data
 
-**Action needed:** Populate kept/discarded hypotheses from 34 experiments to complete the template.
+**Or if you intended:**
+
+- To document your research using this template → Please share the actual hypotheses/experiments
+- Something else is the source material → Share the actual content to distill
+
+Could you provide the underlying research content or clarify what you'd like distilled?
 ```
 
 ### Check Issues
 
-# Check Results
+It looks like you've shared an AI-generated response asking for clarification. I'm not sure what you're asking me to do with it.
 
-The template shows **incomplete data**:
+Could you clarify what you'd like me to help with?
 
-| Field | Current State |
-|-------|---------------|
-| Experiments logged | 34 |
-| Hypotheses recorded | 0 |
-| Kept hypotheses | `Empty` |
-| Discarded hypotheses | `Empty` |
+- **Evaluate** the response shown?
+- **Provide** the underlying research content it was asking for?
+- **Something else**?
 
-## Missing Data
-
-The 34 experiments need to be distilled into:
-1. **Kept hypotheses** — hypotheses supported by evidence
-2. **Discarded hypotheses** — hypotheses falsified or abandoned
-
-## To Complete This Template
-
-You'll need to provide:
-
-```markdown
-### Kept Hypotheses
-<!-- Summarize 34 experiments into supported hypotheses -->
-
-### Discarded Hypotheses  
-<!-- Summarize falsified/abandoned hypotheses -->
-```
-
-**Example format:**
-```markdown
-### Kept Hypotheses
-- H1: [Supported by experiments 3, 7, 12, ...]
-- H2: [Supported by experiments 5, 18, ...]
-
-### Discarded Hypotheses
-- H5: [Falsified by experiments 9, 14, ...]
-```
-
-**Option:** If this is a *report template* you want me to fill out based on prior conversation, share:
-- The source material (logs, code, chat history)
-- Or link to the previous context
-
-**Would you like me to:**
-1. Help distill your 34 experiments into hypotheses if you share the data?
-2. Generate a template structure for populating this manually?
-3. Something else?
+Let me know what you need.
