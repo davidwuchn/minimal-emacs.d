@@ -360,7 +360,13 @@ daemon alive."
 (defun gptel-auto-experiment--eight-keys-scores (&optional hypothesis)
   "Get full Eight Keys scores alist from current codebase.
 Scores based on commit message + code diff (not just stat).
-If HYPOTHESIS is provided, use task-type-aware scoring."
+If HYPOTHESIS is provided, use task-type-aware scoring.
+Loads gptel-benchmark-principles if not already available."
+  (unless (fboundp 'gptel-benchmark-eight-keys-score)
+    (message "[auto-exp] Eight Keys scorer not loaded — requiring gptel-benchmark-principles")
+    (condition-case err
+        (require 'gptel-benchmark-principles nil t)
+      (error (message "[auto-exp] Failed to load Eight Keys scorer: %S" err))))
   (when (fboundp 'gptel-benchmark-eight-keys-score)
     (let* ((worktree (gptel-auto-workflow--worktree-or-project-dir))
            ;; SECURITY: Use shell-quote-argument to prevent shell injection
