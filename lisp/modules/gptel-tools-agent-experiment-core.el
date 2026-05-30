@@ -1064,16 +1064,30 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                    (setq experiment-model
                          (and (boundp 'gptel-model) gptel-model
                               (symbol-name gptel-model)))))
-                ;; Routing handled by gptel-auto-workflow--advice-task-override
-                (my/gptel--run-agent-tool-with-timeout
-                experiment-timeout
-                executor-callback
-                "executor"
-                (format "Experiment %d: optimize %s" experiment-id target)
-                executor-prompt
-                 nil "false" nil))))))
-              )))
-        )
+                 ;; Layer 1 — Hard Block: Check action preconditions before execution
+                 (let ((precondition-error
+                        (when (fboundp 'gptel-auto-workflow--check-action-preconditions)
+                          (gptel-auto-workflow--check-action-preconditions target))))
+                   (if precondition-error
+                       (let ((default-directory experiment-worktree))
+                         (message "[auto-exp] 🚫 %s" precondition-error)
+                         (magit-git-success "checkout" "--" ".")
+                         (setq finished t)
+                         (funcall callback
+                                  (list :target target :id experiment-id :kept nil
+                                        :duration (- (float-time start-time))
+                                        :grader-reason precondition-error
+                                        :comparator-reason "precondition-blocked")))
+                     ;; Routing handled by gptel-auto-workflow--advice-task-override
+                     (my/gptel--run-agent-tool-with-timeout
+                      experiment-timeout
+                      executor-callback
+                      "executor"
+                      (format "Experiment %d: optimize %s" experiment-id target)
+                      executor-prompt
+                       nil "false" nil))))))))
+                 )))
+         )
 
 
 

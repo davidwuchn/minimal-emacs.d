@@ -116,6 +116,8 @@ These targets may need different research patterns or the research findings were
 
 
 
+<<<<<<< Updated upstream
+=======
 
 
 
@@ -212,6 +214,11 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+>>>>>>> Stashed changes
 
 
 
@@ -230,82 +237,48 @@ These targets may need different research patterns or the research findings were
 
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.30). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Distillation: Template-Default
+**Research Strategy**: template-default
 
-**Scope:** 100 experiments across gptel modules (FSM utilities, benchmarks, auto-workflow, tools agent)
+**48 experiments** across **9 targets**:
 
----
+| Target | Type |
+|--------|------|
+| staging-verification | staging |
+| lisp/modules/gptel-auto-workflow-research-integration.el | module |
+| staging-merge | staging |
+| staging-review | staging |
+| lisp/modules/gptel-benchmark-subagent.el | module |
+| lisp/modules/gptel-tools-agent-error.el | module |
+| lisp/modules/gptel-tools-agent-prompt-build.el | module |
+| lisp/modules/gptel-auto-workflow-strategic.el | module |
+| lisp/modules/gptel-auto-workflow-projects.el | module |
 
-## Discarded Hypotheses (7 total)
-
-### Code Clarity Improvements
-
-| Hypothesis | Mechanism | Impact |
-|------------|-----------|--------|
-| Replace `cl-letf`+`symbol-function` with `cl-labels` | Use idiomatic local recursive functions | Eliminates indirection overhead |
-| Remove dead `hash-table-p` guard | Unreachable code elimination | `seen` always fresh |
-| Extract traversal pattern to `my/gptel--fsm-for-each` | DRY helper function | Reduces duplication |
-
-### Performance Improvements
-
-| Hypothesis | Mechanism | Impact |
-|------------|-----------|--------|
-| Eliminate redundant `puthash` calls | Skip writes when cons cell exists | Avoid mutation overhead |
-
-### Correctness Fixes
-
-| Hypothesis | Mechanism | Impact |
-|------------|-----------|--------|
-| `copy-tree` vs `copy-sequence` in `top-research-priority` | Prevent shared cons cell mutation | Fixes data corruption |
-| Add `(listp class)` guard in `ontology-research-gaps` | Validate malformed ontology entries | Prevents runtime errors |
-
-### Refactoring
-
-| Hypothesis | Mechanism | Impact |
-|------------|-----------|--------|
-| Extract `parse-one-autotts-trace` from while-loop | Separate mechanism from policy | Reduces nesting (3→2 levels) |
-
----
-
-**Status:** All 7 hypotheses discarded (not implemented)
+**Kept hypotheses**: none  
+**Discarded hypotheses**: none
 ```
 
 ### Check Issues
 
-# Research Distillation Check
+# Research Strategy Check ✓
 
-## Structure Assessment
+Your data appears internally consistent:
 
-The template is well-formed. Quick verification:
+| Metric | Value |
+|--------|-------|
+| Strategy | template-default |
+| Total Experiments | 48 |
+| Total Targets | 9 |
+| Avg Experiments/Target | ~5.3 |
+| Staging Targets | 3 |
+| Module Targets | 6 |
+| Kept Hypotheses | 0 |
+| Discarded Hypotheses | 0 |
 
-| Aspect | Status |
-|--------|--------|
-| Scope definition | ✓ Clear |
-| Hypotheses categorized | ✓ 4 groups |
-| All fields populated | ✓ Mechanism + Impact |
-| Status consistency | ✓ All 7 marked discarded |
-| Count accuracy | ✓ 7 = 3+1+2+1 ✓ |
+**Question**: What specifically do you want me to check?
 
-## Technical Notes
-
-Some hypotheses appear to lack rejection reasoning:
-
-```
-Hypothesis                          | Potential Issue
-------------------------------------|----------------------------------
-`copy-tree` vs `copy-sequence`      | Would lose structure if `class` is already a list?
-`(listp class)` guard               | What's the source of malformed entries?
-Remove `hash-table-p` guard         | Confirm unreachable via control flow analysis?
-```
-
-## Request
-
-Was this documentation:
-1. **Generated** (and you want validation)?
-2. **In progress** (and you want completion criteria)?
-3. **Completed** (and you want archiving)?
-
-Provide the source code snippets or context for the 7 items if you'd like deeper technical verification.
+- Syntax/format validation?
+- Consistency across the experiment tracking system?
+- Something else?

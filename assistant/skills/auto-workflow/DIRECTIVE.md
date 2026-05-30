@@ -30,7 +30,7 @@ total-kept: 14
 | `staging-review` | 0% | 1 | 0 | ⏳ Insufficient data |
 | `lisp/modules/gptel-tools-agent-prompt-build.el` | 0% | 8 | 0 | ❌ Plateaued |
 | `lisp/modules/gptel-tools-agent-error.el` | 0% | 6 | 0 | ❌ Plateaued |
-| `lisp/modules/gptel-benchmark-subagent.el` | 0% | 1 | 0 | ⏳ Insufficient data |
+| `lisp/modules/gptel-benchmark-subagent.el` | 0% | 2 | 0 | ⏳ Insufficient data |
 
 ## 🧬 Meta-Learned Patterns
 
@@ -62,7 +62,7 @@ total-kept: 14
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
 - **other** (35×): Investigate root cause
-- **timeout** (6×): Add smaller batch sizes or chunked processing
+- **timeout** (7×): Add smaller batch sizes or chunked processing
 - **validation-failed** (3×): Improve pre-grade validation prompts
 - **test-failure** (2×): Run tests before committing experiments
 - **api-limit** (1×): Implement provider fallback or rate limit handling
@@ -112,4 +112,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 870 experiments (0 kept locally across 47 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 870 experiments (0 kept locally across 48 local records). It evolves every self-evolution cycle.*

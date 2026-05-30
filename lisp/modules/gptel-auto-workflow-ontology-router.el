@@ -2735,6 +2735,54 @@ Boost = (keep-rate - avg-axis-rate) × confidence × 0.15."
                 (mapconcat (lambda (v) (format "  $ %s" v))
                            (plist-get schema :verification-commands) "\n"))))))
 
+(defun gptel-auto-workflow--check-action-preconditions (target)
+  "Check action preconditions for TARGET's category.
+Returns nil if all pass, or a string describing the first unmet precondition.
+This is the runtime enforcement layer — preconditions are checked
+before the executor runs, not just listed in the prompt."
+  (when (and target (fboundp 'gptel-auto-workflow--categorize-target))
+    (let* ((category (gptel-auto-workflow--categorize-target target))
+           (schema (cdr (assoc category gptel-auto-workflow--category-action-schemas)))
+           (preconditions (plist-get schema :preconditions))
+           (target-file (when (file-exists-p target) target))
+           (result nil))
+      (when preconditions
+        (dolist (pre preconditions)
+          (unless result
+            (setq result
+                  (pcase pre
+                    ("file-byte-compiles"
+                     (when (and target-file
+                                (not (zerop (call-process
+                                            "emacs" nil nil nil
+                                            "--batch" "-Q"
+                                            "-f" "batch-byte-compile"
+                                            target-file))))
+                       (format "Precondition FAILED: %s does not byte-compile" target)))
+                    ("no-syntax-errors"
+                     (when (and target-file
+                                (with-temp-buffer
+                                  (insert-file-contents target-file)
+                                  (not (zerop (call-process
+                                               "emacs" nil nil nil
+                                               "--batch" "--eval"
+                                               (format "(check-parens)"))))))
+                       (format "Precondition FAILED: %s has syntax errors" target)))
+                    ("tool-registry-initialized"
+                     (unless (and (boundp 'gptel-agent--agents)
+                                  gptel-agent--agents)
+                       "Precondition FAILED: tool registry not initialized"))
+                    ("tool-argument-schemas-valid"
+                     (unless (and (boundp 'gptel-tools--schemas)
+                                  gptel-tools--schemas)
+                       "Precondition FAILED: tool schemas not loaded"))
+                    ("sandbox-rules-loaded"
+                     (unless (and (boundp 'gptel-tools-bash--rules)
+                                  gptel-tools-bash--rules)
+                       "Precondition FAILED: sandbox rules not loaded"))
+                    (_ nil))))))
+      result)))
+
 ;; ─── Ontology Self-Evolution ───
 
 (defvar gptel-auto-workflow--category-strategy-preferences nil
