@@ -1051,10 +1051,10 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                              (fboundp 'gptel-auto-workflow--maybe-override-subagent-provider))
                                     (gptel-auto-workflow--maybe-override-subagent-provider "executor" base-preset)))
                                  (effective-preset (or override-preset base-preset))
-                                 (effective-model
-                                  (or (and effective-preset (plist-get effective-preset :model))
-                                      (and (boundp 'gptel-model) gptel-model)
-                                      "unknown")))
+                                  (effective-model
+                                   (or (and (boundp 'gptel-model) gptel-model)
+                                       (and effective-preset (plist-get effective-preset :model))
+                                       "unknown")))
                             (if (stringp effective-model) effective-model
                               (format "%s" effective-model))))
                   (error
