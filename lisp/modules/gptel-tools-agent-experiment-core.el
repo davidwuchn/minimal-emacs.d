@@ -347,7 +347,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                     " | ∀cl-return-from: ∃cl-block ∧ name_match\n")
                                                             (concat executor-prompt
                                                                    "\n\nλ ¬thrash: reads ≤ 2 → write_next | fix(specific) > re-read(all)"
-                                                                   " | ∀cl-return-from: ∃cl-block ∧ name_match\n")))
+                                                                   " | ∀cl-return-from: ∃cl-block ∧ name_match\n"))))
                                                   (my/gptel--run-agent-tool-with-timeout
                                                   gptel-auto-experiment-validation-retry-time-budget
                                                   (lambda (retry-output)
@@ -387,7 +387,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                  "Validation retry"
                                                  retry-prompt
                                                  nil nil nil
-                                                  gptel-auto-experiment-validation-retry-active-grace))))
+                                                   gptel-auto-experiment-validation-retry-active-grace)))
                                          ;; Non-teachable or already retrying: fail fast
                                          (let* ((hypothesis (gptel-auto-experiment--extract-hypothesis
                                                              effective-agent-output))
@@ -569,7 +569,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                  (message "[auto-workflow] WARNING: pipeline defect - no research context for %s, using fallback hash" (or target "unknown")))))
                             :research-quality (or (and (boundp 'gptel-auto-workflow--current-research-context)
                                                       (plist-get gptel-auto-workflow--current-research-context :source))
-                                                 "none")))))
+                                                  "none"))))
 	                                                    (if keep
 		                                                    (let* ((msg
 			                                                        (format
@@ -652,8 +652,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 		                                                    (setq gptel-auto-experiment--no-improvement-count (1+ gptel-auto-experiment--no-improvement-count))
 		                                                    (funcall log-fn
 			                                                         run-id exp-result)
-		                                                    (funcall callback exp-result))))))))
-                                             (if (and (gptel-auto-experiment--teachable-validation-error-p
+																(funcall callback exp-result)))))))))
+                                              (if (and (gptel-auto-experiment--teachable-validation-error-p
                                                        target validation-error)
                                                       (not (bound-and-true-p gptel-auto-experiment--in-retry)))
                                                  (let ((default-directory experiment-worktree)
