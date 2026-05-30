@@ -27,6 +27,10 @@ total-kept: 14
 | `lisp/modules/gptel-auto-workflow-research-integration.el` | 3% | 29 | 1 | ❌ Plateaued |
 | `lisp/modules/gptel-tools-agent.el` | 0% | 6 | 0 | ❌ Plateaued |
 | `staging-merge` | 0% | 1 | 0 | ⏳ Insufficient data |
+| `staging-review` | 0% | 1 | 0 | ⏳ Insufficient data |
+| `lisp/modules/gptel-tools-agent-prompt-build.el` | 0% | 8 | 0 | ❌ Plateaued |
+| `lisp/modules/gptel-tools-agent-error.el` | 0% | 6 | 0 | ❌ Plateaued |
+| `lisp/modules/gptel-benchmark-subagent.el` | 0% | 1 | 0 | ⏳ Insufficient data |
 
 ## 🧬 Meta-Learned Patterns
 
@@ -57,11 +61,11 @@ total-kept: 14
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (163×): Investigate root cause
-- **timeout** (24×): Add smaller batch sizes or chunked processing
-- **validation-failed** (20×): Improve pre-grade validation prompts
-- **test-failure** (9×): Run tests before committing experiments
-- **api-limit** (3×): Implement provider fallback or rate limit handling
+- **other** (35×): Investigate root cause
+- **timeout** (6×): Add smaller batch sizes or chunked processing
+- **validation-failed** (3×): Improve pre-grade validation prompts
+- **test-failure** (2×): Run tests before committing experiments
+- **api-limit** (1×): Implement provider fallback or rate limit handling
 
 ## Success Patterns
 
@@ -108,4 +112,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 870 experiments (14 kept locally across 219 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 870 experiments (0 kept locally across 47 local records). It evolves every self-evolution cycle.*
