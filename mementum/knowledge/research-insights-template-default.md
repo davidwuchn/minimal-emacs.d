@@ -192,53 +192,111 @@ This is an **Emacs Lisp module** (part of gptel package for AI interactions with
 
 ---
 
-## To Complete This Distillation
 
-Could you provide:
 
-1. **What were the 3 experiments?** (brief descriptions)
-2. **What hypotheses were tested?** (kept or discarded)
-3. **Context:** Is this for your gptel-auto-workflow-projects research?
 
-Or if this is a **report format** you need me to help complete based on previous conversation context—please share the source material/experiments you're summarizing.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Allium Behavioral Spec (auto-generated, v3)
+
+*5 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+
+```allium
+## Distilled Research Strategy
+
+**Research Strategy:** template-default  
+**Total Experiments:** 34  
+**Targets:** 8
+
+### Targets Analyzed:
+```
+lisp/modules/gptel-auto-workflow-research-integration.el
+lisp/modules/gptel-auto-workflow-strategic.el
+lisp/modules/gptel-auto-workflow-projects.el
+lisp/modules/gptel-tools-agent-error.el
+lisp/modules/gptel-tools-agent-prompt-build.el
+staging-verification
+staging-merge
+staging-review
+```
+
+### Status:
+| Section | Status |
+|---------|--------|
+| Kept hypotheses | Empty |
+| Discarded hypotheses | Empty |
+
+**Action needed:** Populate kept/discarded hypotheses from 34 experiments to complete the template.
 ```
 
 ### Check Issues
 
-# Template Review
+# Check Results
 
-Your **Research Distillation Template** looks structurally sound for capturing experimental iterations. Here's a quick assessment:
+The template shows **incomplete data**:
 
-## ✓ What's Working
-- **Clear field mapping** — Each field has a defined purpose
-- **Binary hypothesis tracking** — Kept vs. Discarded forces decisive conclusions
-- **Target specificity** — Points to a specific module
+| Field | Current State |
+|-------|---------------|
+| Experiments logged | 34 |
+| Hypotheses recorded | 0 |
+| Kept hypotheses | `Empty` |
+| Discarded hypotheses | `Empty` |
 
-## Suggestions for Enhancement
+## Missing Data
+
+The 34 experiments need to be distilled into:
+1. **Kept hypotheses** — hypotheses supported by evidence
+2. **Discarded hypotheses** — hypotheses falsified or abandoned
+
+## To Complete This Template
+
+You'll need to provide:
 
 ```markdown
-| Field | Purpose |
-|-------|---------|
-| Research strategy | Overall approach (e.g., template-default) |
-| **Timestamp/Date** | *Add: When experiment was run* |
-| **Environment** | *Add: Emacs version, system config* |
-| Experiments | Number of trials conducted |
-| Targets | Files/modules being tested |
-| Kept hypotheses | Validated/confirmed assumptions |
-| Discarded hypotheses | Rejected/invalidated assumptions |
-| **Next steps** | *Add: Actionable follow-ups* |
+### Kept Hypotheses
+<!-- Summarize 34 experiments into supported hypotheses -->
+
+### Discarded Hypotheses  
+<!-- Summarize falsified/abandoned hypotheses -->
 ```
 
-## Next Steps
+**Example format:**
+```markdown
+### Kept Hypotheses
+- H1: [Supported by experiments 3, 7, 12, ...]
+- H2: [Supported by experiments 5, 18, ...]
 
-To help you **complete** this distillation, I need:
-
-1. **The actual experiment descriptions** — What 3 things did you test?
-2. **The hypotheses** — What did you expect vs. what happened?
-3. **Context** — Are you documenting `gptel-auto-workflow-projects` development?
+### Discarded Hypotheses
+- H5: [Falsified by experiments 9, 14, ...]
+```
 
 **Option:** If this is a *report template* you want me to fill out based on prior conversation, share:
 - The source material (logs, code, chat history)
 - Or link to the previous context
 
-What would you like me to help with—**review**, **complete**, or **create** this distillation?
+**Would you like me to:**
+1. Help distill your 34 experiments into hypotheses if you share the data?
+2. Generate a template structure for populating this manually?
+3. Something else?
