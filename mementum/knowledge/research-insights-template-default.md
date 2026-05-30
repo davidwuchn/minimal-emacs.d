@@ -159,77 +159,41 @@ The experiments surfaced a **robustness crisis, not a performance crisis**. The 
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-**Distilled Research Strategy**
+**Research Distillation: template-default**
 
-- **Template:** template-default
-- **Experiments:** 8 total
-- **Targets:** 6
-  - 2 staging targets (review, merge, verification)
-  - 4 Elisp module targets (strategic, projects, research-integration workflows)
-- **Hypotheses:** None specified (kept or discarded)
->>>>>>> Stashed changes
+- **Strategy**: 8 experiments conducted across 6 targets
+- **Results**: No hypotheses retained; no hypotheses discarded (lists empty)
+- **Interpretation**: The experimental process completed but yielded no definitive conclusions, or results are pending/full documentation not captured in summary
+
+*Recommendation*: Review individual experiment outputs to determine actual hypothesis outcomes.
 ```
 
-### Check Issues
-
-<<<<<<< Updated upstream
-**Verdict: Technically sound and well-framed.** The distillation is sharp, internally consistent, and the “robustness crisis, not performance crisis” conclusion is strongly supported by the evidence you presented. A few minor technical notes and one likely inaccuracy to address before this is finalized:
-
----
-
-### ✅ Confirmed / Strong
-
-**1. The `(ignore)` → `(error nil)` fix is correct.**
-In `condition-case`, a handler has the shape `(CONDITIONS . BODY)`. Writing `(ignore)` installs a handler for the *specific* signal symbol `ignore`, not a catch-all. To swallow any error and return `nil`, `(error nil)` is the right replacement. (Pedantic aside: you *could* define an error symbol named `ignore`, but it would never catch a standard `error` signal.)
-
-**2. `plist-get` on alists and dotted-pair JSON keys are classic Elisp boundary bugs.**
-Both fixes are exactly right. `plist-get` expects a property list (`:key val :key2 val2...`), not an alist. And JSON serialization paths in Emacs are notoriously sensitive to whether keys are keywords, symbols, or strings depending on `json-object-type` / `json-encoding-key-fn`.
-
-**3. `string-match-p` on `nil` is a guaranteed `wrong-type-argument` error.**
-Guard is necessary.
-
-**4. Argument-order inversion in `gptel-benchmark-baseline-file-compare`.**
-This is a high-severity silent bug—exactly the kind of thing that makes baseline/candidate comparisons useless. Good catch.
-
-**5. `provide` stranded before EOF.**
-A genuine structural/load-order bug. M
-
-... (truncated)
-=======
-# Quick Review: Distilled Research Strategy
-
-## Structure Analysis
-
-| Element | Status | Notes |
-|---------|--------|-------|
-| Template | ✓ | Standard choice |
-| Experiment count | ✓ | 8 experiments is reasonable |
-| Target breakdown | ⚠️ | 6 targets with 2 staging + 4 modules |
-| Hypotheses | ❓ | "None specified" — intentional? |
-
-## Observations
-
-**Potential Gaps:**
-- No hypotheses defined — will experiments test specific claims?
-- Unclear how 8 experiments distribute across 6 targets
-- No priority or sequencing specified
-
-**Questions to Consider:**
-1. Are the 2 staging targets prerequisites for module targets?
-2. What's the expected output of each Elisp module target?
-3. Is "no hypotheses" by design, or an oversight?
-
-## Need More Detail?
-
-If you'd like a deeper review, share:
-- Experiment descriptions
-- Success criteria
-- Timeline/deadlines
-
-This helps validate the strategy is well-scoped.
->>>>>>> Stashed changes
