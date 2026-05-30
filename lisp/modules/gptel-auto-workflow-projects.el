@@ -814,6 +814,9 @@ To be called from cron - visits each project directory (loading .dir-locals.el),
 then runs researcher for that project.
 When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
   (interactive)
+  ;; Ensure agent types are registered (researcher, executor, etc.)
+  (when (fboundp 'gptel-agent--update-agents)
+    (ignore-errors (gptel-agent--update-agents)))
   ;; Load full workflow stack when running in researcher daemon context
   (condition-case err
       (progn
