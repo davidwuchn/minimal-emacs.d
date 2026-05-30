@@ -31,7 +31,7 @@ total-kept: 2
 
 - **How it works** (38× from mementum)
 - **Apply to us** (36× from mementum)
-- **manual-fix** (26× from git)
+- **manual-fix** (25× from git)
 - **Source type** (24× from mementum)
 - **Description** (24× from mementum)
 - **Application for us** (24× from mementum)
