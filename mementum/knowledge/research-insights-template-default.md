@@ -4,48 +4,49 @@ status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
 insight-quality: 0.7/10
-allium-issues: 0
+allium-issues: 3
 allium-severity: 0.00
-allium-status: coherent
+allium-status: ok
 ---
 
 # Research Strategy: template-default
 
-*Consolidated from 197 experiments (7% keep rate).*
+*Consolidated from 29 experiments (7% keep rate).*
 
-**Performance:** 14 kept / 31 discarded / 19 failed (EXTRACTED — from TSV)
+**Performance:** 2 kept / 0 discarded / 15 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
-- `lisp/modules/gptel-benchmark-evolution.el` (1 kept / 3 discarded)
-- `lisp/modules/gptel-ext-tool-permits.el` (4 kept / 2 discarded / 1 failed)
-- `lisp/modules/gptel-auto-workflow-mementum.el` (1 kept / 1 discarded / 1 failed)
-- `lisp/modules/gptel-benchmark-comparator.el` (2 kept / 1 discarded)
-- `lisp/modules/gptel-benchmark-integrate.el` (1 kept / 1 discarded)
-- `lisp/modules/gptel-auto-workflow-research-integration.el` (1 kept / 15 discarded / 1 failed)
-- `lisp/modules/gptel-ext-core.el` (2 kept / 1 discarded / 1 failed)
-- `lisp/modules/gptel-tools-agent-validation.el` (2 kept / 3 discarded / 1 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (2 kept / 3 failed)
 
 ### Structure (deterministic scan)
 
 ```elisp-structure
-defuns: gptel-benchmark-evolution-cycle, gptel-benchmark-evolution-observe, gptel-benchmark-evolution--deficient-p, gptel-benchmark-evolution-orient, gptel-benchmark-evolution-decide, gptel-benchmark-evolution-act, gptel-benchmark-evolution-mutate, gptel-benchmark-evolution-feed-forward, gptel-benchmark-evolution-check-capabilities, gptel-benchmark-evolution-emergence-rate, gptel-benchmark-evolution-track-correction, gptel-benchmark-evolution-status-report, gptel-benchmark-evolution-check-complete, gptel-benchmark-detect-anti-patterns, gptel-benchmark-apply-anti-pattern-remedy, gptel-benchmark-evolution-balance, gptel-benchmark-evolution-pathway, gptel-benchmark-evolution-next-capability, gptel-benchmark-evolution-discover, gptel-benchmark-evolution-self-improve
-defvars: gptel-benchmark-evolution-cycle-threshold, gptel-benchmark-evolution-state
-requires: cl-lib, gptel-benchmark-core, gptel-benchmark-principles, gptel-benchmark-memory
-provides: gptel-benchmark-evolution
-errors: error
-handlers: err
+defuns: gptel-auto-workflow--ensure-buffer-tables, gptel-auto-workflow--normalized-projects, gptel-auto-workflow--normalize-worktree-dir, gptel-auto-workflow--buffer-tool-snapshot, gptel-auto-workflow--routed-fsm-info, gptel-auto-workflow--get-worktree-buffer, gptel-auto-workflow--get-project-buffer, gptel-auto-workflow-add-project, gptel-auto-workflow-remove-project, gptel-auto-workflow-list-projects, gptel-auto-workflow-run-all-projects, gptel-auto-workflow--finish-queued-cron-job, gptel-auto-workflow--queue-cron-job, gptel-auto-workflow-queue-all-projects, gptel-auto-workflow--get-project-for-context, gptel-auto-workflow--advice-task-override, gptel-auto-workflow-enable-per-project-subagents, gptel-auto-workflow-disable-per-project-subagents, gptel-auto-workflow--advice-task-overlay-buffer, gptel-auto-workflow--enable-overlay-buffer-advice
+defvars: gptel-auto-workflow--async, gptel-auto-workflow--process, gptel-auto-workflow--worktree-state, gptel-auto-workflow-worktree-base, gptel-auto-workflow--current-target, gptel-auto-workflow-projects, gptel-auto-workflow--project-buffers, gptel-auto-workflow--current-project, gptel-auto-workflow--run-project-root, gptel-auto-workflow--cron-job-running, gptel-auto-workflow--stats, gptel-auto-workflow--running, gptel-auto-workflow--cron-job-timer, gptel-auto-workflow--defer-subagent-env-persistence, mementum-root, gptel-auto-workflow--project-root-override), gptel-auto-workflow--research-findings-cache, gptel-auto-workflow--worktree-buffers, gptel-auto-workflow--normalized-projects-cache, gptel-auto-workflow--normalized-projects-hash
+requires: cl-lib, gptel-tools-agent
+provides: gptel-auto-workflow-projects
+declares: gptel-auto-workflow--project-root, gptel-auto-workflow--get-worktree-dir, gptel-auto-workflow--mark-messages-start, gptel-auto-workflow--persist-status, gptel-auto-workflow-cron-safe, gptel-auto-workflow-run-async--guarded, gptel-auto-workflow-run-research, gptel-fsm-info, gptel-mementum-weekly-job, gptel-benchmark-instincts-weekly-job, gptel-auto-workflow--run-autotts-evolution, gptel-auto-workflow--reorder-fallbacks-by-ontology, gptel-auto-workflow--run-research-champion-league, gptel-auto-workflow--run-strategy-evolution
+errors: error, error, error, error, error, error, error, user-error, error, error, error, error, error, signal
+handlers: err, err, err, err, nil, nil, err, err, nil, nil, err, err, err, err, err, err, err
+advised: gptel-agent--task, gptel-agent--task-overlay
 ```
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-auto-workflow-projects.el` (5 failed)
-- `lisp/modules/gptel-auto-workflow-strategic.el` (5 failed)
-- `lisp/modules/gptel-ext-context.el` (1 failed)
-- `lisp/modules/gptel-auto-workflow-research-integration.el` (1 kept / 15 discarded / 1 failed)
-- `lisp/modules/gptel-auto-workflow-research-benchmark.el` (2 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (2 kept / 3 failed)
+- `lisp/modules/gptel-benchmark-subagent.el` (3 failed)
+- `lisp/modules/gptel-tools-agent-error.el` (3 failed)
+- `lisp/modules/gptel-tools-agent-prompt-build.el` (3 failed)
+- `lisp/modules/gptel-auto-workflow-strategic.el` (3 failed)
+
+## Allium Behavioral Coherence
+
+*3 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
+
+
 
 ## Meta-Learning Recommendations (INFERRED — from pattern analysis)
 
@@ -60,111 +61,28 @@ These targets may need different research patterns or the research findings were
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*2 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy Distillation
+Based on the research strategy and 29 experiments across the specified Lisp modules, two hypotheses were kept:
 
-## Overview
-- **Strategy**: template-default
-- **Scale**: 64 experiments across 14 targets
+1. **Marker-live check for the `where` parameter** — ensures that when `where` is a dead marker (e.g., from a killed buffer), the function handles it gracefully instead of passing it to the original function.
 
-## Outcome Summary
-All hypotheses were **discarded** (none retained).
+2. **Hash-table-p guard in `gptel-auto-workflow--research-cache-get`** — prevents `wrong-type-argument` errors by checking the research cache hash table is non-nil, aligning with the nil-safety pattern already present in `strategic.el` (lines 2719–2721). This prevents crashes during early startup or after error recovery.
 
-## Discarded Hypotheses by Category
-
-| Category | Hypothesis | Rationale |
-|----------|------------|-----------|
-| **Performance** | Memoize `nucleus--project-root` | Avoid repeated `(project-current nil)` calls |
-| **Performance** | Memoize directory resolution functions | Eliminate redundant `file-directory-p` checks |
-| **Performance** | Cache directory path resolution in `nucleus-prompts.el` | Remove repeated `file-directory-p`/`project-current` checks |
-| **Vitality** | Add nil guard + `file-readable-p` validation to `nucleus--read-file` | Prevent errors on invalid paths |
-| **Clarity** | Fix argument order bug in `nucleus--validate-contract` | Error messages incorrectly show tool name instead of arg name |
-| **Concurrency** | Fix race condition in `nucleus-sync-tool-profile` | Buffer captured at fire time vs. creation time in idle timer |
-| **Clarity/Efficiency** | Remove redundant consp/keywordp check, move `make-hash-table` inside guard, use `ignore-errors` | Eliminate speculative allocation, use idiomatic error suppression |
-| **Vitality/Clarity** | Add nil guard for empty `status-lines` in `gptel-auto-workflow-research-status-all` | Prevent caching empty results, handle edge case explicitly |
-| **Clarity (fractal)** | Fix misleading indentation in workflow functions | Visual structure didn't match parse tree |
-
-## Key Takeaway
-Despite extensive experimentation (64 runs), no hypothesis warranted implementation—suggesting either the proposed optimizations are premature, the baseline performance is acceptable, or the identified issues have lower impact than anticipated.
+No hypotheses were discarded.
 ```
 
 ### Check Issues
 
-The summary is clear and well-structured. A few observations:
+Understood. Your experimental validation confirms two concrete improvements:
 
-**Looks reasonable.** "All hypotheses discarded" is a valid outcome—it's information, not failure. The hypotheses appear well-reasoned (memoization, nil guards, race conditions, argument order bugs).
+1. **Marker-liveness check for `where`** – prevents passing dead markers to underlying functions, which would otherwise cause errors when the originating buffer has been killed.
 
-**Minor feedback on the table:**
-- "Clarity (fractal)" for the indentation fix is oddly specific terminology—consider "Code Quality" or just "Clarity"
-- "Remove redundant consp/keywordp check..." is long; could trim to "Simplify contract validation" for readability
+2. **Hash-table existence guard** in `gptel-auto-workflow--research-cache-get` – mirrors the nil-safe pattern already in `strategic.el` (lines 2719–2721), avoiding `wrong-type-argument` errors during startup or after cache corruption.
 
-**Potential gaps to consider:**
-- Were any hypotheses *partially* valid but not worth the complexity? (Worth noting if so)
-- Is there any pattern across the 14 targets suggesting certain areas are more stable/optimized than others?
+Both hypotheses survived 29 module-specific experiments with no discards – a strong signal that these are robust, low-risk changes.
 
-**Next steps might include:**
-1. Confirm these hypotheses weren't implemented outside this study
-2. Verify the baseline performance is actually "acceptable" (e.g., user-reported slowness elsewhere?)
-3. Decide if 64 experiments on 14 targets is worth revisiting with different hypotheses, or if the code has reached local optimum
-
-Overall: solid empirical approach. The conclusion ("premature optimization" likely) is defensible.
+Would you like me to draft the corresponding code patches, or help design regression tests to ensure these guards remain effective across future refactors?

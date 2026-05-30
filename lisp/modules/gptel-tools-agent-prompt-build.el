@@ -1844,7 +1844,7 @@ exhaustion.")
   "Maximum seconds between retries for rate-limited API failures.")
 
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
-  '(("DeepSeek" . "deepseek-v4-flash")
+  '(("DeepSeek" . "deepseek-v4-pro")
     ("MiniMax" . "minimax-m2.7-highspeed")
     ("moonshot" . "kimi-k2.6"))
   "Ordered backend/model fallbacks for headless auto-workflow subagents.
@@ -1868,12 +1868,12 @@ CF-Gateway, then MiniMax."
   :group 'gptel-tools-agent)
 
 (defcustom gptel-auto-workflow-executor-rate-limit-fallbacks
-  '(("DeepSeek" . "deepseek-v4-flash")
+  '(("DeepSeek" . "deepseek-v4-pro")
     ("MiniMax" . "minimax-m2.7-highspeed")
     ("moonshot" . "kimi-k2.6"))
   "Ordered backend/model fallbacks for executor after rate limits.
 
-DeepSeek first — deepseek-v4-flash confirmed working (no content filter).
+DeepSeek first — deepseek-v4-pro confirmed working (no content filter).
 MiniMax second — minimax-m2.7-highspeed fast but may hit rate limits.
 moonshot third — kimi-k2.6 content_filter blocks code gen (last resort).
 DashScope removed — quota exhausted (HTTP 429) on this account.
@@ -1885,19 +1885,19 @@ CF-Gateway removed — @cf/moonshotai/kimi-k2.6 does not support tool calls reli
 (defcustom gptel-auto-workflow-per-task-model-map
   '(("analyzer"   "MiniMax"    . "minimax-m2.7-highspeed")
     ("analyzer"   "DashScope"  . "qwen3.6-plus")
-    ("analyzer"   "DeepSeek"   . "deepseek-v4-flash")
+    ("analyzer"   "DeepSeek"   . "deepseek-v4-pro")
     ("analyzer"   "moonshot"   . "kimi-k2.6")
     ("grader"     "MiniMax"    . "minimax-m2.7-highspeed")
     ("grader"     "DashScope"  . "qwen3.6-plus")
-    ("grader"     "DeepSeek"   . "deepseek-v4-flash")
+    ("grader"     "DeepSeek"   . "deepseek-v4-pro")
     ("grader"     "moonshot"   . "kimi-k2.6")
     ("executor"   "DashScope"  . "qwen3.6-plus")
     ("executor"   "moonshot"   . "kimi-k2.6")
-    ("executor"   "DeepSeek"   . "deepseek-v4-flash")
+    ("executor"   "DeepSeek"   . "deepseek-v4-pro")
     ("executor"   "MiniMax"    . "minimax-m2.7-highspeed")
     ("researcher" "MiniMax"    . "minimax-m2.7-highspeed")
     ("researcher" "DashScope"  . "qwen3.6-plus")
-    ("researcher" "DeepSeek"   . "deepseek-v4-flash")
+    ("researcher" "DeepSeek"   . "deepseek-v4-pro")
     ("researcher" "moonshot"   . "kimi-k2.6")
     ("reviewer"   "MiniMax"    . "minimax-m2.7-highspeed")
     ("reviewer"   "DashScope"  . "qwen3.6-plus")
@@ -1905,14 +1905,14 @@ CF-Gateway removed — @cf/moonshotai/kimi-k2.6 does not support tool calls reli
     ("reviewer"   "moonshot"   . "kimi-k2.6")
     ("comparator" "MiniMax"    . "minimax-m2.7-highspeed")
     ("comparator" "DashScope"  . "qwen3.6-plus")
-    ("comparator" "DeepSeek"   . "deepseek-v4-flash")
+    ("comparator" "DeepSeek"   . "deepseek-v4-pro")
     ("comparator" "moonshot"   . "kimi-k2.6"))
   "Per-task-type model selection for each backend.
 Each element is (AGENT-TYPE BACKEND . MODEL).
 When selecting a backend+model pair for AGENT-TYPE, this map takes
 priority over the static fallback lists — ensuring code-generation
 tasks (executor) use the capable deepseek-v4-pro while analysis tasks
-(analyzer, grader) use the faster deepseek-v4-flash.
+(analyzer, grader) use the faster deepseek-v4-pro.
 Backend entries not listed here fall back to their default model from
 `gptel-auto-workflow-headless-subagent-fallbacks`."
   :type '(repeat (list (string :tag "Agent type")
@@ -2081,11 +2081,11 @@ the user has not explicitly customized the variable."
                        ("Gemini" . "gemini-3.1-pro-preview"))
                        (("DashScope" . "qwen3.6-plus")
                         ("moonshot" . "kimi-k2.6")
-                        ("DeepSeek" . "deepseek-v4-flash")
+                        ("DeepSeek" . "deepseek-v4-pro")
                         ("MiniMax" . "minimax-m2.7-highspeed"))))
          (setq gptel-auto-workflow-headless-subagent-fallbacks
                '(("DashScope" . "qwen3.6-plus")
-                 ("DeepSeek" . "deepseek-v4-flash")
+                 ("DeepSeek" . "deepseek-v4-pro")
                  ("moonshot" . "kimi-k2.6")
                  ("MiniMax" . "minimax-m2.7-highspeed")))
         (push 'gptel-auto-workflow-headless-subagent-fallbacks migrated)))
@@ -2100,7 +2100,7 @@ the user has not explicitly customized the variable."
                 '(("MiniMax" . "minimax-m2.7-highspeed")
                   ("moonshot" . "kimi-k2.6")
                   ("DashScope" . "glm-5")
-                  ("DeepSeek" . "deepseek-v4-flash")))
+                  ("DeepSeek" . "deepseek-v4-pro")))
         (push 'gptel-auto-workflow-executor-rate-limit-fallbacks migrated)))
     (unless (gptel-auto-workflow--custom-var-user-customized-p
              'gptel-auto-experiment-validation-retry-active-grace)
