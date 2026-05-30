@@ -11,13 +11,13 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 192 experiments (9% keep rate).*
+*Consolidated from 194 experiments (9% keep rate).*
 
-**Performance:** 18 kept / 44 discarded / 12 failed (EXTRACTED — from TSV)
+**Performance:** 18 kept / 44 discarded / 14 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
-- `lisp/modules/gptel-tools-agent-prompt-build.el` (1 kept / 3 discarded)
+- `lisp/modules/gptel-tools-agent-prompt-build.el` (1 kept / 3 discarded / 2 failed)
 - `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 3 discarded)
 - `lisp/modules/gptel-tools-agent-runtime.el` (1 kept / 1 discarded / 2 failed)
 - `lisp/modules/gptel-benchmark-core.el` (5 kept / 7 discarded / 2 failed)
@@ -44,11 +44,11 @@ handlers: nil, nil, err, err, err, err, err, err, nil
 
 These targets may need different research patterns or the research findings were misleading.
 
+- `lisp/modules/gptel-tools-agent-prompt-build.el` (1 kept / 3 discarded / 2 failed)
 - `lisp/modules/gptel-auto-workflow-strategic.el` (1 discarded / 1 failed)
 - `lisp/modules/gptel-auto-workflow-evolution.el` (1 failed)
 - `lisp/modules/gptel-tools-agent-runtime.el` (1 kept / 1 discarded / 2 failed)
 - `lisp/modules/gptel-benchmark-core.el` (5 kept / 7 discarded / 2 failed)
-- `lisp/modules/gptel-tools-agent-subagent.el` (1 failed)
 
 ## Meta-Learning Recommendations (INFERRED — from pattern analysis)
 
@@ -69,56 +69,116 @@ These targets may need different research patterns or the research findings were
 
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*4 check issues (severity 0.30). EXTRACTED from distill→check pipeline.*
 
 ```allium
-**Research Strategy: template-default**
+# Research Strategy Distillation: template-default
 
-**87 experiments across 20 targets** — gptel modules for workflow automation, benchmarking, tools/agents, and extensions.
+## Kept Hypotheses (Prioritized)
 
-**Kept (5 hypotheses):**
-- Nil summary validation in benchmark comparison → prevent `wrong-type-argument`
-- Negative caching fix → O(1) instead of O(n) disk hits for missing files
-- `proper-list-p` validation before `last` → prevent crash on improper lists
-- `stringp` validation in skill loader → explicit type contracts
-- Nil guards before `string-match`/`split-string` → error resilience
+### Critical Bug Fixes
+1. **`hash-table-keys` not built-in** — used in `my/gptel-show-permits` and `my/gptel-health-check`; causes runtime errors
+2. **Keyword-to-alist conversion bug** in `gptel-benchmark--to-json-format` — dotted-pair alists retain keyword keys instead of converting to symbols
+3. **Argument order swap** in `gptel-benchmark-baseline-file-compare` — baseline/candidate inversion inverts improvement/regression signals
+4. **Stale-copy bug** in `gptel-auto-workflow--link-shared-runtime-path` — regular files treated as valid without creating symlinks
+5. **`plist-get` vs `alist-get` bug** in `gptel-benchmark-diagnose-elements` — alist data accessed with plist accessor; scores always default to 0.5
 
-**Discarded (14 hypotheses):**
-- `error-message-string` formatting, hash table removal, symbol map derivation, benchmark summary caching, `proper-list-p` replacement, module path caching, nil guards for `feature-name`, FSM logging, `seen` hash table reuse, redundant validation removal, regexp `bound-and-true-p`, `cl-remove` fix, memoization for error categorization
+### Input Validation (Safety/Clarity)
+- `gptel-auto-experiment--validate-candidate-safely`: nil, non-string, empty guards
+- `gptel-auto-workflow-research-status-all`: nil-safety
+- `my/gptel-permit-tool`: string validation to prevent hash corruption
+- `gptel-tools-memory--resolve-path`: slug character validation
+- `gptel-workflow--score-tools`: proper-list-p validation
+- `gptel-benchmark-summarize-results`: proper-list-p validation
+- `gptel-benchmark-prescribe`: nil guard for malformed plist entries
+- `gptel-benchmark--to-json-format`: `(cl-every #'consp data)` validation
+- `gptel-auto-workflow--finalize-review-fix-result`: response nil guard
 
-**Focus:** Safety, Vitality (error resilience), Performance (caching), Clarity (explicit contracts).
+### Code Quality
+- Extract `gptel-benchmark--empty-summary` helper (duplicated zero-result structure)
+- Fix unreachable code in error conditions
+- Fix `condition-case` error handler in `gptel-auto-workflow--safe-truename` (invalid `(ignore)` condition)
+
+### Test Infrastructure
+- Move `provide` after test definitions in `gptel-benchmark-tests.el`
+- Add unwind-protect for global state modification
+- Fix test state pollution in `gptel-benchmark-test-evolution-cycle-increments`
+- Add `(require 'cl-lib)` for undefined functions
+
+## Discarded Hypotheses
+
+| Category | Reason |
+|----------|--------|
+| Redundant `(consp val)` check removal | Already encoded in computation |
+| `condition-case nil` → `ignore-errors` | Self-flagged anti-pattern |
+| Empty `status-lines` nil guard | Marginal edge case |
+| Misleading indentation fixes | Visual-only, no functional impact |
+| Argument order fix in `nucleus--validate-contract` | Lower impact |
+| Race condition in `nucleus-sync-tool-profile` | Not observed |
+| Memoization for `nucleus--project-root` | Not benchmarked as bottleneck |
+| Memoization for `nucleus--resolve-*` dirs | Already optimized |
+| Removing duplicate `cl-every` | Preserves identical semantics |
+| File size validation in `gptel-tools-memory--read` | Over-specification |
+| Restructuring `condition-case` in sync | Marginal performance gain |
+| `gptel-ext-tool-permits.el` optimization | Already optimized |
+| CRUD lifecycle + search | No hypothesis stated |
+
+## Strategy Pattern
+
+**Keep when:**
+- Fixes concrete bugs (runtime errors, incorrect behavior)
+- Adds defensive validation for implicit assumptions
+- Improves error messages/Clarity of code intent
+
+**Discard when:**
+- Speculative performance gains
+- Redundant validation already covered elsewhere
+- Code already optimized from prior experiments
+- Marginal edge cases with low observed impact
 ```
 
 ### Check Issues
 
-# Review: Research Strategy Summary
+# Review of Research Strategy Distillation
 
-## Math Check
-| Category | Count |
-|----------|-------|
-| Kept | 5 |
-| Discarded | 14 |
-| **Total listed** | **19** |
-| Stated total | 87 |
+## Structure Assessment
 
-**⚠️ Discrepancy:** 19 listed vs 87 stated — missing 68 experiments.
+| Aspect | Status | Notes |
+|--------|--------|-------|
+| Hypotheses prioritization | ✅ Good | Clear separation of kept vs discarded |
+| Priority ordering | ⚠️ Unclear | "Critical" first, but sub-priority within sections not indicated |
+| Discard rationale | ⚠️ Inconsistent | Some entries detailed, "CRUD lifecycle + search" lacks substance |
 
-## Validation
+## Issues to Address
 
-**The 5 kept hypotheses** are sound defensive coding practices:
-- ✅ All address runtime error prevention
-- ✅ Cover the four focus areas (Safety, Vitality, Performance, Clarity)
+### 1. Discarded Hypotheses Table Gaps
+```
+| CRUD lifecycle + search | No hypothesis stated |
+```
+This entry provides no actionable insight. Either:
+- Remove it entirely
+- Clarify what was being evaluated and why it was discarded
 
-**The 14 discarded** are reasonable to discard:
-- ✅ Micro-optimizations without evidence of bottleneck
-- ✅ Refactorings that don't improve user-facing behavior
+### 2. Categorization Ambiguity
+Several "Code Quality" items could qualify as "Critical":
+- `condition-case` error handler bug
+- Unreachable code in error conditions
 
-## Questions
+Consider elevating these if they affect correctness.
 
-1. **Where are the other 68 experiments categorized?**
-2. **What's the acceptance criteria for "kept" vs "discarded"?**
-3. **Were 87 experiments actually run, or is this aspirational?**
+### 3. Test Infrastructure Priority
+Listed last despite affecting correctness of all other work. Consider repositioning or adding a note explaining why it's lower priority than bug fixes.
 
-## Verdict
+### 4. Missing Context
+- What methodology produced these hypotheses?
+- What was the codebase scope/size?
+- Were these prioritized via testing, code review, or runtime observation?
 
-The framework is coherent. The hypothesis classifications appear reasonable. The main issue is the count mismatch with the 87-experiment claim.
+## Suggestions
+
+1. **Add section headers with priority numbers** within kept hypotheses
+2. **Standardize discard reasons** — aim for 1-2 sentences each
+3. **Add a "Next Steps" or "Action Items" section** with owner assignments or timelines
+4. **Consider a "Review Date
+
+... (truncated)
