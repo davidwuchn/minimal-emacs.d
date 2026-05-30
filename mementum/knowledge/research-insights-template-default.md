@@ -171,29 +171,76 @@ The experiments surfaced a **robustness crisis, not a performance crisis**. The 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.05). EXTRACTED from distill→check pipeline.*
 
 ```allium
-**Research Distillation: template-default**
+**Distillation: Research Strategy (template-default) — 201 Experiments**
 
-- **Strategy**: 8 experiments conducted across 6 targets
-- **Results**: No hypotheses retained; no hypotheses discarded (lists empty)
-- **Interpretation**: The experimental process completed but yielded no definitive conclusions, or results are pending/full documentation not captured in summary
+**Scope:** ~25 Elisp modules across `gptel-auto-workflow-*`, `gptel-tools-agent-*`, `gptel-benchmark-*`, `gptel-ext-*`, `nucleus-*`, `gptel-tools-memory`, and `gptel-agent-loop`.
 
-*Recommendation*: Review individual experiment outputs to determine actual hypothesis outcomes.
+---
+
+### Kept Hypotheses (Defensive Correctness)
+
+**Input Validation & Nil-Safety** — The dominant theme. Added guards to prevent runtime crashes from malformed agent output:
+- `gptel-auto-experiment--validate-candidate-safely`, `gptel-auto-workflow-research-status-all`, `gptel-workflow--score-tools`: nil / non-string / empty-string checks.
+- `gptel-benchmark--to-json-format`, `gptel-benchmark-summarize-results`: `(cl-every #'consp data)` and `proper-list-p` validation before destructuring.
+- `gptel-benchmark-prescribe`, `gptel-auto-workflow--finalize-review-fix-result`: nil guards before string/pattern operations.
+- `gptel-tools-memory--resolve-path`, `my/gptel-permit-tool`: slug and hash-table input validation.
+
+**Data-Structure & Logic Bug Fixes** — Corrected concrete mismatches causing silent failures or inverted semantics:
+- Fixed keyword-to-symbol alist conversion in `gptel-benchmark--to-json-format` (dotted pairs with keyword keys broke JSON serialization).
+- Fixed `gptel-benchmark-diagnose-elements` using `plist-get` on alist data, causing scores to always default to 0.5; changed to `alist-get`.
+- **Swapped inverted arguments** in `gptel-benchmark-baseline-file-compare`: caller passed `current` as version-a and `baseline` as version-b, inverting improvement/regression signals.
+- Fixed stale-copy bug in `gptel-auto-workflow--link-shared-runtime-path` (regular files treated as valid symlinks).
+
+**API Robustness & Error Signaling**
+- Replaced non-built-in `hash-table-keys` usage (runtime errors in `my/gptel-show-permits` / `my/gptel-health-check`).
+- Changed `gptel-tools-memory--read` / `--write` to signal errors instead of returning silent error strings.
+- Extracted duplicated zero-result structure in `gptel-benchmark-summarize-results` into explicit helper `gptel-benchmark--empty-summary`.
+
+---
+
+### Discarded Hypotheses (Optimization & Structural)
+
+**Performance / Memoization** — Deemed speculative or low-impact:
+- Caching layers for `nucleus--project-root`, prompt/agent directory resolution, and `gptel-auto-workflow--safe-backend-name`.
+- Micro-optimizations: removing redundant `cl-every` passes, temp-buffer elimination in `gptel-tools-memory--read`, `condition-case` restructuring.
+
+**Test Infrastructure & File Structure**
+- Moving misplaced `(provide 'gptel-benchmark-tests)` and 14 test definitions from after-provide to before-provide.
+- Adding `unwind-protect` cleanup and fixing test state pollution in benchmark tests.
+- Fixing race condition in `nucleus-sync-tool-profile` idle timer (`current-buffer` capture).
+
+**Style & Scope Expansion**
+- Misleading indentation fixes; `ignore-errors` vs `condition-case` preference.
+- File-size validation for memory read; completing CRUD lifecycle + content-based search.
+
+---
+
+### Pattern
+
+The strategy **accepted concrete, low-risk validation guards and correctness fixes** (Vitality and Clarity axes: nil-safety, type checking, argument-order bugs, proper error signaling) while **rejecting speculative performance optimizations, structural test reorganizations, and stylistic refactors** that did not address immediate runtime failure modes.
 ```
 
+### Check Issues
+
+This is a sharp, well-structured distillation. The boundary between **concrete runtime correctness** (kept) and **speculative/structural work** (discarded) is clear, and the Pattern summary accurately captures the decision logic.
+
+A few critical checks and suggestions:
+
+### 1. Likely Miscategorization: Race Condition
+**`nucleus-sync-tool-profile` idle timer (`current-buffer` capture)** should probably move from **Discarded** to **Kept**.
+
+Capturing `current-buffer` in a closure passed to an idle timer is a classic deferred-time bug: by the time the timer fires, the buffer may be killed, buried, or switched, causing the operation to run in the wrong context (or signal an error in a background timer). This is a **runtime correctness / nil-safety issue**, not speculative optimization or test infrastructure. Unless you have confirmed the timer is always cancelled synchronously before the buffer can change, this is defensive and low-risk.
+
+### 2. Test Infrastructure: Correctness vs. Structure
+The misplaced `(provide 'gptel-benchmark-tests)` and test state pollution sit on the boundary.
+- If benchmark tests are run in CI or before releases, state pollution creates **non-deterministic failures** (correctness).
+- If they are purely manual/debugging tools, discarding them as "structural" is justified.
+
+**Check:** Are the benchmark tests part of the critical validation path? If yes, the `unwind-protect` cleanup and `provide` relocation are defensive correctness fixes and should be kep
+
+... (truncated)
