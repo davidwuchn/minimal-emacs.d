@@ -174,7 +174,7 @@
 ;;
 ;; C-level message_with_string (from load, save-buffer, etc.) is also
 ;; suppressed from *Messages* (message-log-max 0 blocks message_dolog).
-(setq message-log-max 0)
+(setq message-log-max 65536)
 
 ;; Prefer .el source over .elc when both exist.  The daemon's (load ...)
 ;; call byte-compiles source to .elc as a side effect, and stale .elc
