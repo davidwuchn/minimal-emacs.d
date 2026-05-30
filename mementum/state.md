@@ -81,6 +81,13 @@
 - `experiment-core.el`: When eight-keys score is nil or < 0.1 but grader passed, use normalized grader score as the after-score for the comparator. This prevents valid changes from being rejected because the structural scorer returned 0.0.
 - `prompt-analyze.el`: Lowered strong-grade-pass threshold 85%→70% so grade bypass triggers more readily.
 
+### Remote Sync (36605f6d1 — 10 commits)
+- **`condition-case (error nil)` fix**: All `(ignore)` handlers replaced with `(error nil)` — was NOT catching errors, self-evolution running silently broken. Massive fix.
+- **Research findings overload fix**: Strip `<think>` blocks, extract actionable patterns, limit to 500 chars. Executors were confusing 38KB research with their task.
+- **Evolution skip logic fix**: Negative count from cleanup no longer causes false skip
+- **Model capture fix**: Prioritize `gptel-model` over preset model
+- Pipeline 19:00: 2 experiments, both validation-failed (our comparator fix deployed for 23:00)
+
 ### Remote Sync (98c54d02 — 6 commits)
 - `⊘ debug: add benchmark verification tracing` — Pi5 also debugging verification-failed gate
 - `⊘ fix: add projects.el to reload-live-support, analyzer timeout 120→240s` (DeepSeek thinking)
