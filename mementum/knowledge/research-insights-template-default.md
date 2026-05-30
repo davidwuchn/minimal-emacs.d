@@ -175,101 +175,25 @@ The experiments surfaced a **robustness crisis, not a performance crisis**. The 
 
 
 
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy Distillation
+**Research Distillation: template-default**
 
-## Overview
-**203 experiments** across 33 target modules, evaluating changes for a GPTel system (Emacs LLM integration).
+- **Strategy**: 8 experiments conducted across 6 targets
+- **Results**: No hypotheses retained; no hypotheses discarded (lists empty)
+- **Interpretation**: The experimental process completed but yielded no definitive conclusions, or results are pending/full documentation not captured in summary
 
----
-
-## Kept Hypotheses (15 Validated)
-
-| Category | Count | Key Themes |
-|----------|-------|------------|
-| **Safety** | 8 | Nil guards, `proper-list-p` validation, type checks |
-| **Clarity** | 5 | Extracting helpers, eliminating duplication, explicit contracts |
-| **Performance** | 1 | Precomputing cycle thresholds (5× per cycle → once) |
-| **Bug Fixes** | 1 | Zero-score false-positive rejection in benchmark comparison |
-
-**Core pattern:** Add defensive validation at system boundaries to prevent runtime crashes and make implicit assumptions testable.
-
----
-
-## Discarded Hypotheses (28 Rejected)
-
-| Category | Count | Rationale |
-|----------|-------|-----------|
-| **Unnecessary Refactoring** | 9 | Dead code, unreachable guards, idiom preferences |
-| **Premature Optimization** | 6 | Memoization, regex vs char filtering, condition-case overhead |
-| **Over-validated** | 5 | Validation already handled elsewhere or unnecessary |
-| **Bug Fix Duplicates** | 4 | Same fixes proposed multiple times |
-| **Incorrect Assumptions** | 3 | Proposed changes based on wrong data flow understanding |
-
-**Core pattern:** Proposed changes either didn't measurably improve the system or addressed issues already solved.
-
----
-
-## Summary
-
-The research validated a **defensive programming approach**: adding explicit validation (`nil`, `proper-list-p`, `plist-member`) to entry points prevents crashes without significant performance cost. Rejected proposals were largely unnecessary micro-optimizations or refactoring for idiom preference rather than functional improvement.
+*Recommendation*: Review individual experiment outputs to determine actual hypothesis outcomes.
 ```
 
-### Check Issues
-
-# Review of Research Strategy Distillation
-
-## Quick Assessment: **Solid Summary, Minor Clarity Gaps**
-
----
-
-## ✅ What's Good
-
-| Aspect | Notes |
-|--------|-------|
-| **Structured format** | Tables make categories scannable |
-| **Quantified outcomes** | 15 accepted / 28 rejected gives clear ratio (~35% acceptance) |
-| **Pattern extraction** | Core findings distilled into actionable principles |
-| **Diverse categories** | Safety/Clarity/Performance/Bug Fixes covers the key dimensions |
-
----
-
-## ⚠️ Points Requiring Clarification
-
-### 1. Experiment Count Disconnect
-- **Claimed:** 203 experiments
-- **Hypotheses:** 43 total (15 + 28)
-- **Gap:** ×4.7 experiments per hypothesis — how?
-
-```
-Likely explanations:
-├── Same hypothesis tested across multiple modules?
-├── Multiple test runs for statistical significance?
-├── Baseline vs. variant comparisons counted separately?
-└── ? — This needs explanation for credibility
-```
-
-### 2. Uneven Category Distribution
-| Category | Count |
-|----------|-------|
-| Safety | 8 (highest) |
-| Clarity | 5 |
-| Bug Fixes | 1 |
-| Performance | 1 |
-
-**Question:** Was this distribution *intentional* (prioritizing safety), or does it reflect skewed hypothesis generation?
-
-### 3. "Over-validated" Rejections (5 cases)
-- 5 hypotheses rejected because "validation already handled elsewhere"
-- **Risk:** This suggests unclear ownership of validation logic
-- **Action item:** Might warrant a separate "Validation Architecture" review
-
-### 4. Missing Metrics
-The document lacks:
-- Time saved / crash redu
-
-... (truncated)

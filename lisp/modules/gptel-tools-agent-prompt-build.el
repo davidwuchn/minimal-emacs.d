@@ -1038,16 +1038,18 @@ Returns a compact lambda-notation string ready for the LLM."
      (if strat-f (concat "STRATEGY: " strat-f "\n") "")
      (if agent-b (concat "AGENT: " agent-b "\n") "")
      (if val-pipe (concat "VALIDATE: " val-pipe "\n") "")
-     "\nRULES:\n"
-     "| ¬touch(early-init.el, pre-early-init.el, lisp/eca-security.el)\n"
-     "| ¬doc_only | ¬comment_only | Δ(code) ≡ required\n"
-     "| 1st_line ≡ \"HYPOTHESIS: [what changes & why]\"\n"
-     (if focus (concat "  " focus "\n") "")
-      "| use(Edit,Write) — text-only responses will be rejected | minimal(change) | ¬git(add,commit,push)\n"
-     (concat "| verify: " (or sexp "emacs --batch --eval '...'")
-             " && ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh\n")
-     "\nOUTPUT:  CHANGED(file+fn) EVIDENCE(1-2 diffs) VERIFY(cmds) COMMIT(\"not committed\")\n"
-     "TYPE(pick_one): bug_fix | performance | refactoring | safety | test_coverage")))
+      "\nRULES:\n"
+      "| ¬touch(early-init.el, pre-early-init.el, lisp/eca-security.el)\n"
+      "| ¬doc_only | ¬comment_only | Δ(code) ≡ required\n"
+      "| 1st_line ≡ \"HYPOTHESIS: [what changes & why]\" (NEVER leave blank — always state concrete change)\n"
+      (if focus (concat "  " focus "\n") "")
+       "| use(Edit,Write) — text-only responses will be rejected | minimal(change) | ¬git(add,commit,push)\n"
+       "| MANDATORY: Run `emacs --batch --eval \"(byte-compile-file \\\"FILE\\\")\"` on changed files before finishing\n"
+      (concat "| MANDATORY: verify command: " (or sexp "emacs --batch --eval '...'")
+              " && ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh\n"
+              "| REPORT: In OUTPUT section, show exactly which verify commands ran and their exit codes\n")
+      "\nOUTPUT:  CHANGED(file+fn) EVIDENCE(1-2 diffs) VERIFY(cmds+exit_codes) COMMIT(\"not committed\")\n"
+      "TYPE(pick_one): bug_fix | performance | refactoring | safety | test_coverage")))
 
 (defun gptel-auto-workflow--load-prompt-template ()
   "Load prompt template from skill file.
@@ -1074,16 +1076,18 @@ Returns template string or fallback hardcoded template."
         RULES:
         | ¬touch(early-init.el, pre-early-init.el, lisp/eca-security.el)
         | ¬doc_only | ¬comment_only | Δ(code) ≡ required
-        | 1st_line ≡ \"HYPOTHESIS: [what changes & why]\"
+        | 1st_line ≡ "HYPOTHESIS: [what changes & why]" (NEVER leave blank)
         {{focus-line}}
         | use(Edit,Write) — text-only responses will be rejected | minimal(change) | ¬git(add,commit,push)
+        | MANDATORY: Run `emacs --batch --eval "(byte-compile-file \"FILE\")"` on changed files
+        | MANDATORY: Run verify command and report exit code
         | verify: {{sexp-check-command}} && ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
 
         OUTPUT:
         CHANGED: file(s) + functions touched
         EVIDENCE: 1-2 concrete diffs
-        VERIFY: commands run + pass/fail
-        COMMIT: \"not committed\"
+        VERIFY: commands run + exit codes (MANDATORY — show each command and its exit code)
+        COMMIT: "not committed"
 
         TYPE(pick_one): bug_fix | performance | refactoring | safety | test_coverage
 

@@ -283,7 +283,7 @@ daemons share the same config directory."
                         (let ((standard-output (current-buffer))
                               (debug-on-error nil))
                           (backtrace)))
-                    (error nil)))))))
+                    (error nil))))))
 
 (provide 'post-early-init)
 
