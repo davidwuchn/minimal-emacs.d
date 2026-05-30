@@ -138,170 +138,33 @@ These targets may need different research patterns or the research findings were
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-We need to respond to the user's message. They wrote "distill:" and then a list of experiments across targets, and then "Kept hypotheses:" with a long blank list, and "Discarded hypotheses:" with nothing. This appears to be a request for distillation of research results, but the user didn't provide any actual content. The user might be expecting an AI to process some research data, but the message is empty of details. Possibly it's a template or a placeholder. As an AI assistant, I should clarify what the user wants. The user says "distill:" and then lists experiments and targets. Perhaps they want a summary or distillation of research across these targets. But there are no hypotheses or results provided. So I need to ask for more information.
+**Research Strategy: `template-default`**
 
-Alternatively, this might be part of a system where the user is providing structured data and expects the AI to process it. But the "Kept hypotheses" and "Discarded hypotheses" sections are empty. Could be that the user wants the AI to generate hypotheses based on the listed targets? Or perhaps it's an error.
+**Scope:** 66 experiments across 13 targets (Elisp modules + staging targets).
 
-Given the ambiguity, the best response is to ask the user to provide more context or clarify what they want to distill. I'll respond politely, noting that the message seems incomplete, and ask for the actual research data or specific request.
+**Discarded Hypotheses (5 groups):**
+
+| Category | Hypothesis | Rationale |
+|----------|-----------|-----------|
+| Memoization | `nucleus--project-root` caching | Redundant `project-current` calls don't occur in practice |
+| Memoization | `nucleus--resolve-*-dir` caching | No state change between calls; `file-directory-p` I/O negligible |
+| Memoization | General directory path caching in `nucleus-prompts.el` | Same—resolution is idempotent, not a bottleneck |
+| Error handling | Nil guard + `file-readable-p` in `nucleus--read-file` | Unnecessary defensive coding |
+| Error handling | Argument order fix in `nucleus--validate-contract` | Low-impact clarity issue |
+| Race condition | `nucleus-sync-tool-profile` buffer capture via `let` | Edge case; not a meaningful source of bugs |
+| Performance | Remove redundant `(consp val)` check + move `make-hash-table` inside guard | Micro-optimization; negligible allocation savings |
+| Edge case | Nil guard for empty `status-lines` | Empty results are valid; caching is acceptable |
+| Style | Indentation fixes in `gptel-auto-workflow-run-all-projects` and `gptel-auto-workflow--get-worktree-buffer` | Cosmetic only |
+
+**Kept Hypotheses:** *(none listed)*
+
+---
+
+**Summary:** All 66 experiments were rejected. The strategy errs on the side of *not optimizing*—treating memoization, defensive nil guards, race condition fixes, and style corrections as premature or low-impact. The system favors preserving existing behavior over adding complexity.
 ```
 
-### Check Issues
-
-It looks like you've sent a template or placeholder for a research distillation task, but the message is missing the actual content—such as experiment details, results, or hypotheses to evaluate.
-
-To help you effectively, I need more information:
-
-- What specific experiments or data are you referring to under each target?
-- What hypotheses are you considering (even if they're to be generated or proposed)?
-- What is the goal of the distillation? (e.g., summarizing results, selecting the best hypothesis, identifying patterns, etc.)
-
-Please provide the missing details, and I’ll be happy to distill the information into a clear summary or analysis.
