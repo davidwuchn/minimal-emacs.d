@@ -138,6 +138,13 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
   (gptel-auto-experiment--maybe-failover-main-backend)
   (when (fboundp 'gptel-auto-experiment--check-quota-reset-and-switch-back)
     (gptel-auto-experiment--check-quota-reset-and-switch-back))
+  ;; Global quota exhaustion check — stop early if all backends are dry
+  (when (and (boundp 'gptel-auto-experiment--quota-exhausted)
+             gptel-auto-experiment--quota-exhausted)
+    (message "[auto-experiment] ⏹ All backends quota exhausted — aborting experiment %d/%d for %s"
+             experiment-id max-experiments target)
+    (funcall callback (list :target target :id experiment-id :kept nil :error "all-backends-quota-exhausted"))
+    (cl-return-from gptel-auto-experiment-run))
   (message "[auto-experiment] Starting %d/%d for %s" experiment-id max-experiments target)
   (setq gptel-auto-workflow--current-target target)
   (let* ((worktree (gptel-auto-workflow-create-worktree target experiment-id))
