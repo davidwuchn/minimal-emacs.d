@@ -1,6 +1,5 @@
 ### Allium Issue Trends
-**Recurring patterns** across all strategies:
+**Regression warnings** (1 strategies with increased issues):
 
-- **Hash-table existence guard**: 1 occurrence(s)
-- **Marker-liveness check for `where`**: 1 occurrence(s)
+- `template-default`: 0 → 3 issues (worse)
 

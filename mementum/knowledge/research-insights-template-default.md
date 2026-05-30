@@ -128,52 +128,180 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*7 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-<think>
-The user wants me to distill this research strategy content into a concise format. This appears to be from an automated research system ("template-default") with experiments, hypotheses that were kept or discarded, and optimization patterns.
+We need to respond to the user's message. They wrote "distill:" and then a list of experiments across targets, and then "Kept hypotheses:" with a long blank list, and "Discarded hypotheses:" with nothing. This appears to be a request for distillation of research results, but the user didn't provide any actual content. The user might be expecting an AI to process some research data, but the message is empty of details. Possibly it's a template or a placeholder. As an AI assistant, I should clarify what the user wants. The user says "distill:" and then lists experiments and targets. Perhaps they want a summary or distillation of research across these targets. But there are no hypotheses or results provided. So I need to ask for more information.
 
-Let me distill this into a clear, concise summary.
-</think>
+Alternatively, this might be part of a system where the user is providing structured data and expects the AI to process it. But the "Kept hypotheses" and "Discarded hypotheses" sections are empty. Could be that the user wants the AI to generate hypotheses based on the listed targets? Or perhaps it's an error.
+
+Given the ambiguity, the best response is to ask the user to provide more context or clarify what they want to distill. I'll respond politely, noting that the message seems incomplete, and ask for the actual research data or specific request.
 ```
 
 ### Check Issues
 
-**Distilled Research Strategy**
+It looks like you've sent a template or placeholder for a research distillation task, but the message is missing the actual content—such as experiment details, results, or hypotheses to evaluate.
 
----
+To help you effectively, I need more information:
 
-**Experiments Conducted:**
+- What specific experiments or data are you referring to under each target?
+- What hypotheses are you considering (even if they're to be generated or proposed)?
+- What is the goal of the distillation? (e.g., summarizing results, selecting the best hypothesis, identifying patterns, etc.)
 
-1. **Prompt + Role + Context** → Discarded
-   - *Hypothesis:* Richer system prompts with roles and background would improve responses.
-   - *Result:* No measurable improvement; added complexity without benefit.
-
-2. **Long Context Window** → Kept
-   - *Hypothesis:* With tools like web search, a 128k context window would handle complex research tasks effectively.
-   - *Result:* Context window is a feature, not a differentiator. All models tested have sufficient context for our needs.
-
-3. **Chain of Thought (CoT)** → Kept
-   - *Hypothesis:* Explicitly reasoning through steps before responding would improve quality.
-   - *Result:* Significant quality improvement; most consistent optimization across model families.
-
-4. **Single Task Per Prompt** → Kept
-   - *Hypothesis:* Breaking complex tasks into single, focused prompts would improve output quality.
-   - *Result:* Critical for reliability; combined with CoT for best results.
-
-5. **No Multi-Step Tasks** → Discarded
-   - *Hypothesis:* Avoiding multi-step tasks would reduce error rates.
-   - *Result:* Insufficient as a standalone strategy; not worth the capability tradeoff.
-
-6. **JSON Mode** → Kept
-   - *Hypothesis:* Structured output formats would improve parsing reliability.
-   - *Result:* Reliable parsing is essential; tradeoffs are acceptable.
-
-7. **Temperature = 0** → Kept
-   - *Hypothesis:* Zero temperature would produce consistent, deterministic responses.
-   - *Result:* Essen
-
-... (truncated)
+Please provide the missing details, and I’ll be happy to distill the information into a clear summary or analysis.

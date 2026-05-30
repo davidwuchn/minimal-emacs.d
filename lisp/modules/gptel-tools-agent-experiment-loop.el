@@ -292,11 +292,9 @@ Adapts max-experiments based on API error rate."
       (cl-labels ((run-next (exp-id)
                     (gptel-auto-workflow--update-progress)
                      (when gptel-auto-experiment--quota-exhausted
-                       (message "[auto-workflow] ⏹ All backends exhausted — stopping pipeline for %s"
+                       (message "[auto-workflow] ⏹ All backends exhausted — stopping early for %s"
                                 target)
                        (setq max-exp (1- exp-id))
-                       (when (fboundp 'gptel-auto-workflow-force-stop)
-                         (gptel-auto-workflow-force-stop))
                        (cl-return-from gptel-auto-experiment-loop))
                     (when (and (>= gptel-auto-experiment--api-error-count
                                    gptel-auto-experiment--api-error-threshold)
