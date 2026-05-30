@@ -6,11 +6,25 @@
 (require 'gptel-gh)
 
 (defun my/gptel-api-key (host)
-  "Get API key for HOST from auth-source, return nil if not found.
-Unlike `gptel-api-key-from-auth-source', this won't prompt during process filters."
-  (let ((auth-source-creation-prompts nil)
-        (result (auth-source-user-and-password host "api")))
-    (cadr result)))
+  "Get API key for HOST from ~/.authinfo.gpg, return nil if not found.
+
+Uses `call-process' with `gpg --batch -d' instead of `auth-source'
+to avoid pinentry failures in headless daemon mode.  This mirrors
+`eca-security--decrypt-gpg-agent' which handles gpg directly."
+  (let ((authinfo (expand-file-name "~/.authinfo.gpg"))
+        decrypted)
+    (when (file-exists-p authinfo)
+      (with-temp-buffer
+        (when (zerop (call-process "gpg" nil t nil
+                                   "--batch" "--quiet" "--decrypt" authinfo))
+          (goto-char (point-min))
+          (while (re-search-forward
+                  (format "^machine %s\\s-+login \\([^[:space:]]+\\)\\s-+password \\([^[:space:]]+\\)"
+                          (regexp-quote host))
+                  nil t)
+            (setq decrypted (match-string-no-properties 2))))))
+    (when decrypted
+      (string-trim decrypted))))
 
 ;;; DashScope Backend - uses OpenAI-compatible API
 ;;; No custom parser needed - standard OpenAI SSE format

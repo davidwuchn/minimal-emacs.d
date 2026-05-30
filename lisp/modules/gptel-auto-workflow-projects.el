@@ -314,6 +314,7 @@ then runs workflow for that project.
 When COMPLETION-CALLBACK is non-nil, call it after all project workflows
 finish."
   (interactive)
+  (ignore-errors (gptel-agent--update-agents))
   (gptel-auto-workflow--ensure-buffer-tables)
   (let ((projects (gptel-auto-workflow--normalized-projects)))
     (message "[auto-workflow] Running for %d projects..."

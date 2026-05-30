@@ -1051,7 +1051,21 @@ Returns a compact lambda-notation string ready for the LLM."
                " && ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh\n"
                "| REPORT: In OUTPUT section, show exactly which verify commands ran and their exit codes\n")
        "\nOUTPUT:  CHANGED(file+fn) EVIDENCE(1-2 diffs) VERIFY(cmds+exit_codes) COMMIT(\"not committed\")\n"
-       "TYPE(pick_one): bug_fix | performance | refactoring | safety | test_coverage")))
+      "TYPE(pick_one): bug_fix | performance | refactoring | safety | test_coverage"
+      "\n\nANTI-PATTERNS (causes instant REJECT):\n"
+      "| ¬broad_indentation_changes (never re-indent entire functions)\n"
+      "| ¬extract_helpers_for_single_use (don't create abstractions with one caller)\n"
+      "| ¬rename_vars_unless_bug | ¬reorder_existing_logic\n"
+      "| ¬remove_commented_code | ¬add_comments_to_working_code\n"
+      "| ¬change_indentation_style | ¬convert_let*→let_unless_semantic\n"
+      "\nPATTERNS THAT PASS (copy these):\n"
+      "| add `nil` guard before car/assq on optional arg\n"
+      "| change `(when x (progn ...))` to `(when x ...)` (remove redundant progn)\n"
+      "| add `(ignore-errors ...)` around fragile operation\n"
+      "| replace `(if x nil (y))` with `(unless x (y))`\n"
+      "| add type check `(when (stringp x) ...)` before string operation\n"
+      "| replace `(append (list a) (list b))` with `(list a b)`\n"
+      "\nCRITICAL: Your code quality delta MUST be >= 0. If you break existing tests or decrease readability, you will be REJECTED.\n")))
 
 (defun gptel-auto-workflow--load-prompt-template ()
   "Load prompt template from skill file.
@@ -1101,7 +1115,23 @@ Returns template string or fallback hardcoded template."
         HYPOTHESES: \"Adding nil validation in X prevents runtime errors\"
                    \"Extracting duplicate Y into helper reduces duplication\"
                    \"Adding cache for Z improves performance\"
-                   \"Fixing off-by-one in loop corrects boundary case\"")))
+                   \"Fixing off-by-one in loop corrects boundary case\"
+
+        ANTI-PATTERNS (causes instant REJECT):
+        ¬broad_indentation_changes | ¬extract_helpers_for_single_use
+        ¬rename_vars_unless_bug | ¬reorder_existing_logic
+        ¬remove_commented_code | ¬add_comments_to_working_code
+        ¬change_indentation_style | ¬convert_let*→let_unless_semantic
+
+        PATTERNS THAT PASS:
+        add nil guard before car/assq on optional arg
+        change (when x (progn ...)) to (when x ...)
+        add (ignore-errors ...) around fragile operation
+        replace (if x nil (y)) with (unless x (y))
+        add (when (stringp x) ...) before string operation
+        replace (append (list a) (list b)) with (list a b)
+
+        CRITICAL: code quality delta MUST be >= 0. Breaking tests or decreasing readability = REJECTED.")))
 
 (defun gptel-auto-experiment-build-prompt (target experiment-id max-experiments analysis baseline
                                                   &optional previous-results)
@@ -1719,13 +1749,14 @@ exhaustion.")
   "Maximum seconds between retries for rate-limited API failures.")
 
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
-  '(("DashScope" . "qwen3.6-plus")
-    ("DeepSeek" . "deepseek-v4-flash")
-    ("moonshot" . "kimi-k2.6")
-    ("MiniMax" . "minimax-m2.7-highspeed"))
+  '(("DeepSeek" . "deepseek-v4-flash")
+    ("MiniMax" . "minimax-m2.7-highspeed")
+    ("moonshot" . "kimi-k2.6"))
   "Ordered backend/model fallbacks for headless auto-workflow subagents.
 
-DashScope first (faster, more reliable), then DeepSeek, Moonshot, MiniMax.
+DeepSeek first (working, no content filter), then MiniMax (highspeed, but
+may hit rate limits), then moonshot (content_filter blocks code gen).
+DashScope removed — quota exhausted (HTTP 429) on this account.
 CF-Gateway removed — does not support tool calls reliably."
   :type '(repeat (cons (string :tag "Backend")
                        (string :tag "Model")))
