@@ -139,6 +139,11 @@ long-running daemons)."
   "Buffer-local list of temp files created by subagent results.
 Each buffer manages its own temp files to avoid race conditions.")
 
+(defvar gptel-auto-experiment--executor-reasoning nil
+  "Dynamic variable set by FSM callback with DeepSeek reasoning_content.
+Read by the executor callback for self-evolution.  Reset to nil after
+each subagent call so stale reasoning is not reused across experiments.")
+
 (defvar my/gptel--global-temp-files nil
   "Global fallback list for temp files (used when no buffer context).")
 
@@ -420,6 +425,11 @@ large-result truncation, and result caching."
                              (setq partial (concat partial resp))
                              (unless (plist-get info :tool-use)
                                (when (overlayp ov) (delete-overlay ov))
+                               ;; Capture DeepSeek/thinking reasoning_content for
+                               ;; self-evolution — stored in a dynamic variable so
+                               ;; the experiment callback can read it.
+                               (when-let ((reasoning (plist-get info :reasoning)))
+                                 (setq gptel-auto-experiment--executor-reasoning reasoning))
                                (when-let* ((transformer (plist-get info :transformer)))
                                  (setq partial (funcall transformer partial)))
                                (gptel-auto-workflow--maybe-activate-rate-limit-failover

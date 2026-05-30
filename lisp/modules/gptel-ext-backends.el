@@ -103,24 +103,29 @@ ARGS are passed to `gptel-make-openai'."
               \@cf/openai/whisper
               \@cf/openai/whisper-large-v3-turbo)))
 
-;; CF-Gateway with kimi-k2.6 returns responses in reasoning_content
-;; instead of content, causing gptel to return nil.  Intercept and
-;; fall back to reasoning_content when content is empty.
-(defun my/gptel--cf-gateway-fix-reasoning-content (orig-fun backend response info)
-  "Advice around `gptel--parse-response' to handle CF-Gateway reasoning_content."
+;; Many backends (CF-Gateway/kimi-k2.6, DeepSeek with thinking enabled)
+;; return responses in reasoning_content instead of content, or as well
+;; as content.  Capture reasoning_content whenever present and store it
+;; in INFO's :reasoning slot for the executor subagent to use.
+(defun my/gptel--capture-reasoning-content (orig-fun backend response info)
+  "Advice around `gptel--parse-response' to capture reasoning_content.
+Stores reasoning in INFO's :reasoning slot for self-evolution.
+Falls back to reasoning_content when content is nil (CF-Gateway path)."
   (let ((result (funcall orig-fun backend response info)))
-    (if (and (null result)
-             (eq (type-of backend) 'gptel-openai)
-             (string= (gptel-auto-workflow--safe-backend-name backend) "CF-Gateway"))
-        (let* ((choice0 (map-nested-elt response '(:choices 0)))
-               (message (plist-get choice0 :message))
-               (reasoning (plist-get message :reasoning_content)))
-          (when (and reasoning (stringp reasoning) (not (string-empty-p reasoning)))
-            (plist-put info :reasoning reasoning)
-            reasoning))
-      result)))
+    (when (eq (type-of backend) 'gptel-openai)
+      (let* ((choice0 (map-nested-elt response '(:choices 0)))
+             (message (plist-get choice0 :message))
+             (reasoning (when message
+                          (or (plist-get message :reasoning_content)
+                              (plist-get message :reasoning)))))
+        (when (and reasoning (stringp reasoning) (not (string-empty-p reasoning)))
+          (plist-put info :reasoning reasoning)
+          ;; When content is nil but reasoning is present (CF-Gateway), use reasoning as result
+          (when (null result)
+            (setq result reasoning)))))
+    result))
 
-(advice-add #'gptel--parse-response :around #'my/gptel--cf-gateway-fix-reasoning-content)
+(advice-add #'gptel--parse-response :around #'my/gptel--capture-reasoning-content)
 
 (provide 'gptel-ext-backends)
 ;;; gptel-ext-backends.el ends here

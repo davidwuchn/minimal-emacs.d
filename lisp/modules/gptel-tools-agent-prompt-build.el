@@ -1484,7 +1484,9 @@ row for the same experiment and target."
     (gptel-auto-workflow--persist-status)))
 
 (defun gptel-auto-experiment-log-tsv (run-id experiment)
-  "Append EXPERIMENT to results.tsv for RUN-ID."
+  "Append EXPERIMENT to results.tsv for RUN-ID.
+Captures executor reasoning from the dynamic variable
+`gptel-auto-experiment--executor-reasoning' when available."
   (let* ((file (gptel-auto-workflow--ensure-results-file run-id))
          (experiment-id (gptel-auto-workflow--plist-get experiment :id "?"))
          (target (gptel-auto-workflow--plist-get experiment :target "?"))
@@ -1492,6 +1494,20 @@ row for the same experiment and target."
          (agent-output (gptel-auto-workflow--plist-get experiment :agent-output ""))
          (truncated-output (gptel-auto-experiment--tsv-escape
                             (truncate-string-to-width agent-output 500 nil nil "..."))))
+    ;; Capture executor reasoning for self-evolution feedback
+    (when (and target (bound-and-true-p gptel-auto-experiment--executor-reasoning))
+      (let* ((insights (gethash target gptel-auto-experiment--grader-insights))
+             (existing-output (plist-get insights :executor-reasoning)))
+        ;; Only store if we don't already have reasoning for this target
+        ;; (first executor run per target is the most relevant)
+        (unless existing-output
+          (puthash target
+                   (plist-put (or insights (list :criteria nil))
+                              :executor-reasoning
+                              (substring gptel-auto-experiment--executor-reasoning
+                                         0 (min 500 (length gptel-auto-experiment--executor-reasoning))))
+                   gptel-auto-experiment--grader-insights))))
+    (setq gptel-auto-experiment--executor-reasoning nil)
     ;; Inject research metadata from global context into experiment record.
     ;; This closes the feedback loop: experiments carry the research run that
     ;; influenced the prompt so trace outcomes can be linked after logging.
@@ -2692,6 +2708,13 @@ Returns string warning about common rejection reasons, or empty string."
                                reasons
                                "\n"))
             parts))
+    ;; Executor reasoning from DeepSeek thinking (if available)
+    (let ((executor-reasoning (plist-get insights :executor-reasoning)))
+      (when executor-reasoning
+        (push (concat "## Executor Reasoning from Previous Attempt\n"
+                      "The previous executor proposed these changes with the following reasoning:\n"
+                      "> " (string-trim executor-reasoning) "\n")
+              parts)))
     ;; Grader insights from last evaluation
     (when insights
       (let* ((criteria (plist-get insights :criteria))
