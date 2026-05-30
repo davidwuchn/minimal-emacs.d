@@ -1,35 +1,25 @@
 # Backend Head-to-Head Comparison
-> Auto-generated from 212 experiments across 4 backends
+> Auto-generated from 194 experiments across 4 backends
 
 ## DashScope vs MiniMax (winner: **DashScope**)
-- DashScope: 10.0% keep-rate
-- MiniMax: 3.4% keep-rate
-- Shared targets: 3 | DashScope won 1, MiniMax won 0, ties 2
+- DashScope: 36.4% keep-rate
+- MiniMax: 4.3% keep-rate
+- Shared targets: 3 | DashScope won 3, MiniMax won 0, ties 0
 
 ## MiniMax vs DeepSeek (winner: **tie**)
 - MiniMax: 0.0% keep-rate
 - DeepSeek: 0.0% keep-rate
 - Shared targets: 2 | MiniMax won 0, DeepSeek won 0, ties 2
 
-## DashScope vs DeepSeek (winner: **DashScope**)
-- DashScope: 6.7% keep-rate
-- DeepSeek: 0.0% keep-rate
-- Shared targets: 2 | DashScope won 1, DeepSeek won 0, ties 1
-
-## DashScope vs CF-Gateway (winner: **tie**)
-- DashScope: 0.0% keep-rate
-- CF-Gateway: 0.0% keep-rate
-- Shared targets: 2 | DashScope won 0, CF-Gateway won 0, ties 2
-
-## CF-Gateway vs DeepSeek (winner: **tie**)
-- CF-Gateway: 0.0% keep-rate
-- DeepSeek: 0.0% keep-rate
-- Shared targets: 1 | CF-Gateway won 0, DeepSeek won 0, ties 1
-
-## MiniMax vs CF-Gateway (winner: **tie**)
+## MiniMax vs moonshot (winner: **tie**)
 - MiniMax: 0.0% keep-rate
-- CF-Gateway: 0.0% keep-rate
-- Shared targets: 1 | MiniMax won 0, CF-Gateway won 0, ties 1
+- moonshot: 0.0% keep-rate
+- Shared targets: 1 | MiniMax won 0, moonshot won 0, ties 1
+
+## DashScope vs DeepSeek (winner: **DashScope**)
+- DashScope: 33.3% keep-rate
+- DeepSeek: 0.0% keep-rate
+- Shared targets: 1 | DashScope won 1, DeepSeek won 0, ties 0
 
 
-*Generated: 2026-05-30 00:38*
+*Generated: 2026-05-30 12:07*
