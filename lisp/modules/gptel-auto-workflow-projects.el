@@ -319,9 +319,11 @@ finish."
   (ignore-errors
     (call-process "gpg" nil nil nil "--batch" "--quiet" "--decrypt"
                   (expand-file-name "~/.authinfo.gpg")))
-  ;; Ensure Moonshot is excluded from the fallback chain — its content_filter
-  ;; blocks code generation, and the onto-router keeps preferring it because it
-  ;; returns error messages (looking more responsive than silently-failing peers).
+  ;; Exclude Moonshot from ALL backend selection — its content_filter blocks
+  ;; code generation. The onto-router keeps preferring it because error message
+  ;; responses make Moonshot look more responsive than silently-failing peers.
+  (when (boundp 'gptel-auto-workflow--rate-limited-backends)
+    (cl-pushnew "moonshot" gptel-auto-workflow--rate-limited-backends :test #'string=))
   ;; Override the static fallback with DeepSeek + MiniMax only.
   (when (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
     (setq gptel-auto-workflow-executor-rate-limit-fallbacks

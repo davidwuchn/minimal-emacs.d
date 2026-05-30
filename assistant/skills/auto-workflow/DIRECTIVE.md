@@ -17,14 +17,7 @@ total-kept: 0
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
-| `lisp/modules/gptel-auto-workflow-research-integration.el` | 0% | 2 | 0 | ⏳ Insufficient data |
-| `staging-verification` | 0% | 2 | 0 | ⏳ Insufficient data |
-| `lisp/modules/gptel-auto-workflow-projects.el` | 0% | 14 | 0 | ❌ Plateaued |
-| `lisp/modules/gptel-auto-workflow-strategic.el` | 0% | 12 | 0 | ❌ Plateaued |
-| `staging-merge` | 0% | 1 | 0 | ⏳ Insufficient data |
-| `staging-review` | 0% | 1 | 0 | ⏳ Insufficient data |
-| `lisp/modules/gptel-tools-agent-prompt-build.el` | 0% | 5 | 0 | ⏳ Insufficient data |
-| `lisp/modules/gptel-tools-agent-error.el` | 0% | 3 | 0 | ⏳ Insufficient data |
+| `lisp/modules/gptel-auto-workflow-projects.el` | 0% | 8 | 0 | ❌ Plateaued |
 
 ## 🧬 Meta-Learned Patterns
 
@@ -32,9 +25,9 @@ total-kept: 0
 *These patterns were automatically extracted from successful experiments.*
 
 - **manual-fix** (39× from git)
-- **Application for us** (24× from mementum)
 - **Source type** (24× from mementum)
 - **Description** (24× from mementum)
+- **Application for us** (24× from mementum)
 - **Application** (21× from mementum)
 - **Implementation sketch** (20× from mementum)
 - **How it works** (18× from mementum)
@@ -55,10 +48,8 @@ total-kept: 0
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (30×): Investigate root cause
-- **timeout** (5×): Add smaller batch sizes or chunked processing
-- **validation-failed** (3×): Improve pre-grade validation prompts
-- **test-failure** (2×): Run tests before committing experiments
+- **other** (7×): Investigate root cause
+- **validation-failed** (1×): Improve pre-grade validation prompts
 
 ## Success Patterns
 
@@ -76,9 +67,6 @@ total-kept: 0
 
 <!-- AUTO-UPDATED: From experiment insights -->
 - **lisp/modules/gptel-auto-workflow-projects.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-auto-workflow-strategic.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-tools-agent-prompt-build.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-tools-agent-error.el**: Try validation guards or error handling improvements (previous experiments discarded)
 
 ## Immutable Files
 
@@ -104,4 +92,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 870 experiments (0 kept locally across 40 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 870 experiments (0 kept locally across 8 local records). It evolves every self-evolution cycle.*

@@ -218,7 +218,34 @@ These targets may need different research patterns or the research findings were
 
 
 
+<<<<<<< Updated upstream
 >>>>>>> Stashed changes
+
+
+
+
+
+
+
+
+=======
+>>>>>>> Stashed changes
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -232,74 +259,44 @@ These targets may need different research patterns or the research findings were
 *3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-## Research Strategy Distillation
+**Research Strategy Summary**
 
-**Strategy:** Template-default
+- **Template:** default  
+- **Target file:** `lisp/modules/gptel-auto-workflow-projects.el`  
+- **Number of experiments:** 8  
+- **Kept hypotheses:** none yet  
+- **Discarded hypotheses:** none yet  
 
-**Experiments:** 5 experiments across targets
-
-**Target:** `lisp/modules/gptel-auto-workflow-projects.el`
-
-**Kept hypotheses:** (none specified)
-
-**Discarded hypotheses:** (none specified)
-
----
-
-**Summary:** Template-default approach tested with 5 experimental iterations targeting the gptel-auto-workflow-projects module. No hypotheses have been explicitly retained or discarded yet.
+*In short: eight experimental runs are planned for the specified Elisp module using the default research template, with no hypothesis evaluation recorded at this stage.*
 ```
 
 ### Check Issues
 
-# Research Strategy Check
+# Research Strategy Review
 
-## Summary Assessment
+## Summary Received ✓
 
-| Field | Value | Status |
-|-------|-------|--------|
-| **Strategy** | Template-default | ✓ Specified |
-| **Experiments** | 5 across targets | ✓ Quantified |
-| **Target** | `gptel-auto-workflow-projects.el` | ✓ Identified |
-| **Kept hypotheses** | None | ⚠ Empty |
-| **Discarded hypotheses** | None | ⚠ Empty |
-
----
+| Field | Value |
+|-------|-------|
+| **Template** | default |
+| **Target file** | `lisp/modules/gptel-auto-workflow-projects.el` |
+| **Experiments** | 8 |
+| **Hypotheses tracked** | 0 |
 
 ## Observations
 
-### 1. **Hypotheses Gap**
-The most notable issue: No hypotheses tracked despite 5 experiments. This makes it difficult to:
-- Track what was tested
-- Understand decision rationale
-- Build institutional knowledge
+1. **Empty hypothesis tracking** — No hypotheses have been defined yet, making it difficult to evaluate experiment outcomes
 
-### 2. **Template-Default Strategy**
-This appears to be a baseline approach—likely meaning:
-- No specialized heuristics applied
-- Standard iteration pattern used
+2. **Module location** — The path suggests this is part of a GPTel-related Elisp project
 
----
+3. **Eight runs planned** — Consider documenting what each experiment will vary/test
 
-## Recommendations
+## Suggested Next Steps
 
-```
-Recommended additions:
-├── Hypotheses (per experiment)
-│   ├── What was tested
-│   ├── Why it was tested
-│   └── Expected outcome
-└── Results tracking
-    ├── What worked
-    ├── What didn't
-    └── Why (if known)
-```
+- [ ] Define 1-3 initial hypotheses before running experiments
+- [ ] Document what distinguishes each of the 8 runs
+- [ ] Establish success/failure criteria for each experiment
 
----
+**Question:** What aspect of `gptel-auto-workflow-projects.el` are you investigating? (e.g., performance, edge cases, specific functions, integration issues)
 
-## Questions
-
-1. **What were the 5 experiments testing?**
-2. **Was this targeting a specific bug or feature implementation?**
-3. **Do you want help formalizing the hypothesis tracking?**
-
-Would you like me to help flesh out the missing hypothesis details based on what was likely being tested?
+This will help refine the research strategy.

@@ -763,24 +763,29 @@ Temporarily overrides `gptel-auto-workflow-executor-rate-limit-fallbacks'.
 Call this before experiment runs.
 SAFETY: Uses copy-tree so the returned list shares no structure with
 the original fallback list — preventing mutation side effects."
-  (let ((reordered (copy-tree (gptel-auto-workflow--reorder-fallbacks-by-ontology strategy target))))
-    (when (and reordered (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks))
-      (setq gptel-auto-workflow-executor-rate-limit-fallbacks reordered)
+  (let* ((excluded (and (boundp 'gptel-auto-workflow--rate-limited-backends)
+                        gptel-auto-workflow--rate-limited-backends))
+         (reordered (copy-tree (gptel-auto-workflow--reorder-fallbacks-by-ontology strategy target)))
+         (filtered (if excluded
+                       (cl-remove-if (lambda (e) (member (car e) excluded)) reordered)
+                     reordered)))
+    (when (and filtered (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks))
+      (setq gptel-auto-workflow-executor-rate-limit-fallbacks filtered)
       (message "[onto-router] Applied ontology-ordered fallback chain: %s"
                (mapconcat (lambda (e) (if (consp e) (format "%s/%s" (car e) (cdr e)) (format "%s" e)))
-                          reordered " → ")))))
+                          filtered " → ")))))
 
 ;; ─── Reset to Static Order ───
 
 (defun gptel-auto-workflow--reset-fallback-order ()
-  "Reset fallback chain to static order from executor config."
+  "Reset fallback chain to static order from executor config.
+Moonshot removed — content_filter blocks code generation.
+DashScope removed — quota exhausted on this account (HTTP 429)."
   (when (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
     (setq gptel-auto-workflow-executor-rate-limit-fallbacks
-          '(("DashScope" . "qwen3.6-plus")
-            ("moonshot" . "kimi-k2.6")
-            ("DeepSeek" . "deepseek-v4-flash")
+          '(("DeepSeek" . "deepseek-v4-flash")
             ("MiniMax" . "minimax-m2.7-highspeed")))
-    (message "[onto-router] Reset to executor static fallback order")))
+    (message "[onto-router] Reset to executor static fallback order (DeepSeek + MiniMax only)")))
 
 ;; ─── Semantic Similarity Target Discovery ───
 

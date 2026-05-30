@@ -1,7 +1,7 @@
 ### Allium Issue Trends
-**Regression warnings** (1 strategies with increased issues):
+**Recurring patterns** across all strategies:
 
-- **Discards**: 1 occurrence(s)
-- **Experiment details**: 1 occurrence(s)
-- **Hypotheses**: 1 occurrence(s)
+- **Eight runs planned**: 1 occurrence(s)
+- **Module location**: 1 occurrence(s)
+- **Empty hypothesis tracking**: 1 occurrence(s)
 
