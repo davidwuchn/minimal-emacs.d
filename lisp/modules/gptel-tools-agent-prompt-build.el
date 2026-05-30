@@ -1736,17 +1736,18 @@ CF-Gateway, then MiniMax."
   :group 'gptel-tools-agent)
 
 (defcustom gptel-auto-workflow-executor-rate-limit-fallbacks
-  '(("DeepSeek" . "deepseek-v4-pro")
-    ("MiniMax" . "minimax-m2.7-highspeed")
+  '(("DashScope" . "qwen3.6-plus")
     ("moonshot" . "kimi-k2.6")
-    ("DashScope" . "qwen3.6-plus")
+    ("DeepSeek" . "deepseek-v4-pro")
+    ("MiniMax" . "minimax-m2.7-highspeed")
     ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6"))
   "Ordered backend/model fallbacks for executor after rate limits.
 
-DeepSeek first (best keep-rate for executor tasks at 25%).
-MiniMax second (16.3% keep-rate, proven on executor).
-Moonshot third (backup).  DashScope last — too slow for executor
-tasks (consistently times out at 1080s with nil output).
+DashScope first — ONLY backend proven to make actual code changes
+via Edit/Write tools (all kept experiments use this backend).
+moonshot second (emits well, good for code generation).
+DeepSeek third (outputs reasoning text instead of tool calls).
+MiniMax fourth (rate-limited, HTTP 429).
 CF-Gateway as emergency fallback."
   :type '(repeat (cons (string :tag "Backend")
                        (string :tag "Model")))
@@ -1763,11 +1764,11 @@ CF-Gateway as emergency fallback."
     ("grader"     "DeepSeek"   . "deepseek-v4-flash")
     ("grader"     "CF-Gateway" . "@cf/openai/gpt-oss-120b")
     ("grader"     "moonshot"   . "kimi-k2.6")
-    ("executor"   "MiniMax"    . "minimax-m2.7-highspeed")
     ("executor"   "DashScope"  . "qwen3.6-plus")
-    ("executor"   "DeepSeek"   . "deepseek-v4-pro")
-    ("executor"   "CF-Gateway" . "@cf/moonshotai/kimi-k2.6")
     ("executor"   "moonshot"   . "kimi-k2.6")
+    ("executor"   "DeepSeek"   . "deepseek-v4-pro")
+    ("executor"   "MiniMax"    . "minimax-m2.7-highspeed")
+    ("executor"   "CF-Gateway" . "@cf/moonshotai/kimi-k2.6")
     ("researcher" "MiniMax"    . "minimax-m2.7-highspeed")
     ("researcher" "DashScope"  . "qwen3.6-plus")
     ("researcher" "DeepSeek"   . "deepseek-v4-flash")
