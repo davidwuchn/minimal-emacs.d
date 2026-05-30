@@ -1,53 +1,53 @@
 # Mementum State
 
-> Last session: 2026-05-30 (ROOT CAUSE FOUND: grader not outputting SCORE format)
-> Next pipeline: 10:00 AM (cron schedule)
-> Status: Fix committed, awaiting next run to verify experiments pass gates
+> Last session: 2026-05-30 (Grader scoring FIXED, now fighting agent indentation issues)
+> Next pipeline: Running now (manual trigger)
+> Status: 2 experiments completed, both grader-failed due to unrelated indentation changes
 
-## Session: ROOT CAUSE FOUND — Grader Not Outputting SCORE Format
+## Session: Grader Scoring FIXED — Now Fighting Agent Indentation Issues
 
-**Status:** FIX COMMITTED. Awaiting 10:00 AM pipeline to verify.
+**Status:** 2 experiments completed in current run. Both failed due to unrelated indentation changes. Daemon still running old prompt code.
 
-### Root Cause Analysis
+### Root Cause Analysis (Part 1 — FIXED)
 
-After analyzing 12+ experiment runs, the actual blocker is:
 **The grader model (MiniMax m2.7-highspeed) analyzes correctly but NEVER outputs `SCORE: X/Y`**
 
-This causes:
-1. Agent makes valid code change (experiment 3: all criteria PASS)
-2. Grader outputs long analysis with PASS/FAIL for each item
-3. Parser looks for `SCORE: X/Y` → not found → score=0
-4. Experiment marked `grader-failed` despite correct analysis
-5. **0 experiments pass** → nothing pushes to main
+**Fix Applied:**
+1. Parser fallback for text-based PASS counting (`gptel-benchmark-subagent.el`)
+2. Strengthened grader prompt with MANDATORY SCORE requirement
 
-### Evidence
-- Experiment 3 (2026-05-30T002403Z-82ac): Grader said "This is a valid improvement" + 9/9 PASS, but `grader_quality=0`, `decision=grader-failed`
-- All 4 experiments in latest run: same pattern — analysis says PASS but no SCORE line
-- Parser regex: `(string-match "SCORE:\\s-*\\([0-9]+\\)/\\([0-9]+\\)" details)`
-- Parser fallback: only counts JSON `"passed": true`, not text-based PASS
+### Root Cause Analysis (Part 2 — IN PROGRESS)
 
-### Fix Applied
+**The agent makes broad indentation changes in unrelated code when using Edit tool**
 
-**1. Parser fallback** (`gptel-benchmark-subagent.el`):
-- Added text-based PASS/FAIL counting as 3rd fallback
-- Counts patterns like `1. description: PASS` and `: PASS (not present)`
-- Tested with actual experiment 3 grader output → score=9/9, passed=t ✓
+**Evidence from current run (2026-05-30T033214Z-ed11):**
+- Experiment 1: score=2/9. Grader: "diff shows mostly indentation changes in dolist blocks (lines 180-227)... unrelated to stated improvement. FAIL"
+- Experiment 2: score=0/9. Grader: "diff shows indentation changes throughout the file (lines 180-214, 348, etc.)... unintended indentation changes. FAIL"
 
-**2. Grader prompt strengthened** (`gptel-benchmark--make-grading-prompt`):
-- Added `MANDATORY: End your response with exactly this line:`
-- Made `→ summary: SCORE: X/Y` requirement explicit and prominent
+**Why this happens:**
+1. Agent uses `Edit` tool which may trigger `indent-region` or `save-buffer` with auto-indent
+2. Agent isn't explicitly told NOT to reformat code
+3. Agent may use `Write` tool to rewrite entire file sections, losing original formatting
 
-### Why Previous Fixes Didn't Help
+**Fix Applied (won't take effect until daemon restart):**
+1. `agent-behavior.md`: Added explicit "NEVER reformat, reindent, or restyle code" rule
+2. `agent-behavior.md`: Added surgical precision requirement — change ONLY specific lines
+3. `prompt-template.md`: Added FORBIDDEN rule against reformatting/reindenting
+4. `prompt-template.md`: Added instruction to NOT trigger save-buffer/auto-indent after Edit
+5. `prompt-template.md`: Renumbered instructions (was duplicate #13)
 
-- CF-Gateway removal: fixed routing but experiments still fail at grader
-- Verification mandate: agents still don't verify, but even if they did, grader wouldn't score
-- Lambda verification removal: saved API calls but irrelevant to scoring
-- Stale callbacks: fixed wasted work but not the pass/fail decision
-- DeepSeek model switch: fixed executor tool calls but grader still broken
+### Current Run Status
+- Run: 2026-05-30T033214Z-ed11
+- Experiment 1: grader-failed (score=2/9, indentation issues + no verification)
+- Experiment 2: grader-failed (score=0/9, indentation issues + no verification)
+- Daemon PID: 59097 (running old prompt code, won't pick up fixes until restart)
+- Backend: DashScope/qwen3.6-plus
 
 ### Next Steps
-- Monitor 10:00 AM pipeline run for first `kept` experiment
-- If still failing, investigate whether grader prompt compliance improves
+1. Let current run complete (experiments 3-9 may still fail with old prompts)
+2. Next daemon restart (from evolution cycle or manual) will load new prompt rules
+3. Monitor if indentation issues persist with new prompts
+4. If still failing, investigate Edit tool implementation for auto-indent triggers
 - Consider switching grader model if MiniMax continues ignoring format instructions
 
 ---
