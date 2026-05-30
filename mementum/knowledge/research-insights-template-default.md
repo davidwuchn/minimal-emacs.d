@@ -59,60 +59,66 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-## Distilled Research Strategy: template-default
+**Research Strategy: template-default**
 
-### Scope
-- **192 experiments** across 30 target files in the `lisp/modules/` and staging directories
+**87 experiments across 20 targets** — gptel modules for workflow automation, benchmarking, tools/agents, and extensions.
 
-### Priority Items (7 kept hypotheses)
+**Kept (5 hypotheses):**
+- Nil summary validation in benchmark comparison → prevent `wrong-type-argument`
+- Negative caching fix → O(1) instead of O(n) disk hits for missing files
+- `proper-list-p` validation before `last` → prevent crash on improper lists
+- `stringp` validation in skill loader → explicit type contracts
+- Nil guards before `string-match`/`split-string` → error resilience
 
-| # | Hypothesis | Target Function | Improvement Axis |
-|---|------------|-----------------|------------------|
-| 1 | Early validation for nil/non-string/empty candidate inputs | `gptel-auto-experiment--validate-candidate-safely` | Safety, Clarity |
-| 2 | Fix stale-copy bug where regular files bypass symlink creation | `gptel-auto-workflow--link-shared-runtime-path` | Vitality, Clarity |
-| 3 | Extract duplicated zero-result structure into `gptel-benchmark--empty-summary` helper | `gptel-benchmark-summarize-results` | Clarity (fractal) |
-| 4 | Fix keyword-to-alist conversion: `((:score . 0.8))` not converting keyword keys to symbols | `gptel-benchmark--to-json-format` | Correctness |
-| 5 | **`hash-table-keys` is not a built-in Emacs function** | `my/gptel-show-permits`, `my/gptel-health-check` | Vitality |
-| 6 | Swap argument order in `gptel-benchmark-baseline-file-compare` (baseline/candidate inversion) | `gptel-benchmark-baseline-file-compare` | Correctness |
-| 7 | Fix `gptel-benchmark-diagnose-elements` using `plist-get` on alist data (scores always default to 0.5) | `gptel-benchmark-diagnose-elements` | Diagnosis accuracy |
+**Discarded (14 hypotheses):**
+- `error-message-string` formatting, hash table removal, symbol map derivation, benchmark summary caching, `proper-list-p` replacement, module path caching, nil guards for `feature-name`, FSM logging, `seen` hash table reuse, redundant validation removal, regexp `bound-and-true-p`, `cl-remove` fix, memoization for error categorization
 
-### Secondary Items (additional kept hypotheses)
-
-**Validation guards:**
-- `gptel-auto-workflow-research-status-all`: nil-safety
-- `gptel-workflow--score-tools`: proper-list-p
-- `gptel-benchmark-summarize-results`: proper-list-p
-- `gptel-benchmark-prescribe`: nil guard for malformed plist entries
-- `gptel-benchmark--to-json-format`: `(cl-every #'consp data)` validation
-- `gptel-tools-memory--resolve-path`: slug character validation
-- `gptel-auto-workflow--finalize-review-fix-result`: nil validation for `response`
-
-**Robustness fixes:**
-- `my/gptel--sync-to-upstream`: error handling for buffer iteration failures
-- `my/gptel-permit-tool`: input validation for non-string/empty inputs
-
-**Keyword-plist helper:** Simplify score extraction condition with explicit plist detection
-
-### Discarded (75 hypotheses)
-
-**Not needed / already optimized:**
-- `nucleus-sync-tool-profile` race condition (lexical closure not required)
-- Memoization caching for path resolution functions (already resolved)
-- `gptel-ext-tool-permits.el` optimization (file already optimized)
-- Redundant `(cl-every #'consp)` removal (would lose validation)
-- Error handling restructuring in `gptel-auto-workflow--safe-truename` (already handled)
-
-**Too speculative / low confidence:**
-- Missing `provide` statement issue (structural but low impact)
-- CRUD lifecycle + content-based search (no stated hypothesis)
-- Various nil guard additions with unclear benefit
-
-**Incorrect / fixed:**
-- Removing redundant checks in `gptel-benchmark--to-json-format` (loss of validation)
+**Focus:** Safety, Vitality (error resilience), Performance (caching), Clarity (explicit contracts).
 ```
 
+### Check Issues
+
+# Review: Research Strategy Summary
+
+## Math Check
+| Category | Count |
+|----------|-------|
+| Kept | 5 |
+| Discarded | 14 |
+| **Total listed** | **19** |
+| Stated total | 87 |
+
+**⚠️ Discrepancy:** 19 listed vs 87 stated — missing 68 experiments.
+
+## Validation
+
+**The 5 kept hypotheses** are sound defensive coding practices:
+- ✅ All address runtime error prevention
+- ✅ Cover the four focus areas (Safety, Vitality, Performance, Clarity)
+
+**The 14 discarded** are reasonable to discard:
+- ✅ Micro-optimizations without evidence of bottleneck
+- ✅ Refactorings that don't improve user-facing behavior
+
+## Questions
+
+1. **Where are the other 68 experiments categorized?**
+2. **What's the acceptance criteria for "kept" vs "discarded"?**
+3. **Were 87 experiments actually run, or is this aspirational?**
+
+## Verdict
+
+The framework is coherent. The hypothesis classifications appear reasonable. The main issue is the count mismatch with the 87-experiment claim.

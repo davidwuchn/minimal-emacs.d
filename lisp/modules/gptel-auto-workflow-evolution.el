@@ -5460,7 +5460,13 @@ Checks: required frontmatter, duplicate titles, empty sections."
   "Auto-reorder the fallback chain based on backend performance data.
 Moves better-performing backends to the front of the fallback chain."
   (let* ((stats (gptel-auto-workflow--evolution-backend-stats))
-         (ordered (mapcar #'car stats)))
+         ;; Only consider backends already in the current fallback chain.
+         ;; Historical data may include deprecated backends (e.g. CF-Gateway)
+         ;; that have been removed from the chain — don't re-add them.
+         (current-backends (when (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+                             (mapcar #'car gptel-auto-workflow-executor-rate-limit-fallbacks)))
+         (ordered (seq-filter (lambda (b) (member b current-backends))
+                              (mapcar #'car stats))))
     (when (and ordered (> (length ordered) 2))
       (when (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
         (let ((new-chain

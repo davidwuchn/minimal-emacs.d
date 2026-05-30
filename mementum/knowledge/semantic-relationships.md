@@ -4,12 +4,16 @@
 
 # Semantic File Relationships
 
-Generated: 2026-05-30T11:08
+Generated: 2026-05-30T12:34
 
+| lisp/modules/gptel-auto-workflow-behavioral-tests.el | lisp/modules/gptel-ext-context.el | 2.000 |
+| lisp/modules/gptel-benchmark-integrate.el | lisp/modules/gptel-ext-context.el | 2.000 |
+| lisp/modules/gptel-ext-context.el | lisp/modules/gptel-ext-fsm-utils.el | 2.000 |
+| lisp/modules/gptel-ext-context.el | lisp/modules/gptel-tools-agent-strategy-evolver.el | 2.000 |
 | lisp/modules/gptel-ext-context.el | lisp/modules/gptel-workflow-benchmark.el | 2.000 |
-| lisp/modules/gptel-tools-agent-experiment-loop.el | lisp/modules/gptel-workflow-benchmark.el | 1.000 |
-| lisp/modules/gptel-tools-agent-prompt-analyze.el | lisp/modules/gptel-workflow-benchmark.el | 0.500 |
-| lisp/modules/gptel-tools-agent-experiment-core.el | lisp/modules/gptel-tools-agent-prompt-build.el | 0.250 |
+| lisp/modules/gptel-tools-agent-error.el | lisp/modules/gptel-tools-agent-subagent.el | 2.000 |
+| lisp/modules/gptel-tools-agent-error.el | lisp/modules/gptel-tools-agent-experiment-loop.el | 1.000 |
+| lisp/modules/gptel-ext-context.el | lisp/modules/gptel-tools-agent-experiment-loop.el | 0.667 |
 
 ## Ontology Implications
 

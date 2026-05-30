@@ -23,14 +23,12 @@
 
 ;; Phase 1: Register directives and hooks (needs gptel-config only)
 (with-eval-after-load 'gptel-config
-  (nucleus--register-gptel-directives)
-
+  (ignore-errors (nucleus--register-gptel-directives))
   (add-hook 'gptel-mode-hook #'nucleus-sync-tool-profile)
   (add-hook 'gptel-mode-hook #'nucleus-tool-sanity-check)
   (add-hook 'gptel-mode-hook #'nucleus--header-line-apply-preset-label))
 
-;; Phase 2: Override presets and wire advice (needs gptel-agent loaded)
 (with-eval-after-load 'gptel-agent
-  (nucleus-presets-setup))
+  (ignore-errors (nucleus-presets-setup)))
 
 ;;; nucleus-config.el ends here

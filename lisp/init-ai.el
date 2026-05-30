@@ -60,11 +60,19 @@
     (error nil))
   (unless (featurep 'gptel)
     (message "[init-ai] Workflow daemon detected; force-loading gptel")
-    (require 'gptel)
-    ;; Ensure gptel-config is loaded even if gptel was already loaded
-    ;; before this eval block ran.
-    (require 'gptel-config)
-    (require 'nucleus-config))
+    (condition-case err
+        (require 'gptel)
+      (error
+       (message "[init-ai] Failed to load gptel: %S" err)))
+    (condition-case err
+        (require 'gptel-config)
+      (error
+       (message "[init-ai] Failed to load gptel-config: %S" err)))
+    (condition-case err
+        (require 'nucleus-config)
+      (error
+       (message "[init-ai] Failed to load nucleus-config: %S" err)))
+    (message "[init-ai] gptel + modules loaded"))
   ;; Note: gptel-auto-workflow-persistent-headless is set in post-init.el
   ;; before any gptel-mode buffers exist, so the mode hook in
   ;; gptel-ext-core.el won't default to MiniMax.
