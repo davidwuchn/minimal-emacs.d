@@ -812,35 +812,50 @@ executor's prose summary."
 
 (defun gptel-auto-experiment--timeout-salvage-output (output prompt target &optional worktree)
   "Return synthetic executor output when timed-out error OUTPUT left real
-target edits.  PROMPT is the original executor prompt so the salvage path
-can preserve the intended hypothesis.  TARGET and WORKTREE identify the
-actual edited file."
+valid target edits.  PROMPT is the original executor prompt.  TARGET and
+WORKTREE identify the actual edited file.
+Returns nil (no salvage) when pending changes are syntactically broken,
+avoiding wasted retry cycles on corrupted files."
   (when (and (gptel-auto-experiment--agent-error-p output)
              (gptel-auto-experiment--executor-timeout-p output)
              (gptel-auto-experiment--target-pending-changes-p target worktree))
-    (let* ((raw-hypothesis (gptel-auto-experiment--extract-hypothesis prompt))
-           (hypothesis
-            (if (or (not (gptel-auto-workflow--non-empty-string-p raw-hypothesis))
-                    (member raw-hypothesis '("Agent error" "No hypothesis stated")))
-                (format "Timed-out executor left partial changes in %s for workflow evaluation"
-                        target)
-              raw-hypothesis)))
-      (format
-       (concat
-        "HYPOTHESIS: %s\n"
-        "CHANGED:\n"
-        "- Executor timed out before returning a final response, but the worktree contains pending changes for %s.\n"
-        "EVIDENCE:\n"
-        "- Treat the concrete worktree diff below as the source of truth for this partial attempt.\n"
-        "- Original timeout: %s\n"
-        "VERIFY:\n"
-        "- Run the normal benchmark and required tests against the changed worktree.\n"
-        "COMMIT:\n"
-        "- No commit was created before timeout; only keep the change if benchmark and review gates pass.\n"
-        "Task completed with partial work ready for workflow evaluation.")
-       hypothesis
-       target
-       (my/gptel--sanitize-for-logging output 200)))))
+    ;; Validate pending changes before salvaging — broken parens or syntax
+    ;; errors from a timed-out executor are not worth salvaging.
+    (let* ((target-file (expand-file-name target (or worktree default-directory)))
+           (validation-error (when (file-exists-p target-file)
+                               (gptel-auto-experiment--validate-code target-file))))
+      (if validation-error
+          (progn
+            (message "[auto-exp] ⏱ Timed-out executor left BROKEN changes in %s (%s); reverting instead of salvaging"
+                     target validation-error)
+            (when worktree
+              (let ((default-directory worktree))
+                (magit-git-success "checkout" "--" ".")))
+            nil)
+        ;; Pending changes are valid — salvage them
+        (let* ((raw-hypothesis (gptel-auto-experiment--extract-hypothesis prompt))
+               (hypothesis
+                (if (or (not (gptel-auto-workflow--non-empty-string-p raw-hypothesis))
+                        (member raw-hypothesis '("Agent error" "No hypothesis stated")))
+                    (format "Timed-out executor left partial changes in %s for workflow evaluation"
+                            target)
+                  raw-hypothesis)))
+          (format
+           (concat
+            "HYPOTHESIS: %s\n"
+            "CHANGED:\n"
+            "- Executor timed out before returning a final response, but the worktree contains pending changes for %s.\n"
+            "EVIDENCE:\n"
+            "- Treat the concrete worktree diff below as the source of truth for this partial attempt.\n"
+            "- Original timeout: %s\n"
+            "VERIFY:\n"
+            "- Run the normal benchmark and required tests against the changed worktree.\n"
+            "COMMIT:\n"
+            "- No commit was created before timeout; only keep the change if benchmark and review gates pass.\n"
+            "Task completed with partial work ready for workflow evaluation.")
+           hypothesis
+           target
+           (my/gptel--sanitize-for-logging output 200)))))))
 
 (defun gptel-auto-experiment-grade (output callback &optional target worktree)
   "Grade experiment OUTPUT. LLM decides quality threshold.
