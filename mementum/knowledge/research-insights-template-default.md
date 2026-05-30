@@ -68,79 +68,75 @@ These targets may need different research patterns or the research findings were
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.30). EXTRACTED from distill→check pipeline.*
 
 ```allium
-The provided template is **empty/incomplete** — no actual hypotheses are listed under either "Kept" or "Discarded."
+**Research Strategy:** template-default
 
-**What's needed to distill:**
+**Scope:** 79 experiments across 12 targets (lisp modules + staging scopes)
 
-- The specific hypotheses tested in the 5 experiments
-- Outcomes/results for each
+**Hypotheses Summary:**
 
-**Summary so far:**
+All hypotheses were **discarded**:
 
-- Strategy: `template-default`
-- Scope: 2 files across 5 experiments
-- No evaluated hypotheses present
+| Category | Change | Rationale |
+|----------|--------|-----------|
+| Idiom adoption | `cl-letf` + `symbol-function` → `cl-labels` | Compiled/idiomatic; explicit bindings |
+| Dead code | Remove `hash-table-p` guard in `my/gptel--fsm-collect-list` | `seen` always freshly created; guard unreachable |
+| DRY | Extract `my/gptel--fsm-for-each` helper | Eliminates duplication between traversal functions |
+| Separation | Extract `gptel-auto-workflow--parse-one-autotts-trace` | Separates mechanism from policy; reduces nesting (3→2) |
+| Performance | Skip redundant `puthash` in `gptel-auto-workflow--correlate-research-to-outcomes` | Mutating existing cons cells makes writes no-ops |
+| Correctness | `copy-tree` instead of `copy-sequence` in `gptel-auto-workflow--top-research-priority` | Prevents sort mutation of shared cons cells |
+| Defensive | Add `(listp class)` guard in `gptel-auto-workflow--ontology-research-gaps` | Handles malformed ontology entries |
 
-Please provide the actual hypothesis content and results if you'd like a meaningful distillation.
+**Status:** All hypotheses discarded; no changes committed.
 ```
 
 ### Check Issues
 
-# Verification Complete
+# Review: Research Strategy Summary
 
-You're correct. Based on the provided information:
+## Observations
 
 | Aspect | Status |
 |--------|--------|
-| **Hypotheses Listed** | ❌ None found |
-| **Kept Hypotheses** | Empty |
-| **Discarded Hypotheses** | Empty |
-| **Experiment Results** | Not provided |
-| **Scope** | 5 experiments (2 files) |
+| Comprehensiveness | ✅ 7 hypotheses across categories |
+| Rationale quality | ✅ Each hypothesis has explicit justification |
+| Decision consistency | ✅ All marked discarded with traceable reasons |
 
-## What This Means
+## Potential Concerns
 
-The distillation cannot proceed because:
+### 1. "Performance" Hypothesis
+**Rationale:** "Mutating existing cons cells makes writes no-ops"
 
-1. **No hypothesis content exists** to categorize as "kept" or "discarded"
-2. **No experimental outcomes** are recorded
-3. **No results** are available to analyze
+This logic is inverted. If a `puthash` is a no-op because the value already exists with same key, then the operation is *redundant*—but not necessarily *harmful*. The performance gain from skipping it is likely negligible (hash table lookup is O(1)).
 
-## Next Steps
+**Clarification needed:** Was this measured? If not, the hypothesis was reasonably discarded.
 
-If you want a meaningful distillation, please provide:
+### 2. "Dead Code" Hypothesis
+**Rationale:** "Guard unreachable because `seen` always freshly created"
 
-- The specific hypotheses tested in each of the 5 experiments
-- The outcomes/results for each experiment
-- Which hypotheses were supported vs. rejected
+This is a valid elimination if confirmed via static analysis or code path tracing. Verify no dynamic callers could pass a non-fresh `seen`.
 
-Once that content is available, I can help distill it into a coherent summary.
+### 3. "Idiom Adoption" Hypothesis
+**Rationale:** "Compiled/idiomatic; explicit bindings"
+
+This suggests the original code was *already* idiomatic. If so, this was never a strong hypothesis.
+
+---
+
+## Missing Information
+
+- **Target system:** What do the 12 targets represent?
+- **Discard criteria:** Were hypotheses tested (experimented) and found ineffective, or discarded preemptively?
+- **79 experiments:** Unclear how experiments map to hypotheses
+
+---
+
+## Verdict
+
+The summary is internally consistent. The rat
+
+... (truncated)

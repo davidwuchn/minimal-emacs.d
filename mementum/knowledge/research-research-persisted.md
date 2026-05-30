@@ -7,41 +7,56 @@ Synthesis verification:
 --->
 
 <think>
-The user wants me to synthesize memories about research-persisted findings into a comprehensive knowledge page. Let me analyze the memories:
+The user wants me to synthesize a set of research memories into a knowledge page. Let me analyze the memories and extract the key patterns, findings, and actionable insights.
 
-1. Multiple research sessions from May 2026
-2. Key themes:
-   - Research pipeline architecture
-   - Error recovery patterns (circuit breakers, checkpoints)
-   - Memory systems (mementum, session continuity)
-   - Agent architecture patterns
-   - External sources analysis (efrit, nucleus, context-mode, gbrain, gastown, etc.)
-   - Self-evolution directives
-   - Module complexity analysis
+From the memories, I can identify several recurring themes:
 
-Key patterns to synthesize:
-1. Circuit Breaker + Checkpoint/Restore Pattern
-2. Tool Receipts for Audit Trail
-3. Lambda Notation + Mathematical Attention Magnets
-4. Think-in-Code Paradigm
-5. Session Continuity via FTS5
-6. Feed-Forward Memory Protocol
-7. Beads Ledger for Work Tracking
-8. Three-Tier Watchdog Architecture
-9. DEGRADED State Circuit Breaker
-10. Hybrid Search Fusion
-11. Self-Wiring Knowledge Graph
-12. Three-Loop Meta-Learning Architecture
-13. Self-Verification Engine
-14. Sandbox Tool Pattern
-15. Zero Client Intelligence Pattern
+1. **Research Pipeline Patterns**:
+   - Preserving feedback loops with research hashes
+   - Treating missing research files as pipeline defects
+   - Structured, machine-parseable research outputs
+   - Guarding daemon orchestration boundaries
+   - Making self-evolution observable
 
-Key insights:
-- Research quality measured by downstream experiment success
-- Preserve feedback loops with research hashes
-- Treat missing research files as pipeline defects
-- Guard daemon orchestration boundaries
-- Prioritize observable self-evolution
+2. **Error Recovery Patterns**:
+   - Circuit breakers (OPEN→HALF-OPEN→CLOSED states)
+   - Checkpoint/restore
+   - Exponential backoff with jitter
+   - Fallback chains (provider A → B → C)
+   - Escalation queues
 
-Let me create a comprehensive knowledge page.
+3. **Agent Architecture Patterns**:
+   - Three-tier watchdog (Witness, Deacon, Dogs)
+   - Think-in-code context reduction (98% reduction)
+   - Session continuity via FTS5
+   - Self-wiring knowledge graphs
+   - Lambda notation / mathematical attention magnets
+   - Zero client intelligence / pure execution
+
+4. **Evaluation Patterns**:
+   - Task Success Rate (TSR)
+   - Tool Call Accuracy
+   - Trajectory Efficiency
+   - Reasoning Soundness
+
+5. **Meta-Learning**:
+   - Three-loop architecture (Execution, Evaluation, Self-Improvement)
+   - P(success) confidence scoring
+
+6. **Module Complexity Data**:
+   - 58031 total lines in lisp/modules
+   - Top modules: evolution (5822), strategic (2698), prompt-build (2431), benchmark-research (1742)
+
+Let me create a comprehensive knowledge page that:
+1. Has proper frontmatter
+2. Has at least 50 lines of actual content
+3. Includes concrete examples (code, tables, commands)
+4. Has actionable patterns
+5. Cross-references related topics
+6. Is structured as a complete markdown page
+
+
+7. Organizes patterns by functional category with clear hierarchy
+
+Now I'll structure this with sections for research pipeline integrity, fault tolerance mechanisms, agent design principles, and performance measurement, ensuring each pattern includes implementation guidance and interconnections between related concepts.
 </think>
