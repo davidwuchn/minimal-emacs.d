@@ -98,55 +98,41 @@
   buffer)
 
 (defun my/gptel--reset-agent-task-state ()
-  "Abort running tasks and clear completed subagent task state.
+  "Drain completed subagent tasks and let in-flight tasks drain naturally.
 
-Completed entries are removed. In-flight entries are kept so their
-callbacks still have state to consult when they arrive — the caller's
-stale-run-id check prevents interference. This avoids wasting API
-calls by letting in-flight subagents drain naturally instead of being
-aborted mid-response.
+Completed entries are removed. In-flight entries are kept (not aborted)
+so their callbacks still have state to consult when they arrive — the
+caller's stale-run-id check prevents interference.
+
+CRITICAL: We do NOT call `gptel-abort` on in-flight buffers because the
+subagent's tool-dispatch loop runs asynchronously and crashes with
+\"Selecting deleted buffer\" when the session buffer is killed mid-flight.
+In-flight subagents drain naturally; the stale-run-id check in callbacks
+provides the safety net.
 
 ALGORITHM: Collect task IDs first, then process, to avoid modifying
 the hash table during maphash iteration."
   (when (hash-table-p my/gptel--agent-task-state)
-    (let (all-task-ids request-buffers done-ids in-flight-ids stale-ids)
-      ;; Phase 1: collect all task IDs and classify
+    (let (done-ids stale-ids in-flight-count)
+      ;; Phase 1: classify all task IDs
       (maphash
        (lambda (task-id state)
-         (push task-id all-task-ids)
          (when (plistp state)
            (my/gptel--cancel-agent-task-timers state)
-           (let ((done (plist-get state :done))
-                 (request-buf (my/gptel--agent-task-request-buffer state)))
+           (let ((done (plist-get state :done)))
              (cond (done
                     (push task-id done-ids))
-                   (request-buf
-                    (push request-buf request-buffers)
-                    (push task-id in-flight-ids))
+                   ((my/gptel--agent-task-request-buffer state)
+                    (cl-incf in-flight-count))
                    (t
                     (push task-id stale-ids))))))
        my/gptel--agent-task-state)
       ;; Phase 2: remove done and stale entries (not in-flight)
       (dolist (tid (append done-ids stale-ids))
         (remhash tid my/gptel--agent-task-state))
-      ;; Cancel in-flight request buffers (but keep their state entries)
-      ;; so arriving callbacks don't trigger the "after reset" stale path
-      (dolist (request-buf (delete-dups request-buffers))
-        (when (and (buffer-live-p request-buf)
-                   (fboundp 'gptel-abort))
-          (condition-case err
-              (gptel-abort request-buf)
-            (error
-             (let ((safe-msg (condition-case nil
-                                 (my/gptel--sanitize-for-logging
-                                  (error-message-string err) 160)
-                               (error "abort-error"))))
-               (message "[nucleus] Failed to abort stale subagent buffer %s: %s"
-                        (buffer-name request-buf)
-                        safe-msg))))))
-      (when in-flight-ids
-        (message "[nucleus] Keeping %d in-flight subagent task(s) for natural drain"
-                 (length in-flight-ids))))))
+      (when (> in-flight-count 0)
+        (message "[nucleus] Keeping %d in-flight subagent task(s) for natural drain (not aborting — stale-run check prevents interference)"
+                 in-flight-count)))))
 
 (defun my/gptel--normalize-agent-activity-dir (dir)
   "Return DIR as a canonical directory path with trailing slash, or nil."
