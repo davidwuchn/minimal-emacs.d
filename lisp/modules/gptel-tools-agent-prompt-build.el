@@ -647,7 +647,8 @@ CALLBACK receives the Turtle string or nil."
 
 (defvar gptel-auto-workflow--ab-test-sections
   '(suggestions self-evolution topic-specific git-history
-                axis-performance cross-target-patterns failure-patterns)
+                axis-performance cross-target-patterns failure-patterns
+                research-findings)
   "Prompt sections that can be individually included/excluded for A/B testing.")
 
 (defvar gptel-auto-workflow--ab-test-omit-rate 0.2
@@ -1263,10 +1264,12 @@ Implements section-level A/B testing to identify effective prompt components."
                                       ""))
               (agent-behavior . ,(gptel-auto-workflow--load-skill-content "auto-workflow/agent-behavior"))
               (validation-pipeline . ,(gptel-auto-workflow--load-skill-content "auto-workflow/validation-pipeline"))
-              (research-findings . ,(let ((findings (gptel-auto-workflow-load-research-findings)))
-                                       (if (and findings (not (string-empty-p findings)))
-                                           (gptel-auto-experiment--research-for-prompt findings)
-                                         "No recent external research available.")))
+               (research-findings . ,(if (funcall section-included-p 'research-findings)
+                                           (let ((findings (gptel-auto-workflow-load-research-findings)))
+                                             (if (and findings (not (string-empty-p findings)))
+                                                 (gptel-auto-experiment--research-for-prompt findings)
+                                               "No recent external research available."))
+                                         ""))
               (time-budget . ,(/ gptel-auto-experiment-time-budget 60))
               (focus-line . ,focus-line)
               (sexp-check-command . ,sexp-check-command))))
