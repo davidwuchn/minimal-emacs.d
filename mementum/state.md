@@ -1,11 +1,27 @@
 # Mementum State
 
-> Last session: 2026-05-30 (fixed syntax error in evolution.el line 505)
+> Last session: 2026-05-30 (fixed prompt issues causing experiment failures)
 > Next pipeline: 11:00 (daemon restart to load fixed code)
 
-## Session: Crash Vector Fixes + Remote Sync
+## Session: Prompt Fixes + Experiment Failure Analysis
 
-**Status:** 3 FIXES COMMITTED. Daemon restart at 11:00 will load them.
+**Status:** 4 FIXES COMMITTED. Daemon restart at 11:00 will load them.
+
+**Commit:** `192c92ed` ⊘ fix: reduce prompt size and clarify agent instructions
+- **Problem:** Agent doing research instead of code changes; context window exceeded (2013 tokens)
+- **Root cause:** 
+  1. Objective buried at bottom of prompt after massive context sections
+  2. Research findings always included, confusing agent into research mode
+  3. Executor steps=25 causing context accumulation
+  4. Duplicate instruction numbering (9/10 appeared twice)
+- **Fixes:**
+  1. Moved objective to TOP with CRITICAL banner: "DO NOT do research"
+  2. Added `research-findings` to A/B test sections (can now be excluded)
+  3. Reduced executor steps: 25→15
+  4. Fixed instruction numbering
+  5. Added "Context (Reference Only)" header to separate background from task
+
+**Commit:** `e9dac400` ⊘ fix: remove extra close paren on line 505 that broke evolution-synthesize function
 
 **Commit:** `e9dac400` ⊘ fix: remove extra close paren on line 505 that broke evolution-synthesize function
 - Root cause: Previous commit accidentally added 1 `)` to line 505, changing 8→9 closes
