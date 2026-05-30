@@ -358,10 +358,11 @@ Handles SCORE: X/Y format, JSON format, and text-based PASS/FALL fallback.
 Passes if score >= 60% of total."
   (let ((score 0)
         (total (+ (length expected) (length forbidden)))
-        (details (if (stringp response) response (format "%S" response))))
+        (details (replace-regexp-in-string "<think>.*?</think>" "" (if (stringp response) response (format "%S" response)))))
     ;; Try SCORE: X/Y format first
+    ;; Also matches "Total: X/Y", "score: X/Y", and similar formats
     (cond
-     ((string-match "SCORE:\\s-*\\([0-9]+\\)/\\([0-9]+\\)" details)
+     ((string-match "\\(?:SCORE\\|Total\\|score\\)[:=]\\s-*\\([0-9]+\\)\\s-*/\\s-*\\([0-9]+\\)" details)
       (setq score (string-to-number (match-string 1 details))
             total (string-to-number (match-string 2 details))))
      ;; Count "passed": true in JSON results
@@ -373,17 +374,18 @@ Passes if score >= 60% of total."
           (cl-incf score)))
       (when (string-match "\"total\"\\s-*:\\s-*\\([0-9]+\\)" details)
         (setq total (string-to-number (match-string 1 details)))))
-     ;; Fallback: count text-based PASS items in grader output
+     ;; Fallback: count text-based PASS/✓ items in grader output
      (t
       (with-temp-buffer
         (insert details)
         (goto-char (point-min))
-        ;; Count lines with numbered/bulleted items ending in : PASS
-        ;; Matches patterns like:
-        ;;   "1. description: PASS"
-        ;;   "**1. description**: PASS"
-        ;;   "1. **description**: PASS"
-        (while (re-search-forward "^\\s-*\\(?:\\*\\*\\)?[0-9]+\\.\\s-+\\(?:\\*\\*\\)?.+\\(?:\\*\\*\\)?:\\s-+PASS\\(?:\\s-+-\\|$\\)" nil t)
+        ;; Count numbered items with PASS or ✓ markers
+        ;; Matches: "1. description: PASS" or "1. ✓ description - Yes"
+        (while (re-search-forward
+                (concat "^\\s-*\\(?:\\*\\*\\)?[0-9]+\\.\\s-+"
+                        "\\(?:\\*\\*\\)?\\(?:\\(?:✓\\|✅\\)\\|"
+                        "[^:\n]+\\(?:\\*\\*\\)?:\\s-+PASS\\)")
+                nil t)
           (cl-incf score))
         ;; Also count "PASS (not present)" for forbidden behaviors
         (goto-char (point-min))
