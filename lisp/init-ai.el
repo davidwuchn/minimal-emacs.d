@@ -214,6 +214,15 @@ generation and prompt classification."
 
 ;; Load ECA security utilities
 (require 'eca-security)
+;; Prime gpg-agent cache by decrypting .authinfo.gpg immediately.
+;; eca-security's own decryption is deferred until eca loads, but in
+;; workflow daemons eca may never load (deferred). Without this, every
+;; gpg --batch --decrypt call fails because gpg-agent has no passphrase.
+(ignore-errors
+  (let ((authinfo (expand-file-name "~/.authinfo.gpg")))
+    (when (file-exists-p authinfo)
+      (call-process "gpg" nil nil nil
+                    "--batch" "--quiet" "--decrypt" authinfo))))
 
 (use-package eca
   :ensure t

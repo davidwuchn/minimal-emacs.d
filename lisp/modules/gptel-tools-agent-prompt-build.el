@@ -1792,16 +1792,15 @@ CF-Gateway, then MiniMax."
   :group 'gptel-tools-agent)
 
 (defcustom gptel-auto-workflow-executor-rate-limit-fallbacks
-  '(("DashScope" . "qwen3.6-plus")
-    ("moonshot" . "kimi-k2.6")
-    ("DeepSeek" . "deepseek-v4-flash")
-    ("MiniMax" . "minimax-m2.7-highspeed"))
+  '(("DeepSeek" . "deepseek-v4-flash")
+    ("MiniMax" . "minimax-m2.7-highspeed")
+    ("moonshot" . "kimi-k2.6"))
   "Ordered backend/model fallbacks for executor after rate limits.
 
-DashScope first — qwen3.6-plus supports tool calls and makes code changes.
-moonshot second — kimi-k2.6 emits well, good for code generation.
-DeepSeek third — deepseek-v4-flash (thinking disabled, should emit tool calls).
-MiniMax fourth — rate-limited, HTTP 429.
+DeepSeek first — deepseek-v4-flash confirmed working (no content filter).
+MiniMax second — minimax-m2.7-highspeed fast but may hit rate limits.
+moonshot third — kimi-k2.6 content_filter blocks code gen (last resort).
+DashScope removed — quota exhausted (HTTP 429) on this account.
 CF-Gateway removed — @cf/moonshotai/kimi-k2.6 does not support tool calls reliably."
   :type '(repeat (cons (string :tag "Backend")
                        (string :tag "Model")))
