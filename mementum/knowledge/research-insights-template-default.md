@@ -188,61 +188,100 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-**Distilled Research Log**
+# Research Strategy: Template-Default
 
-- **Strategy**: `template-default`
-- **Experiments**: 3 (narrowly scoped)
-- **Target**: `lisp/modules/gptel-auto-workflow-projects.el`
-- **Kept Hypotheses**: *None recorded*
-- **Discarded Hypotheses**: *None recorded*
+## Overview
+- **Strategy Type**: Template-default
+- **Experiments**: 5 total across targets
+- **File**: `lisp/modules/gptel-auto-workflow-projects.el`
 
-**Observation**: Three iterations were run against a single module, but the trial history is opaque—no hypotheses were retained or rejected. This suggests either early-stage exploration or a logging gap.
+---
 
-**Implication**: Without tracked hypotheses, the 3 experiments cannot be validated, reproduced, or built upon. The work product is currently a blind run.
+## Structure (To Be Populated)
 
-**Recommended Next Step**: Backfill the implicit hypothesis for each of the 3 experiments, mark them as `kept` or `discarded`, and state the failure mode or supporting evidence for each.
+| Section | Content |
+|---------|---------|
+| **Kept Hypotheses** | (Hypotheses confirmed by experiments) |
+| **Discarded Hypotheses** | (Hypotheses invalidated by experiments) |
+
+---
+
+## Next Steps
+
+To complete this distillation, provide:
+1. The specific hypotheses tested
+2. Which hypotheses were supported → move to **Kept**
+3. Which hypotheses were refuted → move to **Discarded**
+
+---
+
+**Note**: The actual hypothesis content appears missing from the prompt. Please share the experiment results or hypothesis list to complete the distillation.
 ```
 
 ### Check Issues
 
-**Audit Confirmed.** The critique is accurate. Without recorded hypotheses, those 3 iterations are not experiments—they are undirected mutations. You cannot distinguish between "tweaked a variable" and "validated a causal mechanism." The log is currently a black box.
+# Analysis: Incomplete Research Strategy Document
+
+You're correct to flag this as incomplete. Here's what I observe:
+
+## Current Status
+
+| Element | Status |
+|---------|--------|
+| Template structure | ✅ Present |
+| Section placeholders | ✅ Present |
+| Hypotheses tested | ❌ Missing |
+| Experiment results | ❌ Missing |
+| Kept/Discarded classifications | ❌ Missing |
 
 ---
 
-### Why the Gap Matters
+## What's Needed to Complete
 
-| Missing Element | Consequence |
-|-----------------|-------------|
-| **Hypothesis** | No falsifiable claim to evaluate. |
-| **Kept/Discarded** | No knowledge accumulation; repeated ground. |
-| **Failure Mode** | If something breaks later, you cannot exclude these paths without re-running them. |
+To populate this template, I need:
 
----
+### 1. Hypotheses List
+Example format:
+```
+H1: Hypothesis text here
+H2: Hypothesis text here
+H3: Hypothesis text here
+...
+```
 
-### Backfill Template
+### 2. Experiment Results Per Target
+```
+Target A:
+- Experiment 1: H1 ✓, H2 ✗
+- Experiment 2: H1 ✓, H3 ✓
+...
 
-For each of the 3 experiments on `lisp/modules/gptel-auto-workflow-projects.el`, capture this:
-
-```markdown
-### Experiment N
-- **Hypothesis**: If we [change X], then [effect Y] will occur in [context Z], because [mechanism].
-- **Code Change**: [Function/variable modified and how]
-- **Observation**: [What actually happened; include error messages or behavioral deltas]
-- **Verdict**: `kept` | `discarded` | `inconclusive`
-- **Rationale**: [Evidence supporting or falsifying the hypothesis. If discarded, state the failure mode precisely.]
+Target B:
+- Experiment 3: H2 ✓, H4 ✗
+...
 ```
 
 ---
 
-### Immediate Action Required
+## Ready to Help
 
-To remediate, provide the **implicit intent** behind each of the 3 trials (even if vague, e.g., “I thought narrowing the prompt scope would reduce hallucinations”). I will help you formalize them into testable hypotheses, assign the correct verdicts, and link them to specific evidence in the module.
+Once you provide the hypotheses and experiment outcomes, I can help:
 
-**What we
+1. **Classify** each hypothesis as Kept or Discarded
+2. **Summarize** patterns across targets
+3. **Refine** the distillation into concise findings
 
-... (truncated)
+**Would you like to share the experiment results/hypotheses now?**

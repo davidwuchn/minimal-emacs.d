@@ -319,6 +319,11 @@ finish."
   (ignore-errors
     (call-process "gpg" nil nil nil "--batch" "--quiet" "--decrypt"
                   (expand-file-name "~/.authinfo.gpg")))
+  ;; Blacklist Moonshot — its content_filter blocks code generation, causing
+  ;; the onto-router to prefer it over working backends (Moonshot returns an
+  ;; error message, other backends fail silently, making Moonshot look "best").
+  (when (boundp 'gptel-auto-workflow--rate-limited-backends)
+    (cl-pushnew "moonshot" gptel-auto-workflow--rate-limited-backends :test #'string=))
   ;; Ensure gptel-agent-dirs includes our custom agent directory so
   ;; --update-agents registers all agent types (grader, analyzer, etc.).
   (let ((agents-dir (expand-file-name "assistant/agents"
@@ -1122,20 +1127,25 @@ and restores headless state. Returns t on success, nil on failure."
 (defun gptel-auto-workflow--run-all-weekly-jobs (prefix per-project-fn)
   "Run a weekly job for all projects using PREFIX and PER-PROJECT-FN.
 PER-PROJECT-FN should accept a project root and return t/nil for success."
-  (message "[%s] Running weekly job for %d projects..."
-           prefix (length (gptel-auto-workflow--normalized-projects)))
-  (let ((results nil))
-    (dolist (project-root (gptel-auto-workflow--normalized-projects))
-      (message "[%s] Processing project: %s" prefix project-root)
+  (when (or (null per-project-fn)
+            (not (functionp per-project-fn)))
+    (signal 'wrong-type-argument (list #'functionp per-project-fn)))
+  (let* ((projects (gptel-auto-workflow--normalized-projects))
+         (results nil)
+         (log-prefix (if (stringp prefix) prefix "weekly")))
+    (message "[%s] Running weekly job for %d projects..."
+             log-prefix (length projects))
+    (dolist (project-root projects)
+      (message "[%s] Processing project: %s" log-prefix project-root)
       (condition-case err
           (if (funcall per-project-fn project-root)
               (push (cons (directory-file-name project-root) 'success) results)
             (push (cons (directory-file-name project-root) 'error) results))
         (error
          (push (cons (directory-file-name project-root) (format "error: %s" err)) results)
-         (message "[%s] ✗ Failed: %s - %s" prefix project-root err))))
+         (message "[%s] ✗ Failed: %s - %s" log-prefix project-root err))))
     (message "[%s] All projects processed: %s"
-             prefix
+             log-prefix
              (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
                         results ", "))
     results))

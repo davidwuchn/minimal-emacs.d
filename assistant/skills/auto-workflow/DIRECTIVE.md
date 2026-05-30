@@ -17,14 +17,14 @@ total-kept: 0
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
-| `lisp/modules/gptel-auto-workflow-projects.el` | 0% | 3 | 0 | ⏳ Insufficient data |
+| `lisp/modules/gptel-auto-workflow-projects.el` | 0% | 5 | 0 | ⏳ Insufficient data |
 
 ## 🧬 Meta-Learned Patterns
 
 <!-- AUTO-UPDATED: From git history + mementum analysis -->
 *These patterns were automatically extracted from successful experiments.*
 
-- **manual-fix** (39× from git)
+- **manual-fix** (38× from git)
 - **Source type** (24× from mementum)
 - **Description** (24× from mementum)
 - **Application for us** (24× from mementum)
@@ -48,7 +48,7 @@ total-kept: 0
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (2×): Investigate root cause
+- **other** (4×): Investigate root cause
 - **validation-failed** (1×): Improve pre-grade validation prompts
 
 ## Success Patterns
@@ -92,4 +92,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 870 experiments (0 kept locally across 3 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 870 experiments (0 kept locally across 5 local records). It evolves every self-evolution cycle.*
