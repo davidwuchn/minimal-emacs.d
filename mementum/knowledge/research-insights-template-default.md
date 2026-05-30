@@ -256,53 +256,13 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-```markdown
-**Research Strategy: Template-Default**
-
-**Scope:** 24 experiments across 6 target modules
-
-**Targets:**
-- `lisp/modules/gptel-tools-agent-benchmark.el`
-- `lisp/modules/gptel-benchmark-subagent.el`
-- `lisp/modules/gptel-tools-agent-error.el`
-- `lisp/modules/gptel-tools-agent-prompt-build.el`
-- `lisp/modules/gptel-auto-workflow-strategic.el`
-- `lisp/modules/gptel-auto-workflow-projects.el`
-
-**Status:**
-- Kept hypotheses: None documented
-- Discarded hypotheses: None documented
-
-**Summary:** Systematic evaluation across agent tools, benchmarking, error handling, prompt construction, and workflow automation modules using default templating approach.
+nil
 ```
 
-### Check Issues
-
-# Document Review
-
-Your markdown appears **structurally sound**. Here's a quick check:
-
-| Element | Status |
-|---------|--------|
-| Headers (`**text**`) | ✅ Correct |
-| List formatting | ✅ Valid |
-| Code fences (\`\`\`) | ✅ Properly closed |
-| Overall structure | ✅ Well-organized |
-
-## Minor Observations
-
-1. **Status section** - Both fields are empty. Should these be populated, or is this intentional for a template?
-
-2. **Summary** - Could be expanded with specific hypotheses or expected outcomes.
-
-3. **Consistency** - File names follow `gptel-*` naming pattern consistently.
-
-Would you like me to:
-- Validate the file paths exist?
-- Suggest additional fields?
-- Expand the summary with more detail?

@@ -2712,6 +2712,10 @@ When called programmatically, returns a status plist."
   (interactive)
   (let* ((proj-root (gptel-auto-workflow--effective-project-root))
          (cache-key (gptel-auto-workflow--normalized-cache-key proj-root))
+         ;; Ensure nil-safety: initialize cache if needed
+         (_ (when (null gptel-auto-workflow--research-findings-cache)
+              (setq gptel-auto-workflow--research-findings-cache
+                    (make-hash-table :test 'equal))))
          (findings (gethash cache-key gptel-auto-workflow--research-findings-cache))
          (cache-file (gptel-auto-workflow--research-file))
          (file-exists (file-exists-p cache-file))
