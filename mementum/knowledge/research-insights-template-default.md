@@ -124,40 +124,75 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-**Distilled Summary**
+**Research Summary**
 
-- **Strategy**: template-default  
-- **Effort**: 1 experiment → `lisp/modules/gptel-auto-workflow-projects.el`  
-- **Result**: Zero hypotheses kept or discarded.  
-- **Assessment**: Inconclusive / exploratory. The probe yielded no signal—neither confirming nor ruling out any theory about the target.  
-- **Next Step**: Sharpen the experiment into a falsifiable, narrowly-scoped claim (e.g., a specific function behavior or side-effect) rather than an open-ended reconnaissance pass.
+- **Strategy**: Template-default
+- **Target**: `lisp/modules/gptel-auto-workflow-projects.el`
+- **Experiments**: 2 completed
+- **Hypotheses**: None kept or discarded
+
+**Distillate**: Early-phase, exploratory work on a single module with inconclusive or pre-hypothesis results. No validated or rejected theories yet—likely still in data collection or scoping mode.
 ```
 
 ### Check Issues
 
-**Verdict**: The meta-assessment is directionally correct, but the framing is loose. You correctly identified the null result, yet calling it an “experiment” overstates the epistemic rigor. What you ran was a **probe or reconnaissance pass**, not an experiment.
+This reads as a coherent early-phase research log, but it flags a **process gap** that you should address before continuing.
 
-### Specific gaps
+### Quick Check
 
-| Item | Issue |
-|------|-------|
-| **Strategy** | “template-default” is fine, but it doesn’t describe the *action*. Did you load the file? Read it? Evaluate a form? |
-| **Effort** | “1 experiment” is non-reproducible. What exactly did you do to the `.el` file? |
-| **Result** | “Zero hypotheses kept or discarded” is awkward. If you started with no hypotheses, you cannot discard any; you simply gathered no evidence. |
-| **Assessment** | “No signal” is accurate, but you need to state what sensor you were reading. No error? No output? Silent success? |
+| Field | Assessment |
+|-------|------------|
+| **Strategy** | `Template-default` is noted. Fine for scoping, but consider tagging when you switch to a targeted strategy (e.g., `dependency-analysis`, `api-design`). |
+| **Target** | Clear, single-file scope. Good. |
+| **Experiments** | 2 completed, but **no linkage to hypotheses**. This is the weak point. |
+| **Hypotheses** | Empty set is acceptable *only if* the experiments were purely observational (e.g., "read codebase," "trace load order"). If they were behavioral tests, you likely generated implicit hypotheses that weren't captured. |
+| **Distillate** | Accurate tone for pre-hypothesis work. |
 
-### Suggested rewrite
+### Suggested Fix
 
-- **Strategy**: Exploratory buffer review / load-test (template-default)  
-- **Effort**: Open-ended read of `lisp/modules/gptel-auto-workflow-projects.el`; evaluated buffer; no predefined hypothesis.  
-- **Observation**: File loaded without error / no obvious structural anomalies / no functional tests invoked *(pick the one that matches)*.  
-- **Assessment**: Inconclusive. Reconnaissance yielded no actionable data; no claims about the module were tested.  
-- **Next Step**: Commit to one falsifiable micro-claim before the next interaction.  
-  - *Example*: “Evaluating `(gptel-auto-workflow-projects-init '())` signals a specific error.
+Add an **Observations** or **Raw Findings** field between Experiments and Hypotheses. Early-phase work usually produces *observations* before *hypotheses*. Your current template forces a binary (kept/discarded) that doesn't fit data-collection mode.
+
+**Revised structure for this entry:**
+
+```markdown
+**Research Summary**
+- **Strategy**: Template-default
+- **Target**: `lisp/modules/gptel-auto-workflow-projects.el`
+- **Experiments**: 2 completed
+  1. [Describe: e.g., "load-order tracing"]
+  2. [Describe: e.g., "command autoload audit"]
+- **Observations**: 
+  - [e.g., "Module loads after `gptel` but before project hooks fire"]
+  - [e.g., "No autoload cookies on interactive commands"]
+- **
 
 ... (truncated)

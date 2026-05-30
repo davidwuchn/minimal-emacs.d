@@ -782,13 +782,18 @@ Without PROJECT-ROOT, clears overlays for all projects."
   (let ((buffers nil))
     (gptel-auto-workflow--iterate-project-buffers
      (lambda (root buf)
-       (push (format "%s -> %s (%s)"
-                     root
-                     (buffer-name buf)
-                     "live")
-             buffers)))
+       (let ((mode (with-current-buffer buf
+                     (format-mode-line mode-name))))
+         (push (format "%s -> %s [%s]"
+                       root
+                       (buffer-name buf)
+                       (or mode "unknown"))
+               buffers))))
     (if buffers
-        (message "Project buffers:\n%s" (string-join buffers "\n"))
+        (let ((sorted (sort buffers #'string<)))
+          (message "Project buffers (%d):\n%s"
+                   (length sorted)
+                   (string-join sorted "\n")))
       (message "No project buffers created yet"))))
 
 ;;; Researcher Multi-Project Support
