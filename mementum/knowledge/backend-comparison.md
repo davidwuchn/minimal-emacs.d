@@ -1,17 +1,25 @@
 # Backend Head-to-Head Comparison
-> Auto-generated from 0 experiments across 0 backends
+> Auto-generated from 201 experiments across 4 backends
+
+## DashScope vs MiniMax (winner: **DashScope**)
+- DashScope: 36.4% keep-rate
+- MiniMax: 4.5% keep-rate
+- Shared targets: 3 | DashScope won 3, MiniMax won 0, ties 0
+
+## MiniMax vs DeepSeek (winner: **tie**)
+- MiniMax: 0.0% keep-rate
+- DeepSeek: 0.0% keep-rate
+- Shared targets: 2 | MiniMax won 0, DeepSeek won 0, ties 2
+
+## MiniMax vs moonshot (winner: **tie**)
+- MiniMax: 0.0% keep-rate
+- moonshot: 0.0% keep-rate
+- Shared targets: 1 | MiniMax won 0, moonshot won 0, ties 1
+
+## DashScope vs DeepSeek (winner: **DashScope**)
+- DashScope: 33.3% keep-rate
+- DeepSeek: 0.0% keep-rate
+- Shared targets: 1 | DashScope won 1, DeepSeek won 0, ties 0
 
 
-<<<<<<< HEAD
-*Generated: 2026-05-30 10:01*
-=======
-<<<<<<< HEAD
-*Generated: 2026-05-30 09:58*
-=======
-<<<<<<< Updated upstream
-*Generated: 2026-05-30 09:23*
-=======
-*Generated: 2026-05-30 09:26*
->>>>>>> Stashed changes
->>>>>>> f83f107b (◈ Merge auto-evolved pipeline files)
->>>>>>> 5a11d87f (◈ Merge auto-evolved pipeline files)
+*Generated: 2026-05-30 10:03*

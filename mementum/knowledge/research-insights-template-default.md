@@ -159,77 +159,88 @@ The experiments surfaced a **robustness crisis, not a performance crisis**. The 
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.05). EXTRACTED from distill→check pipeline.*
 
 ```allium
-**Distilled Research Strategy**
+**Distillation: Research Strategy (template-default) — 201 Experiments**
 
-- **Template:** template-default
-- **Experiments:** 8 total
-- **Targets:** 6
-  - 2 staging targets (review, merge, verification)
-  - 4 Elisp module targets (strategic, projects, research-integration workflows)
-- **Hypotheses:** None specified (kept or discarded)
->>>>>>> Stashed changes
+**Scope:** ~25 Elisp modules across `gptel-auto-workflow-*`, `gptel-tools-agent-*`, `gptel-benchmark-*`, `gptel-ext-*`, `nucleus-*`, `gptel-tools-memory`, and `gptel-agent-loop`.
+
+---
+
+### Kept Hypotheses (Defensive Correctness)
+
+**Input Validation & Nil-Safety** — The dominant theme. Added guards to prevent runtime crashes from malformed agent output:
+- `gptel-auto-experiment--validate-candidate-safely`, `gptel-auto-workflow-research-status-all`, `gptel-workflow--score-tools`: nil / non-string / empty-string checks.
+- `gptel-benchmark--to-json-format`, `gptel-benchmark-summarize-results`: `(cl-every #'consp data)` and `proper-list-p` validation before destructuring.
+- `gptel-benchmark-prescribe`, `gptel-auto-workflow--finalize-review-fix-result`: nil guards before string/pattern operations.
+- `gptel-tools-memory--resolve-path`, `my/gptel-permit-tool`: slug and hash-table input validation.
+
+**Data-Structure & Logic Bug Fixes** — Corrected concrete mismatches causing silent failures or inverted semantics:
+- Fixed keyword-to-symbol alist conversion in `gptel-benchmark--to-json-format` (dotted pairs with keyword keys broke JSON serialization).
+- Fixed `gptel-benchmark-diagnose-elements` using `plist-get` on alist data, causing scores to always default to 0.5; changed to `alist-get`.
+- **Swapped inverted arguments** in `gptel-benchmark-baseline-file-compare`: caller passed `current` as version-a and `baseline` as version-b, inverting improvement/regression signals.
+- Fixed stale-copy bug in `gptel-auto-workflow--link-shared-runtime-path` (regular files treated as valid symlinks).
+
+**API Robustness & Error Signaling**
+- Replaced non-built-in `hash-table-keys` usage (runtime errors in `my/gptel-show-permits` / `my/gptel-health-check`).
+- Changed `gptel-tools-memory--read` / `--write` to signal errors instead of returning silent error strings.
+- Extracted duplicated zero-result structure in `gptel-benchmark-summarize-results` into explicit helper `gptel-benchmark--empty-summary`.
+
+---
+
+### Discarded Hypotheses (Optimization & Structural)
+
+**Performance / Memoization** — Deemed speculative or low-impact:
+- Caching layers for `nucleus--project-root`, prompt/agent directory resolution, and `gptel-auto-workflow--safe-backend-name`.
+- Micro-optimizations: removing redundant `cl-every` passes, temp-buffer elimination in `gptel-tools-memory--read`, `condition-case` restructuring.
+
+**Test Infrastructure & File Structure**
+- Moving misplaced `(provide 'gptel-benchmark-tests)` and 14 test definitions from after-provide to before-provide.
+- Adding `unwind-protect` cleanup and fixing test state pollution in benchmark tests.
+- Fixing race condition in `nucleus-sync-tool-profile` idle timer (`current-buffer` capture).
+
+**Style & Scope Expansion**
+- Misleading indentation fixes; `ignore-errors` vs `condition-case` preference.
+- File-size validation for memory read; completing CRUD lifecycle + content-based search.
+
+---
+
+### Pattern
+
+The strategy **accepted concrete, low-risk validation guards and correctness fixes** (Vitality and Clarity axes: nil-safety, type checking, argument-order bugs, proper error signaling) while **rejecting speculative performance optimizations, structural test reorganizations, and stylistic refactors** that did not address immediate runtime failure modes.
 ```
 
 ### Check Issues
 
-<<<<<<< Updated upstream
-**Verdict: Technically sound and well-framed.** The distillation is sharp, internally consistent, and the “robustness crisis, not performance crisis” conclusion is strongly supported by the evidence you presented. A few minor technical notes and one likely inaccuracy to address before this is finalized:
+This is a sharp, well-structured distillation. The boundary between **concrete runtime correctness** (kept) and **speculative/structural work** (discarded) is clear, and the Pattern summary accurately captures the decision logic.
 
----
+A few critical checks and suggestions:
 
-### ✅ Confirmed / Strong
+### 1. Likely Miscategorization: Race Condition
+**`nucleus-sync-tool-profile` idle timer (`current-buffer` capture)** should probably move from **Discarded** to **Kept**.
 
-**1. The `(ignore)` → `(error nil)` fix is correct.**
-In `condition-case`, a handler has the shape `(CONDITIONS . BODY)`. Writing `(ignore)` installs a handler for the *specific* signal symbol `ignore`, not a catch-all. To swallow any error and return `nil`, `(error nil)` is the right replacement. (Pedantic aside: you *could* define an error symbol named `ignore`, but it would never catch a standard `error` signal.)
+Capturing `current-buffer` in a closure passed to an idle timer is a classic deferred-time bug: by the time the timer fires, the buffer may be killed, buried, or switched, causing the operation to run in the wrong context (or signal an error in a background timer). This is a **runtime correctness / nil-safety issue**, not speculative optimization or test infrastructure. Unless you have confirmed the timer is always cancelled synchronously before the buffer can change, this is defensive and low-risk.
 
-**2. `plist-get` on alists and dotted-pair JSON keys are classic Elisp boundary bugs.**
-Both fixes are exactly right. `plist-get` expects a property list (`:key val :key2 val2...`), not an alist. And JSON serialization paths in Emacs are notoriously sensitive to whether keys are keywords, symbols, or strings depending on `json-object-type` / `json-encoding-key-fn`.
+### 2. Test Infrastructure: Correctness vs. Structure
+The misplaced `(provide 'gptel-benchmark-tests)` and test state pollution sit on the boundary.
+- If benchmark tests are run in CI or before releases, state pollution creates **non-deterministic failures** (correctness).
+- If they are purely manual/debugging tools, discarding them as "structural" is justified.
 
-**3. `string-match-p` on `nil` is a guaranteed `wrong-type-argument` error.**
-Guard is necessary.
-
-**4. Argument-order inversion in `gptel-benchmark-baseline-file-compare`.**
-This is a high-severity silent bug—exactly the kind of thing that makes baseline/candidate comparisons useless. Good catch.
-
-**5. `provide` stranded before EOF.**
-A genuine structural/load-order bug. M
+**Check:** Are the benchmark tests part of the critical validation path? If yes, the `unwind-protect` cleanup and `provide` relocation are defensive correctness fixes and should be kep
 
 ... (truncated)
-=======
-# Quick Review: Distilled Research Strategy
-
-## Structure Analysis
-
-| Element | Status | Notes |
-|---------|--------|-------|
-| Template | ✓ | Standard choice |
-| Experiment count | ✓ | 8 experiments is reasonable |
-| Target breakdown | ⚠️ | 6 targets with 2 staging + 4 modules |
-| Hypotheses | ❓ | "None specified" — intentional? |
-
-## Observations
-
-**Potential Gaps:**
-- No hypotheses defined — will experiments test specific claims?
-- Unclear how 8 experiments distribute across 6 targets
-- No priority or sequencing specified
-
-**Questions to Consider:**
-1. Are the 2 staging targets prerequisites for module targets?
-2. What's the expected output of each Elisp module target?
-3. Is "no hypotheses" by design, or an oversight?
-
-## Need More Detail?
-
-If you'd like a deeper review, share:
-- Experiment descriptions
-- Success criteria
-- Timeline/deadlines
-
-This helps validate the strategy is well-scoped.
->>>>>>> Stashed changes
