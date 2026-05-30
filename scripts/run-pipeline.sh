@@ -212,10 +212,10 @@ EOF
 # Keeps at most 3 rotated copies: .1 (newest), .2, .3 (oldest).
 log_rotate() {
     local f="$1" max="${2:-102400}"
-    [ -f "$f" ] || return
+    [ -f "$f" ] || return 0
     local size
     size=$(wc -c < "$f")
-    [ "$size" -lt "$max" ] && return
+    [ "$size" -lt "$max" ] && return 0
     [ -f "${f}.3" ] && rm -f "${f}.3"
     [ -f "${f}.2" ] && mv "${f}.2" "${f}.3" 2>/dev/null || true
     [ -f "${f}.1" ] && mv "${f}.1" "${f}.2" 2>/dev/null || true
