@@ -498,16 +498,70 @@ The Allium format is a compact statechart — much smaller than English prose."
                         (* 100.0 (/ (float (length allium-spec)) (length english-findings))))))))
         nil))))
 
-(defun gptel-auto-experiment--research-for-prompt (english-findings)
+(defun gptel-auto-experiment--strip-think-blocks (text)
+  "Remove all <think>...</think> blocks from TEXT.
+These are LLM reasoning/planning text that confuses executor agents
+into interpreting the task as research rather than code changes."
+  (let ((result text) start end)
+    (while (string-match "<think>" result)
+      (setq start (match-beginning 0))
+      (setq end (when (string-match "</think>" result (match-end 0))
+                  (match-end 0)))
+      (if end
+          (setq result (concat (substring result 0 start)
+                               (substring result end)))
+        (setq result (substring result 0 start))))
+    (string-trim result)))
+
+(defun gptel-auto-experiment--extract-actionable-patterns (text target)
+  "Extract actionable patterns from TEXT relevant to TARGET.
+Filters to lines containing actionable keywords and topic-relevant terms.
+Returns at most 3 patterns as a compact string, max 500 chars."
+  (let* ((lines (split-string text "\n"))
+         (action-kws '("apply" "fix" "add" "implement" "guard" "validate"
+                       "verify" "handle" "prevent" "circuit" "breaker"
+                       "timeout" "retry" "fallback" "degrade" "classify"
+                       "pattern" "route" "optimize" "extract" "deduplicate"))
+         (target-topic (cond
+                        ((string-match "error" target) "error")
+                        ((string-match "retry" target) "retry")
+                        ((string-match "timeout" target) "timeout")
+                        ((string-match "prompt" target) "prompt")
+                        ((string-match "benchmark" target) "benchmark")
+                        ((string-match "routing\\|router" target) "routing")
+                        ((string-match "evolution" target) "evolution")
+                        (t nil)))
+         (relevant-lines
+          (seq-take
+           (seq-filter
+            (lambda (l)
+              (and (string-match-p (regexp-opt '("^- " "^\\* " "^[0-9]+\\." "^-\\s-" "^\\*\\*"))
+                                   (string-trim l))
+                   (let ((lower (downcase l)))
+                     (or (seq-some (lambda (kw) (string-match-p kw lower))
+                                   action-kws)
+                         (and target-topic (string-match-p target-topic lower))))))
+            lines)
+           3))
+         (compact (if relevant-lines
+                      (mapconcat (lambda (l)
+                                   (let ((trimmed (string-trim l)))
+                                     (truncate-string-to-width trimmed 160 nil nil "")))
+                                 relevant-lines "\n")
+                    (truncate-string-to-width text 300 nil nil "..."))))
+    (if (> (length compact) 500)
+        (concat (truncate-string-to-width compact 497 nil nil "") "...")
+      compact)))
+
+(defun gptel-auto-experiment--research-for-prompt (english-findings &optional target)
   "Return research findings optimized for LLM prompts.
-Uses lambda-compressed version when backend supports it,
-falls back to English prose otherwise.  Allium version is for human audit only."
-  (let ((allium (gptel-auto-experiment--allium-research-findings english-findings nil)))
-    ;; Allium: human audit trail only — never sent to LLM directly
-    ;; Lambda compression: strip English filler, convert to compact notation
+Strips <think> blocks, extracts actionable patterns relevant to TARGET,
+limits to ~500 chars. Lambda-compressed format when backend supports it."
+  (let* ((stripped (gptel-auto-experiment--strip-think-blocks english-findings))
+         (focused (gptel-auto-experiment--extract-actionable-patterns stripped (or target "")))
+         (allium (gptel-auto-experiment--allium-research-findings english-findings nil)))
     (if (gptel-auto-experiment--use-lambda-prompts-p)
-        ;; Lambda-compressed: key patterns, no prose filler
-        (let* ((lines (split-string english-findings "\n"))
+        (let* ((lines (split-string stripped "\n"))
                (apply-lines (seq-filter (lambda (l) (string-match-p "\\*\\*Apply:\\*\\*" l)) lines))
                (compact (if apply-lines
                             (mapconcat (lambda (l)
@@ -517,9 +571,9 @@ falls back to English prose otherwise.  Allium version is for human audit only."
                                        apply-lines "\n")
                           "")))
           (if (string-empty-p compact)
-              (truncate-string-to-width english-findings 500 nil nil "...")
+              focused
             compact))
-      english-findings)))
+      focused)))
 
 (defun gptel-auto-experiment--allium-issues-count (check-output)
   "Count distinct issues from Allium check output (deterministic).
@@ -1305,9 +1359,9 @@ Implements section-level A/B testing to identify effective prompt components."
               (validation-pipeline . ,(gptel-auto-workflow--load-skill-content "auto-workflow/validation-pipeline"))
                (research-findings . ,(if (funcall section-included-p 'research-findings)
                                            (let ((findings (gptel-auto-workflow-load-research-findings)))
-                                             (if (and findings (not (string-empty-p findings)))
-                                                 (gptel-auto-experiment--research-for-prompt findings)
-                                               "No recent external research available."))
+                                              (if (and findings (not (string-empty-p findings)))
+                                                  (gptel-auto-experiment--research-for-prompt findings target)
+                                                "No recent external research available."))
                                          ""))
               (time-budget . ,(/ gptel-auto-experiment-time-budget 60))
               (focus-line . ,focus-line)

@@ -33,7 +33,7 @@ total-kept: 10
 <!-- AUTO-UPDATED: From git history + mementum analysis -->
 *These patterns were automatically extracted from successful experiments.*
 
-- **manual-fix** (37× from git)
+- **manual-fix** (35× from git)
 - **Application for us** (24× from mementum)
 - **Source type** (24× from mementum)
 - **Description** (24× from mementum)
@@ -60,7 +60,7 @@ total-kept: 10
 - **other** (126×): Investigate root cause
 - **api-limit** (14×): Implement provider fallback or rate limit handling
 - **timeout** (12×): Add smaller batch sizes or chunked processing
-- **validation-failed** (10×): Improve pre-grade validation prompts
+- **validation-failed** (12×): Improve pre-grade validation prompts
 - **test-failure** (2×): Run tests before committing experiments
 
 ## Success Patterns
@@ -108,4 +108,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 870 experiments (10 kept locally across 164 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 870 experiments (10 kept locally across 166 local records). It evolves every self-evolution cycle.*

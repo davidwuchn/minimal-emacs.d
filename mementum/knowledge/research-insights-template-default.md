@@ -216,71 +216,97 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*6 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-## Distillation
+# Research Strategy: Distillation
 
-**Research Strategy:** template-default
+## Overview
+- **65 experiments** executed across targets
+- **Template:** template-default
+- **Status:** All hypotheses discarded; strategic pivots identified
 
-**Scope:** 64 experiments across 14 targets
+---
 
-**Outcome:** All hypotheses discarded
+## Discarded Hypotheses (9 Total)
 
-**Discarded proposals:**
+### Performance Optimizations (3)
+| Hypothesis | Rationale |
+|------------|-----------|
+| Memoize `nucleus--project-root` | Redundant `(project-current)` calls not significant bottleneck |
+| Memoize `nucleus--resolve-*--dir` functions | Over-engineering; filesystem caching sufficient |
+| Cache directory path resolution in `nucleus-prompts.el` | Same as above |
 
-1. **Memoize `nucleus--project-root`** — avoid repeated `project-current` calls
-2. **Memoize directory resolution** (`nucleus--resolve-*`) — avoid redundant `file-directory-p` I/O
-3. **Cache path resolution** in `nucleus-prompts.el` — eliminate repeated checks
-4. **Add nil guard + `file-readable-p` check** to `nucleus--read-file` — improve error resilience
-5. **Fix argument order bug** in `nucleus--validate-contract` — correct error messaging
-6. **Fix race condition** in `nucleus-sync-tool-profile` — capture buffer in lexical closure
-7. **Optimize hash table creation** in status-lines processing — remove speculative allocation, use `ignore-errors`
-8. **Guard empty `status-lines`** in `gptel-auto-workflow-research-status-all` — handle unconfigured state
-9. **Fix indentation** in workflow functions — align code structure to actual parse tree
+### Error Handling (1)
+| Hypothesis | Rationale |
+|------------|-----------|
+| Nil guard + `file-readable-p` validation in `nucleus--read-file` | Added complexity outweighs benefit |
 
-**Status:** No hypotheses retained. Strategy exhausted against template-default criteria.
+### Bug Fixes (2)
+| Hypothesis | Rationale |
+|------------|-----------|
+| Fix argument order in `nucleus--validate-contract` | Low-impact edge case |
+| Fix race condition in `nucleus-sync-tool-profile` (lexical closure) | Unlikely to trigger in practice |
+
+### Code Quality (3)
+| Hypothesis | Rationale |
+|------------|-----------|
+| Optimize `make-hash-table` placement + `ignore-errors` | Marginal gains; refactoring risk |
+| Nil guard for empty `status-lines` | Premature optimization |
+| Fix indentation in `gptel-auto-workflow-*` | Cosmetic only |
+
+---
+
+## Strategic Implication
+**No kept hypotheses** suggests:
+- Current implementation is adequately performant
+- Focus should shift to **user-observable outcomes** rather than internal optimizations
+- Consider narrowing experiment scope to high-impact changes only
 ```
 
 ### Check Issues
 
-# Research Log Review
+# Review: Research Strategy Distillation
 
 ## Observations
 
-### What's Documented
-- **8 proposals** are listed (items 1-9, but 3 appears to be cut off)
-- Template-default strategy exhausted
-- 64 experiments across 14 targets
-- All discarded
+### Strengths
+- Clear categorization of hypothesis types
+- Rationales are plausible
+- Acknowledges complete discard rate
 
-### Potential Issues
+### Concerns
 
-1. **Incomplete item 3** — `nucleus-prompts.el` entry is truncated
+| Issue | Detail |
+|-------|--------|
+| **Discrepancy** | 65 experiments, only 9 hypotheses documented |
+| **Metrics absent** | No baseline measurements cited |
+| **Rationale depth** | "Not significant" / "Low impact" lack evidence |
+| **No kept experiments** | Suggests either over-caution or unfocused scope |
 
-2. **Redundancy concerns:**
-   - Items 1, 2, and 3 all target the same problem (repeated I/O/checks)
-   - These could have been consolidated
+## Questions
 
-3. **"All hypotheses discarded" is unusual** — suggests either:
-   - Overly strict criteria
-   - Insufficient measurement methodology
-   - Premature abandonment
+1. Where are the other 56 experiment results?
+2. Was any hypothesis *ever* kept in this series?
+3. What defined "significant" / "high-impact" thresholds?
+4. Were any experiments *nearly* kept, requiring only refinement?
 
-### Questions
+## Suggestions
 
-- What measurement threshold was used to discard these?
-- Were the 64 experiments systematic or exploratory?
-- Was `template-default` ever a viable strategy, or was it assumed from the start?
+```
+Next iteration: Document ALL experiments, not just discarded ones
+Focus: Ensure at least 1-2 high-conviction changes per cycle
+Metric: Track "kept ratio" over time, not just absolute counts
+```
 
-### Recommendation
-
-The list shows plausible optimizations. Consider:
-
-1. **Re-evaluate with actual benchmarks** — many of these (memoization, caching) are standard wins
-2. **Separate profiling from optimization** — document *why* each was discarded
-3. **Reconsider strategy** if 0/64 experiments yielded retained hypotheses
-
-Would you like me to help analyze specific proposals or re-examine the methodology?
+**Bottom line**: The document reads like a post-mortem, but without success stories, it's incomplete. A healthy research pipeline should have *some* kept hypotheses.
