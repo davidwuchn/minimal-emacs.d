@@ -1976,6 +1976,14 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
     (condition-case err
         (gptel-auto-workflow--auto-tune-personas)
       (error (message "[evolution] Step persona-auto-tune: %s" err))))
+  ;; Step C.7c: Ontology self-evolution — learn category-strategy fit
+  (when (fboundp 'gptel-auto-workflow--evolve-ontology)
+    (condition-case err
+        (let ((result (gptel-auto-workflow--evolve-ontology)))
+          (message "[ontology-evolve] Changes: %d, Saturated: %d"
+                   (plist-get result :changes)
+                   (plist-get result :saturated)))
+      (error (message "[evolution] Step ontology-evolve: %s" err))))
   ;; Step C.8: Allium issue trend analysis + regression detection
   (condition-case err
       (let ((trends-report (gptel-auto-workflow--allium-trends-report)))

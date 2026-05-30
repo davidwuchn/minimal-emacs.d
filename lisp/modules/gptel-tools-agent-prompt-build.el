@@ -2725,21 +2725,83 @@ Returns alist of (REASON . COUNT) for the N most common, or nil."
                           (lambda (a b) (> (cdr a) (cdr b))))))
         (seq-take sorted (or n 3))))))
 
+(defun gptel-auto-experiment--get-category-failure-reasons (category &optional n)
+  "Aggregate failure reasons from ALL targets in CATEGORY.
+Returns alist of (REASON . COUNT) for the N most common, or nil."
+  (let ((results-file (gptel-auto-workflow--results-file-path))
+        (reasons (make-hash-table :test 'equal)))
+    (when (and results-file (file-exists-p results-file)
+               (fboundp 'gptel-auto-workflow--categorize-target))
+      (with-temp-buffer
+        (insert-file-contents results-file)
+        (goto-char (point-min))
+        (forward-line 1)
+        (while (not (eobp))
+          (let* ((fields (split-string
+                          (buffer-substring (line-beginning-position) (line-end-position))
+                          "\t"))
+                 (r-target (nth 1 fields))
+                 (r-reason (nth 12 fields)))
+            (when (and r-target r-reason (not (string-empty-p r-reason))
+                       (eq (gptel-auto-workflow--categorize-target r-target) category))
+              (let ((short (car (split-string r-reason ":" t))))
+                (when (and short (not (string= short "N/A")))
+                  (puthash short (1+ (gethash short reasons 0)) reasons))))
+            (forward-line 1)))))
+    ;; Return top N sorted by count
+    (when (> (hash-table-count reasons) 0)
+      (let ((sorted (sort (let (result)
+                            (maphash (lambda (k v) (push (cons k v) result)) reasons)
+                            result)
+                          (lambda (a b) (> (cdr a) (cdr b))))))
+        (seq-take sorted (or n 3))))))
+
+(defun gptel-auto-experiment--get-category-success-axes (category &optional n)
+  "Find most successful exploration axes for CATEGORY across all targets.
+Returns alist of (AXIS . COUNT) for axes that led to kept experiments."
+  (let ((results-file (gptel-auto-workflow--results-file-path))
+        (axes (make-hash-table :test 'equal)))
+    (when (and results-file (file-exists-p results-file)
+               (fboundp 'gptel-auto-workflow--categorize-target))
+      (with-temp-buffer
+        (insert-file-contents results-file)
+        (goto-char (point-min))
+        (forward-line 1)
+        (while (not (eobp))
+          (let* ((fields (split-string
+                          (buffer-substring (line-beginning-position) (line-end-position))
+                          "\t"))
+                 (r-target (nth 1 fields))
+                 (r-decision (nth 7 fields))
+                 (r-axis (nth 17 fields)))
+            (when (and r-target (equal r-decision "kept") r-axis
+                       (not (equal r-axis "?"))
+                       (eq (gptel-auto-workflow--categorize-target r-target) category))
+              (puthash r-axis (1+ (gethash r-axis axes 0)) axes))
+            (forward-line 1)))))
+    (when (> (hash-table-count axes) 0)
+      (let ((sorted (sort (let (result)
+                            (maphash (lambda (k v) (push (cons k v) result)) axes)
+                            result)
+                          (lambda (a b) (> (cdr a) (cdr b))))))
+        (seq-take sorted (or n 3))))))
+
 (defun gptel-auto-experiment--format-ontology-guidance (target)
   "Format ontology-based guidance for TARGET based on its category.
-Includes category-specific Focus/Avoid, failure patterns from other
-targets in the same category, and category-level performance data."
+Includes category-specific Focus/Avoid, recommended axes, failure
+patterns from other targets in the same category, and successful
+axes from kept experiments across the category."
   (when (and target (fboundp 'gptel-auto-workflow--categorize-target))
     (let* ((category (gptel-auto-workflow--categorize-target target))
+           (cat-label (pcase category
+                        (:agentic "agentic") (:programming "programming")
+                        (:tool-calls "tool-calls") (:natural-language "NLP")
+                        (_ nil)))
            (base (pcase category
-                   (:agentic
-                    "agentic — tool dispatch, state management, async workflows")
-                   (:programming
-                    "programming — algorithms, data flow, edge cases")
-                   (:tool-calls
-                    "tool-calls — sandbox execution, file operations")
-                   (:natural-language
-                    "natural-language — prompt templates, text processing, context management")
+                   (:agentic "agentic — tool dispatch, state management, async workflows")
+                   (:programming "programming — algorithms, data flow, edge cases")
+                   (:tool-calls "tool-calls — sandbox execution, file operations")
+                   (:natural-language "natural-language — prompt templates, text processing, context management")
                    (_ nil)))
            (focus (pcase category
                     (:agentic "error recovery paths, tool call lifecycle, state cleanup")
@@ -2753,15 +2815,36 @@ targets in the same category, and category-level performance data."
                     (:tool-calls "changing tool argument schemas, removing safety guards")
                     (:natural-language "changing prompt format, removing fallback text handlers")
                     (_ nil)))
+           (axes (pcase category
+                   (:agentic "A (validation/safety), F (memory/cleanup), H (defensive)")
+                   (:programming "B (performance), C (refactoring), I (edge cases)")
+                   (:tool-calls "A (validation/safety), D (guards), H (defensive)")
+                   (:natural-language "C (refactoring), G (clarity), I (edge cases)")
+                   (_ nil)))
            (cat-failures (gptel-auto-experiment--get-category-failure-reasons category 2))
-           (parts (list base (concat "  Focus: " focus) (concat "  Avoid: " avoid))))
-      ;; Add category-level failure patterns from other targets
+           (success-axes (gptel-auto-experiment--get-category-success-axes category 3))
+           (parts (list base)))
+      ;; Focus and Avoid
+      (when focus
+        (push (concat "  Focus: " focus) parts))
+      (when avoid
+        (push (concat "  Avoid: " avoid) parts))
+      ;; Recommended axes for this category
+      (when axes
+        (push (concat "  Best axes: " axes) parts))
+      ;; Category-level failure patterns from other targets
       (when cat-failures
-        (push (concat "  Common failures across " (pcase category (:agentic "agentic") (:programming "programming") (:tool-calls "tool-calls") (:natural-language "NLP") (_ "other"))
-                      " targets:\n"
+        (push (concat "  Common failures across " (or cat-label "other") " targets:\n"
                       (mapconcat (lambda (pair)
                                    (format "    - %s (%d×)" (car pair) (cdr pair)))
                                  cat-failures "\n"))
+              parts))
+      ;; Category-level success axes from kept experiments
+      (when success-axes
+        (push (concat "  Successful axes on " (or cat-label "other") " targets:\n"
+                      (mapconcat (lambda (pair)
+                                   (format "    - Axis %s (%d kept)" (car pair) (cdr pair)))
+                                 success-axes "\n"))
               parts))
       (mapconcat #'identity (nreverse parts) "\n"))))
 

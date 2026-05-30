@@ -2686,5 +2686,105 @@ Boost = (keep-rate - avg-axis-rate) × confidence × 0.15."
 
 ;; ─── Verbum Experiment Tracker ───
 
+;; ─── Ontology Self-Evolution ───
+
+(defvar gptel-auto-workflow--category-strategy-preferences nil
+  "Alist of (category . preferred-strategy) learned from experiment outcomes.
+Populated by `gptel-auto-workflow--evolve-ontology' during the evolution cycle.
+Changes when a new strategy significantly outperforms the current default for a category.")
+
+(defvar gptel-auto-workflow--category-saturation nil
+  "Alist of (category . t) for categories where all strategies are failing.
+Set by `gptel-auto-workflow--evolve-ontology' when a category's keep-rate
+stays at 0% across sufficient experiments with multiple strategies.")
+
+(defun gptel-auto-workflow--evolve-ontology ()
+  "Evolve the ontology system from experiment outcomes.
+Analyzes keep-rate per (category, strategy) across all experiments to:
+1. Learn which strategies work best for each category
+2. Detect category saturation (all strategies failing)
+3. Update category-strategy preferences
+
+Runs during the self-evolution cycle.  Results are stored in
+`gptel-auto-workflow--category-strategy-preferences'."
+  (let* ((results (ignore-errors (gptel-auto-workflow--parse-all-results)))
+         (cat-strats (make-hash-table :test 'equal))
+         (changes nil)
+         (saturated nil))
+    (when results
+      ;; Phase 1: Aggregate keep-rate per (category, strategy)
+      (dolist (r results)
+        (let* ((r-target (plist-get r :target))
+               (r-strategy (plist-get r :strategy))
+               (r-decision (plist-get r :decision))
+               (r-kept (equal r-decision "kept"))
+               (category (and r-target (fboundp 'gptel-auto-workflow--categorize-target)
+                              (gptel-auto-workflow--categorize-target r-target))))
+          (when (and category r-strategy (not (string-empty-p r-strategy)))
+            (let* ((key (cons category r-strategy))
+                   (entry (gethash key cat-strats (list :kept 0 :total 0))))
+              (setq entry (plist-put entry :kept (+ (plist-get entry :kept) (if r-kept 1 0))))
+              (setq entry (plist-put entry :total (1+ (plist-get entry :total))))
+              (puthash key entry cat-strats)))))
+
+      ;; Phase 2: Compute keep-rates and select best strategies per category
+      (let ((cat-groups (make-hash-table :test 'equal)))
+        ;; Group by category
+        (maphash
+         (lambda (key entry)
+           (let* ((category (car key))
+                  (strategy (cdr key))
+                  (kept (plist-get entry :kept))
+                  (total (plist-get entry :total))
+                  (rate (if (> total 0) (/ (float kept) total) 0)))
+             (push (list :strategy strategy :keep-rate rate :total total)
+                   (gethash category cat-groups))))
+         cat-strats)
+
+        ;; For each category, find best strategy
+        (maphash
+         (lambda (category strategies)
+           (let* ((sorted (sort strategies
+                                (lambda (a b) (> (plist-get a :keep-rate) (plist-get b :keep-rate)))))
+                  (best (car sorted))
+                  (best-rate (plist-get best :keep-rate))
+                  (best-strat (plist-get best :strategy))
+                  (total-kept (cl-reduce #'+ (mapcar (lambda (s) (plist-get s :kept)) sorted)))
+                  (total-all (cl-reduce #'+ (mapcar (lambda (s) (plist-get s :total)) sorted))))
+             ;; Check saturation: > 10 experiments, 0 kept across all strategies
+             (if (and (>= total-all 10) (= total-kept 0))
+                 (progn
+                   (push category saturated)
+                   (message "[ontology-evolve] ⚠ %s SATURATED: %d experiments, 0 kept across %d strategies"
+                            category total-all (length strategies)))
+               ;; Track best strategy if keep-rate > 0
+               (when (and (> best-rate 0) (> (plist-get best :total) 2))
+                 (let ((current (cdr (assoc category gptel-auto-workflow--category-strategy-preferences)))
+                       (total-strats (hash-table-count cat-strats)))
+                   (unless (equal current best-strat)
+                     (push (list category current best-strat best-rate) changes)
+                     (message "[ontology-evolve] ✓ %s: strategy %s → %s (keep-rate %.0f%%)"
+                              category (or current "default") best-strat (* 100 best-rate))))))))
+         cat-groups)
+
+      ;; Phase 3: Update preferences
+      (dolist (change changes)
+        (let ((category (car change))
+              (strategy (nth 2 change)))
+          (setq gptel-auto-workflow--category-strategy-preferences
+                (assoc-delete-all category gptel-auto-workflow--category-strategy-preferences))
+          (push (cons category strategy) gptel-auto-workflow--category-strategy-preferences)))
+
+      ;; Phase 4: Update saturation flags
+      (setq gptel-auto-workflow--category-saturation nil)
+      (dolist (cat saturated)
+        (push (cons cat t) gptel-auto-workflow--category-saturation))
+
+      (when changes
+        (message "[ontology-evolve] Updated %d category strategy preferences" (length changes)))
+      (list :changes (length changes)
+            :saturated (length saturated)
+            :total-strategies (hash-table-count cat-strats))))))
+
 (provide 'gptel-auto-workflow-ontology-router)
 ;;; gptel-auto-workflow-ontology-router.el ends here
