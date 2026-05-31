@@ -1,7 +1,12 @@
 ### Allium Issue Trends
 **Recurring patterns** across all strategies:
 
-- **Define stopping conditions**: 1 occurrence(s)
-- **Track experiment-to-hypothesis mapping**: 1 occurrence(s)
-- **Add success criteria**: 1 occurrence(s)
+- **Discarded hypothesis documentation**: 1 occurrence(s)
+- **Missing context:**: 1 occurrence(s)
+- **Function target is well-defined**: 1 occurrence(s)
+- **Scale ratio:**: 1 occurrence(s)
+
+**Regression warnings** (1 strategies with increased issues):
+
+- `template-default`: 2 → 7 issues (worse)
 
