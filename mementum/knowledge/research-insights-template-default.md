@@ -60,81 +60,230 @@ These targets may need different research patterns or the research findings were
 
 
 
+<<<<<<< Updated upstream
+=======
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+>>>>>>> Stashed changes
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy Distillation
-
-## Summary
-**93 experiments** conducted across **9 targets** (staging-review + lisp modules)
-
-## Hypothesis Status
-
-| Status | Count | Details |
-|--------|-------|---------|
-| **Kept** | 1 | Improve `gptel-auto-workflow-list-project-buffers` function |
-| Placeholder | 1 | "No hypothesis stated" |
-| **Discarded** | 0 | — |
-
-## Key Observation
-- Low hypothesis yield: only **1 actionable hypothesis** from 93 experiments
-- Large gap between experiment count and stated hypotheses suggests:
-  - Many experiments may lack formal hypothesis documentation
-  - Or iterative/observational approach used
-
-## Recommendation
-Consolidate experiment documentation to explicitly link each experiment to a testable hypothesis before next iteration.
+nil
 ```
 
-### Check Issues
-
-# Research Strategy Distillation — Review
-
-## ✅ Structural Assessment
-
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| Format | Good | Table format is clear |
-| Accuracy | ✅ Consistent | Numbers align |
-| Hypothesis tracking | ⚠️ Incomplete | 2 documented ≠ 93 experiments |
-
-## ⚠️ Issues Identified
-
-### 1. Hypothesis Table Mismatch
-```
-1 Kept + 1 Placeholder + 0 Discarded = 2 experiments documented
-                                          ↑
-                                    ≠ 93 total experiments
-```
-**91 experiments** lack hypothesis classification.
-
-### 2. Placeholder Entry Concern
-```
-"Placeholder | 1 | 'No hypothesis stated'"
-```
-This is essentially equivalent to discarded — consider:
-- Splitting into "No hypothesis formed" (missed opportunity)
-- Merging into "Discarded"
-
-### 3. Kept Hypothesis Specificity
-The single "Kept" hypothesis is **implementation-focused**:
-> Improve `gptel-auto-workflow-list-project-buffers` function
-
-This is a **solution**, not a **hypothesis**. A hypothesis would be:
-> *"Project buffer discovery is slow due to synchronous iteration; parallelization will reduce load time by >50%"*
-
-## Recommendations
-
-| Priority | Action |
-|----------|--------|
-| 🔴 High | Retroactively tag experiments with hypothesis status or admit "untracked" |
-| 🟡 Medium | Distinguish "kept" (proved useful) from "implemented" (solution added) |
-| 🟢 Low | Add experiment-to-hypothesis traceability matrix |
-
-## Summary
-
-The summary is a good **meta-document** but reveals the core issue: the r
-
-... (truncated)

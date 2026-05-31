@@ -619,9 +619,13 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
 (declare-function gptel-auto-workflow--remote-optimize-branches "gptel-tools-agent-worktree")
 (declare-function gptel-auto-workflow--shared-remote "gptel-tools-agent-worktree")
 (defvar gptel-auto-workflow-run-async)
-            (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" proj-root))
-            (when (fboundp 'gptel-auto-workflow--reload-live-support)
-              (gptel-auto-workflow--reload-live-support proj-root))
+            (condition-case err
+                (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" proj-root))
+              (error (message "[auto-workflow] Load gptel-tools-agent error: %S" err)))
+            (condition-case err
+                (when (fboundp 'gptel-auto-workflow--reload-live-support)
+                  (gptel-auto-workflow--reload-live-support proj-root))
+              (error (message "[auto-workflow] Reload-live-support error: %S" err)))
             (setq gptel-auto-experiment--api-error-count 0)
             (gptel-auto-workflow--safe-call "Cleanup" #'gptel-auto-workflow--cleanup-stale-state)
             (gptel-auto-workflow--safe-call "Sync staging"
