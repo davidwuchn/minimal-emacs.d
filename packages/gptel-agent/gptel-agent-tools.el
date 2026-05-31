@@ -1442,6 +1442,12 @@ PROMPT is the detailed prompt instructing the agent on what is required."
               ;; the shared agent config in gptel-agent--agents on first call.
               (copy-sequence
                (cdr (assoc agent-type gptel-agent--agents))))
+    ;; Ensure tools are populated when gptel-use-tools is active but
+    ;; gptel--tool-names is nil (fresh headless buffer with no tool context).
+    (unless (or gptel--tool-names (not gptel-use-tools))
+      (setq-local gptel--tool-names
+                  (cl-loop for (_cat . tools) in gptel--known-tools
+                           append (mapcar #'gptel-tool-name tools))))
     (let* ((info (when gptel--fsm-last (gptel-fsm-info gptel--fsm-last)))
            (pos (or (and info (plist-get info :tracking-marker))
                      (and info (plist-get info :position))))
