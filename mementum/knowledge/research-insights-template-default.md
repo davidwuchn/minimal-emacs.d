@@ -65,60 +65,71 @@ These targets may need different research patterns or the research findings were
 
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
 # Research Strategy Distillation
 
 ## Summary
-- **Strategy**: template-default
-- **Experiments**: 65 across 10 targets
-- **Status**: Active hypothesis testing on gptel-* modules
 
-## Kept Hypotheses (7 total)
+| Aspect | Details |
+|--------|---------|
+| **Strategy** | Template-default |
+| **Experiments** | 98 across multiple targets |
+| **Hypotheses Kept** | 1 |
+| **Hypotheses Stated** | 0 |
 
-| # | Change | Vitality | Clarity |
-|---|--------|----------|---------|
-| 1 | Idempotency guard + symmetric disable function | Progressive improvement | Explicit assumptions |
-| 2 | Fix misleading message + dir validation | — | Bug fix |
-| 3 | `eq`→`equal` for cache + reorder checks | Adapts to usage patterns | Content vs identity-based |
-| 4 | Extract buffer lookup with nil guards | Graceful FSM handling | Visible assumptions |
-| 5 | `ignore-errors` + empty-list guard | Edge case adaptation | Explicit validity assumptions |
-| 6 | `format-mode-line`→`mode-name` direct; `if`→`when` | Robustness | Reduced complexity |
-| 7 | Filter `not-applicable` before sort | Latent bug fix | Explicit data filtering |
+## Key Finding
 
-**Discarded**: 0
+**Kept hypothesis:** Focus on improving `gptel-auto-workflow-list-project-buffers`
+
+## Analysis
+
+- **Sparse documentation**: No formal hypothesis was stated at the outset
+- **Low yield**: Only 1 of 98 experiments produced a kept hypothesis
+- **Concentrated focus**: Remaining work centers on a single function improvement
+- **Scope**: `gptel-auto-workflow-*` modules appear to be the primary targets
+
+## Recommendation
+
+The next iteration should establish a clear, testable hypothesis before experimentation to improve hypothesis retention rate from ~1%.
 ```
 
 ### Check Issues
 
 # Review: Research Strategy Distillation
 
-## Structure Assessment ✓
-Clean, tabular format. Good separation of change rationale, impact, and explicitness.
+## Issues Found
 
-## Observations
+### 1. The Kept Hypothesis Isn't a Hypothesis
+The stated "kept hypothesis":
+> Focus on improving `gptel-auto-workflow-list-project-buffers`
 
-| Aspect | Comment |
-|--------|---------|
-| **Hypothesis framing** | Clear distinction between bug fixes (#2), robustness (#6), and latent issues (#7) |
-| **Vitality column** | Mixes: improvement type ("Progressive"), FSM handling, edge case adaptation |
-| **Clarity column** | Varies from bug fix (#2) to architectural notes (#3: "Content vs identity-based") |
-| **Discarded: 0** | Unusual for 65 experiments—either high signal or lenient retention criteria |
+This is a **conclusion/recommendation**, not a hypothesis. A hypothesis would be:
+> *"Improving list-project-buffers performance will reduce workflow latency by >X%"*
 
-## Potential Issues
+### 2. The Stated vs. Kept Paradox
+| Metric | Value | Problem |
+|--------|-------|---------|
+| Hypotheses Stated | 0 | How was something "kept" if nothing was stated? |
+| Hypotheses Kept | 1 | Contradiction |
 
-1. **Term inconsistency**: "Vitality" used as improvement type in some rows, operational benefit in others
-2. **Missing priority/ordering** among the 7 hypotheses
-3. **No cost/risks column**—hard to assess if these are "quick wins" or substantial refactors
-4. **65 experiments → 7 kept** (10.8% retention) could warrant analysis of what got filtered
+This suggests either:
+- The framework conflates "findings" with "hypotheses"
+- Or there's a logging/recording gap
 
-## Suggestions
+### 3. Sparse Analysis
+The document identifies problems but doesn't explain **why** 97/98 experiments failed to yield retained hypotheses:
+- Were they exploratory?
+- Did they lack measurable criteria?
+- Were they poorly executed?
 
-- Add a **category column**: {bug, perf, maintainability, robustness}
-- Add **effort/risk** indicators
-- Consider grouping related changes (e.g., #3 and #4 both touch cache/F SM concerns)
+## Suggested Improvements
 
----
+| Current | Suggested |
+|---------|-----------|
+| Vague "kept hypothesis" | Actual hypothesis with predicted outcome |
+| "Low yield" | Specific failure modes identified |
+| Generic recommendation | Actionable next step with success criteria |
 
-Want me to help refine the schema or analyze any specific hypothesis?
+**Bottom line**: The distillation accurately captures a low-yield research process, but the "kept hypothesis" needs reframing to match the stated framework definitions.
