@@ -1243,13 +1243,31 @@ projects.el teaches all :agentic experiments)."
 
 (defun gptel-auto-workflow--get-review-feedback (target)
   "Return review feedback for TARGET's ontology category, or empty string.
-Cross-target: any target in the same category gets the same feedback.
-Feedback persists until replaced by a newer review block in that category."
+Cross-target within category + cross-category transfer: if current category
+has no feedback, borrows from adjacent categories."
   (when target
-    (let ((category (and (fboundp 'gptel-auto-workflow--categorize-target)
-                         (gptel-auto-workflow--categorize-target target))))
-      (when category
-        (gethash category gptel-auto-workflow--review-feedback "")))))
+    (let* ((category (and (fboundp 'gptel-auto-workflow--categorize-target)
+                         (gptel-auto-workflow--categorize-target target)))
+           (direct (when category (gethash category gptel-auto-workflow--review-feedback))))
+      (or direct
+          (when category
+            (let* ((adjacent
+                    (pcase category
+                      (:programming '(:agentic :tool-calls))
+                      (:agentic '(:programming :tool-calls))
+                      (:tool-calls '(:programming :agentic))
+                      (:natural-language '(:agentic :tool-calls))
+                      (_ '(:programming :agentic :tool-calls))))
+                   (borrowed nil))
+              (dolist (adj adjacent)
+                (unless borrowed
+                  (let ((adj-feedback (gethash adj gptel-auto-workflow--review-feedback)))
+                    (when adj-feedback
+                      (setq borrowed adj-feedback)
+                      (message "[review-feedback] %s ← %s: cross-category transfer"
+                               category adj)))))
+              borrowed))
+          ""))))
 
 (provide 'gptel-tools-agent-staging-baseline)
 ;;; gptel-tools-agent-staging-baseline.el ends here

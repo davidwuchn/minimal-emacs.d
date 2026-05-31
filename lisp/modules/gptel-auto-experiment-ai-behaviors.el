@@ -789,9 +789,28 @@ may need simpler experiments (concrete-task-default mode)."
   "Hash table: category → (task-type . keep-rate). Updated each evolution cycle.")
 
 (defun gptel-ai-behaviors--best-task-for-category (category)
-  "Return the best task type symbol for CATEGORY, or nil."
+  "Return the best task type symbol for CATEGORY, or nil.
+When CATEGORY has no data, transfers from adjacent categories
+(cross-category pattern transfer — ontology bridge)."
   (let ((best (gethash category gptel-ai-behaviors--best-concrete-tasks)))
-    (when best (car best))))
+    (or (when best (car best))
+        ;; Cross-category transfer: borrow from adjacent categories
+        (let* ((adjacent
+                (pcase category
+                  (:programming '(:agentic :tool-calls))
+                  (:agentic '(:programming :tool-calls))
+                  (:tool-calls '(:programming :agentic))
+                  (:natural-language '(:agentic :tool-calls))
+                  (_ '(:programming :agentic :tool-calls))))
+               (borrowed nil))
+          (dolist (adj adjacent)
+            (unless borrowed
+              (let ((adj-best (gethash adj gptel-ai-behaviors--best-concrete-tasks)))
+                (when adj-best
+                  (setq borrowed (car adj-best))
+                  (message "[cross-category] %s ← %s: transferring task type '%s'"
+                           category adj borrowed)))))
+          borrowed))))
 
 ;; ─── Research Priorities Injection ───
 
