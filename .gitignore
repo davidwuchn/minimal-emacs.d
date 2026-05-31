@@ -72,10 +72,7 @@ mementum/knowledge/*REJECTED*
 !cron.d/*
 !packages/
 !packages/**
-assistant/strategies/evaluations.jsonl
-mementum/knowledge/token-efficiency.md
-assistant/skills/auto-workflow/FINDINGS.md
-assistant/skills/auto-workflow/RESEARCHER.md
-assistant/skills/benchmark-improver/SKILL.md
+ assistant/strategies/evaluations.jsonl
+ mementum/knowledge/token-efficiency.md
 __pycache__/
 *.pyc
