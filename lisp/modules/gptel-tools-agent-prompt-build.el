@@ -1650,8 +1650,18 @@ Captures executor reasoning from the dynamic variable
         (when (and category gptel-ai-behaviors--current-hashtags)
           (gptel-ai-behaviors--record-experiment
            category gptel-ai-behaviors--current-hashtags kept
-           (or strategy gptel-ai-behaviors--current-strategy)
-           (plist-get experiment :backend)))))
+            (or strategy gptel-ai-behaviors--current-strategy)
+            (plist-get experiment :backend)))
+      ;; Record concrete task outcome for ontology self-evolution
+      (when (and (fboundp 'gptel-ai-behaviors--record-concrete-task-outcome)
+                 (bound-and-true-p gptel-auto-experiment--current-task-hint))
+        (let* ((hint gptel-auto-experiment--current-task-hint)
+               (task-type (cond ((string-match-p "NIL GUARD\\|nil guard\\|ignore-errors" hint) :nil-guard)
+                                ((string-match-p "REPLICATE PATTERN" hint) :replicate-pattern)
+                                ((string-match-p "condition-case" hint) :condition-case)
+                                ((string-match-p "PICK ONE" hint) :pick-one)
+                                (t :unknown))))
+          (gptel-ai-behaviors--record-concrete-task-outcome category task-type kept)))))
     ;; Inject research metadata from global context into experiment record.
     ;; This closes the feedback loop: experiments carry the research run that
     ;; influenced the prompt so trace outcomes can be linked after logging.

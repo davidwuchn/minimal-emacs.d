@@ -623,6 +623,40 @@ When NO-PROMPT is non-nil, just logs the context (for non-LLM subsystems)."
                           #'gptel-ai-behaviors--wrap-research-with-validation)))
         (error nil)))))
 
+;; ─── Concrete Task-Type Tracking for Ontology Evolution ───
+
+(defvar gptel-ai-behaviors--concrete-task-performance (make-hash-table :test 'equal)
+  "Hash table: (category . task-type) → (total . kept).")
+
+(defun gptel-ai-behaviors--record-concrete-task (category task-type)
+  "Record that TASK-TYPE was dispatched for CATEGORY."
+  (let* ((key (cons category task-type))
+         (entry (gethash key gptel-ai-behaviors--concrete-task-performance (cons 0 0))))
+    (setf (car entry) (1+ (car entry)))
+    (puthash key entry gptel-ai-behaviors--concrete-task-performance)))
+
+(defun gptel-ai-behaviors--record-concrete-task-outcome (category task-type kept)
+  "Record KEPT/DISCARDED for TASK-TYPE on CATEGORY."
+  (let* ((key (cons category task-type))
+         (entry (gethash key gptel-ai-behaviors--concrete-task-performance (cons 0 0))))
+    (when kept
+      (setf (cdr entry) (1+ (cdr entry))))
+    (puthash key entry gptel-ai-behaviors--concrete-task-performance)))
+
+(defun gptel-ai-behaviors--evolve-concrete-tasks ()
+  "Log best task-type per category."
+  (maphash
+   (lambda (key entry)
+     (let* ((category (car key))
+            (task-type (cdr key))
+            (total (car entry))
+            (kept (cdr entry))
+            (rate (if (> total 0) (/ (float kept) total) 0)))
+       (when (>= total 3)
+         (message "[concrete-task] %s/%s: %d/%d kept (%.0f%%)"
+                  category task-type kept total (* 100 rate)))))
+   gptel-ai-behaviors--concrete-task-performance))
+
 ;; ─── Think-Intel → Behavior Feedback (Gap 2 closure) ───
 
 (defun gptel-ai-behaviors--parse-think-intel-from-messages ()

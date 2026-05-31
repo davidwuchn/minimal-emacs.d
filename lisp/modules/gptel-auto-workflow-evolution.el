@@ -2013,6 +2013,14 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
           (gptel-ai-behaviors--evolve-hashtags)
           (message "[ai-behaviors] Evolved category→hashtags from experiment data"))
       (error (message "[evolution] Step ai-behaviors-evolve: %s" err))))
+  ;; Step C.7e: Evolve concrete task-type preferences per category
+  (when (fboundp 'gptel-ai-behaviors--evolve-concrete-tasks)
+    (condition-case err
+        (progn
+          (gptel-ai-behaviors--evolve-concrete-tasks)
+          (message "[concrete-task] Analyzed task-type keep-rates per category"))
+      (error (message "[evolution] Step concrete-task-evolve: %s" err))))
+
   ;; Step C.8: Allium issue trend analysis + regression detection
   (condition-case err
       (let ((trends-report (gptel-auto-workflow--allium-trends-report)))
