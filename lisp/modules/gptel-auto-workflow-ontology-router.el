@@ -3462,8 +3462,9 @@ Runs during evolution cycle alongside strategy learning."
       (gptel-auto-workflow--aggregate-category-eight-keys)
     (error (message "[ontology-evolve] Error aggregating eight-key weights: %S" err))))
 
-;; Load persisted digital twin state at startup
+;; Load persisted digital twin state + re-parse grader insights from TSV at startup
 (condition-case nil (gptel-auto-workflow--load-target-state) (error nil))
+(condition-case nil (gptel-auto-experiment--replay-grader-insights-from-tsv) (error nil))
 
 (provide 'gptel-auto-workflow-ontology-router)
 ;;; gptel-auto-workflow-ontology-router.el ends here

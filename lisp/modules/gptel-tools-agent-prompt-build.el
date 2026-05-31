@@ -2993,6 +2993,42 @@ Format: 'REJECTION PATTERNS TO AVOID:\n- <reason 1>\n- <reason 2>\n...'"
                            (format "- %s" (car entry)))
                          entries "\n")))))
 
+(defun gptel-auto-experiment--replay-grader-insights-from-tsv ()
+  "Re-parse grader insights from persisted TSV results on startup.
+Reads col 10 (grader_reason) from every non-kept experiment in results.tsv
+and re-parses it into `gptel-auto-experiment--grader-insights'.
+This bridges the daemon-restart gap where in-memory grader insights are lost."
+  (when (fboundp 'gptel-auto-experiment--parse-grader-output)
+    (let ((results-file (gptel-auto-workflow--results-file-path)))
+      (when (and results-file (file-exists-p results-file))
+        (let ((count 0))
+          (with-temp-buffer
+            (insert-file-contents results-file)
+            (goto-char (point-min))
+            (forward-line 1)  ; skip header
+            (while (not (eobp))
+              (let* ((fields (split-string
+                              (buffer-substring (line-beginning-position) (line-end-position))
+                              "\t"))
+                     (target (nth 1 fields))
+                     (grader-reason (nth 10 fields)))
+                (when (and target (stringp grader-reason)
+                           (not (string-empty-p grader-reason))
+                           (not (string= grader-reason "N/A")))
+                  ;; TSV-escaped newlines (|) degrade the PASS/FAIL line parsing,
+                  ;; but the structured content with SCORE: and criterion patterns
+                  ;; may still be recoverable — attempt re-parse
+                  (condition-case nil
+                      (progn
+                        (gptel-auto-experiment--parse-grader-output
+                         target (replace-regexp-in-string " | " "\n" grader-reason))
+                        (cl-incf count))
+                    (error nil))))
+              (forward-line 1)))
+          (when (> count 0)
+            (message "[grader-insights] Replayed %d grader outputs from TSV" count))
+          count)))))
+
 (defun gptel-auto-experiment--get-category-failure-reasons (category &optional n)
   "Aggregate failure reasons from ALL targets in CATEGORY.
 Returns alist of (REASON . COUNT) for the N most common, or nil."
@@ -3008,10 +3044,13 @@ Returns alist of (REASON . COUNT) for the N most common, or nil."
           (let* ((fields (split-string
                           (buffer-substring (line-beginning-position) (line-end-position))
                           "\t"))
-                 (r-target (nth 1 fields))
-                 (r-reason (nth 12 fields)))
-            (when (and r-target r-reason (not (string-empty-p r-reason))
-                       (eq (gptel-auto-workflow--categorize-target r-target) category))
+                  (r-target (nth 1 fields))
+                  ;; Read grader_reason (col 10) for meaningful failure categories.
+                  ;; Old code read analyzer-patterns (col 12) which is section metadata.
+                  (r-reason (nth 10 fields)))
+             (when (and r-target r-reason (not (string-empty-p r-reason))
+                        (not (string= r-reason "N/A"))
+                        (eq (gptel-auto-workflow--categorize-target r-target) category))
               (let ((short (car (split-string r-reason ":" t))))
                 (when (and short (not (string= short "N/A")))
                   (puthash short (1+ (gethash short reasons 0)) reasons))))
