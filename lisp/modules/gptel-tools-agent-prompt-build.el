@@ -2114,6 +2114,11 @@ CF-Gateway removed — does not support tool calls reliably."
                        (string :tag "Model")))
   :group 'gptel-tools-agent)
 
+(defvar gptel-auto-workflow-headless-fallback-agents
+  '("analyzer" "comparator" "executor" "grader" "reviewer")
+  "Agent types that use the headless fallback chain instead of gptel interaction.
+Set by `gptel-auto-workflow--migrate-legacy-provider-defaults' on startup.")
+
 (defcustom gptel-auto-workflow-per-task-model-map
   '(("analyzer"   "MiniMax"    . "minimax-m2.7-highspeed")
     ("analyzer"   "DashScope"  . "qwen3.6-plus")

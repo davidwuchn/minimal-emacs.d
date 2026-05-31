@@ -525,7 +525,10 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
       (when (fboundp 'nucleus--register-gptel-directives)
         (nucleus--register-gptel-directives))
       (when (fboundp 'nucleus--override-gptel-agent-presets)
-        (nucleus--override-gptel-agent-presets)))))
+        (nucleus--override-gptel-agent-presets))
+      ;; Initialize legacy provider fallback variables (safe to call repeatedly)
+      (when (fboundp 'gptel-auto-workflow--migrate-legacy-provider-defaults)
+        (gptel-auto-workflow--migrate-legacy-provider-defaults)))))
 
 
 (defun gptel-auto-workflow-cron-safe (&optional completion-callback)
