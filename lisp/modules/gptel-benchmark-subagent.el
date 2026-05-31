@@ -330,8 +330,23 @@ Uses grader subagent - no local fallback (fail if subagent unavailable)."
                               :details "Grader subagent unavailable")))))
 
 (defun gptel-benchmark--make-grading-prompt (output expected forbidden)
-  "Create grading prompt for OUTPUT against EXPECTED and FORBIDDEN."
+  "Create grading prompt for OUTPUT against EXPECTED and FORBIDDEN.
+Includes #=test phase: actively try to break the code first, then evaluate."
   (format "λ grade(output, expected, forbidden).
+  test ∩ evaluate: actively try to break before judging.
+
+## Phase 1: #=test — Attack the code
+The code is guilty until proven innocent. Before evaluating expected behaviors,
+actively TRY TO BREAK IT. Look for:
+  · Edge cases: what if inputs are empty, null, out of range?
+  · Boundary conditions: off-by-one, empty collections, zero values
+  · Error states: does it crash on bad input? Does it handle exceptions?
+  · Race conditions: state changes between reads, concurrency issues
+  · Silent failures: does the function return wrong results silently?
+  · Contract violations: pre/post/invariant — are any violated?
+Report every bug you find.
+
+## Phase 2: #=review — Evaluate against criteria
   ∀e ∈ expected: pass(e) ∨ fail(e) with reason
   ∀f ∈ forbidden: absent(f) → pass | present(f) → fail with reason
 

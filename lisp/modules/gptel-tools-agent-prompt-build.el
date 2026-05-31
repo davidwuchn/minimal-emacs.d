@@ -1083,6 +1083,13 @@ Returns a compact lambda-notation string ready for the LLM."
      (if ai-b (concat ai-b "\n") "")
      (if rec-b (concat rec-b "\n") "")
      (if vio-b (concat vio-b "\n") "")
+     "## Spec Assessment\n"
+     "Before implementing, identify ambiguities in the task:\n"
+     "  · What's NOT specified that needs a decision?\n"
+     "  · Which edge cases are undefined?\n"
+     "  · What assumptions must I make?\n"
+     "State these briefly in HYPOTHESIS before coding.\n"
+     "\n"
      ;; CONTEXT (what you know about this target)
      (if persona (concat "PERSONA: " persona "\n") "")
      (if skills (concat "SKILLS: " skills "\n") "")
