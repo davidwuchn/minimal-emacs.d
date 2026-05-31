@@ -108,6 +108,29 @@ Tries multiple patterns in order:
     (let ((words (split-string hypothesis)))
       (string-join (cl-subseq words 0 (min 6 (length words))) " "))))
 
+(defun gptel-auto-experiment--hypothesis-already-tested-p (hypothesis previous-results)
+  "Return non-nil when HYPOTHESIS was already tested on this target.
+Compares against `:hypothesis' fields in PREVIOUS-RESULTS.
+Uses fuzzy matching: share at least 3 significant tokens after normalization."
+  (when (and hypothesis previous-results (listp previous-results))
+    (let* ((normalized (replace-regexp-in-string
+                        "[^a-zA-Z0-9 ]" " " (downcase hypothesis)))
+           (tokens (delete-dups (split-string normalized "[ \t]+" t)))
+           (sig-tokens (cl-remove-if (lambda (tkn) (< (length tkn) 4)) tokens)))
+      (catch 'found
+        (dolist (prev previous-results)
+          (let ((prev-hyp (plist-get prev :hypothesis)))
+            (when (stringp prev-hyp)
+              (let* ((prev-norm (replace-regexp-in-string
+                                 "[^a-zA-Z0-9 ]" " " (downcase prev-hyp)))
+                     (prev-tokens (split-string prev-norm "[ \t]+" t))
+                     (shared 0))
+                (dolist (tkn sig-tokens)
+                  (when (member tkn prev-tokens)
+                    (cl-incf shared)))
+                (when (>= shared 3)
+                  (throw 'found prev-hyp))))))))))
+
 (defvar gptel-auto-experiment-max-validation-retries 1
   "Maximum retries when validation fails due to teachable patterns.
 Executor will be instructed to load relevant skill and regenerate.")

@@ -1068,8 +1068,10 @@ Returns a compact lambda-notation string ready for the LLM."
            (rec-b (cdr (assoc 'recommended-behaviors vars)))
            (vio-b (cdr (assoc 'mode-violations vars)))
             (val-ap (cdr (assoc 'validation-anti-patterns vars)))
-            (rejection-feedback (cdr (assoc 'rejection-feedback vars)))
-            (uni-d (cdr (assoc 'unified-directive vars))))
+             (rejection-feedback (cdr (assoc 'rejection-feedback vars)))
+             (success-feedback (cdr (assoc 'success-feedback vars)))
+             (keep-rate (cdr (assoc 'keep-rate vars)))
+             (uni-d (cdr (assoc 'unified-directive vars))))
     (concat
       ;; KV CACHE PREFIX — STATIC sections first (shared across experiments)
       ;; These tokens are identical for every experiment → high cache-hit rate.
@@ -1099,13 +1101,15 @@ Returns a compact lambda-notation string ready for the LLM."
        (if val-ap (concat val-ap "\n") "")
       ;; HEADER — DYNAMIC (changes every experiment → cache miss starts here)
       (format "\n---\nλ experiment(%s). id=%d/%d budget=%smin path=%s/%s\nbaseline(8keys): %s"
-              target exp-id max-exp budget worktree tgt-full baseline)
+               target exp-id max-exp budget worktree tgt-full baseline)
       (if weakest (concat "\n  " weakest) "")
       (if controller (concat "\n  " controller) "")
       (if inspection (concat "\n  " inspection) "")
       (if large (concat "\n  " large) "")
       (if moderator (concat "\n  " moderator) "")
-      "\n"
+      (if keep-rate (concat "\nKEEP-RATE: " keep-rate) "")
+      (if success-feedback (concat "\n" success-feedback "\n") "")
+      (if rejection-feedback (concat "\n" rejection-feedback "\n") "")
       ;; Spec Assessment — semi-static
        "## Spec Assessment\n"
        "Before implementing, identify ambiguities in the task:\n"
@@ -1283,8 +1287,18 @@ Implements section-level A/B testing to identify effective prompt components."
              "(progn (find-file %S) (emacs-lisp-mode) (condition-case err (progn (scan-sexps (point-min) (point-max)) (message \"OK\")) (error (message \"ERROR: %%s\" err) (kill-emacs 1))))"
              target-full-path))))
          (target-bytes (gptel-auto-experiment--target-byte-size target-full-path))
-         (recovery-p
-          (gptel-auto-experiment--needs-inspection-thrash-recovery-p previous-results))
+          (recovery-p
+           (gptel-auto-experiment--needs-inspection-thrash-recovery-p previous-results))
+          (keep-rate
+           (when (and previous-results (listp previous-results) (> (length previous-results) 0))
+             (let ((kept 0) (total 0))
+               (dolist (r previous-results)
+                 (when (plist-get r :kept) (cl-incf kept))
+                 (cl-incf total))
+               (if (> total 0)
+                   (format "%.0f%% (%d/%d experiments kept on this target)"
+                           (* 100.0 (/ kept (float total))) kept total)
+                 "No previous experiments on this target"))))
          (large-target-p
           (and (numberp target-bytes)
                (>= target-bytes gptel-auto-experiment-large-target-byte-threshold)))
@@ -1404,6 +1418,10 @@ Read ONE function. Edit ONE line. Verify. Done."))))
               (rejection-feedback . ,(or (and (fboundp 'gptel-auto-experiment--get-rejection-feedback)
                                               (gptel-auto-experiment--get-rejection-feedback target))
                                         ""))
+              (success-feedback . ,(or (and (fboundp 'gptel-auto-experiment--get-success-feedback)
+                                              (gptel-auto-experiment--get-success-feedback target))
+                                        ""))
+              (keep-rate . ,(or keep-rate ""))
               (review-feedback . ,(or gptel-auto-experiment--review-feedback ""))
               (category-instructions . ,(if (fboundp 'gptel-auto-workflow--category-instructions)
                                            (gptel-auto-workflow--category-instructions target)
@@ -1726,6 +1744,16 @@ Captures executor reasoning from the dynamic variable
         (when (and (fboundp 'gptel-auto-experiment--remember-rejection)
                    (stringp comparator-reason) (> (length comparator-reason) 5))
           (gptel-auto-experiment--remember-rejection target comparator-reason))))
+    ;; Remember success patterns for cross-experiment learning
+    (when (and target (equal decision "kept")
+               (fboundp 'gptel-auto-experiment--remember-success))
+      (let ((hypothesis (plist-get experiment :hypothesis))
+            (agent-output (plist-get experiment :agent-output))
+            (diff-snippet nil))
+        (when (and (stringp agent-output)
+                   (fboundp 'gptel-ai-behaviors--extract-diff-snippet))
+          (setq diff-snippet (gptel-ai-behaviors--extract-diff-snippet agent-output)))
+        (gptel-auto-experiment--remember-success target (or hypothesis "kept") diff-snippet)))
     ;; Record ai-behaviors hashtag + strategy tracking for this experiment
     (when (and target (fboundp 'gptel-ai-behaviors--record-experiment))
       (let ((category (and (fboundp 'gptel-auto-workflow--categorize-target)
@@ -2949,6 +2977,15 @@ Persisted alongside the digital twin for survival across daemon restarts.")
 (defconst gptel-auto-experiment--rejection-memory-max 3
   "Maximum rejection reasons to retain per target.")
 
+(defvar gptel-auto-experiment--success-memory (make-hash-table :test 'equal)
+  "Per-target success patterns for cross-experiment learning.
+Key: target file path. Value: list of (HYPOTHESIS . DIFF-SNIPPET) in reverse-chronological.
+Kept to `gptel-auto-experiment--success-memory-max' entries per target.
+Persisted alongside the digital twin for survival across daemon restarts.")
+
+(defconst gptel-auto-experiment--success-memory-max 3
+  "Maximum success patterns to retain per target.")
+
 (defun gptel-auto-experiment--parse-grader-output (target grader-output)
   "Parse GRADER-OUTPUT for per-criterion PASS/FAIL reasoning.
 Extracts numbered items like '1. description: PASS - reason' from the
@@ -3021,6 +3058,32 @@ Format: 'REJECTION PATTERNS TO AVOID:\n- <reason 1>\n- <reason 2>\n...'"
       (format "REJECTION PATTERNS TO AVOID:\n%s"
               (mapconcat (lambda (entry)
                            (format "- %s" (car entry)))
+                         entries "\n")))))
+
+;; ─── Success Memory: Cross-Experiment Learning from Wins ───
+
+(defun gptel-auto-experiment--remember-success (target hypothesis diff-snippet)
+  "Store successful HYPOTHESIS and DIFF-SNIPPET for TARGET in success memory.
+Keeps at most `gptel-auto-experiment--success-memory-max' entries."
+  (when (and target (stringp hypothesis) (> (length hypothesis) 5))
+    (let* ((existing (gethash target gptel-auto-experiment--success-memory))
+           (new-entry (cons (substring hypothesis 0 (min 80 (length hypothesis)))
+                            (or (and (stringp diff-snippet)
+                                     (substring diff-snippet 0 (min 120 (length diff-snippet))))
+                                ""))))
+      (push new-entry existing)
+      (puthash target
+               (seq-take existing gptel-auto-experiment--success-memory-max)
+               gptel-auto-experiment--success-memory))))
+
+(defun gptel-auto-experiment--get-success-feedback (target)
+  "Return formatted success feedback string for TARGET, or nil.
+Format: 'PATTERNS THAT WORKED (replicate):\n- <hypothesis>\n  <diff>\n...'"
+  (let ((entries (gethash target gptel-auto-experiment--success-memory)))
+    (when entries
+      (format "PATTERNS THAT WORKED (replicate):\n%s"
+              (mapconcat (lambda (entry)
+                           (format "- %s\n  %s" (car entry) (cdr entry)))
                          entries "\n")))))
 
 (defun gptel-auto-experiment--replay-grader-insights-from-tsv ()

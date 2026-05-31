@@ -304,7 +304,13 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                     nil))))
                               (repeated-focus
                                (gptel-auto-experiment--repeated-focus-match
-                                effective-agent-output previous-results target)))
+                                effective-agent-output previous-results target))
+                              (duplicate-hypothesis
+                               (and previous-results
+                                    (fboundp 'gptel-auto-experiment--hypothesis-already-tested-p)
+                                    (gptel-auto-experiment--hypothesis-already-tested-p
+                                     (gptel-auto-experiment--extract-hypothesis effective-agent-output)
+                                     previous-results))))
                           (when candidate-validation
                              (let ((best-score (plist-get (cdar candidate-validation) :score)))
                               (message "[auto-exp] Validated %d candidates for %s, best score: %.2f"
@@ -338,8 +344,38 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                             (or (plist-get intel :acts) 0)
                                             (or (plist-get intel :explores) 0)
                                             (or score 0.0))))))))
-                         (unless finished
-                          (if repeated-focus
+                          (unless finished
+                           (if duplicate-hypothesis
+                               (let* ((hypothesis
+                                       (gptel-auto-experiment--extract-hypothesis
+                                        effective-agent-output))
+                                      (reason
+                                       (format "Duplicate hypothesis: \"%s\" — already tested on %s"
+                                               (substring hypothesis 0 (min 60 (length hypothesis))) target))
+                                      (exp-result
+                                       (list :target target
+                                             :id experiment-id
+                                             :hypothesis hypothesis
+                                             :score-before baseline
+                                             :score-after 0
+                                             :code-quality baseline-code-quality
+                                             :kept nil
+                                             :duration (- (float-time) start-time)
+                                             :grader-quality 0
+                                             :grader-reason reason
+                                             :comparator-reason "duplicate-hypothesis"
+                                             :analyzer-patterns (format "%s" patterns)
+                                             :agent-output effective-agent-output
+                                             :backend actual-backend
+                           :model actual-model)))
+                                 (setq finished t)
+                                 (message "[auto-exp] ⏭ Duplicate hypothesis: %s"
+                                          (substring hypothesis 0 (min 80 (length hypothesis))))
+                                 (let ((default-directory experiment-worktree))
+                                   (magit-git-success "checkout" "--" "."))
+                                 (funcall log-fn run-id exp-result)
+                                 (funcall callback exp-result)))
+                            (if repeated-focus
                               (let* ((hypothesis
                                       (gptel-auto-experiment--extract-hypothesis
                                        effective-agent-output))

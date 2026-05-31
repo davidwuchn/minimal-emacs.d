@@ -3256,6 +3256,16 @@ Returns alist of suggestions: (target . suggested-category)."
                        (push (cons target (list (cons :rejections rejections)))
                              data))))
                  gptel-auto-experiment--rejection-memory))
+      ;; Persist success memory alongside digital twin
+      (when (bound-and-true-p gptel-auto-experiment--success-memory)
+        (maphash (lambda (target successes)
+                   (let ((entry (assoc target data)))
+                     (if entry
+                         (setcdr entry (append (cdr entry)
+                                               (list (cons :successes successes))))
+                       (push (cons target (list (cons :successes successes)))
+                             data))))
+                 gptel-auto-experiment--success-memory))
       (make-directory (file-name-directory file) t)
       (with-temp-file file
         (insert (let ((json-encoding-pretty-print t))
@@ -3286,7 +3296,16 @@ Returns alist of suggestions: (target . suggested-category)."
                                  (fboundp 'gptel-auto-experiment--remember-rejection))
                         (dolist (rej rejections)
                           (let ((reason (car rej)))
-                            (gptel-auto-experiment--remember-rejection target reason)))))))
+                            (gptel-auto-experiment--remember-rejection target reason)))))
+                    ;; Load success memory from digital twin
+                    (let ((successes (cdr (assq 'successes plist))))
+                      (when (and successes
+                                 (bound-and-true-p gptel-auto-experiment--success-memory)
+                                 (fboundp 'gptel-auto-experiment--remember-success))
+                        (dolist (succ successes)
+                          (let ((hypothesis (car succ))
+                                (diff (cdr succ)))
+                            (gptel-auto-experiment--remember-success target hypothesis diff)))))))
               (message "[digital-twin] Loaded %d target states + rejection memory from %s"
                        (hash-table-count gptel-auto-experiment--target-state-cache) file))
           (error (message "[digital-twin] Failed to load: %s" (error-message-string err)))))))))
