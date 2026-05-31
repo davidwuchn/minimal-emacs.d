@@ -1150,22 +1150,34 @@ Used to normalize keep-rate by cost.")
   (if (string< (format-time-string "%Y%m%d") "20260601") 3 12))
 
 (defconst gptel-ai-behaviors--model-pricing
-  `(("deepseek-v4-flash" . 1)     ; ¥1/M input + ¥2/M output = ¥3 → base unit
-    ("deepseek-v4-pro" . ,(gptel-ai-behaviors--pro-cost)) ; date-aware: 3 or 12
-    ("kimi-for-coding" . 3)       ; estimated ¥3/M
-    ("kimi-k2.6" . 6)             ; estimated ¥6/M (reasoning)
-    ("minimax-m2.7" . 2)          ; estimated ¥2/M
-    ("minimax-m2.7-highspeed" . 4)) ; estimated ¥4/M
-  "Relative cost multipliers per model from actual API pricing.
-Base unit = deepseek-v4-flash cost (¥3/M tokens).
-DeepSeek v4-pro discount (25%) ended 2026-05-31; full price = 12× flash.")
+  `(("deepseek-v4-flash" . (1 . 0.02))   ; (miss-cost . hit-cost) → ¥1/M vs ¥0.02/M
+    ("deepseek-v4-pro" . (,(gptel-ai-behaviors--pro-cost) . 0.025)) ; ¥3-12/M vs ¥0.025/M
+    ("kimi-for-coding" . (3 . 0.5))      ; estimated
+    ("kimi-k2.6" . (6 . 1))              ; estimated
+    ("minimax-m2.7" . (2 . 0.3))         ; estimated
+    ("minimax-m2.7-highspeed" . (4 . 0.6))) ; estimated
+  "Relative cost multipliers per model: (cache-miss-cost . cache-hit-cost).
+Base unit = deepseek-v4-flash miss cost (¥1/M).
+Cache hit is 50-120× cheaper on DeepSeek due to KV cache.
+Effective cost is weighted by observed hit-rate: miss×rate + hit×(1-rate).")
 
-(defun gptel-ai-behaviors--model-cost (model)
-  "Return estimated cost multiplier for MODEL.
+(defvar gptel-ai-behaviors--cache-hit-rate 0.5
+  "Estimated cache-hit rate (0-1) for KV cache.
+Default 0.5 = half of tokens hit cache. Self-evolves from observed data.")
+
+(defun gptel-ai-behaviors--model-cost (model &optional cache-hit-rate)
+  "Return estimated effective cost multiplier for MODEL.
+CACHE-HIT-RATE (0-1) defaults to `gptel-ai-behaviors--cache-hit-rate'.
+Returns effective cost = miss×(1-rate) + hit×rate.
 Auto-switches pro pricing based on date (discount expired 2026-06-01)."
-  (or (cdr (cl-find-if (lambda (e) (string-match-p (car e) model))
-                       gptel-ai-behaviors--model-pricing))
-      2))
+  (let* ((pricing (cl-find-if (lambda (e) (string-match-p (car e) model))
+                              gptel-ai-behaviors--model-pricing))
+         (miss-cost (car (cdr pricing)))
+         (hit-cost (cdr (cdr pricing)))
+         (rate (or cache-hit-rate gptel-ai-behaviors--cache-hit-rate)))
+    (if (and miss-cost hit-cost (> rate 0))
+        (+ (* miss-cost (- 1 rate)) (* hit-cost rate))
+      (or miss-cost 2))))
 
 (defun gptel-ai-behaviors--record-cost (model effort &optional estimated-cost)
   "Record one API call for MODEL+EFFORT with ESTIMATED-COST.
