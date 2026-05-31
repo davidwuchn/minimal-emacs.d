@@ -358,7 +358,21 @@ Handles SCORE: X/Y format, JSON format, and text-based PASS/FALL fallback.
 Passes if score >= 60% of total."
   (let ((score 0)
         (total (+ (length expected) (length forbidden)))
-        (details (replace-regexp-in-string "<think>.*?</think>" "" (if (stringp response) response (format "%S" response)))))
+        (details (let ((stripped (if (stringp response) response (format "%S" response)))
+                       (start 0) (end 0))
+                   ;; Strip <think> blocks — Emacs has no non-greedy match
+                   (while (string-match "<think>" stripped start)
+                     (setq start (match-beginning 0))
+                     (setq end (when (string-match "</think>" stripped (match-end 0))
+                                 (match-end 0)))
+                   (if end
+                       (setq stripped (concat (substring stripped 0 start)
+                                             (substring stripped end))
+                             ;; stay at same position; next iteration picks up remainder
+                             start start)
+                       (setq stripped (substring stripped 0 start)
+                             start (length stripped))))
+                   stripped)))
     ;; Try score: X/Y format — take LAST match (grader often revises)
     ;; Matches "SCORE: X/Y", "Total: X/Y", "score: X/Y", "Score: X/Y", etc.
     (cond
