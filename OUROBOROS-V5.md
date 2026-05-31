@@ -163,6 +163,67 @@ This isn't a tool adoption. It's an **organizational capability upgrade**. The s
 
 ---
 
+## Promoting OV5
+
+Great architecture means nothing if nobody knows it exists. Here's how to get the message to each audience.
+
+### To Creators (PMF: Grow Through Innovation)
+
+Creators are skeptical, technical, and time-poor. They trust code more than copy. Meet them where they already are.
+
+| Where | What to say |
+|-------|-------------|
+| **GitHub README** (this page) | Lead with the Innovation Flywheel and The Numbers. Make `./scripts/run-pipeline.sh` the first command they see. Link to `results.tsv` from a real run — show experiments, not architecture diagrams. |
+| **Hacker News** | Title: *"My Emacs config runs 100 experiments/day and merges the winners"* — HN loves counterintuitive automation. Post on a Tuesday morning (US time) with the keep-rate numbers and a link to the GitHub repo. |
+| **r/emacs** | Title: *"OV5: 2,061 tests, 4 backends, zero-touch experiment pipeline — all in Emacs Lisp"* — Emacs users want to see Emacs Lisp doing something no other editor can. Lead with the gptel integration and the pipeline architecture. |
+| **Blog post** | Title: *"I Taught My Emacs to Improve Its Own Code"* — narrative format: the problem (manual code review), the experiment (first pipeline run), the results (20% keep-rate, real merges). Include a timestamped log from an actual pipeline run. Embed the key benchmark numbers. |
+| **Conference talk** | Title: *"Self-Regulating AI Architecture: When Your Code Improves Itself"* — 30-min talk with live demo: `run-pipeline.sh` → watch experiments create worktrees → review kept results → show ontology learning over time. Best for Clojure/conj, EmacsConf, or Strange Loop. |
+| **Twitter/X** | Thread format: 5 tweets — (1) problem, (2) OV5 approach, (3) the flywheel, (4) real numbers, (5) link to repo. Tag @karthink (gptel author) and relevant AI dev accounts. |
+
+### To Advocators (GTM: Transform Your Organization)
+
+Advocators need evidence, not features. They're asked "why should we adopt this?" and need answers that survive a budget review.
+
+| Where | What to say |
+|-------|-------------|
+| **LinkedIn** | Title: *"The Knowledge Problem Every Engineering Team Has (and One Solution)"* — lead with the cost of tribal knowledge (senior leaves → 6-12 months of lost patterns). Link to the OV5 paper. Post mid-week (Wed/Thu) when engineering leaders are most active. |
+| **Whitepaper** | *"Continuous Code Quality: An Experiment-Driven Approach to Engineering Excellence"* — 5-page PDF: (1) the tribal knowledge problem with real cost estimates, (2) the OV5 approach compared to status quo, (3) adoption path with timeline and risk mitigation, (4) ROI calculation worksheet for CTOs. Publish on GitHub Releases as a PDF. |
+| **Engineering leadership newsletter** | Pitch to leading engineering newsletters (Engineering Impact, The Engineering Manager, Hackernoon). Title: *"Stop Reviewing. Start Experimenting."* — 800 words on why code review is reactive and OV5 is proactive. |
+| **Case study** | *"From 0 to 500 Experiments: How We Automated Code Quality"* — real metrics: git log of merged experiments, keep-rate trend over 3 months, categories that improved most. Include quotes from the team: "I used to spend 2 hours reviewing nil-guard PRs. Now the system handles them." |
+| **Conference talk** | *"Code Quality Is Not a Review Problem"* — talk for engineering leadership audience (LeadDev, QCon, or local CTO meetups). Thesis: "Your team's best practices are fragile because they live in heads, not in systems. Here's how to encode them as executable knowledge." |
+| **CTO-to-CTO** | Direct outreach to CTOs of mid-sized SaaS companies (50-200 engineers). Message: "Your team has the same tribal knowledge problem every scaling engineering org has. I built a system that encodes it as executable patterns. Here's our case study. 30-min call?" |
+
+### The Activation Funnel
+
+Not everyone who reads becomes an adopter. Here's the path from awareness to running their first pipeline:
+
+```
+Awareness → README / HN / LinkedIn post
+    ↓
+Interest →  "Can it handle my codebase?" → read The Numbers + Risk section
+    ↓
+Evaluation →  Clone, run `./scripts/run-pipeline.sh` on 3 target files
+    ↓
+Trial →  50 experiments → review results → see 20% keep-rate in their own repo
+    ↓
+Adoption →  Add 20 targets → run daily → review kept experiments → ontology learns
+    ↓
+Advocacy →  "We've run 1,000+ experiments. The system found bugs we didn't know existed."
+```
+
+Every step must answer the question the audience is asking RIGHT NOW before they click away:
+
+| Step | The question | Where the answer lives |
+|------|-------------|----------------------|
+| Awareness | "What is this?" | README opening paragraph |
+| Interest | "Is this for me?" | For Creators / For Advocators sections |
+| Evaluation | "Will it work for us?" | Risk and Mitigation + The Numbers |
+| Trial | "How do I start?" | Begin section + run-pipeline.sh |
+| Adoption | "Is it worth the investment?" | ROI table + Innovation Adoption Path |
+| Advocacy | "How do I convince my team?" | The Pitch + What Advocacy Looks Like |
+
+---
+
 ## The Principle
 
 **Ouroboros.** The snake eating its tail.
