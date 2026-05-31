@@ -180,8 +180,16 @@ session buffer mid-flight causes 'Selecting deleted buffer' errors."
 (defun my/gptel--call-gptel-agent-task (callback agent-type description prompt)
   "Invoke the active gptel subagent task runner.
 In headless auto-workflow runs, bypass `gptel-agent-loop-task' to avoid
-its async continuation layer in the worker daemon."
+its async continuation layer in the worker daemon.
+Injects ai-behaviors pipeline mode context into PROMPT for known
+agent types (analyzer/executor/grader/comparator)."
   (require 'gptel-request)
+  ;; Inject ai-behaviors pipeline mode context
+  (when (and (fboundp 'gptel-ai-behaviors--format-pipeline-context)
+             (memq agent-type '(analyzer executor grader comparator)))
+    (let ((mode-ctx (gptel-ai-behaviors--format-pipeline-context agent-type)))
+      (when mode-ctx
+        (setq prompt (concat mode-ctx "\n" prompt)))))
   (let* ((headless-auto-workflow
           (and (or (bound-and-true-p gptel-auto-workflow--headless)
                    (bound-and-true-p gptel-auto-workflow-persistent-headless))
@@ -566,6 +574,8 @@ Uses hash table keyed by task-id to support parallel execution."
 
 (cl-defun my/gptel--run-agent-tool (callback &optional agent-name description prompt files include-history include-diff)
   "Run a gptel-agent agent by name.
+Injects ai-behaviors pipeline mode context into PROMPT when
+the agent type matches a known pipeline mode (analyzer/executor/grader/comparator).
 
 AGENT-NAME must exist in `gptel-agent--agents`.
 

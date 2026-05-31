@@ -106,5 +106,104 @@ mark it: (#name) after the sentence.
     (gptel-ai-behaviors--inject
      (gptel-auto-workflow--categorize-target target))))
 
+;; ─── Pipeline Mode Map ───
+;; Each OV5 subagent type maps to an ai-behaviors operating mode.
+;; The mode defines WHAT the subagent IS (its identity) and what it WILL NOT do.
+
+(defconst gptel-ai-behaviors--pipeline-modes
+  '((analyzer
+     :mode "#=research"
+     :description "Investigate. Report facts. Do NOT recommend or implement."
+     :hard-constraints ("research ∩ {Opinions, Recommendations, Code, Implementation} = ∅"
+                        "Report findings and unknowns — not solutions")
+     :transition "when investigation is exhausted ⊣ {#Code}")
+    (executor
+     :mode "#=code"
+     :description "Write production code. Implement. Do NOT redesign or research."
+     :hard-constraints ("code ∩ {UnrequestedFeatures, OverEngineering, UnjustifiedDeps} = ∅"
+                        "Read existing code first — match conventions"
+                        "Change ONLY what the hypothesis specifies")
+     :transition "when task is complete ⊣ {#Review, #Test}")
+    (grader
+     :mode "#=review"
+     :description "Evaluate code. Find issues. Do NOT fix them."
+     :hard-constraints ("review ∩ {Fixes, Refactoring, WrittenCode} = ∅"
+                        "Judge against expected behaviors — not personal preference")
+     :transition "when all findings are delivered ⊣ {#Code, #Spec}")
+    (comparator
+     :mode "#=spec"
+     :description "Compare before/after. Decide keep or discard. Do NOT re-implement."
+     :hard-constraints ("spec ∩ {Code, Implementation} = ∅"
+                        "Base decision on evidence — grader score + tests + eight-keys")
+     :transition "when decision is made — pipeline continues"))
+  "Maps each OV5 subagent type to an ai-behaviors operating mode.
+Each mode has HARD CONSTRAINTS (what the subagent IS) and a ⊣ transition
+(what should run next).")
+
+(defun gptel-ai-behaviors--mode-for-subagent (agent-type)
+  "Return the operating mode plist for AGENT-TYPE (analyzer/executor/grader/comparator)."
+  (cdr (assq agent-type gptel-ai-behaviors--pipeline-modes)))
+
+(defun gptel-ai-behaviors--mode-hashtags (agent-type)
+  "Return the mode hashtag string for AGENT-TYPE, e.g. \"#=research\"."
+  (plist-get (gptel-ai-behaviors--mode-for-subagent agent-type) :mode))
+
+(defun gptel-ai-behaviors--mode-hard-constraints (agent-type)
+  "Return the HARD CONSTRAINT strings for AGENT-TYPE."
+  (plist-get (gptel-ai-behaviors--mode-for-subagent agent-type) :hard-constraints))
+
+(defun gptel-ai-behaviors--mode-transition (agent-type)
+  "Return the ⊣ transition string for AGENT-TYPE."
+  (plist-get (gptel-ai-behaviors--mode-for-subagent agent-type) :transition))
+
+(defun gptel-ai-behaviors--format-pipeline-context (agent-type)
+  "Format the pipeline mode context for AGENT-TYPE as a prompt string.
+Injects into executor/analyzer/grader/comparator prompts."
+  (when-let ((mode (gptel-ai-behaviors--mode-for-subagent agent-type)))
+    (format
+     (concat "<operating-mode name=\"%s\">\n"
+             "%s\n"
+             "HARD CONSTRAINTS:\n"
+             "%s\n"
+             "When done: %s\n"
+             "</operating-mode>\n")
+     (plist-get mode :mode)
+     (plist-get mode :description)
+     (mapconcat (lambda (c) (format "  ∩ %s" c))
+                (plist-get mode :hard-constraints) "\n")
+     (plist-get mode :transition))))
+
+;; ─── Mode Enforcement ───
+;; The controller checks whether a subagent output stays within its mode's
+;; HARD CONSTRAINTS. Out-of-mode signals (e.g., executor making a research
+;; recommendation) are flagged but not blocked — the system observes and
+;; records the violation for self-evolution.
+
+(defun gptel-ai-behaviors--check-mode-violation (agent-type output)
+  "Check if OUTPUT contains out-of-mode signals for AGENT-TYPE.
+Returns violation string or nil. Detects transitions and mode-crossing
+language ('I recommend', 'we should research', etc.)."
+  (when (and (stringp output) (assq agent-type gptel-ai-behaviors--pipeline-modes))
+    (let ((violations nil)
+          (mode-name (plist-get (gptel-ai-behaviors--mode-for-subagent agent-type) :mode)))
+      (pcase agent-type
+        ((or 'analyzer 'comparator)
+         (when (string-match-p "\\`I recommend\\|we should implement\\|let me code\\|I'll write"
+                               output)
+           (push (format "%s crossed mode boundary: recommended/implemented when in %s"
+                         agent-type mode-name) violations)))
+        ('executor
+         (when (string-match-p "\\`I recommend\\|further research needed\\|we should investigate"
+                               output)
+           (push (format "%s crossed mode boundary: recommended/analyzed when in %s"
+                         agent-type mode-name) violations)))
+        ('grader
+         (when (string-match-p "\\`I'll fix\\|let me correct\\|I will change"
+                               output)
+           (push (format "%s crossed mode boundary: attempted fixes when in %s"
+                         agent-type mode-name) violations))))
+      (when violations
+        (mapconcat #'identity violations "; ")))))
+
 (provide 'gptel-auto-experiment-ai-behaviors)
 ;;; gptel-auto-experiment-ai-behaviors.el ends here
