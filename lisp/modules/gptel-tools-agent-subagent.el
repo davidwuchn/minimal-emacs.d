@@ -102,6 +102,10 @@ Populated by `my/gptel--run-agent-tool-with-timeout', consumed by evolution cycl
 
 (defun my/gptel--reset-agent-task-state ()
   "Drain completed subagent tasks and let in-flight tasks drain naturally.
+If the task state hash is corrupted (e.g. non-plist values or string keys
+where numbers are expected), wrap in ignore-errors to prevent blocking
+the entire pipeline on a non-critical cleanup operation."
+  (ignore-errors
 
 Completed entries are removed. In-flight entries are kept (not aborted)
 so their callbacks still have state to consult when they arrive — the
@@ -135,7 +139,7 @@ the hash table during maphash iteration."
         (remhash tid my/gptel--agent-task-state))
       (when (> in-flight-count 0)
         (message "[nucleus] Keeping %d in-flight subagent task(s) for natural drain (not aborting — stale-run check prevents interference)"
-                 in-flight-count)))))
+                 in-flight-count))))))
 
 (defun my/gptel--normalize-agent-activity-dir (dir)
   "Return DIR as a canonical directory path with trailing slash, or nil."

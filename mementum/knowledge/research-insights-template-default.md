@@ -295,87 +295,21 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-## Research Strategy: Template-Default
-
-**Experiments**: 100 across 15 targets (12 lisp modules + 3 staging branches)
-
----
-
-### Kept Hypotheses (9)
-
-| Focus | Change | Improves |
-|-------|--------|----------|
-| Lambda-prompt extraction | Remove redundant `if apply-lines` check; add early nil guard for `english-findings` | φ Vitality, Fractal Clarity |
-| `allium-spec` handling | Add nil/empty guard; remove redundant callback check | Clarity |
-| Backend type handling | Add explicit `(symbolp backend)` branch before `t` fallback | Fractal Clarity, φ Vitality |
-| Buffer lifecycle | Add `buffer-live-p` guard + nil check in lambda | φ Vitality, Fractal Clarity |
-| Provider selection | Extract logic to `gptel-benchmark--select-provider` | Fractal Clarity, φ Vitality |
-| Error handling | Error recovery + explicit assumptions | Axis A |
-| Defensive coding | Add guards/wrappers | General robustness |
-| Timeout handling | Add sentinel value in `gptel-benchmark-call-subagent-sync` | Axis A, Axis D |
-| Overlay safety | Nil guard on `where`; wrap overlay in `condition-case` | Task reliability |
-
----
-
-### Discarded Hypotheses (3)
-
-1. **Symbol-map heading derivation** — "maintenance bug" framing rejected; duplication preferred over implicit coupling
-2. **Error message formatting** — `(format "%s" err)` → `(error-message-string err)` deemed unnecessary
-3. **Hash table removal** — Context insufficient; hypothesis discarded
+nil
 ```
 
-### Check Issues
-
-# Review: Research Strategy Template
-
-## Summary
-Planning document for 100 experiments across 15 targets, tracking 12 hypotheses (9 kept, 3 discarded).
-
----
-
-## Issues
-
-### 1. Ambiguous Metrics
-The "Improves" column uses unexplained terms:
-- `φ Vitality` vs `Vitality` (inconsistent φ prefix)
-- `Axis A` vs `Axis D` (need legend)
-- `Fractal Clarity` (undefined term)
-
-**Suggestion**: Add key or legend at top explaining all metric names.
-
-### 2. Incomplete Discard Entry
-Entry 3 under Discarded:
-> Context insufficient; hypothesis discarded
-
-Should specify *which* hypothesis (hash table removal was hypothesis 3).
-
-### 3. Missing Scope Definition
-No explanation of:
-- What constitutes an "experiment"
-- Relationship between 100 experiments and 12 hypotheses
-- Whether targets are fixed or dynamic
-
-### 4. Kept Hypotheses Table — Redundancy
-The "Improves" column repeats many values. Consider collapsing to show only *unique* improvements per hypothesis.
-
----
-
-## What's Working
-
-- Clear structure (kept vs. discarded)
-- Specific code-level changes described
-- Rationale provided for discarding
-
----
-
-## Recommendations
-
-1. Add **objective statement** at top
-2. Add **metric legend**
-3. Clarify experiment-hypothesis relationship
-4. Fix numbering (should be 1, 2, 3, not 1, 2, 3.)
