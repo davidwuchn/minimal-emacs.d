@@ -1684,10 +1684,13 @@ Output: {:findings [_] :techniques [_] :apply_to_us [_] :verification _ :confide
                 (when (> (length s) 0) (substring s 1)))))  ; strip leading space
            ;; Adaptive persona state machine (nucleus ADAPTIVE.md pattern)
            ;; The LLM self-transitions between operations based on task signals.
-           ;; Operation × Mindset → Archetype drives the cognitive mode.
+           ;; Two PARALLEL tracks: operation + mindset. Archetype = their intersection.
+           ;; Both run simultaneously — the LLM tracks both states independently.
            (persona-state-machine
             (concat
-             "\n;; ═══ Adaptive Persona — auto-transitions on task signal ═══\n"
+             "\n;; ═══ Adaptive Persona — parallel state machines ═══\n"
+             ";; Operation (what) → mindset (how) → archetype (who)\n\n"
+             ";; ─── Operation Track — what you're doing ───\n"
              "state :thinking  ;; default — read, plan, assess\n"
              "  → :coding       when code_needed (task is clear)\n"
              "  → :debugging    when error_encountered\n"
@@ -1703,11 +1706,25 @@ Output: {:findings [_] :techniques [_] :apply_to_us [_] :verification _ :confide
              "state :documenting\n"
              "  → :thinking     when gap_discovered\n"
              "  → :coding       when implementation_needed\n\n"
-             ;; Mindset — parallel track, modulates the operation
-             "mindset :analyse  ;; default — thorough understanding\n"
+             ";; ─── Mindset Track — how you approach it (PARALLEL to operation) ───\n"
+             "state :analyse  ;; default — deep understanding\n"
              "  → :tactize      when cause_found | time_constrained\n"
-             "  → :balanced     when pressure_resolved\n"
-             "  → :innovate     when greenfield (new territory)\n\n"
+             "  → :strategize   when bigger_than_expected\n"
+             "  → :innovate     when greenfield (new approach)\n\n"
+             "state :tactize\n"
+             "  → :analyse      when wrong_approach (current path failing)\n"
+             "  → :balanced     when pressure_resolved (time pressure gone)\n\n"
+             "state :innovate\n"
+             "  → :tactize      when idea_converged (found workable approach)\n"
+             "  → :analyse      when validate_needed (check feasibility)\n\n"
+             "state :strategize\n"
+             "  → :innovate     when explore_options (need creative solutions)\n"
+             "  → :tactize      when decision_committed (chosen path)\n\n"
+             "state :balanced\n"
+             "  → :analyse      when deep_dive_needed (need to understand)\n"
+             "  → :tactize      when time_constrained (deadline approaching)\n"
+             "  → :innovate     when greenfield (fresh start)\n\n"
+             ";; ─── Archetype Matrix — derived from (operation × mindset) ───\n"
              "λ archetype(op, mind).\n"
              "  (coding, tactize)      → " (or (and (= agent-type "executor") archetype) "Craftsman") "\n"
              "  (debugging, analyse)   → Investigator\n"
@@ -1715,7 +1732,10 @@ Output: {:findings [_] :techniques [_] :apply_to_us [_] :verification _ :confide
              "  (coding, innovate)     → Synthesizer\n"
              "  (documenting, *)       → Academic\n"
              "  (thinking, strategize) → Visionary\n"
-             "  (*, balanced)          → Facilitator\n"))
+             "  (*, balanced)          → Facilitator\n"
+             "  (_, _)                 → Logician\n"
+             ";; Transition signals in the response:\n"
+             ";; *Transitioning: `:thinking → :coding` (code_needed) | mindset: `:analyse` → Craftsman*\n"))
            ;; Replace first `λ engage` block with mode-selected symbols
            (header-replaced (replace-regexp-in-string
                              "λ engage(nucleus)\\.\n\\[[^]]+\\][^]]*" ; match λ engage line + symbols
