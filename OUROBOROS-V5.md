@@ -21,7 +21,7 @@ Your job shifts from "write better code" to "teach the system what better code l
 | Fixing the same nil-guard bug in 12 files | Mark the target once; the system propagates the fix | 12× leverage on every pattern |
 | Code reviewing PRs for style consistency | Review kept experiments (the ontology already blocked style violations) | Review time drops 60% — focus on architecture, not syntax |
 | Writing docs for your patterns | The ontology records every kept/discarded experiment as executable knowledge | Documentation that never goes stale |
-| Wondering "did I break anything?" | 2,061+ tests run before every merge | Ship with confidence, not hope |
+| Wondering "did I break anything?" | 2,678+ tests run before every merge | Ship with confidence, not hope |
 | Spending 4h on a refactor | The system experiments with 5 approaches; you review the winner | 5× more exploration, same time budget |
 
 ### The Innovation Flywheel
@@ -43,7 +43,7 @@ That's the innovation path. Not "AI writes code for you." **Your codebase become
 
 ### The Numbers
 
-These come from 2,000+ experiments across 4 backends, 12 architectures, measured over 6 months:
+These come from 2,000+ experiments across 3 backends, 12 architectures, measured over 6 months:
 
 | Metric | What it means for you |
 |--------|----------------------|
@@ -142,7 +142,7 @@ Every AI coding tool today generates code with no memory of what your team rejec
 | "What if the system makes bad changes?" | Worktree isolation + 6 gates (tests, grader, reviewer, comparator, π Synthesis, champion league). No change touches `main` without passing all gates. |
 | "What if the ontology learns wrong patterns?" | Category drift detection (>20% deviation flagged). Eight-keys scoring catches overfitting. Holdout evaluation prevents self-deception. |
 | "What if it doesn't work for our codebase?" | It runs on every `.el` file by default. 4 ontology categories cover all file types. No special integration needed. |
-| "What if a backend goes down?" | 4 backends with automatic failover. Subagent routing self-tunes: unhealthy backends get health strikes → probation → exclusion. Auto-recovery after 1h without new strikes. |
+| "What if a backend goes down?" | 3 backends with automatic failover. Subagent routing self-tunes: unhealthy backends get health strikes → probation → exclusion. Auto-recovery after 1h without new strikes. |
 
 ### The Pitch
 
@@ -175,7 +175,7 @@ Creators are skeptical, technical, and time-poor. They trust code more than copy
 |-------|-------------|
 | **GitHub README** (this page) | Lead with the Innovation Flywheel and The Numbers. Make `./scripts/run-pipeline.sh` the first command they see. Link to `results.tsv` from a real run — show experiments, not architecture diagrams. |
 | **Hacker News** | Title: *"My Emacs config runs 100 experiments/day and merges the winners"* — HN loves counterintuitive automation. Post on a Tuesday morning (US time) with the keep-rate numbers and a link to the GitHub repo. |
-| **r/emacs** | Title: *"OV5: 2,061 tests, 4 backends, zero-touch experiment pipeline — all in Emacs Lisp"* — Emacs users want to see Emacs Lisp doing something no other editor can. Lead with the gptel integration and the pipeline architecture. |
+| **r/emacs** | Title: *"OV5: 2,678 tests, 3 backends, zero-touch experiment pipeline — all in Emacs Lisp"* — Emacs users want to see Emacs Lisp doing something no other editor can. Lead with the gptel integration and the pipeline architecture. |
 | **Blog post** | Title: *"I Taught My Emacs to Improve Its Own Code"* — narrative format: the problem (manual code review), the experiment (first pipeline run), the results (20% keep-rate, real merges). Include a timestamped log from an actual pipeline run. Embed the key benchmark numbers. |
 | **Conference talk** | Title: *"Self-Regulating AI Architecture: When Your Code Improves Itself"* — 30-min talk with live demo: `run-pipeline.sh` → watch experiments create worktrees → review kept results → show ontology learning over time. Best for Clojure/conj, EmacsConf, or Strange Loop. |
 | **Twitter/X** | Thread format: 5 tweets — (1) problem, (2) OV5 approach, (3) the flywheel, (4) real numbers, (5) link to repo. Tag @karthink (gptel author) and relevant AI dev accounts. |
@@ -331,7 +331,7 @@ Every experiment is an isolated git worktree. `main` is never touched directly. 
 | Gate | What it checks | What happens on failure |
 |------|---------------|------------------------|
 | **Category routing** | Best backend for this target RIGHT NOW? (Δ-from-baseline + trend + confidence) | Routes to strongest current performer; unhealthy backends dropped |
-| **Test execution** | Did 2,061+ tests pass? | Experiment discarded, pattern learned |
+| **Test execution** | Did 2,678+ tests pass? | Experiment discarded, pattern learned |
 | **AI grading** | Is the change well-structured and principled? | Scored 0.0-1.0, fed to analyzer |
 | **AI review** | Does it pass security, conventions, architecture? | Multi-agent review with feedback |
 | **π Synthesis** | Which similar files should inherit this strategy? | Semantic cluster auto-queue |
@@ -399,7 +399,7 @@ Three formats, three audiences — strict separation with regression tests:
 | **EDN** | No (banned) | No (banned) | Used internally by `forge-lambda-fixed-point` |
 | **English prose** | No (phased out) | No | Banned in prompt strings by `no-english-prose-in-llm-prompts` test |
 
-All 96 `.el` files pass `byte-compile-error-on-warn t`. Prompt construction migrated from `{{mustache}}` template substitution to EDN plist → `resolve` → λ notation (deterministic, zero LLM calls for rendering).
+All 97 `.el` files pass `byte-compile-error-on-warn t`. Prompt construction migrated from `{{mustache}}` template substitution to EDN plist → `resolve` → λ notation (deterministic, zero LLM calls for rendering).
 
 ---
 
@@ -564,7 +564,7 @@ The snake does not only consume what exists — it incubates what comes next.
 
 ### Current State: API Substrate
 
-Today the Ouroboros runs on external APIs (MiniMax, Moonshot, DashScope, DeepSeek, CF-Gateway, Gemini). The executor routes to backends by keep-rate, trend, and confidence. **Smart subagent routing** uses health × keep-rate scoring to rank backends for all 5 subagent types. Subagent failures (timeouts, rate limits) feed back as health strikes — the routing self-tunes. Gemini 3.5-flash is available as a fast flash-tier option.
+Today the Ouroboros runs on external APIs (DeepSeek, MiniMax, DashScope, Moonshot). The executor routes to backends by keep-rate, trend, and confidence. **Smart subagent routing** uses health × keep-rate scoring to rank backends for all 5 subagent types. Subagent failures (timeouts, rate limits, quota exhaustion) feed back as health strikes — the routing self-tunes. DashScope and Moonshot are dynamically skipped at runtime when quota-exhausted or content-filtered, and auto-recover when the issue resolves.
 
 ### Discovery: Verbum
 
