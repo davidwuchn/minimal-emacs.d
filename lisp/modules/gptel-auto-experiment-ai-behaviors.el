@@ -188,7 +188,7 @@ All hashtags reference real behavior directories in packages/ai-behaviors/."
   (or (cdr (assq category gptel-ai-behaviors--category-defaults))
       (pcase category
         (:agentic "#=code #contract #checklist #stop #legible #concise")
-        (:programming "#=code #decompose #bisect #concrete #legible")
+        (:programming "#=tdd #decompose #bisect #concrete #legible")
         (:tool-calls "#=code #simulate #boundary #temporal #legible")
         (:natural-language "#=code #user-lens #coherence #concrete #legible")
         (_ "#=code #legible #concise"))))
@@ -231,12 +231,16 @@ mark it: (#name) after the sentence.
                         "Report findings and unknowns — not solutions")
      :transition "when investigation is exhausted ⊣ {#Code}")
     (executor
-     :mode "#=code"
-     :description "Write production code. Implement. Do NOT redesign or research."
-     :hard-constraints ("code ∩ {UnrequestedFeatures, OverEngineering, UnjustifiedDeps} = ∅"
-                        "Read existing code first — match conventions"
-                        "Change ONLY what the hypothesis specifies")
-     :transition "when task is complete ⊣ {#Review, #Test}")
+      :mode "#=tdd"
+      :description "Test-first development. Verify, then implement. Do NOT skip verification."
+      :hard-constraints ("tdd ∩ {UntestedCode, UnverifiedChanges, SkippedVerify} = ∅"
+                         "Write VERIFY section (outside <think>) with MANDATORY commands:"
+                         "  emacs -batch -f batch-byte-compile <file>  → must PASS"
+                         "  emacs -batch -l <file>                     → must LOAD without error"
+                         "  Run tests if test file exists              → must PASS"
+                         "Change ONLY what the hypothesis specifies"
+                         "VERIFY output missing = automatic grader FAIL")
+      :transition "when ALL verification passes ⊣ {#Review}")
     (grader
      :mode "#=review"
      :description "Evaluate code. Find issues. Do NOT fix them."
