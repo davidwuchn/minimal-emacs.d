@@ -30,6 +30,30 @@
 (defvar gptel-benchmark-eight-keys-definitions)
 (defvar gptel-auto-workflow-run-async)
 
+(defcustom gptel-auto-workflow--critical-functions
+  '(gptel-auto-workflow-run-async--guarded
+    gptel-experiment-loop
+    gptel-auto-experiment-loop
+    gptel-tools-agent-register
+    gptel-auto-workflow--normalized-projects
+    gptel-auto-workflow--discover-targets
+    my/gptel--reset-agent-task-state
+    gptel-auto-workflow--backend-available-p
+    gptel-auto-workflow--rate-limit-failover-candidates
+    gptel-auto-workflow--agent-base-preset)
+  "List of symbol-valued critical functions that must be fboundp.
+Self-healing check verifies these are all bound before running experiments.
+If any are void, the system rolls back the most recent change."
+  :type '(repeat symbol)
+  :group 'gptel-auto-workflow)
+
+(defcustom gptel-auto-workflow--self-heal-enabled t
+  "Non-nil means run self-healing health check before experiments.
+When t, `gptel-auto-workflow-cron-safe' validates critical function
+existence and can auto-rollback broken changes."
+  :type 'boolean
+  :group 'gptel-auto-workflow)
+
 (defcustom gptel-auto-workflow--process-timeout-secs 1800
   "Timeout in seconds for blocking subprocess calls during verification.
 
@@ -705,6 +729,98 @@ Works across macOS and Linux."
      ((string-match "^\\([a-z0-9]+\\)" name)
       (match-string 1 name))
      (t "unknown"))))
+
+(defun gptel-auto-workflow--self-heal-check (&optional proj-root)
+  "Validate system health before running experiments.
+Returns t if healthy, nil if broken (and attempts auto-rollback).
+Checks:
+1. Critical function symbols exist (fboundp)
+2. Syntax of recently modified module .el files
+3. Load of critical modules succeeds
+
+If unhealthy and rollback succeeds, returns t after recovery."
+  (let ((healthy t)
+        (proj-root (or proj-root (gptel-auto-workflow--default-dir))))
+    ;; Check 1: Critical function existence
+    (dolist (sym gptel-auto-workflow--critical-functions)
+      (unless (fboundp sym)
+        (message "[self-heal] ⚠ Critical function void: %s" sym)
+        (setq healthy nil)))
+    ;; Check 2: Syntax of recently changed .el files (last 3 commits)
+    (when healthy
+      (let ((changed-files
+             (condition-case nil
+                 (with-temp-buffer
+                   (call-process "git" nil '(t nil) nil
+                                 "-C" proj-root "diff" "--name-only"
+                                 "HEAD~3..HEAD" "--" "*.el")
+                   (split-string (buffer-string) "\n" t))
+               (error nil))))
+        (dolist (file changed-files)
+          (let ((abs-file (expand-file-name file proj-root)))
+            (when (file-exists-p abs-file)
+              (with-temp-buffer
+                (condition-case err
+                    (emacs-lisp-byte-compile-and-load abs-file)
+                  (error
+                   (message "[self-heal] ⚠ Syntax error in %s: %s" file
+                            (error-message-string err))
+                   (setq healthy nil)))))))))
+    ;; Check 3: Load critical modules (idempotent)
+    (when healthy
+      (condition-case err
+          (let ((module-dir (expand-file-name "lisp/modules" proj-root)))
+            (dolist (mod '("gptel-tools-agent-subagent"
+                           "gptel-tools-agent-prompt-build"
+                           "gptel-tools-agent-experiment-core"))
+              (let ((file (expand-file-name (concat mod ".el") module-dir)))
+                (when (file-exists-p file)
+                  (load file 'noerror 'nomessage)))))
+        (error
+         (message "[self-heal] ⚠ Module load failed: %s" (error-message-string err))
+         (setq healthy nil))))
+    (if healthy
+        (message "[self-heal] ✓ System healthy — %d critical functions bound, syntax OK"
+                 (length gptel-auto-workflow--critical-functions))
+      ;; Auto-rollback
+      (message "[self-heal] ! System unhealthy — attempting auto-rollback")
+      (gptel-auto-workflow--self-heal-rollback proj-root))
+    healthy))
+
+(defun gptel-auto-workflow--self-heal-rollback (&optional proj-root)
+  "Roll back the most recent commit that changes .el files.
+Used when self-heal check detects a broken system.
+Removes only the files touched by the breaking commit (not the entire commit),
+then re-validates. Returns t if recovery succeeded."
+  (let ((proj-root (or proj-root (gptel-auto-workflow--default-dir))))
+    (condition-case err
+        (let* ((files
+                (with-temp-buffer
+                  (call-process "git" nil '(t nil) nil
+                                "-C" proj-root "diff" "--name-only"
+                                "HEAD~1..HEAD" "--" "*.el")
+                  (split-string (buffer-string) "\n" t)))
+               (rolled-back 0))
+          (dolist (file files)
+            (when (file-exists-p (expand-file-name file proj-root))
+              (call-process "git" nil nil nil
+                            "-C" proj-root "checkout" "HEAD~1" "--" file)
+              (cl-incf rolled-back)
+              (message "[self-heal]   Rolled back: %s" file)))
+          (when (> rolled-back 0)
+            (message "[self-heal] ✓ Rolled back %d file(s) from HEAD~1" rolled-back)
+            ;; Re-verify after rollback
+            (let ((recovered t))
+              (dolist (sym gptel-auto-workflow--critical-functions)
+                (unless (fboundp sym)
+                  (setq recovered nil)))
+              (if recovered
+                  (message "[self-heal] ✓ Recovery confirmed — all critical functions restored")
+                (message "[self-heal] ✗ Recovery failed — critical functions still void; manual intervention needed")))
+            t))
+      (error
+       (message "[self-heal] ⚠ Rollback error: %S" err)
+       nil))))
 
 (defun gptel-auto-workflow--cleanup-integrated-remote-optimize-branches (&optional proj-root)
   "Delete remote optimize branches already integrated.

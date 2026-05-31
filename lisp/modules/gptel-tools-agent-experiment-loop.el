@@ -247,31 +247,42 @@ If you see a function like \='tool\=' or \='key\=' in the error, it means you wr
 (tool ...) or (key ...) — these are NOT valid Emacs Lisp functions.
 Replace undefined calls with valid Emacs Lisp equivalents or remove them.
 Use function-quote #' for symbols meant as functions, not bare-quote \='.")
-           ;; Agent made no file modifications — it only analyzed, didn't edit
-           ((string-match-p "no code changes\\|no file modifications\\|Agent made no"
-                            validation-error)
-            "Your response contained ANALYSIS but NO FILE EDITS. This is always rejected.
-You MUST use Edit or Write tools to modify the target file. The validation
-gate checks git diff and rejects sessions where no files changed.
-CRITICAL rules for retry:
-- Start by editing the target file — do NOT just analyze or describe what to change
-- Even small, minimal edits are better than no edits
-- If you are uncertain what to change, make a small safe improvement (e.g. add a docstring,
-  fix an edge case, improve error handling) rather than returning analysis text
-- After editing, verify the file byte-compiles: `emacs --batch --eval \"(byte-compile-file \\\"FILE\\\")\"`")
-           ;; Add more skill mappings here as needed
-           (t "")))
+            ;; Agent made no file modifications — it only analyzed, didn't edit
+            ((string-match-p "no code changes\\|no file modifications\\|Agent made no"
+                             validation-error)
+             "TOOL-CALL-FAILURE")
+            ;; Add more skill mappings here as needed
+            (t "")))
+        (tool-call-failure (string= skill-guidance "TOOL-CALL-FAILURE"))
         (original-contract
          (if (and (stringp original-prompt)
                   (> (length original-prompt) 0))
-             original-prompt
+             (if tool-call-failure
+                 (concat
+                  "## SELF-HEAL: Tool-Call Required\n"
+                  "╔══════════════════════════════════════════════════════╗\n"
+                  "║ ⚠ PREVIOUS ATTEMPT output code as text but did NOT  ║\n"
+                  "║   call Edit/Write tool. Text-only code = REJECT.    ║\n"
+                  "║   No files were modified.                           ║\n"
+                  "║                                                     ║\n"
+                  "║ MANDATORY: You MUST call Edit/Write to modify files.║\n"
+                  "║ Do NOT output code in text. Do NOT describe changes.║\n"
+                  "║ λ tool_call(x): edit(x) ∨ write(x) — text ≠ change.║\n"
+                  "║                                                     ║\n"
+                  "║ YOU WILL FAIL if you output code as text again.     ║\n"
+                  "╚══════════════════════════════════════════════════════╝\n\n"
+                  original-prompt)
+               original-prompt)
            (concat
             "FINAL RESPONSE must include:\n"
             "- CHANGED: exact file path(s) and function/variable names touched\n"
             "- EVIDENCE: 1-2 concrete code snippets or diff hunks showing the real edit\n"
             "- VERIFY: exact command(s) run and whether they passed or failed\n"
             "- COMMIT: always \"not committed\"\n"
-            "End the final response with: Task completed"))))
+            "End the final response with: Task completed")))
+        (retry-error (if tool-call-failure
+                         "You output code as text instead of calling Edit/Write tool. No files were modified."
+                       validation-error)))
     (format "Your previous edit to %s was REJECTED due to validation error:
 
 ERROR: %s
@@ -292,9 +303,9 @@ Before retrying, load the relevant skill for guidance.
 ORIGINAL TASK:
 %s"
             target
-            validation-error
+            retry-error
             target
-            skill-guidance
+            (if tool-call-failure "" (or skill-guidance ""))
             original-contract)))
 
 ;;; Experiment Loop
