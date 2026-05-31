@@ -7,55 +7,34 @@ Synthesis verification:
 --->
 
 <think>
-The user wants me to generate a complete knowledge page from all the research digests I've gathered. I need to synthesize all the findings across all research sessions into one comprehensive document.
+The user wants me to generate a complete knowledge page combining all the research findings from the multiple research digests I've accumulated. This is a synthesis task - I need to take all the research findings across multiple turns and produce a comprehensive, structured knowledge page.
 
-Let me analyze all the research digests:
+Let me read through all the research digests to understand what patterns have been found:
 
-1. **Most recent (2026-05-31 10:55)** - 0/3 kept (0%)
-   - Local fallback, no external research
+**From various research turns, the key patterns discovered are:**
 
-2. **2026-05-31 09:09** - 1/24 kept (4%)
-   - Local fallback, some pipeline defect notes
+From own repos (davidwuchn/*):
+1. **zeroclaw** (Rust) - Provider-agnostic runtime, multi-channel, SOP engine, security policy, tool receipts, fallback chains, workspace sandboxing
+2. **nullclaw** (Zig) - Minimal binary (678 KB, ~1 MB RAM, <2ms startup), vtable interfaces, multi-layer sandbox
 
-3. **2026-05-31 08:42** - 3/15 kept (20%)
-   - Own repos analysis (zeroclaw, nullclaw, eca, context-mode, ai-code-interface)
-   - External patterns from arXiv and Azure
 
-4. **2026-05-31 08:38** - 0/3 kept (0%)
-   - Local fallback
+3. **eca** (Clojure) - Editor-agnostic protocol (LSP-inspired), multi-model, multi-agent/subagent, MCP resources, OpenTelemetry
+4. **context-mode** (TypeScript) - Context window optimization, 98% reduction (315 KB→5.4 KB), sandboxing, session continuity via FTS5, output compression
+5. **ai-code-interface.el** (Emacs Lisp) - Unified interface for multiple AI providers
+6. **nucleus** - VSM architecture (S1-S5), symbolic attention magnets (φ, λ, Δ, ε), mode/boundary system, fibonacci recall depth
+7. **mementum** - Git-native memory, feed-forward protocol, λ(λ) meta-learning, human governance, three-tier memory with synthesis trigger
+8. **gptel** (karthink) - FSM request lifecycle (INIT, WAIT, TYPE, TOOL, DONE), tool-use, MCP integration, multi-backend, preset system
+9. **gptel-agent** (karthink) - Sub-agent delegation via Markdown/YAML frontmatter, context isolation, @mention delegation, skill directory scanning, executor/researcher/introspector types
+10. **efrit** - Circuit breaker, tool receipts for audit trail, checkpoint/restore
+11. **genesis-agent** - Self-verification engine with 66 deterministic checks, P(success) confidence scoring
+12. **gastown** - Be ads ledger (git commits as immutable beads), three-tier watchdog (Witness/Deacon/Dogs), git-worktree persistence
+13. **gbrain** - Self-wiring knowledge graph with typed edges, zero LLM calls for wiring, hybrid search (vector+BM25+reciprocal-rank fusion)
+14. **psi** (Clojure) - Statechart-driven agent, EQL-queryable graph, minimal built-in behavior
+15. **symphony** - Worktree isolation, daemon workflow, per-issue git worktrees
 
-5. **2026-05-31 04:30** - 5/20 kept (25%)
-   - External patterns from callsphere.ai (error recovery), sukany.cz (Emacs gptel), dipankar.cc (prompt optimization), arXiv (DSPy)
-   - ACON, task ledger, maker-checker loop, write-manage-read memory
+Now I'm looking at external research patterns, starting with Azure's orchestration spectrum which spans direct calls through to multi-agent orchestration with five distinct levels, plus concurrent fan-out patterns.
 
-6. **2026-05-31** - continuing to review the remaining digests, including a local fallback case, several repository-focused analyses covering nucleus, mementum, gptel and agent patterns, and additional external pattern research from Azure and arXiv sources.
+I'm also reviewing Microsoft's ACON system which optimizes context compression through iterative LLM feedback, achieving significant memory reduction while maintaining accuracy, and Microsoft's magentic approach which uses a dynamic task ledger. The group chat and maker-checker loop pattern enables parallel work with validation, while the handoff orchestration routes between agents with explicit context passing. I'm also examining agent memory taxonomy patterns like the write-manage-read loop and hybrid RAG approaches, alongside broader agent design patterns including trajectory metrics, error recovery mechanisms, and survey results showing 18 architectural patterns from arXiv research.
 
-7. **2026-05-30 20:53** - 0/15 kept (0%)
-   - Local fallback
-
-8. **2026-05-30 17:10** - 0/15 kept (0%)
-   - Local fallback
-
-9. **2026-05-30** - continuing through the remaining digests from late May, including another local fallback case, a comprehensive 6-part own-repos analysis, and additional pattern research.
-
-10. **2026-05-22 12:10** - 3/9 kept (33%)
-    - Deep synthesis of 8 repositories covering genesis-agent, context-mode, gbrain, nucleus, efrit, gastown, nullclaw, and psi.
-
-11. **2026-05-22 10:29** - 9/39 kept (23%)
-    - External research turn 1/3 with detailed analysis.
-
-12. **2026-05-22 10:17** - 3/9 kept (33%)
-    - Local fallback with pipeline improvement directives.
-
-13. **2026-05-22 04:11** - 2/56 kept (4%)
-    - External research turn 1/6 with comprehensive synthesis.
-
-14. **2026-05-20 23:27** - 4/24 kept (17%)
-    - External research turn 1/4 with detailed synthesis.
-
-Now I'm organizing everything into a structured knowledge page with frontmatter and categorized findings. For the own-repos section, I'm cataloging the core systems: zeroclaw as a provider-agnostic runtime with multi-channel support and SOP engine, nullclaw as the minimal Zig implementation, eca providing the editor-agnostic protocol, and context-mode handling context optimization.
-
-I'm also noting ai-code-interface.el for multi-provider support, genesis-agent for self-verification with 66 deterministic checks, gbrain for zero-LLM knowledge graphs, nucleus for lambda notation compression, efrit for pure execution with circuit breakers, gastown for git-worktree persistence, and psi for statechart-driven architecture. For external sources, I'm tracking Azure's orchestration patterns including the maker-checker loop, ACON for context compression, arXiv's four-layer orchestration architecture with MCP/A2A protocols, and various other external systems.
-
-Now I'm looking at additional patterns like self-healing versus retry strategies, circuit breakers with graduated degradation, TaskLedger for agent work, the three-loop meta-learning approach, hybrid search combining vector and BM25 approaches, and write-manage-read memory taxonomy. Let me organize all this into a comprehensive knowledge page.
+Now I'm seeing additional resources on tool ecosystems, gptel integration with MCP capabilities, and specialized prompting techniques like OPRO and DSPy that optimize prompts through LLM feedback and declarative pipeline compilation.
 </think>
