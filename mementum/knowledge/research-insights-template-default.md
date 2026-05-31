@@ -4,14 +4,14 @@ status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
 insight-quality: 0.2/10
-allium-issues: 2
+allium-issues: 3
 allium-severity: 0.00
 allium-status: ok
 ---
 
 # Research Strategy: template-default
 
-*Consolidated from 93 experiments (2% keep rate).*
+*Consolidated from 84 experiments (2% keep rate).*
 
 **Performance:** 2 kept / 0 discarded / 13 failed (EXTRACTED — from TSV)
 
@@ -43,7 +43,7 @@ These targets may need different research patterns or the research findings were
 
 ## Allium Behavioral Coherence
 
-*2 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
+*3 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
 
 
 
@@ -110,61 +110,323 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-**Research Strategy: Template-Default**
+<think>
+The user wants me to distill the research strategy output. Let me analyze what's provided:
 
-**Scope:** 84 experiments across 7 target files (focused on gptel-auto-workflow modules and related tools).
+1. Research strategy: "template-default"
+2. 84 experiments across targets (files)
+3. Kept hypotheses: empty list (mostly blank lines)
+4. Discarded hypotheses: also empty, with "- No hypothesis stated" and one about improving `gptel-auto-workflow-list-project-buffers`
 
-**Active Hypothesis:**
-- Improve `gptel-auto-workflow-list-project-buffers` function
+This seems like a fragment of a research session output. The user likely wants me to:
+1. Summarize what this means
+2. Perhaps help them structure or understand this data
+3. Or create a proper distillation/memory
 
-**Kept Hypotheses:** None stated
-
-**Discarded Hypotheses:** None stated
-
-**Summary:** This is a skeleton research strategy with minimal content. Only one concrete hypothesis targeting the `gptel-auto-workflow-list-project-buffers` function has been identified for investigation across 84 planned experiments. The kept and discarded hypothesis sections appear incomplete.
+Let me provide a clear, concise distillation of what this research strategy summary shows.
+</think>
 ```
 
-### Highest-Value Changes
+### Check Issues
 
-Based on the provided research strategy and the codebase inspection:
+## Research Strategy Distillation
 
-## Assessment
+**Strategy:** `template-default`  
+**Scope:** 84 experiments across target files
 
-**Completeness: ⚠️ Needs Work**
+### Summary
 
-The strategy is indeed a skeleton. Here's what I found:
+| Category | Count |
+|----------|-------|
+| **Kept hypotheses** | 0 |
+| **Discarded hypotheses** | 1+ |
 
-### Current State
-- **Function:** `gptel-auto-workflow-list-project-buffers` exists in `./lisp/modules/gptel-auto-workflow-projects.el`
-- **Current behavior:** Iterates project buffers, formats them with root → buffer-name → mode, sorts alphanumerically, and messages output
-- **84 experiments / 7 files:** No visible evidence of this experiment plan in the codebase
+### Analysis
 
-### Missing Components
+This appears to be a **largely exploratory** research session with:
 
-| Section | Status |
-|---------|--------|
-| Kept Hypotheses | Empty |
-| Discarded Hypotheses | Empty |
-| Experiment Plan | Referenced but not present |
-| Target File Details | Not specified |
+1. **No stated hypotheses** — Most discarded entries are empty, suggesting experiments were run without formal hypotheses (common in initial discovery phases)
 
-### What Could Be Improved
+2. **One explicit discarded hypothesis:**
+   - *Improve `gptel-auto-workflow-list-project-buffers`* — Noted as discarded, likely deemed unnecessary or out of scope
 
-1. **Define concrete hypotheses** — e.g., "List output is unreadable in large projects" or "Sorting is inconsistent across platforms"
+3. **Template-driven approach** — Using a default template suggests systematic, structured experimentation rather than ad-hoc exploration
 
-2. **Specify 7 target files** — which modules beyond `gptel-auto-workflow-projects.el`?
+### Interpretation
 
-3. **Add metrics** — How will improvement be measured? Output format? Performance?
+```
+Strategy Type: Template-based systematic exploration
+Hypothesis Discipline: Low (no formal hypotheses stated)
+Iteration Density: High (84 experiments)
+Filtering Strictness: Unknown (insufficient data on "kept" experiments)
+```
 
-4. **Sample improvement candidates** from current code:
-   - Replace `string<` sorting with version-aware sort
-   - Add filtering by mode/project/buffer state
-   - Output to dedicated buffer instead of `message`
-   - Add async collection for large projects
+---
 
-Would you like me to draft a more complete version of this strategy?
+**What would you like me to help with?**
+
+- 📊 **Expand** this into a full research memory/log format
+- 🔍 **Analyze** the discarded hypothesis for follow-up opportunities  
+- 📋 **Reframe** into structured next steps or action items
+- ❓ Something else?

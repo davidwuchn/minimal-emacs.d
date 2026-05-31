@@ -2359,10 +2359,10 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
         ;; reorder-fallbacks-by-ontology) is picked up here too.
         (default-models (or (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
                                 gptel-auto-workflow-executor-rate-limit-fallbacks)
-             '(("DashScope" . "qwen3.6-plus")
-               ("moonshot" . "kimi-k2.6")
-               ("DeepSeek" . "deepseek-v4-flash")
-               ("MiniMax" . "minimax-m2.7-highspeed"))))
+             '(("DeepSeek" . "deepseek-v4-flash")
+               ("MiniMax" . "minimax-m2.7-highspeed")
+               ("DashScope" . "qwen3.6-plus")
+               ("moonshot" . "kimi-k2.6"))))
         ;; Pre-compute once for all backends
         (axis-rates-cache (when (fboundp 'gptel-auto-workflow--backend-per-axis-keep-rates)
                             (condition-case nil
@@ -2407,10 +2407,10 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
               (if (fboundp 'gptel-auto-workflow--get-backend-performance-stats)
                   (let* ((stats (gptel-auto-workflow--get-backend-performance-stats backend))
                          (total (plist-get stats :total)))
-                    (cond ((< total 3) 0.15)     ; almost no data → significant boost
-                          ((< total 5) 0.05)     ; some data → small boost
+                    (cond ((< total 3) 0.01)     ; almost no data → minimal boost
+                          ((< total 5) 0.005)    ; some data → tiny boost
                           (t 0.0)))
-                0.15))  ; if stats unavailable, treat as cold-start
+                0.01))  ; if stats unavailable, treat as cold-start
               (quarantined (and (fboundp 'gptel-auto-workflow--backend-quarantined-p)
                                 (gptel-auto-workflow--backend-quarantined-p backend)))
               (rate-limited (and (boundp 'gptel-auto-workflow--rate-limited-backends)
