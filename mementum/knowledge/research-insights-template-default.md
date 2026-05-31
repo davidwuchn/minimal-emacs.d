@@ -472,9 +472,13 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*5 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
 <think>
@@ -482,3 +486,23 @@ Now let me look at the related helper functions to understand the context better
 </think>
 ```
 
+### Check Issues
+
+I searched extensively and cannot find the `ai-behaviors--get-relative-path` function anywhere in the codebase. The function doesn't exist in:
+
+- `/Users/davidwu/.emacs.d/packages/ai-behaviors/` (the ai-behaviors submodule)
+- `/Users/davidwu/.emacs.d/packages/ai-code/`
+- `/Users/davidwu/.emacs.d/lisp/`
+- `/Users/davidwu/.emacs.d/packages/nucleus/`
+
+The closest related functions I found are:
+
+1. **`ai-code--get-git-relative-paths`** in `packages/ai-code/ai-code-discussion.el` (line 256)
+2. **`ai-code--relative-filepath`** in `packages/ai-code/ai-code-prompt-mode.el` (line 315)
+3. **`gptel-auto-workflow--results-relative-path`** in `lisp/modules/gptel-tools-agent-base.el` (line 610)
+
+Could you clarify:
+1. Where should this function be located?
+2. What is the exact bug you're seeing with symlinks?
+
+Alternatively, if you have the existing buggy code, please share it so I can understand what needs to be fixed.

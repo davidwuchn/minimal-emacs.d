@@ -1,11 +1,10 @@
 ;; Auto-evolved per-axis backend preference
-;; Updated: 2026-05-31 — DeepSeek primary, DashScope timeout fix
-;; DeepSeek handles complex prompts with thinking mode.
-;; DashScope times out consistently on analyzer tasks.
-;; MiniMax is fast for lightweight subagents.
+;; Updated: 2026-05-31 — MiniMax for analyzer (fast, no thinking)
+;; DeepSeek for executor/grader (complex prompts).
+;; DashScope timeout fixed with increased timeout.
 (setq gptel-auto-workflow--task-backend-preference
-      '(("analyzer" "DeepSeek" . 0.30)
-        ("analyzer" "MiniMax" . 0.20)
+      '(("analyzer" "MiniMax" . 0.30)
+        ("analyzer" "DeepSeek" . 0.20)
         ("analyzer" "DashScope" . 0.10)
         ("grader" "DeepSeek" . 0.30)
         ("grader" "MiniMax" . 0.20)
