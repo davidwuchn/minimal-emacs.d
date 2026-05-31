@@ -348,17 +348,17 @@ large-result truncation, and result caching."
                                 (cdr agent-config)))))))
              (syms (cons 'gptel--preset (gptel--preset-syms preset)))
              (vals (mapcar (lambda (sym) (if (boundp sym) (symbol-value sym) nil)) syms)))
-        ;; Ensure tools are populated when gptel-use-tools is active
-        (unless (or (and gptel--tool-names gptel-tools) (not gptel-use-tools))
-          (setq-local gptel--tool-names
-                      (cl-loop for (_cat . tools) in gptel--known-tools
-                               append (mapcar #'gptel-tool-name tools)))
-          (setq-local gptel-tools
-                      (cl-loop for name in gptel--tool-names
-                               for tool = (gptel-get-tool name)
-                               if tool collect tool)))
         (cl-progv syms vals
           (gptel--apply-preset preset)
+          ;; Ensure tools are populated when gptel-use-tools is active
+          (unless (or (and gptel--tool-names gptel-tools) (not gptel-use-tools))
+            (setq-local gptel--tool-names
+                        (cl-loop for (_cat . tools) in gptel--known-tools
+                                 append (mapcar #'gptel-tool-name tools)))
+            (setq-local gptel-tools
+                        (cl-loop for name in gptel--tool-names
+                                 for tool = (gptel-get-tool name)
+                                 if tool collect tool)))
           (let* ((request-tools (and gptel-use-tools (copy-sequence gptel-tools)))
                  (parent-fsm
                   (and (boundp 'gptel--fsm-last)

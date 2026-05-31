@@ -98,90 +98,76 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-**Research Strategy:** Template-default
+**Research Strategy: Template-Default**
+*93 experiments across 11 targets*
 
-**Context:** 93 experiments across 11 target files
+---
 
-**Kept Hypotheses (9):**
+**Kept Hypotheses:**
 
-| # | Change | Improves | Rationale |
-|---|--------|----------|-----------|
-| 1 | Remove redundant `if apply-lines` check; add nil guard for `english-findings` | φ Vitality, fractal Clarity | mapconcat on empty list returns ""; less branching |
-| 2 | Add nil/empty-string guard for `allium-spec`; remove redundant callback check | Clarity | Prevents wasted LLM calls on invalid input |
-| 3 | Add explicit `(symbolp backend)` branch before `t` case | fractal Clarity, φ Vitality | Explicit type validation; catches non-keyword symbols |
-| 4 | Add `buffer-live-p` guard + nil check in lambda | φ Vitality, fractal Clarity | Adapts to async buffer lifecycle |
-| 5 | Extract provider selection to `gptel-benchmark--select-provider` | fractal Clarity, φ Vitality | Makes selection explicit/testable; enables progressive improvement |
-| 6 | Add error recovery; make assumptions explicit | — | General defensive pattern |
-| 7 | Defensive coding | — | General robustness pattern |
-| 8 | Add timeout sentinel value in sync function | Axis A, Axis D | Explicit timeout handling vs. nil responses |
-| 9 | Nil guard on `where`; wrap overlay creation in `condition-case` | — | Prevents overlay failures from breaking task |
+1. **Lambda-prompt extraction**: Remove redundant `if apply-lines` check (mapconcat on empty list returns "") and add early nil guard for `english-findings` → improves Vitality + fractal Clarity
 
-**Discarded Hypotheses (2):**
+2. **Allium-spec guard**: Add nil/empty-string guard + remove redundant callback check → prevents wasted LLM calls on invalid input
 
-| # | Change | Reason |
-|---|--------|--------|
-| 1 | Replace `(format "%s" err)` with `(error-message-string err)` | Discarded |
-| 2 | Remove entries from hash table | Discarded |
+3. **Backend type validation**: Add explicit `(symbolp backend)` branch before fallback `t` → explicit type assumptions, testable code, adapts to implicit code paths
 
-**Pattern:** Focus on explicit error handling, defensive guards, and function extraction for testability.
+4. **Buffer lifecycle guard**: Add `buffer-live-p` + nil check in lambda → adapts to async buffer lifecycle
+
+5. **Provider selection extraction**: Extract into `gptel-benchmark--select-provider` → explicit testable selection logic, enables progressive improvement
+
+6. **Timeout sentinel**: Add explicit timeout sentinel value in `gptel-benchmark-call-subagent-sync` → distinct timeout handling vs nil responses
+
+7. **Defensive coding**: Nil guard on `where`, wrap overlay creation in `condition-case` → prevents overlay failures from breaking execution
+
+---
+
+**Discarded Hypotheses:**
+- Fixing error message formatting (`(format "%s" err)` → `(error-message-string err)`)
+- Removing entries from hash tables
 ```
 
 ### Check Issues
 
-# Review of Research Strategy Document
+# Review: Research Strategy - Template-Default
 
-## Summary
-This is a post-hoc summary of a hypothesis-driven debugging/improvement process. The document is mostly clear but has several gaps.
+**Context**: 93 experiments across 11 targets is substantial. Good scope for statistical confidence.
 
----
+## Kept Hypotheses — Assessment
 
-## Issues Found
+| # | Hypothesis | Verdict | Notes |
+|---|------------|---------|-------|
+| 1 | Lambda-prompt extraction | ✅ Sound | Removing redundant `mapconcat` check + nil guard = less branching |
+| 2 | Allium-spec guard | ✅ Sound | Nil guard + redundant callback removal = fewer wasted LLM calls |
+| 3 | Backend type validation | ✅ Sound | Explicit `(symbolp backend)` branch improves debuggability |
+| 4 | Buffer lifecycle guard | ✅ Sound | Async buffers are a real footgun; `buffer-live-p` is the right primitive |
+| 5 | Provider selection extraction | ✅ Strong | Extracting to named function enables unit testing + reuse |
+| 6 | Timeout sentinel | ✅ Strong | Distinct sentinel vs `nil` is cleaner than "nil means timeout or error" |
+| 7 | Defensive coding | ✅ Sound | `condition-case` around overlay = resilient to edge cases |
 
-### 1. **Hypotheses 6 & 7 Lack Specificity**
-Both are extremely vague:
-| # | Change | Improves | Rationale |
-|---|--------|----------|-----------|
-| 6 | Add error recovery; make assumptions explicit | — | General defensive pattern |
-| 7 | Defensive coding | — | General robustness pattern |
+## Discarded Hypotheses — Assessment
 
-**Problem:** "Defensive coding" describes *how* changes were made, not *what* changed. These read like generic labels rather than testable hypotheses.
+| Hypothesis | Verdict | Reasoning |
+|------------|---------|-----------|
+| `format` → `error-message-string` | ⚠️ Marginal | `format` is idempotent; `error-message-string` adds dependency but improves UX |
+| Removing hash table entries | ❌ Correct discard | GC handles it; explicit removal adds complexity for unclear gain |
 
----
+## Overall Impression
 
-### 2. **"Improves" Taxonomy Undefined**
-The document references:
-- `φ Vitality`
-- `fractal Clarity`
-- `Axis A`, `Axis D`
-- `—` (dash)
-
-**Problem:** No legend defines these categories. A reader cannot evaluate which changes are most valuable without knowing:
-- What do these axes measure?
-- Is `—` "no improvement" or "not measured"?
-
----
-
-### 3. **Discarded Hypotheses Missing Detail**
-
-| # | Change | Reason |
-|---|--------|--------|
-| 1 | Replace `(format "%s" err)` with `(error-message-string err)` | Discarded |
-| 2 | Remove entries from hash table | Discarded |
-
-**Problem:** "Discarded" without explanation of *why*. Did they:
-- Cause regressions?
-- Not solve the original problem?
-- Introduce new issues?
-
----
-
-### 4. **Hypotheses Are Not Independent**
-93 experiments across 11 files suggests these changes may interact. The document doesn't indicate:
-- Were changes tes
+**Strategy quality**: High. You're targeting:
+- **Complexity reduction** (hypotheses 1, 2)
+- **Testability** (hyp
 
 ... (truncated)
