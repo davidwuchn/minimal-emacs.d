@@ -501,6 +501,10 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                    gptel-auto-experiment-validation-retry-active-grace)))
                                           ;; Non-teachable or already retrying: let grader decide
                                           ;; Don't set finished=t — grader runs below and can bypass
+                                           ;; Record validation error for self-evolution
+                                           (when (and target validation-error
+                                                      (fboundp 'gptel-ai-behaviors--record-validation-error))
+                                             (gptel-ai-behaviors--record-validation-error target validation-error))
                                            (message "[auto-exp] ⚠ Non-teachable validation: %s — grader will evaluate anyway"
                                                     validation-error))))
                                  (let ((gptel-auto-experiment--grading-target target)

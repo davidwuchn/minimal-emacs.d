@@ -2020,6 +2020,13 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
           (gptel-ai-behaviors--evolve-concrete-tasks)
           (message "[concrete-task] Analyzed task-type keep-rates per category"))
       (error (message "[evolution] Step concrete-task-evolve: %s" err))))
+  ;; Step C.7f: Evolve validation error patterns into HARD CONSTRAINT suggestions
+  (when (fboundp 'gptel-ai-behaviors--evolve-validation-rules)
+    (condition-case err
+        (progn
+          (gptel-ai-behaviors--evolve-validation-rules)
+          (message "[validation-evolve] Analyzed validation error patterns"))
+      (error (message "[evolution] Step validation-evolve: %s" err))))
 
   ;; Step C.8: Allium issue trend analysis + regression detection
   (condition-case err

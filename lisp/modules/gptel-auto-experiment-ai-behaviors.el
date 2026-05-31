@@ -810,6 +810,63 @@ may need simpler experiments (concrete-task-default mode)."
   (advice-add 'gptel-auto-workflow-load-research-findings :around
               #'gptel-ai-behaviors--inject-research-priorities))
 
+;; ─── Validation Error Learning Loop ───
+
+(defvar gptel-ai-behaviors--validation-errors (make-hash-table :test 'equal)
+  "Hash table: (category . error-pattern) → count.
+Learned from validation failures, injected as anti-patterns into prompts.")
+
+(defun gptel-ai-behaviors--record-validation-error (target error-msg)
+  "Record a validation ERROR-MSG for TARGET's category.
+Extracts the error pattern (e.g., 'unbalanced parentheses', 'cl-return-from')
+and increments the counter for (category × pattern)."
+  (when (and target (stringp error-msg) (fboundp 'gptel-auto-workflow--categorize-target))
+    (let* ((category (gptel-auto-workflow--categorize-target target))
+           (pattern
+            (cond ((string-match-p "unbalanced\\|scan error" error-msg) "unbalanced-parens")
+                  ((string-match-p "cl-return-from" error-msg) "cl-return-from-without-block")
+                  ((string-match-p "undefined function" error-msg) "undefined-function")
+                  ((string-match-p "defensive code removal" error-msg) "defensive-code-removal")
+                  ((string-match-p "no code changes\\|no file modifications" error-msg) "no-file-modifications")
+                  ((string-match-p "syntax error" error-msg) "syntax-error")
+                  (t "other"))))
+      (when category
+        (let* ((key (cons category pattern))
+               (count (gethash key gptel-ai-behaviors--validation-errors 0)))
+          (puthash key (1+ count) gptel-ai-behaviors--validation-errors)
+          (message "[validation-learn] %s/%s: %d occurrences" category pattern (1+ count)))))))
+
+(defun gptel-ai-behaviors--format-validation-anti-patterns (target)
+  "Format validation anti-patterns for TARGET as prompt guidance.
+Returns string of ERROR patterns to avoid, or empty string."
+  (when (and target (fboundp 'gptel-auto-workflow--categorize-target))
+    (let* ((category (gptel-auto-workflow--categorize-target target))
+           (patterns nil))
+      (maphash
+       (lambda (key count)
+         (when (and (eq (car key) category) (>= count 2))
+           (push (format "  - %s (%d×)" (cdr key) count) patterns)))
+       gptel-ai-behaviors--validation-errors)
+      (when patterns
+        (concat "## Common Validation Errors (LEARN FROM THESE)\n"
+                "Previous experiments on this category failed validation:\n"
+                (mapconcat #'identity (nreverse patterns) "\n")
+                "\n\nActively avoid these patterns. They cause instant rejection.\n")))))
+
+(defun gptel-ai-behaviors--evolve-validation-rules ()
+  "Log validation error patterns per category to evolution messages.
+If a category has >5 same-pattern errors, suggest a new HARD CONSTRAINT."
+  (let ((thresholds nil))
+    (maphash
+     (lambda (key count)
+       (when (>= count 5)
+         (push (list (car key) (cdr key) count) thresholds)
+         (message "[validation-evolve] ⚠ %s/%s occurred %d× — consider adding HARD CONSTRAINT"
+                  (car key) (cdr key) count)))
+     gptel-ai-behaviors--validation-errors)
+    (when thresholds
+      (message "[validation-evolve] %d patterns crossed the threshold" (length thresholds)))))
+
 ;; ─── Think-Intel → Behavior Feedback (Gap 2 closure) ───
 
 (defun gptel-ai-behaviors--parse-think-intel-from-messages ()

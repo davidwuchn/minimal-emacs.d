@@ -1067,6 +1067,7 @@ Returns a compact lambda-notation string ready for the LLM."
            (ai-b (cdr (assoc 'ai-behaviors vars)))
            (rec-b (cdr (assoc 'recommended-behaviors vars)))
            (vio-b (cdr (assoc 'mode-violations vars)))
+           (val-ap (cdr (assoc 'validation-anti-patterns vars)))
            (uni-d (cdr (assoc 'unified-directive vars))))
     (concat
      ;; HEADER
@@ -1085,6 +1086,7 @@ Returns a compact lambda-notation string ready for the LLM."
      (if rec-b (concat rec-b "\n") "")
       (if vio-b (concat vio-b "\n") "")
       (if uni-d (concat uni-d "\n\n") "")
+      (if val-ap (concat val-ap "\n") "")
       "## Spec Assessment\n"
       "Before implementing, identify ambiguities in the task:\n"
      "  · What's NOT specified that needs a decision?\n"
@@ -1454,6 +1456,8 @@ Read ONE function. Edit ONE line. Verify. Done."))))
                                              (gptel-ai-behaviors--recommend-for-prompt target) ""))
                (mode-violations . ,(if (fboundp 'gptel-ai-behaviors--violations-for-prompt)
                                        (gptel-ai-behaviors--violations-for-prompt) ""))
+               (validation-anti-patterns . ,(if (fboundp 'gptel-ai-behaviors--format-validation-anti-patterns)
+                                                (gptel-ai-behaviors--format-validation-anti-patterns target) ""))
               (strategy-frontier . ,(if (fboundp 'gptel-auto-workflow--format-strategy-frontier)
                                         (gptel-auto-workflow--format-strategy-frontier)
                                       ""))
