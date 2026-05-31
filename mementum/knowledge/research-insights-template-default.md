@@ -60,70 +60,37 @@ These targets may need different research patterns or the research findings were
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy: Template-Default
+## Research Strategy: template-default
 
-## Scope
-**104 experiments** across 18 targets (modules, staging branches)
+**Scope**: 57 experiments across 12 targets
 
-## Core Hypotheses (Kept)
+**Result**: Null — no hypotheses retained
 
-| # | Change | Expected Benefit |
-|---|--------|------------------|
-| 1 | Add nil summary validation in `gptel-benchmark-compare-file-versions` | Prevent cryptic `wrong-type-argument` errors; explicit error conditions |
-| 2 | Fix negative caching in `gptel-benchmark--cache-put`/load | 1 disk hit per (name,version) instead of per call |
-| 3 | Remove redundant `if apply-lines` check; add early nil guard for `english-findings` | More robust lambda-prompt extraction; less branching |
-| 4 | Explicit nil/empty-string guard for `allium-spec`; remove redundant callback check | Prevent wasted LLM calls on invalid input |
-| 5 | Add `(symbolp backend)` branch before fallback `t` | Explicit type validation; handle non-keyword symbols |
-| 6 | Add `buffer-live-p` guard + nil check in lambda | Handle async buffer lifecycle |
-| 7 | Extract provider selection into `gptel-benchmark--select-provider` | Testable selection logic; isolated improvement |
-| 8 | Add timeout sentinel in `gptel-benchmark-call-subagent-sync` | Explicit timeout handling distinct from nil responses |
-| 9 | Nil guard on `where` + `condition-case` around overlay | Prevent overlay failures from breaking task execution |
+---
 
-## Discarded
+### Discarded Hypotheses
 
-| # | Proposed Change | Reason for Discard |
-|---|-----------------|-------------------|
-| A | Summary cache layer in `gptel-benchmark--get-trend-summary` | O(1) gain deemed premature |
-| B | Derive heading from `gptel-auto-workflow--mementum-symbol-map` | Duplication acceptable for now |
-| C | Fix `format "%s"` → `error-message-string` | Deferred |
-| D | Remove stale entries from hash table | Not prioritized |
+| # | Description | Rationale |
+|---|-------------|-----------|
+| 1 | Move `make-hash-table` inside guard, replace `condition-case` with `ignore-errors` | Redundant `(consp val)` check already encoded in `inner-ht`; anti-pattern flagged at L362 |
+| 2 | Add nil guard for empty `status-lines` | Self-defeating; cache-empty = cache-miss optimization |
+| 3 | Fix misleading indentation in `gptel-auto-workflow-run-all-projects` and `gptel-auto-workflow--get-worktree-buffer` | Indentation cosmetic; doesn't affect parse tree or runtime |
 
-## Pattern
-- **Error handling** (nil guards, type checks, condition-case)
-- **Performance** (caching negative results)
-- **Clarity** (extracted helpers, explicit assumptions)
-- **Vitality** (robustness to edge cases)
+---
+
+**Conclusion**: No viable improvements identified in this sweep.
 ```
 
 ### Check Issues
 
-## Review: Research Strategy - Template-Default
+I'd need the codebase to verify. What repo/path are these hypotheses about?
 
-**Verdict: Sound strategy. A few points worth considering.**
+Also, a few quick concerns from the table alone:
 
-### Strengths
-- **Clear separation** of kept vs. discarded changes with explicit rationale
-- **Well-categorized patterns** (error handling, performance, clarity, vitality)
-- **Reasonable discards**: Items A, C, D are deferred for good reason (premature optimization, complexity, low priority)
-- **Hypothesis-driven**: Each kept change has an explicit expected benefit
+| # | Issue |
+|---|-------|
+| 1 | The rationale seems circular — "redundant check already encoded" — but redundancy ≠ harmless. If `inner-ht` is `(consp val)`, the guard may be unnecessary; if not, it may be critical. Need to confirm which. |
+| 2 | The "cache-empty = cache-miss optimization" claim depends on usage pattern. If callers frequently check `status-lines`, a nil guard that short-circuits could be a win. |
+| 3 | Cosmetic, agreed, but cosmetic bugs in indentation can mask real logic errors — worth a second look. |
 
-### Questions/Concerns
-
-| # | Concern |
-|---|---------|
-| 3 | "Remove redundant `if apply-lines` check" — verify the check is truly redundant before removal; a redundant check is cheaper than a missing guard |
-| 5 | "`symbolp` branch before fallback `t`" — if keywords work, why non-keyword symbols? Clarify the actual failure case |
-| 9 | "overlay failures" — are overlay errors the primary failure mode, or a secondary concern? Consider prioritizing the primary path |
-
-### Minor Nit
-
-- **A vs B naming inconsistency**: Kept items use numbers (1-9), discarded use letters (A-D). Pick one scheme for consistency.
-
-### Missing
-
-- **Rollback criteria**: What conditions would invalidate keeping any of the 9?
-- **Ordering/dependencies**: Are there ordering constraints among the 9 changes?
-
-### Overall
-
-Solid prioritization. The discarded items are defensible. Proceed.
+57 experiments, 0 retained is a strong outcome. Want me to look at the actual code to sanity-check?
