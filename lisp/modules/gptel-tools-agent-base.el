@@ -170,6 +170,8 @@ ERROR-PREFIX defaults to \"[auto-workflow]\"."
    "Failed to %s"))
 
 
+(provide 'gptel-tools-agent-base)
+
 (defun gptel-auto-workflow--require-magit-dependencies ()
   "Require magit-worktree and magit-git dependencies.
 Signals user-error if either dependency fails to load."
