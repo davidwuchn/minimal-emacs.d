@@ -1443,8 +1443,9 @@ PROMPT is the detailed prompt instructing the agent on what is required."
               (copy-sequence
                (cdr (assoc agent-type gptel-agent--agents))))
     (let* ((info (gptel-fsm-info gptel--fsm-last))
-           (where (or (plist-get info :tracking-marker)
-                      (plist-get info :position)))
+           (pos (or (plist-get info :tracking-marker)
+                    (plist-get info :position)))
+           (where (if (number-or-marker-p pos) pos (point-min)))
            (partial (format "%s result for task: %s\n\n"
                             (capitalize agent-type) description)))
       (gptel--update-status " Calling Agent..." 'font-lock-escape-face)

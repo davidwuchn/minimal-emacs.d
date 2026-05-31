@@ -544,18 +544,22 @@ In headless mode, respects `gptel-mementum-headless-auto-approve'."
                      topic line-count
                      (file-relative-name saved-file
                                          (gptel-auto-workflow--project-root)))))
-         (t
-          (let ((preview-buffer (get-buffer-create "*Synthesis Preview*")))
-            (with-current-buffer preview-buffer
-              (erase-buffer)
-              (insert (format "# Synthesis Preview: %s\n\n" topic))
-              (insert (format "Generated: %d lines\n\n" line-count))
-              (insert "## Generated Knowledge Page\n\n")
-              (insert extracted)
-              (goto-char (point-min)))
-            (display-buffer preview-buffer)
-            (when (y-or-n-p (format "Create knowledge page for '%s'? (%d lines) " topic line-count))
-              (gptel-mementum--save-knowledge-page topic files extracted))))))
+          (t
+           (if (or noninteractive
+                   (not (display-graphic-p)))
+               (message "[mementum] Skip '%s': would prompt for approval (%d lines, noninteractive)"
+                        topic line-count)
+             (let ((preview-buffer (get-buffer-create "*Synthesis Preview*")))
+               (with-current-buffer preview-buffer
+                 (erase-buffer)
+                 (insert (format "# Synthesis Preview: %s\n\n" topic))
+                 (insert (format "Generated: %d lines\n\n" line-count))
+                 (insert "## Generated Knowledge Page\n\n")
+                 (insert extracted)
+                 (goto-char (point-min)))
+               (display-buffer preview-buffer)
+                (when (y-or-n-p (format "Create knowledge page for '%s'? (%d lines) " topic line-count))
+                  (gptel-mementum--save-knowledge-page topic files extracted)))))))
     (error
      (message "[mementum] Error handling synthesis for '%s': %s" topic err))))
 
