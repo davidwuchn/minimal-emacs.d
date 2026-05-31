@@ -1510,10 +1510,16 @@ META-LEARNING: Loads evolved research skills from mementum."
                                            similar "\n"))
                         parts))))
             (if parts (concat (mapconcat #'identity (nreverse parts) "\n") "\n\n") ""))))
-    (format "λ select(project). max=%d path=lisp/modules/
-  | ∀f: size(f) ≤ 1000ℓ ∧ ¬nested_repo(f) ∧ file(f)
-  | priority ∝ 1 / (frontier_size(f) + 1)
-  | prefer(bug_fix) > style_change | prefer(TODO_match) > random
+    (format "You are a code analyzer. Select target files to optimize.
+
+RULES:
+1. ONLY output the JSON below. NO explanation, NO commentary, NO markdown.
+2. Every target must exist in the INPUT files list.
+3. Prioritize files with TODO/FIXME comments and recent git activity.
+4. Max %d targets.
+
+OUTPUT FORMAT — copy this exactly:
+{\"targets\": [{\"file\": \"lisp/modules/foo.el\", \"priority\": 1, \"reason\": \"has 3 TODO comments and recent changes\"}]}
 
 %s%sINPUT:
   files: %s
@@ -1521,9 +1527,7 @@ META-LEARNING: Loads evolved research skills from mementum."
   sizes(top20): %s
   todo/fixme(30): %s
   research: %s
-  history: %s
-
-OUTPUT: {\"targets\": [{\"file\": \"lisp/modules/X.el\", \"priority\": N, \"reason\": \"R\"}]}"
+  history: %s"
             max-targets
             research-section
             (or hints-section "")
