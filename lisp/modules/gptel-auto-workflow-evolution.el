@@ -1856,6 +1856,9 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
       (progn
   ;; Invalidate parse cache so this cycle sees fresh data
   (setq gptel-auto-workflow--results-cache nil)
+  ;; Clear reasoning hit counts for new cycle
+  (when (fboundp 'gptel-ai-behaviors--clear-reasoning-hits)
+    (gptel-ai-behaviors--clear-reasoning-hits))
   ;; Throttle: don't run more than once per 300s (5min) unless forced
   (let ((now (float-time (current-time))))
     (when (and gptel-auto-workflow--evolution-last-run

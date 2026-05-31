@@ -179,6 +179,70 @@ Injects into executor/analyzer/grader/comparator prompts."
 ;; recommendation) are flagged but not blocked — the system observes and
 ;; records the violation for self-evolution.
 
+;; ─── Reasoning-to-Behavior Mapping ───
+;; Extracts reasoning patterns from <think> blocks and maps them to
+;; ai-behaviors hashtags. The ontology tracks which patterns are
+;; effective per category and recommends behaviors for future experiments.
+
+(defconst gptel-ai-behaviors--reasoning-patterns
+  '(("trace\\|step.by.step\\|simulat\\|let me trace" . "#simulate")
+    ("check\\|edge case\\|boundar\\|zero\\|empty\\|nil" . "#boundary")
+    ("decompos\\|break down\\|subproblem\\|split" . "#decompose")
+    ("alternatives\\|option\\|compare\\|tradeoff" . "#evaluate")
+    ("what if\\|reverse\\|backward\\|from the end" . "#backward")
+    ("first principle\\|axiom\\|fundamental\\|from scratch" . "#first-principles")
+    ("analog\\|similar\\|like\\|compare to" . "#analogy")
+    ("deep\\|why\\|root cause\\|underlying" . "#deep")
+    ("dimension\\|axis\\|factor\\|independ" . "#factor")
+    ("precondition\\|postcondition\\|invariant\\|contract" . "#contract")
+    ("provenance\\|origin\\|source\\|where.*came" . "#provenance"))
+  "Alist of (reasoning-regex . ai-behaviors-hashtag).
+Maps reasoning patterns found in <think> blocks to behavior tags.")
+
+(defvar gptel-ai-behaviors--reasoning-hits (make-hash-table :test 'equal)
+  "Hash table: (category . hashtag) → count of reasoning matches.
+Cleared each evolution cycle. Used by prompt builder to recommend behaviors.")
+
+(defun gptel-ai-behaviors--parse-reasoning (output category)
+  "Parse OUTPUT for reasoning patterns, update hit counts for CATEGORY."
+  (when (and output category)
+    (let ((think-blocks (gptel-auto-experiment--extract-think-blocks output)))
+      (dolist (block think-blocks)
+        (dolist (pattern gptel-ai-behaviors--reasoning-patterns)
+          (when (string-match-p (car pattern) block)
+            (let ((key (cons category (cdr pattern))))
+              (puthash key (1+ (gethash key gptel-ai-behaviors--reasoning-hits 0))
+                       gptel-ai-behaviors--reasoning-hits))))))))
+
+(defun gptel-ai-behaviors--extract-think-blocks (text)
+  "Extract all <think>...</think> blocks from TEXT as list of strings."
+  (let ((blocks nil)
+        (start 0))
+    (while (string-match "<think>\\(.*?\\)</think>" text start)
+      (push (match-string-no-properties 1 text) blocks)
+      (setq start (match-end 0)))
+    blocks))
+
+(defun gptel-ai-behaviors--recommend-behaviors (category &optional n)
+  "Return the N most frequently hit hashtags for CATEGORY.
+Returns string of space-separated hashtags, or empty string."
+  (when category
+    (let ((hits (make-hash-table :test 'equal)))
+      (maphash (lambda (key count)
+                 (when (eq (car key) category)
+                   (puthash (cdr key) (+ (gethash (cdr key) hits 0) count) hits)))
+               gptel-ai-behaviors--reasoning-hits)
+      (let ((sorted (sort (let (result)
+                            (maphash (lambda (k v) (push (cons k v) result)) hits)
+                            result)
+                          (lambda (a b) (> (cdr a) (cdr b))))))
+        (when sorted
+          (mapconcat #'car (seq-take sorted (or n 3)) " "))))))
+
+(defun gptel-ai-behaviors--clear-reasoning-hits ()
+  "Clear reasoning hit counts at the start of each evolution cycle."
+  (clrhash gptel-ai-behaviors--reasoning-hits))
+
 (defun gptel-ai-behaviors--check-mode-violation (agent-type output)
   "Check if OUTPUT contains out-of-mode signals for AGENT-TYPE.
 Returns violation string or nil. Detects transitions and mode-crossing
@@ -204,6 +268,17 @@ language ('I recommend', 'we should research', etc.)."
                          agent-type mode-name) violations))))
       (when violations
         (mapconcat #'identity violations "; ")))))
+
+(defun gptel-ai-behaviors--recommend-for-prompt (target)
+  "Return formatted recommended behaviors string for TARGET, or empty.
+Uses reasoning→behavior mappings from previous experiments."
+  (when (and target (fboundp 'gptel-auto-workflow--categorize-target))
+    (let* ((category (gptel-auto-workflow--categorize-target target))
+           (recs (gptel-ai-behaviors--recommend-behaviors category 3)))
+      (when (> (length recs) 0)
+        (concat "## Recommended Behaviors (from reasoning patterns)\n"
+                "These behaviors were effective in similar experiments:\n"
+                "  " recs "\n")))))
 
 (provide 'gptel-auto-experiment-ai-behaviors)
 ;;; gptel-auto-experiment-ai-behaviors.el ends here

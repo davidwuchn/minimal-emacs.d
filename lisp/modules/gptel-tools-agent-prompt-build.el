@@ -1064,7 +1064,8 @@ Returns a compact lambda-notation string ready for the LLM."
          (strat-f (cdr (assoc 'strategy-frontier vars)))
          (agent-b (cdr (assoc 'agent-behavior vars)))
           (val-pipe (cdr (assoc 'validation-pipeline vars)))
-          (ai-b (cdr (assoc 'ai-behaviors vars))))
+          (ai-b (cdr (assoc 'ai-behaviors vars)))
+          (rec-b (cdr (assoc 'recommended-behaviors vars))))
     (concat
      ;; HEADER
      (format "λ experiment(%s). id=%d/%d budget=%smin path=%s/%s\nbaseline(8keys): %s"
@@ -1079,6 +1080,7 @@ Returns a compact lambda-notation string ready for the LLM."
      (if onto-g (concat "CATEGORY: " onto-g "\n") "")
      (if act-s (concat act-s "\n") "")
      (if ai-b (concat ai-b "\n") "")
+     (if rec-b (concat rec-b "\n") "")
      ;; CONTEXT (what you know about this target)
      (if persona (concat "PERSONA: " persona "\n") "")
      (if skills (concat "SKILLS: " skills "\n") "")
@@ -1369,6 +1371,8 @@ Implements section-level A/B testing to identify effective prompt components."
                                      (gptel-auto-workflow--format-schema-guidance target) ""))
                (ai-behaviors . ,(if (fboundp 'gptel-ai-behaviors--inject-for-target)
                                     (gptel-ai-behaviors--inject-for-target target) ""))
+               (recommended-behaviors . ,(if (fboundp 'gptel-ai-behaviors--recommend-for-prompt)
+                                             (gptel-ai-behaviors--recommend-for-prompt target) ""))
               (strategy-frontier . ,(if (fboundp 'gptel-auto-workflow--format-strategy-frontier)
                                         (gptel-auto-workflow--format-strategy-frontier)
                                       ""))

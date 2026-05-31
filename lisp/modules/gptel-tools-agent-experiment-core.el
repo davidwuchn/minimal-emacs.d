@@ -306,9 +306,14 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                          (when salvaged-agent-output
                           (message "[auto-exp] Executor timed out after partial changes for %s; evaluating actual worktree diff"
                                    target))
-                        (message "[auto-exp] Agent output (first 150 chars): %s"
-                                 (my/gptel--sanitize-for-logging effective-agent-output 150))
-                        (unless finished
+                         (message "[auto-exp] Agent output (first 150 chars): %s"
+                                  (my/gptel--sanitize-for-logging effective-agent-output 150))
+                         ;; Parse reasoning patterns from this output for behavior learning
+                         (let ((category (and target (fboundp 'gptel-auto-workflow--categorize-target)
+                                              (gptel-auto-workflow--categorize-target target))))
+                           (when (and category (fboundp 'gptel-ai-behaviors--parse-reasoning))
+                             (gptel-ai-behaviors--parse-reasoning effective-agent-output category)))
+                         (unless finished
                           (if repeated-focus
                               (let* ((hypothesis
                                       (gptel-auto-experiment--extract-hypothesis
