@@ -319,12 +319,18 @@ finish."
   (ignore-errors
     (call-process "gpg" nil nil nil "--batch" "--quiet" "--decrypt"
                   (expand-file-name "~/.authinfo.gpg")))
-  ;; Moonshot content_filter (quota exhausted) blocks code generation, returns
-  ;; 400 errors that make it look responsive to the onto-router.  Mark it as
-  ;; rate-limited so the router skips it dynamically.  When quota resets (next
-  ;; week), the onto-router will re-enable it automatically as responses succeed.
+  ;; DeepSeek is the only backend with remaining quota on this account.
+  ;; Force fallback chain to DeepSeek first, skip all others.
+  (when (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+    (setq gptel-auto-workflow-executor-rate-limit-fallbacks
+          '(("DeepSeek" . "deepseek-v4-pro"))))
+  (when (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
+    (setq gptel-auto-workflow-headless-subagent-fallbacks
+          '(("DeepSeek" . "deepseek-v4-pro"))))
+  ;; Moonshot content_filter blocks code gen. Mark rate-limited so router skips it.
   (when (boundp 'gptel-auto-workflow--rate-limited-backends)
     (cl-pushnew "moonshot" gptel-auto-workflow--rate-limited-backends :test #'string=))
+  (message "[auto-workflow] Fallback chain: %S" gptel-auto-workflow-executor-rate-limit-fallbacks)
   ;; Ensure gptel-agent-dirs includes our custom agent directory so
   ;; --update-agents registers all agent types (grader, analyzer, etc.).
   (let ((agents-dir (expand-file-name "assistant/agents"
