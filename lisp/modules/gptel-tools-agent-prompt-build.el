@@ -2468,7 +2468,7 @@ chain so that subagent calls do not fall through to the mode-hook default
                     (message "[subagent] %s base-preset auto-selected %s/%s"
                              agent-type (car pick) model-str)
                     (setq merged (plist-put merged :backend (car pick)))
-                    (setq merged (plist-put merged :model (or model-sym model-str))))))
+                     (setq merged (plist-put merged :model model-str)))))
             ;; Headless active but no candidates: fall back to
             ;; gptel-backend so the call goes through.
             (when (and (null (plist-get merged :backend))
