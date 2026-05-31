@@ -59,6 +59,9 @@
 (defvar gptel-auto-workflow-use-staging)
 (defvar gptel-auto-experiment--in-retry)
 (defvar gptel-auto-experiment--in-refine)
+(defvar gptel-auto-experiment--think-intel nil
+  "Think-block intelligence from last experiment's agent output.
+Set by executor callback, contains plist with :verdict :acts :explores etc.")
 (defvar gptel-auto-experiment--refine-convergence-stats (list :total 0 :success 0 :failure 0)
   "Convergence statistics for the Generate→Validate→Refine cycle.
 Updated by the refine loop, consumed by the evolution cycle.")
@@ -313,6 +316,13 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                               (gptel-auto-workflow--categorize-target target))))
                            (when (and category (fboundp 'gptel-ai-behaviors--parse-reasoning))
                              (gptel-ai-behaviors--parse-reasoning effective-agent-output category)))
+                         ;; Think-block intelligence: analyze agent reasoning for verdict
+                         (unless (bound-and-true-p gptel-auto-experiment--think-intel)
+                           (let ((intel (when (and effective-agent-output
+                                                    (fboundp 'gptel-auto-experiment--analyze-agent-output))
+                                          (gptel-auto-experiment--analyze-agent-output
+                                           effective-agent-output))))
+                             (setq-local gptel-auto-experiment--think-intel intel)))
                          (unless finished
                           (if repeated-focus
                               (let* ((hypothesis
