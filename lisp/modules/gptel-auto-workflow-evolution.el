@@ -1859,6 +1859,8 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   ;; Clear reasoning hit counts for new cycle
   (when (fboundp 'gptel-ai-behaviors--clear-reasoning-hits)
     (gptel-ai-behaviors--clear-reasoning-hits))
+  (when (fboundp 'gptel-ai-behaviors--clear-violations)
+    (gptel-ai-behaviors--clear-violations))
   ;; Throttle: don't run more than once per 300s (5min) unless forced
   (let ((now (float-time (current-time))))
     (when (and gptel-auto-workflow--evolution-last-run

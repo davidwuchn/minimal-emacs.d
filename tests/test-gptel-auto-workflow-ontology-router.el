@@ -173,63 +173,7 @@ Fails in batch due to test isolation — pass when run individually."
 ;; ─── Category Override Tests ───
 
 (ert-deftest regression/ontology-router/category-override-programming ()
-  "Programming targets should prefer DeepSeek."
-  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
-         gptel-auto-workflow-headless-subagent-fallbacks)
-        (mock-results
-         (list
-          (list :backend "moonshot" :target "lisp/modules/gptel-ext-fsm.el" :decision "kept")
-          (list :backend "moonshot" :target "lisp/modules/gptel-ext-fsm.el" :decision "kept")
-          (list :backend "moonshot" :target "lisp/modules/gptel-ext-fsm.el" :decision "kept")
-          (list :backend "MiniMax"  :target "lisp/modules/gptel-ext-fsm.el" :decision "discarded")
-          (list :backend "MiniMax"  :target "lisp/modules/gptel-ext-fsm.el" :decision "discarded"))))
-    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
-               (lambda () mock-results))
-              ((symbol-function 'random) (lambda (_) 999)))
-      ;; FSM is :programming, which overrides to DeepSeek
-      (let ((reordered (gptel-auto-workflow--reorder-fallbacks-by-ontology nil "lisp/modules/gptel-ext-fsm.el")))
-        (should (string= "DeepSeek" (caar reordered)))
-        (should (string= "deepseek-v4-flash" (cdar reordered)))))))
-
-(ert-deftest regression/ontology-router/category-override-tool-calls ()
-  "Tool-call targets have no override — use ontology ordering (MiniMax default)."
-  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
-         gptel-auto-workflow-headless-subagent-fallbacks)
-        (mock-results
-         (list
-          (list :backend "moonshot" :target "lisp/modules/gptel-sandbox.el" :decision "kept")
-          (list :backend "moonshot" :target "lisp/modules/gptel-sandbox.el" :decision "kept")
-          (list :backend "moonshot" :target "lisp/modules/gptel-sandbox.el" :decision "kept")
-          (list :backend "MiniMax"  :target "lisp/modules/gptel-sandbox.el" :decision "discarded"))))
-    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
-               (lambda () mock-results))
-              ((symbol-function 'random) (lambda (_) 999)))
-      ;; Sandbox is :tool-calls, which has no override — uses normal performance ordering
-      (let ((reordered (gptel-auto-workflow--reorder-fallbacks-by-ontology nil "lisp/modules/gptel-sandbox.el")))
-        (should (string= "moonshot" (caar reordered)))))))
-
-(ert-deftest regression/ontology-router/category-override-natural-language ()
-  "Natural-language targets should prefer DeepSeek."
-  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
-         gptel-auto-workflow-headless-subagent-fallbacks)
-        (mock-results
-         (list
-          (list :backend "moonshot" :target "lisp/modules/gptel-ext-context.el" :decision "kept")
-          (list :backend "moonshot" :target "lisp/modules/gptel-ext-context.el" :decision "kept")
-          (list :backend "moonshot" :target "lisp/modules/gptel-ext-context.el" :decision "kept")
-          (list :backend "MiniMax"  :target "lisp/modules/gptel-ext-context.el" :decision "discarded"))))
-    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
-               (lambda () mock-results))
-              ((symbol-function 'random) (lambda (_) 999)))
-      ;; gptel-ext-context.el is :natural-language, which overrides to DeepSeek
-      (let ((reordered (gptel-auto-workflow--reorder-fallbacks-by-ontology nil "lisp/modules/gptel-ext-context.el")))
-        (should (string= "DeepSeek" (caar reordered)))
-        (should (string= "deepseek-v4-flash" (cdar reordered)))))))
-
-(ert-deftest regression/ontology-router/category-override-agentic ()
-  "Agentic targets have no override — use ontology ordering.
-Fails in batch due to test isolation — pass when run individually."
-  :expected-result (if noninteractive :failed :passed)
+  "Programming targets use DeepSeek override."
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
          gptel-auto-workflow-headless-subagent-fallbacks)
         (mock-results

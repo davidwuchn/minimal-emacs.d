@@ -16,7 +16,11 @@
 
 (defun gptel-ai-behaviors--repo-available-p ()
   "Return non-nil when the ai-behaviors submodule is present."
-  (file-directory-p gptel-ai-behaviors-root))
+  (let ((avail (file-directory-p gptel-ai-behaviors-root)))
+    (unless avail
+      (message "[ai-behaviors] Submodule not found at %s — using hardcoded defaults"
+               gptel-ai-behaviors-root))
+    avail))
 
 (defun gptel-ai-behaviors--resolve-dir (name)
   "Resolve behavior directory for NAME, checking all overrides.
@@ -97,9 +101,9 @@ Falls back to hardcoded defaults when no data exists.")
 (defun gptel-ai-behaviors--evolve-hashtags ()
   "Evolve category→hashtags mapping from experiment outcomes.
 Computes keep-rate per (category, hashtag) and updates
-`gptel-ai-behaviors--category-defaults' with the best combos."
+`gptel-ai-behaviors--category-defaults' with the best combos.
+Requires min 3 experiments AND keep-rate > 0 to adopt a hashtag."
   (let ((cat-best (make-hash-table :test 'equal)))
-    ;; Aggregate keep-rates per hashtag per category
     (maphash
      (lambda (key entry)
        (let* ((category (car key))
@@ -108,23 +112,17 @@ Computes keep-rate per (category, hashtag) and updates
               (total (cdr entry))
               (rate (if (> total 0) (/ (float kept) total) 0))
               (current (gethash category cat-best nil)))
-         (when (or (null current) (> rate (cdr current)))
+         (when (and (>= total 3) (> rate 0)
+                    (or (null current) (> rate (cdr current))))
            (puthash category (cons hashtag rate) cat-best))))
      gptel-ai-behaviors--category-performance)
-    ;; Build default alist from best hashtags (min 3 experiments)
     (setq gptel-ai-behaviors--category-defaults nil)
     (maphash
      (lambda (category best)
-       (let* ((hashtag (car best))
-              (rate (cdr best))
-              (total (cdr (gethash (cons category hashtag)
-                                    gptel-ai-behaviors--category-performance
-                                    (cons 0 0)))))
-         (when (>= total 3)
-           (push (cons category hashtag)
-                 gptel-ai-behaviors--category-defaults)
-           (message "[ai-behaviors-evolve] %s: best hashtag %s (keep-rate %.0f%%, %d exp)"
-                    category hashtag (* 100 rate) total))))
+       (push (cons category (car best))
+             gptel-ai-behaviors--category-defaults)
+       (message "[ai-behaviors-evolve] %s: best hashtag %s (keep-rate %.0f%%)"
+                category (car best) (* 100 (cdr best))))
      cat-best)))
 
 (defun gptel-ai-behaviors--category-hashtags (category)
@@ -282,12 +280,12 @@ Cleared each evolution cycle. Used by prompt builder to recommend behaviors.")
     blocks))
 
 (defun gptel-ai-behaviors--recommend-behaviors (category &optional n)
-  "Return the N most frequently hit hashtags for CATEGORY.
+  "Return the N most frequently hit hashtags for CATEGORY (min 2 hits).
 Returns string of space-separated hashtags, or empty string."
   (when category
     (let ((hits (make-hash-table :test 'equal)))
       (maphash (lambda (key count)
-                 (when (eq (car key) category)
+                 (when (and (eq (car key) category) (>= count 2))
                    (puthash (cdr key) (+ (gethash (cdr key) hits 0) count) hits)))
                gptel-ai-behaviors--reasoning-hits)
       (let ((sorted (sort (let (result)
@@ -325,7 +323,30 @@ language ('I recommend', 'we should research', etc.)."
            (push (format "%s crossed mode boundary: attempted fixes when in %s"
                          agent-type mode-name) violations))))
       (when violations
-        (mapconcat #'identity violations "; ")))))
+        (let ((msg (mapconcat #'identity violations "; ")))
+          (gptel-ai-behaviors--record-violation msg)
+          msg)))))
+
+(defvar gptel-ai-behaviors--recent-violations nil
+  "List of mode violation strings from the most recent experiment cycle.
+Reset each cycle. Read by prompt builder for failure feedback.")
+
+(defun gptel-ai-behaviors--record-violation (violation)
+  "Record a mode VIOLATION for prompt feedback."
+  (push violation gptel-ai-behaviors--recent-violations))
+
+(defun gptel-ai-behaviors--clear-violations ()
+  "Clear recorded violations at cycle start."
+  (setq gptel-ai-behaviors--recent-violations nil))
+
+(defun gptel-ai-behaviors--violations-for-prompt ()
+  "Format recent violations as prompt guidance, or empty string."
+  (when gptel-ai-behaviors--recent-violations
+    (concat "## Mode Violations (AVOID THESE)\n"
+            "Previous experiments crossed mode boundaries:\n"
+            (mapconcat (lambda (v) (format "  - %s" v))
+                       (delete-dups gptel-ai-behaviors--recent-violations) "\n")
+            "\n\nStay within your assigned operating mode.\n")))
 
 (defun gptel-ai-behaviors--recommend-for-prompt (target)
   "Return formatted recommended behaviors string for TARGET, or empty.
