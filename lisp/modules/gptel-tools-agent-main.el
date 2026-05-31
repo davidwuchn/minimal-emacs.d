@@ -974,12 +974,16 @@ into staging or main."
       ;; Clear accumulated backend health strikes so old failures
       ;; don't quarantine all backends on restart (no backend left).
       (setq gptel-auto-workflow--cron-safe-step "clear-lambda-health")
-      (when (and (boundp 'gptel-auto-workflow--lambda-strike-count)
-                 (hash-table-p gptel-auto-workflow--lambda-strike-count))
-        (clrhash gptel-auto-workflow--lambda-strike-count))
-      (when (and (boundp 'gptel-auto-workflow--lambda-dead-until)
-                 (hash-table-p gptel-auto-workflow--lambda-dead-until))
-        (clrhash gptel-auto-workflow--lambda-dead-until))
+      ;; Force-initialize strike tables if missing (defvar may not have run yet)
+      (unless (hash-table-p (and (boundp 'gptel-auto-workflow--lambda-strike-count)
+                                 gptel-auto-workflow--lambda-strike-count))
+        (setq gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal)))
+      (unless (hash-table-p (and (boundp 'gptel-auto-workflow--lambda-dead-until)
+                                 gptel-auto-workflow--lambda-dead-until))
+        (setq gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal)))
+      (clrhash gptel-auto-workflow--lambda-strike-count)
+      (clrhash gptel-auto-workflow--lambda-dead-until)
+      ;; Clear cached health so backend-level re-evaluates fresh
       (when (and (boundp 'gptel-auto-workflow--backend-lambda-health-cache)
                  (hash-table-p gptel-auto-workflow--backend-lambda-health-cache))
         (clrhash gptel-auto-workflow--backend-lambda-health-cache))

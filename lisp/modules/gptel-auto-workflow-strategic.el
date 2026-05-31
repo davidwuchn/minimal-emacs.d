@@ -1777,6 +1777,19 @@ CALLBACK must be a function; guarded with fallback on invalid input.
 BEHAVIOR: Returns non-nil if error state was handled.
 EDGE CASE: Non-nil but malformed targets (improper list, atom) caught before downstream crash."
   (cl-block gptel-auto-workflow--handle-analyzer-error-state
+    ;; CRITICAL: clear accumulated backend health strikes from analyzer retries.
+    ;; The analyzer probes every backend; if all are slow (network issues),
+    ;; every one gets a strike and experiments can't dispatch. Reset after
+    ;; target selection so experiments see a clean slate.
+    (condition-case nil
+        (progn
+          (when (and (boundp 'gptel-auto-workflow--lambda-strike-count)
+                     (hash-table-p gptel-auto-workflow--lambda-strike-count))
+            (clrhash gptel-auto-workflow--lambda-strike-count))
+          (when (and (boundp 'gptel-auto-workflow--lambda-dead-until)
+                     (hash-table-p gptel-auto-workflow--lambda-dead-until))
+            (clrhash gptel-auto-workflow--lambda-dead-until)))
+      (error nil))
     ;; Guard: validate callback, use no-op fallback if invalid
     (unless (functionp callback)
       (message "[auto-workflow] Error state handler: callback is not a function (%S)" callback)
