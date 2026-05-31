@@ -1,7 +1,7 @@
 ### Allium Issue Trends
 **Recurring patterns** across all strategies:
 
-- **What problem is being solved?**: 1 occurrence(s)
-- **What does "template-default" strategy mean?**: 1 occurrence(s)
-- **What is the actual scope?**: 1 occurrence(s)
+- **No discarded hypotheses**: 1 occurrence(s)
+- **Hypothesis 2**: 1 occurrence(s)
+- **Hypothesis 1**: 1 occurrence(s)
 
