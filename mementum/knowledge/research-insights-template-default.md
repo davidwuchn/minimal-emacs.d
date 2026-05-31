@@ -4,14 +4,14 @@ status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
 insight-quality: 0.2/10
-allium-issues: 4
+allium-issues: 0
 allium-severity: 0.00
-allium-status: ok
+allium-status: coherent
 ---
 
 # Research Strategy: template-default
 
-*Consolidated from 48 experiments (2% keep rate).*
+*Consolidated from 44 experiments (2% keep rate).*
 
 **Performance:** 1 kept / 0 discarded / 21 failed (EXTRACTED — from TSV)
 
@@ -42,12 +42,6 @@ These targets may need different research patterns or the research findings were
 - `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 9 failed)
 - `lisp/modules/treesit-agent-tools-workspace.el` (1 failed)
 
-## Allium Behavioral Coherence
-
-*4 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
-
-
-
 ## Meta-Learning Recommendations (INFERRED — from pattern analysis)
 
 - **This strategy underperforms.** Consider evolving a new approach.
@@ -55,81 +49,11 @@ These targets may need different research patterns or the research findings were
 - Try combining with git history for recency bias.
 
 
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy Distillation
-
-## Summary
-
-| Aspect | Details |
-|--------|---------|
-| **Strategy** | Template-default |
-| **Experiments** | 98 across multiple targets |
-| **Hypotheses Kept** | 1 |
-| **Hypotheses Stated** | 0 |
-
-## Key Finding
-
-**Kept hypothesis:** Focus on improving `gptel-auto-workflow-list-project-buffers`
-
-## Analysis
-
-- **Sparse documentation**: No formal hypothesis was stated at the outset
-- **Low yield**: Only 1 of 98 experiments produced a kept hypothesis
-- **Concentrated focus**: Remaining work centers on a single function improvement
-- **Scope**: `gptel-auto-workflow-*` modules appear to be the primary targets
-
-## Recommendation
-
-The next iteration should establish a clear, testable hypothesis before experimentation to improve hypothesis retention rate from ~1%.
+nil
 ```
 
-### Check Issues
-
-# Review: Research Strategy Distillation
-
-## Issues Found
-
-### 1. The Kept Hypothesis Isn't a Hypothesis
-The stated "kept hypothesis":
-> Focus on improving `gptel-auto-workflow-list-project-buffers`
-
-This is a **conclusion/recommendation**, not a hypothesis. A hypothesis would be:
-> *"Improving list-project-buffers performance will reduce workflow latency by >X%"*
-
-### 2. The Stated vs. Kept Paradox
-| Metric | Value | Problem |
-|--------|-------|---------|
-| Hypotheses Stated | 0 | How was something "kept" if nothing was stated? |
-| Hypotheses Kept | 1 | Contradiction |
-
-This suggests either:
-- The framework conflates "findings" with "hypotheses"
-- Or there's a logging/recording gap
-
-### 3. Sparse Analysis
-The document identifies problems but doesn't explain **why** 97/98 experiments failed to yield retained hypotheses:
-- Were they exploratory?
-- Did they lack measurable criteria?
-- Were they poorly executed?
-
-## Suggested Improvements
-
-| Current | Suggested |
-|---------|-----------|
-| Vague "kept hypothesis" | Actual hypothesis with predicted outcome |
-| "Low yield" | Specific failure modes identified |
-| Generic recommendation | Actionable next step with success criteria |
-
-**Bottom line**: The distillation accurately captures a low-yield research process, but the "kept hypothesis" needs reframing to match the stated framework definitions.

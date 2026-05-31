@@ -3,7 +3,7 @@ name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
 version: 2026.05.31
 total-experiments: 870
-total-kept: 14
+total-kept: 11
 ---
 
 # Auto-Workflow Program
@@ -17,16 +17,16 @@ total-kept: 14
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
-| `lisp/modules/gptel-ext-context.el` | 50% | 2 | 1 | ✅ High yield |
-| `lisp/modules/gptel-benchmark-comparator.el` | 50% | 4 | 2 | ✅ High yield |
-| `lisp/modules/gptel-tools-agent-prompt-build.el` | 21% | 14 | 3 | 🟡 Active |
-| `lisp/modules/gptel-tools-agent.el` | 14% | 7 | 1 | 🟡 Active |
-| `lisp/modules/gptel-benchmark-subagent.el` | 13% | 15 | 2 | 🟡 Active |
-| `lisp/modules/gptel-auto-workflow-projects.el` | 11% | 35 | 4 | 🟡 Active |
-| `lisp/modules/gptel-tools-agent-error.el` | 7% | 15 | 1 | ❌ Plateaued |
-| `lisp/modules/gptel-ext-fsm-utils.el` | 0% | 7 | 0 | ❌ Plateaued |
-| `lisp/modules/gptel-ext-retry.el` | 0% | 3 | 0 | ⏳ Insufficient data |
-| `staging-review` | 0% | 11 | 0 | ❌ Plateaued |
+| `lisp/modules/gptel-benchmark-comparator.el` | 33% | 3 | 1 | ✅ High yield |
+| `lisp/modules/gptel-tools-agent-runtime.el` | 25% | 4 | 1 | 🟡 Active |
+| `lisp/modules/gptel-ext-tool-permits.el` | 21% | 14 | 3 | 🟡 Active |
+| `lisp/modules/gptel-benchmark-core.el` | 20% | 10 | 2 | 🟡 Active |
+| `lisp/modules/gptel-tools-memory.el` | 10% | 10 | 1 | 🟡 Active |
+| `lisp/modules/gptel-auto-workflow-projects.el` | 7% | 27 | 2 | ❌ Plateaued |
+| `lisp/modules/gptel-tools-agent-prompt-build.el` | 5% | 20 | 1 | ❌ Plateaued |
+| `lisp/modules/gptel-tools-agent.el` | 0% | 1 | 0 | ⏳ Insufficient data |
+| `lisp/modules/gptel-agent-loop.el` | 0% | 8 | 0 | ❌ Plateaued |
+| `lisp/modules/gptel-auto-workflow-mementum.el` | 0% | 1 | 0 | ⏳ Insufficient data |
 
 ## 🧬 Meta-Learned Patterns
 
@@ -57,10 +57,11 @@ total-kept: 14
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (106×): Investigate root cause
-- **timeout** (17×): Add smaller batch sizes or chunked processing
-- **validation-failed** (15×): Improve pre-grade validation prompts
-- **api-limit** (5×): Implement provider fallback or rate limit handling
+- **other** (110×): Investigate root cause
+- **validation-failed** (28×): Improve pre-grade validation prompts
+- **timeout** (16×): Add smaller batch sizes or chunked processing
+- **api-limit** (14×): Implement provider fallback or rate limit handling
+- **test-failure** (4×): Run tests before committing experiments
 
 ## Success Patterns
 
@@ -78,10 +79,10 @@ total-kept: 14
 ## Next Hypotheses
 
 <!-- AUTO-UPDATED: From experiment insights -->
-- **lisp/modules/gptel-benchmark-comparator.el**: Apply LLM analyzes *why* compressed context failed and updates compression guidelines iteratively (keep rate: 50%)
-- **lisp/modules/gptel-tools-agent-prompt-build.el**: Apply LLM analyzes *why* compressed context failed and updates compression guidelines iteratively (keep rate: 21%)
-- **lisp/modules/gptel-tools-agent.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-benchmark-subagent.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-benchmark-comparator.el**: Apply LLM analyzes *why* compressed context failed and updates compression guidelines iteratively (keep rate: 33%)
+- **lisp/modules/gptel-tools-agent-runtime.el**: Apply LLM analyzes *why* compressed context failed and updates compression guidelines iteratively (keep rate: 25%)
+- **lisp/modules/gptel-ext-tool-permits.el**: Apply LLM analyzes *why* compressed context failed and updates compression guidelines iteratively (keep rate: 21%)
+- **lisp/modules/gptel-tools-memory.el**: Try validation guards or error handling improvements (previous experiments discarded)
 - **lisp/modules/gptel-auto-workflow-projects.el**: Try validation guards or error handling improvements (previous experiments discarded)
 
 ## Immutable Files
@@ -108,4 +109,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 870 experiments (14 kept locally across 143 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 870 experiments (11 kept locally across 173 local records). It evolves every self-evolution cycle.*

@@ -4,13 +4,11 @@
 
 # Semantic File Relationships
 
-Generated: 2026-05-31T02:20
+Generated: 2026-05-31T16:42
 
-| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-tools-agent-main.el | 0.836 |
-| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-auto-workflow-bootstrap.el | 0.831 |
-| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-tools-agent-base.el | 0.829 |
-| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-tools-agent-experiment-loop.el | 0.823 |
-| lisp/modules/gptel-tools-agent-prompt-build.el | lisp/modules/gptel-tools-agent.el | 0.821 |
+| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-auto-workflow-recovery.el | 0.222 |
+| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-ext-checkpoint.el | 0.222 |
+| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-ext-circuit-breaker.el | 0.222 |
 
 ## Ontology Implications
 
