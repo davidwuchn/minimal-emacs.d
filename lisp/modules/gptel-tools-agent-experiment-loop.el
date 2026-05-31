@@ -231,7 +231,8 @@ ORIGINAL TASK:
   "Run experiments for TARGET until stop condition. Call CALLBACK with results.
 Uses local state captured in closure for parallel execution safety.
 Adapts max-experiments based on API error rate."
-  (let* ((workflow-root (gptel-auto-workflow--resolve-run-root))
+  (cl-block gptel-auto-experiment-loop
+    (let* ((workflow-root (gptel-auto-workflow--resolve-run-root))
          (loop-buffer (current-buffer))
          baseline
          baseline-code-quality)
@@ -386,7 +387,7 @@ Adapts max-experiments based on API error rate."
          workflow-root
          (lambda () (run-next 1))
          loop-buffer
-         workflow-root)))))
+         workflow-root))))))
 
 ;;; Main Entry Point
 

@@ -66,6 +66,18 @@ Updated by the refine loop, consumed by the evolution cycle.")
   "Cache of target file state before experiments: (:byte-compiles :syntax-ok).
 Checked before each run to detect pre-existing breakage.")
 (defvar gptel-auto-experiment-active-grace)
+
+(defun gptel-auto-experiment--pre-existing-breakage-p (target)
+  "Return non-nil if TARGET was already broken before this experiment.
+Uses the cached target state to detect pre-existing breakage.
+This helps avoid wasted retry attempts on files that were already invalid."
+  (when (and (stringp target) (not (string-empty-p target)))
+    (let ((state (gethash target gptel-auto-experiment--target-state-cache)))
+      (when state
+        ;; If either byte-compiles or syntax-ok was already nil before experiment,
+        ;; the file was pre-existing broken and retry won't help.
+        (or (null (plist-get state :byte-compiles))
+            (null (plist-get state :syntax-ok)))))))
 (defvar gptel-auto-workflow-executor-rate-limit-fallbacks)
 (defvar gptel-auto-workflow--rate-limited-backends)
 (defvar gptel-model)
@@ -380,10 +392,17 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                      ;; Trigger retry or fail immediately without grader
                                        (let ((default-directory experiment-worktree)
                                              (_gptel-auto-experiment--grading-target target)
-                                             (_gptel-auto-experiment--grading-worktree experiment-worktree))
+                                             (_gptel-auto-experiment--grading-worktree experiment-worktree)
+                                             (pre-existing-breakage
+                                              (gptel-auto-experiment--pre-existing-breakage-p target)))
+                                        ;; Skip retry if file was already broken before experiment
+                                        (when pre-existing-breakage
+                                          (message "[auto-exp] ⚠ Pre-existing breakage detected for %s, skipping retry"
+                                                   target))
                                         (if (and (gptel-auto-experiment--teachable-validation-error-p
                                                   target validation-error)
-                                                 (not validation-retry-active))
+                                                 (not validation-retry-active)
+                                                 (not pre-existing-breakage))
                                             (progn
                                               (message "[auto-experiment] Validation failed with teachable pattern, retrying...")
                                               (gptel-auto-experiment--prepare-validation-retry-worktree
