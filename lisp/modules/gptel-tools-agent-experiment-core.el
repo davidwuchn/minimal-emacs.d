@@ -158,7 +158,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
              gptel-auto-experiment--quota-exhausted)
     (message "[auto-experiment] ⏹ All backends quota exhausted — aborting experiment %d/%d for %s"
              experiment-id max-experiments target)
-    (funcall callback (list :target target :id experiment-id :kept nil :error "all-backends-quota-exhausted"))
+    (when (functionp callback)
+      (funcall callback (list :target target :id experiment-id :kept nil :error "all-backends-quota-exhausted")))
     (cl-return-from gptel-auto-experiment-run))
   (message "[auto-experiment] Starting %d/%d for %s" experiment-id max-experiments target)
   (setq gptel-auto-workflow--current-target target)
@@ -218,7 +219,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
           (experiment-backend nil)
           (experiment-model nil))
     (if (not worktree)
-        (funcall callback (list :target target :error "Failed to create worktree" :backend "none"))
+        (when (functionp callback)
+          (funcall callback (list :target target :error "Failed to create worktree" :backend "none")))
       (gptel-auto-experiment--call-in-context
        experiment-buffer experiment-worktree
        (lambda ()
