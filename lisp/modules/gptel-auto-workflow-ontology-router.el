@@ -2712,6 +2712,81 @@ Boost = (keep-rate - avg-axis-rate) × confidence × 0.15."
             0.0))
       0.0)))
 
+;; ─── Research Coordinator (AutoTTS × AutoGo × Ontology) ───
+
+(defun gptel-auto-workflow--research-priorities ()
+  "Query ontology, AutoTTS, and AutoGo for research priorities.
+Returns plist: (:category-priorities (cat . reason) ... :strategy-insights ... :budget-insights ...)."
+  (let* ((results (condition-case nil (gptel-auto-workflow--parse-all-results) (error nil)))
+         (cat-stats (make-hash-table :test 'equal))
+         (priorities nil))
+    ;; 1. Ontology: category health from experiment data
+    (dolist (r results)
+      (let* ((r-target (plist-get r :target))
+             (r-decision (plist-get r :decision))
+             (r-kept (equal r-decision "kept"))
+             (r-strategy (plist-get r :strategy))
+             (cat (and r-target (fboundp 'gptel-auto-workflow--categorize-target)
+                      (gptel-auto-workflow--categorize-target r-target))))
+        (when cat
+          (let ((e (gethash cat cat-stats (list :kept 0 :total 0 :strategies (make-hash-table :test 'equal)))))
+            (setf (nth 0 e) (+ (nth 0 e) (if r-kept 1 0)))
+            (setf (nth 1 e) (1+ (nth 1 e)))
+            (when r-strategy
+              (let ((s (gethash r-strategy (nth 2 e) (cons 0 0))))
+                (setf (car s) (+ (car s) (if r-kept 1 0)))
+                (setf (cdr s) (1+ (cdr s)))
+                (puthash r-strategy (nth 2 e) s)))
+            (puthash cat e cat-stats)))))
+    ;; 2. Generate priorities per category
+    (maphash
+     (lambda (cat stats)
+       (let* ((kept (nth 0 stats))
+              (total (nth 1 stats))
+              (rate (if (> total 0) (/ (float kept) total) 0))
+              (strategies (nth 2 stats))
+              (best-strat (let ((best nil) (best-rate 0))
+                            (maphash (lambda (s e)
+                                       (let ((sr (if (> (cdr e) 0) (/ (float (car e)) (cdr e)) 0)))
+                                         (when (> sr best-rate) (setq best s best-rate sr))))
+                                     strategies)
+                            best))
+              (best-strat-rate (if (and best-strat (gethash best-strat strategies))
+                                  (let ((e (gethash best-strat strategies)))
+                                    (if (> (cdr e) 0) (/ (float (car e)) (cdr e)) 0))
+                                0))
+              (concrete-health (and (fboundp 'gptel-ai-behaviors--best-concrete-tasks)
+                                    (gethash cat gptel-ai-behaviors--best-concrete-tasks)))
+              (drift (and (fboundp 'gptel-auto-workflow--detect-category-drift)
+                         (let ((d (gptel-auto-workflow--detect-category-drift)))
+                           (cl-some (lambda (x) (eq (nth 1 x) cat)) d)))))
+         ;; Priority rules:
+         (cond
+          ((and (< rate 0.1) (> total 20))
+           (push (cons cat (format "Critical: %.0f%% keep-rate after %d experiments — needs investigation" (* 100 rate) total)) priorities))
+          (drift
+           (push (cons cat (format "Drift detected — targets behaving differently from category average")) priorities))
+          ((and concrete-health (> (cdr concrete-health) 0.5) (< rate 0.1))
+           (push (cons cat (format "Concrete tasks keep at %.0f%% but experiments fail — simplify experiments" (* 100 (cdr concrete-health)))) priorities))
+          ((and best-strat (< best-strat-rate 0.15) (> total 10))
+           (push (cons cat (format "Best strategy %s at %.0f%% — consider strategy evolution" best-strat (* 100 best-strat-rate))) priorities))
+          ((< total 10)
+           (push (cons cat (format "Insufficient data: %d experiments — more experiments needed" total)) priorities)))))
+     cat-stats)
+    (list :category-priorities (nreverse priorities))))
+
+(defun gptel-auto-workflow--format-research-priorities ()
+  "Format research priorities as a prompt string for the researcher."
+  (let ((priorities (gptel-auto-workflow--research-priorities))
+        (parts nil))
+    (dolist (p (plist-get priorities :category-priorities))
+      (push (format "  [%s] %s" (car p) (cdr p)) parts))
+    (when parts
+      (concat "## Research Priorities (from Ontology × AutoTTS × AutoGo)\n"
+              "Focus research on these categories:\n"
+              (mapconcat #'identity (nreverse parts) "\n")
+              "\n\nProduce category-specific findings — not global recommendations.\n"))))
+
 ;; ─── Verbum Experiment Tracker ───
 
 ;; ─── Digital Twin: File Dependency Graph ───

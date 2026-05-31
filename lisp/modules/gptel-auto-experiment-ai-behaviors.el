@@ -793,6 +793,23 @@ may need simpler experiments (concrete-task-default mode)."
   (let ((best (gethash category gptel-ai-behaviors--best-concrete-tasks)))
     (when best (car best))))
 
+;; ─── Research Priorities Injection ───
+
+(defun gptel-ai-behaviors--inject-research-priorities (orig-fn &rest args)
+  "Inject research priorities from ontology/AutoTTS/AutoGo before loading findings."
+  (let ((priorities (when (fboundp 'gptel-auto-workflow--format-research-priorities)
+                     (gptel-auto-workflow--format-research-priorities))))
+    (if priorities
+        (concat priorities "\n" (apply orig-fn args))
+      (apply orig-fn args))))
+
+;; Register research priorities advice
+(when (and (fboundp 'gptel-auto-workflow-load-research-findings)
+           (not (advice-member-p #'gptel-ai-behaviors--inject-research-priorities
+                                'gptel-auto-workflow-load-research-findings)))
+  (advice-add 'gptel-auto-workflow-load-research-findings :around
+              #'gptel-ai-behaviors--inject-research-priorities))
+
 ;; ─── Think-Intel → Behavior Feedback (Gap 2 closure) ───
 
 (defun gptel-ai-behaviors--parse-think-intel-from-messages ()
