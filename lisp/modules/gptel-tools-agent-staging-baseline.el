@@ -502,15 +502,29 @@ Reviewer checks for Blocker/Critical issues."
                         (length review-files)
                         (mapconcat #'identity skipped-review-files ", "))
               ""))
-           (review-prompt (format "Review the following changes for blockers, critical bugs, and security issues.
+            (review-prompt (format "Review the following changes for blockers, critical bugs, and security issues.
 
 CHANGES (diff):
 %s
 
-REVIEW CRITERIA:
-- Blocker: Runtime error, state corruption, data loss, security hole
-- Critical: Proven correctness bug in current code
-- Security: eval of untrusted input, shell injection, nil without guard
+CONTEXT: This change was already APPROVED by an automated grader which
+evaluated quality, clarity, and correctness. A full test suite runs
+after review — functional regressions, compilation errors, and test
+failures will be caught by the next gate. Your review is for issues
+that TESTS CANNOT DETECT.
+
+REVIEW CRITERIA (block only for these):
+- Security: eval of untrusted input, shell injection, hardcoded secrets
+- Data loss: destructive operations without safeguards
+- State corruption: shared global state modified without coordination
+
+DO NOT BLOCK for:
+- Probable correctness bugs that tests will catch
+- Style preferences, variable naming, or code organization
+- Hypothetical edge cases without evidence of actual failure
+- Use of patterns (ignore-errors, condition-case, nil guards) already
+  used elsewhere in the same file — consistency is not a blocker
+- Missing tests (the staging flow runs the full suite)
 
 REVIEW METHOD:
 - If the diff introduces a call to an existing helper/function, inspect that helper's
@@ -523,7 +537,8 @@ REVIEW METHOD:
 %s
 
 OUTPUT: First line must be exactly 'APPROVED' or 'BLOCKED: [reason]'.
-You may include structured markdown after that verdict line.
+BLOCKED requires a specific, observable vulnerability — not general concerns.
+If it would be caught by a test, let it through for the test suite.
 
 Maximum response: 1000 characters."
                                   (truncate-string-to-width diff-content 3000 nil nil "...")

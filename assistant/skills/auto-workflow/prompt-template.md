@@ -168,3 +168,10 @@ Overall Eight Keys score: {{baseline}}
 {{agent-behavior}}
 
 {{validation-pipeline}}
+
+---
+**🚨 URGENT — YOUR NEXT TOOL CALL MUST BE Edit OR Write 🚨**
+DO NOT read more files. DO NOT explore further. DO NOT plan.
+You have enough context. Make a code change NOW.
+If you don't call Edit or Write within the next 2 tool calls, the experiment fails.
+---

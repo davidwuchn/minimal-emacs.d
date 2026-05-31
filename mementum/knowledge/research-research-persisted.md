@@ -1,39 +1,31 @@
 <!--
 Synthesis verification:
-- Confidence: 24%
+- Confidence: 12%
 - Sources: 11 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'research-research-persisted'
+- Warnings: No code examples or concrete references, Content does not mention topic 'research-research-persisted', Very short content (23 lines)
 - Auto-approved: yes (flagged)
 --->
 
 <think>
-The user wants me to generate a complete knowledge page based on all the research findings I've compiled. Let me synthesize everything into a comprehensive, well-organized knowledge page with frontmatter.
+The user wants me to generate a complete knowledge page with all the research findings from the external research turns. Let me synthesize all the findings into a comprehensive, structured document.
 
-Let me organize the key patterns from all research sessions:
+Let me organize the findings from all the research results:
 
-**From the most recent research (2026-05-30 19:57):**
-- Nucleus: VSM Architecture (S5-S1), Symbolic Attention Magnets, Mode/Boundary System, Fibonacci Recall, Criticality-driven storage
-- Mementum: Git-based memory, λ(λ) meta-learning, Three-tier memory, Storage criticality gate
-- gptel: Tool-use architecture, MCP integration, Temperature nil default
+1. **Nucleus** - VSM Architecture, Mathematical Attention Magnets, Mode/Boundary System, Skills Structure, EDN statecharts, Lambda notation
+2. **Mementum** - Git-Based Memory Protocol, Fibonacci Recall Depth, Meta-Learning λ(λ), Three-Tier Memory, Storage Criticality Gate
+3. **gptel** - Tool-Use Architecture, MCP Integration, Temperature nil default
+4. **gptel-agent** - Sub-agent delegation via Markdown/YAML frontmatter, Context isolation, Skill directory scanning, @mentions for delegation
 
 
-- gptel-agent: Sub-agent delegation via YAML/Markdown frontmatter, Context isolation, Skill directory scanning, @mentions for delegation, Planning vs Execution presets
+5. **genesis-agent** - Self-Verification Engine, P(success) confidence scoring
+6. **context-mode** - Think-in-Code Context Reduction, Sandbox Tool Pattern, FTS5 session continuity
+7. **efrit** - Circuit Breaker + Checkpoint/Restore, Tool Receipts for Audit Trail, Zero Client Intelligence
+8. **gastown** - Three-Tier Watchdog, Beads Ledger, Worktree Isolation
+9. **gbrain** - Self-Wiring Knowledge Graph, Hybrid Search Fusion
+10. **symphony** - Worktree Isolation
+11. **psi** - Statechart-Driven Architecture
 
-**From earlier research sessions (2026-05-22 10:29):**
-- efrit: Circuit Breaker, Checkpoint/Restore, Tool Receipts
-- context-mode: Think-in-Code, Session Continuity via FTS5
-- nucleus: Lambda Notation, Mathematical Attention Anchors
-- mementum: Feed-Forward Memory Protocol
-- gastown: Beads Ledger, Multi-Agent Workspace
-- gbrain: Self-Wiring Knowledge Graph
+I've compiled the full list of knowledge sources and can now synthesize these findings into a cohesive document.
 
-, Hybrid Search Fusion
-
-**From the arXiv research (2026-05-20 23:27):**
-- Agent Design Pattern Catalogue, MetaAgent Self-Evolving, Azure AI Orchestration, NVIDIA Evaluation Metrics, Error Recovery Patterns, and a comprehensive Architecture Pattern Taxonomy covering single agent patterns, multi-agent patterns, and tool use patterns
-
-**From the self-evolution research (2026-05-22 12:10):**
-- Genesis Agent with Self-Verification, Context Mode's Sandbox Tool Pattern, and GBrain's Self-Wiring Knowledge Graph approach
-
-Now I'm pulling together the remaining research findings to round out the full picture.
+Now I'm looking at the external research patterns—the agent design catalogue with its eighteen architectural variants, the meta-agent self-evolution approach, the Azure orchestration spectrum, trajectory-aware evaluation metrics, error recovery mechanisms, and a comprehensive taxonomy. I'm prioritizing the highest-impact findings to structure this as a comprehensive knowledge page.
 </think>

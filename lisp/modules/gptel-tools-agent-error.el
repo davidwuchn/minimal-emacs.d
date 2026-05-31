@@ -644,10 +644,11 @@ RETRY-COUNT tracks current retry attempt."
                              (gptel-auto-experiment--provider-pressure-error-p raw-error)))
                (hard-quota (and raw-error
                                 (gptel-auto-experiment--hard-quota-exhausted-p raw-error)))
-               (should-advance (or hard-quota
-                                   (and is-pressure
-                                        (>= (1+ prov-attempts)
-                                            gptel-auto-experiment-max-per-provider-attempts)))))
+                (should-advance (or hard-quota
+                                    timeout-category  ;; curl/timeout: advance immediately
+                                    (and is-pressure
+                                         (>= (1+ prov-attempts)
+                                             gptel-auto-experiment-max-per-provider-attempts)))))
          (gptel-auto-workflow--restore-live-target-file target workflow-root)
          (when quota-exhausted
            (setq gptel-auto-experiment--quota-exhausted t))
