@@ -1204,16 +1204,19 @@ decisions against test results when available."
     (when parts
       (concat "Review outcomes:\n" (mapconcat #'identity (nreverse parts) "\n")))))
 
-;; ─── Review Feedback → Agent Teaching Loop ───
+;; ─── Review Feedback → Agent Teaching Loop (Ontology-Aware) ───
 
 (defvar gptel-auto-workflow--review-feedback (make-hash-table :test 'equal)
-  "Hash table: target-file → latest review block reason.
+  "Hash table: category → latest review block reason.
+Ontology-aware: feedback from one target teaches all targets in the same category.
 Populated by staging review when experiments are blocked.
-Read by prompt builder to inject feedback into next experiment.")
+Read by prompt builder to inject guidance into all experiments in that category.")
 
 (defun gptel-auto-workflow--record-review-feedback (branch category response)
-  "Extract block reason from REVIEW RESPONSE and store per target.
-Maps review block reasons to agent guidance for the next experiment."
+  "Extract block reason from REVIEW RESPONSE and store per CATEGORY.
+Ontology bridge: review failures on one target teach all targets in the same
+category. This enables cross-target learning (e.g. 'missing require' on
+projects.el teaches all :agentic experiments)."
   (let* ((block-reason (when (and (stringp response)
                                   (string-match "BLOCKED:\\s-*\\(.+?\\)\\(?:$\\|[\n\r]\\)" response))
                          (match-string 1 response)))
@@ -1221,31 +1224,32 @@ Maps review block reasons to agent guidance for the next experiment."
           (cond
            ((not block-reason) nil)
            ((string-match-p "byte.compile\\|compil" block-reason)
-            "⚠ PREVIOUS REVIEW: blocked for byte-compile error. Run byte-compile BEFORE Edit.")
+            "⚠ REVIEW: byte-compile error on a similar file. Run byte-compile BEFORE Edit.")
            ((string-match-p "require\\|undefined function\\|void.function\\|void.variable" block-reason)
-            "⚠ PREVIOUS REVIEW: blocked for missing require. Add (require '...) before using new functions.")
+            "⚠ REVIEW: missing require blocked a similar file. Add (require ...) before new functions.")
            ((string-match-p "style\\|format\\|indent\\|whitespace" block-reason)
-            "⚠ PREVIOUS REVIEW: blocked for formatting. Change logic only, never indent/reformat.")
+            "⚠ REVIEW: formatting blocked a similar file. Change logic only, never indent/reformat.")
            ((string-match-p "security\\|eval\\|inject\\|dangerous" block-reason)
-            "⚠ PREVIOUS REVIEW: blocked for security. Avoid eval, shell injection, unvalidated input.")
-           (t (concat "⚠ PREVIOUS REVIEW: blocked — " (truncate-string-to-width block-reason 80))))))
-    (when guidance
-      ;; Extract target from branch name: e.g. projects-neopi5-r1418...exp1 → projects
-      (let ((target (when (string-match "^\\([a-z-]+\\)-" (or branch ""))
-                     (match-string 1 branch))))
-        (when target
-          (puthash target guidance gptel-auto-workflow--review-feedback)
-          (message "[review-feedback] Stored '%s' guidance for target '%s'"
-                   (truncate-string-to-width guidance 60) target))))))
+            "⚠ REVIEW: security issue blocked a similar file. Avoid eval, shell injection.")
+           (t (concat "⚠ REVIEW: " (truncate-string-to-width block-reason 80))))))
+    (when (and guidance category)
+      (puthash category guidance gptel-auto-workflow--review-feedback)
+      (message "[review-feedback] %s → all %s targets: %s"
+               (or (when (string-match "^\\([a-z-]+\\)-" (or branch ""))
+                    (match-string 1 branch))
+                   "unknown")
+               category
+               (truncate-string-to-width guidance 60)))))
 
 (defun gptel-auto-workflow--get-review-feedback (target)
-  "Return review feedback for TARGET if available, or empty string.
-Call from prompt builder to inject previous review block reason
-as guidance for the next experiment on this target."
-  (let ((guidance (and target (gethash target gptel-auto-workflow--review-feedback))))
-    (when guidance
-      (remhash target gptel-auto-workflow--review-feedback)  ; consume once
-      guidance)))
+  "Return review feedback for TARGET's ontology category, or empty string.
+Cross-target: any target in the same category gets the same feedback.
+Feedback persists until replaced by a newer review block in that category."
+  (when target
+    (let ((category (and (fboundp 'gptel-auto-workflow--categorize-target)
+                         (gptel-auto-workflow--categorize-target target))))
+      (when category
+        (gethash category gptel-auto-workflow--review-feedback "")))))
 
 (provide 'gptel-tools-agent-staging-baseline)
 ;;; gptel-tools-agent-staging-baseline.el ends here
