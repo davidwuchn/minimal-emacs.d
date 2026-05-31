@@ -332,8 +332,10 @@ clean_stale_socket "ov5-researcher"
 log "Pulling latest code from origin..."
 # Discard all local changes to auto-generated files — they are upstream-dominant
 # and local edits only cause merge conflicts. checkout HEAD ensures a clean slate
-# (unlike --theirs which only resolves conflict markers).
+# (unlike --theirs which only resolves conflict markers). clean -fd removes
+# untracked files that could also cause conflicts.
 git -C "$DIR" checkout HEAD -- mementum/knowledge/ assistant/skills/ 2>/dev/null || true
+git -C "$DIR" clean -fd -- mementum/knowledge/ assistant/skills/ 2>/dev/null || true
 git -C "$DIR" pull --ff-only 2>&1 || log "WARNING: git pull failed, continuing with current code"
 
 # ─── Stop any existing daemons to ensure fresh code is loaded ───
@@ -529,8 +531,9 @@ if [ "${PIPELINE_SKIP_PRE_EVOLUTION:-no}" != "yes" ]; then
     unset -f clean_ov5_sockets
     # Clear workflow status so auto-workflow can start a fresh daemon
     rm -f "$DIR/var/tmp/cron/auto-workflow-status.sexp" 2>/dev/null || true
-    # Discard all local changes to auto-generated files — they are upstream-dominant
+    # Discard all local changes + untracked files in auto-generated dirs
     git -C "$DIR" checkout HEAD -- mementum/knowledge/ assistant/skills/ 2>/dev/null || true
+    git -C "$DIR" clean -fd -- mementum/knowledge/ assistant/skills/ 2>/dev/null || true
     # Pull any commits pushed by evolution cycle
     git -C "$DIR" pull --ff-only 2>&1 || log "WARNING: post-evolution git pull failed"
     sleep 2
