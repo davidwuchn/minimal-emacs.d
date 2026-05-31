@@ -1054,22 +1054,61 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                   :prompt-structure (gptel-auto-experiment--prompt-structure-score executor-prompt)
                                                                   :kibcm-axis (gptel-auto-experiment--kibcm-axis hypothesis))))
                                                     ;; Don't discard changes when grader bypasses
-                                                    (unless grader-bypass
-                                                      (setq finished t)
-                                                      (magit-git-success "checkout" "--" ".")
-                                                      (gptel-auto-workflow--drop-provisional-commit
-                                                       provisional-commit-hash
-                                                       (format "Discard provisional commit for %s" target))
-                                                      (setq provisional-commit-hash nil))
                                                      (if grader-bypass
-                                                         (message "[auto-experiment] ✓ grader-bypass keeping changes for %s (passed=%s tests-passed=%s)"
-                                                                  target passed tests-passed)
-                                                       (message "[auto-experiment] ✗ %s for %s (passed=%s tests-passed=%s validation-error=%s)"
-                                                                reason target passed tests-passed validation-error))
-                                                    (funcall log-fn
-                                                             run-id exp-result)
-                                                    (funcall callback exp-result))))))
-                                          ))))))))))))))))
+                                                         (let* ((msg (format "◈ Grader-bypass %s: %.2f → %.2f (+%.0f%%)"
+                                                                              target baseline
+                                                                              (/ (float grade-score) grade-total)
+                                                                              (if (> baseline 0)
+                                                                                  (* 100 (/ (- (/ (float grade-score) grade-total) baseline) baseline))
+                                                                                0)))
+                                                                (finalize (gptel-auto-experiment--make-kept-result-callback
+                                                                           run-id exp-result log-fn callback)))
+                                                           (message "[auto-experiment] ✓ grader-bypass committing changes for %s"
+                                                                    target)
+                                                           (gptel-auto-workflow--assert-main-untouched)
+                                                           (if (and (gptel-auto-workflow--stage-worktree-changes "Stage grader-bypass" 60)
+                                                                    (gptel-auto-workflow--promote-provisional-commit
+                                                                     msg "Commit grader-bypass" provisional-commit-hash
+                                                                     (max 300 gptel-auto-workflow-git-timeout)))
+                                                               (progn
+                                                                 (setq provisional-commit-hash nil)
+                                                                 (gptel-auto-workflow--track-commit experiment-id target experiment-worktree)
+                                                                 (gptel-auto-experiment--maybe-log-staging-pending run-id exp-result log-fn)
+                                                                 (when (fboundp 'gptel-auto-workflow--apply-category-vigilance)
+                                                                   (gptel-auto-workflow--apply-category-vigilance target 'kept))
+                                                                 (setq gptel-auto-experiment--best-score
+                                                                       (/ (float grade-score) grade-total)
+                                                                       gptel-auto-experiment--no-improvement-count 0)
+                                                                 (if gptel-auto-experiment-auto-push
+                                                                     (if (gptel-auto-workflow--push-branch-with-lease
+                                                                          experiment-branch "Push grader-bypass" 180)
+                                                                         (if gptel-auto-workflow-use-staging
+                                                                             (gptel-auto-workflow--staging-flow experiment-branch finalize)
+                                                                           (funcall finalize))
+                                                                       (let ((failed (plist-put (copy-sequence exp-result) :comparator-reason "grader-bypass-push-failed")))
+                                                                         (setq failed (plist-put failed :kept nil))
+                                                                         (funcall log-fn run-id failed)
+                                                                         (funcall callback failed)))
+                                                                   (funcall finalize))
+                                                             (let ((failed (plist-put (copy-sequence exp-result) :comparator-reason "grader-bypass-commit-failed")))
+                                                               (gptel-auto-workflow--drop-provisional-commit provisional-commit-hash "Drop grader-bypass")
+                                                               (setq provisional-commit-hash nil)
+                                                               (setq failed (plist-put failed :kept nil))
+                                                               (funcall log-fn run-id failed)
+                                                               (funcall callback failed)))))
+                                                       ;; Not a bypass — discard normally
+                                                       (progn
+                                                         (setq finished t)
+                                                         (magit-git-success "checkout" "--" ".")
+                                                         (gptel-auto-workflow--drop-provisional-commit
+                                                          provisional-commit-hash
+                                                          (format "Discard provisional commit for %s" target))
+                                                         (setq provisional-commit-hash nil)
+                                                         (message "[auto-experiment] ✗ %s for %s (passed=%s tests-passed=%s validation-error=%s)"
+                                                                  reason target passed tests-passed validation-error)
+                                                         (funcall log-fn run-id exp-result)
+                                                         (funcall callback exp-result))))))))
+                                           ))))))))))))))))
                                      ))
                 ;; Capture the backend and model that will actually be used by the
                 ;; executor, including any subagent provider override.
