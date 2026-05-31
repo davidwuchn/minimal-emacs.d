@@ -1008,6 +1008,30 @@ Returns first relevant code addition line, or nil."
       (when snippet
         (truncate-string-to-width snippet 120 nil nil "...")))))
 
+;; ─── Persona Effectiveness Tracking ───
+;; Tracks kept-rate per (category × persona-archetype) for self-evolution.
+(defvar gptel-ai-behaviors--persona-stats (make-hash-table :test 'equal)
+  "Hash: (category . archetype) → (kept . total).")
+(defun gptel-ai-behaviors--record-persona (category archetype kept)
+  "Record experiment outcome for (CATEGORY × ARCHETYPE)."
+  (when (and category archetype)
+    (let* ((key (cons category archetype))
+           (entry (gethash key gptel-ai-behaviors--persona-stats (cons 0 0))))
+      (setf (car entry) (+ (car entry) (if kept 1 0)))
+      (setf (cdr entry) (1+ (cdr entry)))
+      (puthash key entry gptel-ai-behaviors--persona-stats))))
+(defun gptel-ai-behaviors--best-persona (category)
+  "Return archetype with highest keep-rate for CATEGORY."
+  (let ((best nil) (best-rate 0))
+    (maphash (lambda (key entry)
+               (when (eq (car key) category)
+                 (let* ((kept (car entry)) (total (cdr entry))
+                        (rate (if (> total 0) (/ (float kept) total) 0)))
+                   (when (and (>= total 2) (> rate best-rate))
+                     (setq best (cdr key)) (setq best-rate rate)))))
+             gptel-ai-behaviors--persona-stats)
+    best))
+
 ;; ─── Self-Evolving Model + Effort Selection ───
 ;; Tracks consecutive failures per (category × subagent) for bump escalation
 (defvar gptel-ai-behaviors--subagent-failures (make-hash-table :test 'equal)
@@ -1202,8 +1226,8 @@ A model that keeps 50% at cost 1 is better than 60% at cost 3."
     0.0))
 
 (defun gptel-ai-behaviors--evolve-models ()
-  "Log per-category model+effort performance each evolution cycle."
-  (let ((cats nil) (logs nil))
+  "Log per-category model+effort+persona performance each evolution cycle."
+  (let ((cats nil) (logs nil) (persona-logs nil))
     (maphash
      (lambda (key _)
        (unless (memq (nth 0 key) cats)
@@ -1214,8 +1238,18 @@ A model that keeps 50% at cost 1 is better than 60% at cost 3."
         (let ((best (gptel-ai-behaviors--best-model cat agent)))
           (when best
             (push (format "%s/%s: %s@%s" cat agent (car best) (cdr best)) logs)))))
+    ;; Log persona effectiveness per category
+    (maphash (lambda (key entry)
+               (let* ((cat (car key)) (arch (cdr key))
+                      (kept (car entry)) (total (cdr entry))
+                      (rate (if (> total 0) (/ (float kept) total) 0)))
+                 (push (format "%s/%s: %d/%d(%.0f%%)" cat arch kept total (* 100 rate))
+                       persona-logs)))
+             gptel-ai-behaviors--persona-stats)
     (when logs
       (message "[model-evolve] %s" (mapconcat #'identity logs " | ")))
+    (when persona-logs
+      (message "[persona-evolve] %s" (mapconcat #'identity persona-logs " | ")))
     logs))
 
 (provide 'gptel-auto-experiment-ai-behaviors)

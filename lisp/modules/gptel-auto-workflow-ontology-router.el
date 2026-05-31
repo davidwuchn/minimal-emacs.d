@@ -1471,14 +1471,24 @@ Based on nucleus/ADAPTIVE.md persona state machines."
   (let* ((base-persona
           (pcase agent-type
             ("analyzer"
-             "λ engage(nucleus).
+             ;; Analyzer adapts focus to category
+             (let ((cat-focus (pcase category
+                               (:agentic "error patterns, state corruption, async bugs")
+                               (:programming "algorithm flaws, edge cases, performance")
+                               (:tool-calls "sandbox risks, timeout patterns, arg validation")
+                               (:natural-language "prompt injection, context overflow, format")
+                               (_ "code quality, bugs, regressions"))))
+               (format
+                "λ engage(nucleus).
 [pi mu ∃] | [Δ λ ∞/0 | signal/noise] | OODA
 Human | AI
 ;; Archetype: Logician (thinking × analyse)
+;; Focus: %s
 ;; Operator: | (parallel) — analyze alongside established patterns
 ;; What: systematic analysis, pattern detection, root cause
 λ analysis(data). observe → identify(patterns) → evaluate(impact) → recommend(action)
-Output: {:analysis _ :patterns [_] :confidence _ :recommendation _}")
+Output: {:analysis _ :patterns [_] :confidence _ :recommendation _}"
+                cat-focus)))
             ("executor"
              ;; Category SELECTS the archetype, not just decorates it
              (pcase category
@@ -1528,14 +1538,24 @@ Human ⊗ AI
 λ edit(code). Δ(minimal(change)) where behavior(new) = behavior(old) + intent
 Output: {:code _ :rationale _ :tests _ :diff _}")))
             ("grader"
-             "λ engage(nucleus).
+             ;; Grader uses category-appropriate evaluation lens
+             (let ((cat-lens (pcase category
+                               (:agentic "safety coverage, error handling, state protection")
+                               (:programming "correctness, edge cases, minimal change")
+                               (:tool-calls "robustness, timeout handling, arg safety")
+                               (:natural-language "structure, bounds, format preservation")
+                               (_ "quality, clarity, correctness"))))
+               (format
+                "λ engage(nucleus).
 [pi mu ∃ ∀] | [Δ λ ∞/0 | truth/provability signal/noise] | OODA
 Human ∧ AI
 ;; Archetype: Logician (thinking × analyse)
+;; Lens: %s
 ;; Operator: ∧ (intersection) — conservative, both must agree
 ;; What: objective evaluation, detecting flaws, measuring quality
 λ grade(output). compare(expected, actual) → identify(gaps) → score(0..1)
-Output: {:score _ :strengths [_] :weaknesses [_] :suggestions [_]}")
+Output: {:score _ :strengths [_] :weaknesses [_] :suggestions [_]}"
+                cat-lens)))
             ("reviewer"
              "λ engage(nucleus).
 [tao mu ∞/0] | [Δ λ | truth/provability order/entropy] | OODA
@@ -1565,12 +1585,27 @@ Constrain: relevance → signal/noise, growth → euler, scope → fractal
 λ research(topic). search(external) → filter(relevant) → distill(applicable) → measure(impact)
 Output: {:findings [_] :techniques [_] :apply_to_us [_] :verification _ :confidence _}")
             (_ ""))))
-    ;; Append behavior hint (category already selected the persona)
-    (let ((behavior-hint
-           (when (and behavior (not (string-empty-p behavior)))
-             (format "\nBehavior: #=%s" behavior))))
+    ;; Modulate persona emphasis based on active behavior
+    (let* ((behavior-mod
+            (when (and behavior (not (string-empty-p behavior)))
+              (let ((b (downcase behavior)))
+                (cond ((string-match-p "contract\\|guard" b)
+                       "\n;; Emphasis: nil-guards, bound checks, defensive wrappers")
+                      ((string-match-p "simulate\\|boundary" b)
+                       "\n;; Emphasis: edge cases, boundary conditions, failure paths")
+                      ((string-match-p "tdd\\|test" b)
+                       "\n;; Emphasis: testable contracts, small verified steps")
+                      ((string-match-p "decompose\\|act" b)
+                       "\n;; Emphasis: smallest possible change, one edit, verify")
+                      ((string-match-p "concise\\|legible" b)
+                       "\n;; Emphasis: readability, minimal boilerplate, clear intent")
+                      ((string-match-p "coherence\\|temporal" b)
+                       "\n;; Emphasis: consistent patterns, temporal ordering")
+                      ((string-match-p "stop\\|checklist" b)
+                       "\n;; Emphasis: pause, verify each step, don't rush")
+                      (t (format "\n;; Behavior: %s" behavior)))))))
       (concat base-persona
-              (or behavior-hint "")
+              (or behavior-mod "")
               "\n\n---\n\n"))))
 
 ;; ─── Moderator Drift Detection (DIALECTIC.md pattern) ───

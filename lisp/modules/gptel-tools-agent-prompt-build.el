@@ -1762,6 +1762,13 @@ Captures executor reasoning from the dynamic variable
            (gptel-ai-behaviors--record-model
             category "executor" (plist-get experiment :model) kept
             (or active-effort "default"))))
+       ;; Track persona archetype effectiveness per category
+       (when (and category (fboundp 'gptel-ai-behaviors--record-persona))
+         (let ((archetype (pcase category
+                            (:agentic "Guardian") (:programming "Craftsman")
+                            (:tool-calls "Engineer") (:natural-language "Writer")
+                            (_ "Craftsman"))))
+           (gptel-ai-behaviors--record-persona category archetype kept)))
        ;; Track per-subagent consecutive failures for bump-model
        (when category
          (if kept
