@@ -733,15 +733,17 @@ Also removes old conflicting :override advice if present."
 (defun gptel-auto-workflow--advice-task-overlay-buffer (orig-fun where &optional agent-type description)
   "Ensure overlay is created in the correct buffer.
 ORIG-FUN is the original function. WHERE is position/marker.
-Gets target buffer from gptel-fsm-info and creates overlay there."
-  (let* ((fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
+Gets target buffer from gptel-fsm-info and creates overlay there.
+Guards against nil/bad WHERE that would crash goto-char."
+  (let* ((safe-where (if (number-or-marker-p where) where (point-min)))
+         (fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
          (info (and fsm (fboundp 'gptel-fsm-info) (gptel-fsm-info fsm)))
          (valid-info (and (proper-list-p info) info))
          (target-buf (and valid-info (plist-get valid-info :buffer))))
     (if (and target-buf (buffer-live-p target-buf))
         (with-current-buffer target-buf
-          (funcall orig-fun where agent-type description))
-      (funcall orig-fun where agent-type description))))
+          (funcall orig-fun safe-where agent-type description))
+      (funcall orig-fun safe-where agent-type description))))
 
 (defun gptel-auto-workflow--enable-overlay-buffer-advice ()
   "Enable advice to route overlays to correct buffer."
