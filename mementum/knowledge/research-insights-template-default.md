@@ -70,78 +70,58 @@ These targets may need different research patterns or the research findings were
 
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*5 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Distilled Research Strategy
+**Research Strategy: Template-Default**
 
-## Scope
-- **65 experiments** across **10 targets**
-- Primary file: `gptel-auto-workflow-research-integration.el`
+**Scope:** 107 experiments across 11 targets spanning code modules and staging projects.
 
-## Kept Hypotheses
+**Targets:**
+- Core modules: `gptel-ext-tool-permits.el`, `gptel-benchmark-analysis.el`, `gptel-benchmark-subagent.el`, `gptel-tools-agent-error.el`, `gptel-tools-agent-prompt-build.el`, `gptel-auto-workflow-strategic.el`, `gptel-auto-workflow-projects.el`
+- Supporting: `gptel-benchmark-comparator.el`
+- Projects: `staging-review`, `test`
 
-| ID | Hypothesis | Targets | Benefits |
-|----|-----------|---------|----------|
-| 1 | Add idempotency guard to prevent re-adding active advice + extract symmetric disable function | workflow modules | φ Vitality, fractal Clarity |
-| 2 | Fix misleading message + add directory existence validation | workflow modules | Bug fix |
-| 3 | Change `eq` → `equal` for cache comparison; check cache before `ensure-buffer-tables` | `gptel-auto-workflow-projects` | Vitality (adapts to usage), Clarity (explicit assumption: content-based invalidation) |
-| 4 | Extract buffer lookup into validation sequence with explicit nil guards | workflow modules | Clarity (visible assumptions), Vitality (graceful FSM handling) |
-| 5 | Add `ignore-errors` around `file-attributes` + early guard for empty projects | workflow modules | Vitality (edge cases), Clarity (explicit validity assumptions) |
-| 6 | Replace `format-mode-line` with direct `mode-name` + `when` instead of `if` | workflow modules | Clarity (removes complexity) |
-| 7 | Filter `not-applicable` entries before sorting in scoring function | `gptel-benchmark-eight-keys-weakest` | Clarity (explicit filtering), Vitality (prevents runtime crash from latent bug) |
+**Kept Hypothesis:**
+- Improve function `gptel-auto-workflow-list-project-buffers`
 
-## Discarded Hypotheses
-- *(None explicitly listed as discarded)*
+**Discarded:**
+- All prior hypotheses (insufficient evidence or falsified)
 
-## Key Insight
-Staging experiments: **staging-verification → staging-merge → staging-review** (sequential pipeline)
+**Status:** Iteration-based experimentation continues across all targets; focused optimization on `gptel-auto-workflow-list-project-buffers`.
 ```
 
 ### Check Issues
 
-# Review: Distilled Research Strategy
+# Research Strategy Review
 
 ## Observations
 
 **Strengths:**
-- Clear hypothesis structure with traceable benefits
-- Sequential staging pipeline is a good abstraction
-- Benefits are categorized (Vitality, Clarity)
+- Clear scope definition (107 experiments, 11 targets)
+- Focused hypothesis on single function (`gptel-auto-workflow-list-project-buffers`)
+- Explicit documentation of what was discarded and why
+- Iterative approach with ongoing experimentation
 
-**Issues/Gaps:**
+**Potential Concerns:**
 
-| Issue | Detail |
-|-------|--------|
-| Scope mismatch | "65 experiments, 10 targets" but only 7 hypotheses listed — how does this scale? |
-| Vague targets | 5 of 7 hypotheses target "workflow modules" — which specific modules? |
-| Missing discards | Header exists but no discarded hypotheses documented |
-| φ symbol | Appears only in H1 — intentional or formatting error? |
+| Aspect | Question |
+|--------|----------|
+| Scope Creep | 107 experiments across 11 targets—any prioritization framework? |
+| Focus | Is narrowing to one function the right granularity given 11 targets? |
+| Evidence | What criteria determine "insufficient evidence" vs. falsified? |
+| Metrics | How is improvement measured for `gptel-auto-workflow-list-project-buffers`? |
 
 ## Suggestions
 
-1. **Clarify scaling** — How do 7 hypotheses produce 65 experiments? (A/B testing each? Multiple modules per hypothesis?)
+1. **Add success criteria**: What specific behavior change constitutes improvement?
+2. **Track experiment-to-hypothesis mapping**: Ensure experiments directly inform the focused hypothesis
+3. **Define stopping conditions**: When does iteration end?
 
-2. **Name the targets** — Replace "workflow modules" with actual module names:
-   ```
-   - gptel-auto-workflow-projects.el
-   - gptel-auto-workflow-context.el
-   - etc.
-   ```
+## Questions for Clarification
 
-3. **Document discards** — "None explicitly listed" suggests either:
-   - Everything was kept (unlikely)
-   - This section was forgotten
+- What does "improve" mean for the target function? (Performance? Correctness? Both?)
+- Are the 107 experiments equally distributed or stratified?
+- Any preliminary results indicating which direction shows promise?
 
-4. **Consistent benefit notation** — Either all hypotheses use φ notation or none
-
-5. **Staging pipeline** — Needs more detail:
-   - What triggers progression?
-   - What fails at each stage?
-   - How are rollbacks handled?
-
-## Questions
-
-- What defines an "experiment" vs. a "hypothesis"?
-- Are experiments run per-target or are some multi-target?
-- What's the acceptance criteria for moving through staging?
+Want me to dive deeper into any aspect of this strategy?

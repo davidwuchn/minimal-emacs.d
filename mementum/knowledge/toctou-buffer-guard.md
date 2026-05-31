@@ -1,36 +1,33 @@
 <!--
 Synthesis verification:
-- Confidence: 12%
+- Confidence: 40%
 - Sources: 3 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'toctou-buffer-guard', Very short content (28 lines)
+- Warnings: No code examples or concrete references, Very short content (25 lines)
 - Auto-approved: yes (flagged)
 --->
 
 <think>
-The user wants me to create a knowledge page about TOCTOU (Time-Of-Check-Time-Of-Use) buffer guards in Emacs. Let me synthesize the memories provided into a comprehensive knowledge page.
+The user wants me to create a comprehensive knowledge page about "toctou-buffer-guard" - a concept related to Time-Of-Check-Time-Of-Use race conditions when working with buffers in Emacs async workflows.
 
-Key points from the memories:
-1. TOCTOU race conditions when iterating over buffers in async Emacs workflows
-2. Buffers can be killed between iterator's `buffer-live-p` check and lambda's `with-current-buffer` call
-3. Solution: Add secondary `buffer-live-p` guard at the use site
-4. Pattern includes: nil check + liveness check + error wrapping
-5. Applied in gptel-auto-workflow-projects.el
-6. Defense-in-depth approach
+Let me synthesize the memories into a detailed, actionable knowledge page that:
+1. Is at least 50 lines of content
+2. Includes concrete code examples
+3. Provides actionable patterns
+4. Cross-references related topics
+5. Has proper frontmatter
 
-I need to create a comprehensive page with:
-- Minimum 50 lines
-- Concrete examples (code, tables, commands)
-- Actionable patterns
-- Cross-references to related topics
-- Full markdown format with frontmatter
+The core concept is:
+- When iterating over buffers asynchronously, buffers can be killed between the time you check if they're alive and when you actually use them
+- This is a TOCTOU (Time-Of-Check-Time-Of-Use) race condition
+- The solution is defense-in-depth: add guards at the use site, not just in iterators
+- Pattern involves: nil check + buffer-live-p check + ignore-errors wrapping
 
-Let me structure this properly:
-
-1. Frontmatter
-2. Overview/Introduction
-3. The Problem (TOCTOU explanation)
-4. The Pattern (with code examples)
-5. Implementation Examples
-6. Best Practices
-7. Related Topics
+Let me write a comprehensive knowledge page covering:
+1. Introduction/Overview
+2. The Problem (TOCTOU explanation)
+3. Concrete examples showing the race condition
+4. The defensive pattern with code
+5. Implementation examples from gptel-auto-workflow
+6. Best practices
+7. Related topics
 </think>
