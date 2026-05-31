@@ -840,14 +840,21 @@ into staging or main."
                         (not (string-empty-p gptel-auto-workflow--status-run-id))
                         gptel-auto-workflow--status-run-id)))))
     (when proj-root
+      (setq gptel-auto-workflow--cron-safe-step "reset-agent")
       (my/gptel--reset-agent-task-state)
+      (setq gptel-auto-workflow--cron-safe-step "clear-overrides")
       (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+      (setq gptel-auto-workflow--cron-safe-step "reset-mementum")
       (gptel-mementum--reset-synthesis-state)
+      (setq gptel-auto-workflow--cron-safe-step "reset-grade")
       (gptel-auto-experiment--reset-grade-state)
+      (setq gptel-auto-workflow--cron-safe-step "cancel-timer")
       (when gptel-auto-workflow--cron-job-timer
         (cancel-timer gptel-auto-workflow--cron-job-timer)
         (setq gptel-auto-workflow--cron-job-timer nil))
+      (setq gptel-auto-workflow--cron-safe-step "stop-refresh")
       (gptel-auto-workflow--stop-status-refresh-timer)
+      (setq gptel-auto-workflow--cron-safe-step "cleanup-worktrees")
       (gptel-auto-workflow--cleanup-old-worktrees)
       (dolist (timer (copy-sequence timer-list))
         (condition-case err
