@@ -1151,10 +1151,23 @@ Returns a compact lambda-notation string ready for the LLM."
       "| replace `(append (list a) (list b))` with `(list a b)`\n"
       "\nCRITICAL: Your code quality delta MUST be >= 0. If you break existing tests or decrease readability, you will be REJECTED.\n")))
 
-(defun gptel-auto-workflow--load-prompt-template ()
-  "Load prompt template from skill file.
-Returns template string or fallback hardcoded template."
-  (let ((skill-content (gptel-auto-workflow--load-skill-content "auto-workflow/prompt-template")))
+(defun gptel-auto-workflow--load-prompt-template (&optional target)
+  "Load prompt template from skill file, category-specific when TARGET provided.
+Returns template string or fallback hardcoded template.
+Uses ontology category to select the best template for TARGET."
+  (let* ((category (and target (fboundp 'gptel-auto-workflow--categorize-target)
+                       (gptel-auto-workflow--categorize-target target)))
+         (cat-name (pcase category
+                     (:programming "programming")
+                     (:agentic "agentic")
+                     (:tool-calls "tool-calls")
+                     (:natural-language "natural-language")
+                     (_ nil)))
+         (cat-template (when cat-name
+                         (gptel-auto-workflow--load-skill-content
+                          (format "auto-workflow/prompt-template-%s" cat-name))))
+         (skill-content (or (and cat-template (> (length cat-template) 0) cat-template)
+                           (gptel-auto-workflow--load-skill-content "auto-workflow/prompt-template"))))
     (if (> (length skill-content) 0)
         skill-content
       ;; Fallback: inline template (for bootstrapping)
@@ -1480,8 +1493,22 @@ Read ONE function. Edit ONE line. Verify. Done."))))
               (time-budget . ,(/ gptel-auto-experiment-time-budget 60))
               (focus-line . ,focus-line)
               (sexp-check-command . ,sexp-check-command))))
-      ;; EDN resolve: deterministic, no template substitution, no escaping
-      (gptel-auto-experiment--prompt-edn-resolve variables))))
+      ;; Try category-specific template first; fall back to EDN resolve
+      (let ((cat-template (gptel-auto-workflow--load-prompt-template target)))
+        (if (and cat-template (> (length cat-template) 100))
+            ;; Category template available: substitute variables
+            (let ((result cat-template))
+              (dolist (pair variables)
+                (let ((key (car pair))
+                      (val (cdr pair)))
+                  (setq result
+                        (replace-regexp-in-string
+                         (concat "{{" (symbol-name key) "}}")
+                         (if (stringp val) val (format "%s" val))
+                         result t t))))
+              result)
+          ;; Fallback: deterministic EDN resolve
+          (gptel-auto-experiment--prompt-edn-resolve variables))))))
 
 (defun gptel-auto-experiment--get-topic-knowledge (target)
   "Get compressed topic-specific knowledge for TARGET.
