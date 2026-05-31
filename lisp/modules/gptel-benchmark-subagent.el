@@ -419,7 +419,10 @@ Auto-applies LLM backend failover when current provider is rate-limited."
 (defun gptel-benchmark-call-subagent-sync (type description prompt &optional timeout)
   "Call subagent synchronously, returning result.
 TYPE, DESCRIPTION, PROMPT same as async version.
-TIMEOUT overrides default."
+TIMEOUT overrides default.
+Returns:
+- On success: the callback result
+- On timeout: (gptel-benchmark--timeout-sentinel TYPE DESCRIPTION)"
   (let ((result nil)
         (done nil)
         (deadline (+ (float-time) (or timeout gptel-benchmark-subagent-timeout))))
@@ -428,16 +431,30 @@ TIMEOUT overrides default."
      (lambda (r)
        (setq result r done t))
      timeout)
-      (let ((iters 0)
-            (max-iters 1200))
-        (while (and (not done)
-                    (< (float-time) deadline)
-                    (< (cl-incf iters) max-iters))
-          (sit-for 0.1))
-        (unless done
-          (message "[subagent] Timeout after %ds waiting for response"
-                   (or timeout gptel-benchmark-subagent-timeout))))
-    result))
+    (let ((iters 0)
+          (max-iters 1200))
+      (while (and (not done)
+                  (< (float-time) deadline)
+                  (< (cl-incf iters) max-iters))
+        (sit-for 0.1))
+      (unless done
+        (message "[subagent] Timeout after %ds waiting for response"
+                 (or timeout gptel-benchmark-subagent-timeout))))
+    (if done
+        result
+      (gptel-benchmark--timeout-sentinel type description))))
+
+(defun gptel-benchmark--timeout-sentinel (type description)
+  "Return a sentinel value for subagent timeout.
+Distinguishes timeout from nil response.
+TYPE: the subagent type symbol.
+DESCRIPTION: the task description."
+  (list 'gptel-benchmark-timeout type description))
+
+(defun gptel-benchmark--timeout-p (value)
+  "Return non-nil if VALUE is a timeout sentinel."
+  (and (consp value)
+       (eq (car value) 'gptel-benchmark-timeout)))
 
 ;;; Grader Subagent
 
