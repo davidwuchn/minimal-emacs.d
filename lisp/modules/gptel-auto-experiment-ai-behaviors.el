@@ -1028,11 +1028,38 @@ are weighted 50% less to avoid polluting the learning signal."
     (let* ((key (cons category archetype))
            (entry (gethash key gptel-ai-behaviors--persona-stats (cons 0 0)))
            (weight (if (bound-and-true-p gptel-ai-behaviors--exploration-tag) 0.5 1.0)))
-      ;; Use floating point for kept/total to support fractional weights
       (setf (car entry) (+ (car entry) (* (if kept 1 0) weight)))
       (setf (cdr entry) (+ (cdr entry) weight))
       (puthash key entry gptel-ai-behaviors--persona-stats))
     (setq gptel-ai-behaviors--exploration-tag nil)))
+
+(defvar gptel-ai-behaviors--combo-stats (make-hash-table :test 'equal)
+  "Hash: (category archetype hashtag) → (kept . total).
+Three-way tracking of persona × behavior × category outcomes.")
+
+(defun gptel-ai-behaviors--record-combo (category archetype hashtags kept)
+  "Record outcome for CATEGORY × ARCHETYPE × HASHTAGS triple.
+HASHTAGS is a space-separated string of hashtags."
+  (when (and category archetype hashtags)
+    (dolist (h (split-string hashtags))
+      (let* ((key (list category archetype h))
+             (entry (gethash key gptel-ai-behaviors--combo-stats (cons 0 0))))
+        (setf (car entry) (+ (car entry) (if kept 1 0)))
+        (setf (cdr entry) (1+ (cdr entry)))
+        (puthash key entry gptel-ai-behaviors--combo-stats)))))
+
+(defun gptel-ai-behaviors--best-combo (category)
+  "Return best (ARCHETYPE . HASHTAG) for CATEGORY with highest keep-rate."
+  (let ((best nil) (best-rate 0))
+    (maphash (lambda (key entry)
+               (when (eq (nth 0 key) category)
+                 (let ((kept (car entry)) (total (cdr entry))
+                       (rate (if (> total 0) (/ (float kept) total) 0)))
+                   (when (and (>= total 2) (> rate best-rate))
+                     (setq best (cons (nth 1 key) (nth 2 key)))
+                     (setq best-rate rate)))))
+             gptel-ai-behaviors--combo-stats)
+    best))
 (defun gptel-ai-behaviors--best-persona (category)
   "Return archetype with highest keep-rate for CATEGORY."
   (let ((best nil) (best-rate 0))
@@ -1239,8 +1266,8 @@ A model that keeps 50% at cost 1 is better than 60% at cost 3."
     0.0))
 
 (defun gptel-ai-behaviors--evolve-models ()
-  "Log per-category model+effort+persona performance each evolution cycle."
-  (let ((cats nil) (logs nil) (persona-logs nil))
+  "Log per-category model+effort+persona+combo performance each evolution cycle."
+  (let ((cats nil) (logs nil) (persona-logs nil) (combo-logs nil))
     (maphash
      (lambda (key _)
        (unless (memq (nth 0 key) cats)
@@ -1259,10 +1286,20 @@ A model that keeps 50% at cost 1 is better than 60% at cost 3."
                  (push (format "%s/%s: %d/%d(%.0f%%)" cat arch kept total (* 100 rate))
                        persona-logs)))
              gptel-ai-behaviors--persona-stats)
+    ;; Log three-way combo effectiveness
+    (maphash (lambda (key entry)
+               (let ((cat (nth 0 key)) (arch (nth 1 key)) (tag (nth 2 key))
+                     (kept (car entry)) (total (cdr entry))
+                     (rate (if (> total 0) (/ (float kept) total) 0)))
+                 (push (format "%s/%s/%s: %d/%d(%.0f%%)" cat arch tag kept total (* 100 rate))
+                       combo-logs)))
+             gptel-ai-behaviors--combo-stats)
     (when logs
       (message "[model-evolve] %s" (mapconcat #'identity logs " | ")))
     (when persona-logs
       (message "[persona-evolve] %s" (mapconcat #'identity persona-logs " | ")))
+    (when combo-logs
+      (message "[combo-evolve] %s" (mapconcat #'identity (seq-take combo-logs 5) " | ")))
     logs))
 
 (provide 'gptel-auto-experiment-ai-behaviors)

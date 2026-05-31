@@ -1799,9 +1799,14 @@ Captures executor reasoning from the dynamic variable
                                  (:agentic "Investigator") (:programming "Craftsman")
                                  (:tool-calls "Synthesizer") (:natural-language "Academic")
                                  (_ "Craftsman")))))
-           ;; Record actual archetype used (may differ from default due to self-evolution)
-           (gptel-ai-behaviors--record-persona category archetype kept)))
-       ;; Track per-subagent consecutive failures for bump-model
+            ;; Record actual archetype used (may differ from default due to self-evolution)
+            (gptel-ai-behaviors--record-persona category archetype kept))
+          ;; Record three-way combo: (category × archetype × hashtag) for integrated learning
+          (when (and (fboundp 'gptel-ai-behaviors--record-combo)
+                     gptel-ai-behaviors--current-hashtags)
+            (gptel-ai-behaviors--record-combo category archetype
+                                               gptel-ai-behaviors--current-hashtags kept)))
+        ;; Track per-subagent consecutive failures for bump-model
        (when category
          (if kept
              (when (fboundp 'gptel-ai-behaviors--reset-subagent-failures)
