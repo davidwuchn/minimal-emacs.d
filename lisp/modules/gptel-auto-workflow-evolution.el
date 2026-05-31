@@ -2808,7 +2808,11 @@ Pattern from Semantica PolicyEngine.check_compliance()."
       (when (and max-target (stringp target))
         (let ((count (cl-count-if (lambda (r) (equal (plist-get r :target) target)) results)))
           (when (> count max-target)
-            (push (format "Target '%s' has %d experiments (max %d)" target count max-target) errors))))
+            ;; Only report as violation if target is NOT already saturated
+            ;; (saturation preflight check independently blocks new experiments)
+            (unless (and (fboundp 'gptel-auto-workflow--target-saturated-p)
+                         (gptel-auto-workflow--target-saturated-p target max-target))
+              (push (format "Target '%s' has %d experiments (max %d)" target count max-target) errors)))))
       (when (and max-strategy (stringp strategy))
         (let ((count (cl-count-if (lambda (r) (equal (plist-get r :strategy) strategy)) results)))
           (when (> count max-strategy)
