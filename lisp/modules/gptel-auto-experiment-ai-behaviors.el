@@ -1009,6 +1009,20 @@ Returns first relevant code addition line, or nil."
         (truncate-string-to-width snippet 120 nil nil "...")))))
 
 ;; ─── Self-Evolving Model + Effort Selection ───
+;; Tracks consecutive failures per (category × subagent) for bump escalation
+(defvar gptel-ai-behaviors--subagent-failures (make-hash-table :test 'equal)
+  "Hash: (category . subagent) → consecutive-failure-count.")
+(defun gptel-ai-behaviors--record-subagent-failure (category subagent)
+  "Increment consecutive failure count for (CATEGORY × SUBAGENT).
+Returns current count after increment."
+  (let* ((key (cons category subagent))
+         (count (1+ (gethash key gptel-ai-behaviors--subagent-failures 0))))
+    (puthash key count gptel-ai-behaviors--subagent-failures)
+    count))
+(defun gptel-ai-behaviors--reset-subagent-failures (category subagent)
+  "Reset consecutive failure count for (CATEGORY × SUBAGENT) on success."
+  (let ((key (cons category subagent)))
+    (remhash key gptel-ai-behaviors--subagent-failures)))
 ;; Learns per (category × subagent) which (model variant × effort level)
 ;; produces the highest keep-rate. Auto-bumps stuck categories.
 ;; Maps to actual API: DeepSeek high→reasoning_effort"high", max→"max".
@@ -1040,23 +1054,28 @@ EFFORT defaults to \"default\" when not provided."
       (puthash key entry gptel-ai-behaviors--model-stats))))
 
 (defun gptel-ai-behaviors--best-model (category subagent &optional min-samples)
-  "Return best (MODEL . EFFORT) for CATEGORY+SUBAGENT (min MIN-SAMPLES, default 2)."
-  (let ((best nil) (best-rate 0))
+  "Return best (MODEL . EFFORT) for CATEGORY+SUBAGENT (min MIN-SAMPLES, default 2).
+Uses cost-adjusted keep-rate so cheaper models with similar performance win."
+  (let ((best nil) (best-rate 0) (best-cost-rate 0))
     (maphash
      (lambda (key entry)
        (when (and (eq (nth 0 key) category)
                   (eq (nth 1 key) subagent))
          (let* ((kept (car entry))
                 (total (cdr entry))
-                (rate (if (> total 0) (/ (float kept) total) 0)))
+                (model (nth 2 key))
+                (effort (nth 3 key))
+                (raw-rate (if (> total 0) (/ (float kept) total) 0))
+                (cost-rate (gptel-ai-behaviors--cost-adjusted-rate model effort kept total)))
            (when (and (>= total (or min-samples 2))
-                      (> rate best-rate))
-             (setq best (cons (nth 2 key) (nth 3 key)))
-             (setq best-rate rate)))))
+                      (> cost-rate best-cost-rate))
+             (setq best (cons model effort))
+             (setq best-rate raw-rate)
+             (setq best-cost-rate cost-rate)))))
      gptel-ai-behaviors--model-stats)
     (when best
-      (message "[model-select] Best for %s/%s: %s effort=%s (%.0f%%)"
-               category subagent (car best) (cdr best) (* 100 best-rate)))
+      (message "[model-select] Best for %s/%s: %s@%s (raw=%.0f%%, cost-adj=%.2f)"
+               category subagent (car best) (cdr best) (* 100 best-rate) best-cost-rate))
     best))
 
 (defun gptel-ai-behaviors--bump-model (category subagent consecutive-failures current-model &optional current-effort)
@@ -1105,17 +1124,28 @@ DeepSeek v4-pro: high/max map to reasoning_effort. Other models: nil (no effort 
   "Hash: (model effort) → (calls . total-cost-estimate).
 Used to normalize keep-rate by cost.")
 
+(defconst gptel-ai-behaviors--model-pricing
+  '(("deepseek-v4-flash" . 1)     ; ¥1/M input + ¥2/M output = ¥3 → base unit
+    ("deepseek-v4-pro" . 3)       ; ¥3/M inp + ¥6/M out = ¥9 (25% discount until 2026-05-31)
+    ("kimi-for-coding" . 3)       ; estimated ¥3/M
+    ("kimi-k2.6" . 6)             ; estimated ¥6/M (reasoning)
+    ("minimax-m2.7" . 2)          ; estimated ¥2/M
+    ("minimax-m2.7-highspeed" . 4)) ; estimated ¥4/M
+  "Relative cost multipliers per model from actual API pricing.
+Base unit = deepseek-v4-flash cost (¥3/M tokens).
+DeepSeek v4-pro discount (25%) ends 2026-05-31; full price = 12× flash.")
+
+(defun gptel-ai-behaviors--model-cost (model)
+  "Return estimated cost multiplier for MODEL."
+  (or (cdr (assoc model gptel-ai-behaviors--model-pricing :test 'string-match))
+      2))
+
 (defun gptel-ai-behaviors--record-cost (model effort &optional estimated-cost)
   "Record one API call for MODEL+EFFORT with ESTIMATED-COST.
-Default cost tiers: flash=1, pro=3, kimi-highspeed=2, k2.6=4, minimax-highspeed=2."
+Uses `gptel-ai-behaviors--model-pricing' when ESTIMATED-COST is nil."
   (when model
     (let* ((key (cons model (or effort "default")))
-           (cost (or estimated-cost
-                     (cond ((string-match-p "flash" model) 1)
-                           ((string-match-p "pro" model) 3)
-                           ((string-match-p "k2\\.6" model) 4)
-                           ((string-match-p "highspeed" model) 2)
-                           (t 2))))
+           (cost (or estimated-cost (gptel-ai-behaviors--model-cost model)))
            (entry (gethash key gptel-ai-behaviors--cost-stats (cons 0 0))))
       (setf (car entry) (1+ (car entry)))       ;; total calls
       (setf (cdr entry) (+ (cdr entry) cost))   ;; total estimated cost

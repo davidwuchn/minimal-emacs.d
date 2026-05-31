@@ -206,11 +206,11 @@ Auto-applies LLM backend failover when current provider is rate-limited."
               (bump-result
                (and category log-model
                     (fboundp 'gptel-ai-behaviors--bump-model)
-                    (fboundp 'gptel-auto-workflow--record-category-strike)
-                    ;; Use strike count as proxy for consecutive failures
-                    (let* ((strikes (and (boundp 'gptel-auto-workflow--category-strike-counts)
-                                        (assq category gptel-auto-workflow--category-strike-counts)))
-                           (count (if strikes (cadr strikes) 0)))
+                    ;; Use per-subagent failure count from ai-behaviors tracking
+                    (let* ((sub-key (cons category (intern agent-type)))
+                           (count (if (boundp 'gptel-ai-behaviors--subagent-failures)
+                                      (gethash sub-key gptel-ai-behaviors--subagent-failures 0)
+                                    0)))
                       (when (>= count 5)
                         (gptel-ai-behaviors--bump-model category (intern agent-type)
                                                         count log-model

@@ -1747,11 +1747,18 @@ Captures executor reasoning from the dynamic variable
                  (fboundp 'gptel-ai-behaviors--extract-diff-snippet)
                  gptel-ai-behaviors--current-hashtags
                   agent-output (> (length agent-output) 0))
-      ;; Record model performance for self-evolving model selection
-      (when (and category (fboundp 'gptel-ai-behaviors--record-model)
-                 (plist-get experiment :model))
-        (gptel-ai-behaviors--record-model
-         category "executor" (plist-get experiment :model) kept))
+       ;; Record model performance for self-evolving model+effort selection
+       (when (and category (fboundp 'gptel-ai-behaviors--record-model)
+                  (plist-get experiment :model))
+         (gptel-ai-behaviors--record-model
+          category "executor" (plist-get experiment :model) kept))
+       ;; Track per-subagent consecutive failures for bump-model
+       (when category
+         (if kept
+             (when (fboundp 'gptel-ai-behaviors--reset-subagent-failures)
+               (gptel-ai-behaviors--reset-subagent-failures category 'executor))
+           (when (fboundp 'gptel-ai-behaviors--record-subagent-failure)
+             (gptel-ai-behaviors--record-subagent-failure category 'executor))))
         (let* ((hashtag-str (format "%s" (car (split-string gptel-ai-behaviors--current-hashtags))))
                (snippet (gptel-ai-behaviors--extract-diff-snippet agent-output)))
           (when snippet
