@@ -790,13 +790,14 @@ Without PROJECT-ROOT, clears overlays for all projects."
   (let ((buffers nil))
     (gptel-auto-workflow--iterate-project-buffers
      (lambda (root buf)
-       (let ((mode (with-current-buffer buf
-                     (format-mode-line mode-name))))
-         (push (format "%s -> %s [%s]"
-                       root
-                       (buffer-name buf)
-                       (or mode "unknown"))
-               buffers))))
+       (ignore-errors
+         (let ((mode (with-current-buffer buf
+                       (format-mode-line mode-name))))
+           (push (format "%s -> %s [%s]"
+                         root
+                         (buffer-name buf)
+                         (or mode "unknown"))
+                 buffers))))
     (if buffers
         (let ((sorted (sort buffers #'string<)))
           (message "Project buffers (%d):\n%s"

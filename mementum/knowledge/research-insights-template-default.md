@@ -170,69 +170,81 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy Distillation
+# Research Strategy: Template-Default (Distilled)
 
-**Strategy**: template-default
-**Scope**: 66 experiments across 14 targets
-
----
-
-## Outcome: All Hypotheses Discarded
-
-No hypotheses were retained after evaluation.
+**Scope:** 71 experiments across 15 targets (lisp modules + staging areas)
 
 ---
 
-## Discarded Hypothesis Summary
+## Discarded Hypotheses (15 total)
 
-| Category | Count | Focus |
-|----------|-------|-------|
-| Performance (B) | 3 | Memoization of `project-current`, `file-directory-p` checks, hash-table allocation |
-| Clarity | 3 | Argument order bug, race condition fix, misleading indentation |
-| Vitality | 2 | Nil guards, empty result caching, file validation |
+### Performance Optimizations ❌
+- **Memoize `nucleus--project-root`** — avoids repeated `(project-current nil)` calls
+- **Memoize path resolvers** (`prompts-dir`, `agents-dir`, `tool-prompts-dir`) — eliminates redundant `file-directory-p` I/O
+- **Cache directory resolution** in `nucleus-prompts.el` — paths stable within session
+
+### Error Resilience ❌
+- **Nil guard + `file-readable-p`** validation for `nucleus--read-file`
+- **Empty status-lines guard** in `gptel-auto-workflow-research-status-all`
+
+### Bug Fixes ❌
+- **Argument order fix** in `nucleus--validate-contract` — error messages misidentified arg name vs tool name
+- **Race condition fix** in `nucleus-sync-tool-profile` — buffer captured at fire time vs creation time in idle timer lambda
+
+### Code Clarity ❌
+- **Remove redundant `consp`/`keywordp` checks** — encoded in `inner-ht`; move `make-hash-table` inside guard; replace `condition-case nil` with `ignore-errors`
+- **Fix misleading indentation** in `gptel-auto-workflow-run-all-projects` and `gptel-auto-workflow--get-worktree-buffer`
 
 ---
 
-**Key Pattern**: Hypotheses targeted:
-- **Redundant computation** (filesystem checks, project lookups)
-- **Error resilience** (nil guards, file validation)
-- **Code readability** (indentation, argument ordering)
-
-All were evaluated and set aside.
+## Kept Hypotheses
+*None recorded*
 ```
 
 ### Check Issues
 
-# Review of Research Strategy Distillation
+# Review of Research Strategy Document
 
 ## Observations
 
-| Aspect | Status |
-|--------|--------|
-| Coverage | 66 experiments, 14 targets |
-| Retention | 0% (0/66 hypotheses kept) |
-| Category distribution | 3 categories, 8 total items |
+### Issue: Count Mismatch
+The header states **"15 total"** discarded hypotheses, but only **9** are listed. This needs clarification:
+- 3 (Performance) + 2 (Error Resilience) + 2 (Bug Fixes) + 2 (Code Clarity) = **9 total**
 
-## Assessment
+### Missing Context
+The document lacks:
+- **Why** each hypothesis was discarded
+- **What evidence** led to rejection
+- **Outcome**: Did the project succeed despite discarding these?
 
-**Balanced category spread** — Performance, Clarity, and Vitality each targeted, avoiding bias toward any single dimension.
+### Questionable "Kept Hypotheses"
+The "None recorded" under kept hypotheses seems incomplete—either:
+1. All hypotheses failed (worth stating explicitly)
+2. Kept hypotheses exist but weren't documented
+3. This is an interim status report
 
-**Common failure patterns** (hypotheses discarded):
-- Memoization candidates often had lower hit rates than expected
-- Nil guard insertions introduced unnecessary branching overhead
-- Indentation/ordering fixes deemed cosmetic rather than functional
+## Suggestions
 
-## Questions
-
-1. **What retention threshold was used?** (e.g., >5% improvement required?)
-2. **Were any hypotheses "near-miss"** (close to threshold but not quite)?
-3. **Why zero retention across all 66?** — Unusually high rejection rate; worth examining evaluation criteria.
+| Element | Current State | Recommended |
+|---------|--------------|-------------|
+| Count | 9 listed / 15 claimed | Fix or document missing 6 |
+| Disposition | ❌ only | Add brief reason (e.g., "unnecessary", "caused regressions") |
+| Kept section | Empty | Either remove or mark "In Progress" / "All rejected" |
+| Purpose | Unclear | Add 1-sentence goal (e.g., "diagnose XYZ bug") |
 
 ## Verdict
 
-Data is internally consistent but the 0% retention rate warrants scrutiny of the evaluation methodology.
+**Document is incomplete/misleading** as written. The 15 vs 9 discrepancy and empty "Kept" section suggest this is a draft or scratchpad rather than finalized research documentation.

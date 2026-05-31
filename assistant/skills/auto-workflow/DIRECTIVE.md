@@ -21,8 +21,8 @@ total-kept: 10
 | `lisp/modules/gptel-ext-tool-permits.el` | 25% | 12 | 3 | 🟡 Active |
 | `lisp/modules/gptel-tools-agent-runtime.el` | 25% | 4 | 1 | 🟡 Active |
 | `lisp/modules/gptel-benchmark-core.el` | 20% | 10 | 2 | 🟡 Active |
-| `lisp/modules/gptel-auto-workflow-projects.el` | 6% | 17 | 1 | ❌ Plateaued |
-| `lisp/modules/gptel-tools-memory.el` | 6% | 18 | 1 | ❌ Plateaued |
+| `lisp/modules/gptel-tools-memory.el` | 6% | 17 | 1 | ❌ Plateaued |
+| `lisp/modules/gptel-auto-workflow-projects.el` | 5% | 20 | 1 | ❌ Plateaued |
 | `lisp/modules/gptel-tools-agent-prompt-build.el` | 5% | 20 | 1 | ❌ Plateaued |
 | `lisp/modules/nucleus-tools-validate.el` | 0% | 6 | 0 | ❌ Plateaued |
 | `lisp/modules/gptel-benchmark-tests.el` | 0% | 6 | 0 | ❌ Plateaued |
@@ -35,10 +35,10 @@ total-kept: 10
 
 - **How it works** (38× from mementum)
 - **Apply to us** (36× from mementum)
+- **manual-fix** (28× from git)
 - **Application for us** (24× from mementum)
 - **Source type** (24× from mementum)
 - **Description** (24× from mementum)
-- **manual-fix** (24× from git)
 - **Application** (21× from mementum)
 - **Symbolic Attention Magnets** (20× from mementum)
 
@@ -57,9 +57,9 @@ total-kept: 10
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (128×): Investigate root cause
-- **validation-failed** (16×): Improve pre-grade validation prompts
-- **timeout** (14×): Add smaller batch sizes or chunked processing
+- **other** (127×): Investigate root cause
+- **validation-failed** (20×): Improve pre-grade validation prompts
+- **timeout** (16×): Add smaller batch sizes or chunked processing
 - **api-limit** (14×): Implement provider fallback or rate limit handling
 - **test-failure** (4×): Run tests before committing experiments
 
@@ -82,8 +82,8 @@ total-kept: 10
 - **lisp/modules/gptel-benchmark-comparator.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 33%)
 - **lisp/modules/gptel-ext-tool-permits.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 25%)
 - **lisp/modules/gptel-tools-agent-runtime.el**: Apply Replace verbose prompts with compressed mathematical notation using λ calculus and EDN statecharts. (keep rate: 25%)
-- **lisp/modules/gptel-auto-workflow-projects.el**: Try validation guards or error handling improvements (previous experiments discarded)
 - **lisp/modules/gptel-tools-memory.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-auto-workflow-projects.el**: Try validation guards or error handling improvements (previous experiments discarded)
 
 ## Immutable Files
 
@@ -109,4 +109,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 870 experiments (10 kept locally across 176 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 870 experiments (10 kept locally across 182 local records). It evolves every self-evolution cycle.*
