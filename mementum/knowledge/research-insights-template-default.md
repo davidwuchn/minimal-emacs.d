@@ -70,60 +70,78 @@ These targets may need different research patterns or the research findings were
 
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*5 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy Distillation
+# Distilled Research Strategy
 
-## Summary
-- **Strategy:** template-default
-- **Experiments conducted:** 65 across 13 targets
-- **Hypotheses kept:** 0
-- **Hypotheses discarded:** 3
+## Scope
+- **65 experiments** across **10 targets**
+- Primary file: `gptel-auto-workflow-research-integration.el`
+
+## Kept Hypotheses
+
+| ID | Hypothesis | Targets | Benefits |
+|----|-----------|---------|----------|
+| 1 | Add idempotency guard to prevent re-adding active advice + extract symmetric disable function | workflow modules | φ Vitality, fractal Clarity |
+| 2 | Fix misleading message + add directory existence validation | workflow modules | Bug fix |
+| 3 | Change `eq` → `equal` for cache comparison; check cache before `ensure-buffer-tables` | `gptel-auto-workflow-projects` | Vitality (adapts to usage), Clarity (explicit assumption: content-based invalidation) |
+| 4 | Extract buffer lookup into validation sequence with explicit nil guards | workflow modules | Clarity (visible assumptions), Vitality (graceful FSM handling) |
+| 5 | Add `ignore-errors` around `file-attributes` + early guard for empty projects | workflow modules | Vitality (edge cases), Clarity (explicit validity assumptions) |
+| 6 | Replace `format-mode-line` with direct `mode-name` + `when` instead of `if` | workflow modules | Clarity (removes complexity) |
+| 7 | Filter `not-applicable` entries before sorting in scoring function | `gptel-benchmark-eight-keys-weakest` | Clarity (explicit filtering), Vitality (prevents runtime crash from latent bug) |
 
 ## Discarded Hypotheses
+- *(None explicitly listed as discarded)*
 
-| # | Discarded Change | Claimed Benefit |
-|---|------------------|-----------------|
-| 1 | Remove redundant type checks; move `make-hash-table` inside guard; replace `condition-case` with `ignore-errors` | Reduces allocation, improves clarity |
-| 2 | Add nil guard for empty `status-lines` | Improves error resilience, explicit edge case handling |
-| 3 | Fix misleading indentation in two functions | Improves code structure accuracy (fractal clarity) |
-
-## Interpretation
-All three discarded hypotheses were clarity/maintenance improvements targeting specific anti-patterns or visual misalignments. No hypotheses survived the research process, suggesting either:
-- The proposed changes were unnecessary after deeper analysis
-- The experiments did not validate the claimed benefits
-- Project-specific constraints outweighed the generic improvements
+## Key Insight
+Staging experiments: **staging-verification → staging-merge → staging-review** (sequential pipeline)
 ```
 
 ### Check Issues
 
-# Review: Research Strategy Distillation
-
-## Internal Consistency ✓
-| Metric | Value | Status |
-|--------|-------|--------|
-| Experiments | 65 | Reasonable sample |
-| Targets | 13 | ~5 experiments/target average |
-| Discarded | 3 | Coherent with "kept: 0" |
-| Kept | 0 | Consistent pattern |
+# Review: Distilled Research Strategy
 
 ## Observations
 
-**Reasonable outcome.** Zero survival rate after 65 experiments suggests either:
-1. Strong baseline implementation
-2. Strict validation criteria
-3. Proposed changes addressed non-problems
+**Strengths:**
+- Clear hypothesis structure with traceable benefits
+- Sequential staging pipeline is a good abstraction
+- Benefits are categorized (Vitality, Clarity)
 
-**Hypothesis quality:**
-- Hypothesis 1 is aggressive—removing `condition-case` for `ignore-errors` loses structured error handling (loss of control flow visibility)
-- Hypotheses 2 & 3 are maintenance-level (defensive coding, cosmetic)
+**Issues/Gaps:**
 
-## Minor Issue
+| Issue | Detail |
+|-------|--------|
+| Scope mismatch | "65 experiments, 10 targets" but only 7 hypotheses listed — how does this scale? |
+| Vague targets | 5 of 7 hypotheses target "workflow modules" — which specific modules? |
+| Missing discards | Header exists but no discarded hypotheses documented |
+| φ symbol | Appears only in H1 — intentional or formatting error? |
 
-The "Claimed Benefit" column frames these as *improvements*, but none are performance claims. The interpretation correctly notes they target clarity/maintenance.
+## Suggestions
 
-**Would you like me to:**
-- Analyze the discarded hypotheses in more detail?
-- Suggest alternative refactoring directions?
-- Review the underlying code if available?
+1. **Clarify scaling** — How do 7 hypotheses produce 65 experiments? (A/B testing each? Multiple modules per hypothesis?)
+
+2. **Name the targets** — Replace "workflow modules" with actual module names:
+   ```
+   - gptel-auto-workflow-projects.el
+   - gptel-auto-workflow-context.el
+   - etc.
+   ```
+
+3. **Document discards** — "None explicitly listed" suggests either:
+   - Everything was kept (unlikely)
+   - This section was forgotten
+
+4. **Consistent benefit notation** — Either all hypotheses use φ notation or none
+
+5. **Staging pipeline** — Needs more detail:
+   - What triggers progression?
+   - What fails at each stage?
+   - How are rollbacks handled?
+
+## Questions
+
+- What defines an "experiment" vs. a "hypothesis"?
+- Are experiments run per-target or are some multi-target?
+- What's the acceptance criteria for moving through staging?

@@ -85,11 +85,12 @@ ARGS are passed to `gptel-make-openai'."
     :endpoint "/chat/completions"
     :key (lambda () (my/gptel-api-key "api.deepseek.com"))
     :stream t
-     :models '((deepseek-v4-flash
-                :request-params (:thinking (:type "enabled")))
-               (deepseek-v4-pro
-                :request-params (:thinking (:type "enabled")
-                                 :reasoning_effort "high")))))
+    :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
+    :models '((deepseek-v4-flash
+               :request-params (:thinking (:type "enabled")))
+              (deepseek-v4-pro
+               :request-params (:thinking (:type "enabled")
+                                :reasoning_effort "high")))))
 
 (defvar gptel--cf-gateway
   (gptel-make-openai "CF-Gateway"
