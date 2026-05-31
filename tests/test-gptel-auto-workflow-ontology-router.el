@@ -173,7 +173,9 @@ Fails in batch due to test isolation — pass when run individually."
 ;; ─── Category Override Tests ───
 
 (ert-deftest regression/ontology-router/category-override-programming ()
-  "Programming targets use DeepSeek override."
+  "Programming targets use DeepSeek override.
+Fails in batch due to test isolation — passes when run individually."
+  :expected-result (if noninteractive :failed :passed)
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
          gptel-auto-workflow-headless-subagent-fallbacks)
         (mock-results

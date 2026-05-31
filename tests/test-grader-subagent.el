@@ -497,7 +497,6 @@ Result: Tests pass."))
 
 (ert-deftest grader/experiment-timeout-default ()
   "Default experiment time budget should be 300s (reduced from 900 for faster failure)."
-  :expected-result (if noninteractive :failed :passed)
   (require 'gptel-tools-agent)
   (should (= gptel-auto-experiment-time-budget 300)))
 

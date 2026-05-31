@@ -34,9 +34,9 @@
   (should (= gptel-auto-workflow-max-research-turns 3)))
 
 (ert-deftest test-strategic/analyzer-time-budget-default ()
-  "Analyzer time budget should default to 240.
-Increased from 120 because DeepSeek thinking mode slows responses."
-  (should (= gptel-auto-workflow-analyzer-time-budget 240)))
+  "Analyzer time budget should default to 180.
+Reduced from 240 — let it fail fast and fall back to faster backends."
+  (should (= gptel-auto-workflow-analyzer-time-budget 180)))
 
 ;;; Research trace tests
 
