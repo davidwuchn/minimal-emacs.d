@@ -1063,7 +1063,9 @@ Returns a compact lambda-notation string ready for the LLM."
           (cross (cdr (assoc 'cross-target-patterns vars)))
          (strat-f (cdr (assoc 'strategy-frontier vars)))
          (agent-b (cdr (assoc 'agent-behavior vars)))
-         (val-pipe (cdr (assoc 'validation-pipeline vars))))
+          (val-pipe (cdr (assoc 'validation-pipeline vars)))
+          (mode-c (cdr (assoc 'mode-context vars)))
+          (behav (cdr (assoc 'behavior-axes vars))))
     (concat
      ;; HEADER
      (format "λ experiment(%s). id=%d/%d budget=%smin path=%s/%s\nbaseline(8keys): %s"
@@ -1077,7 +1079,8 @@ Returns a compact lambda-notation string ready for the LLM."
      ;; ONTOLOGY FRAME (harness — structures the action space first)
      (if onto-g (concat "CATEGORY: " onto-g "\n") "")
      (if act-s (concat act-s "\n") "")
-     (when (or onto-g act-s) "\n")
+     (if mode-c (concat mode-c "\n") "")
+     (if behav (concat behav "\n") "")
      ;; CONTEXT (what you know about this target)
      (if persona (concat "PERSONA: " persona "\n") "")
      (if skills (concat "SKILLS: " skills "\n") "")
@@ -1366,6 +1369,10 @@ Implements section-level A/B testing to identify effective prompt components."
                (ontology-guidance . ,(gptel-auto-experiment--format-ontology-guidance target))
                (action-schema . ,(if (fboundp 'gptel-auto-workflow--format-schema-guidance)
                                      (gptel-auto-workflow--format-schema-guidance target) ""))
+               (mode-context . ,(if (fboundp 'gptel-auto-experiment--format-mode-context)
+                                    (gptel-auto-experiment--format-mode-context target) ""))
+               (behavior-axes . ,(if (fboundp 'gptel-auto-experiment--format-behavior-axes)
+                                     (gptel-auto-experiment--format-behavior-axes target) ""))
               (strategy-frontier . ,(if (fboundp 'gptel-auto-workflow--format-strategy-frontier)
                                         (gptel-auto-workflow--format-strategy-frontier)
                                       ""))
@@ -2890,6 +2897,33 @@ axes from kept experiments across the category."
                                  success-axes "\n"))
               parts))
       (mapconcat #'identity (nreverse parts) "\n"))))
+
+(defun gptel-auto-experiment--format-mode-context (target)
+  "Format operating mode context (ai-behaviors inspired)."
+  (when (and target (fboundp 'gptel-auto-workflow--categorize-target))
+    (let ((category (gptel-auto-workflow--categorize-target target)))
+      (concat "MODE: #=code\n"
+              "  Phase: implement — previous analysis done, grader follows\n"
+              "  Role: write production code. Change ONLY what's needed.\n"
+              (pcase category
+                (:agentic "  ⊣ #contract #checklist\n")
+                (:programming "  ⊣ #subtract #concrete\n")
+                (:tool-calls "  ⊣ #defensive #boundary\n")
+                (:natural-language "  ⊣ #coherence #depth\n")
+                (_ ""))
+              "  HARD CONSTRAINT: Δ(code) ∧ ¬reformat ∧ ¬comment_only\n"))))
+
+(defun gptel-auto-experiment--format-behavior-axes (target)
+  "Format orthogonal behavior axes (ai-behaviors inspired)."
+  (when (and target (fboundp 'gptel-auto-workflow--categorize-target))
+    (let ((category (gptel-auto-workflow--categorize-target target)))
+      (concat "AXES:\n"
+              (pcase category
+                (:agentic "  #validate #orchestrate #contract\n")
+                (:programming "  #optimize #subtract #concrete\n")
+                (:tool-calls "  #defensive #boundary #robust\n")
+                (:natural-language "  #coherence #depth #concrete\n")
+                (_ ""))))))
 
 (defun gptel-auto-experiment--format-failure-patterns (target)
   "Format common failure patterns for TARGET as prompt guidance.
