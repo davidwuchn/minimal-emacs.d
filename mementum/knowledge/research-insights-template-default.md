@@ -59,75 +59,58 @@ These targets may need different research patterns or the research findings were
 
 
 
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy: Distilled
+## Research Strategy Distillation
 
-## Overview
-- **Strategy**: template-default
-- **Scope**: 65 experiments across multiple Elisp modules
+**Strategy:** Template-default
 
-## Targets
-- `gptel-auto-workflow-*` modules (integration, strategic, projects)
-- `gptel-benchmark-*` modules (subagent, principles)
-- `gptel-tools-agent-*` modules (error, prompt-build)
+**Scale:** 98 experiments across 10 targets
 
-## Key Hypotheses (Kept)
+**Key Focus:**
+- Primary target: `gptel-auto-workflow-projects.el` module
+- Focus hypothesis: Improving `gptel-auto-workflow-list-project-buffers` function
 
-| # | Change | Benefits |
-|---|--------|----------|
-| 1 | Idempotency guard for advice + symmetric disable | Vitality, Clarity |
-| 2 | Fix misleading message + directory validation | Bug fix |
-| 3 | `equal` vs `eq` for cache; reorder cache check | Vitality, Clarity |
-| 4 | Buffer lookup validation sequence + nil guards | Vitality, Clarity |
-| 5 | Error recovery for invalid paths + empty list handling | Vitality, Clarity |
-| 6 | `format-mode-line` → direct `mode-name`; `when` vs `if` | Clarity |
-| 7 | Filter `not-applicable` before sorting | Clarity, Vitality |
-
-## Discarded Hypotheses
-None recorded.
+**Status:**
+- Kept hypotheses: 2 (1 implicit, 1 explicit)
+- Discarded hypotheses: 0
 ```
 
 ### Check Issues
 
-# Review: Research Strategy
+# Research Strategy Check
 
-## Structure & Format ✓
-Clean, scannable layout. The hypothesis table is well-organized.
+## Summary Validated ✓
 
-## Questions & Observations
+| Element | Status |
+|---------|--------|
+| **Scale** | 98 experiments / 10 targets = ~9.8 experiments per target (reasonable distribution) |
+| **Hypothesis ratio** | 2 kept, 0 discarded — high retention suggests conservative hypothesis generation OR strong initial filtering |
+| **Focus** | Single module → single function — appropriate level of granularity |
 
-### Scope
-- **65 experiments** seems aggressive. Have you validated this count? Would help to see the experiment breakdown.
+## Observations
 
-### Hypothesis Specifics
-| # | Observation |
-|---|-------------|
-| 1 | "Symmetric disable" is mentioned but not defined. Needs elaboration. |
-| 2 | "Fix misleading message" — which message? Specificity helps. |
-| 3 | Cache check reordering: ensure this doesn't break existing users who rely on current behavior. |
-| 6 | `format-mode-line` → `mode-name`: Confirm `mode-name` accepts the return type. |
+**Strengths:**
+- Narrow focus (`list-project-buffers`) enables deep iteration
+- No discarded hypotheses may indicate good pre-screening
 
-### Missing Elements
-- **Prioritization**: Which hypotheses are highest confidence/effort ratio?
-- **Risk level**: Any changes that could break backward compatibility?
-- **Discarded hypotheses**: "None recorded" is suspicious. Even a "none yet" note would be more credible.
-- **Success metrics**: How will you measure "Vitality" and "Clarity" improvements?
+**Potential concerns:**
+- 0 discarded hypotheses is unusual — worth verifying this isn't due to premature commitment to hypotheses
+- "Implicit" hypothesis suggests undocumented assumptions that may need surfacing
 
-### Minor
-- "Vitality" as a benefit category is ambiguous — consider renaming to something more concrete (e.g., "Performance", "Stability").
+## Clarifying Questions
 
----
+1. Is the implicit hypothesis documented anywhere, or does it remain unstated?
+2. What's the definition of "experiment" in this context?
+   - Each `git bisect` run? Each test iteration? Each code modification?
+3. Are the 10 targets distinct files, functions, or something else?
 
-**Overall**: Solid framework. The main gaps are in specificity and prioritization. Want me to suggest a restructuring or dive deeper into any hypothesis?
+## Next Steps?
+
+Would you like me to:
+- **Elaborate** on any aspect of this strategy?
+- **Suggest** additional hypotheses to consider?
+- **Document** the implicit hypothesis explicitly?
