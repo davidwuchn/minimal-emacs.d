@@ -1634,7 +1634,27 @@ Output: {:findings [_] :techniques [_] :apply_to_us [_] :verification _ :confide
                       ((string-match-p "stop\\|checklist" b)
                        "\n;; Emphasis: pause, verify each step, don't rush")
                       (t (format "\n;; Behavior: %s" behavior))))))
-           (persona-text (concat base-persona
+           ;; Inject active quality hashtags as additional eight-key symbols
+           ;; into the [symbol-set] block. Each quality maps to a nucleus
+           ;; symbol (from ai-behaviors BEHAVIORS.md quality table).
+           (quality-symbols
+            (when (and behavior (not (string-empty-p behavior)))
+              (let ((b (downcase behavior)) (s ""))
+                (when (string-match-p "\\bdeep\\b\\|creative" b) (setq s (concat s " φ")))
+                (when (string-match-p "\\bwide\\b\\|meta" b) (setq s (concat s " π")))
+                (when (string-match-p "ground" b) (setq s (concat s " fractal")))
+                (when (string-match-p "negative-space\\|challenge" b) (setq s (concat s " ∀")))
+                (when (string-match-p "steel-man" b) (setq s (concat s " ∃")))
+                (when (string-match-p "user-lens" b) (setq s (concat s " ε")))
+                (when (string-match-p "concise\\|subtract" b) (setq s (concat s " μ")))
+                (when (string-match-p "first-principles" b) (setq s (concat s " τ")))
+                (when (> (length s) 0) (substring s 1)))))  ; strip leading space
+           (persona-text (concat (if quality-symbols
+                                     (replace-regexp-in-string
+                                      "\\(\\[\\(?:[^]]+\\|\]\\)*\\)\\]"
+                                      (format "\\1 %s]" quality-symbols)
+                                      base-persona)
+                                   base-persona)
                                   (or behavior-mod "")
                                   "\n\n---\n\n")))
       ;; Record selected archetype for experiment logging

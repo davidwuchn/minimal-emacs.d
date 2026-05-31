@@ -49,11 +49,98 @@ These targets may need different research patterns or the research findings were
 - Try combining with git history for recency bias.
 
 
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-nil
+```
+RESEARCH STRATEGY: template-default
+===================================
+Scope: 100 experiments across 16 modules (workflow, agent, benchmark, tools)
+
+KEPT DIRECTIVES:
+---------------
+1. Simplify extraction → remove redundant guards (mapconcat "" is safe)
+2. Add explicit nil/empty guards (allium-spec, where param)
+3. Add type validation branches (symbolp before fallback t)
+4. Add buffer-live-p guard for async lifecycle
+5. Extract provider selection → dedicated function
+6. Wrap overlay creation in condition-case
+7. Add timeout sentinel for explicit nil handling
+8. Make assumptions explicit (defensive coding)
+
+PRINCIPLES TARGETED:
+- φ Vitality: robustness to edge cases, async lifecycle
+- Fractal Clarity: explicit type assumptions, testable branching
+- Axis A (Error Handling): explicit nil/timeout handling
+- Axis D (Safety): defensive guards
+
+DISCARDED:
+- Deriving headings from symbol-map (latent nil bug risk)
+- error-message-string formatting (low impact)
+- Hash table mutation operations
+```
 ```
 
+### Check Issues
+
+# Review: Research Strategy Template
+
+## Summary Assessment
+
+The strategy demonstrates **strong defensive programming intent** with a clear risk/reward tradeoff rationale. Here's the breakdown:
+
+---
+
+## ✓ Strong Points
+
+| Aspect | Assessment |
+|--------|------------|
+| **Scope clarity** | 100×16 matrix is bounded and testable |
+| **Explicit rationale** | "Discarded" section shows deliberate risk evaluation |
+| **Guards philosophy** | `buffer-live-p`, `symbolp` checks prevent silent failures |
+| **Separation of concerns** | Provider selection extraction reduces coupling |
+
+---
+
+## ⚠️ Concerns
+
+### 1. `mapconcat ""` Safety
+```elisp
+(mapconcat #'identity list "")  ; Assumes string elements
+```
+**Recommendation**: Add type assertion or `cl-remove-if-not` pre-filter if input isn't guaranteed strings.
+
+### 2. Async Lifecycle
+```elisp
+(buffer-live-p (current-buffer))  ; Check at sentinel time
+```
+Good, but consider: What happens if *both* buffer is killed AND process dies? Need explicit ordering.
+
+### 3. Timeout Sentinel
+"Explicit nil handling" needs concrete edge case documented:
+```elisp
+(when (eq (process-status proc) 'run)  ; Still running?
+  (delete-process proc))
+```
+
+---
+
+## Suggestions
+
+1. **Add acceptance criteria** per directive (measurable success)
+2. **Quantify risk reduction** for "discarded" items
+3. **Specify test coverage target** (e.g., "guard branches require unit tests")
+
+---
+
+**Verdict**: Solid foundation. Proceed with implementation, but add concrete nil/edge-case examples to each directive before coding.
