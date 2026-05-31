@@ -644,8 +644,12 @@ When NO-PROMPT is non-nil, just logs the context (for non-LLM subsystems)."
     (puthash key entry gptel-ai-behaviors--concrete-task-performance)))
 
 (defun gptel-ai-behaviors--evolve-concrete-tasks ()
-  "Log best task-type per category."
-  (let ((best-per-cat (make-hash-table :test 'equal)))
+  "Log best task-type per category and diagnose category health.
+Compares concrete task keep-rate vs overall experiment keep-rate.
+If concrete tasks succeed but regular experiments fail, the category
+may need simpler experiments (concrete-task-default mode)."
+  (let ((best-per-cat (make-hash-table :test 'equal))
+        (results (condition-case nil (gptel-auto-workflow--parse-all-results) (error nil))))
     (maphash
      (lambda (key entry)
        (let* ((category (car key))
@@ -660,6 +664,40 @@ When NO-PROMPT is non-nil, just logs the context (for non-LLM subsystems)."
              (when (or (null current) (> rate (cdr current)))
                (puthash category (cons task-type rate) best-per-cat))))))
      gptel-ai-behaviors--concrete-task-performance)
+    ;; Diagnose category health: concrete task vs overall keep-rate
+    (when results
+      (let ((cat-totals (make-hash-table :test 'equal)))
+        (dolist (r results)
+          (let* ((r-target (plist-get r :target))
+                 (r-decision (plist-get r :decision))
+                 (r-kept (equal r-decision "kept"))
+                 (cat (and r-target (fboundp 'gptel-auto-workflow--categorize-target)
+                          (gptel-auto-workflow--categorize-target r-target))))
+            (when cat
+              (let ((e (gethash cat cat-totals (cons 0 0))))
+                (setf (car e) (+ (car e) (if r-kept 1 0)))
+                (setf (cdr e) (1+ (cdr e)))
+                (puthash cat e cat-totals)))))
+        (maphash
+         (lambda (cat total-entry)
+           (let* ((overall-kept (car total-entry))
+                  (overall-total (cdr total-entry))
+                  (overall-rate (if (> overall-total 0) (/ (float overall-kept) overall-total) 0))
+                  (best-task-entry (gethash cat best-per-cat))
+                  (concrete-rate (if best-task-entry (cdr best-task-entry) 0)))
+             (when (and (>= overall-total 5) (> concrete-rate 0))
+               (let ((gap (- concrete-rate overall-rate)))
+                 (cond
+                  ((> gap 0.5)
+                   (message "[category-health] ⚠ %s: concrete tasks %.0f%% vs overall %.0f%% (gap %+.0f%%) — prefer simple tasks"
+                            cat (* 100 concrete-rate) (* 100 overall-rate) (* 100 gap)))
+                  ((< gap -0.3)
+                   (message "[category-health] ✓ %s: concrete tasks %.0f%% ≈ overall %.0f%% — category healthy"
+                            cat (* 100 concrete-rate) (* 100 overall-rate)))
+                  (t
+                   (message "[category-health] %s: concrete %.0f%% vs overall %.0f%% (Δ%+.0f%%)"
+                            cat (* 100 concrete-rate) (* 100 overall-rate) (* 100 gap))))))))
+         cat-totals)))
     (setq gptel-ai-behaviors--best-concrete-tasks best-per-cat)))
 
 (defvar gptel-ai-behaviors--best-concrete-tasks (make-hash-table :test 'equal)
