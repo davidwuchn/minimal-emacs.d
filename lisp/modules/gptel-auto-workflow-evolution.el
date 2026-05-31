@@ -2006,7 +2006,12 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                    (plist-get result :changes)
                    (plist-get result :saturated)))
       (error (message "[evolution] Step ontology-evolve: %s" err))))
-  ;; Step C.7d: Evolve ai-behaviors hashtag mappings from experiment data
+  ;; Step C.7d: Evolve ai-behaviors model+effort selection from experiment data
+  (when (fboundp 'gptel-ai-behaviors--evolve-models)
+    (condition-case err
+        (gptel-ai-behaviors--evolve-models)
+      (error (message "[evolution] Step model-evolve: %s" err))))
+  ;; Step C.7e: Evolve ai-behaviors hashtag mappings from experiment data
   (when (fboundp 'gptel-ai-behaviors--evolve-hashtags)
     (condition-case err
         (progn

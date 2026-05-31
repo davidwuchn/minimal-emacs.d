@@ -2024,37 +2024,48 @@ Fields: :total-decisions, :backend-counts (alist of backend→count),
 (defun gptel-auto-workflow--best-model-for-target (target backend)
   "Return the best historical model for TARGET on BACKEND.
 Searches all kept experiments for this target+backend pair and returns
-the model with the highest keep-rate. Returns nil if no data."
-  (when (and target backend (fboundp 'gptel-auto-workflow--parse-all-results))
-    (let ((model-stats (make-hash-table :test 'equal))
-          (best-model nil)
-          (best-rate 0.0))
-      (dolist (r (gptel-auto-workflow--parse-all-results))
-        (let ((r-target (plist-get r :target))
-              (r-backend (plist-get r :backend))
-              (r-model (plist-get r :model))
-              (r-decision (plist-get r :decision)))
-          (when (and (string= (or r-target "") target)
-                     (string= (or r-backend "") backend)
-                     (stringp r-model))
-            (let ((stats (or (gethash r-model model-stats) (cons 0 0))))
-              (cl-incf (car stats))
-              (when (equal r-decision "kept")
-                (cl-incf (cdr stats)))
-              (puthash r-model stats model-stats)))))
-      (maphash (lambda (model stats)
-                 (let ((total (car stats))
-                       (kept (cdr stats)))
-                   (when (and (> total 0)
-                              (>= (/ (float kept) total) best-rate)
-                              ;; Validate backend/model combination
-                              (or (not (fboundp 'gptel-auto-workflow--model-combination-valid-p))
-                                  (gptel-auto-workflow--model-combination-valid-p
-                                   (concat backend "/" model))))
-                     (setq best-rate (/ (float kept) total))
-                     (setq best-model model))))
-               model-stats)
-      best-model)))
+the model with the highest keep-rate. Falls back to category-level
+model from `gptel-ai-behaviors--best-model' when no per-target data."
+  (let ((best-model nil)
+        (best-rate 0.0))
+    ;; Phase 1: per-target data from experiment history
+    (when (and target backend (fboundp 'gptel-auto-workflow--parse-all-results))
+      (let ((model-stats (make-hash-table :test 'equal)))
+        (dolist (r (gptel-auto-workflow--parse-all-results))
+          (let ((r-target (plist-get r :target))
+                (r-backend (plist-get r :backend))
+                (r-model (plist-get r :model))
+                (r-decision (plist-get r :decision)))
+            (when (and (string= (or r-target "") target)
+                       (string= (or r-backend "") backend)
+                       (stringp r-model))
+              (let ((stats (or (gethash r-model model-stats) (cons 0 0))))
+                (cl-incf (car stats))
+                (when (equal r-decision "kept")
+                  (cl-incf (cdr stats)))
+                (puthash r-model stats model-stats)))))
+        (maphash (lambda (model stats)
+                   (let ((total (car stats))
+                         (kept (cdr stats)))
+                     (when (and (> total 0)
+                                (>= (/ (float kept) total) best-rate)
+                                (or (not (fboundp 'gptel-auto-workflow--model-combination-valid-p))
+                                    (gptel-auto-workflow--model-combination-valid-p
+                                     (concat backend "/" model))))
+                       (setq best-rate (/ (float kept) total))
+                       (setq best-model model))))
+                 model-stats)))
+    ;; Phase 2: fallback to category-level model from ai-behaviors
+    (unless best-model
+      (when (and (fboundp 'gptel-auto-workflow--categorize-target)
+                 (fboundp 'gptel-ai-behaviors--best-model))
+        (let* ((category (gptel-auto-workflow--categorize-target target))
+               (cat-best (gptel-ai-behaviors--best-model category "executor")))
+          (when cat-best
+            (setq best-model (car cat-best))
+            (message "[model-select] Category fallback for %s: %s (from %s)"
+                     target (car cat-best) category)))))
+    best-model))
 
 ;; ─── Per-Run Backend Cooldown ───
 
