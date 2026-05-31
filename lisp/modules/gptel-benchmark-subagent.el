@@ -298,12 +298,13 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                          log-backend log-model)
                         "\n\n---\n\n")
                      (error ""))))
-                ;; Inject nucleus persona based on agent type for
-                ;; attention-shaping. Different subagents benefit from
-                ;; different cognitive modes (from nucleus/ADAPTIVE.md).
+                ;; KV CACHE: persona and routing notes go AFTER the static
+                ;; RULES prefix (now at prompt start) so the shared prefix
+                ;; is maximized. persona-note is same per agent-type → cache hit.
+                ;; routing-note varies per dispatch → cache miss starts here.
                 (persona-note
                  (gptel-auto-workflow--subagent-persona agent-type))
-                (prompt (concat persona-note routing-note prompt)))
+                (prompt (concat prompt "\n" persona-note routing-note)))
             ;; Track API cost per model+effort for cost-adjusted keep-rate
             (when (and log-model (fboundp 'gptel-ai-behaviors--record-cost))
               (gptel-ai-behaviors--record-cost log-model

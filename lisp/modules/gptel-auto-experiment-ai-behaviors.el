@@ -1163,7 +1163,8 @@ Effective cost is weighted by observed hit-rate: miss×rate + hit×(1-rate).")
 
 (defvar gptel-ai-behaviors--cache-hit-rate 0.5
   "Estimated cache-hit rate (0-1) for KV cache.
-Default 0.5 = half of tokens hit cache. Self-evolves from observed data.")
+Default 0.5 = half of tokens hit cache. Self-evolves from observed data.
+WARNING: Set from API response when `prompt_cache_hit_tokens' is available.")
 
 (defun gptel-ai-behaviors--model-cost (model &optional cache-hit-rate)
   "Return estimated effective cost multiplier for MODEL.
