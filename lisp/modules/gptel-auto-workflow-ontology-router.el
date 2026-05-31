@@ -1498,8 +1498,41 @@ from the 8 nucleus archetypes for A/B testing."
                                   (others (remove current alternatives)))
                              (nth (random (length others)) others)))
                        (or learned-archetype default-archetype)))
-         (base-persona
-          (pcase agent-type
+          ;; Task-mode symbol subset — independent from persona archetype
+          ;; Selected by (ontology category × active behavior), not by archetype.
+          ;; Production: [mu tao] precision + minimal change
+          ;; Safety:     [∀ ∃ ε] vigilance + truth + boundaries
+          ;; Creative:   [phi beauty fractal] exploration + aesthetics
+          (task-mode (pcase category
+                       (:agentic 'safety) (:programming 'production)
+                       (:tool-calls 'safety) (:natural-language 'creative)
+                       (_ 'production)))
+          (mode-symbols
+           (pcase task-mode
+             ('production "mu tao")
+             ('safety "∀ ∃ ε")
+             ('creative "phi beauty fractal")
+             (_ "mu tao")))
+          (mode-loop
+           (pcase task-mode
+             ('production "OODA") ('safety "OODA") ('creative "REPL")
+             (_ "OODA")))
+          (mode-collab
+           (pcase task-mode
+             ('production "Human ⊗ AI") ('safety "Human ∘ AI")
+             ('creative "Human | AI")
+             (_ "Human ⊗ AI")))
+          (mode-constrain
+           (pcase task-mode
+             ('production "Constrain: change → minimal, quality → mu, precision → tao")
+             ('safety "Constrain: coverage → ∀, evidence → ∃, boundaries → ε")
+             ('creative "Constrain: exploration → phi, aesthetics → beauty, structure → fractal")
+             (_ "Constrain: quality → mu, clarity → tao")))
+          ;; Override base λ engage line with mode-selected symbols
+          (symbol-override (format "λ engage(nucleus).\n[%s] | [Δ λ | signal/noise] | %s\n%s\n"
+                                    mode-symbols mode-loop mode-collab))
+          (base-persona
+           (pcase agent-type
             ("analyzer"
              ;; Analyzer adapts focus to category
              (let ((cat-focus (pcase category
@@ -1683,12 +1716,18 @@ Output: {:findings [_] :techniques [_] :apply_to_us [_] :verification _ :confide
              "  (documenting, *)       → Academic\n"
              "  (thinking, strategize) → Visionary\n"
              "  (*, balanced)          → Facilitator\n"))
+           ;; Replace first `λ engage` block with mode-selected symbols
+           (header-replaced (replace-regexp-in-string
+                             "λ engage(nucleus)\\.\n\\[[^]]+\\][^]]*" ; match λ engage line + symbols
+                             (replace-regexp-in-string "\n$" "" symbol-override) ; strip trailing newline
+                             base-persona))
            (persona-text (concat (if quality-symbols
                                      (replace-regexp-in-string
                                       "\\(\\[\\(?:[^]]+\\|\]\\)*\\)\\]"
                                       (format "\\1 %s]" quality-symbols)
-                                      base-persona)
-                                   base-persona)
+                                      header-replaced)
+                                   header-replaced)
+                                  "\n" mode-constrain
                                   (or behavior-mod "")
                                   persona-state-machine
                                   "\n\n---\n\n")))
