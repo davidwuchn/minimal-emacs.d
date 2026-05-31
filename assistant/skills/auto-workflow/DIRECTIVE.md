@@ -3,7 +3,7 @@ name: auto-workflow-directive
 description: Evolving program definition for auto-workflow
 version: 2026.05.31
 total-experiments: 870
-total-kept: 11
+total-kept: 7
 ---
 
 # Auto-Workflow Program
@@ -17,16 +17,16 @@ total-kept: 11
 <!-- AUTO-UPDATED: Targets ranked by recent keep rate -->
 | Target | Keep Rate | Total | Kept | Status |
 |--------|-----------|-------|------|--------|
-| `lisp/modules/gptel-benchmark-comparator.el` | 33% | 3 | 1 | ✅ High yield |
-| `lisp/modules/gptel-tools-agent-runtime.el` | 25% | 4 | 1 | 🟡 Active |
-| `lisp/modules/gptel-ext-tool-permits.el` | 21% | 14 | 3 | 🟡 Active |
-| `lisp/modules/gptel-benchmark-core.el` | 20% | 10 | 2 | 🟡 Active |
-| `lisp/modules/gptel-auto-workflow-projects.el` | 7% | 27 | 2 | ❌ Plateaued |
-| `lisp/modules/gptel-tools-memory.el` | 6% | 17 | 1 | ❌ Plateaued |
-| `lisp/modules/gptel-tools-agent-prompt-build.el` | 5% | 20 | 1 | ❌ Plateaued |
-| `lisp/modules/nucleus-tools-validate.el` | 0% | 6 | 0 | ❌ Plateaued |
-| `lisp/modules/gptel-benchmark-tests.el` | 0% | 6 | 0 | ❌ Plateaued |
-| `lisp/modules/gptel-tools-agent.el` | 0% | 1 | 0 | ⏳ Insufficient data |
+| `lisp/modules/gptel-benchmark-principles.el` | 25% | 4 | 1 | 🟡 Active |
+| `lisp/modules/gptel-auto-workflow-projects.el` | 23% | 26 | 6 | 🟡 Active |
+| `lisp/modules/gptel-auto-workflow-research-integration.el` | 0% | 2 | 0 | ⏳ Insufficient data |
+| `staging-verification` | 0% | 2 | 0 | ⏳ Insufficient data |
+| `lisp/modules/gptel-auto-workflow-strategic.el` | 0% | 12 | 0 | ❌ Plateaued |
+| `staging-merge` | 0% | 1 | 0 | ⏳ Insufficient data |
+| `staging-review` | 0% | 1 | 0 | ⏳ Insufficient data |
+| `lisp/modules/gptel-tools-agent-prompt-build.el` | 0% | 8 | 0 | ❌ Plateaued |
+| `lisp/modules/gptel-tools-agent-error.el` | 0% | 6 | 0 | ❌ Plateaued |
+| `lisp/modules/gptel-benchmark-subagent.el` | 0% | 3 | 0 | ⏳ Insufficient data |
 
 ## 🧬 Meta-Learned Patterns
 
@@ -39,8 +39,8 @@ total-kept: 11
 - **Source type** (24× from mementum)
 - **Description** (24× from mementum)
 - **Application** (21× from mementum)
-- **Symbolic Attention Magnets** (20× from mementum)
 - **Implementation sketch** (20× from mementum)
+- **Symbolic Attention Magnets** (20× from mementum)
 
 ## 🛠️ Effective Techniques
 
@@ -57,11 +57,11 @@ total-kept: 11
 
 <!-- AUTO-UPDATED: From experiment error analysis -->
 
-- **other** (129×): Investigate root cause
-- **validation-failed** (28×): Improve pre-grade validation prompts
-- **timeout** (16×): Add smaller batch sizes or chunked processing
-- **api-limit** (14×): Implement provider fallback or rate limit handling
-- **test-failure** (4×): Run tests before committing experiments
+- **other** (50×): Investigate root cause
+- **timeout** (7×): Add smaller batch sizes or chunked processing
+- **validation-failed** (5×): Improve pre-grade validation prompts
+- **test-failure** (2×): Run tests before committing experiments
+- **api-limit** (1×): Implement provider fallback or rate limit handling
 
 ## Success Patterns
 
@@ -79,11 +79,11 @@ total-kept: 11
 ## Next Hypotheses
 
 <!-- AUTO-UPDATED: From experiment insights -->
-- **lisp/modules/gptel-benchmark-comparator.el**: Apply LLM analyzes *why* compressed context failed and updates compression guidelines iteratively (keep rate: 33%)
-- **lisp/modules/gptel-tools-agent-runtime.el**: Apply LLM analyzes *why* compressed context failed and updates compression guidelines iteratively (keep rate: 25%)
-- **lisp/modules/gptel-ext-tool-permits.el**: Apply LLM analyzes *why* compressed context failed and updates compression guidelines iteratively (keep rate: 21%)
-- **lisp/modules/gptel-auto-workflow-projects.el**: Try validation guards or error handling improvements (previous experiments discarded)
-- **lisp/modules/gptel-tools-memory.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-benchmark-principles.el**: Apply LLM analyzes *why* compressed context failed and updates compression guidelines iteratively (keep rate: 25%)
+- **lisp/modules/gptel-auto-workflow-projects.el**: Apply LLM analyzes *why* compressed context failed and updates compression guidelines iteratively (keep rate: 23%)
+- **lisp/modules/gptel-auto-workflow-strategic.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-tools-agent-prompt-build.el**: Try validation guards or error handling improvements (previous experiments discarded)
+- **lisp/modules/gptel-tools-agent-error.el**: Try validation guards or error handling improvements (previous experiments discarded)
 
 ## Immutable Files
 
@@ -109,4 +109,4 @@ var/elpa/**
 
 ---
 
-*This directive was auto-generated from 870 experiments (11 kept locally across 192 local records). It evolves every self-evolution cycle.*
+*This directive was auto-generated from 870 experiments (7 kept locally across 65 local records). It evolves every self-evolution cycle.*

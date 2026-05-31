@@ -201,25 +201,69 @@ All hashtags reference real behavior directories in packages/ai-behaviors/."
         (:natural-language "#=code #user-lens #coherence #concrete #legible #=act")
         (_ "#=code #legible #concise #=act"))))
 
+(defvar gptel-ai-behaviors--impact-tracking (make-hash-table :test 'equal)
+  "Hash table: (category . hashtag) → (kept-with . total-with) for behavior impact analysis.")
+
+(defun gptel-ai-behaviors--record-behavior-impact (category hashtags kept)
+  "Record which behaviors were active for KEPT or DISCARDED experiment."
+  (when category
+    (dolist (tag (split-string hashtags))
+      (let* ((key (cons category tag))
+             (entry (gethash key gptel-ai-behaviors--impact-tracking (cons 0 0))))
+        (setf (car entry) (+ (car entry) (if kept 1 0)))
+        (setf (cdr entry) (1+ (cdr entry)))
+        (puthash key entry gptel-ai-behaviors--impact-tracking)))))
+
+(defun gptel-ai-behaviors--low-impact-behaviors (category)
+  "Return list of hashtags for CATEGORY that never affect outcomes (skip threshold > 5 experiments)."
+  (let ((result nil))
+    (maphash
+     (lambda (key entry)
+       (when (and (eq (car key) category)
+                  (>= (cdr entry) 5)  ; enough data
+                  (let* ((kept-with (car entry))
+                         (total-with (cdr entry))
+                         (kept-without (- total-with kept-with)))
+                    ;; If keep-rate WITH behavior ≈ keep-rate WITHOUT, it's low-impact
+                    (< (abs (- (if (> kept-with 0) (/ (float kept-with) total-with) 0)
+                                (if (> kept-without 0) (/ (float (- total-with kept-with)) total-with) 0)))
+                       0.1))))
+       (push (cdr key) result))
+     gptel-ai-behaviors--impact-tracking)
+    result))
+
 (defun gptel-ai-behaviors--inject (category)
   "Resolve hashtags for CATEGORY and return formatted context.
-Returns empty string if ai-behaviors repo is not available."
+Skips behaviors that have been identified as low-impact for this category."
   (when (and category (gptel-ai-behaviors--repo-available-p))
-    (let* ((hashtags (gptel-ai-behaviors--category-hashtags category))
-           (resolved (gptel-ai-behaviors--expand hashtags))
-           (content (car resolved))
-           (mode-tag (cdr resolved)))
-      (when (> (length content) 0)
-        (concat (if mode-tag
-                    (format "<operating-mode name=\"%s\">\n%s\n</operating-mode>\n"
-                            mode-tag content)
-                  (format "<behavior-modifiers>\n%s\n</behavior-modifiers>\n"
-                          content))
-                "<framework>
+    (let* ((all-hashtags (gptel-ai-behaviors--category-hashtags category))
+           (low-impact (gptel-ai-behaviors--low-impact-behaviors category))
+           (filtered (if low-impact
+                        (mapconcat #'identity
+                                   (cl-remove-if (lambda (tagn)
+                                                   (member tagn low-impact))
+                                                 (split-string all-hashtags))
+                                   " ")
+                      all-hashtags)))
+      (when (string-empty-p (string-trim filtered))
+        (setq filtered all-hashtags))  ; never inject empty — revert to all
+      (let* ((resolved (gptel-ai-behaviors--expand filtered))
+             (content (car resolved))
+             (mode-tag (cdr resolved)))
+        (when (> (length content) 0)
+          (when (> (length low-impact) 0)
+            (message "[ai-behaviors] Skipped %d low-impact behaviors for %s: %s"
+                     (length low-impact) category (mapconcat #'identity low-impact " ")))
+          (concat (if mode-tag
+                      (format "<operating-mode name=\"%s\">\n%s\n</operating-mode>\n"
+                              mode-tag content)
+                    (format "<behavior-modifiers>\n%s\n</behavior-modifiers>\n"
+                            content))
+                  "<framework>
 HARD CONSTRAINTs define what the current mode IS — they are not overridable.
 When a behavior modifier causes you to make a point you would not otherwise make,
 mark it: (#name) after the sentence.
-</framework>\n")))))
+</framework>\n"))))))
 
 (defun gptel-ai-behaviors--inject-for-target (target)
   "Resolve ai-behaviors for TARGET's ontology category."
