@@ -855,6 +855,18 @@ into staging or main."
       (my/gptel--reset-agent-task-state)
       (setq gptel-auto-workflow--cron-safe-step "clear-overrides")
       (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+      ;; Clear accumulated backend health strikes so old failures
+      ;; don't quarantine all backends on restart (no backend left).
+      (setq gptel-auto-workflow--cron-safe-step "clear-lambda-health")
+      (when (and (boundp 'gptel-auto-workflow--lambda-strike-count)
+                 (hash-table-p gptel-auto-workflow--lambda-strike-count))
+        (clrhash gptel-auto-workflow--lambda-strike-count))
+      (when (and (boundp 'gptel-auto-workflow--lambda-dead-until)
+                 (hash-table-p gptel-auto-workflow--lambda-dead-until))
+        (clrhash gptel-auto-workflow--lambda-dead-until))
+      (when (and (boundp 'gptel-auto-workflow--backend-lambda-health-cache)
+                 (hash-table-p gptel-auto-workflow--backend-lambda-health-cache))
+        (clrhash gptel-auto-workflow--backend-lambda-health-cache))
       (setq gptel-auto-workflow--cron-safe-step "reset-mementum")
       (gptel-mementum--reset-synthesis-state)
       (setq gptel-auto-workflow--cron-safe-step "reset-grade")

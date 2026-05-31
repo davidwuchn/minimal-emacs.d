@@ -4,21 +4,21 @@ status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
 insight-quality: 0.3/10
-allium-issues: 3
+allium-issues: 0
 allium-severity: 0.00
-allium-status: ok
+allium-status: coherent
 ---
 
 # Research Strategy: template-default
 
-*Consolidated from 62 experiments (3% keep rate).*
+*Consolidated from 69 experiments (3% keep rate).*
 
-**Performance:** 2 kept / 0 discarded / 4 failed (EXTRACTED — from TSV)
+**Performance:** 2 kept / 0 discarded / 5 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
 - `lisp/modules/gptel-tools-agent-prompt-build.el` (1 kept / 2 failed)
-- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept)
+- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 1 failed)
 
 ### Structure (deterministic scan)
 
@@ -36,15 +36,10 @@ handlers: nil, nil, err, ..., ...), err, err, err, err, err, nil, nil
 
 These targets may need different research patterns or the research findings were misleading.
 
+- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 1 failed)
 - `lisp/modules/gptel-tools-agent-error.el` (1 failed)
 - `lisp/modules/gptel-tools-agent-prompt-build.el` (1 kept / 2 failed)
 - `lisp/modules/gptel-auto-workflow-strategic.el` (1 failed)
-
-## Allium Behavioral Coherence
-
-*3 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
-
-
 
 ## Meta-Learning Recommendations (INFERRED — from pattern analysis)
 
@@ -61,60 +56,42 @@ These targets may need different research patterns or the research findings were
 
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*4 check issues (severity 0.30). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-## Research Strategy Distillation
+## Distillation
 
-### Strategy
-- **Type:** Template-default approach
-- **Scope:** 62 experiments across 6 target modules
+**Research Strategy:** Template-default
 
-### Key Details
-- **Hypotheses Kept:** 2
-  - No explicit hypothesis was formally stated at the outset
-  - Focus area: improvement of `gptel-auto-workflow-list-project-buffers` function
-- **Hypotheses Discarded:** 0
+**Scope:** 69 experiments across 6 target files (all Elisp modules for what appears to be an Emacs AI interaction package).
 
-### Summary
-This was a template-driven experimental strategy with no explicitly stated starting hypothesis. The work concentrated on improving a single function (`gptel-auto-workflow-list-project-buffers`). All 62 experiments were retained—none were discarded—suggesting either a broad exploratory approach or incremental refinements that showed promise.
+**Kept Hypotheses (1):**
+- Improve function `gptel-auto-workflow-list-project-buffers`
+
+**Discarded Hypotheses (1):**
+- Hypothesis was not stated
+
+---
+
+**Summary:** This fragment indicates a hypothesis-driven experimental process where out of 69 experiments, only 1 hypothesis was retained (improving a specific function), and 1 was discarded for lacking a stated hypothesis.
 ```
 
 ### Check Issues
 
-Looking at this summary, I notice several issues:
+# Check Results
 
 ## Inconsistencies Found
 
-1. **Contradictory hypothesis statements:**
-   - "No explicit hypothesis was formally stated at the outset"
-   - "Hypotheses Kept: 2"
-   
-   If no hypothesis was stated, how can 2 be "kept"?
+| Issue | Detail |
+|-------|--------|
+| **Number mismatch** | 69 experiments total, but only 2 accounted for (1 kept + 1 discarded). What happened to the other **67 experiments**? |
+| **Contradiction** | "Discarded because hypothesis was not stated" — if no hypothesis was stated, there's nothing to discard |
 
-2. **Unusual experiment retention rate:**
-   - 62 experiments, 0 discarded = 100% retention
-   - This is statistically improbable unless:
-     - A very low bar for "experiment" (likely just test runs)
-     - No filtering/discarding process was used
-     - "Experiment" is being used loosely
+## Summary
 
-3. **Scope mismatch:**
-   - 62 experiments across **6 target modules**
-   - But focus is on improving **1 function**
-   - Either the scope is broader than described, or the count is inflated
+This fragment appears **incomplete or corrupted**. Either:
+- Most experiments have no recorded outcome (67 missing)
+- The tracking system failed to log results properly
+- This is a truncated/malformed export
 
-4. **Vague language:**
-   - "suggesting either a broad exploratory approach or incremental refinements that showed promise"
-   - This hedges too much and doesn't give a clear verdict
-
-## Recommendations
-
-- Clarify what constitutes an "experiment" in this context
-- Explain the relationship between the 2 kept hypotheses and the 6 modules
-- Define the discarding criteria (or lack thereof)
-- State explicitly what the starting hypothesis(es) were
-
-**Bottom line:** This summary reads like a templated document with fill-in-the-blanks that weren't fully thought through. The numbers don't align logically.
-
-Would you like me to help rewrite it more accurately?
+**Recommendation:** Verify the source data for the missing 67 experiments before relying on this analysis.
