@@ -79,6 +79,10 @@ active operating mode tag (or nil)."
   "Dynamic variable. Set by prompt builder to the hashtags injected.
 Read by experiment logging to record which behaviors were active.")
 
+(defvar gptel-ai-behaviors--current-strategy nil
+  "Dynamic variable. Set by prompt builder to the strategy name used.
+Read by experiment logging for three-way (category × strategy × hashtags) tracking.")
+
 (defvar gptel-ai-behaviors--category-performance (make-hash-table :test 'equal)
   "Hash table: (category . hashtag) → (kept . total).
 Learned from experiment outcomes. Evolved each cycle.")
@@ -87,34 +91,47 @@ Learned from experiment outcomes. Evolved each cycle.")
   "Alist: (category . hashtag-string) learned from kept experiments.
 Falls back to hardcoded defaults when no data exists.")
 
-(defun gptel-ai-behaviors--record-experiment (category hashtags kept)
-  "Record HASHTAGS for CATEGORY as kept or not."
+(defun gptel-ai-behaviors--record-experiment (category hashtags kept &optional strategy)
+  "Record HASHTAGS for CATEGORY as kept or not.
+When STRATEGY is provided, also tracks the three-way (category × strategy × hashtags) combo."
   (when category
     (dolist (tag (split-string hashtags))
+      ;; Two-way: (category × hashtags)
       (let* ((key (cons category tag))
-             (entry (gethash key gptel-ai-behaviors--category-performance
-                             (cons 0 0))))
-        (setf (car entry) (+ (car entry) (if kept 1 0)))  ; kept
-        (setf (cdr entry) (1+ (cdr entry)))               ; total
-        (puthash key entry gptel-ai-behaviors--category-performance)))))
+             (entry (gethash key gptel-ai-behaviors--category-performance (cons 0 0))))
+        (setf (car entry) (+ (car entry) (if kept 1 0)))
+        (setf (cdr entry) (1+ (cdr entry)))
+        (puthash key entry gptel-ai-behaviors--category-performance))
+      ;; Three-way: (category × strategy × hashtags)
+      (when strategy
+        (let* ((key3 (list category strategy tag))
+               (entry3 (gethash key3 gptel-ai-behaviors--category-performance (cons 0 0))))
+          (setf (car entry3) (+ (car entry3) (if kept 1 0)))
+          (setf (cdr entry3) (1+ (cdr entry3)))
+          (puthash key3 entry3 gptel-ai-behaviors--category-performance))))))
+
+(defvar gptel-ai-behaviors--combo-defaults nil
+  "Alist: (category . (strategy . hashtags)) learned from three-way data.")
 
 (defun gptel-ai-behaviors--evolve-hashtags ()
   "Evolve category→hashtags mapping from experiment outcomes.
-Computes keep-rate per (category, hashtag) and updates
-`gptel-ai-behaviors--category-defaults' with the best combos.
-Requires min 3 experiments AND keep-rate > 0 to adopt a hashtag."
-  (let ((cat-best (make-hash-table :test 'equal)))
+Learns both two-way (category × hashtag) and three-way
+(category × strategy × hashtag) optimal combinations."
+  (let ((cat-best (make-hash-table :test 'equal))
+        (combo-best (make-hash-table :test 'equal)))
+    ;; Two-way: category × hashtag
     (maphash
      (lambda (key entry)
-       (let* ((category (car key))
-              (hashtag (cdr key))
-              (kept (car entry))
-              (total (cdr entry))
-              (rate (if (> total 0) (/ (float kept) total) 0))
-              (current (gethash category cat-best nil)))
-         (when (and (>= total 3) (> rate 0)
-                    (or (null current) (> rate (cdr current))))
-           (puthash category (cons hashtag rate) cat-best))))
+       (when (and (consp key) (not (listp (cdr key))))  ; simple (cat . tag) keys
+         (let* ((category (car key))
+                (hashtag (cdr key))
+                (kept (car entry))
+                (total (cdr entry))
+                (rate (if (> total 0) (/ (float kept) total) 0))
+                (current (gethash category cat-best nil)))
+           (when (and (>= total 3) (> rate 0)
+                      (or (null current) (> rate (cdr current))))
+             (puthash category (cons hashtag rate) cat-best)))))
      gptel-ai-behaviors--category-performance)
     (setq gptel-ai-behaviors--category-defaults nil)
     (maphash
@@ -123,7 +140,46 @@ Requires min 3 experiments AND keep-rate > 0 to adopt a hashtag."
              gptel-ai-behaviors--category-defaults)
        (message "[ai-behaviors-evolve] %s: best hashtag %s (keep-rate %.0f%%)"
                 category (car best) (* 100 (cdr best))))
-     cat-best)))
+     cat-best)
+    ;; Three-way: category × strategy × hashtag
+    (maphash
+     (lambda (key entry)
+       (when (and (listp key) (= (length key) 3))  ; three-way keys
+         (let* ((category (nth 0 key))
+                (strategy (nth 1 key))
+                (hashtag (nth 2 key))
+                (kept (car entry))
+                (total (cdr entry))
+                (rate (if (> total 0) (/ (float kept) total) 0))
+                (combo-key (cons category strategy))
+                (current (gethash combo-key combo-best nil)))
+           (when (and (>= total 2) (> rate 0)
+                      (or (null current) (> rate (cdr current))))
+             (puthash combo-key (cons hashtag rate) combo-best)))))
+     gptel-ai-behaviors--category-performance)
+    (setq gptel-ai-behaviors--combo-defaults nil)
+    (maphash
+     (lambda (combo-key best)
+       (let* ((category (car combo-key))
+              (strategy (cdr combo-key))
+              (hashtag (car best))
+              (rate (cdr best)))
+         (push (list category strategy hashtag)
+               gptel-ai-behaviors--combo-defaults)
+         (message "[ai-behaviors-evolve] %s/%s: best hashtag %s (keep-rate %.0f%%)"
+                  category strategy hashtag (* 100 rate))))
+     combo-best)))
+
+(defun gptel-ai-behaviors--best-hashtag-for (category &optional strategy)
+  "Return the best hashtag for CATEGORY, optionally with STRATEGY.
+Prefers three-way (category × strategy) match over two-way (category only)."
+  (when category
+    (or (and strategy
+             (let ((entry (assoc (list category strategy)
+                                 (mapcar (lambda (x) (cons (list (nth 0 x) (nth 1 x)) (nth 2 x)))
+                                         gptel-ai-behaviors--combo-defaults))))
+               (when entry (cdr entry))))
+        (cdr (assq category gptel-ai-behaviors--category-defaults)))))
 
 (defun gptel-ai-behaviors--category-hashtags (category)
   "Return the hashtag string for CATEGORY (ai-behaviors format).
@@ -350,14 +406,25 @@ Reset each cycle. Read by prompt builder for failure feedback.")
 
 (defun gptel-ai-behaviors--recommend-for-prompt (target)
   "Return formatted recommended behaviors string for TARGET, or empty.
-Uses reasoning→behavior mappings from previous experiments."
+Uses reasoning→behavior mappings from previous experiments.
+Includes three-way combo (category × strategy × hashtags) recommendation
+when available from empirical data."
   (when (and target (fboundp 'gptel-auto-workflow--categorize-target))
     (let* ((category (gptel-auto-workflow--categorize-target target))
-           (recs (gptel-ai-behaviors--recommend-behaviors category 3)))
+           (recs (gptel-ai-behaviors--recommend-behaviors category 3))
+           (strategy (when (boundp 'gptel-auto-workflow--current-strategy-name)
+                       gptel-auto-workflow--current-strategy-name))
+           (best-hashtag (when (fboundp 'gptel-ai-behaviors--best-hashtag-for)
+                           (gptel-ai-behaviors--best-hashtag-for category strategy)))
+           (parts nil))
+      (when best-hashtag
+        (push (format "  └ %s for %s with strategy %s (learned from experiment data)"
+                      best-hashtag category strategy) parts))
       (when (> (length recs) 0)
-        (concat "## Recommended Behaviors (from reasoning patterns)\n"
-                "These behaviors were effective in similar experiments:\n"
-                "  " recs "\n")))))
+        (push (format "  └ %s (from reasoning patterns)" recs) parts))
+      (when parts
+        (concat "## Optimal Behavior Combos (learned)\n"
+                (mapconcat #'identity parts "\n") "\n")))))
 
 (provide 'gptel-auto-experiment-ai-behaviors)
 ;;; gptel-auto-experiment-ai-behaviors.el ends here

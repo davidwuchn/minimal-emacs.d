@@ -1214,10 +1214,15 @@ Implements section-level A/B testing to identify effective prompt components."
   ;; Record ai-behaviors hashtags for this experiment (read by log-tsv)
   (when (fboundp 'gptel-ai-behaviors--category-hashtags)
     (let ((category (and target (fboundp 'gptel-auto-workflow--categorize-target)
-                         (gptel-auto-workflow--categorize-target target))))
+                         (gptel-auto-workflow--categorize-target target)))
+          (strategy (and (boundp 'gptel-auto-workflow--current-strategy-name)
+                         gptel-auto-workflow--current-strategy-name)))
       (when category
-        (setq gptel-ai-behaviors--current-hashtags
-              (gptel-ai-behaviors--category-hashtags category)))))
+        (let ((best (when (fboundp 'gptel-ai-behaviors--best-hashtag-for)
+                      (gptel-ai-behaviors--best-hashtag-for category strategy))))
+          (setq gptel-ai-behaviors--current-hashtags
+                (or best (gptel-ai-behaviors--category-hashtags category)))
+          (setq gptel-ai-behaviors--current-strategy strategy)))))
   ;; Adapt compression based on token efficiency analysis
   (gptel-auto-workflow--adapt-prompt-compression)
   
@@ -1597,14 +1602,16 @@ Captures executor reasoning from the dynamic variable
                                          0 (min 500 (length gptel-auto-experiment--executor-reasoning))))
                    gptel-auto-experiment--grader-insights))))
     (setq gptel-auto-experiment--executor-reasoning nil)
-    ;; Record ai-behaviors hashtag tracking for this experiment
+    ;; Record ai-behaviors hashtag + strategy tracking for this experiment
     (when (and target (fboundp 'gptel-ai-behaviors--record-experiment))
       (let ((category (and (fboundp 'gptel-auto-workflow--categorize-target)
                            (gptel-auto-workflow--categorize-target target)))
-            (kept (equal decision "kept")))
+            (kept (equal decision "kept"))
+            (strategy (plist-get experiment :strategy)))
         (when (and category gptel-ai-behaviors--current-hashtags)
           (gptel-ai-behaviors--record-experiment
-           category gptel-ai-behaviors--current-hashtags kept))))
+           category gptel-ai-behaviors--current-hashtags kept
+           (or strategy gptel-ai-behaviors--current-strategy)))))
     ;; Inject research metadata from global context into experiment record.
     ;; This closes the feedback loop: experiments carry the research run that
     ;; influenced the prompt so trace outcomes can be linked after logging.
