@@ -330,13 +330,17 @@ clean_stale_socket "ov5-researcher"
 
 # ─── Pull latest code so daemon restart picks up fixes ───
 log "Pulling latest code from origin..."
-# Force-clean all auto-generated files — evolution cycle may have modified them,
-# and stale merge conflicts from previous interrupted pulls also block git pull.
-# git checkout HEAD can fail on unmerged files; git reset --hard handles both
-# modified and unmerged states. git clean -fd removes untracked artifacts.
-git -C "$DIR" reset --hard HEAD 2>/dev/null || true
+# Stash any work-in-progress (experiment results, manual edits) so we don't lose them.
+# Auto-evolved files (DIRECTIVE.md, strategy-guidance.json, comparison reports) are
+# upstream-dominant — discard local versions since they'll be regenerated next cycle.
+# Stale merge conflicts from previous interrupted pulls also block git pull — clear them.
+git -C "$DIR" stash push -m "auto-workflow-pre-pull-$(date +%s)" 2>/dev/null || true
+git -C "$DIR" merge --abort 2>/dev/null || true  # clear stale merge state
+git -C "$DIR" checkout HEAD -- mementum/knowledge/ assistant/skills/ assistant/strategies/ 2>/dev/null || true
 git -C "$DIR" clean -fd -- mementum/knowledge/ assistant/skills/ assistant/strategies/ 2>/dev/null || true
 git -C "$DIR" pull --ff-only 2>&1 || log "WARNING: git pull failed, continuing with current code"
+# Restore stashed changes (non-auto-evolved files only — auto-evolved were discarded)
+git -C "$DIR" stash pop 2>/dev/null || true
 
 # ─── Stop any existing daemons to ensure fresh code is loaded ───
 log "Stopping any existing daemons to load latest code..."
@@ -532,10 +536,13 @@ if [ "${PIPELINE_SKIP_PRE_EVOLUTION:-no}" != "yes" ]; then
     # Clear workflow status so auto-workflow can start a fresh daemon
     rm -f "$DIR/var/tmp/cron/auto-workflow-status.sexp" 2>/dev/null || true
     # Discard all local changes + untracked files in auto-generated dirs
-    git -C "$DIR" reset --hard HEAD 2>/dev/null || true
+    git -C "$DIR" stash push -m "auto-workflow-post-pull-$(date +%s)" 2>/dev/null || true
+    git -C "$DIR" merge --abort 2>/dev/null || true
+    git -C "$DIR" checkout HEAD -- mementum/knowledge/ assistant/skills/ assistant/strategies/ 2>/dev/null || true
     git -C "$DIR" clean -fd -- mementum/knowledge/ assistant/skills/ assistant/strategies/ 2>/dev/null || true
     # Pull any commits pushed by evolution cycle
     git -C "$DIR" pull --ff-only 2>&1 || log "WARNING: post-evolution git pull failed"
+    git -C "$DIR" stash pop 2>/dev/null || true
     sleep 2
 else
     log "=== Step 3: Skipped (PIPELINE_SKIP_PRE_EVOLUTION=yes) ==="
