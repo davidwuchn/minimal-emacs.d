@@ -783,10 +783,13 @@ Without PROJECT-ROOT, clears overlays for all projects."
         (message "[auto-workflow] Cleared executor overlays for %s" project-root))
     (gptel-auto-workflow--iterate-project-buffers
      (lambda (_ buf)
-       (with-current-buffer buf
-         (dolist (ov (overlays-in (point-min) (point-max)))
-           (when (overlay-get ov 'gptel-agent--task-type)
-             (delete-overlay ov))))))
+       ;; DEFENSE-IN-DEPTH: TOCTOU guard against buffer kill between
+       ;; iterator's buffer-live-p check and with-current-buffer use.
+       (when (and buf (buffer-live-p buf))
+         (with-current-buffer buf
+           (dolist (ov (overlays-in (point-min) (point-max)))
+             (when (overlay-get ov 'gptel-agent--task-type)
+               (delete-overlay ov)))))))
     (message "[auto-workflow] Cleared all executor overlays")))
 
 (defun gptel-auto-workflow-list-project-buffers ()
@@ -796,14 +799,19 @@ Without PROJECT-ROOT, clears overlays for all projects."
   (let ((buffers nil))
     (gptel-auto-workflow--iterate-project-buffers
      (lambda (root buf)
-       (ignore-errors
-         (let ((mode (with-current-buffer buf
-                       (format-mode-line mode-name))))
+       ;; DEFENSE-IN-DEPTH: Guard against TOCTOU race where buffer is
+       ;; killed between iterator's buffer-live-p check and our use.
+       (when (and buf (buffer-live-p buf))
+         (let ((mode (ignore-errors
+                       (with-current-buffer buf
+                         (format-mode-line mode-name)))))
            (push (format "%s -> %s [%s]"
                          root
                          (buffer-name buf)
-                         (or mode "unknown"))
-                 buffers))))
+                         (if (and mode (not (string-empty-p mode)))
+                             mode
+                           "unknown"))
+                 buffers)))))
     (if buffers
         (let ((sorted (sort buffers #'string<)))
           (message "Project buffers (%d):\n%s"

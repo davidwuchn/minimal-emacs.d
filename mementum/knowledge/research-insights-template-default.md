@@ -178,73 +178,13 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy: Template-Default (Distilled)
-
-**Scope:** 71 experiments across 15 targets (lisp modules + staging areas)
-
----
-
-## Discarded Hypotheses (15 total)
-
-### Performance Optimizations ❌
-- **Memoize `nucleus--project-root`** — avoids repeated `(project-current nil)` calls
-- **Memoize path resolvers** (`prompts-dir`, `agents-dir`, `tool-prompts-dir`) — eliminates redundant `file-directory-p` I/O
-- **Cache directory resolution** in `nucleus-prompts.el` — paths stable within session
-
-### Error Resilience ❌
-- **Nil guard + `file-readable-p`** validation for `nucleus--read-file`
-- **Empty status-lines guard** in `gptel-auto-workflow-research-status-all`
-
-### Bug Fixes ❌
-- **Argument order fix** in `nucleus--validate-contract` — error messages misidentified arg name vs tool name
-- **Race condition fix** in `nucleus-sync-tool-profile` — buffer captured at fire time vs creation time in idle timer lambda
-
-### Code Clarity ❌
-- **Remove redundant `consp`/`keywordp` checks** — encoded in `inner-ht`; move `make-hash-table` inside guard; replace `condition-case nil` with `ignore-errors`
-- **Fix misleading indentation** in `gptel-auto-workflow-run-all-projects` and `gptel-auto-workflow--get-worktree-buffer`
-
----
-
-## Kept Hypotheses
-*None recorded*
+nil
 ```
 
-### Check Issues
-
-# Review of Research Strategy Document
-
-## Observations
-
-### Issue: Count Mismatch
-The header states **"15 total"** discarded hypotheses, but only **9** are listed. This needs clarification:
-- 3 (Performance) + 2 (Error Resilience) + 2 (Bug Fixes) + 2 (Code Clarity) = **9 total**
-
-### Missing Context
-The document lacks:
-- **Why** each hypothesis was discarded
-- **What evidence** led to rejection
-- **Outcome**: Did the project succeed despite discarding these?
-
-### Questionable "Kept Hypotheses"
-The "None recorded" under kept hypotheses seems incomplete—either:
-1. All hypotheses failed (worth stating explicitly)
-2. Kept hypotheses exist but weren't documented
-3. This is an interim status report
-
-## Suggestions
-
-| Element | Current State | Recommended |
-|---------|--------------|-------------|
-| Count | 9 listed / 15 claimed | Fix or document missing 6 |
-| Disposition | ❌ only | Add brief reason (e.g., "unnecessary", "caused regressions") |
-| Kept section | Empty | Either remove or mark "In Progress" / "All rejected" |
-| Purpose | Unclear | Add 1-sentence goal (e.g., "diagnose XYZ bug") |
-
-## Verdict
-
-**Document is incomplete/misleading** as written. The 15 vs 9 discrepancy and empty "Kept" section suggest this is a draft or scratchpad rather than finalized research documentation.
