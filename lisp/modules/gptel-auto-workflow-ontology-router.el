@@ -325,7 +325,7 @@ Categories based on module purpose from historical experiment analysis."
          :programming)
        ;; Tool-calls: sandbox, tool execution, bash, grep, glob, tools infrastructure
        ((or (string-match-p "sandbox" basename)
-            (string-match-p "\\`gptel-tools\\b" basename)  ; gptel-tools.el but not tools-agent*
+            (string-match-p "\\`gptel-tools\\.el\\'" basename)  ; exactly gptel-tools.el
             (string-match-p "\\`gptel-tools-[^a]" basename)  ; tools-* but not tools-agent*
             (string-match-p "\\`nucleus-tools" basename)    ; nucleus-tools*
             (member basename '("gptel-tools-bash.el" "gptel-tools-grep.el"

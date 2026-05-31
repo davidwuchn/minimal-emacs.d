@@ -629,9 +629,20 @@ AGENT-NAME must exist in `gptel-agent--agents`.
                                                        &optional files include-history include-diff active-grace)
   "Run `my/gptel--run-agent-tool' with TIMEOUT and optional ACTIVE-GRACE.
 Logs subagent dispatch to ontology for self-evolution tracking."
-  (let ((previous-timeout my/gptel-agent-task-timeout)
-        (previous-hard-timeout my/gptel-agent-task-hard-timeout)
-        (grace (or active-grace gptel-auto-experiment-active-grace)))
+  (let* ((adjusted-timeout
+          ;; Dynamic timeout: reduce for backends with strikes (verbum health ladder)
+          (if (and (fboundp 'gptel-auto-workflow--backend-health-level)
+                   (boundp 'gptel-backend) gptel-backend
+                   (fboundp 'gptel-backend-name))
+              (let* ((backend-name (gptel-auto-workflow--safe-backend-name gptel-backend))
+                     (health (gptel-auto-workflow--backend-health-level backend-name)))
+                (if (and (numberp health) (>= health 3))
+                    (min timeout 120)  ; probation/dead → max 120s
+                  timeout))
+            timeout))
+         (previous-timeout my/gptel-agent-task-timeout)
+         (previous-hard-timeout my/gptel-agent-task-hard-timeout)
+         (grace (or active-grace gptel-auto-experiment-active-grace)))
     ;; Log subagent dispatch to ontology tracking (for self-evolution)
     (when (and (boundp 'gptel-auto-workflow--current-target)
                gptel-auto-workflow--current-target

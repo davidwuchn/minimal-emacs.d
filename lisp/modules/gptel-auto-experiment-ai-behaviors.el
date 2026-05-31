@@ -829,6 +829,36 @@ When CATEGORY has no data, transfers from adjacent categories
   (advice-add 'gptel-auto-workflow-load-research-findings :around
               #'gptel-ai-behaviors--inject-research-priorities))
 
+;; ─── Target Saturation Detection ───
+
+(defun gptel-ai-behaviors--target-saturated-p (target)
+  "Return non-nil when TARGET has failed with the same error 3+ times.
+Uses experiment results to detect saturation patterns.
+Saturated targets are skipped to avoid wasting experiments."
+  (when target
+    (let* ((results (condition-case nil (gptel-auto-workflow--parse-all-results) (error nil)))
+           (failures nil))
+      (dolist (r results)
+        (when (and (equal (plist-get r :target) target)
+                   (not (equal (plist-get r :decision) "kept"))
+                   (plist-get r :comparator-reason))
+          (let ((reason (plist-get r :comparator-reason)))
+            ;; Group similar failures (e.g., "validation-failed" matches all validation failures)
+            (let ((key (cond ((string-match-p "validation.failed\\|verification.failed" reason) "validation")
+                            ((string-match-p "grader.*failed\\|grader.*reject" reason) "grader")
+                            ((string-match-p "timeout" reason) "timeout")
+                            ((string-match-p "api.*error\\|rate.limit\\|quota" reason) "api")
+                            (t reason))))
+              (push key failures)))))
+      (let* ((counts (make-hash-table :test 'equal)))
+        (dolist (f failures)
+          (puthash f (1+ (gethash f counts 0)) counts))
+        (let ((max-count 0) (max-key nil))
+          (maphash (lambda (k v) (when (> v max-count) (setq max-count v max-key k))) counts)
+          (when (and max-key (>= max-count 3))
+            (message "[saturation] ⏭ %s: %d× %s — skipping" target max-count max-key)
+            max-key))))))
+
 ;; ─── Validation Error Learning Loop ───
 
 (defvar gptel-ai-behaviors--validation-errors (make-hash-table :test 'equal)
