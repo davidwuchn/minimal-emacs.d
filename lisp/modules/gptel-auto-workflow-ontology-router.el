@@ -1479,9 +1479,18 @@ from the 8 nucleus archetypes for A/B testing."
              (:tool-calls "Synthesizer") (:natural-language "Academic")
              (_ "Craftsman")))
           ;; Self-evolve: check if data suggests a better persona
+          ;; Check three-way combo first: (category × archetype × hashtag)
+          ;; If a winning combo exists, prefer its archetype over best-persona alone
+          (combo-best (and (fboundp 'gptel-ai-behaviors--best-combo)
+                           (gptel-ai-behaviors--best-combo category)))
+          ;; Expose combo hashtag for behavior selection
+          (combo-hashtag (and combo-best (cdr combo-best)))
+          (_ (when (and combo-hashtag (boundp 'gptel-ai-behaviors--combo-hashtag))
+               (setq gptel-ai-behaviors--combo-hashtag combo-hashtag)))
           (learned-archetype
-           (and (fboundp 'gptel-ai-behaviors--best-persona)
-                (gptel-ai-behaviors--best-persona category)))
+           (or (and combo-best (car combo-best))  ; combo archetype wins
+               (and (fboundp 'gptel-ai-behaviors--best-persona)
+                    (gptel-ai-behaviors--best-persona category))))
            ;; Explore 20% when learned != default; curiosity 5% when default confirmed
            ;; Uses 8 nucleus archetypes: (op × mindset) derived
            (alternatives '("Investigator" "Craftsman" "Synthesizer" "Visionary"

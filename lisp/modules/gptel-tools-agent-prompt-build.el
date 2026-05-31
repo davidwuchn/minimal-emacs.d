@@ -1253,11 +1253,19 @@ Implements section-level A/B testing to identify effective prompt components."
           (strategy (and (boundp 'gptel-auto-workflow--current-strategy-name)
                          gptel-auto-workflow--current-strategy-name)))
       (when category
-        (let ((best (when (fboundp 'gptel-ai-behaviors--best-hashtag-for)
-                      (gptel-ai-behaviors--best-hashtag-for category strategy))))
-          (setq gptel-ai-behaviors--current-hashtags
-                (or best (gptel-ai-behaviors--category-hashtags category)))
-          (setq gptel-ai-behaviors--current-strategy strategy)))))
+         (let ((best (when (fboundp 'gptel-ai-behaviors--best-hashtag-for)
+                       (gptel-ai-behaviors--best-hashtag-for category strategy)))
+               ;; Prefer combo-recommended hashtag over best-hashtag when available
+               (combo-tag (and (boundp 'gptel-ai-behaviors--combo-hashtag)
+                               gptel-ai-behaviors--combo-hashtag)))
+           (setq gptel-ai-behaviors--current-hashtags
+                 (or (and combo-tag (format "#=%s" combo-tag))
+                     best
+                     (gptel-ai-behaviors--category-hashtags category)))
+           (setq gptel-ai-behaviors--current-strategy strategy)
+           ;; Reset combo tag after use
+           (when (boundp 'gptel-ai-behaviors--combo-hashtag)
+             (setq gptel-ai-behaviors--combo-hashtag nil))))))
   ;; Adapt compression based on token efficiency analysis
   (gptel-auto-workflow--adapt-prompt-compression)
   
