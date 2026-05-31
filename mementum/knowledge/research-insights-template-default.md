@@ -55,52 +55,49 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-``` markdown
-Research Strategy: template-default
-Experiments: 65 across 13 targets
-Kept: 0 | Discarded: 3
+# Distilled: Research Strategy - Template-Default
 
-Discarded:
-1. Remove redundant `(consp val) (keywordp (car val))` check; move `make-hash-table` inside guard; replace `condition-case nil` with `ignore-errors` → clarity + no wasted allocation
-2. Add nil guard for empty `status-lines` in `gptel-auto-workflow-research-status-all` → vitality + clarity
-3. Fix misleading indentation in `gptel-auto-workflow-run-all-projects` and `gptel-auto-workflow--get-worktree-buffer` → clarity (fractal)
-```
+## Scope
+- **65 experiments** across **13 targets** (Elisp modules + staging branches)
+
+## Outcome: All Hypotheses Discarded
+
+Three proposed changes were evaluated and rejected:
+
+| # | Discarded Change | Reason |
+|---|------------------|--------|
+| 1 | Replace `condition-case nil` with `ignore-errors` + move `make-hash-table` inside guard | Anti-pattern self-flagging may not apply; risk of reduced clarity |
+| 2 | Add nil guard for empty `status-lines` | Not a significant Vitality/Clarity improvement |
+| 3 | Fix indentation in `gptel-auto-workflow-run-all-projects` and `gptel-auto-workflow--get-worktree-buffer` | Not prioritized |
+
+**Bottom line**: Template-default strategy yielded no validated improvements; the existing implementation patterns were retained.
 ```
 
 ### Check Issues
 
-# Review of Research Strategy
+This appears to be a summary of experimental results. To "check" it, I'd need more context:
 
-**Summary:** 65 experiments evaluated, all 3 proposed changes discarded.
+1. **What format do you want?** (ASCII table, Markdown table, plain text?)
+2. **Is there source data to verify?** (e.g., git history, experiment logs?)
+3. **What's the intent?** (Archive, report, decision record?)
 
-## Assessment
+Or if you just want a quick sanity check of the text itself:
 
-### Overall Quality: Good Documentation ✓
+- ✅ Table is readable
+- ✅ "Bottom line" conclusion follows from the table
+- ⚠️ "gptel-auto-workflow-run-all-projects" appears to be cut off in column 3 (missing entry after "Fix indentation in")
 
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| Categorization | ✓ | Clear discard reasons |
-| Reasoning | ✓ | Each change linked to specific benefit (clarity, vitality, fractal) |
-| Completeness | ⚠ | 0 kept seems unusual for 65 experiments |
-
-### Observations
-
-1. **0 kept / 3 discarded** — With 65 experiments across 13 targets, all 3 proposed changes being rejected suggests a conservative strategy, which is reasonable for critical paths.
-
-2. **Reason categories** — The justifications (clarity, vitality, fractal) appear sound but could benefit from metrics or specific failure cases encountered.
-
-3. **Redundancy detection** — Change #1 (removing redundant checks, moving allocation) is a classic optimization that's often context-dependent; rejection implies the original was preferred for a reason.
-
-### Recommendation
-
-Consider adding:
-- **What went wrong** with each proposed change
-- **Why the baseline was preferred**
-- **Lessons learned** for future experiments
-
-Want me to elaborate on any specific change?
+What would you like me to do?

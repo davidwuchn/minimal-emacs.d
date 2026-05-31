@@ -1,7 +1,7 @@
 ### Allium Issue Trends
 **Recurring patterns** across all strategies:
 
-- **Breakdown the 40**: 1 occurrence(s)
-- **Cross-reference**: 1 occurrence(s)
-- **Verify call sites**: 1 occurrence(s)
+- **Redundancy detection**: 1 occurrence(s)
+- **Reason categories**: 1 occurrence(s)
+- **0 kept / 3 discarded**: 1 occurrence(s)
 
