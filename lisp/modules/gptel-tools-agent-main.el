@@ -638,6 +638,17 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
               (error (message "[auto-workflow] Reload-live-support error: %S" err)))
             (setq gptel-auto-workflow--cron-safe-step "cleanup")
             (setq gptel-auto-experiment--api-error-count 0)
+            ;; Clear accumulated backend health strikes so old failures
+            ;; don't quarantine all backends on restart.
+            (when (and (boundp 'gptel-auto-workflow--lambda-strike-count)
+                       (hash-table-p gptel-auto-workflow--lambda-strike-count))
+              (clrhash gptel-auto-workflow--lambda-strike-count))
+            (when (and (boundp 'gptel-auto-workflow--lambda-dead-until)
+                       (hash-table-p gptel-auto-workflow--lambda-dead-until))
+              (clrhash gptel-auto-workflow--lambda-dead-until))
+            (when (and (boundp 'gptel-auto-workflow--backend-lambda-health-cache)
+                       (hash-table-p gptel-auto-workflow--backend-lambda-health-cache))
+              (clrhash gptel-auto-workflow--backend-lambda-health-cache))
             (gptel-auto-workflow--safe-call "Cleanup" #'gptel-auto-workflow--cleanup-stale-state)
             (gptel-auto-workflow--safe-call "Sync staging"
               (lambda ()

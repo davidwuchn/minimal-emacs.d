@@ -118,36 +118,38 @@
        (> (length findings) 100)
        (string-match-p "\\S-" findings)))
 
-(defun slr--local-fallback-findings (&optional reason)
-  "Return local fallback findings when external research fails for REASON."
-  (format "## Local Research Fallback
-
-Research subagent did not return usable external findings%s.
-
-Use this local context for the pipeline instead of treating research as absent:
-
-- Prioritize daemon-loading safety: avoid `load-file` paths that can corrupt nested `lambda` or `maphash` forms in the workflow daemon.
-- Prefer nil-safety and proper-list guards around warm daemon state, cache lookups, and parsed subagent output.
-- Keep analyzer/controller outputs machine-parseable; when wrappers or code fences appear, scan for the first valid plist instead of parsing the whole response.
-- Treat timeout-sized or header-only research output as failed and fall back to local repository patterns.
-
-This fallback is intentionally local-only and should be replaced by fresh external research when the provider is healthy."
-          (if (and (stringp reason) (string-match-p "\\S-" reason))
-              (format " (%s)" (truncate-string-to-width reason 120 nil nil "..."))
-            "")))
+(defun slr--signal-missing-research (reason details)
+  "Signal a research pipeline defect for tracking.
+REASON is a symbol: daemon-disappeared, timeout, empty-response, or error.
+DETAILS is a string with additional context.
+Logs to var/tmp/research-defects.jsonl for experiment outcome correlation."
+  (let ((defect-data (list :reason reason
+                           :details details
+                           :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")
+                           :pipeline-defect t)))
+    ;; Log the defect to var/tmp for correlation with experiment outcomes
+    (let ((defect-file (expand-file-name "var/tmp/research-defects.jsonl"
+                                          (slr--root))))
+      (make-directory (file-name-directory defect-file) t)
+      (with-temp-file defect-file
+        (insert (json-encode defect-data))
+        (insert "\n")))
+    (message "[slr] RESEARCH PIPELINE DEFECT: %s — %s" reason details)
+    ;; Signal the defect as an error so callers can handle it explicitly
+    (signal 'research-pipeline-defect
+            (list reason details (format "[slr] Research pipeline defect: %s (%s)" reason details)))))
 
 (defun slr--finish-single-turn (prompt findings completion-callback)
   "Persist FINDINGS for PROMPT and invoke COMPLETION-CALLBACK."
-  (let ((final-findings
-         (if (slr--usable-findings-p findings)
-             findings
-           (message "[slr] Single-turn returned unusable findings (%d chars), using local fallback"
-                    (length (or findings "")))
-           (slr--local-fallback-findings findings))))
-    (slr--record-context prompt final-findings)
-    (slr--save-findings final-findings)
-    (when (functionp completion-callback)
-      (funcall completion-callback final-findings))))
+  (unless (slr--usable-findings-p findings)
+    (slr--signal-missing-research
+     'empty-response
+     (format "finish-single-turn received %d chars (need >100 with content)"
+             (length (or findings "")))))
+  (slr--record-context prompt findings)
+  (slr--save-findings findings)
+  (when (functionp completion-callback)
+    (funcall completion-callback findings)))
 
 (defun slr--run-single-turn (prompt completion-callback)
   "Run a single-turn research subagent call with PROMPT.
@@ -164,11 +166,16 @@ during deeply nested subagent setup (FSM, 31 tools, preset, context init)."
             (lambda (result)
               (let ((findings (or result "")))
                 (message "[slr] Subagent returned %d chars" (length findings))
-                (slr--finish-single-turn prompt findings completion-callback)))
+                (if (slr--usable-findings-p findings)
+                    (slr--finish-single-turn prompt findings completion-callback)
+                  (slr--signal-missing-research
+                   'empty-response
+                   (format "Subagent returned %d chars (need >100 with content)"
+                           (length findings))))))
             timeout)
          (error
-          (message "[slr] Single-turn subagent failed (%s), using local fallback" err)
-          (slr--finish-single-turn prompt (format "%s" err) completion-callback)))))))
+          (message "[slr] Single-turn subagent error (%s)" err)
+          (slr--signal-missing-research 'daemon-disappeared (format "%s" err))))))))
 
 (defun slr-run-research (&optional completion-callback)
   "Run external research using subagent and save results.
@@ -193,13 +200,13 @@ COMPLETION-CALLBACK receives the saved findings when provided."
                      (slr--save-findings findings)
                      (when (functionp completion-callback)
                        (funcall completion-callback findings)))
-                 (message "[slr] Multi-turn returned unusable findings (%d chars), falling back to single-turn"
-                          (length (or findings "")))
-                 (slr--run-single-turn (slr--build-prompt) completion-callback)))))
+                 (slr--signal-missing-research
+                  'empty-response
+                  (format "Multi-turn EMA returned %d chars (need >100 with content)"
+                          (length (or findings ""))))))))
         (error
-         (message "[slr] Multi-turn failed (%s), falling back to single-turn" err)
-         (message "[slr] Backtrace: %s" (with-output-to-string (backtrace)))
-         (slr--run-single-turn (slr--build-prompt) completion-callback)))
+         (message "[slr] Multi-turn failed (%s)" err)
+         (slr--signal-missing-research 'daemon-disappeared (format "%s" err)))))
     ;; Fallback: single-turn research (raw SKILL.md, no controller)
     (slr--run-single-turn (slr--build-prompt) completion-callback)))
 

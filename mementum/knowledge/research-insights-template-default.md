@@ -11,14 +11,14 @@ allium-status: ok
 
 # Research Strategy: template-default
 
-*Consolidated from 76 experiments (3% keep rate).*
+*Consolidated from 62 experiments (3% keep rate).*
 
-**Performance:** 2 kept / 0 discarded / 12 failed (EXTRACTED — from TSV)
+**Performance:** 2 kept / 0 discarded / 4 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
 - `lisp/modules/gptel-tools-agent-prompt-build.el` (1 kept / 2 failed)
-- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 5 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept)
 
 ### Structure (deterministic scan)
 
@@ -36,10 +36,9 @@ handlers: nil, nil, err, ..., ...), err, err, err, err, err, nil, nil
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-auto-workflow-strategic.el` (4 failed)
-- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 5 failed)
 - `lisp/modules/gptel-tools-agent-error.el` (1 failed)
 - `lisp/modules/gptel-tools-agent-prompt-build.el` (1 kept / 2 failed)
+- `lisp/modules/gptel-auto-workflow-strategic.el` (1 failed)
 
 ## Allium Behavioral Coherence
 
@@ -60,41 +59,62 @@ These targets may need different research patterns or the research findings were
 
 
 
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*4 check issues (severity 0.30). EXTRACTED from distill→check pipeline.*
 
 ```allium
 ## Research Strategy Distillation
 
-**Strategy:** Template-default
+### Strategy
+- **Type:** Template-default approach
+- **Scope:** 62 experiments across 6 target modules
 
-**Scope:** 76 experiments across 6 Emacs Lisp modules
+### Key Details
+- **Hypotheses Kept:** 2
+  - No explicit hypothesis was formally stated at the outset
+  - Focus area: improvement of `gptel-auto-workflow-list-project-buffers` function
+- **Hypotheses Discarded:** 0
 
-**Modules examined:**
-- `gptel-benchmark-subagent.el`
-- `gptel-tools-agent-error.el`
-- `gptel-benchmark-comparator.el`
-- `gptel-tools-agent-prompt-build.el`
-- `gptel-auto-workflow-strategic.el`
-- `gptel-auto-workflow-projects.el`
-
-**Outcome:**
-
-| Category | Count |
-|----------|-------|
-| Kept hypotheses | 1 |
-| Discarded hypotheses | 0 |
-| Unstated hypotheses | 5 modules worth |
-
-**Active focus:** Improving `gptel-auto-workflow-list-project-buffers`
-
-**Summary:** Most hypotheses remain unstated or unspecified. One hypothesis about the project buffer listing function was retained for iteration.
+### Summary
+This was a template-driven experimental strategy with no explicitly stated starting hypothesis. The work concentrated on improving a single function (`gptel-auto-workflow-list-project-buffers`). All 62 experiments were retained—none were discarded—suggesting either a broad exploratory approach or incremental refinements that showed promise.
 ```
 
+### Check Issues
+
+Looking at this summary, I notice several issues:
+
+## Inconsistencies Found
+
+1. **Contradictory hypothesis statements:**
+   - "No explicit hypothesis was formally stated at the outset"
+   - "Hypotheses Kept: 2"
+   
+   If no hypothesis was stated, how can 2 be "kept"?
+
+2. **Unusual experiment retention rate:**
+   - 62 experiments, 0 discarded = 100% retention
+   - This is statistically improbable unless:
+     - A very low bar for "experiment" (likely just test runs)
+     - No filtering/discarding process was used
+     - "Experiment" is being used loosely
+
+3. **Scope mismatch:**
+   - 62 experiments across **6 target modules**
+   - But focus is on improving **1 function**
+   - Either the scope is broader than described, or the count is inflated
+
+4. **Vague language:**
+   - "suggesting either a broad exploratory approach or incremental refinements that showed promise"
+   - This hedges too much and doesn't give a clear verdict
+
+## Recommendations
+
+- Clarify what constitutes an "experiment" in this context
+- Explain the relationship between the 2 kept hypotheses and the 6 modules
+- Define the discarding criteria (or lack thereof)
+- State explicitly what the starting hypothesis(es) were
+
+**Bottom line:** This summary reads like a templated document with fill-in-the-blanks that weren't fully thought through. The numbers don't align logically.
+
+Would you like me to help rewrite it more accurately?
