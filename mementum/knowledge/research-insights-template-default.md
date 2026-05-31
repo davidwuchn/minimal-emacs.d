@@ -60,68 +60,70 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-## Distilled Research Strategy
+# Research Strategy Distillation
 
-**Template:** template-default
+## Summary
+- **Strategy:** template-default
+- **Experiments conducted:** 65 across 13 targets
+- **Hypotheses kept:** 0
+- **Hypotheses discarded:** 3
 
-**Scope:** 107 experiments across 11 targets
+## Discarded Hypotheses
 
-**Targets:**
-- `lisp/modules/gptel-ext-tool-permits.el`
-- `staging-review`
-- `lisp/modules/gptel-benchmark-analysis.el`
-- `test`
-- `lisp/modules/gptel-benchmark-subagent.el`
-- `lisp/modules/gptel-tools-agent-error.el`
-- `lisp/modules/gptel-benchmark-comparator.el`
-- `lisp/modules/gptel-tools-agent-prompt-build.el`
-- `lisp/modules/gptel-auto-workflow-strategic.el`
-- `lisp/modules/gptel-auto-workflow-projects.el`
+| # | Discarded Change | Claimed Benefit |
+|---|------------------|-----------------|
+| 1 | Remove redundant type checks; move `make-hash-table` inside guard; replace `condition-case` with `ignore-errors` | Reduces allocation, improves clarity |
+| 2 | Add nil guard for empty `status-lines` | Improves error resilience, explicit edge case handling |
+| 3 | Fix misleading indentation in two functions | Improves code structure accuracy (fractal clarity) |
 
-**Hypotheses:** None stated
-
-**Observations:**
-- Potential improvement target: `gptel-auto-workflow-list-project-buffers`
-
-**Discarded:** —
+## Interpretation
+All three discarded hypotheses were clarity/maintenance improvements targeting specific anti-patterns or visual misalignments. No hypotheses survived the research process, suggesting either:
+- The proposed changes were unnecessary after deeper analysis
+- The experiments did not validate the claimed benefits
+- Project-specific constraints outweighed the generic improvements
 ```
 
 ### Check Issues
 
-# Research Strategy Review
+# Review: Research Strategy Distillation
 
-## ✅ Structure Valid
+## Internal Consistency ✓
+| Metric | Value | Status |
+|--------|-------|--------|
+| Experiments | 65 | Reasonable sample |
+| Targets | 13 | ~5 experiments/target average |
+| Discarded | 3 | Coherent with "kept: 0" |
+| Kept | 0 | Consistent pattern |
 
-The template is well-formatted with clear sections.
+## Observations
 
-## ⚠️ Potential Issues
+**Reasonable outcome.** Zero survival rate after 65 experiments suggests either:
+1. Strong baseline implementation
+2. Strict validation criteria
+3. Proposed changes addressed non-problems
 
-| Section | Issue |
-|---------|-------|
-| **Hypotheses** | Empty — unclear what you're actually testing |
-| **Discarded** | Empty — unclear what was ruled out |
-| **Scope** | "107 experiments" seems high for 11 targets — is this realistic? |
-| **Observations** | Lists `gptel-auto-workflow-list-project-buffers` but not why |
+**Hypothesis quality:**
+- Hypothesis 1 is aggressive—removing `condition-case` for `ignore-errors` loses structured error handling (loss of control flow visibility)
+- Hypotheses 2 & 3 are maintenance-level (defensive coding, cosmetic)
 
-## 🔍 Questions
+## Minor Issue
 
-1. What's the experimental goal? (e.g., performance, accuracy, error reduction?)
-2. How do you plan to run 107 experiments?
-3. Why are `staging-review` and `test` listed as targets alongside `.el` files?
-4. What metric defines "success" for these experiments?
+The "Claimed Benefit" column frames these as *improvements*, but none are performance claims. The interpretation correctly notes they target clarity/maintenance.
 
-## Recommendation
-
-Add:
-- At least one **hypothesis** per target
-- A **timeline** or resource estimate for 107 experiments
-- **Discarded items** to show the search space was narrowed intentionally
-
----
-
-Want me to help flesh out any of these sections?
+**Would you like me to:**
+- Analyze the discarded hypotheses in more detail?
+- Suggest alternative refactoring directions?
+- Review the underlying code if available?

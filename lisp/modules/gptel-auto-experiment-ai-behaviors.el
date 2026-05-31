@@ -833,7 +833,7 @@ Returns parsed entries for evolution analysis."
       (dolist (r results)
         (let ((cat (nth 0 r)) (verdict (nth 1 r)) (acts (nth 2 r)))
           (when (string-prefix-p "STUCK" verdict) (push cat stuck-cats))
-          (when (and (> acts 0) (string-prefix-p "ACTIVE\\|PROGRESS" verdict))
+          (when (and (> acts 0) (string-match-p "ACTIVE\\|PROGRESS" verdict))
             (push cat active-cats))))
       (dolist (cat (seq-uniq stuck-cats))
         (let* ((current (gptel-ai-behaviors--category-hashtags cat))
