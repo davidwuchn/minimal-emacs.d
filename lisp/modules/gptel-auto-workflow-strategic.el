@@ -1554,10 +1554,10 @@ ASSUMPTION: my/gptel-agent-task-timeout may be unbound in some configurations.
 EDGE CASE: Unbound timeout variable defaults to 0, letting analyzer-time-budget govern."
   (let* ((context (gptel-auto-workflow--gather-context))
          (max-targets gptel-auto-workflow-max-targets-per-run)
-         (analyzer-timeout (min (or (and (boundp 'my/gptel-agent-task-timeout)
-                                         my/gptel-agent-task-timeout)
-                                    0)
-                                gptel-auto-workflow-analyzer-time-budget))
+          (analyzer-timeout (min (or (and (boundp 'my/gptel-agent-task-timeout)
+                                          my/gptel-agent-task-timeout)
+                                     gptel-auto-workflow-analyzer-time-budget)
+                                 gptel-auto-workflow-analyzer-time-budget))
          (prompt (gptel-auto-workflow--build-analyzer-prompt
                   context research-findings max-targets)))
     (if (and gptel-auto-experiment-use-subagents
