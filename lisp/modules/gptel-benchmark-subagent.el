@@ -142,6 +142,13 @@ subagent context for a single dispatch.")
 Calls CALLBACK with result when complete.
 TIMEOUT overrides the default benchmark subagent timeout.
 Auto-applies LLM backend failover when current provider is rate-limited."
+  ;; GUARD: nil callback → void-function nil crash. Replace with safe logger.
+  (unless (functionp callback)
+    (message "[subagent] ⚠ %s dispatched with non-function callback (%s), replacing with safe fallback"
+             type (if (symbolp callback) callback (type-of callback)))
+    (setq callback (lambda (result)
+                     (message "[subagent] %s result discarded (nil callback): %s"
+                              type (my/gptel--sanitize-for-logging (format "%s" result) 100)))))
   ;; GUARD: Ensure required nucleus tools are loaded before launching subagent.
   ;; In deferred-init daemons, tool modules may not be loaded yet when the
   ;; first subagent fires. Force-require gptel-tools to warm the registry.

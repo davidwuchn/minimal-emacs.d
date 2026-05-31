@@ -4,46 +4,47 @@ status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
 insight-quality: 0.2/10
-allium-issues: 7
-allium-severity: 0.00
+allium-issues: 3
+allium-severity: 0.05
 allium-status: ok
 ---
 
 # Research Strategy: template-default
 
-*Consolidated from 100 experiments (2% keep rate).*
+*Consolidated from 61 experiments (2% keep rate).*
 
-**Performance:** 2 kept / 0 discarded / 13 failed (EXTRACTED — from TSV)
+**Performance:** 1 kept / 3 discarded / 21 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
-- `lisp/modules/gptel-tools-agent-prompt-build.el` (1 kept / 2 failed)
-- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 5 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 2 discarded / 9 failed)
 
 ### Structure (deterministic scan)
 
 ```elisp-structure
-defuns: gptel-auto-workflow--knowledge-cache-get, gptel-auto-workflow--knowledge-cache-set, gptel-auto-workflow--knowledge-cache-invalidate, gptel-auto-workflow--knowledge-cache-stats, gptel-auto-workflow--load-token-efficiency-data, gptel-auto-workflow--adapt-prompt-compression, gptel-auto-experiment--prompt-structure-score, gptel-auto-experiment--kibcm-axis, gptel-auto-experiment--forge-fixed-point, gptel-auto-experiment--compile-score, gptel-auto-experiment--decompile-score, gptel-auto-experiment--nucleus-compiler-prompt, gptel-auto-experiment--forge-lambda-fixed-point, gptel-auto-experiment--edn-richness-score, gptel-auto-experiment--count-edn-elements, gptel-auto-experiment--use-lambda-prompts-p, gptel-auto-experiment--lambda-compress-prompt, gptel-auto-experiment--resolve-prompt, gptel-auto-experiment--allium-compiler-prompt, gptel-auto-experiment--allium-distill
-defvars: gptel-auto-workflow--skills), gptel-auto-experiment-large-target-byte-threshold), gptel-auto-workflow--last-prompt-sections), gptel-auto-workflow--current-research-context), gptel-auto-experiment-time-budget), gptel-auto-workflow-use-staging), gptel-auto-workflow--running), gptel-auto-workflow--stats), gptel-auto-experiment-validation-retry-active-grace), gptel-auto-workflow--legacy-validation-retry-active-grace), gptel-auto-workflow--current-validation-retry-active-grace), my/gptel-subagent-stream), gptel-auto-workflow--knowledge-cache, gptel-auto-workflow--knowledge-cache-max-age, gptel-auto-workflow--topic-knowledge-max-chars, gptel-auto-experiment--lambda-verified-backends, gptel-auto-experiment--allium-research-cache, gptel-auto-workflow--ab-test-sections, gptel-auto-workflow--ab-test-omit-rate, gptel-auto-workflow--ab-test-min-samples
-requires: cl-lib, seq, subr-x
-provides: gptel-tools-agent-prompt-build
-declares: gptel-agent-read-file, gptel-auto-workflow--valid-strategy-name-p, gptel-auto-workflow-load-research-findings, gptel-benchmark--detect-task-type, my/gptel-get-model-metadata, gptel-auto-workflow--current-run-id, gptel-auto-workflow--ensure-results-file, gptel-auto-workflow--make-idempotent-callback, gptel-auto-workflow--non-empty-string-p, gptel-auto-workflow--plist-get, gptel-auto-workflow--results-file-path, gptel-auto-workflow--worktree-base-root, gptel-auto-experiment--eight-keys-scores, gptel-auto-workflow--project-root, gptel-auto-workflow--persist-status, my/gptel--sanitize-for-logging, gptel-auto-workflow--extract-mutation-templates, gptel-auto-workflow--format-weakest-keys, gptel-auto-workflow-skill-suggest-hypothesis, gptel-auto-experiment--inspection-thrash-result-p
-errors: Error, error, error, ERROR, error, error, error, Error, signal, error, signal, error, error, error, error, error, error, error
-handlers: nil, nil, err, ..., ...), err, err, err, err, err, nil
+defuns: gptel-auto-workflow--ensure-buffer-tables, gptel-auto-workflow--normalized-projects, gptel-auto-workflow--normalize-worktree-dir, gptel-auto-workflow--buffer-tool-snapshot, gptel-auto-workflow--routed-fsm-info, gptel-auto-workflow--get-worktree-buffer, gptel-auto-workflow--get-project-buffer, gptel-auto-workflow-add-project, gptel-auto-workflow-remove-project, gptel-auto-workflow-list-projects, gptel-auto-workflow-run-all-projects, gptel-auto-workflow--finish-queued-cron-job, gptel-auto-workflow--queue-cron-job, gptel-auto-workflow-queue-all-projects, gptel-auto-workflow--get-project-for-context, gptel-auto-workflow--advice-task-override, gptel-auto-workflow-enable-per-project-subagents, gptel-auto-workflow-disable-per-project-subagents, gptel-auto-workflow--advice-task-overlay-buffer, gptel-auto-workflow--enable-overlay-buffer-advice
+defvars: gptel-auto-workflow--async, gptel-auto-workflow--process, gptel-auto-workflow--worktree-state, gptel-auto-workflow-worktree-base, gptel-auto-workflow--current-target, gptel-auto-workflow-projects, gptel-auto-workflow--project-buffers, gptel-auto-workflow--current-project, gptel-auto-workflow--run-project-root, gptel-auto-workflow--cron-job-running, gptel-auto-workflow--stats, gptel-auto-workflow--running, gptel-auto-workflow--cron-job-timer, gptel-auto-workflow--defer-subagent-env-persistence, mementum-root, gptel-auto-workflow--project-root-override), gptel-auto-workflow--research-findings-cache, gptel-auto-workflow--worktree-buffers, gptel-auto-workflow--normalized-projects-cache, gptel-auto-workflow--normalized-projects-hash
+requires: cl-lib, gptel-tools-agent
+provides: gptel-auto-workflow-projects
+declares: gptel-auto-workflow--project-root, gptel-auto-workflow--get-worktree-dir, gptel-auto-workflow--mark-messages-start, gptel-auto-workflow--persist-status, gptel-auto-workflow-cron-safe, gptel-auto-workflow-run-async--guarded, gptel-auto-workflow-run-research, gptel-fsm-info, gptel-mementum-weekly-job, gptel-benchmark-instincts-weekly-job, gptel-auto-workflow--run-autotts-evolution, gptel-auto-workflow--reorder-fallbacks-by-ontology, gptel-auto-workflow--run-research-champion-league, gptel-auto-workflow--run-strategy-evolution
+errors: error, error, error, error, error, error, error, user-error, error, error, error, error, error, signal
+handlers: err, err, err, err, nil, nil, err, err, nil, nil, err, err, err, err, err, err, err
+advised: gptel-agent--task, gptel-agent--task-overlay
 ```
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-auto-workflow-strategic.el` (5 failed)
-- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 5 failed)
-- `lisp/modules/gptel-tools-agent-error.el` (1 failed)
-- `lisp/modules/gptel-tools-agent-prompt-build.el` (1 kept / 2 failed)
+- `lisp/modules/gptel-tools-agent-prompt-build.el` (4 failed)
+- `lisp/modules/gptel-tools-agent-error.el` (2 failed)
+- `lisp/modules/gptel-benchmark-principles.el` (2 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 2 discarded / 9 failed)
+- `lisp/modules/treesit-agent-tools-workspace.el` (1 failed)
 
 ## Allium Behavioral Coherence
 
-*7 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
+*3 behavioral issues (severity 0.05). EXTRACTED from Allium v3 pipeline.*
 
 
 
@@ -60,84 +61,63 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy Summary
+**Distilled Research Strategy Summary**
 
-**Strategy:** template-default
+**Scope**: 61 experiments across 13 Elisp modules (detailed below).  
+**Template**: default research strategy.  
 
----
+**Kept Hypotheses**  
+None.  
+ (No hypothesis was retained after evaluation.)  
 
-## Experiments
-**100 experiments** across 9 targets:
+**Discarded Hypotheses**  
+1. **Memory‑allocation micro‑optimisation**  
+   - *Change*: Removing redundant `(consp val) (keywordp (car val))` check (already encoded in `inner-ht` computation) and moving `make-hash-table` inside the guard to avoid speculative allocation; replacing `condition-case nil` with `ignore-errors` (self‑flagged anti‑pattern at L362).  
+   - *Rationale*: Improves clarity, reduces wasted allocation, and uses idiomatic error suppression.  
 
-| Category | Files |
-|----------|-------|
-| Benchmarking | `gptel-benchmark-analysis.el`, `gptel-benchmark-subagent.el`, `gptel-benchmark-comparator.el` |
-| Workflow | `gptel-auto-workflow-strategic.el`, `gptel-auto-workflow-projects.el` |
-| Tools/Agents | `gptel-tools-agent-error.el`, `gptel-tools-agent-prompt-build.el` |
-| Testing | `test` |
-| Staging | `staging-review` |
+2. **Empty‑status guard**  
+   - *Change*: Adding a nil guard for empty `status-lines` in `gptel-auto-workflow-research-status-all` to prevent caching empty results when no projects are configured.  
+   - *Rationale*: Enhances Vitality (error resilience) and Clarity (explicit edge‑case handling).  
 
----
-
-## Hypotheses
-
-**Kept:**
-- Improve `gptel-auto-workflow-list-project-buffers` function
-
-**Discarded:** None documented
+3. **Indentation fix for structural honesty**  
+   - *Change*: Correcting misleading indentation in `gptel-auto-workflow-run-all-projects` (where `with-current-buffer` appeared nested inside `when` but was actually at `progn` level) and in `gptel-auto-workflow--get-worktree-buffer` (over‑indented `dolist`).  
+   - *Rationale*: Enforces fractal Clarity by aligning visual code structure with the actual parse tree.  
 
 ---
 
-*No formal hypothesis statement provided.*
+**Modules Under Experimentation**  
+- `lisp/modules/gptel-tools-memory.el`
+- `staging-review`
+- `staging-merge`
+- `staging-scope`
+- `staging-verification`
+- `lisp/modules/nucleus-prompts.el`
+- `lisp/modules/gptel-tools-agent-error.el`
+- `lisp/modules/gptel-tools-agent-prompt-build.el`
+- `lisp/modules/gptel-benchmark-principles.el`
+- `lisp/modules/treesit-agent-tools-workspace.el`
+- `lisp/modules/gptel-auto-workflow-strategic.el`
+- `lisp/modules/gptel-auto-workflow-projects.el`
+- `lisp/modules/gptel-ext-tool-permits.el`
+
+(**Note**: The kept‑hypotheses section was intentionally left blank; no provisional hypotheses were carried forward.)
 ```
 
 ### Check Issues
 
-# Review: Research Strategy Summary
+The summary appears internally consistent and well-structured:
 
-## Issues Identified
+- **No kept hypotheses** is correct, and the note explicitly states that the section was left blank intentionally.
+- **Three discarded hypotheses** are clearly described with specific changes and rationales. The micro-optimisation hypothesis includes a pointer to a self‑flagged anti‑pattern (`condition-case` → `ignore-errors`), which suggests the strategy is aware of idiomatic improvements.
+- **Modules under experimentation** list 13 files; the count matches the summary’s claim. The naming suggests a plausible set of Elisp modules.
 
-| Issue | Severity | Notes |
-|-------|----------|-------|
-| No formal hypothesis | ⚠️ Medium | The summary explicitly notes this is missing |
-| "100 experiments" unclear | 🔴 High | Listed files represent ~9 targets, not 100 experiments |
-| No discarded hypotheses | ⚠️ Medium | Either very high success rate or incomplete tracking |
+One minor observation: the memory‑allocation hypothesis mentions moving `make-hash-table` inside a guard to avoid speculative allocation. That’s sound in principle, but without seeing the original code it’s impossible to confirm whether the pre‑existing check was truly redundant (the phrase “already encoded in inner‑ht computation” may need a second pair of eyes if you’re implementing it). The other two discarded hypotheses (empty‑status guard and indentation fix) are straightforward and likely correct.
 
----
-
-## Key Questions
-
-1. **What is the actual scope?**  
-   - 100 experiments? or 9 target areas?
-   - Are there sub-experiments within each file?
-
-2. **What does "template-default" strategy mean?**  
-   - No description provided
-   - How does this differ from other strategies?
-
-3. **What problem is being solved?**  
-   - The kept hypothesis references a specific function improvement
-   - But no overarching research question stated
-
----
-
-## Recommendations
-
-```
-✓ Add: Formal hypothesis statement (null + alternative)
-✓ Clarify: Relationship between "100 experiments" and 9 file categories
-✓ Document: Criteria for hypothesis discard/retention
-✓ Define: What "template-default" strategy entails
-```
-
----
-
-## Want Me To:
-- Draft a formal hypothesis template?
-- Clarify the experiment categorization?
-- Suggest rewording for the kept hypothesis?
+Overall, the summary is clear, internally consistent, and aligns with the stated scope. If this is part of a research log, it’s ready for archive or further review.
