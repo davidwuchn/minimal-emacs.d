@@ -2899,26 +2899,30 @@ Cached unless FORCE is non-nil."
      :preconditions ("tool-registry-initialized" "fsm-not-in-error-state")
      :commit-criteria ("tool-dispatch-still-works" "error-handling-intact")
      :verification-commands ("emacs --batch --eval \"(check-parens)\""
-                             "emacs -Q --batch -f batch-byte-compile"))
+                             "emacs -Q --batch -f batch-byte-compile")
+     :instructions "⚠ AGENTIC: changes affect subagent dispatch. Add nil-guards on gethash/assoc in FSM callbacks. Never remove error handlers without replacement.")
     (:programming
      :description "Code refactoring, performance, and bug fixes"
      :preconditions ("file-byte-compiles" "no-syntax-errors")
      :commit-criteria ("all-tests-pass" "no-regressions" "style-integrity")
      :verification-commands ("emacs --batch --eval \"(check-parens)\""
-                             "emacs -Q --batch -f batch-byte-compile"))
+                             "emacs -Q --batch -f batch-byte-compile")
+     :instructions "⚠ PROGRAMMING: byte-compile after EVERY edit. Add nil-guards (ignore-errors, condition-case, hash-table-p). Extract duplicated code. Never reformat.")
     (:tool-calls
      :description "Sandbox execution and file operation tools"
      :preconditions ("tool-argument-schemas-valid" "sandbox-rules-loaded")
      :commit-criteria ("tool-call-still-works" "error-handling-robust")
      :verification-commands ("emacs --batch --eval \"(check-parens)\""
-                             "emacs -Q --batch -f batch-byte-compile"))
+                             "emacs -Q --batch -f batch-byte-compile")
+     :instructions "⚠ TOOL-CALLS: validate tool arguments with schemas. Add boundary checks on file paths. Never bypass sandbox rules for direct operations.")
     (:natural-language
      :description "Prompt templates, text processing, context management"
      :preconditions ("file-byte-compiles")
      :commit-criteria ("prompt-format-preserved" "fallback-handlers-intact")
      :verification-commands ("emacs --batch --eval \"(check-parens)\""
-                             "emacs -Q --batch -f batch-byte-compile")))
-  "Per-category action schema with preconditions, commit criteria, and verification commands.")
+                             "emacs -Q --batch -f batch-byte-compile")
+     :instructions "⚠ NATURAL-LANGUAGE: preserve prompt template structure. Don't remove fallback handlers. Test with sample input after changes."))
+  "Per-category action schema with preconditions, commit criteria, verification commands, and category-specific instructions.")
 
 (defun gptel-auto-workflow--format-schema-guidance (target)
   "Format action schema for TARGET as prompt guidance string."
@@ -2934,6 +2938,16 @@ Cached unless FORCE is non-nil."
                            (plist-get schema :commit-criteria) "\n")
                 (mapconcat (lambda (v) (format "  $ %s" v))
                            (plist-get schema :verification-commands) "\n"))))))
+
+(defun gptel-auto-workflow--category-instructions (target)
+  "Return category-specific agent instructions for TARGET.
+Extracted from the ontology action schema.
+Returns empty string when target category is unknown."
+  (when (and target (fboundp 'gptel-auto-workflow--categorize-target))
+    (let* ((cat (gptel-auto-workflow--categorize-target target))
+           (schema (cdr (assoc cat gptel-auto-workflow--category-action-schemas)))
+           (instructions (plist-get schema :instructions)))
+      (or instructions ""))))
 
 (defun gptel-auto-workflow--check-action-preconditions (target)
   "Check action preconditions for TARGET's category.

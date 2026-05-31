@@ -25,6 +25,8 @@ Working dir: {{worktree-path}}
 
 {{review-feedback}}
 
+{{category-instructions}}
+
 ## VERIFY (MANDATORY)
 After every Edit:
 1. `{{sexp-check-command}}` → must PASS
