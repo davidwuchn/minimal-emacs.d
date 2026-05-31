@@ -47,3 +47,21 @@ These targets may need different research patterns or the research findings were
 - **This strategy underperforms.** Consider evolving a new approach.
 - The findings may be too generic or targeting the wrong files.
 - Try combining with git history for recency bias.
+
+
+
+
+
+
+
+
+
+
+## Allium Behavioral Spec (auto-generated, v3)
+
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+
+```allium
+nil
+```
+

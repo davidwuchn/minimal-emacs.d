@@ -2015,12 +2015,12 @@ CF-Gateway removed — does not support tool calls reliably."
   :group 'gptel-tools-agent)
 
 (defcustom gptel-auto-workflow-headless-fallback-agents
-  '("analyzer" "comparator" "executor" "grader" "researcher" "reviewer")
+  '("comparator" "executor" "grader" "researcher" "reviewer")
   "Headless subagents that should use the fallback provider list.
-
-DashScope is preferred for headless runs (faster, independent quota).
-The fallback chain DNS-polls through DashScope, DeepSeek, moonshot,
-CF-Gateway, then MiniMax."
+Analyzer excluded — it only selects targets (lightweight), doesn't need
+the heavy fallback chain. Without this, analyzer tries DeepSeek first
+(120s timeout) before falling through to MiniMax, wasting 2+ minutes
+per analyzer call."
   :type '(repeat string)
   :group 'gptel-tools-agent)
 
