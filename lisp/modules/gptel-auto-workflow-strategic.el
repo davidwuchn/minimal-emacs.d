@@ -556,7 +556,7 @@ EDGE CASE: Empty plist data returns empty hash table (not nil)."
 
 (defun gptel-auto-workflow--load-researcher-meta-learning ()
   "Load meta-learning data for researcher skill.
-Reads topic-performance.json and returns formatted stats.
+Reads topic-performance.json and enriches with ontology category data.
 Returns nil if data not available."
   (let* ((data-dir (expand-file-name "assistant/skills/researcher-prompt/data" 
                                      (gptel-auto-workflow--effective-project-root)))
@@ -567,7 +567,9 @@ Returns nil if data not available."
                  (topics (when data (gethash "topics" data))))
             (when (and topics (hash-table-p topics))
               (let ((total-exp (gethash "total_experiments" data 0))
-                    (total-kept 0))
+                    (total-kept 0)
+                    ;; Ontology enrichment: per-category research impact
+                    (cat-impact (gptel-auto-workflow--research-impact-by-category)))
                 (maphash
                  (lambda (_topic-key stats)
                    (when (hash-table-p stats)
@@ -578,10 +580,49 @@ Returns nil if data not available."
                                        0)
                       :kept total-kept
                       :total total-exp
-                      :topics topics))))
+                      :topics topics
+                      :category-impact cat-impact))))  ; ontology enrichment
         (error 
          (message "[research] Error loading meta-learning data: %s" err)
          nil)))))
+
+(defun gptel-auto-workflow--research-impact-by-category ()
+  "Compute per-category research impact from experiment outcomes.
+Returns formatted string showing which categories benefit from research,
+or nil if insufficient data."
+  (let* ((results (condition-case nil (gptel-auto-workflow--parse-all-results) (error nil)))
+         (cat-stats (make-hash-table :test 'equal))
+         (parts nil))
+    (when results
+      (dolist (r results)
+        (let* ((target (plist-get r :target))
+               (kept (equal (plist-get r :decision) "kept"))
+               (has-research (plist-get r :has-research))
+               (cat (and target (fboundp 'gptel-auto-workflow--categorize-target)
+                         (gptel-auto-workflow--categorize-target target))))
+          (when cat
+            (let ((entry (gethash cat cat-stats (list :total 0 :kept 0 :with-research 0 :kept-with-research 0))))
+              (setf (plist-get entry :total) (1+ (plist-get entry :total)))
+              (when kept (setf (plist-get entry :kept) (1+ (plist-get entry :kept))))
+              (when has-research
+                (setf (plist-get entry :with-research) (1+ (plist-get entry :with-research)))
+                (when kept (setf (plist-get entry :kept-with-research) (1+ (plist-get entry :kept-with-research)))))
+              (puthash cat entry cat-stats))))))
+    (maphash
+     (lambda (cat stats)
+       (let* ((with-r (plist-get stats :with-research))
+              (kept-r (plist-get stats :kept-with-research))
+              (total (plist-get stats :total))
+              (rate (if (> with-r 0) (/ (float kept-r) with-r) 0))
+              (need (if (> rate 0.1) "HIGH — continue" (if (> total 5) "LOW — skip" "INSUFFICIENT DATA"))))
+         (when (>= total 3)
+           (push (format "  %s: %.0f%% kept with research (%d/%d) → %s"
+                         cat (* 100 rate) kept-r with-r need)
+                 parts))))
+     cat-stats)
+    (when parts
+      (concat "### Per-category research impact (ontology-enriched)\n"
+              (mapconcat #'identity (nreverse parts) "\n")))))
 
 (defun gptel-auto-workflow--substitute-researcher-variables (skill-content)
   "Substitute template variables in SKILL-CONTENT with meta-learning data.
@@ -655,6 +696,13 @@ daemon's evolve_researcher.py, restores template variables before substituting."
                    (gptel-auto-workflow--format-strategy-guidance-json guidance-json)
                  "*Controller not yet evolved.*")
                skill-content t t)))
+      ;; Inject per-category research impact (ontology-enriched)
+      (let ((cat-impact (plist-get meta-data :category-impact)))
+        (when cat-impact
+          (setq skill-content
+                (replace-regexp-in-string
+                 "{{category-impact}}" cat-impact
+                 skill-content t t))))
       ;; Inject current executor bottlenecks so researcher targets real problems
       (let ((bottlenecks (gptel-auto-workflow--current-bottleneck-report)))
         (setq skill-content
