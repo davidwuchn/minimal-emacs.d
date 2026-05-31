@@ -359,7 +359,11 @@ Uses hash table keyed by task-id to support parallel execution."
                    (funcall restore-origin-fsm child-fsm)
                    (unwind-protect
                        (my/gptel--invoke-callback-safely callback result agent-type)
-                     (remhash task-id my/gptel--agent-task-state))))))))
+                     ;; Defer remhash to periodic cleanup (reset-agent-task-state)
+                     ;; to prevent duplicate callbacks from seeing nil state and
+                     ;; discarding results as "stale" (the :done flag above prevents
+                     ;; double processing even when entry persists).
+                     nil)))))))
       (cl-labels
          ((finish-timeout (state timeout-seconds timeout-suffix
                                  &optional timeout-kind total-elapsed-seconds)
