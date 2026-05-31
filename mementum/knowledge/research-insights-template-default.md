@@ -55,11 +55,82 @@ These targets may need different research patterns or the research findings were
 - Try combining with git history for recency bias.
 
 
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*5 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-nil
+**Distilled Research Strategy: template-default**
+
+**100 experiments across targets** span 16 files focused on GPTel automation workflows, tools, benchmarks, and staging processes.
+
+**Core Themes from Kept Hypotheses:**
+
+1. **Defensive Nil Guards** — Add explicit nil/empty guards (e.g., `english-findings`, `allium-spec`, `where` parameter) to handle edge cases gracefully.
+
+2. **Type Validation** — Explicit `(symbolp backend)` checks before fallback cases; make type assumptions testable.
+
+3. **Async Buffer Safety** — `buffer-live-p` guards for async lifecycle management.
+
+4. **Function Extraction** — Isolate `gptel-benchmark--select-provider` to make selection logic explicit and testable.
+
+5. **Error Handling** — Timeout sentinel values, `condition-case` wrappers for overlay creation.
+
+6. **Simplification** — Remove redundant conditional branching (e.g., `if apply-lines` check) where `mapconcat` handles empty lists.
+
+**Discarded Hypotheses:**
+
+- Deriving headings from symbol maps (maintenance bug fix via explicit correspondence)
+- Error message formatting (`(error-message-string err)` vs `(format "%s" err)`)
+- Hash table entry removal
+
+**Strategy Focus:** Incremental robustness via explicit assumptions, defensive coding, and reduced implicit branching.
 ```
 
+### Check Issues
+
+# Review: Distilled Research Strategy
+
+## Summary
+Concise summary of research findings from GPTel codebase analysis.
+
+## ✅ Strengths
+- Clear separation of kept vs. discarded hypotheses
+- Actionable, specific improvements listed
+- Ends with a coherent strategy statement
+
+## ⚠️ Issues to Address
+
+| Issue | Suggestion |
+|-------|------------|
+| `template-default` appears placeholder | Clarify or remove |
+| No priority/ordering | Rank themes by impact |
+| No examples | Add brief code snippets |
+| `allium-spec` vs `allium-spec` | Confirm correct casing |
+
+## 💡 Recommendations
+
+**Missing elements:**
+1. **Priority ranking** — Which themes should be addressed first?
+2. **Effort vs. impact** — Quick wins vs. major refactors?
+3. **Success metrics** — How to validate the strategy?
+4. **Timeline** — Milestones or phases?
+
+**Example enhancement:**
+```
+1. Defensive Nil Guards (HIGH PRIORITY)
+   - Example: `(when (and backend (stringp backend) ...)`
+   - Files: english-findings.el, allium-spec.el
+   - Risk: Low | Impact: High
+```
+
+## Verdict
+Good foundation for a research summary. Needs **prioritization** and **concrete examples** to become actionable development guidance.

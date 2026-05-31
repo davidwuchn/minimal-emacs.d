@@ -1111,12 +1111,33 @@ Returns (NEW-MODEL . NEW-EFFORT) or nil if no bump needed."
             (cons model effort)))))))
 
 (defun gptel-ai-behaviors--effort-for-api (model effort)
-  "Return `:reasoning_effort' value for MODEL+EFFORT combo.
-DeepSeek v4-pro: high/max map to reasoning_effort. Other models: nil (no effort param)."
-  (when (and (stringp model) (stringp effort))
+  "Return `:reasoning_effort' API param for MODEL+EFFORT combo.
+DeepSeek v4-pro: high→\"high\", max→\"max\" (reasoning_effort API param).
+MiniMax: high/max → upgrade to highspeed variant (nil for API param).
+Kimi: high/max → upgrade to k2.6 variant (nil for API param).
+Returns nil when no API param is needed (effort is \"default\")."
+  (when (and (stringp model) (stringp effort) (not (equal effort "default")))
     (let ((model-down (downcase model)))
-      (when (string-match-p "deepseek.*pro" model-down)
-        (if (member effort '("max" "high")) effort nil)))))
+      (cond ((string-match-p "deepseek.*pro" model-down)
+             (if (member effort '("high" "max")) effort nil))
+            ((string-match-p "minimax" model-down)
+             nil)  ; MiniMax uses model variant switching, not API param
+            ((string-match-p "kimi" model-down)
+             nil)  ; Kimi uses model variant switching
+            (t nil)))))
+
+(defun gptel-ai-behaviors--model-for-effort (base-model effort)
+  "Return model variant that matches EFFORT level for BASE-MODEL family.
+MiniMax: default→m2.7, high/max→m2.7-highspeed.
+Kimi: default/max→k2.6, high→k2.6 (same model, different API params).
+DeepSeek: kept as-is (effort handled via reasoning_effort API param)."
+  (when (stringp base-model)
+    (let ((down (downcase base-model)))
+      (cond ((string-match-p "minimax" down)
+             (if (member effort '("high" "max")) "minimax-m2.7-highspeed" "minimax-m2.7"))
+            ((string-match-p "kimi" down)
+             "kimi-k2.6")  ; default for Kimi
+            (t base-model)))))
 
 ;; ─── Cost Tracking ───
 
@@ -1124,20 +1145,26 @@ DeepSeek v4-pro: high/max map to reasoning_effort. Other models: nil (no effort 
   "Hash: (model effort) → (calls . total-cost-estimate).
 Used to normalize keep-rate by cost.")
 
+(defun gptel-ai-behaviors--pro-cost ()
+  "Return pro cost multiplier: 3 (discount) before 2026-06-01, 12 (full) after."
+  (if (string< (format-time-string "%Y%m%d") "20260601") 3 12))
+
 (defconst gptel-ai-behaviors--model-pricing
-  '(("deepseek-v4-flash" . 1)     ; ¥1/M input + ¥2/M output = ¥3 → base unit
-    ("deepseek-v4-pro" . 3)       ; ¥3/M inp + ¥6/M out = ¥9 (25% discount until 2026-05-31)
+  `(("deepseek-v4-flash" . 1)     ; ¥1/M input + ¥2/M output = ¥3 → base unit
+    ("deepseek-v4-pro" . ,(gptel-ai-behaviors--pro-cost)) ; date-aware: 3 or 12
     ("kimi-for-coding" . 3)       ; estimated ¥3/M
     ("kimi-k2.6" . 6)             ; estimated ¥6/M (reasoning)
     ("minimax-m2.7" . 2)          ; estimated ¥2/M
     ("minimax-m2.7-highspeed" . 4)) ; estimated ¥4/M
   "Relative cost multipliers per model from actual API pricing.
 Base unit = deepseek-v4-flash cost (¥3/M tokens).
-DeepSeek v4-pro discount (25%) ends 2026-05-31; full price = 12× flash.")
+DeepSeek v4-pro discount (25%) ended 2026-05-31; full price = 12× flash.")
 
 (defun gptel-ai-behaviors--model-cost (model)
-  "Return estimated cost multiplier for MODEL."
-  (or (cdr (assoc model gptel-ai-behaviors--model-pricing :test 'string-match))
+  "Return estimated cost multiplier for MODEL.
+Auto-switches pro pricing based on date (discount expired 2026-06-01)."
+  (or (cdr (cl-find-if (lambda (e) (string-match-p (car e) model))
+                       gptel-ai-behaviors--model-pricing))
       2))
 
 (defun gptel-ai-behaviors--record-cost (model effort &optional estimated-cost)

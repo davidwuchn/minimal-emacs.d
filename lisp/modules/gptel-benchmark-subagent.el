@@ -202,19 +202,18 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                     (fboundp 'gptel-ai-behaviors--best-model)
                     (gptel-ai-behaviors--best-model category
                                                      (intern agent-type) 2)))
-              ;; Check if bump-model wants to escalate (≥5 consecutive failures)
+              ;; Check if bump-model wants to escalate (≥5, ≥7, ≥10 consecutive failures)
               (bump-result
                (and category log-model
                     (fboundp 'gptel-ai-behaviors--bump-model)
-                    ;; Use per-subagent failure count from ai-behaviors tracking
                     (let* ((sub-key (cons category (intern agent-type)))
                            (count (if (boundp 'gptel-ai-behaviors--subagent-failures)
                                       (gethash sub-key gptel-ai-behaviors--subagent-failures 0)
                                     0)))
-                      (when (>= count 5)
-                        (gptel-ai-behaviors--bump-model category (intern agent-type)
-                                                        count log-model
-                                                        (or category-effort base-effort))))))
+                      ;; Pass actual count — bump-model handles thresholds internally
+                      (gptel-ai-behaviors--bump-model category (intern agent-type)
+                                                      count log-model
+                                                      (or category-effort base-effort)))))
               (bumped-model (and bump-result (car bump-result)))
               (bumped-effort (and bump-result (cdr bump-result)))
               (category-model (and category-best (car category-best)))
