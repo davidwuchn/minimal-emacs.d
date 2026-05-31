@@ -1920,8 +1920,8 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
             (has-research (and (getenv "PIPELINE_FINDINGS_FILE")
                                (file-exists-p (getenv "PIPELINE_FINDINGS_FILE")))))
           ;; Negative count means experiments were cleaned up (last-total > current).
-          ;; Run anyway — we still have data to analyze. Only skip when genuinely 0.
-          (when (and (= new-experiments 0) (not has-research))
+          ;; Also trigger experiments when <= 0 — no new data to analyze.
+          (when (and (<= new-experiments 0) (not has-research))
             ;; No experiments to analyze — trigger them instead.
             ;; This enables local development machines to run experiments,
             ;; not just Pi5 (which runs via cron).
