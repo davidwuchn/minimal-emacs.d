@@ -1792,12 +1792,14 @@ Captures executor reasoning from the dynamic variable
             (or active-effort "default"))))
        ;; Track persona archetype effectiveness per category
        (when (and category (fboundp 'gptel-ai-behaviors--record-persona))
-         (let ((archetype (or (and (boundp 'gptel-ai-behaviors--current-archetype)
-                                   gptel-ai-behaviors--current-archetype)
-                              (pcase category
-                                (:agentic "Guardian") (:programming "Craftsman")
-                                (:tool-calls "Engineer") (:natural-language "Writer")
-                                (_ "Craftsman")))))
+          (let ((archetype (or (and (boundp 'gptel-ai-behaviors--current-archetype)
+                                    gptel-ai-behaviors--current-archetype)
+                               ;; Nucleus archetypes from (op × mindset) matrix
+                               (pcase category
+                                 (:agentic "Investigator") (:programming "Craftsman")
+                                 (:tool-calls "Synthesizer") (:natural-language "Academic")
+                                 (_ "Craftsman")))))
+           ;; Record actual archetype used (may differ from default due to self-evolution)
            (gptel-ai-behaviors--record-persona category archetype kept)))
        ;; Track per-subagent consecutive failures for bump-model
        (when category

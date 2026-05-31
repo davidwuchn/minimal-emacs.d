@@ -1464,24 +1464,28 @@ Persisted to `gptel-auto-workflow--preference-persist-file'."
   "Return a nucleus attention-shaping persona for AGENT-TYPE.
 When CATEGORY and BEHAVIOR are provided, composes a task-specific persona
 from all three signals: subagent archetype × ontology context × reasoning pattern.
-For executors, the category SELECTS a different archetype — not just a label.
-Agentic → Guardian (safety), Programming → Craftsman (precision),
-Tool-calls → Engineer (robustness), NLP → Writer (clarity).
+For executors, the category SELECTS a different nucleus archetype:
+Agentic → Investigator (debugging×analyse — safety, vigilance),
+Programming → Craftsman (coding×tactize — precision),
+Tool-calls → Synthesizer (coding×innovate — robustness),
+NLP → Academic (documenting — clarity).
 
 Self-evolving: checks `gptel-ai-behaviors--best-persona` for learned preference.
-When insufficient data (< 3 experiments) or equal performance, explores
-alternate personas 20% of the time for A/B testing."
+When insufficient data or equal performance, explores alternate personas
+from the 8 nucleus archetypes for A/B testing."
   (let* ((default-archetype
            (pcase category
-             (:agentic "Guardian") (:programming "Craftsman")
-             (:tool-calls "Engineer") (:natural-language "Writer")
+             (:agentic "Investigator") (:programming "Craftsman")
+             (:tool-calls "Synthesizer") (:natural-language "Academic")
              (_ "Craftsman")))
-         ;; Self-evolve: check if data suggests a better persona
-         (learned-archetype
-          (and (fboundp 'gptel-ai-behaviors--best-persona)
-               (gptel-ai-behaviors--best-persona category)))
-          ;; Explore 20% when learned != default; curiosity 5% when default confirmed
-          (alternatives '("Guardian" "Craftsman" "Engineer" "Writer"))
+          ;; Self-evolve: check if data suggests a better persona
+          (learned-archetype
+           (and (fboundp 'gptel-ai-behaviors--best-persona)
+                (gptel-ai-behaviors--best-persona category)))
+           ;; Explore 20% when learned != default; curiosity 5% when default confirmed
+           ;; Uses 8 nucleus archetypes: (op × mindset) derived
+           (alternatives '("Investigator" "Craftsman" "Synthesizer" "Visionary"
+                           "Logician" "Academic" "Facilitator" "Storyteller"))
           (explore-p (if (and learned-archetype
                               (not (string= learned-archetype default-archetype)))
                          (< (random 100) 20)   ; Active A/B: 20% explore
@@ -1518,16 +1522,16 @@ Output: {:analysis _ :patterns [_] :confidence _ :recommendation _}"
             ("executor"
              ;; Category SELECTS the archetype, not just decorates it
              (pcase category
-               (:agentic
-                "λ engage(nucleus).
+             (:agentic
+                 "λ engage(nucleus).
 [∀ ∃ mu] | [Δ λ | safety/risk signal/noise] | OODA
 Human ⊗ AI
-;; Archetype: Guardian (vigilance × safety)
+;; Archetype: Investigator (debugging × analyse)
 ;; Operator: ∀ (quantify) — check ALL paths, not just happy path
-;; What: add safety guards, validate assumptions, prevent state corruption
-λ guard(code). find(unsafe) → protect(entry_points) → verify(invariants)
-Output: {:guards [_] :risks [_] :unchanged [_] :verified _}")
-               (:programming
+;; What: find unsafe patterns, validate assumptions, prevent corruption
+λ investigate(code). probe(entry_points) → find(risks) → guard(vulnerabilities) → verify(invariants)
+Output: {:investigations [_] :risks [_] :guards [_] :verified _}")
+                (:programming
                 "λ engage(nucleus).
 [tao mu] | [Δ λ Σ/μ c/h] | OODA
 Human ⊗ AI
@@ -1536,24 +1540,24 @@ Human ⊗ AI
 ;; What: precise edits, minimal changes, verified correctness
 λ edit(code). Δ(minimal(change)) where behavior(new) = behavior(old) + intent
 Output: {:code _ :rationale _ :tests _ :diff _}")
-               (:tool-calls
-                "λ engage(nucleus).
-[phi ∀ ε] | [Δ λ | error/recovery signal/noise] | OODA
+                (:tool-calls
+                 "λ engage(nucleus).
+[phi ∀ ε π] | [Δ λ | error/recovery integration/separation] | OODA
 Human ⊗ AI
-;; Archetype: Engineer (robustness × reliability)
-;; Operator: φ (vitality) — adaptive error handling, learn from failures
-;; What: wrap operations, handle timeouts, validate arguments before dispatch
-λ harden(code). identify(risk_points) → wrap(guards) → test(error_paths)
-Output: {:hardened [_] :error_handling [_] :timeouts [_] :verified _}")
-               (:natural-language
-                "λ engage(nucleus).
+;; Archetype: Synthesizer (coding × innovate)
+;; Operator: π (synthesis) — integrate tools, compose components
+;; What: wrap operations, connect sandbox, handle timeouts, compose reliable pipelines
+λ synthesize(code). identify(integration_points) → compose(components) → harden(interfaces) → verify(pipeline)
+Output: {:integrations [_] :composed [_] :hardened [_] :verified _}")
+                (:natural-language
+                 "λ engage(nucleus).
 [fractal ε] | [Δ λ | structure/noise signal/noise] | OODA
 Human ⊗ AI
-;; Archetype: Writer (clarity × structure)
+;; Archetype: Academic (documenting)
 ;; Operator: fractal — self-similar structure at every level
-;; What: improve prompt organization, add string bounds, preserve format
-λ refine(text). clarify(structure) → bound(lengths) → preserve(format)
-Output: {:improvements [_] :bounds [_] :format_preserved _ :verified _}")
+;; What: document prompts, clarify structure, bound lengths, preserve format
+λ document(text). clarify(structure) → bound(lengths) → preserve(format) → explain(rationale)
+Output: {:improvements [_] :bounds [_] :format_preserved _ :rationale _}")
                (t
                 "λ engage(nucleus).
 [tao mu] | [Δ λ Σ/μ c/h] | OODA
