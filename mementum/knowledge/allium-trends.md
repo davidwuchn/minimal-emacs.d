@@ -1,12 +1,11 @@
 ### Allium Issue Trends
 **Recurring patterns** across all strategies:
 
-- **"Template-default"**: 1 occurrence(s)
-- **"None discarded"**: 1 occurrence(s)
-- **87 experiments without context**: 1 occurrence(s)
-- **No hypothesis statement**: 1 occurrence(s)
+- **No discarded hypotheses listed**: 1 occurrence(s)
+- **Hypothesis 2 details**: 1 occurrence(s)
+- **"42 experiments across 8 target files"**: 1 occurrence(s)
 
 **Regression warnings** (1 strategies with increased issues):
 
-- `template-default`: 0 → 4 issues (worse)
+- `template-default`: 1 → 3 issues (worse)
 
