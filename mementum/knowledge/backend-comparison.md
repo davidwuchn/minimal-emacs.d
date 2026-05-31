@@ -1,10 +1,10 @@
 # Backend Head-to-Head Comparison
-> Auto-generated from 42 experiments across 2 backends
+> Auto-generated from 65 experiments across 3 backends
 
-## DeepSeek vs moonshot (winner: **DeepSeek**)
-- DeepSeek: 50.0% keep-rate
-- moonshot: 0.0% keep-rate
-- Shared targets: 1 | DeepSeek won 1, moonshot won 0, ties 0
+## MiniMax vs DeepSeek (winner: **MiniMax**)
+- MiniMax: 7.1% keep-rate
+- DeepSeek: 0.0% keep-rate
+- Shared targets: 1 | MiniMax won 1, DeepSeek won 0, ties 0
 
 
-*Generated: 2026-05-31 10:55*
+*Generated: 2026-05-31 11:01*

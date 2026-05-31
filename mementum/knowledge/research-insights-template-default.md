@@ -3,21 +3,21 @@ title: Research Insights - template-default
 status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
-insight-quality: 0.5/10
-allium-issues: 3
+insight-quality: 0.2/10
+allium-issues: 0
 allium-severity: 0.00
-allium-status: ok
+allium-status: coherent
 ---
 
 # Research Strategy: template-default
 
-*Consolidated from 42 experiments (5% keep rate).*
+*Consolidated from 65 experiments (2% keep rate).*
 
-**Performance:** 2 kept / 0 discarded / 25 failed (EXTRACTED — from TSV)
+**Performance:** 1 kept / 3 discarded / 21 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
-- `lisp/modules/gptel-auto-workflow-projects.el` (2 kept / 3 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 2 discarded / 9 failed)
 
 ### Structure (deterministic scan)
 
@@ -36,17 +36,11 @@ advised: gptel-agent--task, gptel-agent--task-overlay
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-auto-workflow-projects.el` (2 kept / 3 failed)
-- `lisp/modules/gptel-benchmark-subagent.el` (3 failed)
-- `lisp/modules/gptel-tools-agent-error.el` (3 failed)
-- `lisp/modules/gptel-tools-agent-prompt-build.el` (3 failed)
-- `lisp/modules/gptel-auto-workflow-strategic.el` (3 failed)
-
-## Allium Behavioral Coherence
-
-*3 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
-
-
+- `lisp/modules/gptel-tools-agent-prompt-build.el` (4 failed)
+- `lisp/modules/gptel-tools-agent-error.el` (2 failed)
+- `lisp/modules/gptel-benchmark-principles.el` (2 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 2 discarded / 9 failed)
+- `lisp/modules/treesit-agent-tools-workspace.el` (1 failed)
 
 ## Meta-Learning Recommendations (INFERRED — from pattern analysis)
 
@@ -63,30 +57,50 @@ These targets may need different research patterns or the research findings were
 
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*2 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-Distilled findings from the 42 experiments across the listed modules:
+``` markdown
+Research Strategy: template-default
+Experiments: 65 across 13 targets
+Kept: 0 | Discarded: 3
 
-1. **Marker liveness guard for the `where` parameter** – When a marker points to a killed buffer, passing it directly to the original function can cause errors or undefined behavior. Adding a `marker-live` check before use ensures graceful degradation and avoids crashes.
-
-2. **Nil‑safety for research findings cache** – `gptel-auto-workflow--research-cache-get` lacks a `hash-table-p` guard, although its sibling in `strategic.el` already uses this pattern. If the cache hash table is nil (e.g., early startup, failed initialization, or error recovery), a bare `gethash` call will raise a `wrong-type-argument` error. Inserting a simple `(when (hash-table-p cache) …)` wrapper eliminates this risk and makes the code consistent with the rest of the system.
-
-No hypotheses were discarded, indicating that these two issues are the only remaining actionable problems uncovered in this round of experimentation. The next steps would be to implement the marker-live check at the relevant call sites and to add the `hash-table-p` guard in `gptel-auto-workflow--research-cache-get` (mirroring the safety check already present at `strategic.el:2719‑2721`).
+Discarded:
+1. Remove redundant `(consp val) (keywordp (car val))` check; move `make-hash-table` inside guard; replace `condition-case nil` with `ignore-errors` → clarity + no wasted allocation
+2. Add nil guard for empty `status-lines` in `gptel-auto-workflow-research-status-all` → vitality + clarity
+3. Fix misleading indentation in `gptel-auto-workflow-run-all-projects` and `gptel-auto-workflow--get-worktree-buffer` → clarity (fractal)
+```
 ```
 
 ### Check Issues
 
-The two findings are precise and actionable. Both address real failure modes:
+# Review of Research Strategy
 
-1. **Marker liveness for `where` parameter** – Passing a marker whose buffer has been killed to a function that expects a live buffer is a classic source of hard-to-debug errors. The fix is straightforward: before calling the original function, check `(marker-buffer where)` and, if `nil`, either skip the operation, signal a meaningful error, or fall back to a safe default (e.g., the current buffer).
+**Summary:** 65 experiments evaluated, all 3 proposed changes discarded.
 
-2. **Nil‑safety for `gptel-auto-workflow--research-cache-get`** – Using `gethash` on a `nil` cache table raises `wrong-type-argument` (e.g., during early startup or after a failed cache initialization). Wrapping the lookup with `(when (hash-table-p cache) ...)` mirrors the pattern already used in `strategic.el` (around line 2719‑2721) and makes the function robust against that scenario. The `get` should return `nil` if the cache isn’t ready, which is safe and consistent.
+## Assessment
 
-Both changes are low-risk, defensive improvements. The fact that no other hypotheses survived the experiments suggests the codebase is otherwise in good shape regarding these types of guard conditions.
+### Overall Quality: Good Documentation ✓
 
-**Next steps for implementation:**
+| Aspect | Status | Notes |
+|--------|--------|-------|
+| Categorization | ✓ | Clear discard reasons |
+| Reasoning | ✓ | Each change linked to specific benefit (clarity, vitality, fractal) |
+| Completeness | ⚠ | 0 kept seems unusual for 65 experiments |
 
-- For the marker issue: locate every call site where the raw `where` marker is passed to a function that assumes a live buffer (likely inside `gptel-auto-workflow`’s directive handling). Insert a `(when (marker-buffer where) ...)` check, or use `(or (marker-buffer where) (current-buffer))` if a 
+### Observations
 
-... (truncated)
+1. **0 kept / 3 discarded** — With 65 experiments across 13 targets, all 3 proposed changes being rejected suggests a conservative strategy, which is reasonable for critical paths.
+
+2. **Reason categories** — The justifications (clarity, vitality, fractal) appear sound but could benefit from metrics or specific failure cases encountered.
+
+3. **Redundancy detection** — Change #1 (removing redundant checks, moving allocation) is a classic optimization that's often context-dependent; rejection implies the original was preferred for a reason.
+
+### Recommendation
+
+Consider adding:
+- **What went wrong** with each proposed change
+- **Why the baseline was preferred**
+- **Lessons learned** for future experiments
+
+Want me to elaborate on any specific change?
