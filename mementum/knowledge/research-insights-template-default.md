@@ -60,10 +60,6 @@ These targets may need different research patterns or the research findings were
 
 
 
-<<<<<<< Updated upstream
-=======
-<<<<<<< Updated upstream
-=======
 
 
 
@@ -76,222 +72,6 @@ These targets may need different research patterns or the research findings were
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
->>>>>>> Stashed changes
-
-
-
-
-
-
-
-
-
-
-
-
->>>>>>> Stashed changes
 
 
 
@@ -332,7 +112,6 @@ These targets may need different research patterns or the research findings were
 
 ## Allium Behavioral Spec (auto-generated, v3)
 
-<<<<<<< Updated upstream
 *4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
@@ -348,35 +127,10 @@ These targets may need different research patterns or the research findings were
 **Discarded Hypotheses:** None stated
 
 **Summary:** This is a skeleton research strategy with minimal content. Only one concrete hypothesis targeting the `gptel-auto-workflow-list-project-buffers` function has been identified for investigation across 84 planned experiments. The kept and discarded hypothesis sections appear incomplete.
-=======
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
-
-```allium
-## Distillation: gptel-auto-workflow Research Strategy
-
-### Core Focus Areas
-
-| Area | Problem | Fix |
-|------|---------|-----|
-| **Cache validation** | Uses `eq` (identity) instead of `equal` (content) | Switch comparator, reorder checks |
-| **Buffer lookup** | Missing nil guards, unclear validation flow | Extract to explicit sequence |
-| **Runtime crash** | `not-applicable` in scores breaks `<` comparison | Filter before sort |
-| **Advice idempotency** | Re-adding active advice | Idempotency guard + symmetric disable |
-| **Path robustness** | Invalid paths cause errors | `ignore-errors` around `file-attributes` |
-| **Edge case** | Empty project list unhandled | Early guard |
-| **Mode-line** | `format-mode-line` adds unnecessary complexity | Direct `mode-name` access + `when` |
-
-### Pattern: Two-Layer Quality Model
-
-```
-φ Vitality     → Adaptive error recovery, edge case handling
-fractal Clarity → Explicit assumptions, visible data flow
->>>>>>> Stashed changes
 ```
 
 ### Highest-Value Changes
 
-<<<<<<< Updated upstream
 Based on the provided research strategy and the codebase inspection:
 
 ## Assessment
@@ -414,10 +168,3 @@ The strategy is indeed a skeleton. Here's what I found:
    - Add async collection for large projects
 
 Would you like me to draft a more complete version of this strategy?
-=======
-1. **Cache invalidation** — `eq`→`equal` is a subtle but real performance/freshness issue
-2. **Benchmark sort crash** — guaranteed runtime error, not conditional
-3. **Advice idempotency** — prevents double-wiring bugs
-```
-
->>>>>>> Stashed changes

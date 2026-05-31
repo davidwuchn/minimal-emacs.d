@@ -1,5 +1,1 @@
-<<<<<<< Updated upstream
 {"beta":0.047619047619047616,"own-priority":52.142857142857146,"ext-priority":15.0,"stop-threshold":65.0,"token-budget":8000,"learning-method":"agent-rules","evolved-at":"2026-05-31T15:11:02Z","based-on-traces":11,"best-topic":"json-null","best-topic-rate":0.0}
-=======
-{"beta":0.1076923076923077,"own-priority":91.42857142857143,"ext-priority":16.499999999999996,"stop-threshold":65.0,"token-budget":8000,"learning-method":"heuristic","evolved-at":"2026-05-30T05:58:26Z","based-on-traces":17,"best-topic":"json-null","best-topic-rate":0.0}
->>>>>>> Stashed changes
