@@ -322,7 +322,19 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                     (fboundp 'gptel-auto-experiment--analyze-agent-output))
                                           (gptel-auto-experiment--analyze-agent-output
                                            effective-agent-output))))
-                             (setq-local gptel-auto-experiment--think-intel intel)))
+                             (setq-local gptel-auto-experiment--think-intel intel)
+                             ;; Feed verdict to ai-behaviors evolution for behavior optimization
+                             (when intel
+                               (let ((verdict (plist-get intel :verdict))
+                                     (score (plist-get intel :score))
+                                     (category (and target (fboundp 'gptel-auto-workflow--categorize-target)
+                                                    (gptel-auto-workflow--categorize-target target))))
+                                 (when (and category verdict)
+                                   (message "[think-intel] %s|%s|%s|acts=%d|expl=%d|score=%.1f"
+                                            category target verdict
+                                            (plist-get intel :acts)
+                                            (plist-get intel :explores)
+                                            score))))))
                          (unless finished
                           (if repeated-focus
                               (let* ((hypothesis
