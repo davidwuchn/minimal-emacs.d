@@ -331,10 +331,10 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                     (gptel-auto-workflow--categorize-target target))))
                                  (when (and category verdict)
                                    (message "[think-intel] %s|%s|%s|acts=%d|expl=%d|score=%.1f"
-                                            category target verdict
-                                            (plist-get intel :acts)
-                                            (plist-get intel :explores)
-                                            score))))))
+                                            (or category "unknown") (or target "unknown") (or verdict "none")
+                                            (or (plist-get intel :acts) 0)
+                                            (or (plist-get intel :explores) 0)
+                                            (or score 0.0))))))))
                          (unless finished
                           (if repeated-focus
                               (let* ((hypothesis
@@ -1211,9 +1211,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                       "executor"
                       (format "Experiment %d: optimize %s" experiment-id target)
                       executor-prompt
-                       nil "false" nil))))))))
-                 )))
-         )
+                        nil "false" nil))))))))
+                  )))
 
 
 

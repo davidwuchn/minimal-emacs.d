@@ -68,60 +68,65 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.05). EXTRACTED from distill→check pipeline.*
 
 ```allium
-**Research Strategy: Template-Default**
+# Research Strategy Distillation
 
-**Scope:** 107 experiments across 11 targets spanning code modules and staging projects.
+## Summary
 
-**Targets:**
-- Core modules: `gptel-ext-tool-permits.el`, `gptel-benchmark-analysis.el`, `gptel-benchmark-subagent.el`, `gptel-tools-agent-error.el`, `gptel-tools-agent-prompt-build.el`, `gptel-auto-workflow-strategic.el`, `gptel-auto-workflow-projects.el`
-- Supporting: `gptel-benchmark-comparator.el`
-- Projects: `staging-review`, `test`
+| Metric | Value |
+|--------|-------|
+| Strategy | template-default |
+| Experiments | 65 |
+| Targets | 13 files (gptel/treesit/nucleus modules) |
+| Kept hypotheses | 0 |
+| Discarded | 3 |
 
-**Kept Hypothesis:**
-- Improve function `gptel-auto-workflow-list-project-buffers`
+## Discarded Hypotheses (with rationale)
 
-**Discarded:**
-- All prior hypotheses (insufficient evidence or falsified)
+1. **L362 anti-pattern refactor** — Remove redundant `(consp val) (keywordp (car val))` guard; move `make-hash-table` inside guard; replace `condition-case nil` with `ignore-errors`. Rationale: reduces speculative allocation, uses idiomatic suppression.
 
-**Status:** Iteration-based experimentation continues across all targets; focused optimization on `gptel-auto-workflow-list-project-buffers`.
+2. **Nil guard for empty `status-lines`** — Add nil guard in `gptel-auto-workflow-research-status-all`. Rationale: prevents caching empty results; improves error resilience and clarity.
+
+3. **Indentation fixes** — Fix misleading indentation in `gptel-auto-workflow-run-all-projects` and `gptel-auto-workflow--get-worktree-buffer`. Rationale: aligns visual structure with actual parse tree (Clarity/fractal).
+
+---
+
+**Conclusion**: No hypotheses met the threshold for retention under template-default evaluation.
 ```
 
 ### Check Issues
 
-# Research Strategy Review
+# Review
 
-## Observations
+**Missing data**: 65 experiments → 3 discarded + 0 kept = 62 unaccounted. Need clarification on outcomes.
 
-**Strengths:**
-- Clear scope definition (107 experiments, 11 targets)
-- Focused hypothesis on single function (`gptel-auto-workflow-list-project-buffers`)
-- Explicit documentation of what was discarded and why
-- Iterative approach with ongoing experimentation
+**Structural issue**: If 65 attempts produced zero retained hypotheses, that's a systematic failure—not just a threshold problem.
 
-**Potential Concerns:**
+**Discarded hypotheses** look minor (style, cosmetics). For a 65-experiment run, I'd expect at least one non-trivial change.
 
-| Aspect | Question |
-|--------|----------|
-| Scope Creep | 107 experiments across 11 targets—any prioritization framework? |
-| Focus | Is narrowing to one function the right granularity given 11 targets? |
-| Evidence | What criteria determine "insufficient evidence" vs. falsified? |
-| Metrics | How is improvement measured for `gptel-auto-workflow-list-project-buffers`? |
+**What needs verification:**
+1. What happened to the other 62 experiments?
+2. Are the 3 discarded actually the *best* of 65? Or cherry-picked examples?
+3. What was the actual evaluation criteria for template-default?
 
-## Suggestions
-
-1. **Add success criteria**: What specific behavior change constitutes improvement?
-2. **Track experiment-to-hypothesis mapping**: Ensure experiments directly inform the focused hypothesis
-3. **Define stopping conditions**: When does iteration end?
-
-## Questions for Clarification
-
-- What does "improve" mean for the target function? (Performance? Correctness? Both?)
-- Are the 107 experiments equally distributed or stratified?
-- Any preliminary results indicating which direction shows promise?
-
-Want me to dive deeper into any aspect of this strategy?
+**Concern**: The conclusion reads like "nothing worked" but doesn't explain *why* nothing worked.
