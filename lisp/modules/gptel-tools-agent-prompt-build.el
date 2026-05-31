@@ -1067,8 +1067,9 @@ Returns a compact lambda-notation string ready for the LLM."
            (ai-b (cdr (assoc 'ai-behaviors vars)))
            (rec-b (cdr (assoc 'recommended-behaviors vars)))
            (vio-b (cdr (assoc 'mode-violations vars)))
-           (val-ap (cdr (assoc 'validation-anti-patterns vars)))
-           (uni-d (cdr (assoc 'unified-directive vars))))
+            (val-ap (cdr (assoc 'validation-anti-patterns vars)))
+            (rejection-feedback (cdr (assoc 'rejection-feedback vars)))
+            (uni-d (cdr (assoc 'unified-directive vars))))
     (concat
      ;; HEADER
      (format "λ experiment(%s). id=%d/%d budget=%smin path=%s/%s\nbaseline(8keys): %s"
@@ -1142,6 +1143,7 @@ Returns a compact lambda-notation string ready for the LLM."
       "| ¬rename_vars_unless_bug | ¬reorder_existing_logic\n"
       "| ¬remove_commented_code | ¬add_comments_to_working_code\n"
       "| ¬change_indentation_style | ¬convert_let*→let_unless_semantic\n"
+      (if rejection-feedback (concat "\nPREVIOUS REJECTIONS (learn from these):\n" rejection-feedback "\n") "")
       "\nPATTERNS THAT PASS (copy these):\n"
       "| add `nil` guard before car/assq on optional arg\n"
       "| change `(when x (progn ...))` to `(when x ...)` (remove redundant progn)\n"
@@ -1394,6 +1396,9 @@ Read ONE function. Edit ONE line. Verify. Done."))))
               (controller-focus . ,(or controller-focus ""))
               (inspection-thrash-contract . ,(or inspection-thrash-contract ""))
               (task-hint . ,(or gptel-auto-experiment--current-task-hint ""))
+              (rejection-feedback . ,(or (and (fboundp 'gptel-auto-experiment--get-rejection-feedback)
+                                              (gptel-auto-experiment--get-rejection-feedback target))
+                                        ""))
               (review-feedback . ,(or gptel-auto-experiment--review-feedback ""))
               (category-instructions . ,(if (fboundp 'gptel-auto-workflow--category-instructions)
                                            (gptel-auto-workflow--category-instructions target)
@@ -1706,6 +1711,16 @@ Captures executor reasoning from the dynamic variable
                                          0 (min 500 (length gptel-auto-experiment--executor-reasoning))))
                    gptel-auto-experiment--grader-insights))))
     (setq gptel-auto-experiment--executor-reasoning nil)
+    ;; Remember rejection reasons for cross-experiment learning
+    (when (and target (not (equal decision "kept")))
+      (let ((grader-reason (plist-get experiment :grader-reason))
+            (comparator-reason (plist-get experiment :comparator-reason)))
+        (when (and (fboundp 'gptel-auto-experiment--remember-rejection)
+                   (stringp grader-reason) (> (length grader-reason) 5))
+          (gptel-auto-experiment--remember-rejection target grader-reason))
+        (when (and (fboundp 'gptel-auto-experiment--remember-rejection)
+                   (stringp comparator-reason) (> (length comparator-reason) 5))
+          (gptel-auto-experiment--remember-rejection target comparator-reason))))
     ;; Record ai-behaviors hashtag + strategy tracking for this experiment
     (when (and target (fboundp 'gptel-ai-behaviors--record-experiment))
       (let ((category (and (fboundp 'gptel-auto-workflow--categorize-target)
@@ -2890,6 +2905,15 @@ Optional N limits number of reasons (default 3)."
   "Hash table keyed by target file, values are plists of grader insight data.
 Each entry: (:grader-output RAW-TEXT :criteria ((DESC . REASON) ...)).")
 
+(defvar gptel-auto-experiment--rejection-memory (make-hash-table :test 'equal)
+  "Per-target rejection reasons for cross-experiment learning.
+Key: target file path. Value: list of (REASON . TIMESTAMP) in reverse-chronological.
+Kept to `gptel-auto-experiment--rejection-memory-max' entries per target.
+Persisted alongside the digital twin for survival across daemon restarts.")
+
+(defconst gptel-auto-experiment--rejection-memory-max 3
+  "Maximum rejection reasons to retain per target.")
+
 (defun gptel-auto-experiment--parse-grader-output (target grader-output)
   "Parse GRADER-OUTPUT for per-criterion PASS/FAIL reasoning.
 Extracts numbered items like '1. description: PASS - reason' from the
@@ -2927,6 +2951,42 @@ output, including <think> blocks.  Stores results in
                  (list :grader-output (substring grader-output 0 (min 500 (length grader-output)))
                        :criteria (nreverse criteria))
                  gptel-auto-experiment--grader-insights)))))
+
+;; ─── Rejection Memory: Cross-Experiment Learning ───
+
+(defun gptel-auto-experiment--remember-rejection (target reason)
+  "Store REASON for TARGET in rejection memory.
+Keeps at most `gptel-auto-experiment--rejection-memory-max' entries.
+Deduplicates: if REASON is similar to an existing entry, updates timestamp."
+  (when (and target (stringp reason) (> (length reason) 5))
+    (let* ((now (float-time))
+           (existing (gethash target gptel-auto-experiment--rejection-memory))
+           (normalized (substring reason 0 (min 80 (length reason))))
+           (found nil)
+           (new-list (delq nil
+                          (mapcar (lambda (entry)
+                                    (let ((old-reason (car entry)))
+                                      (if (string-prefix-p (substring normalized 0 (min 30 normalized))
+                                                            (or old-reason ""))
+                                          (progn (setq found t)
+                                                 (cons normalized now))
+                                        entry)))
+                                  existing))))
+      (unless found
+        (push (cons normalized now) new-list))
+      (puthash target
+               (seq-take new-list gptel-auto-experiment--rejection-memory-max)
+               gptel-auto-experiment--rejection-memory))))
+
+(defun gptel-auto-experiment--get-rejection-feedback (target)
+  "Return formatted rejection feedback string for TARGET, or nil.
+Format: 'REJECTION PATTERNS TO AVOID:\n- <reason 1>\n- <reason 2>\n...'"
+  (let ((entries (gethash target gptel-auto-experiment--rejection-memory)))
+    (when entries
+      (format "REJECTION PATTERNS TO AVOID:\n%s"
+              (mapconcat (lambda (entry)
+                           (format "- %s" (car entry)))
+                         entries "\n")))))
 
 (defun gptel-auto-experiment--get-category-failure-reasons (category &optional n)
   "Aggregate failure reasons from ALL targets in CATEGORY.

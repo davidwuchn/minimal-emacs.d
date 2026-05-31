@@ -3114,7 +3114,7 @@ Returns alist of suggestions: (target . suggested-category)."
 ;; ─── Digital Twin Persistence ───
 
 (defun gptel-auto-workflow--persist-target-state ()
-  "Save target state cache to disk (survives daemon restart)."
+  "Save target state cache and rejection memory to disk (survives daemon restart)."
   (when (and (bound-and-true-p gptel-auto-experiment--target-state-cache)
              (> (hash-table-count gptel-auto-experiment--target-state-cache) 0))
     (let ((file (expand-file-name "var/tmp/digital-twin.json"
@@ -3125,14 +3125,24 @@ Returns alist of suggestions: (target . suggested-category)."
                                           (cons :syntax-ok (plist-get state :syntax-ok))))
                        data))
                gptel-auto-experiment--target-state-cache)
+      ;; Persist rejection memory alongside digital twin
+      (when (bound-and-true-p gptel-auto-experiment--rejection-memory)
+        (maphash (lambda (target rejections)
+                   (let ((entry (assoc target data)))
+                     (if entry
+                         (setcdr entry (append (cdr entry)
+                                               (list (cons :rejections rejections))))
+                       (push (cons target (list (cons :rejections rejections)))
+                             data))))
+                 gptel-auto-experiment--rejection-memory))
       (make-directory (file-name-directory file) t)
       (with-temp-file file
         (insert (let ((json-encoding-pretty-print t))
                   (json-encode data))))
-      (message "[digital-twin] Persisted %d target states to %s" (length data) file))))
+      (message "[digital-twin] Persisted %d target states + rejection memory to %s" (length data) file))))
 
 (defun gptel-auto-workflow--load-target-state ()
-  "Load target state cache from disk."
+  "Load target state cache and rejection memory from disk."
   (when (boundp 'gptel-auto-experiment--target-state-cache)
     (let ((file (expand-file-name "var/tmp/digital-twin.json"
                                   (gptel-auto-workflow--worktree-base-root))))
@@ -3147,10 +3157,18 @@ Returns alist of suggestions: (target . suggested-category)."
                     (puthash target
                              (list :byte-compiles (cdr (assq 'byte-compiles plist))
                                    :syntax-ok (cdr (assq 'syntax-ok plist)))
-                             gptel-auto-experiment--target-state-cache))))
-              (message "[digital-twin] Loaded %d target states from %s"
+                             gptel-auto-experiment--target-state-cache)
+                    ;; Load rejection memory from digital twin
+                    (let ((rejections (cdr (assq 'rejections plist))))
+                      (when (and rejections
+                                 (bound-and-true-p gptel-auto-experiment--rejection-memory)
+                                 (fboundp 'gptel-auto-experiment--remember-rejection))
+                        (dolist (rej rejections)
+                          (let ((reason (car rej)))
+                            (gptel-auto-experiment--remember-rejection target reason)))))))
+              (message "[digital-twin] Loaded %d target states + rejection memory from %s"
                        (hash-table-count gptel-auto-experiment--target-state-cache) file))
-          (error (message "[digital-twin] Failed to load: %s" (error-message-string err))))))))
+          (error (message "[digital-twin] Failed to load: %s" (error-message-string err)))))))))
 
 ;; ─── Ontology Self-Evolution ───
 
