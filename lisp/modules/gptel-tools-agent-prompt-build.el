@@ -2326,11 +2326,12 @@ the user has not explicitly customized the variable."
         (push 'gptel-auto-workflow-headless-subagent-fallbacks migrated)))
     (unless (gptel-auto-workflow--custom-var-user-customized-p
              'gptel-auto-workflow-executor-rate-limit-fallbacks)
-      (when (equal gptel-auto-workflow-executor-rate-limit-fallbacks
+      (when (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+                 (equal gptel-auto-workflow-executor-rate-limit-fallbacks
                    '(("DeepSeek" . "deepseek-chat")
                      ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
                      ("DashScope" . "qwen3.6-plus")
-                     ("Gemini" . "gemini-3.1-pro-preview")))
+                     ("Gemini" . "gemini-3.1-pro-preview"))))
           (setq gptel-auto-workflow-executor-rate-limit-fallbacks
                 '(("MiniMax" . "minimax-m2.7-highspeed")
                   ("moonshot" . "kimi-k2.6")
