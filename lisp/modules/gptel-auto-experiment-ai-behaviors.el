@@ -183,13 +183,14 @@ Prefers three-way (category × strategy) match over two-way (category only)."
 
 (defun gptel-ai-behaviors--category-hashtags (category)
   "Return the hashtag string for CATEGORY (ai-behaviors format).
-Uses learned defaults when available, falls back to hardcoded."
+Uses learned defaults when available, falls back to hardcoded.
+All hashtags reference real behavior directories in packages/ai-behaviors/."
   (or (cdr (assq category gptel-ai-behaviors--category-defaults))
       (pcase category
-        (:agentic "#=code #contract #checklist #scope #legible #concise")
-        (:programming "#=code #subtract #concrete #legible")
-        (:tool-calls "#=code #defensive #boundary #robust #legible")
-        (:natural-language "#=code #coherence #depth #concrete #legible")
+        (:agentic "#=code #contract #checklist #stop #legible #concise")
+        (:programming "#=code #decompose #bisect #concrete #legible")
+        (:tool-calls "#=code #simulate #boundary #temporal #legible")
+        (:natural-language "#=code #user-lens #coherence #concrete #legible")
         (_ "#=code #legible #concise"))))
 
 (defun gptel-ai-behaviors--inject (category)
