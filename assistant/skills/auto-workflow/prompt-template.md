@@ -23,6 +23,8 @@ Working dir: {{worktree-path}}
 
 {{task-hint}}
 
+{{review-feedback}}
+
 ## VERIFY (MANDATORY)
 After every Edit:
 1. `{{sexp-check-command}}` → must PASS

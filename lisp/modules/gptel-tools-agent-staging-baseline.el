@@ -572,8 +572,12 @@ Maximum response: 1000 characters."
               (lambda (result)
                 (let* ((response (if (stringp result) result (format "%S" result)))
                        (approved (gptel-auto-workflow--review-approved-p response)))
-                  (gptel-auto-workflow--track-review-outcome category approved)
-                  (message "[auto-workflow] Review %s: %s (category: %s)"
+                   (gptel-auto-workflow--track-review-outcome category approved)
+                   ;; Feed review block reason to agent for next experiment
+                   (unless approved
+                     (gptel-auto-workflow--record-review-feedback
+                      optimize-branch category response))
+                   (message "[auto-workflow] Review %s: %s (category: %s)"
                            (if approved "PASSED" "BLOCKED")
                            (my/gptel--sanitize-for-logging response 100)
                            (or category "unknown"))
@@ -1200,33 +1204,48 @@ decisions against test results when available."
     (when parts
       (concat "Review outcomes:\n" (mapconcat #'identity (nreverse parts) "\n")))))
 
-(defun gptel-auto-workflow--review-accuracy-feedback (category)
-  "Return formatted accuracy feedback for CATEGORY based on past review outcomes.
-Returns a string to inject into the review prompt, or nil if insufficient data.
-Tells the reviewer its historical bias so it can self-calibrate."
-  (when category
-    (let* ((outcomes (gethash category gptel-auto-workflow--review-outcomes))
-           (approve (and outcomes (plist-get outcomes :approved)))
-           (total (and outcomes (plist-get outcomes :total))))
-      (when (and total (>= total 3))
-        (let* ((blocked (- total approve))
-               (approval-rate (/ (float approve) total))
-               (cat-name (pcase category
-                           (:agentic "agentic")
-                           (:programming "programming")
-                           (:tool-calls "tool-calls")
-                           (:natural-language "NLP")
-                           (_ (format "%s" category))))
-               (calibration (if (> approval-rate 0.7)
-                                "You are historically lenient here. Only block for clear vulnerabilities."
-                              (if (< approval-rate 0.3)
-                                  "You are historically strict here. Consider that tests catch most issues."
-                                "Your calibration is balanced. Continue as-is."))))
-          (concat "ACCURACY FEEDBACK for " cat-name " category:\n"
-                  "  Past " (number-to-string total) " reviews: "
-                  (number-to-string approve) " approved (" (number-to-string blocked) " blocked) — "
-                  (format "%.0f" (* 100 approval-rate)) "% approval rate\n"
-                  "  " calibration "\n"))))))
+;; ─── Review Feedback → Agent Teaching Loop ───
+
+(defvar gptel-auto-workflow--review-feedback (make-hash-table :test 'equal)
+  "Hash table: target-file → latest review block reason.
+Populated by staging review when experiments are blocked.
+Read by prompt builder to inject feedback into next experiment.")
+
+(defun gptel-auto-workflow--record-review-feedback (branch category response)
+  "Extract block reason from REVIEW RESPONSE and store per target.
+Maps review block reasons to agent guidance for the next experiment."
+  (let* ((block-reason (when (and (stringp response)
+                                  (string-match "BLOCKED:\\s-*\\(.+?\\)\\(?:$\\|[\n\r]\\)" response))
+                         (match-string 1 response)))
+         (guidance
+          (cond
+           ((not block-reason) nil)
+           ((string-match-p "byte.compile\\|compil" block-reason)
+            "⚠ PREVIOUS REVIEW: blocked for byte-compile error. Run byte-compile BEFORE Edit.")
+           ((string-match-p "require\\|undefined function\\|void.function\\|void.variable" block-reason)
+            "⚠ PREVIOUS REVIEW: blocked for missing require. Add (require '...) before using new functions.")
+           ((string-match-p "style\\|format\\|indent\\|whitespace" block-reason)
+            "⚠ PREVIOUS REVIEW: blocked for formatting. Change logic only, never indent/reformat.")
+           ((string-match-p "security\\|eval\\|inject\\|dangerous" block-reason)
+            "⚠ PREVIOUS REVIEW: blocked for security. Avoid eval, shell injection, unvalidated input.")
+           (t (concat "⚠ PREVIOUS REVIEW: blocked — " (truncate-string-to-width block-reason 80))))))
+    (when guidance
+      ;; Extract target from branch name: e.g. projects-neopi5-r1418...exp1 → projects
+      (let ((target (when (string-match "^\\([a-z-]+\\)-" (or branch ""))
+                     (match-string 1 branch))))
+        (when target
+          (puthash target guidance gptel-auto-workflow--review-feedback)
+          (message "[review-feedback] Stored '%s' guidance for target '%s'"
+                   (truncate-string-to-width guidance 60) target))))))
+
+(defun gptel-auto-workflow--get-review-feedback (target)
+  "Return review feedback for TARGET if available, or empty string.
+Call from prompt builder to inject previous review block reason
+as guidance for the next experiment on this target."
+  (let ((guidance (and target (gethash target gptel-auto-workflow--review-feedback))))
+    (when guidance
+      (remhash target gptel-auto-workflow--review-feedback)  ; consume once
+      guidance)))
 
 (provide 'gptel-tools-agent-staging-baseline)
 ;;; gptel-tools-agent-staging-baseline.el ends here

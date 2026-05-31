@@ -1363,8 +1363,12 @@ Read ONE function. Edit ONE line. Verify. Done."
 - Wrap a gethash/assoc in (when-let ...) or (or ...) nil guard
 - Add (condition-case ...) around a file operation
 Read ONE function. Edit ONE line. Verify. Done."))))
-       (setq gptel-auto-experiment--current-task-hint task-hint))
-     (setq gptel-auto-workflow--last-prompt-sections
+        (setq gptel-auto-experiment--current-task-hint task-hint))
+      ;; Review feedback: teach agent from previous staging review block reasons
+      (let ((feedback (when (fboundp 'gptel-auto-workflow--get-review-feedback)
+                        (gptel-auto-workflow--get-review-feedback target))))
+        (setq gptel-auto-experiment--review-feedback (or feedback "")))
+      (setq gptel-auto-workflow--last-prompt-sections
           (mapconcat #'symbol-name included-sections ","))
   ;; Build variables plist and resolve to lambda via EDN pipeline
   (let* ((variables
@@ -1377,6 +1381,7 @@ Read ONE function. Edit ONE line. Verify. Done."))))
               (controller-focus . ,(or controller-focus ""))
               (inspection-thrash-contract . ,(or inspection-thrash-contract ""))
               (task-hint . ,(or gptel-auto-experiment--current-task-hint ""))
+              (review-feedback . ,(or gptel-auto-experiment--review-feedback ""))
               (previous-experiment-analysis . ,(or patterns "No previous experiments"))
               (suggestions . ,(if (funcall section-included-p 'suggestions)
                                   (or suggestions "None")
