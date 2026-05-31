@@ -83,7 +83,9 @@ Ensures the module directory exists before constructing the path."
                     gptel-tools-agent-experiment-loop
                     gptel-tools-agent-main
                     gptel-tools-agent-research
-                    gptel-auto-workflow-ontology-predict))
+                    gptel-auto-workflow-ontology-predict
+                    gptel-auto-workflow-evolution
+                    gptel-auto-workflow-production))
   (condition-case err
       (gptel-tools-agent--load-module feature)
     (error
