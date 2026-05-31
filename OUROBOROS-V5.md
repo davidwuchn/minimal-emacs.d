@@ -2,7 +2,7 @@
 
 > **The snake that researches what to eat, executes what it learned, and feeds outcomes back into its own appetite.**
 >
-> **V5.1 update (2026-05-31):** 57 commits, 7.5K lines — ai-behaviors integration (4 layers), ontology co-evolution, two-phase grader (#=test + #=review), digital twin dependency graph, subagent HARD CONSTRAINT enforcement, convergence invariant tracking, strike decay + auto-thaw, grader-bypass commit flow, category→hashtag learning, universal subsystem behavior injection via advice.
+> **V5.1 update (2026-05-31):** 65+ commits, 8K+ lines — ai-behaviors integration (4 layers), ontology co-evolution, two-phase grader (#=test + #=review), digital twin dependency graph, subagent HARD CONSTRAINT enforcement, convergence invariant tracking, strike decay + auto-thaw, grader-bypass commit flow, category→hashtag learning, universal subsystem behavior injection via advice, research coordinator (AutoTTS×AutoGo×Ontology), concrete task evolution, kept pattern memory, λ-compressed behavior prompts (59% reduction), adaptive injection, DeepSeek curl timeout fix.
 
 Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) + [gptel](https://github.com/karthink/gptel). 3 pipeline runs/day (macOS: 10AM/2PM/6PM; Linux: every 4h) + hourly self-evolution + watchdog every 30min. The snake eating its own tail — every subsystem improves every other subsystem.
 
@@ -24,7 +24,7 @@ It automates the entire cycle. Market intelligence feeds an experimentation engi
 |-----------|---------------|
 | **Autonomous experimentation** | Designs, codes, tests, and merges product improvements 24/7 |
 | **Self-improving** | Each experiment outcome sharpens the next cycle's hypotheses |
-| **Multi-provider routing** | Routes work across 6 LLM backends, auto-fails over on failure |
+| **Multi-provider routing** | Routes work across 4 LLM backends, auto-fails over on failure |
 | **Recovery-native** | Survives API outages, rate limits, daemon crashes — resumes where it left off |
 | **Memory** | Builds a knowledge graph of every experiment, pattern, and outcome |
 
@@ -34,7 +34,7 @@ It automates the entire cycle. Market intelligence feeds an experimentation engi
 |--------|-------|
 | Experiments run | 1,159+ across 257+ runs |
 | Keep rate | 20.4% (experiments that improve the product) |
-| Test suite | 2,090+ tests pass before any merge |
+| Test suite | 2,061+ tests pass before any merge |
 | Throughput | ~166 experiments/week, 24/7 autonomous |
 | Backends | 4 providers (DeepSeek, MiniMax, moonshot, DashScope), auto-routed by measured keep-rate |
 | Uptime | Self-healing watchdog, in-process memory management, crash-recovery |
@@ -199,7 +199,7 @@ Every experiment is an isolated git worktree. `main` is never touched directly. 
 | Gate | What it checks | What happens on failure |
 |------|---------------|------------------------|
 | **Category routing** | Best backend for this target RIGHT NOW? (Δ-from-baseline + trend + confidence) | Routes to strongest current performer; unhealthy backends dropped |
-| **Test execution** | Did 2090+ tests pass? | Experiment discarded, pattern learned |
+| **Test execution** | Did 2,061+ tests pass? | Experiment discarded, pattern learned |
 | **AI grading** | Is the change well-structured and principled? | Scored 0.0-1.0, fed to analyzer |
 | **AI review** | Does it pass security, conventions, architecture? | Multi-agent review with feedback |
 | **π Synthesis** | Which similar files should inherit this strategy? | Semantic cluster auto-queue |
@@ -411,7 +411,7 @@ The snake's own immune system:
 | Guard | Prevents |
 |-------|---------|
 | Git worktree isolation | `main` never touched directly |
-| 2013 tests + 1800s timeout | Broken code caught before staging |
+| 2,061+ tests + 300s timeout | Broken code caught before staging |
 | Ontology-aware provider routing | VSM-auto-tuned scoring + recency-weighted keep-rate + per-axis KIBC boost + per-run cooldown; backends with elevated health auto-excluded |
 | Per-target model preference | Historical performance data selects strongest model for each target |
 | Routing audit trail | Every decision recorded with component scores and VSM adjustment history |
