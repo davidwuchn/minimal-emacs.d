@@ -2899,19 +2899,23 @@ axes from kept experiments across the category."
       (mapconcat #'identity (nreverse parts) "\n"))))
 
 (defun gptel-auto-experiment--format-mode-context (target)
-  "Format operating mode context (ai-behaviors inspired)."
+  "Format operating mode context (ai-behaviors inspired).
+Injects the actual prompt.md content from the ai-behaviors #=code mode."
   (when (and target (fboundp 'gptel-auto-workflow--categorize-target))
     (let ((category (gptel-auto-workflow--categorize-target target)))
-      (concat "MODE: #=code\n"
-              "  Phase: implement — previous analysis done, grader follows\n"
-              "  Role: write production code. Change ONLY what's needed.\n"
-              (pcase category
-                (:agentic "  ⊣ #contract #checklist\n")
-                (:programming "  ⊣ #subtract #concrete\n")
-                (:tool-calls "  ⊣ #defensive #boundary\n")
-                (:natural-language "  ⊣ #coherence #depth\n")
-                (_ ""))
-              "  HARD CONSTRAINT: Δ(code) ∧ ¬reformat ∧ ¬comment_only\n"))))
+      (concat
+       "<operating-mode name=\"#=code\">\n"
+       "Write production code. Ship working software.\n"
+       "code :: Task -> WorkingCode; code ∩ {UnrequestedFeatures, OverEngineering, UnjustifiedDeps} = ∅\n"
+       (pcase category
+         (:agentic "Contract: pre/post/invariant for tool boundaries. Checklist: track every spec item.\n")
+         (:programming "Subtract: remove before adding. Concrete: every term resolves to specific code.\n")
+         (:tool-calls "Defensive: error handling + safety guards. Boundary: edges: zero, empty, nil.\n")
+         (:natural-language "Coherence: pieces consistent with context. Depth: why behind the surface.\n")
+         (_ ""))
+       "HARD CONSTRAINT: Δ(code) ONLY — no reformatting, no comments, no documentation.\n"
+       "Read existing code first — match conventions.\n"
+       "</operating-mode>\n"))))
 
 (defun gptel-auto-experiment--format-behavior-axes (target)
   "Format orthogonal behavior axes (ai-behaviors inspired)."
