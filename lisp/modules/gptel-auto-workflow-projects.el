@@ -415,7 +415,7 @@ finish."
                                         (format "[auto-workflow] - Skipped: %s"
                                                 project-root)))))))
                    (error
-                    (push (cons project-root (format "error: %s" err)) results)
+                    (push (cons project-root (format "error: %s" (error-message-string err))) results)
                     (message "[auto-workflow] ✗ Failed: %s - %s" project-root err)
                     (run-next)))))))
         (run-next)))))
@@ -919,7 +919,7 @@ When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
                         (with-temp-file (expand-file-name "var/tmp/research-total-backtrace.txt"
                                                           (gptel-auto-workflow--worktree-base-root))
                           (insert bt))))
-                    (push (cons project-root (format "error: %s" err)) results)
+                    (push (cons project-root (format "error: %s" (error-message-string err))) results)
                     (message "[research] ✗ Failed: %s - %s" project-root err)
                     (setq gptel-auto-workflow--current-project nil)
                     (run-next)))))))
@@ -1129,7 +1129,7 @@ and restores headless state. Returns t on success, nil on failure."
                 (message "[%s] ✓ Completed: %s" prefix root)
                 t)
             (error
-             (message "[%s] ✗ Failed: %s - %s" prefix root err)
+             (message "[%s] ✗ Failed: %s - %s" prefix root (error-message-string err))
              nil)))
       (unless headless-was-enabled
         (when (fboundp 'gptel-auto-workflow--disable-headless-suppression)
@@ -1154,8 +1154,8 @@ PER-PROJECT-FN should accept a project root and return t/nil for success."
               (push (cons (directory-file-name project-root) 'success) results)
             (push (cons (directory-file-name project-root) 'error) results))
         (error
-         (push (cons (directory-file-name project-root) (format "error: %s" err)) results)
-         (message "[%s] ✗ Failed: %s - %s" log-prefix project-root err))))
+         (push (cons (directory-file-name project-root) (format "error: %s" (error-message-string err))) results)
+         (message "[%s] ✗ Failed: %s - %s" log-prefix project-root (error-message-string err)))))
     (message "[%s] All projects processed: %s"
              log-prefix
              (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))

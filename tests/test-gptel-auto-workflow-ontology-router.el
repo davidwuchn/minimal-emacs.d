@@ -93,9 +93,7 @@
         (should (string= "kimi-k2.6" (cdar reordered)))))))
 
 (ert-deftest regression/ontology-router/reorder-keeps-all-backends ()
-  "Reordering should preserve all backends from static list.
-Fails in batch due to test isolation — pass when run individually."
-  :expected-result (if noninteractive :failed :passed)
+  "Reordering should preserve all backends from static list."
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
          gptel-auto-workflow-headless-subagent-fallbacks)
         (mock-results
@@ -173,9 +171,7 @@ Fails in batch due to test isolation — pass when run individually."
 ;; ─── Category Override Tests ───
 
 (ert-deftest regression/ontology-router/category-override-programming ()
-  "Programming targets use DeepSeek override.
-Fails in batch due to test isolation — passes when run individually."
-  :expected-result (if noninteractive :failed :passed)
+  "Programming targets use DeepSeek override."
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
          gptel-auto-workflow-headless-subagent-fallbacks)
         (mock-results
@@ -761,9 +757,7 @@ All known backends now support lambda notation; no async verification needed."
 ;; ─── Lambda Verification Report (verbum Phase 12) ───
 
 (ert-deftest tdd/lambda-verify/report-with-results ()
-  "lambda-verification-report shows correct counts with cached results.
-Fails in batch due to test isolation — pass when run individually."
-  :expected-result (if noninteractive :failed :passed)
+  "lambda-verification-report shows correct counts with cached results."
   (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
     (puthash "moonshot" :healthy gptel-auto-workflow--lambda-verification-results)
     (puthash "DashScope" :degraded gptel-auto-workflow--lambda-verification-results)

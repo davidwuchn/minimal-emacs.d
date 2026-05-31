@@ -1,1 +1,1 @@
-{"beta":0.047619047619047616,"own-priority":52.142857142857146,"ext-priority":15.0,"stop-threshold":65.0,"token-budget":8000,"learning-method":"agent-rules","evolved-at":"2026-05-31T15:11:02Z","based-on-traces":11,"best-topic":"json-null","best-topic-rate":0.0}
+{"beta":0.11340206185567009,"own-priority":55.10309278350516,"ext-priority":15.0,"stop-threshold":66.36082474226804,"token-budget":4907,"learning-method":"beta-schedule","evolved-at":"not-yet","based-on-traces":0,"best-topic":"json-null","best-topic-rate":0.0}

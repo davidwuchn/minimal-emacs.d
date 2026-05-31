@@ -55,13 +55,75 @@ These targets may need different research patterns or the research findings were
 
 
 
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-nil
+# Research Strategy: Template-Default
+
+## Scope
+**104 experiments** across 18 targets (modules, staging branches)
+
+## Core Hypotheses (Kept)
+
+| # | Change | Expected Benefit |
+|---|--------|------------------|
+| 1 | Add nil summary validation in `gptel-benchmark-compare-file-versions` | Prevent cryptic `wrong-type-argument` errors; explicit error conditions |
+| 2 | Fix negative caching in `gptel-benchmark--cache-put`/load | 1 disk hit per (name,version) instead of per call |
+| 3 | Remove redundant `if apply-lines` check; add early nil guard for `english-findings` | More robust lambda-prompt extraction; less branching |
+| 4 | Explicit nil/empty-string guard for `allium-spec`; remove redundant callback check | Prevent wasted LLM calls on invalid input |
+| 5 | Add `(symbolp backend)` branch before fallback `t` | Explicit type validation; handle non-keyword symbols |
+| 6 | Add `buffer-live-p` guard + nil check in lambda | Handle async buffer lifecycle |
+| 7 | Extract provider selection into `gptel-benchmark--select-provider` | Testable selection logic; isolated improvement |
+| 8 | Add timeout sentinel in `gptel-benchmark-call-subagent-sync` | Explicit timeout handling distinct from nil responses |
+| 9 | Nil guard on `where` + `condition-case` around overlay | Prevent overlay failures from breaking task execution |
+
+## Discarded
+
+| # | Proposed Change | Reason for Discard |
+|---|-----------------|-------------------|
+| A | Summary cache layer in `gptel-benchmark--get-trend-summary` | O(1) gain deemed premature |
+| B | Derive heading from `gptel-auto-workflow--mementum-symbol-map` | Duplication acceptable for now |
+| C | Fix `format "%s"` → `error-message-string` | Deferred |
+| D | Remove stale entries from hash table | Not prioritized |
+
+## Pattern
+- **Error handling** (nil guards, type checks, condition-case)
+- **Performance** (caching negative results)
+- **Clarity** (extracted helpers, explicit assumptions)
+- **Vitality** (robustness to edge cases)
 ```
 
+### Check Issues
+
+## Review: Research Strategy - Template-Default
+
+**Verdict: Sound strategy. A few points worth considering.**
+
+### Strengths
+- **Clear separation** of kept vs. discarded changes with explicit rationale
+- **Well-categorized patterns** (error handling, performance, clarity, vitality)
+- **Reasonable discards**: Items A, C, D are deferred for good reason (premature optimization, complexity, low priority)
+- **Hypothesis-driven**: Each kept change has an explicit expected benefit
+
+### Questions/Concerns
+
+| # | Concern |
+|---|---------|
+| 3 | "Remove redundant `if apply-lines` check" — verify the check is truly redundant before removal; a redundant check is cheaper than a missing guard |
+| 5 | "`symbolp` branch before fallback `t`" — if keywords work, why non-keyword symbols? Clarify the actual failure case |
+| 9 | "overlay failures" — are overlay errors the primary failure mode, or a secondary concern? Consider prioritizing the primary path |
+
+### Minor Nit
+
+- **A vs B naming inconsistency**: Kept items use numbers (1-9), discarded use letters (A-D). Pick one scheme for consistency.
+
+### Missing
+
+- **Rollback criteria**: What conditions would invalidate keeping any of the 9?
+- **Ordering/dependencies**: Are there ordering constraints among the 9 changes?
+
+### Overall
+
+Solid prioritization. The discarded items are defensible. Proceed.
