@@ -4,7 +4,7 @@
 
 # Semantic File Relationships
 
-Generated: 2026-05-30T12:27
+Generated: 2026-05-30T21:04
 
 | lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-tools-agent-main.el | 0.833 |
 | lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-auto-workflow-bootstrap.el | 0.831 |

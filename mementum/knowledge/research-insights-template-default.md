@@ -3,49 +3,48 @@ title: Research Insights - template-default
 status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
-insight-quality: 0.7/10
-allium-issues: 0
+insight-quality: 0.2/10
+allium-issues: 4
 allium-severity: 0.00
-allium-status: coherent
+allium-status: ok
 ---
 
 # Research Strategy: template-default
 
-*Consolidated from 197 experiments (7% keep rate).*
+*Consolidated from 98 experiments (2% keep rate).*
 
-**Performance:** 14 kept / 31 discarded / 19 failed (EXTRACTED — from TSV)
+**Performance:** 2 kept / 0 discarded / 10 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
-- `lisp/modules/gptel-benchmark-evolution.el` (1 kept / 3 discarded)
-- `lisp/modules/gptel-ext-tool-permits.el` (4 kept / 2 discarded / 1 failed)
-- `lisp/modules/gptel-auto-workflow-mementum.el` (1 kept / 1 discarded / 1 failed)
-- `lisp/modules/gptel-benchmark-comparator.el` (2 kept / 1 discarded)
-- `lisp/modules/gptel-benchmark-integrate.el` (1 kept / 1 discarded)
-- `lisp/modules/gptel-auto-workflow-research-integration.el` (1 kept / 15 discarded / 1 failed)
-- `lisp/modules/gptel-ext-core.el` (2 kept / 1 discarded / 1 failed)
-- `lisp/modules/gptel-tools-agent-validation.el` (2 kept / 3 discarded / 1 failed)
+- `lisp/modules/gptel-tools-agent-prompt-build.el` (1 kept)
+- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 5 failed)
 
 ### Structure (deterministic scan)
 
 ```elisp-structure
-defuns: gptel-benchmark-evolution-cycle, gptel-benchmark-evolution-observe, gptel-benchmark-evolution--deficient-p, gptel-benchmark-evolution-orient, gptel-benchmark-evolution-decide, gptel-benchmark-evolution-act, gptel-benchmark-evolution-mutate, gptel-benchmark-evolution-feed-forward, gptel-benchmark-evolution-check-capabilities, gptel-benchmark-evolution-emergence-rate, gptel-benchmark-evolution-track-correction, gptel-benchmark-evolution-status-report, gptel-benchmark-evolution-check-complete, gptel-benchmark-detect-anti-patterns, gptel-benchmark-apply-anti-pattern-remedy, gptel-benchmark-evolution-balance, gptel-benchmark-evolution-pathway, gptel-benchmark-evolution-next-capability, gptel-benchmark-evolution-discover, gptel-benchmark-evolution-self-improve
-defvars: gptel-benchmark-evolution-cycle-threshold, gptel-benchmark-evolution-state
-requires: cl-lib, gptel-benchmark-core, gptel-benchmark-principles, gptel-benchmark-memory
-provides: gptel-benchmark-evolution
-errors: error
-handlers: err
+defuns: gptel-auto-workflow--knowledge-cache-get, gptel-auto-workflow--knowledge-cache-set, gptel-auto-workflow--knowledge-cache-invalidate, gptel-auto-workflow--knowledge-cache-stats, gptel-auto-workflow--load-token-efficiency-data, gptel-auto-workflow--adapt-prompt-compression, gptel-auto-experiment--prompt-structure-score, gptel-auto-experiment--kibcm-axis, gptel-auto-experiment--forge-fixed-point, gptel-auto-experiment--compile-score, gptel-auto-experiment--decompile-score, gptel-auto-experiment--nucleus-compiler-prompt, gptel-auto-experiment--forge-lambda-fixed-point, gptel-auto-experiment--edn-richness-score, gptel-auto-experiment--count-edn-elements, gptel-auto-experiment--use-lambda-prompts-p, gptel-auto-experiment--lambda-compress-prompt, gptel-auto-experiment--resolve-prompt, gptel-auto-experiment--allium-compiler-prompt, gptel-auto-experiment--allium-distill
+defvars: gptel-auto-workflow--skills), gptel-auto-experiment-large-target-byte-threshold), gptel-auto-workflow--last-prompt-sections), gptel-auto-workflow--current-research-context), gptel-auto-experiment-time-budget), gptel-auto-workflow-use-staging), gptel-auto-workflow--running), gptel-auto-workflow--stats), gptel-auto-experiment-validation-retry-active-grace), gptel-auto-workflow--legacy-validation-retry-active-grace), gptel-auto-workflow--current-validation-retry-active-grace), my/gptel-subagent-stream), gptel-auto-workflow--knowledge-cache, gptel-auto-workflow--knowledge-cache-max-age, gptel-auto-workflow--topic-knowledge-max-chars, gptel-auto-experiment--lambda-verified-backends, gptel-auto-experiment--allium-research-cache, gptel-auto-workflow--ab-test-sections, gptel-auto-workflow--ab-test-omit-rate, gptel-auto-workflow--ab-test-min-samples
+requires: cl-lib, seq, subr-x
+provides: gptel-tools-agent-prompt-build
+declares: gptel-agent-read-file, gptel-auto-workflow--valid-strategy-name-p, gptel-auto-workflow-load-research-findings, gptel-benchmark--detect-task-type, my/gptel-get-model-metadata, gptel-auto-workflow--current-run-id, gptel-auto-workflow--ensure-results-file, gptel-auto-workflow--make-idempotent-callback, gptel-auto-workflow--non-empty-string-p, gptel-auto-workflow--plist-get, gptel-auto-workflow--results-file-path, gptel-auto-workflow--worktree-base-root, gptel-auto-experiment--eight-keys-scores, gptel-auto-workflow--project-root, gptel-auto-workflow--persist-status, my/gptel--sanitize-for-logging, gptel-auto-workflow--extract-mutation-templates, gptel-auto-workflow--format-weakest-keys, gptel-auto-workflow-skill-suggest-hypothesis, gptel-auto-experiment--inspection-thrash-result-p
+errors: Error, error, error, error, error, Error, signal, error, signal, error, error, error, error, error
+handlers: nil, nil, err, err, err, err, err, err, nil
 ```
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-auto-workflow-projects.el` (5 failed)
-- `lisp/modules/gptel-auto-workflow-strategic.el` (5 failed)
-- `lisp/modules/gptel-ext-context.el` (1 failed)
-- `lisp/modules/gptel-auto-workflow-research-integration.el` (1 kept / 15 discarded / 1 failed)
-- `lisp/modules/gptel-auto-workflow-research-benchmark.el` (2 failed)
+- `lisp/modules/gptel-auto-workflow-strategic.el` (4 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 5 failed)
+- `lisp/modules/gptel-tools-agent-error.el` (1 failed)
+
+## Allium Behavioral Coherence
+
+*4 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
+
+
 
 ## Meta-Learning Recommendations (INFERRED — from pattern analysis)
 
@@ -60,178 +59,74 @@ These targets may need different research patterns or the research findings were
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*6 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy Distillation
+# Distillation
 
-## Context
-65 experiments across targets; template-default approach
+## Research Strategy: template-default
+
+## 98 Experiments | 12 Targets
+
+**Targets:**
+- `staging-scope`, `staging-review`, `test`
+- `lisp/modules/gptel-ext-tool-permits.el`
+- `lisp/modules/gptel-benchmark-analysis.el`
+- `lisp/modules/gptel-benchmark-subagent.el`
+- `lisp/modules/gptel-benchmark-comparator.el`
+- `lisp/modules/gptel-tools-agent-error.el`
+- `lisp/modules/gptel-tools-agent-prompt-build.el`
+- `lisp/modules/gptel-auto-workflow-strategic.el`
+- `lisp/modules/gptel-auto-workflow-projects.el`
 
 ## Kept Hypotheses
 
-| # | Change | Targets |
-|---|--------|---------|
-| 1 | Idempotency guard for advice + extract symmetric disable function | φ Vitality, fractal Clarity |
-| 2 | Fix misleading message + add directory existence validation | Bug fix |
-| 3 | Cache validation: `equal` instead of `eq` for project list; check cache before `ensure-buffer-tables` | φ Vitality (adapts to usage), fractal Clarity (explicit assumption) |
-| 4 | Extract buffer lookup into validation sequence with explicit nil guards | fractal Clarity, φ Vitality (graceful FSM handling) |
-| 5 | `ignore-errors` around `file-attributes` + early guard for empty projects | φ Vitality (edge cases), fractal Clarity |
-| 6 | `format-mode-line` → direct `mode-name` access; `when` instead of `if` | fractal Clarity |
-| 7 | Filter `not-applicable` entries before sorting in `gptel-benchmark-eight-keys-weakest` | φ Vitality (prevents latent crash), fractal Clarity |
+1. improving the function `gptel-auto-workflow-list-project-buffers`
 
-## Discarded
+## Discarded Hypotheses
 
-- *(empty)*
+(None stated)
 ```
 
 ### Check Issues
 
-# Research Strategy Distillation — Check
+# Review of Research Tracking Document
 
-| Aspect | Status | Notes |
-|--------|--------|-------|
-| **Structure** | ✓ Valid | Clear table format with #, Change, Targets columns |
-| **Completeness** | ✓ Valid | All 7 kept hypotheses have both change description and target mappings |
-| **Discarded** | ✓ Valid | Empty set explicitly noted (no erroneous discards) |
-| **Context** | ✓ Valid | Describes scope (65 experiments) and methodology (template-default) |
+This appears to be a research/experiment tracking document. Here's my analysis:
 
 ## Observations
 
-1. **Dual-criteria tagging** — Every kept item maps to both φ Vitality and/or fractal Clarity ✓
-2. **Bug fix isolation** — Item #2 stands alone as bug fix, no quality dimension tag (intentional?) ✓
-3. **Hypothesis count** — 7/65 experiments retained (~10.8%) indicates aggressive filtering ✓
+**Structure:**
+- Standard experiment tracking format with hypotheses tracking
+- 98 experiments mapped to 12 targets
+- Clear separation between kept and discarded hypotheses
 
-## Minor Clarification Request
+**Target Categories:**
+1. **Environment targets**: `staging-scope`, `staging-review`, `test`
+2. **Elisp module targets**: 9 files in `lisp/modules/` (mostly `gptel-*` related)
 
-**Item #2**: "Bug fix" — Should this also receive a quality dimension tag, or is the intent that pure bug fixes are auto-kept regardless of criteria?
+**Hypothesis Status:**
+- Only 1 kept hypothesis (focused on improving `gptel-auto-workflow-list-project-buffers`)
+- No discarded hypotheses documented
 
-Otherwise, the distillation appears well-formed.
+## Questions/Feedback
+
+1. **Missing Discarded Hypotheses** - If 98 experiments were run, presumably some hypotheses were tested and rejected. Where are they?
+
+2. **Target Scope** - The targets mix infrastructure (`staging-*`) with code modules. Is this intentional?
+
+3. **Kept Hypothesis Specificity** - "improving the function" is vague. Better to specify:
+   - What improvement was made?
+   - What metric improved?
+   - What was the baseline?
+
+4. **98 Experiments → 12 Targets** - ~8 experiments per target on average. Is this evenly distributed or were some targets more heavily experimented on?
+
+---
+
+**What would you like me to help with?**
+- Refine the hypothesis documentation?
+- Analyze the experiment distribution?
+- Something else?

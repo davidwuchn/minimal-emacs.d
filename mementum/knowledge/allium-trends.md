@@ -1,5 +1,8 @@
 ### Allium Issue Trends
-**Regression warnings** (1 strategies with increased issues):
+**Recurring patterns** across all strategies:
 
-- `template-default`: 0 → 3 issues (worse)
+- **Add risk assessment**: 1 occurrence(s)
+- **Clarify the 12 targets**: 1 occurrence(s)
+- **Define success metrics**: 1 occurrence(s)
+- **Formulate a hypothesis**: 1 occurrence(s)
 
