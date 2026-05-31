@@ -6,7 +6,6 @@
 (require 'cl-lib)
 (declare-function gptel-auto-workflow-evolution-run-cycle "gptel-auto-workflow-evolution")
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
-(defvar gptel-auto-workflow-evolution-enabled)
 
 ;; ─── Configuration ───
 
@@ -51,7 +50,7 @@ Runs every 300s (5min) to keep RSS from runaway growth."
   "Run evolution cycle if enabled and not already running.
 Also runs periodic mementum maintenance (index rebuild + synthesis)
 every cycle when there are candidate memories to process."
-  (when (and gptel-auto-workflow-evolution-enabled
+  (when (and (bound-and-true-p gptel-auto-workflow-evolution-enabled)
              (fboundp 'gptel-auto-workflow-evolution-run-cycle))
     ;; Ensure base functions are available (breaks circular require)
     (unless (fboundp 'gptel-auto-workflow--worktree-base-root)
@@ -197,7 +196,7 @@ Called when research context changes or run completes."
       
       ;; Evolution config
       (insert "Configuration:\n")
-      (insert (format "  Evolution enabled: %s\n" gptel-auto-workflow-evolution-enabled))
+      (insert (format "  Evolution enabled: %s\n" (bound-and-true-p gptel-auto-workflow-evolution-enabled)))
       (insert (format "  Evolution interval: %d seconds\n" gptel-auto-workflow-evolution-interval))
       (insert (format "  Timer active: %s\n\n" 
                       (if gptel-auto-workflow--evolution-timer "YES" "NO")))
@@ -299,16 +298,15 @@ Called when research context changes or run completes."
 
 (defun gptel-auto-workflow-evolution-auto-start ()
   "Auto-start evolution and GC timers if enabled."
-  (when gptel-auto-workflow-evolution-enabled
+  (when (bound-and-true-p gptel-auto-workflow-evolution-enabled)
     (gptel-auto-workflow-start-evolution-timer)
     (gptel-auto-workflow-start-gc-timer)
     ;; Run initial cycle
     (run-with-idle-timer 60 nil #'gptel-auto-workflow--maybe-run-evolution)))
 
 ;; τ Wisdom: start on load when daemon is active and evolution is enabled.
-;; ∃ Truth: removed nil hard-disable — if evolution is broken, fix it, don't hide it.
 (when (and (daemonp)
-           gptel-auto-workflow-evolution-enabled)
+           (bound-and-true-p gptel-auto-workflow-evolution-enabled))
   (gptel-auto-workflow-evolution-auto-start))
 
 ;; ─── Pipeline Verification ───
