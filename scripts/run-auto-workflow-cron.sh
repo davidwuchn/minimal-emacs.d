@@ -1139,7 +1139,7 @@ ensure_worker_daemon() {
     
     # Verify socket is actually gone before starting new daemon
     local _socket_gone=0
-    for _ in $(seq 1 20); do
+    for _ in $(seq 1 60); do
         if ! daemon_socket_has_owner 2>/dev/null; then
             _socket_gone=1
             break
@@ -1186,7 +1186,7 @@ ensure_worker_daemon() {
             bash -c 'ulimit -s 65532 2>/dev/null; exec "$0" --init-directory="$1" --daemon="$2" --eval "(setq native-comp-jit-compilation nil)" </dev/null >>"$3" 2>&1' \
             "$EMACS" "$DIR" "$SERVER_NAME" "$DAEMON_LOG" &
     fi
-    for _ in $(seq 1 50); do
+    for _ in $(seq 1 150); do
         if check_worker_daemon; then
             rc=0
         else
