@@ -29,6 +29,14 @@
             (message "[post-init] Cleaned stale daemon socket: %s" stale))))
     (error nil)))
 
+;; Pre-populate rate-limited backends for this machine.
+;; MiniMax is out of quota (resets tomorrow). Remove this block when quota returns.
+(with-eval-after-load 'gptel-tools-agent-experiment-core
+  (when (and (boundp 'gptel-auto-workflow--rate-limited-backends)
+             (not (member "MiniMax" gptel-auto-workflow--rate-limited-backends)))
+    (push "MiniMax" gptel-auto-workflow--rate-limited-backends)
+    (message "[post-init] MiniMax rate-limited (temporary — quota exhausted)")))
+
 ;; Add the local lisp directory to Emacs' load path using the true root directory
 ;; (not user-emacs-directory, since we changed that to var/)
 (add-to-list 'load-path (expand-file-name "lisp" minimal-emacs-user-directory))
