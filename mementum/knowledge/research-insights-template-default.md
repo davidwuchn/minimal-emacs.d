@@ -55,42 +55,111 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-## Research Strategy: template-default
+# Research Strategy Distillation
 
-**Scope**: 57 experiments across 12 targets
+## Scope
+- **65 experiments** across 10 targets in `gptel/` module system
 
-**Result**: Null — no hypotheses retained
+## Core Hypotheses (Kept/Active)
 
----
+| Focus | Hypothesis | Targets |
+|-------|-----------|---------|
+| **Idempotency** | Add guard to prevent re-adding active advice; extract symmetric disable | workflow-research, workflow-strategic |
+| **Cache validation** | Use `equal` instead of `eq` for project list comparison; check cache before `ensure-buffer-tables` | workflow-projects |
+| **Buffer lookup** | Extract to validation sequence with explicit nil guards | (general) |
+| **Edge cases** | `ignore-errors` around `file-attributes`; early guard for empty projects | workflow-projects |
+| **Mode-line** | Direct `mode-name` access instead of `format-mode-line`; use `when` not `if` | (general) |
 
-### Discarded Hypotheses
+## Bug Fixes
+- Misleading error messages
+- Directory existence validation
 
-| # | Description | Rationale |
-|---|-------------|-----------|
-| 1 | Move `make-hash-table` inside guard, replace `condition-case` with `ignore-errors` | Redundant `(consp val)` check already encoded in `inner-ht`; anti-pattern flagged at L362 |
-| 2 | Add nil guard for empty `status-lines` | Self-defeating; cache-empty = cache-miss optimization |
-| 3 | Fix misleading indentation in `gptel-auto-workflow-run-all-projects` and `gptel-auto-workflow--get-worktree-buffer` | Indentation cosmetic; doesn't affect parse tree or runtime |
+## Discarded
+- `gptel-benchmark-eight-keys-weakest`: Runtime crash on `not-applicable` symbols during sorting → filter before sort
 
----
-
-**Conclusion**: No viable improvements identified in this sweep.
+## Design Principles
+- **φ Vitality**: Adaptive error recovery, handles edge cases gracefully
+- **Fractal Clarity**: Explicit assumptions, visible logic flow, nil-safety
 ```
 
 ### Check Issues
 
-I'd need the codebase to verify. What repo/path are these hypotheses about?
+# Review: Research Strategy Distillation
 
-Also, a few quick concerns from the table alone:
+## Overall Assessment: ✅ Solid Foundation
 
-| # | Issue |
-|---|-------|
-| 1 | The rationale seems circular — "redundant check already encoded" — but redundancy ≠ harmless. If `inner-ht` is `(consp val)`, the guard may be unnecessary; if not, it may be critical. Need to confirm which. |
-| 2 | The "cache-empty = cache-miss optimization" claim depends on usage pattern. If callers frequently check `status-lines`, a nil guard that short-circuits could be a win. |
-| 3 | Cosmetic, agreed, but cosmetic bugs in indentation can mask real logic errors — worth a second look. |
+The distillation is well-structured with clear hypothesis-driven organization.
 
-57 experiments, 0 retained is a strong outcome. Want me to look at the actual code to sanity-check?
+---
+
+## Strengths
+
+| Aspect | Evaluation |
+|--------|------------|
+| **Hypothesis-driven** | Each focus has explicit expected behavior changes |
+| **Active vs Discarded** | Clear separation prevents dead-end exploration |
+| **Specificity** | Concrete code-level fixes (`equal` vs `eq`, `when` vs `if`) |
+| **Design Principles** | φ Vitality + Fractal Clarity provide decision-making criteria |
+
+---
+
+## Observations / Questions
+
+### 1. Scope Feasibility
+> 65 experiments × 10 targets = 650+ test cases?
+
+Is there a prioritization mechanism? Consider tagging hypotheses as P0/P1/P2.
+
+### 2. Idempotency Hypothesis
+```elisp
+;; "Extract symmetric disable" - does this mean:
+(advice-add 'foo :before #'guard)   ; symmetric to
+(advice-remove 'foo #'guard)
+```
+Clarify whether "symmetric disable" refers to advice removal, mode toggling, or both.
+
+### 3. Mode-line Entry
+```elisp
+;; Direct mode-name vs format-mode-line
+;; Risk: mode-name may be a list, not string
+(when (stringp mode-name) ...)  ; still needed?
+```
+
+### 4. Discarded Experiment
+> `not-applicable` symbols during sorting → filter before sort
+
+Is this documented in a bug tracker? Could it be a linting target instead of experiment discard?
+
+---
+
+## Suggestions
+
+| Area | Recommendation |
+|------|----------------|
+| **Hypothesis table** | Add "Status" column (e.g., Implemented/In Progress/Pending) |
+| **φ Vita
+
+... (truncated)

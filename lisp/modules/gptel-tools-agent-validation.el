@@ -357,5 +357,49 @@ Returns nil if valid, or error message string if invalid."
                (unless byte-compile-ok
                  (format "Byte-compile error in %s" file)))))))))
 
+;; ─── Cheap Diff Content Sanity Check ───
+
+(defun gptel-auto-experiment--validate-diff-content (worktree)
+  "Cheap pre-grade check of aggregate diff in WORKTREE.
+Returns nil if content seems reasonable, or an error string.
+Catches: trivial changes (whitespace/comments only), LLM artifacts in diff,
+vandalism (removal of error handling), and excessively large diffs.
+This runs between syntax validation and the grader API call."
+  (when (and worktree (file-directory-p worktree))
+    (let ((default-directory worktree)
+          (diff-text (shell-command-to-string
+                      "git --no-pager diff --no-ext-diff --unified=10 HEAD -- . 2>/dev/null")))
+      (cond
+       ;; No diff at all — executor somehow produced no changes
+       ((string-empty-p (string-trim diff-text))
+        "Cheap check: experiment produced no file changes")
+       ;; Check for LLM/markdown artifacts in the diff
+       ((string-match-p
+         "\\+```\\(emacs-lisp\\|lisp\\|elisp\\)?" diff-text)
+        (format "Cheap check: LLM markdown artifacts in diff (``` blocks)"))
+       ;; Check for debug artifacts: print/insert at top level
+       ((string-match-p
+         "^\\+\\(message\\|insert\\|print\\|princ\\|debug\\)" diff-text)
+        (format "Cheap check: debug artifact in diff (top-level %s)"
+                (match-string 1 diff-text)))
+       ;; Check for vandalism: removal of error handling patterns
+       ((string-match-p
+         "^-.*condition-case\\|^-.*ignore-errors\\|^-.*noninteractive"
+         diff-text)
+        (format "Cheap check: error handling removal detected in diff"))
+       ;; Check for excessive diff size (>80 lines touched is off-task)
+       ((> (count-matches "\n" diff-text) 80)
+        (format "Cheap check: diff too large (%d lines)"
+                (1+ (count-matches "\n" diff-text))))
+       ;; Check for trivial changes: only whitespace or comment additions
+       ((let ((non-trivial-lines 0))
+          (dolist (line (split-string diff-text "\n"))
+            (when (string-match-p "^\\+[^+ \t;]" line)
+              (cl-incf non-trivial-lines)))
+          (and (> non-trivial-lines 0) (< non-trivial-lines 2)))
+        (format "Cheap check: diff has only %d non-comment code lines" non-trivial-lines))
+       ;; Looks reasonable
+       (t nil)))))
+
 (provide 'gptel-tools-agent-validation)
 ;;; gptel-tools-agent-validation.el ends here

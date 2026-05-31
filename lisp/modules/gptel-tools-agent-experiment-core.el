@@ -409,12 +409,15 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                  (setq finished t))
                                ;; Validate syntax BEFORE calling grader to avoid wasting API calls
                                ;; Check ALL modified files, not just target — agent may edit dependencies
-                               (let ((validation-error
-                                     (when target
-                                       (or (gptel-auto-experiment--validate-all-modified-files experiment-worktree)
-                                           (gptel-auto-experiment--validate-code
-                                            (expand-file-name target experiment-worktree))))))
-                                (if validation-error
+                                  (let ((validation-error
+                                      (when target
+                                        (or (gptel-auto-experiment--validate-all-modified-files experiment-worktree)
+                                            (gptel-auto-experiment--validate-code
+                                             (expand-file-name target experiment-worktree))
+                                            ;; Cheap diff content check — catches trivial/nonsense diffs
+                                            ;; before expensive grader call
+                                            (gptel-auto-experiment--validate-diff-content experiment-worktree)))))
+                                 (if validation-error
                                    (progn
                                      (message "[auto-exp] ✗ Pre-grade validation failed: %s"
                                               (my/gptel--sanitize-for-logging validation-error 200))

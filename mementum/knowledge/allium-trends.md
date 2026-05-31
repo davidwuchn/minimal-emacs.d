@@ -1,12 +1,9 @@
 ### Allium Issue Trends
 **Recurring patterns** across all strategies:
 
-- **File relationship unclear**: 1 occurrence(s)
-- **Success criteria undefined**: 1 occurrence(s)
-- **Experiment-to-hypothesis mapping unclear**: 1 occurrence(s)
-- **No discarded hypotheses recorded**: 1 occurrence(s)
-
-**Regression warnings** (1 strategies with increased issues):
-
-- `template-default`: 3 → 8 issues (worse)
+- **Add success criteria**: 1 occurrence(s)
+- **Expand H7**: 1 occurrence(s)
+- **Specify target files for H4 and H5**: 1 occurrence(s)
+- **Add a mapping table**: 1 occurrence(s)
+- **Clarify φ symbol**: 1 occurrence(s)
 
