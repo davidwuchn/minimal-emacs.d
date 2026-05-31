@@ -11,7 +11,7 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 44 experiments (2% keep rate).*
+*Consolidated from 42 experiments (2% keep rate).*
 
 **Performance:** 1 kept / 0 discarded / 21 failed (EXTRACTED — from TSV)
 

@@ -4,11 +4,11 @@
 
 # Semantic File Relationships
 
-Generated: 2026-05-31T16:42
+Generated: 2026-05-31T16:52
 
-| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-auto-workflow-recovery.el | 0.222 |
-| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-ext-checkpoint.el | 0.222 |
-| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-ext-circuit-breaker.el | 0.222 |
+| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-auto-workflow-recovery.el | 0.250 |
+| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-ext-checkpoint.el | 0.250 |
+| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-ext-circuit-breaker.el | 0.250 |
 
 ## Ontology Implications
 
