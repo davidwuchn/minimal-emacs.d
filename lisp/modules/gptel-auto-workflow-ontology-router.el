@@ -1480,19 +1480,20 @@ alternate personas 20% of the time for A/B testing."
          (learned-archetype
           (and (fboundp 'gptel-ai-behaviors--best-persona)
                (gptel-ai-behaviors--best-persona category)))
-         ;; Explore 20% of the time when learned != default (gather A/B data)
-         (explore-p (and learned-archetype
-                         (not (string= learned-archetype default-archetype))
-                         (< (random 100) 20)))
-         (archetype (if explore-p
-                        (progn
-                          (when (boundp 'gptel-ai-behaviors--exploration-tag)
-                            (setq gptel-ai-behaviors--exploration-tag t))
-                          (if (string= learned-archetype default-archetype)
-                              (car (remove default-archetype
-                                           '("Guardian" "Craftsman" "Engineer" "Writer")))
-                            learned-archetype))
-                      (or learned-archetype default-archetype)))
+          ;; Explore 20% when learned != default; curiosity 5% when default confirmed
+          (alternatives '("Guardian" "Craftsman" "Engineer" "Writer"))
+          (explore-p (if (and learned-archetype
+                              (not (string= learned-archetype default-archetype)))
+                         (< (random 100) 20)   ; Active A/B: 20% explore
+                       (< (random 100) 5)))    ; Curiosity: 5% try random alternative
+          (archetype (if explore-p
+                         (progn
+                           (when (boundp 'gptel-ai-behaviors--exploration-tag)
+                             (setq gptel-ai-behaviors--exploration-tag t))
+                           (let* ((current (or learned-archetype default-archetype))
+                                  (others (remove current alternatives)))
+                             (nth (random (length others)) others)))
+                       (or learned-archetype default-archetype)))
          (base-persona
           (pcase agent-type
             ("analyzer"
