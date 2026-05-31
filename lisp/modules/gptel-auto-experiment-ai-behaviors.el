@@ -661,7 +661,10 @@ When NO-PROMPT is non-nil, just logs the context (for non-LLM subsystems)."
       (condition-case nil
           (progn
             (advice-add (intern used-by) :around
-                        (gptel-ai-behaviors--advice-inject subsystem no-prompt))
+                        (condition-case er
+                            (gptel-ai-behaviors--advice-inject subsystem no-prompt)
+                          (void-variable (message "[ai-behaviors] void-variable %s in %s advice" (cadr er) subsystem))
+                          (error (message "[ai-behaviors] %s advice error: %s" subsystem (error-message-string er)))))
             (when (eq subsystem 'researcher)
               (advice-add (intern used-by) :around
                           #'gptel-ai-behaviors--wrap-research-with-validation)))
