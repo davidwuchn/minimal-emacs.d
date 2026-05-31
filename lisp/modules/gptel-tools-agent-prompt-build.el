@@ -1687,7 +1687,16 @@ Captures executor reasoning from the dynamic variable
                                 ((string-match-p "condition-case" hint) :condition-case)
                                 ((string-match-p "PICK ONE" hint) :pick-one)
                                 (t :unknown))))
-          (gptel-ai-behaviors--record-concrete-task-outcome category task-type kept)))))
+          (gptel-ai-behaviors--record-concrete-task-outcome category task-type kept)))
+      ;; Store kept experiment pattern for future prompt injection
+      (when (and kept (fboundp 'gptel-ai-behaviors--record-kept-pattern)
+                 (fboundp 'gptel-ai-behaviors--extract-diff-snippet)
+                 gptel-ai-behaviors--current-hashtags
+                 agent-output (> (length agent-output) 0))
+        (let* ((hashtag-str (format "%s" (car (split-string gptel-ai-behaviors--current-hashtags))))
+               (snippet (gptel-ai-behaviors--extract-diff-snippet agent-output)))
+          (when snippet
+            (gptel-ai-behaviors--record-kept-pattern category hashtag-str snippet))))))
     ;; Inject research metadata from global context into experiment record.
     ;; This closes the feedback loop: experiments carry the research run that
     ;; influenced the prompt so trace outcomes can be linked after logging.
@@ -3120,6 +3129,14 @@ and WHAT pattern to use — from all OV5 signals combined."
                           "\n"))))
         (when fix-text
           (push (format "PREVIOUS GRADER FAILURES — FIX THESE:\n%s" fix-text) parts)))
+      ;; Past kept patterns for this category (learned from experiment history)
+      (when (and (fboundp 'gptel-ai-behaviors--format-kept-patterns)
+                 (bound-and-true-p gptel-ai-behaviors--kept-patterns)
+                 (hash-table-p gptel-ai-behaviors--kept-patterns)
+                 (> (hash-table-count gptel-ai-behaviors--kept-patterns) 0))
+        (let* ((past-pats (gptel-ai-behaviors--format-kept-patterns category)))
+          (when past-pats
+            (push (format "PAST PATTERNS (worked before):\n%s" past-pats) parts))))
       (push (format "SCOPE: ONE function. Edit ONE line. Verify.") parts)
       (mapconcat #'identity (nreverse parts) "\n"))))
 

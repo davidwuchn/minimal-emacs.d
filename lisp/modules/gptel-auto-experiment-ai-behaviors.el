@@ -847,5 +847,60 @@ Returns parsed entries for evolution analysis."
         (message "[ai-behaviors] ACTIVE %s — maintaining current behaviors" cat)))
     results))
 
+;; ─── Kept Pattern Memory ───
+
+(defvar gptel-ai-behaviors--kept-patterns (make-hash-table :test 'equal)
+  "Hash table (category . hashtag) → (pattern count) for kept experiment diffs.
+Populated by `gptel-ai-behaviors--record-kept-pattern' when experiments are kept.
+Read by `gptel-ai-behaviors--format-kept-patterns' for prompt injection.")
+
+(defun gptel-ai-behaviors--record-kept-pattern (category hashtag diff-snippet)
+  "Store DIFF-SNIPPET as a successful pattern for (CATEGORY . HASHTAG).
+Overwrites when a new pattern is available, keeping the most recent success."
+  (when (and category hashtag diff-snippet)
+    (let* ((key (cons category (intern hashtag)))
+           (entry (gethash key gptel-ai-behaviors--kept-patterns)))
+      (puthash key (list :pattern diff-snippet
+                         :count (1+ (or (plist-get entry :count) 0)))
+               gptel-ai-behaviors--kept-patterns)
+      (message "[patterns] Stored pattern for %s × %s" category hashtag))))
+
+(defun gptel-ai-behaviors--format-kept-patterns (category &optional n)
+  "Format kept patterns for CATEGORY for prompt injection.
+Returns up to N (default 2) most recent patterns as a compact string, or nil."
+  (let ((patterns nil))
+    (maphash
+     (lambda (key entry)
+       (when (eq (car key) category)
+         (push (list :hashtag (cdr key)
+                     :pattern (plist-get entry :pattern)
+                     :count (plist-get entry :count))
+               patterns)))
+     gptel-ai-behaviors--kept-patterns)
+    (when patterns
+      (let ((sorted (sort patterns (lambda (a b) (> (plist-get a :count) (plist-get b :count))))))
+        (mapconcat
+         (lambda (p)
+           (format "  [%s ×%d] %s" (plist-get p :hashtag) (plist-get p :count)
+                   (truncate-string-to-width (plist-get p :pattern) 200 nil nil "...")))
+         (seq-take sorted (or n 2))
+         "\n")))))
+
+(defun gptel-ai-behaviors--extract-diff-snippet (agent-output)
+  "Extract a compact code snippet from AGENT-OUTPUT for pattern storage.
+Looks for diff-like content (+/- lines) in the output.
+Returns first relevant code addition line, or nil."
+  (when (stringp agent-output)
+    (let ((lines (split-string agent-output "\n"))
+          (snippet nil))
+      (dolist (line lines)
+        (when (and (string-match "^\\+" line)
+                   (not (string-match "^\\+\\+\\+" line))
+                   (string-match "ignore-errors\\|when\\|unless\\|condition-case\\|if\\|or\\|and\\|gethash\\|assoc\\|boundp" line)
+                   (null snippet))
+          (setq snippet (string-trim (substring line 1)))))
+      (when snippet
+        (truncate-string-to-width snippet 120 nil nil "...")))))
+
 (provide 'gptel-auto-experiment-ai-behaviors)
 ;;; gptel-auto-experiment-ai-behaviors.el ends here
