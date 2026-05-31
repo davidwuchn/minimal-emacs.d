@@ -3,7 +3,7 @@ title: Research Insights - template-default
 status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
-insight-quality: 0.6/10
+insight-quality: 0.9/10
 allium-issues: 3
 allium-severity: 0.00
 allium-status: ok
@@ -11,14 +11,15 @@ allium-status: ok
 
 # Research Strategy: template-default
 
-*Consolidated from 32 experiments (6% keep rate).*
+*Consolidated from 95 experiments (9% keep rate).*
 
-**Performance:** 2 kept / 0 discarded / 3 failed (EXTRACTED — from TSV)
+**Performance:** 9 kept / 2 discarded / 11 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
-- `lisp/modules/gptel-tools-agent-prompt-build.el` (1 kept / 2 failed)
-- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept)
+- `lisp/modules/gptel-tools-agent-prompt-build.el` (3 kept / 2 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (4 kept / 2 discarded / 1 failed)
+- `lisp/modules/gptel-benchmark-subagent.el` (2 kept / 3 failed)
 
 ### Structure (deterministic scan)
 
@@ -36,8 +37,11 @@ handlers: nil, nil, err, ..., ...), err, err, err, err, err, nil, nil
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-tools-agent-prompt-build.el` (1 kept / 2 failed)
-- `lisp/modules/gptel-auto-workflow-strategic.el` (1 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (4 kept / 2 discarded / 1 failed)
+- `lisp/modules/gptel-auto-workflow-strategic.el` (4 failed)
+- `lisp/modules/gptel-benchmark-subagent.el` (2 kept / 3 failed)
+- `lisp/modules/gptel-tools-agent-error.el` (1 failed)
+- `lisp/modules/gptel-tools-agent-prompt-build.el` (3 kept / 2 failed)
 
 ## Allium Behavioral Coherence
 
@@ -50,3 +54,81 @@ These targets may need different research patterns or the research findings were
 - **This strategy underperforms.** Consider evolving a new approach.
 - The findings may be too generic or targeting the wrong files.
 - Try combining with git history for recency bias.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Allium Behavioral Spec (auto-generated, v3)
+
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+
+```allium
+<think>
+I've distilled the research strategy into a concise memory. Let me also provide a summary response to the user.
+</think>
+```
+
+### Check Issues
+
+# Key Properties of 1,000,000
+
+**1,000,000** (one million) is a fundamental number with several notable mathematical properties:
+
+## Basic Properties
+- **Written as**: 10⁶ (10 to the power of 6)
+- **Ordinal**: One millionth (1,000,000th)
+- **Roman Numeral**: M̅ (M with overline)
+
+## Prime Factorization
+- **1,000,000 = 10⁶ = 2⁶ × 5⁶**
+
+## Divisors
+- **Total divisors**: 49
+- **Prime divisors**: 2 and 5
+- Some notable divisors: 1, 2, 4, 5, 8, 10, 16, 20, 25, 32, 40, 50, 64, 80, 100, 125, 160, 200, 250, 320, 400, 500, 625, 800, 1000, 1250, 1600, 2000, 2500, 3125, 4000, 5000, 6250, 10000, 12500, 20000, 25000, 31250, 50000, 62500, 100000, 125000, 200000, 250000, 500000, 1000000
+
+## Interesting Properties
+- **Perfect square**: 1000² (1,000 × 1,000)
+- **Perfect cube**: 100³
+- **Perfect fourth power**: 10⁴
+- **Perfect sixth power**: 100⁶
+
+## Named Numbers Around It
+- **Lakh** = 100,000 (Indian system)
+- **Million** = 1,000,000
+- **Crore** = 10,000,000 (Indian system)
+- **Billion** = 1,000,000,000 (1,000 millions)
+
+Is there a specific property or context involving 1,000,000 you'd like me to elaborate on?
