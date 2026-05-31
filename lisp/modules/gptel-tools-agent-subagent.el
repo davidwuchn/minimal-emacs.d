@@ -629,15 +629,13 @@ AGENT-NAME must exist in `gptel-agent--agents`.
                                                         &optional files include-history include-diff active-grace)
   "Run `my/gptel--run-agent-tool' with TIMEOUT and optional ACTIVE-GRACE.
 Logs subagent dispatch to ontology for self-evolution tracking."
-  ;; GUARD: nil callback → void-function nil crash on timer.
+  ;; GUARD: nil callback → (void-function nil) crash on timer.
+  ;; Must come before ASYNC dispatch — replaced with safe logger.
   (unless (functionp callback)
-    (let ((safe-cb (lambda (result)
-                     (message "[nucleus] %s result discarded (nil callback): %s"
-                              agent-name
-                              (my/gptel--sanitize-for-logging (format "%s" result) 100)))))
-      (message "[nucleus] ⚠ %s dispatched with non-function callback — using safe fallback"
-               agent-name)
-      (setq callback safe-cb)))
+    (message "[nucleus] ⚠ %s with nil callback — safe fallback" agent-name)
+    (setq callback (lambda (result)
+                     (message "[nucleus] %s callback (nil): %s" agent-name
+                              (if (stringp result) (truncate-string-to-width result 80) "non-string")))))
   (let* ((adjusted-timeout
           ;; Dynamic timeout: reduce for backends with strikes (verbum health ladder)
           (if (and (fboundp 'gptel-auto-workflow--backend-health-level)

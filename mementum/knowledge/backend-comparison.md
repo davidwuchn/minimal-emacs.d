@@ -1,10 +1,10 @@
 # Backend Head-to-Head Comparison
-> Auto-generated from 65 experiments across 3 backends
+> Auto-generated from 37 experiments across 2 backends
 
-## MiniMax vs DeepSeek (winner: **tie**)
-- MiniMax: 0.0% keep-rate
+## MiniMax vs DeepSeek (winner: **MiniMax**)
+- MiniMax: 9.1% keep-rate
 - DeepSeek: 0.0% keep-rate
-- Shared targets: 1 | MiniMax won 0, DeepSeek won 0, ties 1
+- Shared targets: 1 | MiniMax won 1, DeepSeek won 0, ties 0
 
 
-*Generated: 2026-05-30 22:34*
+*Generated: 2026-05-31 17:49*

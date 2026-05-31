@@ -1,9 +1,9 @@
 # Model-Level Head-to-Head Comparison
-> Auto-generated from 65 experiments across 1 models
+> Auto-generated from 37 experiments across 1 models
 
 ## Model Rankings (by keep-rate)
 
-- **MiniMax/minimax-m2.7-highspeed**: 0.0%
+- **MiniMax/minimax-m2.7-highspeed**: 5.0%
 
 
-*Generated: 2026-05-30 22:34*
+*Generated: 2026-05-31 17:49*
