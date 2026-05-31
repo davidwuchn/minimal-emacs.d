@@ -4,14 +4,14 @@ status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
 insight-quality: 0.2/10
-allium-issues: 0
+allium-issues: 4
 allium-severity: 0.00
-allium-status: coherent
+allium-status: ok
 ---
 
 # Research Strategy: template-default
 
-*Consolidated from 50 experiments (2% keep rate).*
+*Consolidated from 48 experiments (2% keep rate).*
 
 **Performance:** 1 kept / 0 discarded / 21 failed (EXTRACTED — from TSV)
 
@@ -42,8 +42,24 @@ These targets may need different research patterns or the research findings were
 - `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 9 failed)
 - `lisp/modules/treesit-agent-tools-workspace.el` (1 failed)
 
+## Allium Behavioral Coherence
+
+*4 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
+
+
+
 ## Meta-Learning Recommendations (INFERRED — from pattern analysis)
 
 - **This strategy underperforms.** Consider evolving a new approach.
 - The findings may be too generic or targeting the wrong files.
 - Try combining with git history for recency bias.
+
+
+## Allium Behavioral Spec (auto-generated, v3)
+
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+
+```allium
+nil
+```
+

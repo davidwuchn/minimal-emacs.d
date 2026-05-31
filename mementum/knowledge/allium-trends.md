@@ -1,7 +1,12 @@
 ### Allium Issue Trends
 **Recurring patterns** across all strategies:
 
-- **What problem is being solved?**: 1 occurrence(s)
-- **What does "template-default" strategy mean?**: 1 occurrence(s)
-- **What is the actual scope?**: 1 occurrence(s)
+- **Document strategy rationale**: 1 occurrence(s)
+- **Explain scope choices**: 1 occurrence(s)
+- **Define metrics**: 1 occurrence(s)
+- **Add hypotheses**: 1 occurrence(s)
+
+**Regression warnings** (1 strategies with increased issues):
+
+- `template-default`: 0 → 4 issues (worse)
 
