@@ -12,6 +12,7 @@
 !lisp/modules/*.el
 lisp/*.elc
 lisp/modules/*.elc
+!.gitattributes
 !pre-early-init.el
 !post-early-init.el
 !post-init.el
