@@ -3,7 +3,7 @@ title: Research Insights - template-default
 status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
-insight-quality: 0.3/10
+insight-quality: 0.4/10
 allium-issues: 0
 allium-severity: 0.00
 allium-status: coherent
@@ -11,14 +11,14 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 69 experiments (3% keep rate).*
+*Consolidated from 49 experiments (4% keep rate).*
 
-**Performance:** 2 kept / 0 discarded / 5 failed (EXTRACTED — from TSV)
+**Performance:** 2 kept / 0 discarded / 3 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
 - `lisp/modules/gptel-tools-agent-prompt-build.el` (1 kept / 2 failed)
-- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 1 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept)
 
 ### Structure (deterministic scan)
 
@@ -36,8 +36,6 @@ handlers: nil, nil, err, ..., ...), err, err, err, err, err, nil, nil
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 1 failed)
-- `lisp/modules/gptel-tools-agent-error.el` (1 failed)
 - `lisp/modules/gptel-tools-agent-prompt-build.el` (1 kept / 2 failed)
 - `lisp/modules/gptel-auto-workflow-strategic.el` (1 failed)
 
@@ -54,44 +52,433 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-## Distillation
-
-**Research Strategy:** Template-default
-
-**Scope:** 69 experiments across 6 target files (all Elisp modules for what appears to be an Emacs AI interaction package).
-
-**Kept Hypotheses (1):**
-- Improve function `gptel-auto-workflow-list-project-buffers`
-
-**Discarded Hypotheses (1):**
-- Hypothesis was not stated
-
----
-
-**Summary:** This fragment indicates a hypothesis-driven experimental process where out of 69 experiments, only 1 hypothesis was retained (improving a specific function), and 1 was discarded for lacking a stated hypothesis.
+<think>
+Now let me look at the related helper functions to understand the context better.
+</think>
 ```
 
-### Check Issues
-
-# Check Results
-
-## Inconsistencies Found
-
-| Issue | Detail |
-|-------|--------|
-| **Number mismatch** | 69 experiments total, but only 2 accounted for (1 kept + 1 discarded). What happened to the other **67 experiments**? |
-| **Contradiction** | "Discarded because hypothesis was not stated" — if no hypothesis was stated, there's nothing to discard |
-
-## Summary
-
-This fragment appears **incomplete or corrupted**. Either:
-- Most experiments have no recorded outcome (67 missing)
-- The tracking system failed to log results properly
-- This is a truncated/malformed export
-
-**Recommendation:** Verify the source data for the missing 67 experiments before relying on this analysis.

@@ -25,7 +25,7 @@
       (setq score (+ score 0.3)))
     (when (> (length text) 1000)
       (setq score (+ score 0.2)))
-    (when (string-match-p "## \|### \|\\*\\*" text)
+    (when (string-match-p "## \\|### \\|\\*\\*" text)
       (setq score (+ score 0.2)))
     (when (string-match-p "```" text)
       (setq score (+ score 0.1)))
@@ -206,7 +206,7 @@ COMPLETION-CALLBACK receives the saved findings when provided."
                           (length (or findings ""))))))))
         (error
          (message "[slr] Multi-turn failed (%s)" err)
-         (slr--signal-missing-research 'daemon-disappeared (format "%s" err)))))
+         (slr--signal-missing-research 'daemon-disappeared (format "%s" err))))
     ;; Fallback: single-turn research (raw SKILL.md, no controller)
     (slr--run-single-turn (slr--build-prompt) completion-callback)))
 
@@ -222,3 +222,4 @@ COMPLETION-CALLBACK receives the saved findings when provided."
     prompt))
 
 (provide 'standalone-research)
+;;; standalone-research.el ends here
