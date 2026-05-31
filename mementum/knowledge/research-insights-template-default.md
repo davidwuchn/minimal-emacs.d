@@ -3,236 +3,53 @@ title: Research Insights - template-default
 status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
-insight-quality: 0.7/10
-allium-issues: 0
+insight-quality: 0.5/10
+allium-issues: 3
 allium-severity: 0.00
-allium-status: coherent
+allium-status: ok
 ---
 
 # Research Strategy: template-default
 
-*Consolidated from 197 experiments (7% keep rate).*
+*Consolidated from 42 experiments (5% keep rate).*
 
-**Performance:** 14 kept / 31 discarded / 19 failed (EXTRACTED — from TSV)
+**Performance:** 2 kept / 0 discarded / 25 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
-- `lisp/modules/gptel-benchmark-evolution.el` (1 kept / 3 discarded)
-- `lisp/modules/gptel-ext-tool-permits.el` (4 kept / 2 discarded / 1 failed)
-- `lisp/modules/gptel-auto-workflow-mementum.el` (1 kept / 1 discarded / 1 failed)
-- `lisp/modules/gptel-benchmark-comparator.el` (2 kept / 1 discarded)
-- `lisp/modules/gptel-benchmark-integrate.el` (1 kept / 1 discarded)
-- `lisp/modules/gptel-auto-workflow-research-integration.el` (1 kept / 15 discarded / 1 failed)
-- `lisp/modules/gptel-ext-core.el` (2 kept / 1 discarded / 1 failed)
-- `lisp/modules/gptel-tools-agent-validation.el` (2 kept / 3 discarded / 1 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (2 kept / 3 failed)
 
 ### Structure (deterministic scan)
 
 ```elisp-structure
-defuns: gptel-benchmark-evolution-cycle, gptel-benchmark-evolution-observe, gptel-benchmark-evolution--deficient-p, gptel-benchmark-evolution-orient, gptel-benchmark-evolution-decide, gptel-benchmark-evolution-act, gptel-benchmark-evolution-mutate, gptel-benchmark-evolution-feed-forward, gptel-benchmark-evolution-check-capabilities, gptel-benchmark-evolution-emergence-rate, gptel-benchmark-evolution-track-correction, gptel-benchmark-evolution-status-report, gptel-benchmark-evolution-check-complete, gptel-benchmark-detect-anti-patterns, gptel-benchmark-apply-anti-pattern-remedy, gptel-benchmark-evolution-balance, gptel-benchmark-evolution-pathway, gptel-benchmark-evolution-next-capability, gptel-benchmark-evolution-discover, gptel-benchmark-evolution-self-improve
-defvars: gptel-benchmark-evolution-cycle-threshold, gptel-benchmark-evolution-state
-requires: cl-lib, gptel-benchmark-core, gptel-benchmark-principles, gptel-benchmark-memory
-provides: gptel-benchmark-evolution
-errors: error
-handlers: err
+defuns: gptel-auto-workflow--ensure-buffer-tables, gptel-auto-workflow--normalized-projects, gptel-auto-workflow--normalize-worktree-dir, gptel-auto-workflow--buffer-tool-snapshot, gptel-auto-workflow--routed-fsm-info, gptel-auto-workflow--get-worktree-buffer, gptel-auto-workflow--get-project-buffer, gptel-auto-workflow-add-project, gptel-auto-workflow-remove-project, gptel-auto-workflow-list-projects, gptel-auto-workflow-run-all-projects, gptel-auto-workflow--finish-queued-cron-job, gptel-auto-workflow--queue-cron-job, gptel-auto-workflow-queue-all-projects, gptel-auto-workflow--get-project-for-context, gptel-auto-workflow--advice-task-override, gptel-auto-workflow-enable-per-project-subagents, gptel-auto-workflow-disable-per-project-subagents, gptel-auto-workflow--advice-task-overlay-buffer, gptel-auto-workflow--enable-overlay-buffer-advice
+defvars: gptel-auto-workflow--async, gptel-auto-workflow--process, gptel-auto-workflow--worktree-state, gptel-auto-workflow-worktree-base, gptel-auto-workflow--current-target, gptel-auto-workflow-projects, gptel-auto-workflow--project-buffers, gptel-auto-workflow--current-project, gptel-auto-workflow--run-project-root, gptel-auto-workflow--cron-job-running, gptel-auto-workflow--stats, gptel-auto-workflow--running, gptel-auto-workflow--cron-job-timer, gptel-auto-workflow--defer-subagent-env-persistence, mementum-root, gptel-auto-workflow--project-root-override), gptel-auto-workflow--research-findings-cache, gptel-auto-workflow--worktree-buffers, gptel-auto-workflow--normalized-projects-cache, gptel-auto-workflow--normalized-projects-hash
+requires: cl-lib, gptel-tools-agent
+provides: gptel-auto-workflow-projects
+declares: gptel-auto-workflow--project-root, gptel-auto-workflow--get-worktree-dir, gptel-auto-workflow--mark-messages-start, gptel-auto-workflow--persist-status, gptel-auto-workflow-cron-safe, gptel-auto-workflow-run-async--guarded, gptel-auto-workflow-run-research, gptel-fsm-info, gptel-mementum-weekly-job, gptel-benchmark-instincts-weekly-job, gptel-auto-workflow--run-autotts-evolution, gptel-auto-workflow--reorder-fallbacks-by-ontology, gptel-auto-workflow--run-research-champion-league, gptel-auto-workflow--run-strategy-evolution
+errors: error, error, error, error, error, error, error, user-error, error, error, error, error, error, signal
+handlers: err, err, err, err, nil, nil, err, err, nil, nil, err, err, err, err, err, err, err
+advised: gptel-agent--task, gptel-agent--task-overlay
 ```
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-auto-workflow-projects.el` (5 failed)
-- `lisp/modules/gptel-auto-workflow-strategic.el` (5 failed)
-- `lisp/modules/gptel-ext-context.el` (1 failed)
-- `lisp/modules/gptel-auto-workflow-research-integration.el` (1 kept / 15 discarded / 1 failed)
-- `lisp/modules/gptel-auto-workflow-research-benchmark.el` (2 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (2 kept / 3 failed)
+- `lisp/modules/gptel-benchmark-subagent.el` (3 failed)
+- `lisp/modules/gptel-tools-agent-error.el` (3 failed)
+- `lisp/modules/gptel-tools-agent-prompt-build.el` (3 failed)
+- `lisp/modules/gptel-auto-workflow-strategic.el` (3 failed)
+
+## Allium Behavioral Coherence
+
+*3 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
+
+
 
 ## Meta-Learning Recommendations (INFERRED — from pattern analysis)
 
 - **This strategy underperforms.** Consider evolving a new approach.
 - The findings may be too generic or targeting the wrong files.
 - Try combining with git history for recency bias.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## Allium Behavioral Spec (auto-generated, v3)
-
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
-
-```allium
-# Research Strategy Distillation
-
-**Strategy**: template-default
-**Scope**: 66 experiments across 14 targets
-
----
-
-## Outcome: All Hypotheses Discarded
-
-No hypotheses were retained after evaluation.
-
----
-
-## Discarded Hypothesis Summary
-
-| Category | Count | Focus |
-|----------|-------|-------|
-| Performance (B) | 3 | Memoization of `project-current`, `file-directory-p` checks, hash-table allocation |
-| Clarity | 3 | Argument order bug, race condition fix, misleading indentation |
-| Vitality | 2 | Nil guards, empty result caching, file validation |
-
----
-
-**Key Pattern**: Hypotheses targeted:
-- **Redundant computation** (filesystem checks, project lookups)
-- **Error resilience** (nil guards, file validation)
-- **Code readability** (indentation, argument ordering)
-
-All were evaluated and set aside.
-```
-
-### Check Issues
-
-# Review of Research Strategy Distillation
-
-## Observations
-
-| Aspect | Status |
-|--------|--------|
-| Coverage | 66 experiments, 14 targets |
-| Retention | 0% (0/66 hypotheses kept) |
-| Category distribution | 3 categories, 8 total items |
-
-## Assessment
-
-**Balanced category spread** — Performance, Clarity, and Vitality each targeted, avoiding bias toward any single dimension.
-
-**Common failure patterns** (hypotheses discarded):
-- Memoization candidates often had lower hit rates than expected
-- Nil guard insertions introduced unnecessary branching overhead
-- Indentation/ordering fixes deemed cosmetic rather than functional
-
-## Questions
-
-1. **What retention threshold was used?** (e.g., >5% improvement required?)
-2. **Were any hypotheses "near-miss"** (close to threshold but not quite)?
-3. **Why zero retention across all 66?** — Unusually high rejection rate; worth examining evaluation criteria.
-
-## Verdict
-
-Data is internally consistent but the 0% retention rate warrants scrutiny of the evaluation methodology.
