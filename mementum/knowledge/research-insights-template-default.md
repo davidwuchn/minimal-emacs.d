@@ -1090,34 +1090,105 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-## Research Strategy: template-default
+## Research Session Summary
 
-### Scope
-- **84 experiments** across **7 target files**
-- Areas: benchmarking, tools agent, auto-workflow, comparator, prompt building
+**Strategy**: `template-default`
+
+**Scope**: 84 experiments across 7 target files:
+- `lisp/modules/gptel-benchmark-subagent.el`
+- `lisp/modules/gptel-tools-agent-error.el`
+- `lisp/modules/gptel-benchmark-comparator.el`
+- `lisp/modules/gptel-tools-agent-prompt-build.el`
+- `lisp/modules/gptel-auto-workflow-strategic.el`
+- `lisp/modules/gptel-auto-workflow-projects.el`
+- `test`
+
+---
 
 ### Kept Hypotheses
-1. **Improving `gptel-auto-workflow-list-project-buffers`** — the only stated hypothesis under consideration
+
+| # | Hypothesis |
+|---|------------|
+| 1 | Improving the function `gptel-auto-workflow-list-project-buffers` |
+
+---
 
 ### Discarded Hypotheses
-*(none recorded)*
 
-### Observations
-- Template appears **incomplete** — "No hypothesis stated" for main hypothesis slot
-- 84 experiments is a large scope; consider narrowing to high-impact targets first
-- Focus hypothesis: buffer discovery/listing function suggests workflow performance concerns
+None recorded.
 
-### Recommendations
-1. Define the primary hypothesis before running experiments
-2. Prioritize experiments on `gptel-auto-workflow-*` files if workflow performance is the goal
-3. Track discarded hypotheses to avoid re-testing dead ends
+---
+
+### Key Observation
+
+This session produced **84 experiments** but validated only **1 hypothesis** — the focus was heavily on iterative experimentation with minimal hypothesis formalization. The single retained hypothesis targets a specific function in the auto-workflow projects module.
 ```
 
 ### Check Issues
 
-I'll analyze this research strategy document and verify its observations.
+## Verification Results
+
+**Issues found:**
+
+| Claim | Status | Details |
+|-------|--------|---------|
+| File `gptel-benchmark-comparator.el` | ❌ Missing | File does not exist in `lisp/modules/` |
+| File `test` (directory) | ❌ Missing | No `test/` directory found |
+| `gptel-auto-workflow-list-project-buffers` | ✅ Exists | Found at line 795 in `gptel-auto-workflow-projects.el` |
+| 84 experiments | ⚠️ Unverified | No experiment tracking data visible |
+
+**Summary**: The research session summary references **6 target files** (5 exist + 1 missing), not 7 as stated. The "test" entry appears to be an empty/unresolved path. The single retained hypothesis is valid — the function exists.
+
+Do you want me to:
+1. Check for experiment logs/records elsewhere?
+2. Verify the git history for experiment-related commits?
+3. Create the missing file `gptel-benchmark-comparator.el`?
