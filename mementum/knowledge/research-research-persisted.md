@@ -1,25 +1,39 @@
 <!--
 Synthesis verification:
-- Confidence: 12%
-- Sources: 13 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'research-research-persisted', Very short content (17 lines)
+- Confidence: 24%
+- Sources: 14 memories
+- Warnings: No code examples or concrete references, Content does not mention topic 'research-research-persisted'
 - Auto-approved: yes (flagged)
 --->
 
 <think>
-The user wants me to generate a complete knowledge page based on all the research findings from the past 30 days. Let me synthesize all the patterns into a comprehensive, structured knowledge page with frontmatter.
+The user wants me to generate a complete knowledge page from all the research findings I've collected. This is a comprehensive synthesis of multiple research sessions across the user's personal repos (nucleus, mementum, gptel) and external sources. I need to organize all the patterns, techniques, and insights into a structured knowledge page.
 
-Let me organize this by the most impactful patterns, categorized by domain:
+Let me compile everything I've gathered:
 
-1. **Memory Systems** - Mementum, MemEvolve, GBrain hybrid search
-2. **Agent Architecture** - VSM, gptel-agent, Three-Loop Meta-Learning
-3. **Control & Safety** - Circuit Breaker, Checkpoint/Restore, Verification Gates
-4. **Context Management** - Think-in-Code, Sandbox Tool Pattern, FTS5
+**From own repos:**
+1. **Nucleus** - VSM architecture, mathematical attention magnets (φ, λ, Δ, ε), lambda notation compression, EDN statecharts, tension pairs
+2. **Mementum** - Git-based memory protocol, three storage types (state/memories/knowledge), human governance (AI proposes, human approves, AI commits), λ(λ) meta-learning
+3. **gptel** - FSM for request lifecycle, tool use with gptel-make-tool, backend abstraction, MCP integration, preset system
+4. **efrit** - Circuit breaker, checkpoint/restore, tool receipts for audit trail
+5. **genesis-agent** - Self-verification with 66 deterministic checks, P(success) confidence scoring
+6. **context-mode** - 98% context reduction via sandbox tools, SQLite/FTS5 session continuity
+7. **gbrain** - Self-wiring knowledge graph, typed entity edges, hybrid search (vector + BM25 + reciprocal rank fusion)
+8. **gastown** - Three-tier watchdog (Witness/Deacon/Dogs), git-worktree persistence, escalation routing
+9. **nullclaw** - Minimal binary design (678KB, ~1MB RAM, <2ms startup)
+10. **psi** - Statechart-driven architecture with EQL-queryable graph
+11. **symphony** - Worktree isolation for agent runs, workflow policy in-repo
 
 
-5. **Self-Evolution** - Meta-learning λ(λ), Pattern extraction after 3 occurrences, AutoTTS
-6. **Prompt Engineering** - Symbolic Attention Magnets, Mode/Boundary System
-7. **Tool Use** - Tool receipts, MCP integration, Temperature defaults
+12. **zeroclaw** - Multi-channel provider-agnostic with fallback chains, SOP engine
 
-Now I'll create the frontmatter and organize everything into a structured, readable knowledge page.
+**From external sources:**
+1. **arXiv:2405.10467** - Agent Design Pattern Catalogue (18 patterns)
+2. **arXiv:2508.00271** - MetaAgent self-evolving paradigm
+3. **Azure AI Agent Orchestration** - 5-level complexity spectrum
+4. **NVIDIA AI Agent Evaluation** - Trajectory-aware metrics
+5. **AI Agent Error Recovery** - 5 production patterns (exponential backoff, circuit breakers, checkpoint-and-resume, fallback chains, escalation queues)
+6. **MemEvol** - Meta-evolution of memory systems with modular design
+
+I need to organize all of this into a structured knowledge page with frontmatter and complete content.
 </think>
