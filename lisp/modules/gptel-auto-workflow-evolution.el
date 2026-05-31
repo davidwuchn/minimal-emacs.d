@@ -1915,12 +1915,16 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (dolist (w (plist-get v :warnings))
           (message "[pipeline] WARN: %s" w)))
     (error nil))
+  ;; Ensure required modules are loaded before evolution checks
+  (mapc (lambda (m) (require m nil t))
+        '(gptel-tools-agent-base gptel-tools-agent-main))
   (condition-case nil
       (let ((new-experiments (or (gptel-auto-workflow--evolution-count-new) 0))
             (has-research (and (getenv "PIPELINE_FINDINGS_FILE")
                                (file-exists-p (getenv "PIPELINE_FINDINGS_FILE")))))
           ;; Negative count means experiments were cleaned up (last-total > current).
           ;; Also trigger experiments when <= 0 — no new data to analyze.
+          (message "[evolution] new-experiments=%d has-research=%s" new-experiments has-research)
           (when (and (<= new-experiments 0) (not has-research))
             ;; No experiments to analyze — trigger them instead.
             ;; This enables local development machines to run experiments,
