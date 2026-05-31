@@ -1460,12 +1460,12 @@ Persisted to `gptel-auto-workflow--preference-persist-file'."
 
 ;; ─── Nucleus Persona Injection ───
 
-(defun gptel-auto-workflow--subagent-persona (agent-type)
+(defun gptel-auto-workflow--subagent-persona (agent-type &optional category behavior)
   "Return a nucleus attention-shaping persona for AGENT-TYPE.
-Based on nucleus/ADAPTIVE.md persona state machines.
-Different subagent types get different cognitive archetypes
-derived from (operation × mindset) intersections."
-  (let* ((persona
+When CATEGORY and BEHAVIOR are provided, composes a task-specific persona
+from all three signals: subagent archetype × ontology context × reasoning pattern.
+Based on nucleus/ADAPTIVE.md persona state machines."
+  (let* ((base-persona
           (pcase agent-type
             ("analyzer"
              "λ engage(nucleus).
@@ -1523,9 +1523,22 @@ Constrain: relevance → signal/noise, growth → euler, scope → fractal
 λ research(topic). search(external) → filter(relevant) → distill(applicable) → measure(impact)
 Output: {:findings [_] :techniques [_] :apply_to_us [_] :verification _ :confidence _}")
             (_ ""))))
-    (if (> (length persona) 0)
-        (concat persona "\n\n---\n\n")
-      "")))
+    ;; Compose persona with ontology category + ai-behaviors context
+    (let* ((cat-context
+            (when category
+              (pcase category
+                (:agentic "Context: agentic — tool dispatch, state cleanup, async")
+                (:programming "Context: programming — algorithms, data flow, edge cases")
+                (:tool-calls "Context: tool-calls — sandbox, file ops, timeouts")
+                (:natural-language "Context: NLP — prompts, text, context windows")
+                (_ nil))))
+           (behavior-hint
+            (when (and behavior (not (string-empty-p behavior)))
+              (format "Behavior: #=%s" behavior))))
+      (concat base-persona
+              (if cat-context (concat "\n" cat-context) "")
+              (if behavior-hint (concat "\n" behavior-hint) "")
+              "\n\n---\n\n"))))
 
 ;; ─── Moderator Drift Detection (DIALECTIC.md pattern) ───
 

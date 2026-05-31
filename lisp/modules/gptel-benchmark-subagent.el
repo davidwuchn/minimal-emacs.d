@@ -303,7 +303,11 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                 ;; is maximized. persona-note is same per agent-type → cache hit.
                 ;; routing-note varies per dispatch → cache miss starts here.
                 (persona-note
-                 (gptel-auto-workflow--subagent-persona agent-type))
+                 (gptel-auto-workflow--subagent-persona
+                  agent-type category
+                  (when (and (boundp 'gptel-ai-behaviors--current-hashtags)
+                             gptel-ai-behaviors--current-hashtags)
+                    (car (split-string gptel-ai-behaviors--current-hashtags)))))
                 (prompt (concat prompt "\n" persona-note routing-note)))
             ;; Track API cost per model+effort for cost-adjusted keep-rate
             (when (and log-model (fboundp 'gptel-ai-behaviors--record-cost))
