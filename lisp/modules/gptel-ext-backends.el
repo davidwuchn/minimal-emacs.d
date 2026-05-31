@@ -73,8 +73,8 @@ ARGS are passed to `gptel-make-openai'."
                   `(("Authorization" . ,(concat "Bearer " (gptel--get-api-key)))
                     ("User-Agent"    . "KimiCLI/1.3")))
         :stream t
-        :curl-args '("--http1.1" "--max-time" "120" "--connect-timeout" "15")
-        :models '((kimi-k2.6
+    :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
+    :models '((kimi-k2.6
                    :request-params (:reasoning (:effort "high")
                                                :thinking  (:type "enabled")))
                   kimi-for-coding)))
@@ -85,7 +85,7 @@ ARGS are passed to `gptel-make-openai'."
     :endpoint "/chat/completions"
     :key (lambda () (my/gptel-api-key "api.deepseek.com"))
     :stream t
-    :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
+    :curl-args '("--http1.1" "--max-time" "900" "--connect-timeout" "30")
     :models '((deepseek-v4-flash
                :request-params (:thinking (:type "enabled")))
               (deepseek-v4-pro
