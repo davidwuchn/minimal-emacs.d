@@ -90,67 +90,98 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy: Template-Default Distillation
+**Research Strategy:** Template-default
 
-## Overview
-**93 experiments** across 11 target files with focus on defensive coding and explicit assumptions.
+**Context:** 93 experiments across 11 target files
 
-## Core Strategy
+**Kept Hypotheses (9):**
 
-### Primary Goals
-1. **Fractal Clarity** — Make implicit assumptions explicit and testable
-2. **φ Vitality** — Robustness to edge cases (async buffers, invalid input)
-3. **Error Handling** — Explicit failure modes with recoverable errors
+| # | Change | Improves | Rationale |
+|---|--------|----------|-----------|
+| 1 | Remove redundant `if apply-lines` check; add nil guard for `english-findings` | φ Vitality, fractal Clarity | mapconcat on empty list returns ""; less branching |
+| 2 | Add nil/empty-string guard for `allium-spec`; remove redundant callback check | Clarity | Prevents wasted LLM calls on invalid input |
+| 3 | Add explicit `(symbolp backend)` branch before `t` case | fractal Clarity, φ Vitality | Explicit type validation; catches non-keyword symbols |
+| 4 | Add `buffer-live-p` guard + nil check in lambda | φ Vitality, fractal Clarity | Adapts to async buffer lifecycle |
+| 5 | Extract provider selection to `gptel-benchmark--select-provider` | fractal Clarity, φ Vitality | Makes selection explicit/testable; enables progressive improvement |
+| 6 | Add error recovery; make assumptions explicit | — | General defensive pattern |
+| 7 | Defensive coding | — | General robustness pattern |
+| 8 | Add timeout sentinel value in sync function | Axis A, Axis D | Explicit timeout handling vs. nil responses |
+| 9 | Nil guard on `where`; wrap overlay creation in `condition-case` | — | Prevents overlay failures from breaking task |
 
-### Key Tactics
+**Discarded Hypotheses (2):**
 
-| Tactic | Target | Files |
-|--------|--------|-------|
-| Remove redundant conditionals | Lambda-prompt extraction | gptel-benchmark-principles.el |
-| Add explicit type guards (symbolp) | Struct handling | gptel-tools-agent-prompt-build.el |
-| Add buffer lifecycle guards | Async edge cases | gptel-tools-agent.el |
-| Extract provider selection | Selection algorithm | gptel-benchmark-subagent.el |
-| Timeout sentinel value | Sync calls | gptel-benchmark-call-subagent-sync |
-| Nil guard + condition-case | Overlay failures | gptel-auto-workflow-research-integration.el |
+| # | Change | Reason |
+|---|--------|--------|
+| 1 | Replace `(format "%s" err)` with `(error-message-string err)` | Discarded |
+| 2 | Remove entries from hash table | Discarded |
 
-### Discarded
-- `error-message-string` refactor (low impact)
-- Hash table removal strategy
-
-**Pattern**: Prefer *explicit type/guard validation* over parameter tuning; extract discrete concerns into testable functions.
+**Pattern:** Focus on explicit error handling, defensive guards, and function extraction for testability.
 ```
 
 ### Check Issues
 
-# Review: Research Strategy
+# Review of Research Strategy Document
 
-## ✅ Strengths
-- Clear structure with specific file targets
-- Well-defined goals (Fractal Clarity, φ Vitality, Error Handling)
-- Shows deliberate rejection of alternatives ("Discarded" section)
+## Summary
+This is a post-hoc summary of a hypothesis-driven debugging/improvement process. The document is mostly clear but has several gaps.
 
-## ⚠️ Concerns
+---
 
-| Issue | Question |
-|-------|----------|
-| **93 experiments** | Reasonable count, or scope creep? What's the验收 criteria for each? |
-| **"φ Vitality"** | Unusual term — define explicitly or use standard terminology |
-| **6 tactics, 11 files** | What's the plan for the 5 unmentioned files? |
-| **No priorities** | Which tactics ship first? |
-| **No timeline** | Any deadlines or milestones? |
-| **Vague tactics** | "Remove redundant conditionals" — specify which ones and why |
-| **Discarded list thin** | Only 2 items rejected — is this complete? |
+## Issues Found
 
-## 🔍 Specific Questions
+### 1. **Hypotheses 6 & 7 Lack Specificity**
+Both are extremely vague:
+| # | Change | Improves | Rationale |
+|---|--------|----------|-----------|
+| 6 | Add error recovery; make assumptions explicit | — | General defensive pattern |
+| 7 | Defensive coding | — | General robustness pattern |
 
-1. How do you measure "Fractal Clarity" in practice?
-2. What's the rollback plan if a tactic breaks existing functionality?
-3. Are these experiments independent or sequenced with dependencies?
+**Problem:** "Defensive coding" describes *how* changes were made, not *what* changed. These read like generic labels rather than testable hypotheses.
 
-## Verdict
-Solid starting point. Needs: **success metrics**, **priority ordering**, and **coverage explanation** for all 11 files.
+---
+
+### 2. **"Improves" Taxonomy Undefined**
+The document references:
+- `φ Vitality`
+- `fractal Clarity`
+- `Axis A`, `Axis D`
+- `—` (dash)
+
+**Problem:** No legend defines these categories. A reader cannot evaluate which changes are most valuable without knowing:
+- What do these axes measure?
+- Is `—` "no improvement" or "not measured"?
+
+---
+
+### 3. **Discarded Hypotheses Missing Detail**
+
+| # | Change | Reason |
+|---|--------|--------|
+| 1 | Replace `(format "%s" err)` with `(error-message-string err)` | Discarded |
+| 2 | Remove entries from hash table | Discarded |
+
+**Problem:** "Discarded" without explanation of *why*. Did they:
+- Cause regressions?
+- Not solve the original problem?
+- Introduce new issues?
+
+---
+
+### 4. **Hypotheses Are Not Independent**
+93 experiments across 11 files suggests these changes may interact. The document doesn't indicate:
+- Were changes tes
+
+... (truncated)
