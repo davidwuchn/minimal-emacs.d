@@ -340,7 +340,12 @@ Returns nil if valid, or error message string if invalid."
                    (diff (gptel-auto-experiment--diff-against-head file))
                    (undefined-call
                     (gptel-auto-experiment--introduced-undefined-call
-                     diff parsed-forms)))
+                     diff parsed-forms))
+                   ;; Quick byte-compile check — catches errors that syntax-only check misses
+                   (byte-compile-ok (zerop (call-process "emacs" nil nil nil
+                                                         "--batch" "-Q"
+                                                         "-f" "batch-byte-compile"
+                                                         file))))
               (or
                (when (gptel-auto-experiment--invalid-cl-return-target-in-forms
                       parsed-forms)
@@ -348,7 +353,9 @@ Returns nil if valid, or error message string if invalid."
                (when undefined-call
                  (format "Undefined function introduced in %s: %S" file undefined-call))
                (when (gptel-auto-experiment--defensive-code-removal-p diff)
-                 (format "Defensive code removal detected in %s: removing or/assoc fallbacks without proof" file)))))))))
+                 (format "Defensive code removal detected in %s: removing or/assoc fallbacks without proof" file))
+               (unless byte-compile-ok
+                 (format "Byte-compile error in %s" file)))))))))
 
 (provide 'gptel-tools-agent-validation)
 ;;; gptel-tools-agent-validation.el ends here
