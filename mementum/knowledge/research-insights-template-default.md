@@ -65,72 +65,60 @@ These targets may need different research patterns or the research findings were
 
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*5 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-**Distilled Research Strategy: template-default**
+# Research Strategy Distillation
 
-**100 experiments across targets** span 16 files focused on GPTel automation workflows, tools, benchmarks, and staging processes.
+## Summary
+- **Strategy**: template-default
+- **Experiments**: 65 across 10 targets
+- **Status**: Active hypothesis testing on gptel-* modules
 
-**Core Themes from Kept Hypotheses:**
+## Kept Hypotheses (7 total)
 
-1. **Defensive Nil Guards** — Add explicit nil/empty guards (e.g., `english-findings`, `allium-spec`, `where` parameter) to handle edge cases gracefully.
+| # | Change | Vitality | Clarity |
+|---|--------|----------|---------|
+| 1 | Idempotency guard + symmetric disable function | Progressive improvement | Explicit assumptions |
+| 2 | Fix misleading message + dir validation | — | Bug fix |
+| 3 | `eq`→`equal` for cache + reorder checks | Adapts to usage patterns | Content vs identity-based |
+| 4 | Extract buffer lookup with nil guards | Graceful FSM handling | Visible assumptions |
+| 5 | `ignore-errors` + empty-list guard | Edge case adaptation | Explicit validity assumptions |
+| 6 | `format-mode-line`→`mode-name` direct; `if`→`when` | Robustness | Reduced complexity |
+| 7 | Filter `not-applicable` before sort | Latent bug fix | Explicit data filtering |
 
-2. **Type Validation** — Explicit `(symbolp backend)` checks before fallback cases; make type assumptions testable.
-
-3. **Async Buffer Safety** — `buffer-live-p` guards for async lifecycle management.
-
-4. **Function Extraction** — Isolate `gptel-benchmark--select-provider` to make selection logic explicit and testable.
-
-5. **Error Handling** — Timeout sentinel values, `condition-case` wrappers for overlay creation.
-
-6. **Simplification** — Remove redundant conditional branching (e.g., `if apply-lines` check) where `mapconcat` handles empty lists.
-
-**Discarded Hypotheses:**
-
-- Deriving headings from symbol maps (maintenance bug fix via explicit correspondence)
-- Error message formatting (`(error-message-string err)` vs `(format "%s" err)`)
-- Hash table entry removal
-
-**Strategy Focus:** Incremental robustness via explicit assumptions, defensive coding, and reduced implicit branching.
+**Discarded**: 0
 ```
 
 ### Check Issues
 
-# Review: Distilled Research Strategy
+# Review: Research Strategy Distillation
 
-## Summary
-Concise summary of research findings from GPTel codebase analysis.
+## Structure Assessment ✓
+Clean, tabular format. Good separation of change rationale, impact, and explicitness.
 
-## ✅ Strengths
-- Clear separation of kept vs. discarded hypotheses
-- Actionable, specific improvements listed
-- Ends with a coherent strategy statement
+## Observations
 
-## ⚠️ Issues to Address
+| Aspect | Comment |
+|--------|---------|
+| **Hypothesis framing** | Clear distinction between bug fixes (#2), robustness (#6), and latent issues (#7) |
+| **Vitality column** | Mixes: improvement type ("Progressive"), FSM handling, edge case adaptation |
+| **Clarity column** | Varies from bug fix (#2) to architectural notes (#3: "Content vs identity-based") |
+| **Discarded: 0** | Unusual for 65 experiments—either high signal or lenient retention criteria |
 
-| Issue | Suggestion |
-|-------|------------|
-| `template-default` appears placeholder | Clarify or remove |
-| No priority/ordering | Rank themes by impact |
-| No examples | Add brief code snippets |
-| `allium-spec` vs `allium-spec` | Confirm correct casing |
+## Potential Issues
 
-## 💡 Recommendations
+1. **Term inconsistency**: "Vitality" used as improvement type in some rows, operational benefit in others
+2. **Missing priority/ordering** among the 7 hypotheses
+3. **No cost/risks column**—hard to assess if these are "quick wins" or substantial refactors
+4. **65 experiments → 7 kept** (10.8% retention) could warrant analysis of what got filtered
 
-**Missing elements:**
-1. **Priority ranking** — Which themes should be addressed first?
-2. **Effort vs. impact** — Quick wins vs. major refactors?
-3. **Success metrics** — How to validate the strategy?
-4. **Timeline** — Milestones or phases?
+## Suggestions
 
-**Example enhancement:**
-```
-1. Defensive Nil Guards (HIGH PRIORITY)
-   - Example: `(when (and backend (stringp backend) ...)`
-   - Files: english-findings.el, allium-spec.el
-   - Risk: Low | Impact: High
-```
+- Add a **category column**: {bug, perf, maintainability, robustness}
+- Add **effort/risk** indicators
+- Consider grouping related changes (e.g., #3 and #4 both touch cache/F SM concerns)
 
-## Verdict
-Good foundation for a research summary. Needs **prioritization** and **concrete examples** to become actionable development guidance.
+---
+
+Want me to help refine the schema or analyze any specific hypothesis?

@@ -399,10 +399,20 @@ Uses grader subagent - no local fallback (fail if subagent unavailable)."
                               :passed nil
                               :details "Grader subagent unavailable")))))
 
+(defvar gptel-auto-experiment--grading-hypothesis nil
+  "Dynamic variable: hypothesis string for the current grading call.
+Set before `gptel-benchmark-grade' to inject experiment hypothesis
+into the grading prompt so the grader can evaluate hypothesis fit.")
+
 (defun gptel-benchmark--make-grading-prompt (output expected forbidden)
   "Create grading prompt for OUTPUT against EXPECTED and FORBIDDEN.
-Includes #=test phase: actively try to break the code first, then evaluate."
-  (format "λ grade(output, expected, forbidden).
+Includes #=test phase: actively try to break the code first, then evaluate.
+When `gptel-auto-experiment--grading-hypothesis' is set, adds hypothesis-aware
+criteria so the grader evaluates whether the output satisfied the experiment goal."
+  (let ((hypothesis gptel-auto-experiment--grading-hypothesis)
+        (total (+ (length expected) (length forbidden))))
+    (concat
+     (format "λ grade(output, expected, forbidden).
   test ∩ evaluate: actively try to break before judging.
 
 ## Phase 1: #=test — Attack the code
@@ -419,7 +429,20 @@ Report every bug you find.
 ## Phase 2: #=review — Evaluate against criteria
   ∀e ∈ expected: pass(e) ∨ fail(e) with reason
   ∀f ∈ forbidden: absent(f) → pass | present(f) → fail with reason
+")
+     (when hypothesis
+       (format "\n## Phase 3: #=hypothesis-fit — Does output achieve the goal?
+The experiment's stated hypothesis was:
+  %s
 
+The code MUST satisfy this hypothesis to be considered passing.
+Evaluate: does the change actually achieve what the hypothesis claims?
+If the hypothesis says \"add nil guard before car\" but the code does
+something else entirely, the experiment FAILS even if the code is
+otherwise correct. A correct fix for a DIFFERENT bug is still a FAIL.
+Start this criterion with \"HYPOTHESIS-FIT:\" in your response.
+" hypothesis))
+     (format "
 MANDATORY: Begin your response with exactly this line:
 → summary: SCORE: X/%d
 where X is the count of passing items. Put this line FIRST, before any analysis — the parser reads it from the start of your response.
@@ -432,10 +455,10 @@ OUTPUT:
 
 λ forbidden:
 %s"
-          (+ (length expected) (length forbidden))
-          output
-          (mapconcat (lambda (b) (concat "- " b)) expected "\n")
-          (mapconcat (lambda (b) (concat "- " b)) forbidden "\n")))
+             total
+             output
+             (mapconcat (lambda (b) (concat "- " b)) expected "\n")
+             (mapconcat (lambda (b) (concat "- " b)) forbidden "\n")))))
 
 (defun gptel-benchmark--parse-grade-response (response expected forbidden)
   "Parse LLM grading RESPONSE into plist.

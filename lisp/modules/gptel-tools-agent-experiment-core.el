@@ -512,10 +512,12 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                              (gptel-ai-behaviors--record-validation-error target validation-error))
                                            (message "[auto-exp] ⚠ Non-teachable validation: %s — grader will evaluate anyway"
                                                     validation-error))))
-                                 (let ((gptel-auto-experiment--grading-target target)
-                                       (gptel-auto-experiment--grading-worktree experiment-worktree))
-                                   (gptel-auto-experiment--grade-with-retry
-                               effective-agent-output
+                                  (let ((gptel-auto-experiment--grading-target target)
+                                        (gptel-auto-experiment--grading-worktree experiment-worktree)
+                                        (gptel-auto-experiment--grading-hypothesis
+                                         (gptel-auto-experiment--extract-hypothesis effective-agent-output)))
+                                    (gptel-auto-experiment--grade-with-retry
+                                effective-agent-output
                                 (lambda (grade)
                                   (gptel-auto-experiment--call-in-context
                                    experiment-buffer experiment-worktree
