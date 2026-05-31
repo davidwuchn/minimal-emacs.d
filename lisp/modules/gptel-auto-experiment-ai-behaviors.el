@@ -91,9 +91,10 @@ Learned from experiment outcomes. Evolved each cycle.")
   "Alist: (category . hashtag-string) learned from kept experiments.
 Falls back to hardcoded defaults when no data exists.")
 
-(defun gptel-ai-behaviors--record-experiment (category hashtags kept &optional strategy)
+(defun gptel-ai-behaviors--record-experiment (category hashtags kept &optional strategy backend)
   "Record HASHTAGS for CATEGORY as kept or not.
-When STRATEGY is provided, also tracks the three-way (category × strategy × hashtags) combo."
+When STRATEGY is provided, tracks three-way (category × strategy × hashtags).
+When BACKEND is provided, tracks (category × backend × hashtag) for backend-aware behavior selection."
   (when category
     (dolist (tag (split-string hashtags))
       ;; Two-way: (category × hashtags)
@@ -108,7 +109,14 @@ When STRATEGY is provided, also tracks the three-way (category × strategy × ha
                (entry3 (gethash key3 gptel-ai-behaviors--category-performance (cons 0 0))))
           (setf (car entry3) (+ (car entry3) (if kept 1 0)))
           (setf (cdr entry3) (1+ (cdr entry3)))
-          (puthash key3 entry3 gptel-ai-behaviors--category-performance))))))
+          (puthash key3 entry3 gptel-ai-behaviors--category-performance)))
+      ;; Backend-aware: (category × backend × hashtags) — Gap 1 closure
+      (when backend
+        (let* ((keyb (list category (intern backend) tag))
+               (entryb (gethash keyb gptel-ai-behaviors--category-performance (cons 0 0))))
+          (setf (car entryb) (+ (car entryb) (if kept 1 0)))
+          (setf (cdr entryb) (1+ (cdr entryb)))
+          (puthash keyb entryb gptel-ai-behaviors--category-performance))))))
 
 (defvar gptel-ai-behaviors--combo-defaults nil
   "Alist: (category . (strategy . hashtags)) learned from three-way data.")
@@ -614,6 +622,43 @@ When NO-PROMPT is non-nil, just logs the context (for non-LLM subsystems)."
               (advice-add (intern used-by) :around
                           #'gptel-ai-behaviors--wrap-research-with-validation)))
         (error nil)))))
+
+;; ─── Think-Intel → Behavior Feedback (Gap 2 closure) ───
+
+(defun gptel-ai-behaviors--parse-think-intel-from-messages ()
+  "Scan *Messages* for [think-intel] lines and adjust behavior defaults.
+STUCK categories get #=act boost; ACTIVE categories maintain current hashtags.
+Returns parsed entries for evolution analysis."
+  (let ((results nil))
+    (ignore-errors
+      (with-current-buffer (or (get-buffer "*Messages*")
+                               (error "No *Messages* buffer"))
+        (goto-char (point-max))
+        (while (re-search-backward
+                "^\\[think-intel\\] \\([^|]+\\)|\\([^|]+\\)|\\([^|]+\\)|acts=\\([0-9]+\\)|expl=\\([0-9]+\\)|score=\\([0-9.-]+\\)"
+                nil t 50)
+          (let* ((category (intern (match-string 1)))
+                 (verdict (match-string 3))
+                 (acts (string-to-number (match-string 4)))
+                 (score (string-to-number (match-string 6))))
+            (push (list category verdict acts score) results)))))
+    (let ((stuck-cats nil) (active-cats nil))
+      (dolist (r results)
+        (let ((cat (nth 0 r)) (verdict (nth 1 r)) (acts (nth 2 r)))
+          (when (string-prefix-p "STUCK" verdict) (push cat stuck-cats))
+          (when (and (> acts 0) (string-prefix-p "ACTIVE\\|PROGRESS" verdict))
+            (push cat active-cats))))
+      (dolist (cat (seq-uniq stuck-cats))
+        (let* ((current (gptel-ai-behaviors--category-hashtags cat))
+               (boosted (if (string-match-p "#=act" current)
+                            current (concat current " #=act"))))
+          (unless (equal current boosted)
+            (push (cons cat boosted) gptel-ai-behaviors--category-defaults)
+            (message "[ai-behaviors] STUCK %s → boosting #=act: (+%d)"
+                     cat (length (seq-filter (lambda (r) (eq (nth 0 r) cat)) stuck-cats))))))
+      (dolist (cat (seq-uniq active-cats))
+        (message "[ai-behaviors] ACTIVE %s — maintaining current behaviors" cat)))
+    results))
 
 (provide 'gptel-auto-experiment-ai-behaviors)
 ;;; gptel-auto-experiment-ai-behaviors.el ends here

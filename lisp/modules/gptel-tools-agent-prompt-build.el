@@ -1618,7 +1618,8 @@ Captures executor reasoning from the dynamic variable
         (when (and category gptel-ai-behaviors--current-hashtags)
           (gptel-ai-behaviors--record-experiment
            category gptel-ai-behaviors--current-hashtags kept
-           (or strategy gptel-ai-behaviors--current-strategy)))))
+           (or strategy gptel-ai-behaviors--current-strategy)
+           (plist-get experiment :backend)))))
     ;; Inject research metadata from global context into experiment record.
     ;; This closes the feedback loop: experiments carry the research run that
     ;; influenced the prompt so trace outcomes can be linked after logging.
