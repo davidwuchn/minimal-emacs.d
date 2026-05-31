@@ -60,85 +60,75 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy: Template-Default
+# Research Strategy: Distilled
 
-## Summary
+**Strategy**: Template-default
 
-| Category | Count |
-|----------|-------|
-| Total Experiments | 99 |
-| Targets | 9 files (staging-review + 8 lisp modules) |
-| Kept Hypotheses | 1 |
-| Discarded Hypotheses | 0 |
+**Scope**: 99 experiments across 9 targets
 
-## Kept Hypothesis
+| Target Type | Count | Examples |
+|-------------|-------|----------|
+| Staging | 1 | `staging-review` |
+| Elisp modules | 8 | `gptel-*` files |
 
-- **Improve `gptel-auto-workflow-list-project-buffers`** - This single hypothesis was retained from the experimental process.
+**Hypotheses**:
 
-## Notable Observations
+| Status | Count | Details |
+|--------|-------|---------|
+| Kept | 1 | Partial: Improve `gptel-auto-workflow-list-project-buffers` |
+| Discarded | 0 | — |
+| Stated | 0 | No formal hypothesis documented |
 
-- Most experiment iterations did not produce stated hypotheses
-- Zero hypotheses were explicitly discarded
-- Focus area: Auto-workflow functionality in the gptel system
-
-## Files Analyzed
-
-1. `staging-review`
-2. `gptel-benchmark-analysis.el`
-3. `gptel-benchmark-subagent.el`
-4. `gptel-tools-agent-error.el`
-5. `gptel-benchmark-comparator.el`
-6. `gptel-tools-agent-prompt-build.el`
-7. `gptel-auto-workflow-strategic.el`
-8. `gptel-auto-workflow-projects.el`
+**Status**: Experimental framework defined; hypotheses not yet formalized.
 ```
 
 ### Check Issues
 
 # Review: Research Strategy Document
 
-## ✅ Structural Analysis
+## Issues Found
 
-| Element | Status | Notes |
-|---------|--------|-------|
-| Summary table | ✓ | Clear count metrics |
-| Kept hypothesis | ✓ | Well-defined scope |
-| Observations | ✓ | Relevant patterns noted |
-| File inventory | ✓ | Complete listing |
+### 1. Hypothesis Contradiction
+| Status | Count | Problem |
+|--------|-------|---------|
+| Kept | 1 | → Must have been stated first |
+| Stated | 0 | → Cannot keep what wasn't stated |
 
-## ⚠️ Observations / Questions
+**Claim**: 1 hypothesis kept, but 0 formally documented. This is logically inconsistent.
 
-### 1. Hypothesis Ratio Concern
-- **99 experiments → 1 hypothesis** = 1% yield
-- This suggests either:
-  - High rejection threshold (good)
-  - Unclear hypothesis generation criteria
-  - Missing documentation of why other 98 didn't qualify
+### 2. Missing Breakdown
+- Stated: 99 experiments across 9 targets
+- Missing: Distribution of experiments per target
+- Expected: Either a table or narrative explaining the split
 
-### 2. Zero Discards
-- "Discarded Hypotheses: 0" seems inconsistent with "Most iterations did not produce stated hypotheses"
-- Clarification needed: Were alternatives generated and kept, or never formally stated?
+### 3. Unclear "Partial" Qualifier
+`gptel-auto-workflow-list-project-buffers` marked as "Partial" — partial what? Scope? Expected outcome?
 
-### 3. Specificity of Hypothesis
-- `"gptel-auto-workflow-list-project-buffers"` — is this a function name?
-- If so, consider specifying:
-  - Current behavior vs. desired behavior
-  - Measurable improvement criteria
+## Suggested Fixes
 
-### 4. Missing from Files Analyzed
-Only 8 files listed, but header says "9 files (staging-review + 8 lisp modules)" — counts match, but consider numbering for clarity.
+| Issue | Fix |
+|-------|-----|
+| Hypothesis table | Move the 1 "kept" row to "Stated" with full description |
+| Experiment distribution | Add per-target or per-category breakdown |
+| "Partial" status | Define what constitutes "partial" success |
 
-## 📋 Suggested Refinements
+## Minor Notes
+- Target count (9) matches sum (1 + 8) ✓
+- "Experimental framework defined" contradicts "hypotheses not yet formalized" if a hypothesis is already "kept"
 
-```
-1. Add hypothesis generation criteria
-2. Include discard reasons (even if "not stated")
-3. Define success metrics for the kept hypothesis
-```
+---
 
-Would you like me to elaborate on any section or draft a more detailed hypothesis specification?
+**Verdict**: Draft needs reconciliation before approval.
