@@ -1099,6 +1099,38 @@ DeepSeek v4-pro: high/max map to reasoning_effort. Other models: nil (no effort 
       (when (string-match-p "deepseek.*pro" model-down)
         (if (member effort '("max" "high")) effort nil)))))
 
+;; ─── Cost Tracking ───
+
+(defvar gptel-ai-behaviors--cost-stats (make-hash-table :test 'equal)
+  "Hash: (model effort) → (calls . total-cost-estimate).
+Used to normalize keep-rate by cost.")
+
+(defun gptel-ai-behaviors--record-cost (model effort &optional estimated-cost)
+  "Record one API call for MODEL+EFFORT with ESTIMATED-COST.
+Default cost tiers: flash=1, pro=3, kimi-highspeed=2, k2.6=4, minimax-highspeed=2."
+  (when model
+    (let* ((key (cons model (or effort "default")))
+           (cost (or estimated-cost
+                     (cond ((string-match-p "flash" model) 1)
+                           ((string-match-p "pro" model) 3)
+                           ((string-match-p "k2\\.6" model) 4)
+                           ((string-match-p "highspeed" model) 2)
+                           (t 2))))
+           (entry (gethash key gptel-ai-behaviors--cost-stats (cons 0 0))))
+      (setf (car entry) (1+ (car entry)))       ;; total calls
+      (setf (cdr entry) (+ (cdr entry) cost))   ;; total estimated cost
+      (puthash key entry gptel-ai-behaviors--cost-stats))))
+
+(defun gptel-ai-behaviors--cost-adjusted-rate (model effort kept total)
+  "Return keep-rate normalized by cost. Higher is better value.
+A model that keeps 50% at cost 1 is better than 60% at cost 3."
+  (if (and (> total 0) (> kept 0))
+      (let* ((key (cons (or model "unknown") (or effort "default")))
+             (entry (gethash key gptel-ai-behaviors--cost-stats (cons 1 1)))
+             (avg-cost (/ (float (cdr entry)) (car entry))))
+        (/ (float kept) total avg-cost))
+    0.0))
+
 (defun gptel-ai-behaviors--evolve-models ()
   "Log per-category model+effort performance each evolution cycle."
   (let ((cats nil) (logs nil))

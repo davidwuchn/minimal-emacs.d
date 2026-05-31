@@ -190,23 +190,61 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                               gptel-auto-workflow--analyzer-failed-backends)
                          (and (boundp 'gptel-auto-workflow--rate-limited-backends)
                               gptel-auto-workflow--rate-limited-backends)))
-             (chain-pick
-              (when (and candidates
-                         (fboundp 'gptel-auto-workflow--first-available-provider-candidate))
-                (gptel-auto-workflow--first-available-provider-candidate
-                 candidates excluded)))
-             (selected-backend
-              (or (car chain-pick)
-                  (when (plistp override-preset)
-                    (plist-get override-preset :backend))
-                  (when (plistp gptel-agent-preset)
-                    (plist-get gptel-agent-preset :backend))))
-              (selected-model
-               (or (cdr chain-pick)
+              ;; Phase 1: ontology category + best-model from ai-behaviors
+              (category
+               (and (boundp 'gptel-auto-workflow--current-target)
+                    gptel-auto-workflow--current-target
+                    (fboundp 'gptel-auto-workflow--categorize-target)
+                    (gptel-auto-workflow--categorize-target
+                     gptel-auto-workflow--current-target)))
+              (category-best
+               (and category
+                    (fboundp 'gptel-ai-behaviors--best-model)
+                    (gptel-ai-behaviors--best-model category
+                                                     (intern agent-type) 2)))
+              ;; Check if bump-model wants to escalate (≥5 consecutive failures)
+              (bump-result
+               (and category log-model
+                    (fboundp 'gptel-ai-behaviors--bump-model)
+                    (fboundp 'gptel-auto-workflow--record-category-strike)
+                    ;; Use strike count as proxy for consecutive failures
+                    (let* ((strikes (and (boundp 'gptel-auto-workflow--category-strike-counts)
+                                        (assq category gptel-auto-workflow--category-strike-counts)))
+                           (count (if strikes (cadr strikes) 0)))
+                      (when (>= count 5)
+                        (gptel-ai-behaviors--bump-model category (intern agent-type)
+                                                        count log-model
+                                                        (or category-effort base-effort))))))
+              (bumped-model (and bump-result (car bump-result)))
+              (bumped-effort (and bump-result (cdr bump-result)))
+              (category-model (and category-best (car category-best)))
+              (category-effort (or (and category-best (cdr category-best)) "default"))
+              ;; Phase 2: per-subagent base effort (cheaper subagents get lower effort)
+              (base-effort
+               (cond ((member agent-type '("executor" "grader")) "high")
+                     ((member agent-type '("analyzer" "comparator")) "default")
+                     (t "default")))
+              (effort (or (and (not (equal category-effort "default")) category-effort)
+                          base-effort))
+              (chain-pick
+               (when (and candidates
+                          (fboundp 'gptel-auto-workflow--first-available-provider-candidate))
+                 (gptel-auto-workflow--first-available-provider-candidate
+                  candidates excluded)))
+              (selected-backend
+               (or (car chain-pick)
                    (when (plistp override-preset)
-                     (plist-get override-preset :model))
+                     (plist-get override-preset :backend))
                    (when (plistp gptel-agent-preset)
-                     (plist-get gptel-agent-preset :model))))
+                     (plist-get gptel-agent-preset :backend))))
+               (selected-model
+                (or bumped-model                      ; bump-model escalation
+                    category-model                    ; best-model from ontology
+                    (cdr chain-pick)
+                    (when (plistp override-preset)
+                      (plist-get override-preset :model))
+                    (when (plistp gptel-agent-preset)
+                      (plist-get gptel-agent-preset :model))))
               (selected-model-sym
                (and selected-model
                     selected-model
@@ -267,11 +305,17 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                 (persona-note
                  (gptel-auto-workflow--subagent-persona agent-type))
                 (prompt (concat persona-note routing-note prompt)))
-            ;; Inject dynamic reasoning_effort based on selected model
-            (let ((effort-param
+            ;; Track API cost per model+effort for cost-adjusted keep-rate
+            (when (and log-model (fboundp 'gptel-ai-behaviors--record-cost))
+              (gptel-ai-behaviors--record-cost log-model
+                                               (or bumped-effort category-effort base-effort)))
+            ;; Inject dynamic reasoning_effort: bump → category → subagent default
+            (let ((effective-effort (or bumped-effort category-effort base-effort))
+                  (effort-param
                    (and log-model
                         (fboundp 'gptel-ai-behaviors--effort-for-api)
-                        (gptel-ai-behaviors--effort-for-api log-model "high"))))
+                        (gptel-ai-behaviors--effort-for-api log-model
+                                                            (or bumped-effort category-effort base-effort)))))
               (if (fboundp 'my/gptel--agent-task-with-timeout)
                (let ((my/gptel-agent-task-timeout
                       (gptel-benchmark--subagent-timeout timeout effective-preset))
