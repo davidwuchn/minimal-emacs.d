@@ -4,14 +4,14 @@ status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
 insight-quality: 0.2/10
-allium-issues: 2
+allium-issues: 3
 allium-severity: 0.00
 allium-status: ok
 ---
 
 # Research Strategy: template-default
 
-*Consolidated from 93 experiments (2% keep rate).*
+*Consolidated from 84 experiments (2% keep rate).*
 
 **Performance:** 2 kept / 0 discarded / 13 failed (EXTRACTED — from TSV)
 
@@ -43,7 +43,7 @@ These targets may need different research patterns or the research findings were
 
 ## Allium Behavioral Coherence
 
-*2 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
+*3 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
 
 
 
@@ -60,8 +60,6 @@ These targets may need different research patterns or the research findings were
 
 
 
-<<<<<<< Updated upstream
-=======
 
 
 
@@ -72,224 +70,6 @@ These targets may need different research patterns or the research findings were
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-
-
-
-
-
-
-
-
-
-
-=======
->>>>>>> Stashed changes
 
 
 
@@ -320,81 +100,59 @@ These targets may need different research patterns or the research findings were
 
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy Distillation
+**Research Strategy: Template-Default**
 
-## Overview
-- **Template**: template-default
-- **Experiments**: 100 across 15 Lisp modules + 3 staging targets
+**Scope:** 84 experiments across 7 target files (focused on gptel-auto-workflow modules and related tools).
 
----
+**Active Hypothesis:**
+- Improve `gptel-auto-workflow-list-project-buffers` function
 
-## Kept Hypotheses (8)
+**Kept Hypotheses:** None stated
 
-| # | Focus | Improvement Axes |
-|---|-------|------------------|
-| 1 | Simplify lambda-prompt extraction (remove redundant `if apply-lines` check, nil guard for `english-findings`) | φ Vitality, Fractal Clarity |
-| 2 | Add nil/empty guard for `allium-spec`, remove redundant callback check | Fractal Clarity, Vitality |
-| 3 | Add explicit `(symbolp backend)` type check before fallback `t` | Fractal Clarity, Vitality (new error strategy) |
-| 4 | Add `buffer-live-p` guard + nil check in lambda | φ Vitality, Fractal Clarity |
-| 5 | Extract provider selection into `gptel-benchmark--select-provider` function | Fractal Clarity, Vitality |
-| 6 | Error recovery + explicit assumptions | Error Handling, Safety |
-| 7 | Defensive coding | Safety, Robustness |
-| 8 | Timeout sentinel value in `gptel-benchmark-call-subagent-sync` | Error Handling, Safety |
+**Discarded Hypotheses:** None stated
 
----
-
-## Discarded Hypotheses (3)
-
-| Hypothesis | Reason for Discard |
-|------------|-------------------|
-| Derive heading from `gptel-auto-workflow--mementum-symbol-map` | Maintenance bug fix; not core to current goals |
-| Fix error message formatting (`(error-message-string err)`) | Low priority; deferred |
-| Remove items from hash table | Incomplete/infeasible |
+**Summary:** This is a skeleton research strategy with minimal content. Only one concrete hypothesis targeting the `gptel-auto-workflow-list-project-buffers` function has been identified for investigation across 84 planned experiments. The kept and discarded hypothesis sections appear incomplete.
 ```
 
 ### Check Issues
 
-# Review: Research Strategy Distillation
+Based on the provided research strategy and the codebase inspection:
 
-## Overall Assessment
-The document is well-structured with clear categorization. Here are observations and questions:
+## Assessment
 
----
+**Completeness: ⚠️ Needs Work**
 
-## Strengths ✓
-- Clean tabular format with focused columns
-- Logical separation between kept (8) and discarded (3) hypotheses
-- Improvement axes provide categorization framework
-- Specific technical focus (emacs-lisp specifics, function names)
+The strategy is indeed a skeleton. Here's what I found:
 
----
+### Current State
+- **Function:** `gptel-auto-workflow-list-project-buffers` exists in `./lisp/modules/gptel-auto-workflow-projects.el`
+- **Current behavior:** Iterates project buffers, formats them with root → buffer-name → mode, sorts alphanumerically, and messages output
+- **84 experiments / 7 files:** No visible evidence of this experiment plan in the codebase
 
-## Questions / Points to Clarify
+### Missing Components
 
-| # | Issue | Suggestion |
-|---|-------|------------|
-| 1, 4 | **"φ" symbol** appears in Focus column for hypotheses 1 and 4 | What does φ denote? Priority marker? Already-implemented flag? |
-| 5 | "Extract into...function" | Does function already exist, or is this *create* new function? |
-| 8 | "Timeout sentinel value" | Specify what value (e.g., `0`, `nil`, `-1`)? |
-| — | **Ordering** | Is there a dependency/order? Hypothesis 5 (extraction) may need to precede others |
-| — | **Criteria** | What defines success for each hypothesis? |
+| Section | Status |
+|---------|--------|
+| Kept Hypotheses | Empty |
+| Discarded Hypotheses | Empty |
+| Experiment Plan | Referenced but not present |
+| Target File Details | Not specified |
 
----
+### What Could Be Improved
 
-## Minor Suggestions
+1. **Define concrete hypotheses** — e.g., "List output is unreadable in large projects" or "Sorting is inconsistent across platforms"
 
-1. **Hypothesis 3** — "new error strategy" is vague; consider specifying error behavior
-2. **Hypothesis 7** — "Defensive coding" is generic; could be more specific
-3. **"allium-spec"** — Is this a code-named module or literal? (Allium = onion/garlic family)
+2. **Specify 7 target files** — which modules beyond `gptel-auto-workflow-projects.el`?
 
----
+3. **Add metrics** — How will improvement be measured? Output format? Performance?
 
-## Discarded Hypotheses
-Good that reasons are documented. Consider adding **effort vs. impact** notation if applicable (e.g., "low impact, high effort").
+4. **Sample improvement candidates** from current code:
+   - Replace `string<` sorting with version-aware sort
+   - Add filtering by mode/project/buffer state
+   - Output to dedicated buffer instead of `message`
+   - Add async collection for large projects
 
----
-
-Want me to elaborate on any specific hypothesis or restructure the document?
+Would you like me to draft a more complete version of this strategy?

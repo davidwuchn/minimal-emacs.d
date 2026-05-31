@@ -1,33 +1,91 @@
 <!--
 Synthesis verification:
-- Confidence: 12%
+- Confidence: 24%
 - Sources: 17 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'research-research-persisted', Very short content (25 lines)
+- Warnings: No code examples or concrete references, Content does not mention topic 'research-research-persisted'
 - Auto-approved: yes (flagged)
 --->
 
 <think>
-The user wants me to generate the complete knowledge page from all the research findings. Let me analyze the massive amount of research data they've provided and synthesize it into a comprehensive research digest.
+Let me look at the memory file and the last research result to understand what knowledge I need to synthesize.
 
-Let me parse through all the research findings chronologically:
+Let me analyze all the research findings across all timestamps:
 
-1. **2026-05-31 10:55** - Empty (0/3 kept)
-2. **2026-05-31 09:26** - Empty (local fallback)
-3. **2026-05-31 08:42** - 3/15 kept (20%) - External research on ACON, Azure patterns, mcp.el
-4. **2026-05-31 08:38** - Empty (local fallback)
+**Research 2026-05-31 10:55** - Most recent, external focus:
+1. ACON (Microsoft) - Context compression via guideline optimization
+2. Magentic orchestration (Azure) - Task ledger pattern
+3. Group chat / maker-checker loop (Azure)
+4. gptel + mcp.el integration patterns
+5. Memory taxonomy: write-manage-read loop
+
+**Research 2026-05-31 08:42** - Own repos (davidwuchn/*):
 
 
-5. **2026-05-31 04:30** - Empty (local fallback)
-6. **2026-05-30 23:56** - Empty (local fallback)
-7. **2026-05-30 20:53** - 0/15 kept (0%)
-8. **2026-05-30 17:10** - Empty (local fallback)
-9. **2026-05-22 12:10** - 3/9 kept (33%) - Tier 1 repos deep research
-10. **2026-05-22 10:29** - 9/39 kept (23%)
-11. **2026-05-22 10:17** - Empty (local fallback)
+1. zeroclaw - Provider-agnostic agent runtime
+2. nullclaw - Minimal AI infrastructure
+3. eca - Editor-agnostic protocol
+4. context-mode - Context window optimization, 98% reduction
+5. ai-code-interface.el - Unified Emacs interface
 
-Now I'm looking at the research findings with actual content. The ones with substance are turn 3 from 05-31 showing Azure patterns and MCP integration, turn 1 from 05-22 covering circuit breakers and context compression, turn 2 from 05-22 with agent architecture and error recovery, and turn 1 from 05-22 with git history and module complexity analysis. I need to synthesize the high-value findings from these non-empty results into a cohesive digest.
+**Research 2026-05-31 08:38** - External turn 1/2:
+1. arXiv 2601.13671v1 - Multi-agent orchestration architectures
+2. Azure AI agent design patterns
+3. MCP.el + gptel integration
 
-Looking at the patterns emerging across these sources: **zeroclaw** uses provider-agnostic architecture with multi-channel support and an SOP engine; **nullclaw** is a minimal Zig-based infrastructure; **eca** provides an editor-agnostic protocol with multi-agent support; **context-mode** achieves massive context reduction through sandboxing and session continuity tracking; and the upstream **gptel** uses a finite state machine for request handling. The external research adds error recovery patterns with circuit breakers and backoff strategies, plus orchestration approaches from Azure.
+Now I'm looking at the external research to extract actionable patterns from these sources.
 
-I'm also seeing concurrent and hierarchical orchestration patterns, a maker-checker loop for group chat, and task ledger management. The compression approaches like ACON with iterative guideline refinement and the write-manage-read memory loop offer interesting optimization angles. There's also MCP integration patterns and specialized agents like gptel-agent with context isolation that could strengthen the architecture. Now I'm thinking about how to structure all this into a cohesive knowledge page that synthesizes these findings.
+**Research 2026-05-30 20:53** - External turn 2/5:
+1. karthink/gptel-agent - Sub-agent delegation via Markdown/YAML frontmatter
+2. MemEvolve - Meta-evolution of agent memory systems
+3. Lambda calculus in Emacs Lisp
+4. Tangled Skills
+
+**Research 2026-05-30 17:10** - Local codebase analysis:
+1. gptel-auto-workflow-evolution.el (6056 lines) - largest
+2. gptel-auto-workflow-ontology-router.el (3231 lines)
+3. gptel-tools-agent-prompt-build.el (3070 lines)
+4. gptel-auto-workflow-strategic.el (2803 lines)
+
+**Research 2026-05-22 12:10** - Deep external turn 1/4:
+1. genesis-agent - Self-verification engine (66 deterministic checks)
+2. context-mode - Sandbox tool pattern
+3. gbrain - Self-wiring knowledge graph
+4. nucleus - Lambda notation compression
+5. efrit - Zero client intelligence, pure execution
+6. gastown - Git-worktree persistence
+7. nullclaw - Minimal binary design
+8. psi (Clojure) - Statechart-driven architecture
+
+**Research 2026-05-22 10:29** - Deep external turn 1/3:
+1. circuit breaker + checkpoint/restore
+2. tool receipts for audit trail
+3. lambda notation + mathematical attention magnets
+4. think-in-code paradigm
+5. session continuity via FTS5
+6. feed-forward memory protocol
+7. beads ledger for work tracking
+
+**Research 2026-05-20 23:27** - External turn 1/4:
+1. arXiv 2405.10467 - 18 architectural patterns
+2. arXiv 2508.00271 - MetaAgent self-evolving paradigm
+3. Azure AI agent orchestration patterns
+4. NVIDIA AI agent evaluation guide
+5. AI agent error recovery patterns (5 patterns)
+6. awesome-agents repository
+7. nucleus - VSM architecture & mathematical attention anchors
+8. efrit - Native elisp coding agent
+9. genesis-agent - Self-modifying verification gates
+10. symphony - Worktree isolation
+11. mementum - Git memory protocol
+12. gastown - Multi-agent workspace orchestration
+13. gbrain - Self-wiring knowledge graph
+14. zeroclaw - Security-first agent runtime
+
+Now I'm looking at a comprehensive knowledge synthesis that pulls together all these research findings into a structured digest.
+
+I'm organizing this into key architectural patterns that work across different agent systems. I notice several recurring themes: provider-agnostic runtimes with fallback chains and sandboxing, context compression techniques that achieve dramatic size reductions, and editor-agnostic protocols that decouple AI from specific environments. There's also a strong pattern around structured subagent delegation, git-based memory with temporal search, and multi-tier watchdog systems. Most interesting is the pattern of self-wiring knowledge graphs that automatically create typed edges, plus hybrid search approaches combining vector and keyword matching. The meta-learning frameworks show up repeatedly too—separating first-order from second-order learning, using mathematical symbols as attention anchors, and optimizing compression guidelines. I'm also seeing provider abstraction with circuit breakers and graceful degradation patterns, along with task ledger approaches.
+
+Now I'm mapping these patterns onto a knowledge synthesis framework that integrates them. The key architectural decisions are separating operational state from knowledge state, using git as the foundational memory substrate with an explicit write-manage-read loop, and layering attention through mathematical symbol systems. I need orchestration patterns like sequential, concurrent, and group chat approaches with a maker-checker loop for validation, plus task ledger management. Error recovery combines circuit breakers with exponential backoff and checkpoint-resume capabilities. Memory itself is structured as three tiers with synthesis triggers and fibonacci-scaled recall, augmented by hybrid search fusion. Self-evolution uses natural language gradient descent with meta-learning loops that track lambda metrics. Code generation benefits from deterministic verification engines and think-in-code paradigms with sandboxed execution. Finally, I'm standardizing the interface through LSP-style editor-agnostic protocols with frontmatter-declared agent specs and MCP for tool integration.
+
+Now I'm ready to synthesize this into a comprehensive knowledge page.
 </think>
