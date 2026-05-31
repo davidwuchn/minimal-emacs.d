@@ -2120,9 +2120,10 @@ CF-Gateway removed — does not support tool calls reliably."
 Set by `gptel-auto-workflow--migrate-legacy-provider-defaults' on startup.")
 
 (defcustom gptel-auto-workflow-per-task-model-map
-  '(("analyzer"   "MiniMax"    . "minimax-m2.7-highspeed")
+  '(    ("analyzer"   "MiniMax"    . "minimax-m2.7-highspeed")
     ("analyzer"   "DashScope"  . "qwen3.6-plus")
     ("analyzer"   "moonshot"   . "kimi-k2.6")
+    ("analyzer"   "DeepSeek"   . "deepseek-v4-flash")
     ("grader"     "MiniMax"    . "minimax-m2.7-highspeed")
     ("grader"     "DashScope"  . "qwen3.6-plus")
     ("grader"     "DeepSeek"   . "deepseek-v4-pro")

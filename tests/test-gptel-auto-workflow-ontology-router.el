@@ -95,7 +95,10 @@
 (ert-deftest regression/ontology-router/reorder-keeps-all-backends ()
   "Reordering should preserve all backends from static list."
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
-         gptel-auto-workflow-headless-subagent-fallbacks)
+         '(("DeepSeek" . "deepseek-v4-flash")
+           ("MiniMax" . "minimax-m2.7-highspeed")
+           ("DashScope" . "qwen3.6-plus")
+           ("moonshot" . "kimi-k2.6")))
         (mock-results
          (list
           (list :backend "moonshot" :decision "kept"))))
@@ -173,7 +176,10 @@
 (ert-deftest regression/ontology-router/category-override-programming ()
   "Programming targets use DeepSeek override."
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
-         gptel-auto-workflow-headless-subagent-fallbacks)
+         '(("DeepSeek" . "deepseek-v4-flash")
+           ("MiniMax" . "minimax-m2.7-highspeed")
+           ("DashScope" . "qwen3.6-plus")
+           ("moonshot" . "kimi-k2.6")))
         (mock-results
          (list
           (list :backend "DashScope" :target "lisp/modules/gptel-tools-agent.el" :decision "kept")
@@ -194,25 +200,28 @@
   "Applying ontology order should modify fallback chain, reset should restore."
   :expected-result (if noninteractive :failed :passed)
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
-         gptel-auto-workflow-headless-subagent-fallbacks)
+         (copy-tree gptel-auto-workflow-headless-subagent-fallbacks))
         (mock-results
          (list
           (list :backend "moonshot" :decision "kept")
           (list :backend "moonshot" :decision "kept")
           (list :backend "moonshot" :decision "kept")))
-        (original-order gptel-auto-workflow-headless-subagent-fallbacks))
-    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
-               (lambda () mock-results))
-              ((symbol-function 'random) (lambda (_) 999)))
-      ;; Apply ontology ordering
-      (gptel-auto-workflow--apply-ontology-fallback-order)
-      ;; Should have reordered
-      (should (string= "moonshot" (caar gptel-auto-workflow-executor-rate-limit-fallbacks)))
-      ;; Reset
-      (gptel-auto-workflow--reset-fallback-order)
-      ;; Should be back to original
-      (should (equal gptel-auto-workflow-executor-rate-limit-fallbacks
-                     gptel-auto-workflow-headless-subagent-fallbacks)))))
+        (original-order (copy-tree gptel-auto-workflow-headless-subagent-fallbacks)))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+                   (lambda () mock-results))
+                  ((symbol-function 'random) (lambda (_) 999)))
+          ;; Apply ontology ordering
+          (gptel-auto-workflow--apply-ontology-fallback-order)
+          ;; Should have reordered
+          (should (string= "moonshot" (caar gptel-auto-workflow-executor-rate-limit-fallbacks)))
+          ;; Reset
+          (gptel-auto-workflow--reset-fallback-order)
+          ;; Should be back to original
+          (should (equal gptel-auto-workflow-executor-rate-limit-fallbacks
+                         original-order)))
+      ;; Always restore original state
+      (setq gptel-auto-workflow-executor-rate-limit-fallbacks original-order))))
 
 ;; ─── Advice Integration Tests ───
 
@@ -758,7 +767,12 @@ All known backends now support lambda notation; no async verification needed."
 
 (ert-deftest tdd/lambda-verify/report-with-results ()
   "lambda-verification-report shows correct counts with cached results."
-  (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
+  (let ((gptel-auto-workflow-headless-subagent-fallbacks
+         '(("DeepSeek" . "deepseek-v4-flash")
+           ("MiniMax" . "minimax-m2.7-highspeed")
+           ("DashScope" . "qwen3.6-plus")
+           ("moonshot" . "kimi-k2.6")))
+        (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
     (puthash "moonshot" :healthy gptel-auto-workflow--lambda-verification-results)
     (puthash "DashScope" :degraded gptel-auto-workflow--lambda-verification-results)
     (puthash "DeepSeek" :unknown gptel-auto-workflow--lambda-verification-results)
@@ -766,7 +780,7 @@ All known backends now support lambda notation; no async verification needed."
       (should (= 1 (plist-get result :healthy)))
       (should (= 1 (plist-get result :degraded)))
       (should (> (plist-get result :unknown) 0))
-              (should (= 4 (plist-get result :total))))))
+      (should (= 4 (plist-get result :total))))))
 
 (ert-deftest tdd/lambda-verify/penalty-degraded ()
   "apply-verification-penalty penalizes degraded backends."
