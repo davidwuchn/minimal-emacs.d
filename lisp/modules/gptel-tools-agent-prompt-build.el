@@ -2042,7 +2042,6 @@ CF-Gateway removed — @cf/moonshotai/kimi-k2.6 does not support tool calls reli
 (defcustom gptel-auto-workflow-per-task-model-map
   '(("analyzer"   "MiniMax"    . "minimax-m2.7-highspeed")
     ("analyzer"   "DashScope"  . "qwen3.6-plus")
-    ("analyzer"   "DeepSeek"   . "deepseek-v4-pro")
     ("analyzer"   "moonshot"   . "kimi-k2.6")
     ("grader"     "MiniMax"    . "minimax-m2.7-highspeed")
     ("grader"     "DashScope"  . "qwen3.6-plus")
@@ -2053,6 +2052,10 @@ CF-Gateway removed — @cf/moonshotai/kimi-k2.6 does not support tool calls reli
     ("executor"   "DeepSeek"   . "deepseek-v4-pro")
     ("executor"   "MiniMax"    . "minimax-m2.7-highspeed")
     ("researcher" "MiniMax"    . "minimax-m2.7-highspeed")
+    ("researcher" "DashScope"  . "qwen3.6-plus")
+    ("researcher" "DeepSeek"   . "deepseek-v4-pro")
+    ("researcher" "moonshot"   . "kimi-k2.6")
+    ("reviewer"   "MiniMax"    . "minimax-m2.7-highspeed")
     ("researcher" "DashScope"  . "qwen3.6-plus")
     ("researcher" "DeepSeek"   . "deepseek-v4-pro")
     ("researcher" "moonshot"   . "kimi-k2.6")
