@@ -1838,45 +1838,63 @@ EDGE CASE: nil or non-list returns nil safely."
 
 (defun gptel-auto-workflow--parse-json-targets (response proj-root max-targets)
   "Parse JSON from RESPONSE to extract targets.
+Strips markdown code fences, tries multiple start positions.
 Returns nil if parsing fails or no targets found.
 Logs parsing failures for debugging."
   (cl-block gptel-auto-workflow--parse-json-targets
     (unless (gptel-auto-workflow--nonempty-string-p response)
       (message "[auto-workflow] Empty response in parse-json-targets")
       (cl-return-from gptel-auto-workflow--parse-json-targets nil))
-    (condition-case err
-        (with-temp-buffer
-          (insert response)
-          (goto-char (point-min))
-          (when (re-search-forward "[{[]" nil t)
-            (goto-char (match-beginning 0))
-            (let* ((json-array-type 'list)
-                   (json-object-type 'alist)
-                   (json-key-type 'symbol)
-                   (data (json-read))
-                   (target-list
-                    (cond
-                     ((gptel-auto-workflow--json-object-p data)
-                      (or (alist-get 'targets data)
-                          (alist-get 'files data)
-                          (alist-get 'paths data)
-                          (and (gptel-auto-workflow--json-target-file data)
-                               (list data))))
-                     ((listp data) data)))
-                   (candidates
-                    (and (listp target-list)
-                         (delq nil
-                               (mapcar #'gptel-auto-workflow--json-target-file
-                                       target-list)))))
-              (when candidates
-                (gptel-auto-workflow--filter-valid-targets
-                 candidates proj-root max-targets)))))
-      (json-error
-       (message "[auto-workflow] JSON parse error: %s" (error-message-string err))
-       nil)
-      (error
-       (message "[auto-workflow] Target parse error: %s" (error-message-string err))
-       nil))))
+    (let ((cleaned (gptel-auto-workflow--strip-markdown-fences response))
+          (result nil))
+      (condition-case err
+          (with-temp-buffer
+            (insert cleaned)
+            (goto-char (point-min))
+            (while (and (null result)
+                        (re-search-forward "[{[]" nil t))
+              (goto-char (match-beginning 0))
+              (condition-case json-err
+                  (let* ((json-array-type 'list)
+                         (json-object-type 'alist)
+                         (json-key-type 'symbol)
+                         (data (json-read))
+                         (target-list
+                          (cond
+                           ((gptel-auto-workflow--json-object-p data)
+                            (or (alist-get 'targets data)
+                                (alist-get 'files data)
+                                (alist-get 'paths data)
+                                (and (gptel-auto-workflow--json-target-file data)
+                                     (list data))))
+                           ((listp data) data)))
+                         (candidates
+                          (and (listp target-list)
+                               (delq nil
+                                     (mapcar #'gptel-auto-workflow--json-target-file
+                                             target-list)))))
+                    (when candidates
+                      (setq result
+                            (gptel-auto-workflow--filter-valid-targets
+                             candidates proj-root max-targets))))
+                (json-error
+                 (goto-char (1+ (match-beginning 0))) ; skip past broken {
+                 nil)))
+            result)
+        (error
+         (message "[auto-workflow] Target parse error: %s" (error-message-string err))
+         nil)))))
+
+(defun gptel-auto-workflow--strip-markdown-fences (text)
+  "Extract content from markdown code fences if present.
+Returns TEXT unchanged if no code fences found."
+  (let ((trimmed (string-trim text)))
+    (cond
+     ((string-match "```[a-z]*\n\\(\\(?:.\\|\n\\)*?\\)```" trimmed)
+      (string-trim (match-string 1 trimmed)))
+     ((string-match "`\\([^`]+\\)`" trimmed)
+      (match-string 1 trimmed))
+     (t trimmed))))
 
 (defun gptel-auto-workflow--parse-regex-targets (response proj-root max-targets)
   "Parse RESPONSE using regex fallback to extract targets.

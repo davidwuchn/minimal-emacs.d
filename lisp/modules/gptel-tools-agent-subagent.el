@@ -776,10 +776,20 @@ Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
 ;;; Configuration
 
 (defcustom gptel-auto-workflow-targets
-  '()
+  '("lisp/modules/gptel-benchmark-comparator.el"
+    "lisp/modules/gptel-tools-agent-runtime.el"
+    "lisp/modules/gptel-ext-tool-permits.el"
+    "lisp/modules/gptel-benchmark-core.el"
+    "lisp/modules/gptel-tools-memory.el"
+    "lisp/modules/gptel-agent-loop.el"
+    "lisp/modules/gptel-auto-workflow-projects.el"
+    "lisp/modules/gptel-tools-agent-experiment-core.el"
+    "lisp/modules/gptel-tools-agent-benchmark.el"
+    "lisp/modules/gptel-benchmark-subagent.el")
   "Static fallback targets when LLM selection disabled or fails.
-Empty by default - LLM selects targets dynamically.
-Monthly subscription: LLM selection finds best targets each run."
+Bootstrap list from self-evolution top performers + critical safety files.
+These kickstart the experiment feedback loop when the analyzer cannot
+produce parseable targets (network latency, quota, unparseable output)."
   :type '(repeat string)
   :safe #'always
   :group 'gptel-tools-agent)
