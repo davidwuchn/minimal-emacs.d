@@ -21,12 +21,7 @@ Working dir: {{worktree-path}}
 {{controller-focus}}
 {{inspection-thrash-contract}}
 
-## WHAT TO CHANGE
-Make ONE of:
-- Add nil/error guard (condition-case, ignore-errors, hash-table-p check)
-- Extract duplicated code into helper function
-- Add validation before destructive operation
-- Fix obvious bug (off-by-one, missing check, edge case)
+{{task-hint}}
 
 ## VERIFY (MANDATORY)
 After every Edit:

@@ -63,57 +63,13 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-## Distilled Research Strategy
-
-**Strategy:** Template-default
-**Scope:** 67 experiments across 13 targets
-
-**Outcome:** All hypotheses discarded.
-
-**Rationale Summary:**
-
-1. **Redundant guard removal** — `(consp val) (keywordp (car val))` already encoded in `inner-ht`; moving `make-hash-table` inside guard avoids speculative allocation; `ignore-errors` replaces `condition-case nil` (anti-pattern).
-
-2. **Nil guard for empty `status-lines`** — Prevents caching empty results when no projects configured; improves Vitality and Clarity.
-
-3. **Indentation fixes** — Corrects visual representation of parse tree structure in two locations (`gptel-auto-workflow-run-all-projects`, `gptel-auto-workflow--get-worktree-buffer`); improves Clarity (fractal).
+nil
 ```
 
-### Check Issues
-
-# Review: Distilled Research Strategy
-
-## Summary
-67 experiments → 0 accepted. All proposed optimizations were rejected after testing.
-
-## Observations
-
-### Strengths
-- **Transparent reporting** — "All hypotheses discarded" is honest; null results have scientific value
-- **Specific technical reasoning** for each rejection
-- **Measurable scope** — 13 targets, 67 experiments provides statistical weight
-
-### Potential Clarifications
-
-| Item | Question |
-|------|----------|
-| "Hypotheses discarded" | Does this mean: (a) changes were tested and didn't help, or (b) changes were rejected pre-testing due to reasoning? |
-| Rationale #1 | If guards are "already encoded," why were experiments needed? Is the claim verified or theoretical? |
-| Rationale #3 | Indentation as "fractal clarity" — is this measurable? |
-
-### Minor Issues
-
-1. **Rationale #1 phrasing**: "anti-pattern" for `condition-case nil` is debatable; it's sometimes intentional
-2. **No negative controls** mentioned — were baseline measurements taken before each experiment?
-3. **Template-default strategy** — what does this mean? Unclear to outsiders
-
-## Verdict
-
-> **Reasonable outcome.** In optimization work, most hypotheses *should* fail. The document correctly treats this as informative rather than a setback.
-
-**Request:** Can you share the original hypotheses that were tested? That would allow verification of whether the rationales accurately explain the rejections.

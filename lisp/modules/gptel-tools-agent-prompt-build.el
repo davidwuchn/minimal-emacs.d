@@ -1306,7 +1306,37 @@ Implements section-level A/B testing to identify effective prompt components."
                     "4. Your NEXT tool call MUST be a write (Edit, Write, ApplyPatch) on that same symbol.\n"
                     "5. If you do more than 2 read-only calls without writing, your turn will be aborted.\n"
                     "6. Do not inspect a second subsystem before the first edit exists.\n\n"))))
-    (setq gptel-auto-workflow--last-prompt-sections
+     ;; Concrete task hint: generate single-action instruction from target history
+     (let* ((target-history (and (boundp 'gptel-auto-experiment--target-history)
+                                 (gethash target gptel-auto-experiment--target-history)))
+            (failures (or (plist-get target-history :validation-failed) 0))
+            (kept-count (or (plist-get target-history :kept) 0))
+            (last-kept-action (plist-get target-history :last-kept-action))
+            (task-hint
+             (cond
+              ;; No kept experiments, many failures → simplest possible task
+              ((and (= kept-count 0) (> failures 3))
+               "## TASK (DO THIS EXACTLY)
+ADD A NIL GUARD: find any function call in the file and wrap it in
+(ignore-errors ...) or add a nil-check with (when ...).
+Read ONE function. Edit ONE line. Verify. Done.
+DO NOT explore other functions. DO NOT plan further changes.")
+              ;; Previously kept → replicate the pattern
+              ((and (> kept-count 0) last-kept-action)
+               (format "## TASK (REPLICATE PATTERN)
+Previous kept change: %s
+Find a SIMILAR pattern elsewhere in this file and apply the SAME fix.
+Read ONE function. Edit ONE line. Verify. Done."
+                       last-kept-action))
+              ;; New target → gentle guidance
+              (t
+               "## TASK (PICK ONE, DO IT NOW)
+- Add (ignore-errors ...) around a function call
+- Wrap a gethash/assoc in (when-let ...) or (or ...) nil guard
+- Add (condition-case ...) around a file operation
+Read ONE function. Edit ONE line. Verify. Done."))))
+       (setq gptel-auto-experiment--current-task-hint task-hint))
+     (setq gptel-auto-workflow--last-prompt-sections
           (mapconcat #'symbol-name included-sections ","))
   ;; Build variables plist and resolve to lambda via EDN pipeline
   (let* ((variables
@@ -1318,6 +1348,7 @@ Implements section-level A/B testing to identify effective prompt components."
               (large-target-guidance . ,(or large-target-guidance ""))
               (controller-focus . ,(or controller-focus ""))
               (inspection-thrash-contract . ,(or inspection-thrash-contract ""))
+              (task-hint . ,(or gptel-auto-experiment--current-task-hint ""))
               (previous-experiment-analysis . ,(or patterns "No previous experiments"))
               (suggestions . ,(if (funcall section-included-p 'suggestions)
                                   (or suggestions "None")
