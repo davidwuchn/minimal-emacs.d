@@ -267,22 +267,37 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                 (persona-note
                  (gptel-auto-workflow--subagent-persona agent-type))
                 (prompt (concat persona-note routing-note prompt)))
-           (if (fboundp 'my/gptel--agent-task-with-timeout)
-            (let ((my/gptel-agent-task-timeout
-                   (gptel-benchmark--subagent-timeout timeout effective-preset))
-                  (gptel-agent-preset effective-preset))
-              (my/gptel--agent-task-with-timeout
-               callback
-               agent-type
-               description
-               prompt
-               files))
-          (let ((gptel-agent-preset effective-preset))
-            (gptel-agent--task
-             callback
-             agent-type
-              description
-              prompt)))))
+            ;; Inject dynamic reasoning_effort based on selected model
+            (let ((effort-param
+                   (and log-model
+                        (fboundp 'gptel-ai-behaviors--effort-for-api)
+                        (gptel-ai-behaviors--effort-for-api log-model "high"))))
+              (if (fboundp 'my/gptel--agent-task-with-timeout)
+               (let ((my/gptel-agent-task-timeout
+                      (gptel-benchmark--subagent-timeout timeout effective-preset))
+                     (gptel-agent-preset effective-preset)
+                     (gptel--request-params
+                      (if effort-param
+                          (plist-put (copy-sequence gptel--request-params)
+                                     :reasoning_effort effort-param)
+                        gptel--request-params)))
+                 (my/gptel--agent-task-with-timeout
+                  callback
+                  agent-type
+                  description
+                  prompt
+                  files))
+             (let ((gptel-agent-preset effective-preset)
+                   (gptel--request-params
+                    (if effort-param
+                        (plist-put (copy-sequence gptel--request-params)
+                                   :reasoning_effort effort-param)
+                      gptel--request-params)))
+                (gptel-agent--task
+                 callback
+                 agent-type
+                  description
+                  prompt))))))
     (funcall callback (format "[MOCK] %s: %s"
                               type
                               (truncate-string-to-width prompt 100 nil nil "...")))))
