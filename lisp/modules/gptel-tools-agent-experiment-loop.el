@@ -528,11 +528,11 @@ before headless operation.")
 (defvar gptel-auto-workflow--messages-start-pos nil
   "Buffer position where the current workflow run's messages begin.")
 
-(defvar gptel-auto-workflow--max-stuck-minutes 10
+(defvar gptel-auto-workflow--max-stuck-minutes 20
   "Maximum minutes without progress before watchdog force-stops the workflow.
-Reduced from 90m to 10m: when a subagent task hangs or the experiment loop
-gets stuck between experiments, the old timeout let daemon burn CPU for 1.5
-hours before recovery.")
+Increased from 10m to 20m: experiments with slow backends (2-5min per call)
+can exceed the old limit across multiple phases (executor, validation, grading).
+Each phase is a separate subagent call with no progress update between them.")
 
 (defcustom gptel-auto-workflow-status-file "var/tmp/cron/auto-workflow-status.sexp"
   "Path to the persisted auto-workflow status snapshot.
@@ -1198,7 +1198,7 @@ Force-stops when:
                                   (hash-table-count my/gptel--agent-task-state))))
           (cond
             ((and (numberp stuck-minutes)
-                  (> stuck-minutes 5)  ; 5 min grace for grader retry delays
+                  (> stuck-minutes 10)  ; 10 min grace for backend delays (2-5min per call)
                   (not (and (numberp active-tasks) (> active-tasks 0))))
             (message "[auto-workflow] WATCHDOG: No active subagent tasks for %.1f min, force-stopping"
                      stuck-minutes)
