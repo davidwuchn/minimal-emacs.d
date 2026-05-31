@@ -17,6 +17,11 @@
 (defvar gptel-auto-workflow--evolution-timer nil
   "Timer for periodic evolution cycles.")
 
+(defvar gptel-auto-workflow--running nil
+  "Non-nil when a workflow is actively running experiments.")
+(defvar gptel-auto-workflow--cron-job-running nil
+  "Non-nil when a cron job is queued or running.")
+
 (defvar gptel-auto-workflow--gc-timer nil
   "Timer for periodic garbage collection.")
 
@@ -49,9 +54,12 @@ Runs every 300s (5min) to keep RSS from runaway growth."
 (defun gptel-auto-workflow--maybe-run-evolution ()
   "Run evolution cycle if enabled and not already running.
 Also runs periodic mementum maintenance (index rebuild + synthesis)
-every cycle when there are candidate memories to process."
+every cycle when there are candidate memories to process.
+Skips when a workflow or cron job is active to avoid preempting experiments."
   (when (and (bound-and-true-p gptel-auto-workflow-evolution-enabled)
-             (fboundp 'gptel-auto-workflow-evolution-run-cycle))
+             (fboundp 'gptel-auto-workflow-evolution-run-cycle)
+             (not (bound-and-true-p gptel-auto-workflow--running))
+             (not (bound-and-true-p gptel-auto-workflow--cron-job-running)))
     ;; Ensure base functions are available (breaks circular require)
     (unless (fboundp 'gptel-auto-workflow--worktree-base-root)
       (condition-case nil
