@@ -2729,7 +2729,7 @@ Returns plist: (:category-priorities (cat . reason) ... :strategy-insights ... :
              (cat (and r-target (fboundp 'gptel-auto-workflow--categorize-target)
                       (gptel-auto-workflow--categorize-target r-target))))
         (when cat
-          (let ((e (gethash cat cat-stats (list :kept 0 :total 0 :strategies (make-hash-table :test 'equal)))))
+          (let ((e (gethash cat cat-stats (list 0 0 (make-hash-table :test 'equal)))))
             (setf (nth 0 e) (+ (nth 0 e) (if r-kept 1 0)))
             (setf (nth 1 e) (1+ (nth 1 e)))
             (when r-strategy
