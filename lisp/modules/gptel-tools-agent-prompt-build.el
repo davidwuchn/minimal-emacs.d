@@ -2103,13 +2103,14 @@ exhaustion.")
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
   '(("DeepSeek" . "deepseek-v4-pro")
     ("MiniMax" . "minimax-m2.7-highspeed")
+    ("DashScope" . "qwen3.6-plus")
     ("moonshot" . "kimi-k2.6"))
   "Ordered backend/model fallbacks for headless auto-workflow subagents.
 
 DeepSeek first (working, no content filter), then MiniMax (highspeed, but
-may hit rate limits), then moonshot (content_filter blocks code gen).
-DashScope removed — quota exhausted (HTTP 429) on this account.
-CF-Gateway removed — does not support tool calls reliably."
+may hit rate limits), DashScope (quota exhausted on some accounts, skipped
+at runtime via rate-limited-backends), moonshot (content_filter blocks
+code gen). CF-Gateway removed — does not support tool calls reliably."
   :type '(repeat (cons (string :tag "Backend")
                        (string :tag "Model")))
   :group 'gptel-tools-agent)
@@ -2127,14 +2128,16 @@ per analyzer call."
 (defcustom gptel-auto-workflow-executor-rate-limit-fallbacks
   '(("DeepSeek" . "deepseek-v4-pro")
     ("MiniMax" . "minimax-m2.7-highspeed")
+    ("DashScope" . "qwen3.6-plus")
     ("moonshot" . "kimi-k2.6"))
   "Ordered backend/model fallbacks for executor after rate limits.
 
 DeepSeek first — deepseek-v4-pro confirmed working (no content filter).
 MiniMax second — minimax-m2.7-highspeed fast but may hit rate limits.
-moonshot third — kimi-k2.6 content_filter blocks code gen (last resort).
-DashScope removed — quota exhausted (HTTP 429) on this account.
-CF-Gateway removed — @cf/moonshotai/kimi-k2.6 does not support tool calls reliably."
+DashScope third — qwen3.6-plus, quota-exhausted on some accounts (skipped at
+  runtime via rate-limited-backends when 429 received).
+moonshot last — kimi-k2.6 content_filter blocks code gen (last resort).
+CF-Gateway removed — does not support tool calls reliably."
   :type '(repeat (cons (string :tag "Backend")
                        (string :tag "Model")))
   :group 'gptel-tools-agent)
