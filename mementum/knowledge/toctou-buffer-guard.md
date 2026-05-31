@@ -2,26 +2,30 @@
 Synthesis verification:
 - Confidence: 12%
 - Sources: 3 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'toctou-buffer-guard', Very short content (19 lines)
+- Warnings: No code examples or concrete references, Content does not mention topic 'toctou-buffer-guard', Very short content (23 lines)
 - Auto-approved: yes (flagged)
 --->
 
 <think>
-The user wants me to create a knowledge page about TOCTOU (Time-of-Check-Time-of-Use) buffer guards in Emacs, based on the provided memories. Let me synthesize all the information into a comprehensive knowledge page.
+The user wants me to synthesize memories about TOCTOU (Time-of-Check-Time-of-Use) buffer guards in Emacs into a comprehensive knowledge page. Let me create a detailed, actionable knowledge page with:
 
-Key points to cover:
-1. What TOCTOU is in the context of Emacs async workflows
-2. The specific problem: buffers being killed between iterator checks and lambda execution
-3. The solution pattern: defense-in-depth with multiple guards
-4. Code examples
-5. Related topics
+1. Frontmatter with proper metadata
+2. At least 50 lines of actual content
+3. Concrete code examples
+4. Actionable patterns
+5. Cross-references to related topics
+6. Full markdown format
 
-Let me create a comprehensive page with:
-- Frontmatter
-- Introduction to TOCTOU in Emacs
-- The Problem explained
-- The Solution Pattern with code examples
-- Concrete implementation examples from gptel-auto-workflow
-- Best practices
-- Related topics
+The topic is about handling race conditions when iterating over buffers in async Emacs workflows, specifically the TOCTOU problem where buffers can be killed between a liveness check and actual use.
+
+Let me structure this comprehensively:
+
+1. Introduction to TOCTOU in Emacs
+2. The Problem Explained
+3. Code Examples showing the race condition
+4. The Solution Pattern (defense in depth)
+5. Implementation Guidelines
+6. Specific application in gptel-auto-workflow
+7. Related Topics
+8. Best Practices Checklist
 </think>
