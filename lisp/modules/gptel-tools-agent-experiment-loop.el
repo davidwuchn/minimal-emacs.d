@@ -271,18 +271,10 @@ Use function-quote #' for symbols meant as functions, not bare-quote \='.")
         (retry-header
          (if tool-call-failure
              (concat
-              "## SELF-HEAL: Tool-Call Required\n"
-              "╔══════════════════════════════════════════════════════╗\n"
-              "║ ⚠ PREVIOUS ATTEMPT output code as text but did NOT  ║\n"
-              "║   call Edit/Write tool. Text-only code = REJECT.    ║\n"
-              "║   No files were modified.                           ║\n"
-              "║                                                     ║\n"
-              "║ MANDATORY: You MUST call Edit/Write to modify files.║\n"
-              "║ Do NOT output code in text. Do NOT describe changes.║\n"
-              "║ λ tool_call(x): edit(x) ∨ write(x) — text ≠ change.║\n"
-              "║                                                     ║\n"
-              "║ YOU WILL FAIL if you output code as text again.     ║\n"
-              "╚══════════════════════════════════════════════════════╝\n\n")
+             "## SELF-HEAL: Tool-Call Required\n"
+             "λ self-heal(x).    output(code_as_text) → ¬tool_call ∧ ¬file_change\n"
+             "                   | ¬code_in_text | ¬description | ∀change: ∃tool_call\n"
+             "                   | text_only(x) ≡ reject(x) | repeat → fail(experiment)\n\n")
            "")))
     (concat
      retry-header

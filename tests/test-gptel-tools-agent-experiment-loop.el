@@ -68,7 +68,7 @@
 ;;; Self-heal tool-call failure tests
 
 (ert-deftest test-loop/make-retry-prompt-prepends-for-no-code-changes ()
-  "make-retry-prompt should prepend self-heal directive for 'no code changes'."
+  "make-retry-prompt should prepend self-heal λ notation for 'no code changes'."
   (let* ((original "Original prompt with task instructions")
          (result (gptel-auto-experiment--make-retry-prompt
                   "test.el"
@@ -78,11 +78,12 @@
          (pos-original (string-match (regexp-quote original) result)))
     (should (stringp result))
     (should (> (length result) (length original)))
-    ;; Self-heal box should appear BEFORE original prompt (prepended, not appended)
+    ;; Self-heal λ notation should appear BEFORE original prompt (prepended, not appended)
     (should pos-self-heal)
-    (should (string-match-p "MANDATORY.*Edit/Write" result))
-    (should (string-match-p "YOU WILL FAIL" result))
-    (should (string-match-p "λ tool_call" result))
+    (should (string-match-p "λ self-heal" result))
+    (should (string-match-p "¬tool_call" result))
+    (should (string-match-p "∀change: ∃tool_call" result))
+    (should (string-match-p "text_only.*≡ reject" result))
     ;; Original prompt should appear in the result
     (should pos-original)
     ;; Self-heal must appear before original prompt
