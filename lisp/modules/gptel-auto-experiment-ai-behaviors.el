@@ -628,6 +628,9 @@ When NO-PROMPT is non-nil, just logs the context (for non-LLM subsystems)."
 (defvar gptel-ai-behaviors--concrete-task-performance (make-hash-table :test 'equal)
   "Hash table: (category . task-type) → (total . kept).")
 
+(defvar gptel-ai-behaviors--concrete-trigger-counts (make-hash-table :test 'equal)
+  "Hash table: category → (triggered . total). How often concrete task fallback activates.")
+
 (defun gptel-ai-behaviors--record-concrete-task (category task-type)
   "Record that TASK-TYPE was dispatched for CATEGORY."
   (let* ((key (cons category task-type))
@@ -698,7 +701,45 @@ may need simpler experiments (concrete-task-default mode)."
                    (message "[category-health] %s: concrete %.0f%% vs overall %.0f%% (Δ%+.0f%%)"
                             cat (* 100 concrete-rate) (* 100 overall-rate) (* 100 gap))))))))
          cat-totals)))
-    (setq gptel-ai-behaviors--best-concrete-tasks best-per-cat)))
+    (setq gptel-ai-behaviors--best-concrete-tasks best-per-cat)
+    ;; Track concrete task trigger rate: how often does each category need
+    ;; the deterministic fallback (0 kept, >3 failures)?
+    (let ((cat-triggers (make-hash-table :test 'equal))
+          (results (condition-case nil (gptel-auto-workflow--parse-all-results) (error nil)))))
+      (dolist (r (or results (condition-case nil (gptel-auto-workflow--parse-all-results) (error nil))))
+        (let* ((r-target (plist-get r :target))
+               (r-decision (plist-get r :decision))
+               (r-kept (equal r-decision "kept"))
+               (cat (and r-target (fboundp 'gptel-auto-workflow--categorize-target)
+                        (gptel-auto-workflow--categorize-target r-target))))
+          (when cat
+            (let ((e (gethash cat cat-triggers (list :total 0 :kept 0 :failures 0 :consecutive-fail 0))))
+              (setf (plist-get e :total) (1+ (plist-get e :total)))
+              (if r-kept
+                  (progn
+                    (setf (plist-get e :kept) (1+ (plist-get e :kept)))
+                    (setf (plist-get e :consecutive-fail) 0))
+                (setf (plist-get e :failures) (1+ (plist-get e :failures)))
+                (setf (plist-get e :consecutive-fail) (1+ (plist-get e :consecutive-fail))))
+              (puthash cat e cat-triggers)))))
+      (maphash
+       (lambda (cat stats)
+         (let* ((total (plist-get stats :total))
+                (kept (plist-get stats :kept))
+                (max-consecutive (plist-get stats :consecutive-fail))
+                (trigger-rate (if (> total 0) (/ (float (- total kept)) total) 0)))
+           (when (>= total 10)
+             (cond
+              ((> max-consecutive 5)
+               (message "[concrete-trigger] ⚠ %s: %d consecutive failures — target may be broken"
+                        cat max-consecutive))
+              ((> trigger-rate 0.8)
+               (message "[concrete-trigger] ⚠ %s: %.0f%% fail rate — experiments may be too complex"
+                        cat (* 100 trigger-rate)))
+              (t
+               (message "[concrete-trigger] %s: %.0f%% fail rate (max %d consecutive)"
+                        cat (* 100 trigger-rate) max-consecutive))))))
+        cat-triggers)))
 
 (defvar gptel-ai-behaviors--best-concrete-tasks (make-hash-table :test 'equal)
   "Hash table: category → (task-type . keep-rate). Updated each evolution cycle.")
