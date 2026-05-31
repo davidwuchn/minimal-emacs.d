@@ -1,6 +1,8 @@
 # OUROBOROS-V5: Self-Regulating AI Architecture
 
 > **The snake that researches what to eat, executes what it learned, and feeds outcomes back into its own appetite.**
+>
+> **V5.1 update (2026-05-31):** 57 commits, 7.5K lines — ai-behaviors integration (4 layers), ontology co-evolution, two-phase grader (#=test + #=review), digital twin dependency graph, subagent HARD CONSTRAINT enforcement, convergence invariant tracking, strike decay + auto-thaw, grader-bypass commit flow, category→hashtag learning, universal subsystem behavior injection via advice.
 
 Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) + [gptel](https://github.com/karthink/gptel). 3 pipeline runs/day (macOS: 10AM/2PM/6PM; Linux: every 4h) + hourly self-evolution + watchdog every 30min. The snake eating its own tail — every subsystem improves every other subsystem.
 
@@ -30,11 +32,11 @@ It automates the entire cycle. Market intelligence feeds an experimentation engi
 
 | Metric | Value |
 |--------|-------|
-| Experiments run | 1,159 across 257 runs |
+| Experiments run | 1,159+ across 257+ runs |
 | Keep rate | 20.4% (experiments that improve the product) |
-| Test suite | 2,013 tests pass before any merge |
+| Test suite | 2,090+ tests pass before any merge |
 | Throughput | ~166 experiments/week, 24/7 autonomous |
-| Backends | 6 providers, auto-routed by measured keep-rate |
+| Backends | 4 providers (DeepSeek, MiniMax, moonshot, DashScope), auto-routed by measured keep-rate |
 | Uptime | Self-healing watchdog, in-process memory management, crash-recovery |
 
 ### Market
@@ -46,7 +48,7 @@ Any organization that ships software faces the same challenge: **how fast can we
 | Layer | Advantage |
 |-------|-----------|
 | **Self-knowledge** | The system builds an ontology of its own experiments — patterns, anti-patterns, what works per category |
-| **Routing intelligence** | 7 weeks of keep-rate data across 6 providers (1,200+ experiments, 257 runs); Bayesian Thompson sampling for optimal routing |
+| **Routing intelligence** | 7+ weeks of keep-rate data across 4+ providers (1,200+ experiments, 257+ runs); Bayesian Thompson sampling for optimal routing; ai-behaviors category×strategy×hashtag co-evolution |
 | **Lambda compiler** | Proprietary technique for verifying LLM output quality (P(λ)=90.7%); all 4 major prompts λ-compressed (4× token reduction); EDN prompt pipeline replaces template substitution for deterministic prompt construction |
 | **Prompt compression** | All 4 major prompts use lambda notation (4× token reduction); EDN prompt pipeline replaces template substitution with deterministic plist→λ resolve |
 | **Verbum pipeline** | Model distillation pipeline achieving 280× compression with 87% accuracy retention — enables local deterministic execution |
@@ -197,7 +199,7 @@ Every experiment is an isolated git worktree. `main` is never touched directly. 
 | Gate | What it checks | What happens on failure |
 |------|---------------|------------------------|
 | **Category routing** | Best backend for this target RIGHT NOW? (Δ-from-baseline + trend + confidence) | Routes to strongest current performer; unhealthy backends dropped |
-| **Test execution** | Did 2481 tests pass within 1800s? | Experiment discarded, pattern learned |
+| **Test execution** | Did 2090+ tests pass? | Experiment discarded, pattern learned |
 | **AI grading** | Is the change well-structured and principled? | Scored 0.0-1.0, fed to analyzer |
 | **AI review** | Does it pass security, conventions, architecture? | Multi-agent review with feedback |
 | **π Synthesis** | Which similar files should inherit this strategy? | Semantic cluster auto-queue |
@@ -308,7 +310,7 @@ The system does not just run experiments — it builds a **formal knowledge grap
 | **Ambiguity filtering** | Multi-stage confidence gating — defer high-ambiguity candidates |
 | **Second-chance repair** | Soft-deleted patterns re-evaluated each cycle |
 | **Interval Labelling Schema** | O(1) subsumption over pattern hierarchy via preorder/postorder |
-| **Backend performance analysis** | 1,200+ experiments tracked per backend/model → keep-rate statistics |
+| **Backend performance analysis** | 1,200+ experiments tracked across 4+ backends → keep-rate statistics; three-way (category×strategy×hashtags) combo learning |
 | **Pre-flight prediction** | Anti-pattern detection (3+ consecutive failures), target saturation (≥10), prediction threshold (0.15) |
 | **Ontology vs LLM decider** | Formal decision framework: data-availability × complexity × EMA confidence → ontology or LLM. Low EMA (<0.3) bypasses ontology, high EMA (>0.6) accepts weaker picks |
 | | φ freshness: EMA history persists across daemon restarts via cross-subsystem-state.json | Controller starts with informed confidence, not from zero |
