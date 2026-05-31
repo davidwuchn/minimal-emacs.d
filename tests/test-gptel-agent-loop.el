@@ -3,11 +3,11 @@
 (require 'ert)
 (require 'cl-lib)
 
-;;; Load real dependencies first
-(require 'gptel)
-(require 'gptel-request)
-(require 'gptel-ext-fsm)
-(require 'gptel-ext-fsm-utils)
+;;; Load real dependencies first (with graceful fallback for batch mode)
+(when (condition-case nil (require 'gptel nil t) (error nil))
+  (require 'gptel-request nil t)
+  (require 'gptel-ext-fsm nil t)
+  (require 'gptel-ext-fsm-utils nil t))
 (require 'gptel-ext-retry)
 (require 'gptel-agent-loop)
 

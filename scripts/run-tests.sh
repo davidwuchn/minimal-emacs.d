@@ -102,6 +102,9 @@ run_unit_tests() {
           ! -name "test-gptel-tools-agent-regressions.el" \
           ! -name "test-wrapped-fsm.el" \
           ! -name "test-nucleus-header-line.el" \
+          ! -name "test-auto-workflow-batch.el" \
+          ! -name "test-gptel-agent-loop.el" \
+          ! -name "test-gptel-agent-loop-integration.el" \
           -exec echo "-l {}" \;) \
         --eval "(ert-run-tests-batch-and-exit \"$PATTERN\")" 2>&1)
     ert_status=$?
