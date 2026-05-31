@@ -1071,72 +1071,77 @@ Returns a compact lambda-notation string ready for the LLM."
             (rejection-feedback (cdr (assoc 'rejection-feedback vars)))
             (uni-d (cdr (assoc 'unified-directive vars))))
     (concat
-     ;; HEADER
-     (format "λ experiment(%s). id=%d/%d budget=%smin path=%s/%s\nbaseline(8keys): %s"
-             target exp-id max-exp budget worktree tgt-full baseline)
-     (if weakest (concat "\n  " weakest) "")
-     (if controller (concat "\n  " controller) "")
-     (if inspection (concat "\n  " inspection) "")
-     (if large (concat "\n  " large) "")
-     (if moderator (concat "\n  " moderator) "")
-     "\n\n"
-     ;; ONTOLOGY FRAME (harness — structures the action space first)
-     (if onto-g (concat "CATEGORY: " onto-g "\n") "")
-     (if act-s (concat act-s "\n") "")
-     (if ai-b (concat ai-b "\n") "")
-     (if rec-b (concat rec-b "\n") "")
-      (if vio-b (concat vio-b "\n") "")
-      (if uni-d (concat uni-d "\n\n") "")
-      (if val-ap (concat val-ap "\n") "")
-      "## Spec Assessment\n"
-      "Before implementing, identify ambiguities in the task:\n"
-     "  · What's NOT specified that needs a decision?\n"
-     "  · Which edge cases are undefined?\n"
-     "  · What assumptions must I make?\n"
-     "State these briefly in HYPOTHESIS before coding.\n"
-     "\n"
-     ;; CONTEXT (what you know about this target)
-     (if persona (concat "PERSONA: " persona "\n") "")
-     (if skills (concat "SKILLS: " skills "\n") "")
-     (if allium-i (concat "ALLIUM: " allium-i "\n") "")
-     (if allium-r (concat "REPAIR: " allium-r "\n") "")
-     (if (or topic prev) (concat "PAST: " (or topic "")
-                                 (if prev (concat " " prev) "") "\n") "")
-      (if (or sugg hyp mut evol)
-          (let ((sugg-str (if (listp sugg) (mapconcat #'identity sugg " | ") (or sugg "")))
-                (mut-str (if (listp mut) (mapconcat (lambda (x) (format "- %s" x)) mut "\n") (or mut ""))))
-            (concat "SUGGEST: " sugg-str
-                    (if hyp (concat " " hyp) "")
-                    (if mut-str (concat "\n" mut-str) "")
-                    (if evol (concat " " evol) "") "\n"))
-        "")
-     (if research (concat "RESEARCH: " research "\n") "")
-     (if git-hist (concat "GIT: " git-hist "\n") "")
-     (if axis-g (concat "AXIS: " axis-g "\n") "")
-     (if axis-p (concat "AXIS-PERF: " axis-p "\n") "")
-     (if frontier (concat "FRONTIER: " frontier "\n") "")
-     (if satur (concat "SATUR: " satur "\n") "")
-     ;; FAILURE PATTERNS (guardrails — what went wrong before)
-     (if fail-p (concat "FAIL: " fail-p "\n") "")
-     (if div (concat "DIVERSITY: " div "\n") "")
-     (if cross (concat "CROSS: " cross "\n") "")
-     (if strat-f (concat "STRATEGY: " strat-f "\n") "")
-     (if agent-b (concat "AGENT: " agent-b "\n") "")
-     (if val-pipe (concat "VALIDATE: " val-pipe "\n") "")
-       "\nRULES:\n"
-       "| ¬touch(early-init.el, pre-early-init.el, lisp/eca-security.el)\n"
-       "| ¬doc_only | ¬comment_only | Δ(code) ≡ required\n"
-        "| MUST edit files — analysis-only responses will be rejected without grading\n"
-        "| 1st_line ≡ \"HYPOTHESIS: [what changes & why]\" (NEVER leave blank — always state concrete change)\n"
-       (if focus (concat "  " focus "\n") "")
-        "| use(Edit,Write) — text-only responses will be rejected | minimal(change) | ¬git(add,commit,push)\n"
-        "| ∀cl-return-from: ∃cl-block ∧ name_match | ¬call_undefined_fn\n"
-        "| MANDATORY: Run `emacs --batch --eval \"(byte-compile-file \\\"FILE\\\")\"` on changed files before finishing\n"
-       (concat "| MANDATORY: verify command: " (or sexp "emacs --batch --eval '...'")
-               " && ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh\n"
-               "| REPORT: In OUTPUT section, show exactly which verify commands ran and their exit codes\n")
-       "\nOUTPUT:  CHANGED(file+fn) EVIDENCE(1-2 diffs) VERIFY(cmds+exit_codes) COMMIT(\"not committed\")\n"
-      "TYPE(pick_one): bug_fix | performance | refactoring | safety | test_coverage"
+      ;; KV CACHE PREFIX — STATIC sections first (shared across experiments)
+      ;; These tokens are identical for every experiment → high cache-hit rate.
+      ;; Dynamic sections (target, budget) moved later to maximize prefix length.
+      "\nRULES:\n"
+      "| ¬touch(early-init.el, pre-early-init.el, lisp/eca-security.el)\n"
+      "| ¬doc_only | ¬comment_only | Δ(code) ≡ required\n"
+       "| MUST edit files — analysis-only responses will be rejected without grading\n"
+       "| 1st_line ≡ \"HYPOTHESIS: [what changes & why]\" (NEVER leave blank — always state concrete change)\n"
+      (if focus (concat "  " focus "\n") "")
+       "| use(Edit,Write) — text-only responses will be rejected | minimal(change) | ¬git(add,commit,push)\n"
+       "| ∀cl-return-from: ∃cl-block ∧ name_match | ¬call_undefined_fn\n"
+       "| MANDATORY: Run `emacs --batch --eval \"(byte-compile-file \\\"FILE\\\")\"` on changed files before finishing\n"
+      (concat "| MANDATORY: verify command: " (or sexp "emacs --batch --eval '...'")
+              " && ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh\n"
+              "| REPORT: In OUTPUT section, show exactly which verify commands ran and their exit codes\n")
+      "\nOUTPUT:  CHANGED(file+fn) EVIDENCE(1-2 diffs) VERIFY(cmds+exit_codes) COMMIT(\"not committed\")\n"
+      "TYPE(pick_one): bug_fix | performance | refactoring | safety | test_coverage\n"
+      "\n"
+      ;; ONTOLOGY FRAME — semi-static (same for all targets in same category)
+      (if onto-g (concat "CATEGORY: " onto-g "\n") "")
+      (if act-s (concat act-s "\n") "")
+      (if ai-b (concat ai-b "\n") "")
+      (if rec-b (concat rec-b "\n") "")
+       (if vio-b (concat vio-b "\n") "")
+       (if uni-d (concat uni-d "\n\n") "")
+       (if val-ap (concat val-ap "\n") "")
+      ;; HEADER — DYNAMIC (changes every experiment → cache miss starts here)
+      (format "\n---\nλ experiment(%s). id=%d/%d budget=%smin path=%s/%s\nbaseline(8keys): %s"
+              target exp-id max-exp budget worktree tgt-full baseline)
+      (if weakest (concat "\n  " weakest) "")
+      (if controller (concat "\n  " controller) "")
+      (if inspection (concat "\n  " inspection) "")
+      (if large (concat "\n  " large) "")
+      (if moderator (concat "\n  " moderator) "")
+      "\n"
+      ;; Spec Assessment — semi-static
+       "## Spec Assessment\n"
+       "Before implementing, identify ambiguities in the task:\n"
+      "  · What's NOT specified that needs a decision?\n"
+      "  · Which edge cases are undefined?\n"
+      "  · What assumptions must I make?\n"
+      "State these briefly in HYPOTHESIS before coding.\n"
+      "\n"
+      ;; CONTEXT (what you know about this target — DYNAMIC)
+      (if persona (concat "PERSONA: " persona "\n") "")
+      (if skills (concat "SKILLS: " skills "\n") "")
+      (if allium-i (concat "ALLIUM: " allium-i "\n") "")
+      (if allium-r (concat "REPAIR: " allium-r "\n") "")
+      (if (or topic prev) (concat "PAST: " (or topic "")
+                                  (if prev (concat " " prev) "") "\n") "")
+       (if (or sugg hyp mut evol)
+           (let ((sugg-str (if (listp sugg) (mapconcat #'identity sugg " | ") (or sugg "")))
+                 (mut-str (if (listp mut) (mapconcat (lambda (x) (format "- %s" x)) mut "\n") (or mut ""))))
+             (concat "SUGGEST: " sugg-str
+                     (if hyp (concat " " hyp) "")
+                     (if mut-str (concat "\n" mut-str) "")
+                     (if evol (concat " " evol) "") "\n"))
+         "")
+      (if research (concat "RESEARCH: " research "\n") "")
+      (if git-hist (concat "GIT: " git-hist "\n") "")
+      (if axis-g (concat "AXIS: " axis-g "\n") "")
+      (if axis-p (concat "AXIS-PERF: " axis-p "\n") "")
+      (if frontier (concat "FRONTIER: " frontier "\n") "")
+      (if satur (concat "SATUR: " satur "\n") "")
+      ;; FAILURE PATTERNS — semi-dynamic
+      (if fail-p (concat "FAIL: " fail-p "\n") "")
+      (if div (concat "DIVERSITY: " div "\n") "")
+      (if cross (concat "CROSS: " cross "\n") "")
+      (if strat-f (concat "STRATEGY: " strat-f "\n") "")
+      (if agent-b (concat "AGENT: " agent-b "\n") "")
+      (if val-pipe (concat "VALIDATE: " val-pipe "\n") "")
       "\n\nANTI-PATTERNS (causes instant REJECT):\n"
       "| ¬broad_indentation_changes (never re-indent entire functions)\n"
       "| ¬extract_helpers_for_single_use (don't create abstractions with one caller)\n"
