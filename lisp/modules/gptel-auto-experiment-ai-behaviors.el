@@ -1018,7 +1018,7 @@ Returns first relevant code addition line, or nil."
 (defconst gptel-ai-behaviors--model-variants
   '((deepseek . (deepseek-v4-flash deepseek-v4-pro))     ; flash=fast, pro=thinking+effort
     (kimi . (kimi-for-coding kimi-k2.6))                  ; coding=fast, k2.6=reasoning(:effort high)
-    (minimax . (minimax-m2.1 minimax-m2.5 minimax-m2.7 minimax-m2.7-highspeed)))
+    (minimax . (minimax-m2.7 minimax-m2.7-highspeed)))
   "Model families and variants ordered by capability (fast→powerful).")
 
 (defvar gptel-ai-behaviors--model-stats (make-hash-table :test 'equal)
