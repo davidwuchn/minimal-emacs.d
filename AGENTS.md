@@ -35,6 +35,7 @@
 - **Skill conflicts**: Pi5's version wins (it has the most experiment data).
 - **Knowledge conflicts**: Merge both versions (newer knowledge supplements older).
 - **Mementum conflicts**: Accept both (memories are atomic and additive).
+- **Never use `git reset --hard`**: Destroys uncommitted work irreversibly. Use `git stash push -m "msg"` to save work, then `git checkout HEAD -- path/...` to discard only specific auto-generated files, then `git stash pop` to restore. Add `git merge --abort` to clear stale merge state before pulling.
 
 ### Document Map
 
