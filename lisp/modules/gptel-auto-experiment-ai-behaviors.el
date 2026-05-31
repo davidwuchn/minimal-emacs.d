@@ -1009,6 +1009,9 @@ Returns first relevant code addition line, or nil."
         (truncate-string-to-width snippet 120 nil nil "...")))))
 
 ;; ─── Persona Effectiveness Tracking ───
+(defvar gptel-ai-behaviors--current-archetype nil
+  "Dynamic variable: archetype selected for current subagent dispatch.")
+
 ;; Tracks kept-rate per (category × persona-archetype) for self-evolution.
 (defvar gptel-ai-behaviors--persona-stats (make-hash-table :test 'equal)
   "Hash: (category . archetype) → (kept . total).")

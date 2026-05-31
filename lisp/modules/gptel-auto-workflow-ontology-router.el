@@ -1467,8 +1467,30 @@ from all three signals: subagent archetype × ontology context × reasoning patt
 For executors, the category SELECTS a different archetype — not just a label.
 Agentic → Guardian (safety), Programming → Craftsman (precision),
 Tool-calls → Engineer (robustness), NLP → Writer (clarity).
-Based on nucleus/ADAPTIVE.md persona state machines."
-  (let* ((base-persona
+
+Self-evolving: checks `gptel-ai-behaviors--best-persona` for learned preference.
+When insufficient data (< 3 experiments) or equal performance, explores
+alternate personas 20% of the time for A/B testing."
+  (let* ((default-archetype
+           (pcase category
+             (:agentic "Guardian") (:programming "Craftsman")
+             (:tool-calls "Engineer") (:natural-language "Writer")
+             (_ "Craftsman")))
+         ;; Self-evolve: check if data suggests a better persona
+         (learned-archetype
+          (and (fboundp 'gptel-ai-behaviors--best-persona)
+               (gptel-ai-behaviors--best-persona category)))
+         ;; Explore 20% of the time when we have data but not enough to be sure
+         (explore-p (and learned-archetype
+                         (not (string= learned-archetype default-archetype))
+                         (< (random 100) 20)))
+         (archetype (if explore-p
+                        (if (string= learned-archetype default-archetype)
+                            (car (remove default-archetype
+                                         '("Guardian" "Craftsman" "Engineer" "Writer")))
+                          learned-archetype)
+                      (or learned-archetype default-archetype)))
+         (base-persona
           (pcase agent-type
             ("analyzer"
              ;; Analyzer adapts focus to category
@@ -1603,10 +1625,14 @@ Output: {:findings [_] :techniques [_] :apply_to_us [_] :verification _ :confide
                        "\n;; Emphasis: consistent patterns, temporal ordering")
                       ((string-match-p "stop\\|checklist" b)
                        "\n;; Emphasis: pause, verify each step, don't rush")
-                      (t (format "\n;; Behavior: %s" behavior)))))))
-      (concat base-persona
-              (or behavior-mod "")
-              "\n\n---\n\n"))))
+                      (t (format "\n;; Behavior: %s" behavior))))))
+           (persona-text (concat base-persona
+                                  (or behavior-mod "")
+                                  "\n\n---\n\n")))
+      ;; Record selected archetype for experiment logging
+      (when (boundp 'gptel-ai-behaviors--current-archetype)
+        (setq gptel-ai-behaviors--current-archetype archetype))
+      persona-text)))
 
 ;; ─── Moderator Drift Detection (DIALECTIC.md pattern) ───
 
