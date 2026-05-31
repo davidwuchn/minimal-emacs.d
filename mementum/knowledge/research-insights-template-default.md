@@ -59,88 +59,71 @@ These targets may need different research patterns or the research findings were
 
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-```
-RESEARCH STRATEGY: template-default
-===================================
-Scope: 100 experiments across 16 modules (workflow, agent, benchmark, tools)
+## Research Strategy: Template-Default
 
-KEPT DIRECTIVES:
----------------
-1. Simplify extraction → remove redundant guards (mapconcat "" is safe)
-2. Add explicit nil/empty guards (allium-spec, where param)
-3. Add type validation branches (symbolp before fallback t)
-4. Add buffer-live-p guard for async lifecycle
-5. Extract provider selection → dedicated function
-6. Wrap overlay creation in condition-case
-7. Add timeout sentinel for explicit nil handling
-8. Make assumptions explicit (defensive coding)
+**Scope:** 98 experiments across 9 targets (Emacs Lisp modules for GPT/AI tooling)
 
-PRINCIPLES TARGETED:
-- φ Vitality: robustness to edge cases, async lifecycle
-- Fractal Clarity: explicit type assumptions, testable branching
-- Axis A (Error Handling): explicit nil/timeout handling
-- Axis D (Safety): defensive guards
+**Active Focus:**
+- Improving `gptel-auto-workflow-list-project-buffers`
 
-DISCARDED:
-- Deriving headings from symbol-map (latent nil bug risk)
-- error-message-string formatting (low impact)
-- Hash table mutation operations
-```
+**Test Targets:**
+- Benchmarking: `gptel-benchmark-analysis.el`, `gptel-benchmark-subagent.el`, `gptel-benchmark-comparator.el`
+- Agent/Tools: `gptel-tools-agent-error.el`, `gptel-tools-agent-prompt-build.el`
+- Workflows: `gptel-auto-workflow-strategic.el`, `gptel-auto-workflow-projects.el`
+- Testing/Staging: `staging-review`, `test`
+
+**Summary:** Systematic iteration on a specific function within a broader AI-assistance Emacs framework. No explicit hypothesis framework—pure empirical/experimental approach.
 ```
 
 ### Check Issues
 
-# Review: Research Strategy Template
+# Research Strategy Review: Template-Default
 
-## Summary Assessment
+## ✅ Strengths
 
-The strategy demonstrates **strong defensive programming intent** with a clear risk/reward tradeoff rationale. Here's the breakdown:
-
----
-
-## ✓ Strong Points
-
-| Aspect | Assessment |
-|--------|------------|
-| **Scope clarity** | 100×16 matrix is bounded and testable |
-| **Explicit rationale** | "Discarded" section shows deliberate risk evaluation |
-| **Guards philosophy** | `buffer-live-p`, `symbolp` checks prevent silent failures |
-| **Separation of concerns** | Provider selection extraction reduces coupling |
-
----
+| Element | Assessment |
+|---------|------------|
+| **Active Focus** | Clear single target (`gptel-auto-workflow-list-project-buffers`) |
+| **Categorization** | Logical grouping (benchmarking, agents, workflows, staging) |
+| **Scope Definition** | 9 targets defined, not vague |
 
 ## ⚠️ Concerns
 
-### 1. `mapconcat ""` Safety
-```elisp
-(mapconcat #'identity list "")  ; Assumes string elements
-```
-**Recommendation**: Add type assertion or `cl-remove-if-not` pre-filter if input isn't guaranteed strings.
+### 1. Hypothesis Gap
+> "No explicit hypothesis framework—pure empirical/experimental approach"
 
-### 2. Async Lifecycle
-```elisp
-(buffer-live-p (current-buffer))  ; Check at sentinel time
-```
-Good, but consider: What happens if *both* buffer is killed AND process dies? Need explicit ordering.
+**Risk:** Without hypotheses, how do you define success per experiment?
 
-### 3. Timeout Sentinel
-"Explicit nil handling" needs concrete edge case documented:
-```elisp
-(when (eq (process-status proc) 'run)  ; Still running?
-  (delete-process proc))
+**Recommendation:** At minimum, define:
+```
+For each experiment:
+  - Baseline: [current behavior]
+  - Target: [expected improvement]
+  - Metric: [how measured]
+```
+
+### 2. 98 Experiments = High Churn Risk
+- Will all 98 be tracked meaningfully?
+- Is this a planned series or aspirational?
+
+### 3. Missing Context
+- What's the actual performance problem with `gptel-auto-workflow-list-project-buffers`?
+- Any error logs, user reports, or metrics driving this focus?
+
+## Suggested Refinements
+
+```org
+**Experiment Tracking Schema:**
+- ID: [target]-[iteration#]
+- Baseline: [metric before]
+- Change: [what was modified]
+- Result: [metric after]
+- Verdict: [keep/revert/refine]
 ```
 
 ---
 
-## Suggestions
-
-1. **Add acceptance criteria** per directive (measurable success)
-2. **Quantify risk reduction** for "discarded" items
-3. **Specify test coverage target** (e.g., "guard branches require unit tests")
-
----
-
-**Verdict**: Solid foundation. Proceed with implementation, but add concrete nil/edge-case examples to each directive before coding.
+**Verdict:** Solid empirical framework, but add explicit success criteria per experiment. Want me to propose an experiment tracking template?
