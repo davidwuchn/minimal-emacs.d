@@ -71,14 +71,72 @@ active operating mode tag (or nil)."
                 (setq mode-tag tag))))))))
     (cons (string-trim content) mode-tag)))
 
+(defvar gptel-ai-behaviors--current-hashtags nil
+  "Dynamic variable. Set by prompt builder to the hashtags injected.
+Read by experiment logging to record which behaviors were active.")
+
+(defvar gptel-ai-behaviors--category-performance (make-hash-table :test 'equal)
+  "Hash table: (category . hashtag) → (kept . total).
+Learned from experiment outcomes. Evolved each cycle.")
+
+(defvar gptel-ai-behaviors--category-defaults nil
+  "Alist: (category . hashtag-string) learned from kept experiments.
+Falls back to hardcoded defaults when no data exists.")
+
+(defun gptel-ai-behaviors--record-experiment (category hashtags kept)
+  "Record HASHTAGS for CATEGORY as kept or not."
+  (when category
+    (dolist (tag (split-string hashtags))
+      (let* ((key (cons category tag))
+             (entry (gethash key gptel-ai-behaviors--category-performance
+                             (cons 0 0))))
+        (setf (car entry) (+ (car entry) (if kept 1 0)))  ; kept
+        (setf (cdr entry) (1+ (cdr entry)))               ; total
+        (puthash key entry gptel-ai-behaviors--category-performance)))))
+
+(defun gptel-ai-behaviors--evolve-hashtags ()
+  "Evolve category→hashtags mapping from experiment outcomes.
+Computes keep-rate per (category, hashtag) and updates
+`gptel-ai-behaviors--category-defaults' with the best combos."
+  (let ((cat-best (make-hash-table :test 'equal)))
+    ;; Aggregate keep-rates per hashtag per category
+    (maphash
+     (lambda (key entry)
+       (let* ((category (car key))
+              (hashtag (cdr key))
+              (kept (car entry))
+              (total (cdr entry))
+              (rate (if (> total 0) (/ (float kept) total) 0))
+              (current (gethash category cat-best nil)))
+         (when (or (null current) (> rate (cdr current)))
+           (puthash category (cons hashtag rate) cat-best))))
+     gptel-ai-behaviors--category-performance)
+    ;; Build default alist from best hashtags (min 3 experiments)
+    (setq gptel-ai-behaviors--category-defaults nil)
+    (maphash
+     (lambda (category best)
+       (let* ((hashtag (car best))
+              (rate (cdr best))
+              (total (cdr (gethash (cons category hashtag)
+                                    gptel-ai-behaviors--category-performance
+                                    (cons 0 0)))))
+         (when (>= total 3)
+           (push (cons category hashtag)
+                 gptel-ai-behaviors--category-defaults)
+           (message "[ai-behaviors-evolve] %s: best hashtag %s (keep-rate %.0f%%, %d exp)"
+                    category hashtag (* 100 rate) total))))
+     cat-best)))
+
 (defun gptel-ai-behaviors--category-hashtags (category)
-  "Return the hashtag string for CATEGORY (ai-behaviors format)."
-  (pcase category
-    (:agentic "#=code #contract #checklist #scope #legible #concise")
-    (:programming "#=code #subtract #concrete #legible")
-    (:tool-calls "#=code #defensive #boundary #robust #legible")
-    (:natural-language "#=code #coherence #depth #concrete #legible")
-    (_ "#=code #legible #concise")))
+  "Return the hashtag string for CATEGORY (ai-behaviors format).
+Uses learned defaults when available, falls back to hardcoded."
+  (or (cdr (assq category gptel-ai-behaviors--category-defaults))
+      (pcase category
+        (:agentic "#=code #contract #checklist #scope #legible #concise")
+        (:programming "#=code #subtract #concrete #legible")
+        (:tool-calls "#=code #defensive #boundary #robust #legible")
+        (:natural-language "#=code #coherence #depth #concrete #legible")
+        (_ "#=code #legible #concise"))))
 
 (defun gptel-ai-behaviors--inject (category)
   "Resolve hashtags for CATEGORY and return formatted context.

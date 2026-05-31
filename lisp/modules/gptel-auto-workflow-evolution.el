@@ -1999,6 +1999,13 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                    (plist-get result :changes)
                    (plist-get result :saturated)))
       (error (message "[evolution] Step ontology-evolve: %s" err))))
+  ;; Step C.7d: Evolve ai-behaviors hashtag mappings from experiment data
+  (when (fboundp 'gptel-ai-behaviors--evolve-hashtags)
+    (condition-case err
+        (progn
+          (gptel-ai-behaviors--evolve-hashtags)
+          (message "[ai-behaviors] Evolved category→hashtags from experiment data"))
+      (error (message "[evolution] Step ai-behaviors-evolve: %s" err))))
   ;; Step C.8: Allium issue trend analysis + regression detection
   (condition-case err
       (let ((trends-report (gptel-auto-workflow--allium-trends-report)))
