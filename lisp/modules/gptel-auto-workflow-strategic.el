@@ -448,17 +448,6 @@ Returns findings content or empty string if not found."
         (message "[research] Loaded evolved findings (%d chars)" (length content))
         content))))
 
-(defun gptel-auto-workflow--load-directive-skill ()
-  "Load evolved directive skill from DIRECTIVE.md.
-Returns skill content or empty string if not found.
-Uses standard skill loader for consistency."
-  (let ((content (gptel-auto-workflow--load-skill-content "auto-workflow/DIRECTIVE")))
-    (if (or (null content) (string-empty-p content))
-        ""
-      (progn
-        (message "[directive] Loaded evolved skill (%d chars)" (length content))
-        content))))
-
 (defun gptel-auto-workflow--research-topics-string ()
   "Return current research topics based on project focus and recent experiments.
 
@@ -994,10 +983,8 @@ substituted into the template before building the prompt.
 Results feed into directive's 'Next Hypotheses' for target selection."
   (let* ((raw-skill (gptel-auto-workflow--load-researcher-skill))
          (base-prompt (gptel-auto-workflow--substitute-researcher-variables raw-skill))
-         (skill-content (gptel-auto-workflow--load-research-skill))
-         (directive-content (gptel-auto-workflow--load-directive-skill))
-         (priority-targets (gptel-auto-workflow--directive-extract-priority-targets directive-content))
-         ;; Research variant selected by champion league (reuses strategy infrastructure)
+          (skill-content (gptel-auto-workflow--load-research-skill))
+          ;; Research variant selected by champion league (reuses strategy infrastructure)
          (research-variant (gptel-auto-workflow--select-best-research-variant))
          (variant-content (gptel-auto-workflow--load-research-variant-content research-variant))
          ;; Load AutoTTS-style strategy guidance via {{strategy-guidance}} template injection only
@@ -1020,12 +1007,6 @@ Results feed into directive's 'Next Hypotheses' for target selection."
                 (concat "### Previous Research Outcomes (Last 14 Days)\n"
                         "*How recent research runs performed downstream. Prioritize what worked, avoid what failed.*\n\n"
                         recent-outcomes
-                        "\n\n")
-              "")
-            (if priority-targets
-                (concat "### Current Project Targets (from directive)\n"
-                        "*Research ideas that could improve these specific modules:*\n"
-                        priority-targets
                         "\n\n")
               "")
             (if (and source-guidance (not (string-empty-p source-guidance)))
@@ -1200,27 +1181,6 @@ Returns t if evolution was triggered, nil otherwise."
        (setq triggered t)))
     
     triggered))
-
-
-
-(defun gptel-auto-workflow--directive-extract-priority-targets (directive-content)
-  "Extract high-priority targets from DIRECTIVE-CONTENT.
-Returns formatted string or nil."
-  (when (and directive-content (not (string-empty-p directive-content)))
-    (with-temp-buffer
-      (insert directive-content)
-      (goto-char (point-min))
-      (let ((targets nil))
-        ;; Look for Active Targets table
-        (when (re-search-forward "## Active Targets" nil t)
-          (forward-line 2) ; Skip header
-          (forward-line 1) ; Skip separator
-          (while (looking-at "| `\\([^`]+\\)` | [^|]+ | [^|]+ | [^|]+ | \\(✅\\|🟡\\)")
-            (push (match-string 1) targets)
-            (forward-line 1)))
-        (if targets
-            (mapconcat (lambda (targ) (format "- %s" targ)) (nreverse targets) "\n")
-          nil)))))
 
 
 
@@ -1466,20 +1426,10 @@ runtime errors when frontier-select-targets returns a malformed value."
 CONTEXT is the gathered context plist.
 RESEARCH-FINDINGS is the research findings string or empty.
 MAX-TARGETS is the maximum number of targets to select.
-META-LEARNING: Loads evolved directive and research skills from mementum."
+META-LEARNING: Loads evolved research skills from mementum."
   (unless (plistp context)
     (setq context '()))
-  (let* ((directive (gptel-auto-workflow--load-directive-skill))
-         (research-skill (gptel-auto-workflow--load-research-skill))
-         (directive-section (if directive
-                                (format "EVOLVED PROGRAM DIRECTIVE (from %d experiments):\n%s\n\n"
-                                        (or (when (string-match "total-experiments: \\([0-9]+\\)" directive)
-                                              (string-to-number (match-string 1 directive)))
-                                            0)
-                                        (truncate-string-to-width
-                                         (replace-regexp-in-string "^---$\\|^---\\n.*\\n---\\n" "" directive)
-                                         1500 nil nil "..."))
-                              ""))
+  (let* ((research-skill (gptel-auto-workflow--load-research-skill))
          (research-section (if (and research-skill (not (string-empty-p research-skill)))
                                (format "RESEARCH STRATEGY GUIDE:\n%s\n\n"
                                        (truncate-string-to-width research-skill 800 nil nil "..."))
@@ -1563,7 +1513,7 @@ META-LEARNING: Loads evolved directive and research skills from mementum."
   | priority ∝ 1 / (frontier_size(f) + 1)
   | prefer(bug_fix) > style_change | prefer(TODO_match) > random
 
-%s%s%sINPUT:
+%s%sINPUT:
   files: %s
   git(30d): %s
   sizes(top20): %s
@@ -1573,7 +1523,6 @@ META-LEARNING: Loads evolved directive and research skills from mementum."
 
 OUTPUT: {\"targets\": [{\"file\": \"lisp/modules/X.el\", \"priority\": N, \"reason\": \"R\"}]}"
             max-targets
-            directive-section
             research-section
             (or hints-section "")
             (or (plist-get context :file-list) "")

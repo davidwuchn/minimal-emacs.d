@@ -1422,7 +1422,7 @@ Returns output string or nil on failure."
         (message "[evolution] %s completed" script-name)
         output))))
 
-(declare-function gptel-auto-workflow--load-directive-skill "gptel-auto-workflow-strategic" ())
+
 
 ;;; ─── Dynamic Content Generators ───
 

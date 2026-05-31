@@ -313,16 +313,13 @@ Called when research context changes or run completes."
 ;; ─── Pipeline Verification ───
 
 (defun gptel-auto-workflow--verify-pipeline-integration ()
-  "Verify that research findings feed into directive and auto-workflow.
+  "Verify that research findings feed into auto-workflow.
 Checks:
 1. Research findings file exists and has content
-2. Directive skill exists and references recent findings
-3. Research context is set for next auto-workflow run
+2. Research context is set for next auto-workflow run
 Returns t if all checks pass, nil with warnings otherwise."
   (let* ((findings-file (expand-file-name "var/tmp/research-findings.md"))
-         (directive-file (expand-file-name "assistant/skills/auto-workflow/DIRECTIVE.md"))
          (findings-ok nil)
-         (directive-ok nil)
          (context-ok nil)
          (issues nil))
     
@@ -332,12 +329,7 @@ Returns t if all checks pass, nil with warnings otherwise."
         (setq findings-ok t)
       (push "Research findings file missing or too small" issues))
     
-    ;; Check 2: Directive skill exists (will be updated during auto-workflow)
-    (if (file-exists-p directive-file)
-        (setq directive-ok t)
-      (push "Directive skill file not found" issues))
-    
-    ;; Check 3: Findings are recent (within last 24 hours)
+    ;; Check 2: Findings are recent (within last 24 hours)
     (let ((findings-mtime (when (file-exists-p findings-file)
                             (nth 5 (file-attributes findings-file)))))
       (if (and findings-mtime
@@ -347,9 +339,9 @@ Returns t if all checks pass, nil with warnings otherwise."
         (push "Research findings are stale (>24h old)" issues)))
     
     ;; Report
-    (if (and findings-ok directive-ok context-ok)
+    (if (and findings-ok context-ok)
         (progn
-          (message "[pipeline-verification] ✓ All checks passed: findings→directive integration working")
+          (message "[pipeline-verification] ✓ All checks passed")
           t)
       (let ((issue-str (string-join (reverse issues) "; ")))
         (message "[pipeline-verification] ✗ Issues found: %s" issue-str)
