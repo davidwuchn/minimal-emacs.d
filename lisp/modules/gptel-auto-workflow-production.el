@@ -6,6 +6,7 @@
 (require 'cl-lib)
 (declare-function gptel-auto-workflow-evolution-run-cycle "gptel-auto-workflow-evolution")
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
+(defvar gptel-auto-workflow-evolution-enabled)
 
 ;; ─── Configuration ───
 
