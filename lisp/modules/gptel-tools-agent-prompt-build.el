@@ -1080,9 +1080,12 @@ Returns a compact lambda-notation string ready for the LLM."
       "| ¬touch(early-init.el, pre-early-init.el, lisp/eca-security.el)\n"
       "| ¬doc_only | ¬comment_only | Δ(code) ≡ required\n"
        "| MUST edit files — analysis-only responses will be rejected without grading\n"
-       "| 1st_line ≡ \"HYPOTHESIS: [what changes & why]\" (NEVER leave blank — always state concrete change)\n"
+       "| MANDATORY: Call Edit/Write tool — do NOT output code as text. Text-only code output = REJECT.\n"
+        "| 1st_line ≡ \"HYPOTHESIS: [what changes & why]\" (NEVER leave blank — always state concrete change)\n"
       (if focus (concat "  " focus "\n") "")
-       "| use(Edit,Write) — text-only responses will be rejected | minimal(change) | ¬git(add,commit,push)\n"
+       "| use(Edit,Write,ApplyPatch) — text output ≠ code change. YOU MUST CALL THE EDIT TOOL.\n"
+       "| After hypothesis, call Read tool to examine the target, then call Edit/Write to apply changes.\n"
+       "| ¬text_only_code | minimal(change) | ¬git(add,commit,push)\n"
        "| ∀cl-return-from: ∃cl-block ∧ name_match | ¬call_undefined_fn\n"
        "| MANDATORY: Run `emacs --batch --eval \"(byte-compile-file \\\"FILE\\\")\"` on changed files before finishing\n"
       (concat "| MANDATORY: verify command: " (or sexp "emacs --batch --eval '...'")
@@ -2130,7 +2133,7 @@ Set by `gptel-auto-workflow--migrate-legacy-provider-defaults' on startup.")
     ("grader"     "moonshot"   . "kimi-k2.6")
     ("executor"   "DashScope"  . "qwen3.6-plus")
     ("executor"   "moonshot"   . "kimi-k2.6")
-    ("executor"   "DeepSeek"   . "deepseek-v4-pro")
+    ("executor"   "DeepSeek"   . "deepseek-v4-flash-no-think")
     ("executor"   "MiniMax"    . "minimax-m2.7-highspeed")
     ("researcher" "MiniMax"    . "minimax-m2.7-highspeed")
     ("researcher" "DashScope"  . "qwen3.6-plus")
@@ -2323,7 +2326,7 @@ the user has not explicitly customized the variable."
                        ("Gemini" . "gemini-3.1-pro-preview"))
                        (("DashScope" . "qwen3.6-plus")
                         ("moonshot" . "kimi-k2.6")
-                        ("DeepSeek" . "deepseek-v4-pro")
+    ("DeepSeek" . "deepseek-v4-pro")
                         ("MiniMax" . "minimax-m2.7-highspeed"))))
          (setq gptel-auto-workflow-headless-subagent-fallbacks
                '(("DashScope" . "qwen3.6-plus")
