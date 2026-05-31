@@ -4,14 +4,14 @@ status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
 insight-quality: 0.2/10
-allium-issues: 3
+allium-issues: 2
 allium-severity: 0.00
 allium-status: ok
 ---
 
 # Research Strategy: template-default
 
-*Consolidated from 84 experiments (2% keep rate).*
+*Consolidated from 93 experiments (2% keep rate).*
 
 **Performance:** 2 kept / 0 discarded / 13 failed (EXTRACTED — from TSV)
 
@@ -43,7 +43,7 @@ These targets may need different research patterns or the research findings were
 
 ## Allium Behavioral Coherence
 
-*3 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
+*2 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
 
 
 
@@ -60,68 +60,334 @@ These targets may need different research patterns or the research findings were
 
 
 
+<<<<<<< Updated upstream
+=======
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+
+
+
+
+
+
+
+
+
+
+=======
+>>>>>>> Stashed changes
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*5 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
 # Research Strategy Distillation
 
-## Summary
+**Template**: `template-default`
 
-**Template**: template-default  
-**Experiments**: 84 total across 7 target files
+**Scope**: 42 experiments across 8 target files
+
+**Targets**:
+- `gptel-tools-agent-benchmark.el`
+- `gptel-benchmark-subagent.el`
+- `gptel-tools-agent-error.el`
+- `gptel-tools-agent-prompt-build.el`
+- `gptel-auto-workflow-strategic.el`
+- `gptel-auto-workflow-projects.el`
+- `gptel-auto-workflow-ontology-strategy.el`
+- `gptel-tools-agent-experiment-core.el`
+
+**Kept hypotheses**: *(none documented)*
+
+**Discarded hypotheses**:
+1. Add marker-live check for the `where` parameter — guard against dead markers from killed buffers
+2. Add `hash-table-p` guard in `gptel-auto-workflow--research-cache-get` — prevent `wrong-type-argument` errors when cache hash table is nil (inconsistency vs. strategic.el line 2719-2721)
 
 ---
 
-## Kept Hypotheses (1)
-
-1. **Improving `gptel-auto-workflow-list-project-buffers`** — The only stated hypothesis retained for further investigation
-
----
-
-## Discarded Hypotheses
-
-- None recorded
-
----
-
-## Key Observation
-
-The research log shows **83 of 84 experiments** resulted in no documented hypotheses being kept, indicating either:
-
-- Exploratory/confirmatory testing without formal hypotheses, or
-- Most experiments validated existing behavior (null results not tracked)
+**Note**: Document appears incomplete — "Kept hypotheses" section is empty but bullets are present, suggesting content may have been lost or cut off during extraction.
 ```
 
 ### Check Issues
 
-# Research Strategy Distillation — Check
+# Review: Research Strategy Distillation Document
 
-## Observations
+## Summary
 
-**Concerns:**
-
-| Issue | Detail |
-|-------|--------|
-| Low retention rate | 1.2% (1/84) hypothesis retention is unusual |
-| No discarded hypotheses | Missing 83 experiments worth of documentation |
-| Asymmetry | "Discarded = None" but 83 were not kept |
-
-## Likely Interpretation
-
-The 83 untagged experiments likely fall into:
-
-1. **Null results** — behavior confirmed, no action needed
-2. **Inconclusive** — unable to validate or reject
-3. **Merged** — folded into the single kept hypothesis
-
-## Recommendations
-
-- Add explicit categories for "null result" or "behavior confirmed"
-- Distinguish between "discarded" (rejected) vs. "absorbed" (merged)
-- Consider tracking effort/impact per experiment
+The document is a **snapshot of an incomplete research tracking record** for a gptel-related project.
 
 ---
 
-**Verdict**: Summary is plausible but incomplete. The gap between "kept" and "discarded" suggests documentation gaps rather than 83 failures.
+## Issues Identified
+
+| Issue | Location | Severity |
+|-------|----------|----------|
+| Empty "Kept hypotheses" section | Lines 7-8 | **High** |
+| No documented experiments (0 of 42) | Scope line | **Critical** |
+| No methodology described | Missing section | **Medium** |
+| No results or conclusions | Missing section | **High** |
+
+---
+
+## What's Present
+
+✅ **Discarded hypotheses** (2 items) — These are clear and actionable:
+1. Marker-live check for `where` parameter
+2. `hash-table-p` guard in cache getter function
+
+---
+
+## What's Missing
+
+- [ ] **Kept hypotheses** — At least one should exist if experiments were run
+- [ ] **Experiment results** — No data for any of the 42 experiments
+- [ ] **Files modified** — No evidence of changes made
+- [ ] **Next steps** — No actionable roadmap
+
+---
+
+## Questions
+
+1. Was this document truncated during extraction, or is this the complete state?
+2. Should the 42 experiments be distributed as a separate artifact?
+3. Are the discarded hypotheses **rejected** permanently, or pending revisit?
+
+---
+
+## Recommendation
+
+If this is an active project, consider regenerating or completing this document before archiving. The discarded hypotheses alone don't justify "42 experiments" of scope.
