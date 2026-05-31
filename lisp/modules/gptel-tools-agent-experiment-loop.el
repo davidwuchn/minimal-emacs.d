@@ -540,10 +540,9 @@ Increased from 10m to 20m: experiments with slow backends (2-5min per call)
 can exceed the old limit across multiple phases (executor, validation, grading).
 Each phase is a separate subagent call with no progress update between them.")
 
-(defvar gptel-auto-workflow--total-budget-minutes 60
+(defvar gptel-auto-workflow--total-budget-minutes 120
   "Maximum TOTAL minutes for a workflow before watchdog force-stops.
-Prevents runaway workflows that make progress but never finish.
-Set to 60min: 5 targets × 3 phases × 4min avg = 60min budget.")
+Set to 120min: 5 targets × 2 experiments × 10min avg = 100min budget.")
 
 (defvar gptel-auto-workflow--watchdog-start-time nil
   "Timestamp when the current workflow run started.

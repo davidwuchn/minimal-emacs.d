@@ -580,7 +580,7 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
                  gptel-auto-workflow-persistent-headless t
                  message-log-max 10000
                  gptel-auto-experiment-max-retries 3  ; 3 attempts for transient network errors
-                 gptel-auto-experiment-time-budget 600
+                 gptel-auto-experiment-time-budget 900
                  ;; Reduced from 120s to 60s to fail faster on slow model retries
                  ;; This avoids wasting 300s on validation-retry-failed experiments
                  gptel-auto-experiment-validation-retry-time-budget 60

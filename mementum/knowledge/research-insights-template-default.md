@@ -52,6 +52,7 @@ These targets may need different research patterns or the research findings were
 - Try combining with git history for recency bias.
 
 
+<<<<<<< Updated upstream
 
 
 
@@ -214,11 +215,14 @@ These targets may need different research patterns or the research findings were
 
 
 
+=======
+>>>>>>> Stashed changes
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
+<<<<<<< Updated upstream
 I see you're providing a research tracking template. However, this appears incomplete—particularly the "kept hypotheses" section just shows template placeholders rather than actual hypotheses.
 
 Could you clarify what you'd like me to distill? For example:
@@ -228,5 +232,8 @@ Could you clarify what you'd like me to distill? For example:
 3. **Something else**—perhaps this is context from a previous session you'd like me to work with?
 
 Let me check if there's related memory/context:
+=======
+nil
+>>>>>>> Stashed changes
 ```
 
