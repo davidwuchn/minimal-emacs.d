@@ -1,9 +1,10 @@
 # Model-Level Head-to-Head Comparison
-> Auto-generated from 100 experiments across 1 models
+> Auto-generated from 42 experiments across 2 models
 
 ## Model Rankings (by keep-rate)
 
-- **MiniMax/minimax-m2.7-highspeed**: 6.5%
+- **DeepSeek/deepseek-v4-pro**: 0.0%
+- **moonshot/kimi-k2.6**: 0.0%
 
 
-*Generated: 2026-05-31 19:03*
+*Generated: 2026-05-31 19:10*

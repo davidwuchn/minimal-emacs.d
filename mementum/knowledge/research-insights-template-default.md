@@ -276,6 +276,7 @@ These targets may need different research patterns or the research findings were
 
 
 
+<<<<<<< Updated upstream
 >>>>>>> Stashed changes
 
 
@@ -287,66 +288,15 @@ These targets may need different research patterns or the research findings were
 
 
 
+=======
+>>>>>>> Stashed changes
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy: Template-Default — Distilled
-
-## Scope
-100 experiments across 15 Elisp modules (workflow automation, agents, benchmarks, tools).
-
-## Core Themes
-
-1. **Explicit over Implicit** — Replace fallthrough logic with explicit type/symbol checks; make assumptions visible and testable.
-
-2. **Defensive Coding** — Add nil guards, `buffer-live-p` checks, `condition-case` wrappers; handle edge cases before they cause failures.
-
-3. **Separation of Concerns** — Extract discrete logic (provider selection, lambda prompts) into named, testable functions.
-
-4. **Explicit Error Communication** — Use sentinel values (e.g., timeout markers), `error-message-string`, and structured error handling over raw data.
-
-## Kept Strategies (High-Value Patterns)
-
-| Pattern | Quality Axis |
-|---------|--------------|
-| Early nil guard + redundant check removal | Clarity, Vitality |
-| Explicit `(symbolp backend)` branch before fallback | Clarity, Vitality (new code path) |
-| `buffer-live-p` + nil guard in async lambdas | Vitality (lifecycle), Clarity |
-| Extract provider selection to dedicated function | Clarity (explicit assumptions) |
-| Timeout sentinel value | Error Handling, Safety |
-| `condition-case` around overlay/side-effect code | Robustness |
-
-## Discarded Strategies
-
-- **Symbol map → heading derivation** — Rejected (latent maintenance bug)
-- **Error message string formatting** — Rejected (likely low ROI)
-- **Hash table entry removal** — Rejected (incomplete context)
-
-## Philosophical Undertone
-
-Favor **progressive refinement** (small, explicit changes) over large refactors; prioritize **observable assumptions** over implicit behavior; treat **edge cases as explicit contracts** rather than implicit fallthroughs.
+nil
 ```
 
-### Check Issues
-
-## Review
-
-**Overall**: Solid distillation. Core themes and kept strategies align well. The explicit error communication sentinel pattern is particularly strong.
-
-**Issues**:
-
-| Area | Problem |
-|------|---------|
-| Discarded strategies | Lack rationale depth — "incomplete context" and "likely low ROI" don't inform future decisions |
-| No success metrics | No way to evaluate if the strategy is working |
-| No prioritization | Equal weight to all items — is early nil guard as impactful as `condition-case`? |
-| Quality Axis column | "Clarity" and "Vitality" are undefined — readers must infer meaning |
-
-**Minor**:
-- "Progressive refinement" vs "large refactors" — this tension is real, but worth noting *when* large refactors are acceptable (e.g., schema changes)
-
-**Verdict**: Good internal document. For broader audience, I'd expand the discarded strategies rationale and add a "what this looks like in practice" example for each core theme.
-
-Want me to draft expanded versions of any section?

@@ -850,16 +850,19 @@ into staging or main."
       (gptel-auto-workflow--stop-status-refresh-timer)
       (gptel-auto-workflow--cleanup-old-worktrees)
       (dolist (timer (copy-sequence timer-list))
-        (when (timerp timer)
-          (let* ((fn-rep (condition-case nil
-                             (prin1-to-string (timer--function timer))
-                           (error ""))))
-            (when (and (stringp fn-rep)
-                       (or (string-match-p "nucleus" fn-rep)
-                           (string-match-p "gptel.*agent" fn-rep)
-                           (string-match-p "auto-experiment" fn-rep)))
-              (cancel-timer timer)
-              (cl-incf cleaned)))))
+        (condition-case err
+            (when (timerp timer)
+              (let* ((fn-rep (condition-case nil
+                                 (prin1-to-string (timer--function timer))
+                               (error ""))))
+                (when (and (stringp fn-rep)
+                           (or (string-match-p "nucleus" fn-rep)
+                               (string-match-p "gptel.*agent" fn-rep)
+                               (string-match-p "auto-experiment" fn-rep)))
+                  (cancel-timer timer)
+                  (cl-incf cleaned))))
+          (error
+           (message "[auto-workflow] Timer cleanup error: %S" err))))
       (dolist (buf (buffer-list))
         (when (buffer-live-p buf)
           (with-current-buffer buf
