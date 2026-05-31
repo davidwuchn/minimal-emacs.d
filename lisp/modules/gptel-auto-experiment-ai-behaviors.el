@@ -487,6 +487,16 @@ when available from empirical data."
 ;; Every OV5 subsystem can query its optimal behavior hashtags.
 ;; Defaults are learned from experiment data per (subsystem × category).
 
+(defvar subsystem nil
+  "Top-level sentinel to prevent void-variable on arm64 Emacs 30.1.
+Native-comp deferred compilation leaks `subsystem' as a free variable
+in byte-compiled closure chains (advice lambdas, timer callbacks).
+Without this defvar, cascading 'Error running timer' failures occur.")
+
+(defvar cat-triggers nil
+  "Top-level sentinel for native-comp closure capture on arm64 Emacs 30.1.
+Prevents void-variable in concrete-task-evolve and related evolution steps.")
+
 (defconst gptel-ai-behaviors--subsystem-map
   '((researcher
      :mode "#=research"
