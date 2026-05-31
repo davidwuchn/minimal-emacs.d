@@ -3124,6 +3124,90 @@ This bridges the daemon-restart gap where in-memory grader insights are lost."
             (message "[grader-insights] Replayed %d grader outputs from TSV" count))
           count)))))
 
+;; ─── Run Diagnostic Summary ───
+
+(defun gptel-auto-experiment--log-run-summary (results &optional run-id)
+  "Log structured diagnostic summary from RESULTS plist list.
+Computes keep-rate, top failure reasons, backend performance,
+strategy stats, and anomaly flags.  Logs as multi-line message."
+  (when (and results (listp results) (> (length results) 0))
+    (let* ((total (length results))
+           (kept (cl-count-if (lambda (r) (plist-get r :kept)) results))
+           (keep-rate (if (> total 0) (/ (float kept) total) 0.0))
+           ;; Failure reason aggregation
+           (fail-reasons (make-hash-table :test 'equal))
+           (backend-stats (make-hash-table :test 'equal))
+           (strategy-stats (make-hash-table :test 'equal))
+           (error-cats (make-hash-table :test 'equal)))
+      ;; Aggregate across all results
+      (dolist (r results)
+        (let* ((kept-p (plist-get r :kept))
+               (reason (plist-get r :comparator-reason))
+               (backend (plist-get r :backend))
+               (strategy (plist-get r :strategy))
+               (error-cat (plist-get r :error-category)))
+          (unless kept-p
+            (let ((short (cond ((stringp reason) (car (split-string reason ":" t)))
+                               ((symbolp reason) (symbol-name reason))
+                               (t "unknown"))))
+              (puthash short (1+ (gethash short fail-reasons 0)) fail-reasons)))
+          (when backend
+            (let ((entry (gethash backend backend-stats (list :total 0 :kept 0))))
+              (setf (nth 0 entry) (1+ (nth 0 entry)))
+              (when kept-p (setf (nth 1 entry) (1+ (nth 1 entry))))
+              (puthash backend entry backend-stats)))
+          (when strategy
+            (let ((entry (gethash strategy strategy-stats (list :total 0 :kept 0))))
+              (setf (nth 0 entry) (1+ (nth 0 entry)))
+              (when kept-p (setf (nth 1 entry) (1+ (nth 1 entry))))
+              (puthash strategy entry strategy-stats)))
+          (when error-cat
+            (puthash error-cat (1+ (gethash error-cat error-cats 0)) error-cats))))
+      ;; Sort for display
+      (let* ((sorted-fails (sort (let (r) (maphash (lambda (k v) (push (cons k v) r)) fail-reasons) r)
+                                 (lambda (a b) (> (cdr a) (cdr b)))))
+             (sorted-backends (sort (let (r) (maphash (lambda (k v) (push (cons k v) r)) backend-stats) r)
+                                    (lambda (a b) (> (nth 0 (cdr a)) (nth 0 (cdr b))))))
+             (top-fails (seq-take sorted-fails 5))
+             (anomalies nil))
+        ;; Anomaly detection
+        (when (< keep-rate 0.1)
+          (push (format "keep-rate %.0f%% < 10%% — systemic failure suspected" (* 100 keep-rate)) anomalies))
+        (when (and (>= total 3) (= kept 0))
+          (push "zero kept experiments — all experiments failed" anomalies))
+        (when (and top-fails (>= (cdar top-fails) (/ total 2)))
+          (push (format "dominant failure: %s (%d/%d, %.0f%%)" (caar top-fails) (cdar top-fails) total
+                        (* 100.0 (/ (float (cdar top-fails)) total)))
+                anomalies))
+        ;; Log structured summary as single message
+        (message "\n═══════════════════════════════════════════════════════════\n\
+%s ║ %d experiments | %d kept (%.0f%%) | %d targets\n\
+╠══ FAILURES\n\
+%s\
+╠══ BACKENDS\n\
+%s\
+╠══ ANOMALIES\n\
+%s\
+╚═══════════════════════════════════════════════════════════"
+                (or run-id "RUN")
+                total kept (* 100 keep-rate)
+                (length (delete-dups (mapcar (lambda (r) (plist-get r :target)) results)))
+                (if top-fails
+                    (mapconcat (lambda (p) (format "║  • %s: %d×" (car p) (cdr p))) top-fails "\n")
+                  "║  (none)")
+                (if sorted-backends
+                    (mapconcat (lambda (p)
+                                 (let ((name (car p))
+                                       (t0 (nth 0 (cdr p)))
+                                       (k0 (nth 1 (cdr p))))
+                                   (format "║  • %s: %d exp, %d kept (%.0f%%)" name t0 k0
+                                           (if (> t0 0) (* 100.0 (/ (float k0) t0)) 0.0))))
+                               sorted-backends "\n")
+                  "║  (no backend data)")
+                (if anomalies
+                    (mapconcat (lambda (a) (format "║  ⚠ %s" a)) anomalies "\n")
+                  "║  (none detected)"))))))
+
 (defun gptel-auto-experiment--get-category-failure-reasons (category &optional n)
   "Aggregate failure reasons from ALL targets in CATEGORY.
 Returns alist of (REASON . COUNT) for the N most common, or nil."

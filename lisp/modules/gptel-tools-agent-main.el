@@ -898,9 +898,11 @@ into staging or main."
                      gptel-auto-workflow--current-project nil)
                (setq gptel-auto-workflow--stats
                      (plist-put gptel-auto-workflow--stats :phase final-phase))
-               (message "[auto-workflow] Complete: %d experiments, %d targets improved"
-                        (length all-results) kept-count)
-               (gptel-auto-workflow--persist-status)
+                (message "[auto-workflow] Complete: %d experiments, %d targets improved"
+                         (length all-results) kept-count)
+                (when (fboundp 'gptel-auto-experiment--log-run-summary)
+                  (gptel-auto-experiment--log-run-summary all-results run-id))
+                (gptel-auto-workflow--persist-status)
                (when completion-callback
                  (funcall completion-callback all-results)))))))
     ;; Set project context for subagent routing
