@@ -266,6 +266,7 @@ These targets may need different research patterns or the research findings were
 
 
 
+<<<<<<< Updated upstream
 
 
 
@@ -478,11 +479,60 @@ These targets may need different research patterns or the research findings were
 
 
 
+=======
+>>>>>>> Stashed changes
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-nil
+# Research Strategy
+
+**Strategy Type:** template-default
+
+**Experiments:** 24 total across 6 targets
+
+**Target Files:**
+- `lisp/modules/gptel-tools-agent-benchmark.el`
+- `lisp/modules/gptel-benchmark-subagent.el`
+- `lisp/modules/gptel-tools-agent-error.el`
+- `lisp/modules/gptel-tools-agent-prompt-build.el`
+- `lisp/modules/gptel-auto-workflow-strategic.el`
+- `lisp/modules/gptel-auto-workflow-projects.el`
+
+**Kept Hypotheses:** —
+
+**Discarded Hypotheses:** —
 ```
 
+### Check Issues
+
+# Research Strategy Check
+
+Your strategy configuration looks structurally sound. Here are a few observations:
+
+## Configuration Summary
+| Field | Value |
+|-------|-------|
+| Strategy Type | `template-default` |
+| Total Experiments | 24 |
+| Targets | 6 files |
+| Hypotheses | None tracked yet |
+
+## Questions/Considerations
+
+1. **Hypotheses Tracking** — Both "Kept" and "Discarded" are empty. Should these be populated as experiments run?
+
+2. **Experiment Distribution** — 24 experiments across 6 targets = 4 experiments each on average. Is this allocation intentional, or do some targets need more focus?
+
+3. **Target Files** — All are in `lisp/modules/`. Are these all related benchmarks/tools, or should they be grouped differently?
+
+4. **Strategy Type** — `template-default` suggests a standard approach. Do you need a custom strategy for these benchmarks?
+
+---
+
+**What specifically would you like me to check?**
+- File structure/existence?
+- Experiment definitions?
+- Hypothesis tracking?
+- Something else?
