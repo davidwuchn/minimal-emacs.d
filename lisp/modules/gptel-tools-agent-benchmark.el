@@ -1084,5 +1084,139 @@ is reduced because well-written code is harder to improve measurably."
             :note (and (string= winner "tie")
                        "Kept: score improved despite combined tie"))))))
 
+;; ─── Think-Block Intelligence ───
+
+(require 'subr-x)  ; for string-trim
+
+(defun gptel-auto-experiment--extract-think-blocks (output)
+  "Extract all <think>...</think> blocks from OUTPUT.
+Returns list of strings, each a single think block's content."
+  (when (stringp output)
+    (let ((result nil)
+          (start 0))
+      (while (string-match "<think>" output start)
+        (let ((block-start (match-end 0))
+              (block-end (when (string-match "</think>" output (match-end 0))
+                           (match-beginning 0))))
+          (when block-end
+            (push (string-trim (substring output block-start block-end)) result)
+            (setq start (match-end 0)))
+          (unless block-end
+            (push (string-trim (substring output block-start)) result)
+            (setq start (length output)))))
+      (nreverse result))))
+
+(defun gptel-auto-experiment--classify-think-blocks (blocks)
+  "Classify each think BLOCK into a reasoning category.
+Returns plist: (:categories LIST :dominant SYMBOL :score FLOAT :verdict STRING)."
+  (let ((categories nil)
+        (scores nil)
+        (patterns
+         '(;; Category: planning — agent is strategizing
+           (planning . ("let me plan" "i need to" "first.*then" "step[s]?"
+                        "approach" "strategy" "before.*implement"
+                        "create a plan" "what.*need to do"))
+           ;; Category: exploring — agent is reading/investigating
+           (exploring . ("let me (read|look|check|find|search|see|examine|understand)"
+                         "let.s (read|look|check|find|search|see|examine|understand)"
+                         "i don.t see" "what does" "how does"
+                         "let me.*open" "let me.*file"
+                         "reading.*file" "to understand"))
+           ;; Category: acting — agent is making changes
+           (acting . ("i.ll (edit|write|change|modify|fix|add|remove|replace|update|refactor)"
+                      "let me.*(edit|write|change|modify|fix|add)"
+                      "making.*change" "apply.*patch"
+                      "i.(ve| have) (made|changed|fixed|added)"))
+           ;; Category: verifying — agent is testing
+           (verifying . ("byte.compile" "check.parens" "run.*(test|verify)"
+                         "syntax.*(check|ok)" "compile.*(pass|fail|error)"
+                         "verify.*(works|pass)" "tests.*pass"))
+           ;; Category: confused — agent doesn't know what to do
+           (confused . ("i.m not sure" "i don.t (know|understand)" "this is (unclear|confusing)"
+                        "what (should|am i)" "need more (context|information)"
+                        "i think.*but" "not sure what"))
+           ;; Category: self-correcting — agent realizes mistake
+           (self-correcting . ("actually" "wait" "on second thought" "let me (rethink|reconsider|redo)"
+                               "that.s wrong" "i made a mistake" "that didn.t work"
+                               "let me try (again|differently)")))))
+    (dolist (block blocks)
+      (let ((lower (downcase block))
+            (best-category 'exploring)
+            (best-score 0))
+        (dolist (entry patterns)
+          (let ((cat (car entry))
+                (kws (cdr entry)))
+            (dolist (kw kws)
+              (when (string-match-p kw lower)
+                (let ((hits (length (split-string lower kw t))))
+                  (when (> (1- hits) best-score)
+                    (setq best-category cat
+                          best-score (1- hits))))))))
+        (push best-category categories)
+        (push best-score scores)))
+    (let* ((counts (make-hash-table))
+           (total-score 0))
+      (dolist (cat categories)
+        (puthash cat (1+ (gethash cat counts 0)) counts))
+      (dolist (s scores)
+        (setq total-score (+ total-score s)))
+      (let* ((dominant
+              (let ((best (car categories))
+                    (best-n 0))
+                (maphash (lambda (cat n) (when (> n best-n) (setq best cat best-n n))) counts)
+                best))
+             (act-count (or (gethash 'acting counts) 0))
+             (explore-count (or (gethash 'exploring counts) 0))
+             (confused-count (or (gethash 'confused counts) 0))
+             (plan-count (or (gethash 'planning counts) 0))
+             (n-blocks (length blocks))
+             (reasoning-score
+              ;; Higher score = more likely to succeed
+              (/ (+ (* act-count 3.0)   ; acting is best
+                    (* (- n-blocks plan-count explore-count confused-count) 1.0)
+                    ;; Penalize no action
+                    (if (and (> n-blocks 3) (= act-count 0)) -3.0 0.0)
+                    ;; Penalize confusion
+                    (* confused-count -2.0))
+                 (max n-blocks 1)))
+             (verdict
+              (cond
+               ((= act-count 0)
+                (cond
+                 ((> confused-count 2) "STUCK-CONFUSED: agent does not understand task")
+                 ((> explore-count 2) "STUCK-EXPLORING: agent reads but never edits")
+                 ((> plan-count 2) "STUCK-PLANNING: agent plans but never acts")
+                 (t "STUCK-NO-ACTION: agent never attempted code changes")))
+               ((> act-count 2) "ACTIVE: agent made multiple edit attempts")
+               ((> act-count 0) "PROGRESS: agent made at least one edit")
+               (t "UNKNOWN"))))
+        (list :categories categories
+              :dominant dominant
+              :acts act-count
+              :explores explore-count
+              :confused confused-count
+              :plans plan-count
+              :n-blocks n-blocks
+              :score reasoning-score
+              :verdict verdict)))))
+
+(defun gptel-auto-experiment--analyze-agent-output (output)
+  "Analyze agent OUTPUT to extract think-block intelligence.
+Returns plist suitable for experiment result enrichment."
+  (let* ((blocks (gptel-auto-experiment--extract-think-blocks output))
+         (analysis (when blocks
+                     (gptel-auto-experiment--classify-think-blocks blocks))))
+    (if analysis
+        (progn
+          (message "[think-intel] %s (n=%d acts=%d explores=%d confused=%d score=%.1f)"
+                   (plist-get analysis :verdict)
+                   (plist-get analysis :n-blocks)
+                   (plist-get analysis :acts)
+                   (plist-get analysis :explores)
+                   (plist-get analysis :confused)
+                   (plist-get analysis :score))
+          analysis)
+      (list :verdict "NO-THINK" :score 0.0))))
+
 (provide 'gptel-tools-agent-benchmark)
 ;;; gptel-tools-agent-benchmark.el ends here
