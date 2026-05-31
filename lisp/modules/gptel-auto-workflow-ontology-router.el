@@ -792,12 +792,21 @@ the original fallback list — preventing mutation side effects."
 (defun gptel-auto-workflow--reset-fallback-order ()
   "Reset fallback chain to static order from executor config.
 Moonshot removed — content_filter blocks code generation.
-DashScope removed — quota exhausted on this account (HTTP 429)."
+DashScope reinstated as tertiary backend — qwen3.6-plus confirmed working
+on 2026-05-31 (was previously excluded due to transient quota issue)."
   (when (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
     (setq gptel-auto-workflow-executor-rate-limit-fallbacks
           '(("DeepSeek" . "deepseek-v4-flash")
-            ("MiniMax" . "minimax-m2.7-highspeed")))
-    (message "[onto-router] Reset to executor static fallback order (DeepSeek + MiniMax only)")))
+            ("MiniMax" . "minimax-m2.7-highspeed")
+            ("DashScope" . "qwen3.6-plus")))
+    ;; Clear any stale health strikes for DashScope from health cache
+    (when (boundp 'gptel-auto-workflow--backend-lambda-health-cache)
+      (maphash (lambda (k v)
+                 (when (and (symbolp k) (string-match-p "DashScope" (symbol-name k)))
+                   (puthash k (plist-put v :health :healthy)
+                            gptel-auto-workflow--backend-lambda-health-cache)))
+               gptel-auto-workflow--backend-lambda-health-cache))
+    (message "[onto-router] Reset to executor static fallback order (DeepSeek + MiniMax + DashScope)")))
 
 ;; ─── Semantic Similarity Target Discovery ───
 
