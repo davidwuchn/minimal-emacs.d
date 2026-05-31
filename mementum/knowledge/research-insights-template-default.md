@@ -3,7 +3,7 @@ title: Research Insights - template-default
 status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
-insight-quality: 0.5/10
+insight-quality: 0.2/10
 allium-issues: 3
 allium-severity: 0.00
 allium-status: ok
@@ -11,36 +11,35 @@ allium-status: ok
 
 # Research Strategy: template-default
 
-*Consolidated from 42 experiments (5% keep rate).*
+*Consolidated from 107 experiments (2% keep rate).*
 
-**Performance:** 2 kept / 0 discarded / 25 failed (EXTRACTED — from TSV)
+**Performance:** 2 kept / 0 discarded / 13 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
-- `lisp/modules/gptel-auto-workflow-projects.el` (2 kept / 3 failed)
+- `lisp/modules/gptel-tools-agent-prompt-build.el` (1 kept / 2 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 5 failed)
 
 ### Structure (deterministic scan)
 
 ```elisp-structure
-defuns: gptel-auto-workflow--ensure-buffer-tables, gptel-auto-workflow--normalized-projects, gptel-auto-workflow--normalize-worktree-dir, gptel-auto-workflow--buffer-tool-snapshot, gptel-auto-workflow--routed-fsm-info, gptel-auto-workflow--get-worktree-buffer, gptel-auto-workflow--get-project-buffer, gptel-auto-workflow-add-project, gptel-auto-workflow-remove-project, gptel-auto-workflow-list-projects, gptel-auto-workflow-run-all-projects, gptel-auto-workflow--finish-queued-cron-job, gptel-auto-workflow--queue-cron-job, gptel-auto-workflow-queue-all-projects, gptel-auto-workflow--get-project-for-context, gptel-auto-workflow--advice-task-override, gptel-auto-workflow-enable-per-project-subagents, gptel-auto-workflow-disable-per-project-subagents, gptel-auto-workflow--advice-task-overlay-buffer, gptel-auto-workflow--enable-overlay-buffer-advice
-defvars: gptel-auto-workflow--async, gptel-auto-workflow--process, gptel-auto-workflow--worktree-state, gptel-auto-workflow-worktree-base, gptel-auto-workflow--current-target, gptel-auto-workflow-projects, gptel-auto-workflow--project-buffers, gptel-auto-workflow--current-project, gptel-auto-workflow--run-project-root, gptel-auto-workflow--cron-job-running, gptel-auto-workflow--stats, gptel-auto-workflow--running, gptel-auto-workflow--cron-job-timer, gptel-auto-workflow--defer-subagent-env-persistence, mementum-root, gptel-auto-workflow--project-root-override), gptel-auto-workflow--research-findings-cache, gptel-auto-workflow--worktree-buffers, gptel-auto-workflow--normalized-projects-cache, gptel-auto-workflow--normalized-projects-hash
-requires: cl-lib, gptel-tools-agent
-provides: gptel-auto-workflow-projects
-declares: gptel-auto-workflow--project-root, gptel-auto-workflow--get-worktree-dir, gptel-auto-workflow--mark-messages-start, gptel-auto-workflow--persist-status, gptel-auto-workflow-cron-safe, gptel-auto-workflow-run-async--guarded, gptel-auto-workflow-run-research, gptel-fsm-info, gptel-mementum-weekly-job, gptel-benchmark-instincts-weekly-job, gptel-auto-workflow--run-autotts-evolution, gptel-auto-workflow--reorder-fallbacks-by-ontology, gptel-auto-workflow--run-research-champion-league, gptel-auto-workflow--run-strategy-evolution
-errors: error, error, error, error, error, error, error, user-error, error, error, error, error, error, signal
-handlers: err, err, err, err, nil, nil, err, err, nil, nil, err, err, err, err, err, err, err
-advised: gptel-agent--task, gptel-agent--task-overlay
+defuns: gptel-auto-workflow--knowledge-cache-get, gptel-auto-workflow--knowledge-cache-set, gptel-auto-workflow--knowledge-cache-invalidate, gptel-auto-workflow--knowledge-cache-stats, gptel-auto-workflow--load-token-efficiency-data, gptel-auto-workflow--adapt-prompt-compression, gptel-auto-experiment--prompt-structure-score, gptel-auto-experiment--kibcm-axis, gptel-auto-experiment--forge-fixed-point, gptel-auto-experiment--compile-score, gptel-auto-experiment--decompile-score, gptel-auto-experiment--nucleus-compiler-prompt, gptel-auto-experiment--forge-lambda-fixed-point, gptel-auto-experiment--edn-richness-score, gptel-auto-experiment--count-edn-elements, gptel-auto-experiment--use-lambda-prompts-p, gptel-auto-experiment--lambda-compress-prompt, gptel-auto-experiment--resolve-prompt, gptel-auto-experiment--allium-compiler-prompt, gptel-auto-experiment--allium-distill
+defvars: gptel-auto-workflow--skills), gptel-auto-experiment-large-target-byte-threshold), gptel-auto-workflow--last-prompt-sections), gptel-auto-workflow--current-research-context), gptel-auto-experiment-time-budget), gptel-auto-workflow-use-staging), gptel-auto-workflow--running), gptel-auto-workflow--stats), gptel-auto-experiment-validation-retry-active-grace), gptel-auto-workflow--legacy-validation-retry-active-grace), gptel-auto-workflow--current-validation-retry-active-grace), my/gptel-subagent-stream), gptel-auto-workflow--knowledge-cache, gptel-auto-workflow--knowledge-cache-max-age, gptel-auto-workflow--topic-knowledge-max-chars, gptel-auto-experiment--lambda-verified-backends, gptel-auto-experiment--allium-research-cache, gptel-auto-workflow--ab-test-sections, gptel-auto-workflow--ab-test-omit-rate, gptel-auto-workflow--ab-test-min-samples
+requires: cl-lib, seq, subr-x
+provides: gptel-tools-agent-prompt-build
+declares: gptel-agent-read-file, gptel-auto-workflow--valid-strategy-name-p, gptel-auto-workflow-load-research-findings, gptel-benchmark--detect-task-type, my/gptel-get-model-metadata, gptel-auto-workflow--current-run-id, gptel-auto-workflow--ensure-results-file, gptel-auto-workflow--make-idempotent-callback, gptel-auto-workflow--non-empty-string-p, gptel-auto-workflow--plist-get, gptel-auto-workflow--results-file-path, gptel-auto-workflow--worktree-base-root, gptel-auto-experiment--eight-keys-scores, gptel-auto-workflow--project-root, gptel-auto-workflow--persist-status, my/gptel--sanitize-for-logging, gptel-auto-workflow--extract-mutation-templates, gptel-auto-workflow--format-weakest-keys, gptel-auto-workflow-skill-suggest-hypothesis, gptel-auto-experiment--inspection-thrash-result-p
+errors: Error, error, error, error, error, Error, signal, error, signal, error, error, error, error, error
+handlers: nil, nil, err, ...), err, err, err, err, err, nil
 ```
 
 ## Targets with Validation Failures
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-auto-workflow-projects.el` (2 kept / 3 failed)
-- `lisp/modules/gptel-benchmark-subagent.el` (3 failed)
-- `lisp/modules/gptel-tools-agent-error.el` (3 failed)
-- `lisp/modules/gptel-tools-agent-prompt-build.el` (3 failed)
-- `lisp/modules/gptel-auto-workflow-strategic.el` (3 failed)
+- `lisp/modules/gptel-auto-workflow-strategic.el` (5 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 5 failed)
+- `lisp/modules/gptel-tools-agent-error.el` (1 failed)
+- `lisp/modules/gptel-tools-agent-prompt-build.el` (1 kept / 2 failed)
 
 ## Allium Behavioral Coherence
 
@@ -61,125 +60,68 @@ These targets may need different research patterns or the research findings were
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy Distillation
+## Distilled Research Strategy
 
-## Overview
-- **Template**: template-default
-- **Scope**: 65 experiments across 10 targets
+**Template:** template-default
 
-## Key Hypotheses (Kept)
+**Scope:** 107 experiments across 11 targets
 
-1. **Cache Validation** — Replace `eq` with `equal` for project list comparison; check cache before `ensure-buffer-tables`. Improves Vitality (adapts to usage) and Clarity (explicit content-based invalidation).
+**Targets:**
+- `lisp/modules/gptel-ext-tool-permits.el`
+- `staging-review`
+- `lisp/modules/gptel-benchmark-analysis.el`
+- `test`
+- `lisp/modules/gptel-benchmark-subagent.el`
+- `lisp/modules/gptel-tools-agent-error.el`
+- `lisp/modules/gptel-benchmark-comparator.el`
+- `lisp/modules/gptel-tools-agent-prompt-build.el`
+- `lisp/modules/gptel-auto-workflow-strategic.el`
+- `lisp/modules/gptel-auto-workflow-projects.el`
 
-2. **Buffer Lookup Extraction** — Extract buffer lookup into clear validation sequence with explicit nil guards. Improves Clarity (visible assumptions) and Vitality (graceful FSM handling).
+**Hypotheses:** None stated
 
-3. **Adaptive Error Recovery** — Add `ignore-errors` around `file-attributes` and early guard for empty projects. Improves Vitality (edge case handling) and Clarity (explicit validity assumptions).
+**Observations:**
+- Potential improvement target: `gptel-auto-workflow-list-project-buffers`
 
-4. **Mode-Line Simplification** — Replace `format-mode-line` with direct `mode-name` access; use `when` vs `if`. Improves Clarity (reduces complexity).
-
-5. **Benchmark Crash Prevention** — Filter `not-applicable` entries before sorting in `gptel-benchmark-eight-keys-weakest`. Improves both Clarity (explicit filtering) and Vitality (fixes latent bug).
-
-## Additional Changes
-
-- Idempotency guard for re-adding advice + symmetric disable function
-- Bug fix: misleading message + directory existence validation
-
-## Discarded
-
-- (None explicitly listed in provided text)
+**Discarded:** —
 ```
 
 ### Check Issues
 
-# Review: Research Strategy Distillation
+# Research Strategy Review
 
-## Overall Assessment
+## ✅ Structure Valid
 
-**Rating: 7/10** — Solid foundational document with good structure, but several areas need clarification.
+The template is well-formatted with clear sections.
 
----
+## ⚠️ Potential Issues
 
-## Strengths
+| Section | Issue |
+|---------|-------|
+| **Hypotheses** | Empty — unclear what you're actually testing |
+| **Discarded** | Empty — unclear what was ruled out |
+| **Scope** | "107 experiments" seems high for 11 targets — is this realistic? |
+| **Observations** | Lists `gptel-auto-workflow-list-project-buffers` but not why |
 
-| Aspect | Notes |
-|--------|-------|
-| **Structure** | Clean separation of kept/discarded changes |
-| **Scope definition** | Explicit experiment count (65) and target count (10) |
-| **Hypothesis format** | Each has clear "Improves X and Y" rationale |
-| **Categorization** | Distinguishes key hypotheses from additional changes |
+## 🔍 Questions
 
----
+1. What's the experimental goal? (e.g., performance, accuracy, error reduction?)
+2. How do you plan to run 107 experiments?
+3. Why are `staging-review` and `test` listed as targets alongside `.el` files?
+4. What metric defines "success" for these experiments?
 
-## Issues & Questions
+## Recommendation
 
-### 1. Missing Context
-- What are the **targets** being experimented on?
-- What does "template-default" mean in this context?
-
-### 2. Vague Descriptions
-- **Hypothesis 4** ("Mode-Line Simplification"): `format-mode-line` vs direct access is a performance vs correctness tradeoff—clarify which problem this solves
-- **Additional Changes**: "Bug fix: misleading message" — what was the message?
-
-### 3. Inconsistent Formatting
-- "Kept" uses numbered list; "Additional Changes" uses bullet points
-- "Discarded" section is empty but still present
-
-### 4. Missing Validation Criteria
-- How will you measure if these hypotheses hold?
-- No success metrics defined
+Add:
+- At least one **hypothesis** per target
+- A **timeline** or resource estimate for 107 experiments
+- **Discarded items** to show the search space was narrowed intentionally
 
 ---
 
-## Recommendations
-
-1. **Add experiment mapping** — Which hypotheses map to which targets/experiments?
-2. **Define "distillation" criteria** — What determined kept vs discarded?
-3. **Add risk assessment** — What's the impact if a hypothesis fails?
-4. **Complete the Discarded section** — Either remove it or add N/A
-
-... (truncated)
+Want me to help flesh out any of these sections?
