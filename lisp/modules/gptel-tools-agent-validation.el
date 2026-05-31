@@ -341,11 +341,9 @@ Returns nil if valid, or error message string if invalid."
                    (undefined-call
                     (gptel-auto-experiment--introduced-undefined-call
                      diff parsed-forms))
-                   ;; Quick byte-compile check — catches errors that syntax-only check misses
-                   (byte-compile-ok (zerop (call-process "emacs" nil nil nil
-                                                         "--batch" "-Q"
-                                                         "-f" "batch-byte-compile"
-                                                         file))))
+                   ;; Quick byte-compile check — uses project load-path so
+                   ;; require dependencies resolve (not emacs -Q which strips paths)
+                   (byte-compile-ok (zerop (call-process "scripts/byte-compile-check.sh" nil nil nil file))))
               (or
                (when (gptel-auto-experiment--invalid-cl-return-target-in-forms
                       parsed-forms)
