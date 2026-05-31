@@ -493,9 +493,10 @@ Native-comp deferred compilation leaks `subsystem' as a free variable
 in byte-compiled closure chains (advice lambdas, timer callbacks).
 Without this defvar, cascading 'Error running timer' failures occur.")
 
-(defvar cat-triggers nil
+(defvar cat-triggers (make-hash-table :test 'equal)
   "Top-level sentinel for native-comp closure capture on arm64 Emacs 30.1.
-Prevents void-variable in concrete-task-evolve and related evolution steps.")
+Prevents void-variable in concrete-task-evolve and related evolution steps.
+Initialized as hash-table to prevent (wrong-type-argument hash-table-p nil).")
 
 (defconst gptel-ai-behaviors--subsystem-map
   '((researcher
