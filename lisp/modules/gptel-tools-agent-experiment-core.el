@@ -216,6 +216,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
           (executor-prompt nil)
           (executor-callback nil)
           (validation-retry-active nil)
+          (grader-retry-active nil)
           (experiment-backend nil)
           (experiment-model nil))
     (if (not worktree)
@@ -566,39 +567,70 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                   (grader-only-failure
                                                    (and (not normal-grade-rejection)
                                                         (plist-get grade :grader-only-failure))))
-                                             (setq finished t)
-                                             ;; Log the failure
-                                             (let ((exp-result (list :target target
-                                                                     :id experiment-id
-                                                                     :hypothesis hypothesis
-                                                                     :score-before baseline
-                                                                     :score-after 0
-                                                                     :kept nil
-                                                                     :duration (- (float-time) start-time)
-                                                                     :grader-quality grade-score
-                                                                     :grader-reason grade-details
-                                                                     :comparator-reason
-                                                                     (cond
-                                                                      (normal-grade-rejection
-                                                                       "grader-rejected")
-                                                                      (grader-only-failure
-                                                                       (gptel-auto-experiment--grader-only-error-label
-                                                                        error-category))
-                                                                      (t
-                                                                       (symbol-name (or error-category :unknown))))
-                                                                      :analyzer-patterns (format "%s" patterns)
-                                                                      :agent-output effective-agent-output
-                                                                      :backend actual-backend
-                          :model actual-model)))
-                                               (when grade-error-output
-                                                 (setq exp-result
-                                                       (plist-put exp-result :error grade-error-output)))
-                                               (when grader-only-failure
-                                                 (setq exp-result
-                                                       (plist-put exp-result :grader-only-failure t)))
-                                               (funcall log-fn
-                                                        run-id exp-result)
-                                               (funcall callback exp-result)))
+                                              (setq finished t)
+                                              ;; Grader rejection retry: specific feedback → one fix shot
+                                              (if (and normal-grade-rejection
+                                                       (not grader-retry-active)
+                                                       (not pre-existing-breakage)
+                                                       (stringp grade-details)
+                                                       (> (length grade-details) 60))
+                                                  (let ((default-directory experiment-worktree))
+                                                    (message "[auto-exp] 🔄 Grader rejection retry: %s"
+                                                             (my/gptel--sanitize-for-logging grade-details 200))
+                                                    (setq grader-retry-active t finished nil)
+                                                    (gptel-auto-experiment--prepare-validation-retry-worktree
+                                                     target provisional-commit-hash)
+                                                    (setq provisional-commit-hash nil)
+                                                    (let* ((_gptel-auto-experiment-active-grace
+                                                            gptel-auto-experiment-validation-retry-active-grace)
+                                                           (retry-prompt
+                                                            (concat executor-prompt
+                                                                    "\n\n## PREVIOUS ATTEMPT REJECTED BY GRADER\n"
+                                                                    "Grader feedback: " grade-details "\n\n"
+                                                                    "λ fix(specific) > re-read(all) | ¬thrash\n"
+                                                                    "Address each FAIL criterion.\n")))
+                                                      (my/gptel--run-agent-tool-with-timeout
+                                                       gptel-auto-experiment-retry-time-budget
+                                                       (lambda (retry-output)
+                                                         (if (and (stringp retry-output)
+                                                                  (string-match-p "\\`Error:" retry-output))
+                                                             (progn
+                                                               (setq finished t)
+                                                               (message "[auto-exp] ✗ Grader retry failed")
+                                                               (funcall log-fn run-id exp-result)
+                                                               (funcall callback exp-result))
+                                                           (funcall executor-callback retry-output)))
+                                                       "executor" "Grader rejection retry"
+                                                       retry-prompt nil nil nil
+                                                       gptel-auto-experiment-validation-retry-active-grace)))
+                                                ;; Non-teachable: fail normally
+                                                (let ((exp-result (list :target target
+                                                                        :id experiment-id
+                                                                        :hypothesis hypothesis
+                                                                        :score-before baseline
+                                                                        :score-after 0
+                                                                        :kept nil
+                                                                        :duration (- (float-time) start-time)
+                                                                        :grader-quality grade-score
+                                                                        :grader-reason grade-details
+                                                                        :comparator-reason
+                                                                        (cond
+                                                                         (normal-grade-rejection "grader-rejected")
+                                                                         (grader-only-failure
+                                                                          (gptel-auto-experiment--grader-only-error-label error-category))
+                                                                         (t (symbol-name (or error-category :unknown))))
+                                                                        :analyzer-patterns (format "%s" patterns)
+                                                                        :agent-output effective-agent-output
+                                                                        :backend actual-backend
+                           :model actual-model)))
+                                                  (when grade-error-output
+                                                    (setq exp-result
+                                                          (plist-put exp-result :error grade-error-output)))
+                                                  (when grader-only-failure
+                                                    (setq exp-result
+                                                          (plist-put exp-result :grader-only-failure t)))
+                                                  (funcall log-fn run-id exp-result)
+                                                  (funcall callback exp-result))))
                                          ;; Grader passed - create a provisional commit so the
                                          ;; benchmark/scope logic can diff against HEAD~1.
                                          (let ((default-directory experiment-worktree))
