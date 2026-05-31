@@ -1649,6 +1649,40 @@ Output: {:findings [_] :techniques [_] :apply_to_us [_] :verification _ :confide
                 (when (string-match-p "concise\\|subtract" b) (setq s (concat s " μ")))
                 (when (string-match-p "first-principles" b) (setq s (concat s " τ")))
                 (when (> (length s) 0) (substring s 1)))))  ; strip leading space
+           ;; Adaptive persona state machine (nucleus ADAPTIVE.md pattern)
+           ;; The LLM self-transitions between operations based on task signals.
+           ;; Operation × Mindset → Archetype drives the cognitive mode.
+           (persona-state-machine
+            (concat
+             "\n;; ═══ Adaptive Persona — auto-transitions on task signal ═══\n"
+             "state :thinking  ;; default — read, plan, assess\n"
+             "  → :coding       when code_needed (task is clear)\n"
+             "  → :debugging    when error_encountered\n"
+             "  → :documenting  when explanation_needed\n\n"
+             "state :coding\n"
+             "  → :thinking     when design_gap (need to reconsider)\n"
+             "  → :debugging    when error_encountered\n"
+             "  → :documenting  when implementation_complete\n\n"
+             "state :debugging\n"
+             "  → :coding       when root_cause_found\n"
+             "  → :thinking     when cause_unclear\n"
+             "  → :documenting  when resolved\n\n"
+             "state :documenting\n"
+             "  → :thinking     when gap_discovered\n"
+             "  → :coding       when implementation_needed\n\n"
+             ;; Mindset — parallel track, modulates the operation
+             "mindset :analyse  ;; default — thorough understanding\n"
+             "  → :tactize      when cause_found | time_constrained\n"
+             "  → :balanced     when pressure_resolved\n"
+             "  → :innovate     when greenfield (new territory)\n\n"
+             "λ archetype(op, mind).\n"
+             "  (coding, tactize)      → " (or (and (= agent-type "executor") archetype) "Craftsman") "\n"
+             "  (debugging, analyse)   → Investigator\n"
+             "  (thinking, analyse)    → Logician\n"
+             "  (coding, innovate)     → Synthesizer\n"
+             "  (documenting, *)       → Academic\n"
+             "  (thinking, strategize) → Visionary\n"
+             "  (*, balanced)          → Facilitator\n"))
            (persona-text (concat (if quality-symbols
                                      (replace-regexp-in-string
                                       "\\(\\[\\(?:[^]]+\\|\]\\)*\\)\\]"
@@ -1656,6 +1690,7 @@ Output: {:findings [_] :techniques [_] :apply_to_us [_] :verification _ :confide
                                       base-persona)
                                    base-persona)
                                   (or behavior-mod "")
+                                  persona-state-machine
                                   "\n\n---\n\n")))
       ;; Record selected archetype for experiment logging
       (when (boundp 'gptel-ai-behaviors--current-archetype)
