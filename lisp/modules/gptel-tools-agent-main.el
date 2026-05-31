@@ -471,6 +471,8 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
     (load-file (expand-file-name "lisp/modules/gptel-benchmark-subagent.el" root))
     (load-file (expand-file-name "lisp/modules/nucleus-prompts.el" root))
     (load-file (expand-file-name "lisp/modules/nucleus-presets.el" root))
+    ;; Ensure gptel-agent--task has FSM position guard for analyzer dispatch
+    (load-file (expand-file-name "packages/gptel-agent/gptel-agent-tools.el" root))
     (condition-case err (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root)) (error (message "[reload] strategic.el skipped (load error: %s)" (error-message-string err))))
     ;; Populate targets if empty (daemon mode doesn't load .dir-locals.el)
     ;; NOTE: defcustom in gptel-tools-agent-subagent.el resets the global
