@@ -1442,9 +1442,9 @@ PROMPT is the detailed prompt instructing the agent on what is required."
               ;; the shared agent config in gptel-agent--agents on first call.
               (copy-sequence
                (cdr (assoc agent-type gptel-agent--agents))))
-    (let* ((info (gptel-fsm-info gptel--fsm-last))
-           (pos (or (plist-get info :tracking-marker)
-                    (plist-get info :position)))
+    (let* ((info (when gptel--fsm-last (gptel-fsm-info gptel--fsm-last)))
+           (pos (or (and info (plist-get info :tracking-marker))
+                     (and info (plist-get info :position))))
            (where (if (number-or-marker-p pos) pos (point-min)))
            (partial (format "%s result for task: %s\n\n"
                             (capitalize agent-type) description)))
