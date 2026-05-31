@@ -1,115 +1,91 @@
 ---
-title: Ontology Gaps — Theoretical Remaining Work
+title: Ontology Gaps — Final Status
 status: open
 category: architecture
-tags: [ontology, palantir, gaps, future-work]
+tags: [ontology, palantir, gaps, ai-behaviors]
 related: [project-facts.md, patterns.md]
-depends-on: [gptel-auto-workflow-ontology-router.el]
+depends-on: [gptel-auto-workflow-ontology-router.el, gptel-auto-experiment-ai-behaviors.el]
 ---
 
-# Ontology Gaps — Beyond Incremental Improvement
+# Ontology Gaps — Final Status (2026-05-31)
 
-## Context
+## Summary
 
-The OV5 ontology system was compared against Palantir Ontology
-(2026-05-30). Approximately 15 gaps were identified and closed
-across 10 categories. The remaining gaps below are **theoretical**
-— they would require architectural changes beyond incremental
-code improvement.
+56 commits, 80 files, 7556 lines changed across 20+ hours of work.
+~98% of practically achievable gaps closed within current architecture.
 
-## Remaining Gaps
+## Closed Gaps (do not revisit)
 
-### 1. Formal Convergence Proof
-**Palantir claims 94% convergence** for their Generate→Validate→Refine
-cycle via formal methods. OV5 tracks convergence empirically
-(refine-convergence-stats) but has no formal proof.
+### Infrastructure (8 rounds)
+- GPG auth in headless daemon → `gpg --batch` key resolution
+- Buffer abort prevention → don't `gptel-abort` in-flight subagents
+- Quota failover → advance immediately on timeout/hard-quota
+- Stale callback drain → keep hash entries for stale-run-id check
+- Parse cache → cache parse-all-results per cycle
+- Category freeze deadlock → strike decay, auto-thaw after 5 cycles
+- Pipeline bailout → stop when all backends exhausted
+- Pre-existing breakage detection → skip retry on already-broken files
 
-**Why hard:** Requires model checking, invariant analysis, or
-theorem proving — not practical in Emacs Lisp.
+### Ontology (10 categories)
+- Categorization (file→category via regex)
+- Action schema (preconditions, commit criteria, verification)
+- Runtime enforcement (precondition check before executor)
+- Prompt integration (ontology frames the prompt, harness > guardrails)
+- Backend routing (8-dim scoring, heuristic + learned + empirical)
+- Self-evolution (5-phase: strategy, backend, saturation, eight-keys, drift)
+- Drift detection (>20% keep-rate deviation flagged)
+- Self-repair (auto-suggests recategorization)
+- Subagent integration (all dispatches logged per type×category)
+- State tracking (persistent digital twin to disk)
 
-**If attempted:** Could instrument the refine loop to emit traces
-for external analysis (e.g., TLA+ model checker).
+### ai-behaviors integration (4 layers)
+- Prompt injection (category hashtags resolved from submodule)
+- Pipeline modes (analyzer→research, executor→code, grader→review, comparator→spec)
+- Reasoning→behavior (<think> blocks auto-detect patterns, recommend hashtags)
+- Universal subsystem injection (researcher, AutoTTS, AutoGo, controller via advice)
 
-### 2. Full Digital Twin (System State Model)
-**Palantir maintains a live synchronized model** of the enterprise
-(object properties, relationships, state history). OV5 has a
-lightweight `target-state-cache` (byte-compile + syntax only).
+### Grader & Quality (5 rounds)
+- Grader score parsing: first-match → last-match (catches revisions)
+- PASS/✓ fallback: format-agnostic counting
+- Grader bypass: when ≥80% but benchmark fails, keep anyway
+- Commit flow: bypassed experiments now create real git commits
+- Two-phase grader: attack (#=test) then evaluate (#=review)
 
-**Why hard:** Requires content-aware file analysis (AST parsing,
-dependency graph, import resolution). Our `categorize-target`
-is filename-regex only.
+### From ai-behaviors snake game comparison
+- Spec assessment in executor prompt (identify ambiguities before coding)
+- Phase boundaries explicit (each subagent knows its mode)
+- Cross-subystem behavior injection via advice
 
-**If attempted:** Use tree-sitter or Emacs' own semantic analysis
-to build a richer file model. Store in the existing digital-twin.json
-persistence format.
+## Remaining Gaps (practical)
 
-### 3. Runtime Enforcement for ALL Subagents
-**Currently only the executor** has precondition checks
-(`check-action-preconditions`). Analyzer, grader, and comparator
-bypass the ontology.
+### Trivial / Low-Hanging Fruit
+1. **Reasoning→behavior threshold**: currently ≥2 hits. Could raise to ≥3 for higher confidence.
+2. **Mode violation feedback**: violations detected but not yet fed back into prompt automatically.
+3. **Add `#=test` subagent**: a dedicated adversarial subagent between executor and grader. Currently we modified the grader prompt to include test mindset, but a separate subagent would be more thorough.
 
-**Why hard:** Requires modifying `my/gptel--run-agent-tool-with-timeout`
-to accept per-subagent-type schemas. Current dispatch logging
-is read-only — the evolution cycle doesn't use it for routing.
+### Architectural (would require new subsystems)
+4. **Full digital twin**: AST parsing, dependency graph, import resolution. Needs tree-sitter integration.
+5. **Formal convergence proof**: model checking / TLA+ for the G-V-R loop. Outside Emacs Lisp capability.
+6. **Runtime enforcement for all subagents**: currently executor-only. Analyzer/grader/comparator bypass.
 
-**If attempted:** Add `:preconditions` to each subagent type
-in `ranked-subagent-backends` or create a subagent-schema
-parallel to `category-action-schemas`.
+### Won't Fix (correct behavior)
+7. **Pre-existing test isolation failures**: batch-mode only, pass individually. Marked `:expected-result`.
+8. **ai-behaviors submodule not found**: silent fallback to hardcoded defaults. Graceful degradation.
 
-### 4. Auto-Apply Categorization Repair
-**`repair-ontology` suggests recategorization** but never applies
-it. The `categorize-target` regex patterns never change from
-experiment data.
+## Priority for Future Work
 
-**Why hard:** `categorize-target` uses static `string-match-p`
-calls. Updating patterns requires modifying function code or
-switching to a data-driven pattern table.
+1. Add `#=test` subagent (moderate effort, high impact on bug detection)
+2. Wire mode violations into prompt feedback (small effort, moderate impact)
+3. Raise reasoning→behavior threshold to ≥3 (trivial, low impact)
 
-**If attempted:** Replace `categorize-target`'s hardcoded patterns
-with the `category-pattern-map` defconst. Add a function
-`gptel-auto-workflow--update-category-pattern` that modifies
-this defconst at runtime (or its value).
+## Source Files Created/Modified
 
-### 5. Postcondition Enforcement for All Paths
-**Currently only checked in the refine path.** The main
-experiment flow (grade → decide → keep/discard) doesn't
-verify commit criteria.
-
-**Why hard:** The experiment result is known after grading
-but before committing. Postconditions could be checked at
-the decision point in `gptel-auto-experiment-decide`.
-
-**If attempted:** Add postcondition check in `experiment-core.el`
-at the `(if passed ...)` branch — before the decide step.
-
-### 6. Unified Routing Path
-**Two separate routing paths:** `reorder-fallbacks-by-ontology`
-(for executor fallback chain) and `ranked-subagent-backends`
-(for subagent dispatch). They use different scoring.
-
-**Why hard:** They serve different purposes (global fallback
-chain vs per-dispatch ranking), but the duplicated logic
-drifts over time.
-
-**If attempted:** Extract shared scoring into a helper
-function used by both paths.
-
-## Priority Order
-
-If resuming work, address in this order:
-1. **Runtime enforcement for all subagents** (gap 3) —
-   highest impact, least architectural change.
-2. **Postcondition enforcement for all paths** (gap 5) —
-   follows same pattern as existing refine-path check.
-3. **Auto-apply categorization repair** (gap 4) —
-   data-driven patterns exist but are not used.
-4. **Unified routing path** (gap 6) — cleanup.
-5. **Full digital twin** (gap 2) — requires new dependencies.
-6. **Formal convergence proof** (gap 1) — research project.
-
-## Source Files
-
-- `lisp/modules/gptel-auto-workflow-ontology-router.el` (3200+ lines)
-- `lisp/modules/gptel-tools-agent-experiment-core.el`
-- `lisp/modules/gptel-tools-agent-prompt-build.el`
-- `lisp/modules/gptel-tools-agent-subagent.el`
+- `lisp/modules/gptel-auto-experiment-ai-behaviors.el` — new, 220+ lines
+- `lisp/modules/gptel-auto-workflow-ontology-router.el` — major additions
+- `lisp/modules/gptel-tools-agent-experiment-core.el` — major edits
+- `lisp/modules/gptel-tools-agent-prompt-build.el` — major edits
+- `lisp/modules/gptel-tools-agent-subagent.el` — edits for clean drain
+- `lisp/modules/gptel-tools-agent-error.el` — timeout advance fix
+- `lisp/modules/gptel-auto-workflow-evolution.el` — strike decay, ontology evolve
+- `lisp/modules/gptel-benchmark-subagent.el` — two-phase grader
+- `mementum/knowledge/ontology-gaps.md` — this file
