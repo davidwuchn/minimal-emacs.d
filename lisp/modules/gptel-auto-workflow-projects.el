@@ -319,6 +319,8 @@ finish."
   (ignore-errors
     (call-process "gpg" nil nil nil "--batch" "--quiet" "--decrypt"
                   (expand-file-name "~/.authinfo.gpg")))
+  ;; Reset per-run quota flag so Moonshot errors don't block DeepSeek experiments
+  (setq gptel-auto-experiment--quota-exhausted nil)
   ;; Moonshot content_filter blocks code gen. Mark rate-limited so router skips it.
   (when (boundp 'gptel-auto-workflow--rate-limited-backends)
     (cl-pushnew "moonshot" gptel-auto-workflow--rate-limited-backends :test #'string=))

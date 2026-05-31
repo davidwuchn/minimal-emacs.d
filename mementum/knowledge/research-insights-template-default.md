@@ -4,20 +4,21 @@ status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
 insight-quality: 0.2/10
-allium-issues: 3
-allium-severity: 0.05
+allium-issues: 7
+allium-severity: 0.00
 allium-status: ok
 ---
 
 # Research Strategy: template-default
 
-*Consolidated from 103 experiments (2% keep rate).*
+*Consolidated from 100 experiments (2% keep rate).*
 
-**Performance:** 1 kept / 3 discarded / 21 failed (EXTRACTED — from TSV)
+**Performance:** 2 kept / 0 discarded / 13 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
-- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 2 discarded / 9 failed)
+- `lisp/modules/gptel-tools-agent-prompt-build.el` (1 kept / 2 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 5 failed)
 
 ### Structure (deterministic scan)
 
@@ -35,15 +36,14 @@ handlers: nil, nil, err, ..., ...), err, err, err, err, err, nil
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-tools-agent-prompt-build.el` (4 failed)
-- `lisp/modules/gptel-tools-agent-error.el` (2 failed)
-- `lisp/modules/gptel-benchmark-principles.el` (2 failed)
-- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 2 discarded / 9 failed)
-- `lisp/modules/treesit-agent-tools-workspace.el` (1 failed)
+- `lisp/modules/gptel-auto-workflow-strategic.el` (5 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 5 failed)
+- `lisp/modules/gptel-tools-agent-error.el` (1 failed)
+- `lisp/modules/gptel-tools-agent-prompt-build.el` (1 kept / 2 failed)
 
 ## Allium Behavioral Coherence
 
-*3 behavioral issues (severity 0.05). EXTRACTED from Allium v3 pipeline.*
+*7 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
 
 
 
@@ -68,115 +68,66 @@ These targets may need different research patterns or the research findings were
 
 
 
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*6 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.05). EXTRACTED from distill→check pipeline.*
 
 ```allium
-**Research Strategy: Template-Default Distillation**
+## Research Strategy: `template-default`
 
----
+**Scope:** 42 experiments across 8 Elisp target files in GPTel codebase
 
-**Context:** 65 experiments across targets including `staging-verification`, `staging-merge`, `staging-review`, and various Lisp modules.
+### Kept Hypotheses (2)
 
----
+1. **Marker-liveness check for `where` parameter** — Handle dead markers from killed buffers gracefully instead of passing them to original functions.
 
-**Kept Hypotheses:**
+2. **`hash-table-p` guard in `gptel-auto-workflow--research-cache-get`** — Prevent `wrong-type-argument` when research cache hash table is nil. Strategic.el already has this nil-safety pattern (line 2719-2721); this function lacks it — an inconsistency that could crash early startup or after error recovery.
 
-1. **Idempotency Guard + Symmetric Disable** — Add guard to prevent re-adding active advice; extract symmetric disable function.
-   - Targets: φ Vitality (progressive improvement), fractal Clarity (explicit assumptions, testable)
+### Discarded Hypotheses
 
-2. **Message Fix + Directory Validation** — Fix misleading message; add directory existence validation.
-   - Type: Bug fix
-
-3. **Cache Comparison Fix** — `gptel-auto-workflow--normalized-projects` uses `eq` (identity) for project list comparison, causing unnecessary invalidation. Change to `equal` (content) and check cache before `ensure-buffer-tables`.
-   - Targets: φ Vitality (adapts to usage patterns), fractal Clarity (cache invalidation is content-based, not identity-based)
-
-4. **Buffer Lookup Extraction** — Extract into clear validation sequence with explicit nil guards.
-   - Targets: Clarity (visible assumptions), Vitality (graceful FSM state handling)
-
-5. **Error Recovery + Edge Cases** — Add `ignore-errors` around `file-attributes`; add early guard for empty project lists.
-   - Targets: φ Vitality (adapts to edge cases), fractal Clarity (explicit project validity assumptions)
-
-6. **Mode-Line Simplification** — Replace `format-mode-line` with direct `mode-name` access; use `when` instead of `if`; add nil-safety guard for buffer iteration.
-   - Target: fractal Clarity (removes unnecessary complexity)
-
----
-
-**Discarded Hypotheses:**
-
-- `gptel-benchmark-eight-keys-weakest` crashes when sorting scores with `not-applicable` symbols (causes `<` comparison error). Filter `not-applicable` entries before sorting to prevent runtime error.
-  - Targets: Clarity (explicit data filtering), Vitality (latent bug discovery)
+- None
 ```
 
 ### Check Issues
 
-# Review: Research Strategy Template-Default Distillation
+# Review: Research Strategy `template-default`
 
-## Summary Assessment
+## Overall Assessment: Adequate but thin
 
-**Verdict: Incomplete / Needs Clarification**
+### ✅ Strengths
 
----
+| Aspect | Observation |
+|--------|-------------|
+| **Scope definition** | Clear file/experiment count — testable boundary |
+| **Hypothesis specificity** | Both address concrete crash scenarios, not vague "improve X" |
+| **Consistency catch** | The `hash-table-p` gap vs. Strategic.el is a solid observation |
 
-## Critical Questions
+### ⚠️ Concerns
 
-### 1. Experiment Lossage
-65 experiments → 7 hypotheses is a **97% discard rate**. What happened to the other 58?
+**1. Zero discarded hypotheses is a red flag**
+- With 42 experiments across 8 files, expecting *every* initial hypothesis to survive pre-mortem is statistically improbable
+- Possible explanations:
+  - Pre-filtering happened before this doc (should be noted)
+  - Under-exploration of failure modes
 
-| Scenario | Implication |
-|----------|-------------|
-| Merged into these 7 | Need consolidation narrative |
-| Invalid results | Need failure analysis |
-| Redundant | Need deduplication rationale |
-| Never ran | Strategy document is premature |
+**2. Narrow crash-failure focus**
+- Only catching `wrong-type-argument` and dead-marker edge cases
+- What about:
+  - Performance regressions?
+  - Data corruption (e.g., stale cache writes)?
+  - API contract violations from upstream dependencies?
 
-### 2. Hypothesis 7 (Discarded) — Actually Stronger Than Some Kept
+**3. No prioritization within the 42 experiments**
+- If scope changes, what's the drop-order?
+- No mention of which 8 files, which risks are highest
 
-```
-- crash when sorting → runtime error
-- filter before sort → surgical fix
-- addresses latent bug → high value
-```
-
-This should **not** be discarded. The `not-applicable` filtering hypothesis is more concrete and actionable than several kept hypotheses (e.g., "symmetric disable function extraction").
-
-### 3. φ Notation Inconsistency
-
-```
-Hypothesis 1: "φ Vitality"
-Hypothesis 3: "φ Vitality"
-Hypothesis 5: "φ Vitality"
-
-Hypothesis 2: No φ prefix (just "Bug fix")
-Hypothesis 4: No φ prefix
-```
-
-**What does φ denote?** If it marks priority, why skip hypotheses 2 and 4?
-
-### 4. Missing Information
-
-| Element | Status |
-|---------|--------|
-| Hypothesis prioritization | ❌ Absent |
-| Expected effort/impact | ❌ Absent |
-| Success criteria | ❌ Absent |
-| Experiment-to-hypothesis mapping | ❌ Absent |
-| Interaction dependencies | ❌ Absent |
+**4. Missing success criteria**
+- What does "handle gracefully" mean for dead markers?
+  - Return `nil`? Signal a warning? Fallback behavior?
+- Ambiguity here could cause wasted iterations
 
 ---
 
-## Hypothesis Quality Assessment
-
-| # | Hypothesis | Strength | Issue |
-|---|------------|----------|--
+**Bottom line:** The hypotheses are plausible and internally consistent. The main risk is that the *search space* (42 experiments) may be underspecified relative to the *hypothesis space* (only 2). 
 
 ... (truncated)
