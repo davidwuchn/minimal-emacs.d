@@ -2,93 +2,90 @@
 
 > **The snake that researches what to eat, executes what it learned, and feeds outcomes back into its own appetite.**
 >
-> **V5.1 update (2026-05-31):** 65+ commits, 8K+ lines — ai-behaviors integration (4 layers), ontology co-evolution, two-phase grader (#=test + #=review), digital twin dependency graph, subagent HARD CONSTRAINT enforcement, convergence invariant tracking, strike decay + auto-thaw, grader-bypass commit flow, category→hashtag learning, universal subsystem behavior injection via advice, research coordinator (AutoTTS×AutoGo×Ontology), concrete task evolution, kept pattern memory, λ-compressed behavior prompts (59% reduction), adaptive injection, DeepSeek curl timeout fix.
+> **V5.1 update (2026-05-31):** 75+ commits, 9K+ lines — ai-behaviors integration (4 layers), ontology co-evolution, two-phase grader (#=test + #=review), digital twin dependency graph, subagent HARD CONSTRAINT enforcement, convergence invariant tracking, strike decay + auto-thaw, grader-bypass commit flow, category→hashtag learning, universal subsystem behavior injection via advice, research coordinator (AutoTTS×AutoGo×Ontology), concrete task evolution, kept pattern memory, λ-compressed behavior prompts (59% reduction), adaptive injection, DeepSeek curl timeout fix, validation self-evolution (learn from → inject → avoid), grader-decides-pre-grade (60% bypass threshold), research coordinator (ontology × AutoTTS × AutoGo), token efficiency (59% behavior prompt reduction).
 
 Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) + [gptel](https://github.com/karthink/gptel). 3 pipeline runs/day (macOS: 10AM/2PM/6PM; Linux: every 4h) + hourly self-evolution + watchdog every 30min. The snake eating its own tail — every subsystem improves every other subsystem.
 
 ---
 
-## For Investors
+## For Creators
 
-**Ouroboros V5 is an autonomous R&D engine.** It replaces the manual cycle of research → prototype → test → decide with a closed-loop system that runs continuously, 24/7, at near-zero marginal cost per experiment.
+**OV5 is a self-building codebase.** You define the target files; the system generates, tests, and merges improvements autonomously. The ontology is your **design assistant** — it knows what patterns work for each file type and what mistakes to avoid.
 
-### The Problem
+### What the Ontology Does for You
 
-Every product team has the same bottleneck: **learning velocity.** The gap between "we should try this" and "we know if it works" is days or weeks of manual effort — research, coding, testing, reviewing, deploying. Most teams batch this work into sprints, which means slow iteration and high overhead per experiment.
+| What you get | How |
+|-------------|-----|
+| **Instant pattern awareness** | The ontology categorizes every file by purpose (`:programming`, `:tool-calls`, `:agentic`, `:natural-language`). Each category gets tailored optimization guidance — you don't write prompts, the ontology writes them for you. |
+| **Mistake prevention** | Validation failures are tracked per (category × error-pattern). The ontology learns which errors are common and injects anti-pattern warnings into future prompts. You fix a bug once; the system remembers for all similar files. |
+| **Behavior-preserving changes** | The ai-behaviors system (15 λ-compressed behavior prompts) enforces HARD CONSTRAINTS on every edit: no unrequested features, no over-engineering, no style-only changes. The ontology selects which behaviors activate per file category. |
+| **Kept pattern memory** | Every successful experiment stores its diff snippet per (category × hashtag). Future executors see "this worked before" examples. Your best code becomes the template for your next code. |
 
-### What OV5 Does
+### Workflow
 
-It automates the entire cycle. Market intelligence feeds an experimentation engine that generates hypotheses, tests them in isolated environments, scores them against real test suites, and merges what improves the product — all without human intervention. One command starts the loop; the loop sustains itself.
+```
+1. Define targets in .dir-locals.el
+2. Run once: ./scripts/run-pipeline.sh
+3. The system runs experiments, grades, merges — continuously
+4. Review what was kept (git log) and what was discarded (results.tsv)
+5. The ontology evolves: learns which approaches work for your codebase
+```
 
-| Capability | What it means |
-|-----------|---------------|
-| **Autonomous experimentation** | Designs, codes, tests, and merges product improvements 24/7 |
-| **Self-improving** | Each experiment outcome sharpens the next cycle's hypotheses |
-| **Multi-provider routing** | Routes work across 4 LLM backends, auto-fails over on failure |
-| **Recovery-native** | Survives API outages, rate limits, daemon crashes — resumes where it left off |
-| **Memory** | Builds a knowledge graph of every experiment, pattern, and outcome |
+No prompt engineering. No manual experiment design. The ontology handles strategy selection, backend routing, behavior injection, and error recovery. You own the code; the system improves it.
 
-### Traction
+### For Solo Developers
 
-| Metric | Value |
-|--------|-------|
-| Experiments run | 1,159+ across 257+ runs |
-| Keep rate | 20.4% (experiments that improve the product) |
-| Test suite | 2,061+ tests pass before any merge |
-| Throughput | ~166 experiments/week, 24/7 autonomous |
-| Backends | 4 providers (DeepSeek, MiniMax, moonshot, DashScope), auto-routed by measured keep-rate |
-| Uptime | Self-healing watchdog, in-process memory management, crash-recovery |
+One command a day replaces a full-time R&D engineer. The ontology learns your codebase's patterns — not generic advice, but specific knowledge of what works in your project. After 100+ experiments, the system knows your code better than any human contributor.
 
-### Market
+### For Teams
 
-Any organization that ships software faces the same challenge: **how fast can we learn what works?** OV5 addresses this directly — it replaces manual R&D cycles with an autonomous system that runs experiments continuously. The addressable market is any engineering organization that values iteration speed.
-
-### Moat
-
-| Layer | Advantage |
-|-------|-----------|
-| **Self-knowledge** | The system builds an ontology of its own experiments — patterns, anti-patterns, what works per category |
-| **Routing intelligence** | 7+ weeks of keep-rate data across 4+ providers (1,200+ experiments, 257+ runs); Bayesian Thompson sampling for optimal routing; ai-behaviors category×strategy×hashtag co-evolution |
-| **Lambda compiler** | Proprietary technique for verifying LLM output quality (P(λ)=90.7%); all 4 major prompts λ-compressed (4× token reduction); EDN prompt pipeline replaces template substitution for deterministic prompt construction |
-| **Prompt compression** | All 4 major prompts use lambda notation (4× token reduction); EDN prompt pipeline replaces template substitution with deterministic plist→λ resolve |
-| **Verbum pipeline** | Model distillation pipeline achieving 280× compression with 87% accuracy retention — enables local deterministic execution |
-
-### ROI Estimate
-
-| | Manual (1 engineer) | OV5 |
-|---|---|---|
-| **Experiments/week** | ~5 (one per day) | ~166 (24/7 autonomous) |
-| **Cost/week** | ~$4,000 (senior engineer) | ~$17–83 (API fees) |
-| **Cost per experiment** | ~$800 | ~$0.10–0.50 |
-| **Scaling** | Linear (hire more engineers) | Near-zero marginal (more API calls) |
-| **Coverage** | 1 focus area at a time | 5 targets per run, cross-domain |
-| **Memory** | What one engineer remembers | Persistent knowledge graph of all outcomes |
-
-**At 20% keep rate**: OV5 delivers ~33 product-improving experiments per week — equivalent to a team of ~6 engineers working full-time on R&D, at ~1% of the cost.
-
-ROI improves further as the knowledge graph grows: kept experiments propagate strategies to similar targets (π Synthesis), and discarded experiments train the system to avoid repeating mistakes.
-
-### Business Model
-
-OV5 is infrastructure. Deployment models:
-- **Self-hosted** (current) — Runs on your own infrastructure using your API keys
-- **Managed** (planned) — Hosted OV5 with shared backend pool, usage-based pricing
-- **Enterprise** (planned) — Dedicated deployment with compliance, audit, SLA
+The ontology is the **shared memory** of the team's engineering decisions. New members get the accumulated knowledge of every kept and discarded experiment. The system doesn't forget why a change was rejected or what pattern succeeded.
 
 ---
 
-## For Market & Growth Teams
+## For Advocators
 
-**Ouroboros V5** is a **self-driving growth engine** for product-market fit. Two loops work together:
+**OV5 is an organizational learning engine.** The ontology captures what your team learns about its own codebase — not as documentation that goes stale, but as an active system that improves code generation with every experiment.
 
-| Loop | Like | Job |
-|------|------|-----|
-| **market-sense** 🧭 | A tireless competitive intelligence analyst | Scans the landscape, finds what's working, flags what's changing. Every cycle it hunts 17+ sources for novel techniques, competitive moves, and market signals — then distills them into actionable experiments. |
-| **growth-loop** 🔄 | An automated experimentation platform | Takes those signals and runs them as real, tested experiments on your product — isolated, verified, measured. Keeps what improves PMF, discards what doesn't, and learns from every result. |
+### The Knowledge Problem
 
-No dashboards to watch. No manual pipeline to manage. The system closes its own feedback loop: **market-sense feeds growth-loop; growth-loop results sharpen market-sense.** Each cycle, the system gets smarter about what to sense and what to build.
+Every engineering team has the same problem: **what the team knows is not what the codebase knows.** Senior engineers leave, taking patterns with them. Decisions are documented in PR comments that nobody re-reads. Best practices are enforced by code review — which catches mistakes after they're made.
 
-**You don't operate the loops. You define the direction.** The loops self-steer toward PMF — sensing the market, testing hypotheses, keeping what works, and feeding every outcome back into the next iteration.
+### How the Ontology Solves It
+
+| Problem | Ontology solution |
+|---------|------------------|
+| **Tribal knowledge** | Kept experiments are stored as executable patterns — not docs, but code that produced kept results. The ontology propagates successful strategies to similar files automatically (π Synthesis). |
+| **Repeated mistakes** | Discarded experiments are stored as failure patterns. The ontology tracks validation errors per category and injects anti-pattern warnings before the executor starts. Error rates decrease per category over time. |
+| **Stale best practices** | The ontology self-evolves. What worked last month may not work today — the system detects keep-rate changes, category drift, and strategy degradation. It retires what no longer works and promotes what does. |
+| **Onboarding debt** | New team members get an ontology that already knows the codebase's patterns. Instead of "ask a senior," they get the system that encodes senior knowledge. |
+| **Decision opacity** | Every routing decision, every grader score, every validation error is recorded in the audit trail. You can trace why any experiment was kept or discarded. |
+
+### The Feedback Loop
+
+The ontology is not a static document. It is a **living system** that closes its own feedback loops:
+
+```
+Experiments produce outcomes
+  → ontology learns: category×strategy×hashtag keep-rates
+  → validates: drift, saturation, error patterns
+  → injects: learned preferences into next experiment
+  → next experiment is more informed
+  → outcomes improve → ontology learns more
+```
+
+### Adopting OV5
+
+| Stage | What happens | Timeline |
+|-------|-------------|----------|
+| **Day 1** | `git clone —recurse-submodules` + `./scripts/run-pipeline.sh` | Minutes |
+| **Week 1** | System runs first experiments, establishes baselines. Ontology has 0 data — uses defaults. | 1 week |
+| **Month 1** | 100+ experiments completed. Ontology has per-category keep-rates, strategy preferences, error patterns. | 1 month |
+| **Quarter 1** | 500+ experiments. Ontology shows measurable improvement in keep-rate vs baseline. Team sees fewer repeated errors. | 3 months |
+
+### For Engineering Leaders
+
+OV5 is not a tool your team uses. It is a **system that improves your codebase** — the same way CI/CD improved deployment reliability, OV5 improves code quality autonomy. The ontology is the asset: every experiment adds to what the system knows about your codebase. After one quarter, the system knows more about your code's patterns than any single engineer.
 
 ---
 
