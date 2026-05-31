@@ -293,12 +293,15 @@ BEHAVIOR: Uses wc -l for efficient line counting without loading files into buff
   "Gather context for LLM target selection.
 Scans only root-repo targets that can be integrated into staging.
 Uses caching to avoid redundant shell command execution.
-EDGE CASE: Only caches context when shell commands produce non-empty output."
+EDGE CASE: Only caches context when shell commands produce non-empty output.
+BUG FIX: Uses `equal' not `eq' for cache key comparison — `eq' on strings
+compares object identity, causing cache misses when a freshly-computed
+string has the same content but different identity."
   (let* ((proj-root (gptel-auto-workflow--effective-project-root))
          (cache-ttl (* 5 60))
          (now (float-time))
          (cache-entry (and (listp gptel-auto-workflow--context-cache)
-                           (eq (car gptel-auto-workflow--context-cache) proj-root)
+                           (equal (car gptel-auto-workflow--context-cache) proj-root)
                            (listp (cdr gptel-auto-workflow--context-cache))
                            (cdr gptel-auto-workflow--context-cache)))
          (cached-context (and cache-entry
@@ -1369,14 +1372,18 @@ least explored = highest opportunity.  This is instant, requires
 no AI call, and never times out.
 
 Only calls the AI analyzer when frontier data is empty (first run
-or TSV history was cleared)."
+or TSV history was cleared).
+
+VALIDATION: Guards frontier-targets with proper-list-p to prevent
+runtime errors when frontier-select-targets returns a malformed value."
   (let* ((frontier-ranked
           (and (fboundp 'gptel-auto-experiment--frontier-select-targets)
                (condition-case nil
                    (gptel-auto-experiment--frontier-select-targets
                     gptel-auto-workflow-max-targets-per-run)
                  (error nil))))
-         (frontier-targets (mapcar #'car frontier-ranked)))
+         (frontier-targets (and (proper-list-p frontier-ranked)
+                                (mapcar #'car frontier-ranked))))
     (if (and frontier-targets (> (length frontier-targets) 0))
         ;; Fast path: frontier data available — skip the AI call entirely.
         (let* ((targets (seq-take frontier-targets
@@ -1489,7 +1496,7 @@ META-LEARNING: Loads evolved directive and research skills from mementum."
                                            similar "\n"))
                         parts))))
             (if parts (concat (mapconcat #'identity (nreverse parts) "\n") "\n\n") ""))))
-            (format "λ select(project). max=%d path=lisp/modules/
+    (format "λ select(project). max=%d path=lisp/modules/
   | ∀f: size(f) ≤ 1000ℓ ∧ ¬nested_repo(f) ∧ file(f)
   | priority ∝ 1 / (frontier_size(f) + 1)
   | prefer(bug_fix) > style_change | prefer(TODO_match) > random
@@ -1511,18 +1518,18 @@ OUTPUT: {\"targets\": [{\"file\": \"lisp/modules/X.el\", \"priority\": N, \"reas
             (or (plist-get context :git-history) "")
             (or (plist-get context :file-sizes) "")
             (or (plist-get context :todos) "")
-             (if (or (null research-findings) (string-empty-p research-findings))
-                 "Not available (research disabled)"
-               (let* ((lines (split-string research-findings "\n"))
-                      (apply-lines (seq-filter (lambda (l) (string-match-p "\\*\\*Apply:\\*\\*" l)) lines))
-                      (apply-section
-                       (if apply-lines
-                           (concat "\n### Actionable Research Patterns (match to files below)\n"
-                                   (mapconcat #'identity apply-lines "\n")
-                                   "\n\n")
-                         "")))
-                 (concat apply-section
-                         (truncate-string-to-width research-findings 3000 nil nil "..."))))
+            (if (or (null research-findings) (string-empty-p research-findings))
+                "Not available (research disabled)"
+              (let* ((lines (split-string research-findings "\n"))
+                     (apply-lines (seq-filter (lambda (l) (string-match-p "\\*\\*Apply:\\*\\*" l)) lines))
+                     (apply-section
+                      (if apply-lines
+                          (concat "\n### Actionable Research Patterns (match to files below)\n"
+                                  (mapconcat #'identity apply-lines "\n")
+                                  "\n\n")
+                        "")))
+                (concat apply-section
+                        (truncate-string-to-width research-findings 3000 nil nil "..."))))
             (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
                 (gptel-auto-workflow--evolution-get-knowledge)
               "HISTORICAL SUCCESS PATTERNS (from past experiments):\n- Focus on bug fixes and error handling for best results"))))
@@ -2160,78 +2167,78 @@ BEHAVIOR: Validates filtered result is a list before using it, falls back to unf
       (if gptel-auto-workflow-strategic-selection
           (gptel-auto-workflow--ask-analyzer-for-targets
            (lambda (targets)
-              (if (gptel-auto-workflow--handle-analyzer-error-state targets safe-targets callback)
-                  nil  ; Error already handled
-                (if (null targets)
-                    (let* ((frontier-ranked
-                            (and (fboundp 'gptel-auto-experiment--frontier-select-targets)
-                                 (gptel-auto-experiment--frontier-select-targets
-                                  gptel-auto-workflow-max-targets-per-run)))
-                           (frontier-targets (mapcar #'car frontier-ranked))
-                           (effective-static (or safe-targets
-                                                  (and (fboundp 'gptel-auto-workflow--discover-targets)
-                                                       (gptel-auto-workflow--discover-targets))))
-                           ;; Frontier ranking first, static targets as padding
-                           (merged (if frontier-targets
-                                       (let ((remaining (- gptel-auto-workflow-max-targets-per-run
-                                                           (length frontier-targets))))
-                                         (append frontier-targets
-                                                 (seq-take (cl-remove-if (lambda (t2) (member t2 frontier-targets))
-                                                                         effective-static)
-                                                           (max 0 remaining))))
-                                     effective-static))
-                           (augmented (gptel-auto-workflow--semantic-target-augmentation merged)))
-                      (message "[auto-workflow] Analyzer returned no targets; using frontier-ranked (%d) + static (%d) = %d targets"
-                               (length frontier-targets) (length effective-static) (length augmented))
-                      (funcall callback augmented))
-                  (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
-                         (final-targets (if (and filtered-targets (listp filtered-targets))
-                                            filtered-targets
-                                          targets))
-                         ;; Pad with safe-targets when analyst returns fewer than max
-                         (padded (if (and safe-targets
-                                          (< (length final-targets) gptel-auto-workflow-max-targets-per-run))
-                                     (append final-targets
-                                             (seq-take (cl-remove-if (lambda (t2)
-                                                                       (member t2 final-targets))
-                                                                     safe-targets)
-                                                       (- gptel-auto-workflow-max-targets-per-run
-                                                          (length final-targets))))
-                                   final-targets))
-                         (budgeted-targets (if (fboundp 'gptel-auto-workflow--enforce-category-budget)
-                                                (gptel-auto-workflow--enforce-category-budget padded)
-                                              padded))
-                         (augmented (gptel-auto-workflow--semantic-target-augmentation budgeted-targets))
-                         (with-queued (gptel-auto-workflow--inject-queued-targets augmented)))
+             (if (gptel-auto-workflow--handle-analyzer-error-state targets safe-targets callback)
+                 nil  ; Error already handled
+               (if (null targets)
+                   (let* ((frontier-ranked
+                           (and (fboundp 'gptel-auto-experiment--frontier-select-targets)
+                                (gptel-auto-experiment--frontier-select-targets
+                                 gptel-auto-workflow-max-targets-per-run)))
+                          (frontier-targets (mapcar #'car frontier-ranked))
+                          (effective-static (or safe-targets
+                                                (and (fboundp 'gptel-auto-workflow--discover-targets)
+                                                     (gptel-auto-workflow--discover-targets))))
+                          ;; Frontier ranking first, static targets as padding
+                          (merged (if frontier-targets
+                                      (let ((remaining (- gptel-auto-workflow-max-targets-per-run
+                                                          (length frontier-targets))))
+                                        (append frontier-targets
+                                                (seq-take (cl-remove-if (lambda (t2) (member t2 frontier-targets))
+                                                                        effective-static)
+                                                          (max 0 remaining))))
+                                    effective-static))
+                          (augmented (gptel-auto-workflow--semantic-target-augmentation merged)))
+                     (message "[auto-workflow] Analyzer returned no targets; using frontier-ranked (%d) + static (%d) = %d targets"
+                              (length frontier-targets) (length effective-static) (length augmented))
+                     (funcall callback augmented))
+                 (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
+                        (final-targets (if (and filtered-targets (listp filtered-targets))
+                                           filtered-targets
+                                         targets))
+                        ;; Pad with safe-targets when analyst returns fewer than max
+                        (padded (if (and safe-targets
+                                         (< (length final-targets) gptel-auto-workflow-max-targets-per-run))
+                                    (append final-targets
+                                            (seq-take (cl-remove-if (lambda (t2)
+                                                                      (member t2 final-targets))
+                                                                    safe-targets)
+                                                      (- gptel-auto-workflow-max-targets-per-run
+                                                         (length final-targets))))
+                                  final-targets))
+                        (budgeted-targets (if (fboundp 'gptel-auto-workflow--enforce-category-budget)
+                                              (gptel-auto-workflow--enforce-category-budget padded)
+                                            padded))
+                        (augmented (gptel-auto-workflow--semantic-target-augmentation budgeted-targets))
+                        (with-queued (gptel-auto-workflow--inject-queued-targets augmented)))
                    (unless (or (null filtered-targets) (listp filtered-targets))
                      (message "[auto-workflow] Frontier filter returned non-list (%S); using unfiltered targets"
                               filtered-targets))
                    (message "[auto-workflow] Analyzer selected %d targets, %d after frontier filtering"
                             (length targets) (length final-targets))
-                    (funcall callback with-queued))))))
-          (let* ((fallback-targets
-                  (or static-targets
-                      (and (fboundp 'gptel-auto-experiment--frontier-select-targets)
-                           (mapcar #'car (gptel-auto-experiment--frontier-select-targets
-                                          gptel-auto-workflow-max-targets-per-run)))
-                      (and (fboundp 'gptel-auto-workflow--discover-targets)
-                           (gptel-auto-workflow--discover-targets))))
-                 (filtered-targets (if fallback-targets
-                                       (gptel-auto-workflow--filter-frontier-saturated-targets fallback-targets)
-                                     nil))
-                 (final-targets (if (and filtered-targets (listp filtered-targets))
-                                    filtered-targets
-                                  fallback-targets))
-                (budgeted-targets (if (fboundp 'gptel-auto-workflow--enforce-category-budget)
-                                      (gptel-auto-workflow--enforce-category-budget final-targets)
-                                    final-targets))
-                (augmented (gptel-auto-workflow--semantic-target-augmentation budgeted-targets))
-                (with-queued (gptel-auto-workflow--inject-queued-targets augmented)))
+                   (funcall callback with-queued))))))
+        (let* ((fallback-targets
+                (or static-targets
+                    (and (fboundp 'gptel-auto-experiment--frontier-select-targets)
+                         (mapcar #'car (gptel-auto-experiment--frontier-select-targets
+                                        gptel-auto-workflow-max-targets-per-run)))
+                    (and (fboundp 'gptel-auto-workflow--discover-targets)
+                         (gptel-auto-workflow--discover-targets))))
+               (filtered-targets (if fallback-targets
+                                     (gptel-auto-workflow--filter-frontier-saturated-targets fallback-targets)
+                                   nil))
+               (final-targets (if (and filtered-targets (listp filtered-targets))
+                                  filtered-targets
+                                fallback-targets))
+               (budgeted-targets (if (fboundp 'gptel-auto-workflow--enforce-category-budget)
+                                     (gptel-auto-workflow--enforce-category-budget final-targets)
+                                   final-targets))
+               (augmented (gptel-auto-workflow--semantic-target-augmentation budgeted-targets))
+               (with-queued (gptel-auto-workflow--inject-queued-targets augmented)))
           (unless (or (null filtered-targets) (listp filtered-targets))
             (message "[auto-workflow] Frontier filter returned non-list (%S); using unfiltered targets"
                      filtered-targets))
-           (message "[auto-workflow] Static/fallback: %d targets, %d after frontier filtering"
-                    (length fallback-targets) (length final-targets))
+          (message "[auto-workflow] Static/fallback: %d targets, %d after frontier filtering"
+                   (length fallback-targets) (length final-targets))
           (funcall callback with-queued))))))
 
 ;;; ─── AutoTTS Trace Collection & Controller ───
