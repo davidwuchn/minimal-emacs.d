@@ -323,22 +323,34 @@ Categories based on module purpose from historical experiment analysis."
              (string-match-p "compile" basename)
              (string-match-p "\\`gptel-ext-" basename))
          :programming)
-       ;; Tool-calls: sandbox, tool execution, bash, grep, glob
+       ;; Tool-calls: sandbox, tool execution, bash, grep, glob, tools infrastructure
        ((or (string-match-p "sandbox" basename)
+            (string-match-p "\\`gptel-tools\\b" basename)  ; gptel-tools.el but not tools-agent*
             (string-match-p "\\`gptel-tools-[^a]" basename)  ; tools-* but not tools-agent*
+            (string-match-p "\\`nucleus-tools" basename)    ; nucleus-tools*
             (member basename '("gptel-tools-bash.el" "gptel-tools-grep.el"
                               "gptel-tools-glob.el" "gptel-tools-edit.el"
                               "gptel-tools-apply.el" "gptel-tools-preview.el"
                               "gptel-tools-programmatic.el")))
         :tool-calls)
-       ;; Agentic: agent orchestration, workflow, evolution, strategy
+       ;; Agentic: agent orchestration, workflow, evolution, strategy, ai-behaviors
        ((or (string-match-p "agent" basename)
             (string-match-p "workflow" basename)
             (string-match-p "strategy" basename)
-            (string-match-p "evolution" basename))
+            (string-match-p "evolution" basename)
+            (string-match-p "ai-behaviors" basename)
+            (string-match-p "\\`gptel-agent-" basename))
         :agentic)
-       ;; Default: natural-language (conservative, many gptel features are NL)
-       (t :natural-language)))))
+       ;; Infrastructure: presets, UI, config, init modules
+       ((or (string-match-p "nucleus-presets" basename)
+            (string-match-p "nucleus-header" basename)
+            (string-match-p "init-" basename)
+            (string-match-p "tree-sitter\\|treesit" basename)
+            (string-match-p "skill-routing" basename)
+            (string-match-p "standalone" basename))
+        :natural-language)
+       ;; Default to :programming for unrecognized .el files (conservative)
+       (t :programming)))))
 
 ;; ─── Category-Level Performance Aggregation ───
 
