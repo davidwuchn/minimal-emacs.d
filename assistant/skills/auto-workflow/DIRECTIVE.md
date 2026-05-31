@@ -38,8 +38,8 @@ total-kept: 11
 - **Application for us** (24× from mementum)
 - **Source type** (24× from mementum)
 - **Description** (24× from mementum)
-- **manual-fix** (22× from git)
 - **Application** (21× from mementum)
+- **manual-fix** (21× from git)
 - **Symbolic Attention Magnets** (20× from mementum)
 
 ## 🛠️ Effective Techniques

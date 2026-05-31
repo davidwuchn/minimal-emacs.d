@@ -11,9 +11,9 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 69 experiments (1% keep rate).*
+*Consolidated from 67 experiments (1% keep rate).*
 
-**Performance:** 1 kept / 5 discarded / 22 failed (EXTRACTED — from TSV)
+**Performance:** 1 kept / 3 discarded / 22 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
@@ -49,11 +49,64 @@ These targets may need different research patterns or the research findings were
 - Try combining with git history for recency bias.
 
 
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-nil
+**Distilled Research Strategy: template-default**
+
+- **67 experiments** evaluated across 13 codebase targets
+- **Hypotheses kept**: None (0/3 documented proposals accepted)
+- **Discarded proposals**:
+  1. Remove redundant `(consp val) (keywordp (car val))` check + move `make-hash-table` inside guard + replace `condition-case nil` with `ignore-errors`
+  2. Add nil guard for empty `status-lines` in `gptel-auto-workflow-research-status-all`
+  3. Fix misleading indentation in `gptel-auto-workflow-run-all-projects` and `gptel-auto-workflow--get-worktree-buffer`
+
+**Interpretation**: Template-default strategy applied conservatively—all proposed changes rejected without stated justification.
 ```
 
+### Check Issues
+
+# Check: Distilled Research Strategy Summary
+
+## Validation
+
+Your summary is **structurally complete**:
+- Metrics present (67 experiments, 13 targets, 0/3 acceptance)
+- Proposals clearly listed and numbered
+- Interpretation attempts to draw meaning
+
+## Issues Identified
+
+### 1. **Incomplete Data Flow**
+```
+67 experiments → 0 accepted proposals
+```
+What did the 67 experiments produce? Without results, justification, or findings, this is a dead end.
+
+### 2. **Interpretation Overreach**
+Your interpretation says "without stated justification" — but the real problem is **no justification was requested or documented in the first place**. This isn't conservative application; it's incomplete process.
+
+### 3. **Missing Elements**
+A proper distilled strategy should include:
+| Missing | Why It Matters |
+|---------|----------------|
+| Findings/thresholds | What did experiments reveal? |
+| Rejection rationale | Why each proposal failed |
+| Alternative approaches | What was accepted instead |
+| Next steps | How to proceed from here |
+
+## Verdict
+
+⚠️ **Template-default applied, but incomplete execution**
+
+The strategy name suggests automated processing, but automation without documentation produces noise. 
+
+**Question for you**: Should I help draft a proper research summary that extracts *learnings* from the 67 experiments, or is this just a record-keeping artifact you needed checked?
