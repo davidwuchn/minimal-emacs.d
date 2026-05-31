@@ -645,17 +645,30 @@ When NO-PROMPT is non-nil, just logs the context (for non-LLM subsystems)."
 
 (defun gptel-ai-behaviors--evolve-concrete-tasks ()
   "Log best task-type per category."
-  (maphash
-   (lambda (key entry)
-     (let* ((category (car key))
-            (task-type (cdr key))
-            (total (car entry))
-            (kept (cdr entry))
-            (rate (if (> total 0) (/ (float kept) total) 0)))
-       (when (>= total 3)
-         (message "[concrete-task] %s/%s: %d/%d kept (%.0f%%)"
-                  category task-type kept total (* 100 rate)))))
-   gptel-ai-behaviors--concrete-task-performance))
+  (let ((best-per-cat (make-hash-table :test 'equal)))
+    (maphash
+     (lambda (key entry)
+       (let* ((category (car key))
+              (task-type (cdr key))
+              (total (car entry))
+              (kept (cdr entry))
+              (rate (if (> total 0) (/ (float kept) total) 0)))
+         (when (>= total 3)
+           (message "[concrete-task] %s/%s: %d/%d kept (%.0f%%)"
+                    category task-type kept total (* 100 rate))
+           (let ((current (gethash category best-per-cat)))
+             (when (or (null current) (> rate (cdr current)))
+               (puthash category (cons task-type rate) best-per-cat))))))
+     gptel-ai-behaviors--concrete-task-performance)
+    (setq gptel-ai-behaviors--best-concrete-tasks best-per-cat)))
+
+(defvar gptel-ai-behaviors--best-concrete-tasks (make-hash-table :test 'equal)
+  "Hash table: category → (task-type . keep-rate). Updated each evolution cycle.")
+
+(defun gptel-ai-behaviors--best-task-for-category (category)
+  "Return the best task type symbol for CATEGORY, or nil."
+  (let ((best (gethash category gptel-ai-behaviors--best-concrete-tasks)))
+    (when best (car best))))
 
 ;; ─── Think-Intel → Behavior Feedback (Gap 2 closure) ───
 

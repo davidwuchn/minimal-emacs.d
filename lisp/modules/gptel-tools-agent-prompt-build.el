@@ -1308,13 +1308,37 @@ Implements section-level A/B testing to identify effective prompt components."
                     "5. If you do more than 2 read-only calls without writing, your turn will be aborted.\n"
                     "6. Do not inspect a second subsystem before the first edit exists.\n\n"))))
      ;; Concrete task hint: generate single-action instruction from target history
+     ;; Uses ontology-learned task type preferences when available
      (let* ((target-history (and (boundp 'gptel-auto-experiment--target-history)
                                  (gethash target gptel-auto-experiment--target-history)))
             (failures (or (plist-get target-history :validation-failed) 0))
             (kept-count (or (plist-get target-history :kept) 0))
             (last-kept-action (plist-get target-history :last-kept-action))
+            (category (and (fboundp 'gptel-auto-workflow--categorize-target)
+                           (gptel-auto-workflow--categorize-target target)))
+            (best-task (and category (fboundp 'gptel-ai-behaviors--best-task-for-category)
+                            (gptel-ai-behaviors--best-task-for-category category)))
             (task-hint
              (cond
+              (best-task
+               (pcase best-task
+                 (:nil-guard "## TASK (BEST KNOWN FOR THIS CATEGORY)
+ADD A NIL GUARD: find any function call in the file and wrap it in
+(ignore-errors ...) or add a nil-check with (when ...).
+Read ONE function. Edit ONE line. Verify. Done.
+DO NOT explore other functions. DO NOT plan further changes.")
+                 (:condition-case "## TASK (BEST KNOWN FOR THIS CATEGORY)
+ADD ERROR HANDLING: find a file/process/network operation and wrap it in
+(condition-case ... (error ...)).
+Read ONE function. Edit ONE line. Verify. Done.")
+                 (:replicate-pattern "## TASK (BEST KNOWN FOR THIS CATEGORY)
+ADD A SIMILAR FIX: find a function that calls gethash/assoc and add
+a nil guard or when-let wrapper. Look at recent kept patterns.
+Read ONE function. Edit ONE line. Verify. Done.")
+                 (_ "## TASK (BEST KNOWN FOR THIS CATEGORY)
+Add (ignore-errors ...) around a function call or
+wrap a gethash/assoc in (or ...) nil guard.
+Read ONE function. Edit ONE line. Verify. Done.")))
               ;; No kept experiments, many failures → simplest possible task
               ((and (= kept-count 0) (> failures 3))
                "## TASK (DO THIS EXACTLY)
