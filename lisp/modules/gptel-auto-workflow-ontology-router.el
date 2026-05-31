@@ -2714,6 +2714,108 @@ Boost = (keep-rate - avg-axis-rate) × confidence × 0.15."
 
 ;; ─── Verbum Experiment Tracker ───
 
+;; ─── Digital Twin: File Dependency Graph ───
+
+(defvar gptel-auto-workflow--digital-twin-cache nil
+  "Cached digital twin data: (file . plist) with :requires :provides :defuns :defvars.
+Built by `gptel-auto-workflow--build-digital-twin'. Persisted to var/tmp/digital-twin.json.")
+
+(defun gptel-auto-workflow--parse-el-file (file)
+  "Parse FILE for require/provide/defun/defvar declarations.
+Returns plist: (:requires (:provides :defuns :defvars :declare-fns)."
+  (let ((requires nil) (provides nil) (defuns nil)
+        (defvars nil) (declare-fns nil))
+    (when (file-exists-p file)
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        (while (not (eobp))
+          (cond
+           ((looking-at "(require\\s-+'?\\([^ )]+\\)")
+            (push (match-string-no-properties 1) requires))
+           ((looking-at "(provide\\s-+'?\\([^ )]+\\)")
+            (push (match-string-no-properties 1) provides))
+           ((looking-at "(defun\\s-+\\([^ (]+\\)")
+            (push (match-string-no-properties 1) defuns))
+           ((looking-at "(defvar\\s-+\\([^ (]+\\)")
+            (push (match-string-no-properties 1) defvars))
+           ((looking-at "(declare-function\\s-+\\([^ (]+\\)")
+            (push (match-string-no-properties 1) declare-fns)))
+          (forward-line 1))))
+    (list :requires (nreverse requires)
+          :provides (nreverse provides)
+          :defuns (nreverse defuns)
+          :defvars (nreverse defvars)
+          :declare-fns (nreverse declare-fns))))
+
+(defun gptel-auto-workflow--build-digital-twin (&optional force)
+  "Build digital twin dependency graph for all .el files in lisp/modules/.
+Cached unless FORCE is non-nil."
+  (let ((dir (expand-file-name "lisp/modules/" (gptel-auto-workflow--worktree-base-root))))
+    (when (and (or force (null gptel-auto-workflow--digital-twin-cache))
+               (file-directory-p dir))
+      (let ((twin (make-hash-table :test 'equal)))
+        (dolist (file (directory-files dir t "\\.el$"))
+          (let ((parsed (gptel-auto-workflow--parse-el-file file))
+                (rel (file-relative-name file dir)))
+            (when parsed
+              (puthash rel parsed twin))))
+        (setq gptel-auto-workflow--digital-twin-cache twin)
+        (message "[digital-twin] Built: %d files, %d total requires"
+                 (hash-table-count twin)
+                 (cl-reduce #'+ (mapcar #'length
+                                        (mapcar (lambda (k) (plist-get (gethash k twin) :requires))
+                                                (all-completions "" twin)))))
+        ;; Persist
+        (let ((file (expand-file-name "var/tmp/digital-twin.json"
+                                      (gptel-auto-workflow--worktree-base-root))))
+          (make-directory (file-name-directory file) t)
+          (with-temp-file file
+            (insert "{\"version\": 1, \"built\": \""
+                    (format-time-string "%Y-%m-%dT%H:%M:%S")
+                    "\", \"files\": {")
+            (let ((first t))
+              (maphash (lambda (k v)
+                         (unless first (insert ","))
+                         (setq first nil)
+                         (insert (json-encode k) ":"
+                                 (json-encode (list (cons :requires (plist-get v :requires))
+                                                     (cons :provides (plist-get v :provides))
+                                                     (cons :defuns (plist-get v :defuns))
+                                                     (cons :defvars (plist-get v :defvars))))))
+                       twin))
+            (insert "}}"))
+          (message "[digital-twin] Persisted to %s" file)))
+      gptel-auto-workflow--digital-twin-cache)))
+
+(defun gptel-auto-workflow--digital-twin-dependencies (target)
+  "Return list of files that TARGET depends on (via require)."
+  (when target
+    (let* ((basename (file-name-nondirectory target))
+           (file-key (concat "lisp/modules/" basename))
+           (twin (or gptel-auto-workflow--digital-twin-cache
+                     (gptel-auto-workflow--build-digital-twin))))
+      (when twin
+        (let ((entry (gethash file-key twin)))
+          (when entry
+            (plist-get entry :requires)))))))
+
+(defun gptel-auto-workflow--digital-twin-dependents (target)
+  "Return list of files that depend on TARGET."
+  (when target
+    (let* ((basename (file-name-nondirectory target))
+           (provides (and (string-match "\\`\\(.+\\)\\.el\\'" basename)
+                          (match-string 1 basename)))
+           (twin (or gptel-auto-workflow--digital-twin-cache
+                     (gptel-auto-workflow--build-digital-twin)))
+           (dependents nil))
+      (when (and twin provides)
+        (maphash (lambda (file entry)
+                   (when (member provides (plist-get entry :requires))
+                     (push file dependents)))
+                 twin))
+      dependents)))
+
 ;; ─── Category Action Schema ───
 
 (defconst gptel-auto-workflow--category-action-schemas

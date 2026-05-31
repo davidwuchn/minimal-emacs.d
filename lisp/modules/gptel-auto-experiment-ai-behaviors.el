@@ -490,6 +490,67 @@ HARD CONSTRAINTs define what the current mode IS — they are not overridable.
                    (gptel-ai-behaviors--best-hashtag-for category nil))))
       (or best default-modifiers))))
 
+;; ─── Convergence Invariant Tracking ───
+;; Monitors that refine scores are monotonically improving.
+
+(defvar gptel-ai-behaviors--convergence-history (make-hash-table :test 'equal)
+  "Hash table: target → list of (timestamp . score) for successive refines.")
+
+(defvar gptel-ai-behaviors--convergence-violations (make-hash-table :test 'equal)
+  "Hash table: target → count of consecutive convergence violations.")
+
+(defun gptel-ai-behaviors--record-refine-score (target score)
+  "Record SCORE for TARGET refine iteration. Checks monotonic improvement."
+  (when target
+    (let* ((history (gethash target gptel-ai-behaviors--convergence-history nil))
+           (prev-score (car (car history)))
+           (violations (gethash target gptel-ai-behaviors--convergence-violations 0)))
+      (push (cons (float-time) score) history)
+      (puthash target history gptel-ai-behaviors--convergence-history)
+      ;; Check monotonic improvement
+      (when (and prev-score (< score prev-score))
+        (let ((new-violations (1+ violations)))
+          (puthash target new-violations gptel-ai-behaviors--convergence-violations)
+          (message "[convergence] ⚠ %s: score dropped %.3f → %.3f (%d violations)"
+                   target prev-score score new-violations)
+          (when (>= new-violations 3)
+            (message "[convergence] 🚫 %s: 3 consecutive regressions — suggest terminating refine cycle"
+                     target)))))))
+
+(defun gptel-ai-behaviors--clear-convergence ()
+  "Clear convergence tracking at cycle start."
+  (clrhash gptel-ai-behaviors--convergence-history)
+  (clrhash gptel-ai-behaviors--convergence-violations))
+
+;; ─── Subagent Precondition Enforcement ───
+;; Blocks subagent dispatch if HARD CONSTRAINTS are violated.
+
+(defun gptel-ai-behaviors--check-subagent-preconditions (agent-type prompt)
+  "Check if PROMPT violates AGENT-TYPE's mode HARD CONSTRAINTS.
+Returns nil if ok, or error string if blocked."
+  (when-let ((mode (gptel-ai-behaviors--mode-for-subagent agent-type)))
+    (let ((constraints (plist-get mode :hard-constraints))
+          (violations nil))
+      (dolist (constraint constraints)
+        (cond
+         ;; "review ∩ {Fixes, Refactoring, WrittenCode} = ∅" → prompt should not ask to fix
+         ((and (string-match-p "∩ {Fixes" constraint)
+               (string-match-p "fix\\|correct\\|rewrite\\|refactor" prompt))
+          (push (format "HARD CONSTRAINT: %s (prompt asks to fix in %s mode)" constraint agent-type)
+                violations))
+         ;; "research ∩ {Code, Implementation} = ∅" → prompt should not ask to implement
+         ((and (string-match-p "∩ {Code, Implementation" constraint)
+               (string-match-p "implement\\|write code\\|create file" prompt))
+          (push (format "HARD CONSTRAINT: %s (prompt asks to implement in %s mode)" constraint agent-type)
+                violations))
+         ;; "spec ∩ {Code, Implementation} = ∅" → similar
+         ((and (string-match-p "∩ {Code, Implementation, Mutation" constraint)
+               (string-match-p "implement\\|write code\\|modify" prompt))
+          (push (format "HARD CONSTRAINT: %s (prompt asks to implement in %s mode)" constraint agent-type)
+                violations))))
+      (when violations
+        (mapconcat #'identity violations "; ")))))
+
 ;; ─── Subsystem Advice Registration ───
 ;; Wire ai-behaviors context into each subsystem at its entry point.
 

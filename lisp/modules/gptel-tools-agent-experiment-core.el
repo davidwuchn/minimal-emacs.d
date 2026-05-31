@@ -1386,6 +1386,9 @@ Called when the grader passed but the benchmark/validation failed."
                                              (plist-get schema :commit-criteria))))
                         (when commit-failed
                           (message "[auto-exp] ⚠ Postcondition %s not verified for %s" commit-failed target))))
+                    ;; Record convergence score for monotonic improvement check
+                    (when (fboundp 'gptel-ai-behaviors--record-refine-score)
+                      (gptel-ai-behaviors--record-refine-score target effective-score))
                     (message "[auto-experiment] ✓ Refine passed (score=%s)" effective-score)
                     (funcall callback (list :refined t :exp-result exp-result
                                            :effective-score effective-score

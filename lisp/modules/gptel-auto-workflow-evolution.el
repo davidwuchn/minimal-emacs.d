@@ -1854,6 +1854,9 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (cl-block gptel-auto-workflow-evolution-run-cycle
   (condition-case early-err
       (progn
+  ;; Rebuild digital twin dependency graph
+  (when (fboundp 'gptel-auto-workflow--build-digital-twin)
+    (condition-case nil (gptel-auto-workflow--build-digital-twin) (error nil)))
   ;; Invalidate parse cache so this cycle sees fresh data
   (setq gptel-auto-workflow--results-cache nil)
   ;; Clear reasoning hit counts for new cycle
@@ -1861,6 +1864,8 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
     (gptel-ai-behaviors--clear-reasoning-hits))
   (when (fboundp 'gptel-ai-behaviors--clear-violations)
     (gptel-ai-behaviors--clear-violations))
+  (when (fboundp 'gptel-ai-behaviors--clear-convergence)
+    (gptel-ai-behaviors--clear-convergence))
   ;; Throttle: don't run more than once per 300s (5min) unless forced
   (let ((now (float-time (current-time))))
     (when (and gptel-auto-workflow--evolution-last-run

@@ -189,7 +189,13 @@ agent types (analyzer/executor/grader/comparator)."
              (memq agent-type '(analyzer executor grader comparator)))
     (let ((mode-ctx (gptel-ai-behaviors--format-pipeline-context agent-type)))
       (when mode-ctx
-        (setq prompt (concat mode-ctx "\n" prompt)))))
+        (setq prompt (concat mode-ctx "\n" prompt))))
+    ;; Check HARD CONSTRAINTS before dispatch — block if violated
+    (when (fboundp 'gptel-ai-behaviors--check-subagent-preconditions)
+      (let ((violation (gptel-ai-behaviors--check-subagent-preconditions agent-type prompt)))
+        (when violation
+          (message "[ai-behaviors] 🚫 %s" violation)
+          (error "[ai-behaviors] Blocked %s dispatch: %s" agent-type violation)))))
   (let* ((headless-auto-workflow
           (and (or (bound-and-true-p gptel-auto-workflow--headless)
                    (bound-and-true-p gptel-auto-workflow-persistent-headless))
