@@ -1008,5 +1008,93 @@ Returns first relevant code addition line, or nil."
       (when snippet
         (truncate-string-to-width snippet 120 nil nil "...")))))
 
+;; ─── Self-Evolving Model + Effort Selection ───
+;; Learns per (category × subagent) which model variant + effort level
+;; produces the highest keep-rate. Auto-bumps stuck categories.
+
+(defconst gptel-ai-behaviors--model-variants
+  '((deepseek . (deepseek-v4-flash deepseek-v4-pro))
+    (minimax . (minimax-m2.1 minimax-m2.5 minimax-m2.7 minimax-m2.7-highspeed)))
+  "Model families and their variants ordered by capability (low→high).
+First entry = fast/cheap default. Last entry = most capable.")
+
+(defconst gptel-ai-behaviors--effort-levels
+  '("low" "medium" "high" "xhigh" "max")
+  "Reasoning effort levels ordered by compute cost.")
+
+(defvar gptel-ai-behaviors--model-effort-stats (make-hash-table :test 'equal)
+  "Hash: (category subagent model effort) → (kept . total).")
+
+(defun gptel-ai-behaviors--record-model-effort (category subagent model effort kept)
+  "Record experiment outcome for (CATEGORY SUBAGENT MODEL EFFORT)."
+  (when (and category subagent model kept)
+    (let* ((key (list category subagent model (or effort "default")))
+           (entry (gethash key gptel-ai-behaviors--model-effort-stats (cons 0 0))))
+      (setf (car entry) (+ (car entry) (if kept 1 0)))
+      (setf (cdr entry) (1+ (cdr entry)))
+      (puthash key entry gptel-ai-behaviors--model-effort-stats))))
+
+(defun gptel-ai-behaviors--best-model-effort (category subagent &optional min-samples)
+  "Return (MODEL . EFFORT) with highest keep-rate for CATEGORY+SUBAGENT.
+MIN-SAMPLES defaults to 2. Returns nil if no data."
+  (let ((best nil) (best-rate 0))
+    (maphash
+     (lambda (key entry)
+       (when (and (eq (nth 0 key) category)
+                  (eq (nth 1 key) subagent))
+         (let* ((kept (car entry))
+                (total (cdr entry))
+                (rate (if (> total 0) (/ (float kept) total) 0)))
+           (when (and (>= total (or min-samples 2))
+                      (> rate best-rate))
+             (setq best (cons (nth 2 key) (nth 3 key)))
+             (setq best-rate rate)))))
+     gptel-ai-behaviors--model-effort-stats)
+    (when best
+      (message "[model-effort] Best for %s/%s: %s effort=%s (%.0f%%)"
+               category subagent (car best) (cdr best) (* 100 best-rate)))
+    best))
+
+(defun gptel-ai-behaviors--bump-model-effort (category subagent consecutive-failures current-model)
+  "Auto-bump model variant when a category is stuck.
+CONSECUTIVE-FAILURES: how many consecutive experiments failed.
+CURRENT-MODEL: the model currently in use.
+Returns (MODEL . EFFORT) or nil (no bump needed)."
+  (when (and category subagent (numberp consecutive-failures))
+    (let ((family (catch 'found
+                    (dolist (fentry gptel-ai-behaviors--model-variants nil)
+                      (when (memq current-model (cdr fentry))
+                        (throw 'found (car fentry))))))
+          (effort-idx nil))
+      (when family
+        (let ((variants (cdr (assq family gptel-ai-behaviors--model-variants))))
+          ;; Determine bump level from failures
+          (cond
+           ((>= consecutive-failures 10) (setq effort-idx 4))  ;; max
+           ((>= consecutive-failures 7)  (setq effort-idx 3))  ;; xhigh
+           ((>= consecutive-failures 5)  (setq effort-idx 2))  ;; high
+           (t nil))
+          (when effort-idx
+            (let* ((model-idx (min (1- (length variants))
+                                   (floor (/ effort-idx 2))))  ;; bump model too
+                   (model (nth model-idx variants))
+                   (effort (nth effort-idx gptel-ai-behaviors--effort-levels)))
+              (unless (equal model current-model)
+                (message "[model-effort] ⚠ Bumping %s/%s: %S→%s effort=%s (%d consecutive failures)"
+                         category subagent current-model model effort consecutive-failures))
+              (cons model effort))))))))
+
+(defun gptel-ai-behaviors--evolve-model-effort ()
+  "Log per-category model+effort performance. Called each evolution cycle."
+  (let ((cats nil))
+    (maphash
+     (lambda (key _)
+       (unless (memq (nth 0 key) cats)
+         (push (nth 0 key) cats)))
+     gptel-ai-behaviors--model-effort-stats)
+    (dolist (cat cats)
+      (dolist (agent '(executor grader analyzer comparator))
+        (gptel-ai-behaviors--best-model-effort cat agent)))))
+
 (provide 'gptel-auto-experiment-ai-behaviors)
 ;;; gptel-auto-experiment-ai-behaviors.el ends here
