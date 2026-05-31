@@ -346,16 +346,16 @@ daemon alive."
         (when (and skip-tests gptel-auto-experiment-require-tests)
           (message "[auto-exp] Tests required before staging merge: %s"
                    (if tests-passed "PASS" "FAIL")))
-         (list :passed tests-passed
-               :debug-info debug-info
-               :nucleus-passed t
-               :nucleus-skipped t
-               :tests-passed tests-passed
-              :tests-output final-tests-output
-              :tests-skipped (not should-run-tests)
-              :time (- (float-time) start)
-              :eight-keys (when scores (alist-get 'overall scores))
-              :eight-keys-scores scores)))))
+          (list :passed tests-passed
+                :debug-info debug-info
+                :nucleus-passed t
+                :nucleus-skipped t
+                :tests-passed tests-passed
+               :tests-output final-tests-output
+               :tests-skipped (not should-run-tests)
+               :time (- (float-time) start)
+               :eight-keys (when scores (alist-get 'overall scores))
+               :eight-keys-scores scores)))))
 
 (defun gptel-auto-experiment--eight-keys-scores (&optional hypothesis)
   "Get full Eight Keys scores alist from current codebase.

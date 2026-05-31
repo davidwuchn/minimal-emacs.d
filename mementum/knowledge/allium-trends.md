@@ -1,5 +1,8 @@
 ### Allium Issue Trends
-**Regression warnings** (1 strategies with increased issues):
+**Recurring patterns** across all strategies:
 
-- `template-default`: 0 → 3 issues (worse)
+- **Missing**: 1 occurrence(s)
+- **Target Improvement column**: 1 occurrence(s)
+- **Kept vs Discarded imbalance**: 1 occurrence(s)
+- **Hypothesis #4**: 1 occurrence(s)
 

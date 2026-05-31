@@ -79,10 +79,11 @@ Ensures the module directory exists before constructing the path."
                    gptel-tools-agent-strategy-harness
                    gptel-tools-agent-strategy-evolver
                    gptel-tools-agent-error
-                   gptel-tools-agent-experiment-core
-                   gptel-tools-agent-experiment-loop
-                   gptel-tools-agent-main
-                   gptel-tools-agent-research))
+                    gptel-tools-agent-experiment-core
+                    gptel-tools-agent-experiment-loop
+                    gptel-tools-agent-main
+                    gptel-tools-agent-research
+                    gptel-auto-workflow-ontology-predict))
   (condition-case err
       (gptel-tools-agent--load-module feature)
     (error

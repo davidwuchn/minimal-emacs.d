@@ -30,6 +30,7 @@
 
 (declare-function gptel-auto-experiment--frontier-saturated-p "gptel-tools-agent-prompt-build" (target &optional min-frontier-size min-axes min-quality))
 (declare-function gptel-auto-experiment--compute-frontier "gptel-tools-agent-prompt-build" (target))
+(declare-function gptel-auto-workflow--target-saturated-p "gptel-auto-workflow-ontology-predict" (target &optional max-experiments))
 
 (defvar gptel-auto-experiment-max-per-target)
 (defvar gptel-auto-experiment-no-improvement-threshold)
@@ -336,6 +337,12 @@ Adapts max-experiments based on API error rate."
           (message "[saturation] ⏭ %s: skipping due to repeated failure pattern" target)
           (funcall callback nil)
            (cl-return-from gptel-auto-experiment-loop))))
+        ;; Target-experiment saturation: skip if target has enough experiments
+        (when (and (fboundp 'gptel-auto-workflow--target-saturated-p)
+                   (gptel-auto-workflow--target-saturated-p target))
+          (message "[onto-sat] ⏭ %s: skipping — target has enough experiments" target)
+          (funcall callback nil)
+          (cl-return-from gptel-auto-experiment-loop))
     (let* ((original-max gptel-auto-experiment-max-per-target)
            (max-exp (gptel-auto-experiment--adaptive-max-experiments original-max))
            ;; Adjust max-exp based on frontier size: underexplored targets get more experiments
