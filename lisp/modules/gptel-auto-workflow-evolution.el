@@ -1926,6 +1926,8 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
             ;; This enables local development machines to run experiments,
             ;; not just Pi5 (which runs via cron).
             (message "[evolution] No new experiments to analyze. Triggering experiment run...")
+            ;; Ensure the experiment runner module is loaded
+            (require 'gptel-tools-agent-main nil t)
             (condition-case err
                 (gptel-auto-workflow-run-async
                  nil
