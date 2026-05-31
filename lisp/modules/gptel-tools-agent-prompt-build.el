@@ -3098,7 +3098,30 @@ and WHAT pattern to use — from all OV5 signals combined."
       (push (format "TASK: %s" task-text) parts)
       (when (and fail-text (not (string-empty-p fail-text)))
         (push (format "AVOID: %s" fail-text) parts))
-      (push (format "CHANGE: ONE function. Edit ONE line. Verify with byte-compile.") parts)
+      ;; Grader feedback → concrete fix instructions
+      (let* ((insights (gethash target gptel-auto-experiment--grader-insights))
+             (grader-fails (and insights
+                                (cl-remove-if-not
+                                 (lambda (c) (eq :fail (plist-get c :verdict)))
+                                 (plist-get insights :criteria))))
+             (fix-text (when grader-fails
+                         (mapconcat
+                          (lambda (c)
+                            (let ((desc (plist-get c :description)))
+                              (cond ((string-match-p "verif" desc)
+                                     "MUST run + show output of: syntax-check + byte-compile + load-test")
+                                    ((string-match-p "describe" desc)
+                                     "MUST state HYPOTHESIS clearly — what changed and why")
+                                    ((string-match-p "improve" desc)
+                                     "MUST fix actual bug or performance issue — avoid style-only")
+                                    ((string-match-p "minimal" desc)
+                                     "MUST change ≤1 function, ≤3 lines — no scope creep")
+                                    (t (format "FIX: %s" (or (plist-get c :reason) desc))))))
+                          grader-fails
+                          "\n"))))
+        (when fix-text
+          (push (format "PREVIOUS GRADER FAILURES — FIX THESE:\n%s" fix-text) parts)))
+      (push (format "SCOPE: ONE function. Edit ONE line. Verify.") parts)
       (mapconcat #'identity (nreverse parts) "\n"))))
 
 ;;; Cross-Target Pattern Transfer
