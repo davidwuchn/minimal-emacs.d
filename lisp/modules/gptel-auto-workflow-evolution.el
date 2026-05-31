@@ -23,6 +23,7 @@
 ;; External functions from other modules
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base" ())
 (declare-function gptel-auto-workflow--load-skill-content "gptel-tools-agent-prompt-build" (skill-name))
+(declare-function gptel-auto-workflow-run-async "gptel-tools-agent-main" (&optional targets completion-callback))
 (declare-function gptel-auto-workflow--discover-strategies "gptel-tools-agent-strategy-harness" ())
 (declare-function gptel-benchmark-eight-keys-score-for "gptel-benchmark-principles" (output subsystem &optional hypothesis))
 (declare-function gptel-auto-workflow--evolve-research-strategy "gptel-auto-workflow-research-benchmark" ())
@@ -1918,14 +1919,23 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
       (let ((new-experiments (or (gptel-auto-workflow--evolution-count-new) 0))
             (has-research (and (getenv "PIPELINE_FINDINGS_FILE")
                                (file-exists-p (getenv "PIPELINE_FINDINGS_FILE")))))
-         ;; Negative count means experiments were cleaned up (last-total > current).
-         ;; Run anyway — we still have data to analyze. Only skip when genuinely 0.
-         (when (and (= new-experiments 0) (not has-research))
-           ;; Persist hints before early return so state survives daemon restarts
-           (gptel-auto-workflow--persist-next-cycle-hints)
-           (let ((message (format "[evolution] No new experiments (0 new, no research). Skipping.")))
-             (message "%s" message)
-             (cl-return-from gptel-auto-workflow-evolution-run-cycle message))))
+          ;; Negative count means experiments were cleaned up (last-total > current).
+          ;; Run anyway — we still have data to analyze. Only skip when genuinely 0.
+          (when (and (= new-experiments 0) (not has-research))
+            ;; No experiments to analyze — trigger them instead.
+            ;; This enables local development machines to run experiments,
+            ;; not just Pi5 (which runs via cron).
+            (message "[evolution] No new experiments to analyze. Triggering experiment run...")
+            (condition-case err
+                (gptel-auto-workflow-run-async
+                 nil
+                 (lambda (&optional _results)
+                   ;; Run evolution cycle after experiments complete
+                   (gptel-auto-workflow-evolution-run-cycle)))
+              (error (message "[evolution] Experiment run error: %s" err)))
+            ;; Persist hints before returning
+            (gptel-auto-workflow--persist-next-cycle-hints)
+            (cl-return-from gptel-auto-workflow-evolution-run-cycle "triggered-experiments")))
     (error (message "[evolution] Warning: new-experiments check failed, continuing cycle")))
   ;; Consume pipeline env vars for research-aware evolution
   (let ((research-quality (getenv "PIPELINE_RESEARCH_QUALITY"))
