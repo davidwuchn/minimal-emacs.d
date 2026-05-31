@@ -51,11 +51,83 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-nil
+# Research Strategy: Distilled
+
+## Overview
+- **Strategy**: template-default
+- **Scope**: 65 experiments across multiple Elisp modules
+
+## Targets
+- `gptel-auto-workflow-*` modules (integration, strategic, projects)
+- `gptel-benchmark-*` modules (subagent, principles)
+- `gptel-tools-agent-*` modules (error, prompt-build)
+
+## Key Hypotheses (Kept)
+
+| # | Change | Benefits |
+|---|--------|----------|
+| 1 | Idempotency guard for advice + symmetric disable | Vitality, Clarity |
+| 2 | Fix misleading message + directory validation | Bug fix |
+| 3 | `equal` vs `eq` for cache; reorder cache check | Vitality, Clarity |
+| 4 | Buffer lookup validation sequence + nil guards | Vitality, Clarity |
+| 5 | Error recovery for invalid paths + empty list handling | Vitality, Clarity |
+| 6 | `format-mode-line` → direct `mode-name`; `when` vs `if` | Clarity |
+| 7 | Filter `not-applicable` before sorting | Clarity, Vitality |
+
+## Discarded Hypotheses
+None recorded.
 ```
 
+### Check Issues
+
+# Review: Research Strategy
+
+## Structure & Format ✓
+Clean, scannable layout. The hypothesis table is well-organized.
+
+## Questions & Observations
+
+### Scope
+- **65 experiments** seems aggressive. Have you validated this count? Would help to see the experiment breakdown.
+
+### Hypothesis Specifics
+| # | Observation |
+|---|-------------|
+| 1 | "Symmetric disable" is mentioned but not defined. Needs elaboration. |
+| 2 | "Fix misleading message" — which message? Specificity helps. |
+| 3 | Cache check reordering: ensure this doesn't break existing users who rely on current behavior. |
+| 6 | `format-mode-line` → `mode-name`: Confirm `mode-name` accepts the return type. |
+
+### Missing Elements
+- **Prioritization**: Which hypotheses are highest confidence/effort ratio?
+- **Risk level**: Any changes that could break backward compatibility?
+- **Discarded hypotheses**: "None recorded" is suspicious. Even a "none yet" note would be more credible.
+- **Success metrics**: How will you measure "Vitality" and "Clarity" improvements?
+
+### Minor
+- "Vitality" as a benefit category is ambiguous — consider renaming to something more concrete (e.g., "Performance", "Stability").
+
+---
+
+**Overall**: Solid framework. The main gaps are in specificity and prioritization. Want me to suggest a restructuring or dive deeper into any hypothesis?

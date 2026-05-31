@@ -325,7 +325,9 @@ finish."
   (when (boundp 'gptel-auto-workflow--rate-limited-backends)
     (cl-pushnew "moonshot" gptel-auto-workflow--rate-limited-backends :test #'string=))
   (message "[auto-workflow] Fallback chain: %S rate-limited: %S"
-           gptel-auto-workflow-executor-rate-limit-fallbacks
+           (if (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+               gptel-auto-workflow-executor-rate-limit-fallbacks
+             "uninitialized")
            gptel-auto-workflow--rate-limited-backends)
   ;; Ensure gptel-agent-dirs includes our custom agent directory so
   ;; --update-agents registers all agent types (grader, analyzer, etc.).

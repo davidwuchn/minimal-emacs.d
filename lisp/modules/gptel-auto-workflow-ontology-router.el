@@ -18,7 +18,13 @@
 
 (require 'gptel-auto-workflow-evolution)
 
-(defvar gptel-auto-workflow-executor-rate-limit-fallbacks)
+(defvar gptel-auto-workflow-executor-rate-limit-fallbacks
+  '(("DeepSeek" . "deepseek-v4-flash")
+    ("MiniMax" . "minimax-m2.7-highspeed")
+    ("DashScope" . "qwen3.6-plus"))
+  "Fallback chain for executor when rate-limited.
+First backend is primary, subsequent backends are tried in order.
+Ordered by keep-rate from experiment data.")
 (defvar gptel-auto-workflow-headless-subagent-fallbacks)
 
 ;; ─── Sieve-Based Backend Classification (verbum Phase 5) ───
