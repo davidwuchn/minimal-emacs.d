@@ -298,6 +298,22 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                          log-backend log-model)
                         "\n\n---\n\n")
                      (error ""))))
+                ;; NUCLEUS MODE: inject per-subagent operating mode with boundaries
+                ;; Each mode defines WHAT the subagent produces and what it WILL NOT do.
+                ;; From ai-behaviors/behaviors/=mode/prompt.md
+                (mode-note
+                 (let ((mode-name (pcase agent-type
+                                   ("executor" "code") ("grader" "review")
+                                   ("analyzer" "frame") ("researcher" "research")
+                                   ("reviewer" "review") (_ "code")))
+                       (mode-file (expand-file-name
+                                    (format ".ai-behaviors/=%s/prompt.md" mode-name)
+                                    (or (bound-and-true-p minimal-emacs-user-directory)
+                                        user-emacs-directory))))
+                   (when (file-exists-p mode-file)
+                     (with-temp-buffer
+                       (insert-file-contents mode-file)
+                       (buffer-string)))))
                 ;; KV CACHE: persona and routing notes go AFTER the static
                 ;; RULES prefix (now at prompt start) so the shared prefix
                 ;; is maximized. persona-note is same per agent-type → cache hit.
@@ -308,7 +324,7 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                   (when (and (boundp 'gptel-ai-behaviors--current-hashtags)
                              gptel-ai-behaviors--current-hashtags)
                     (car (split-string gptel-ai-behaviors--current-hashtags)))))
-                (prompt (concat prompt "\n" persona-note routing-note)))
+                (prompt (concat prompt "\n" (or mode-note "") persona-note routing-note)))
             ;; Track API cost per model+effort for cost-adjusted keep-rate
             (when (and log-model (fboundp 'gptel-ai-behaviors--record-cost))
               (gptel-ai-behaviors--record-cost log-model
