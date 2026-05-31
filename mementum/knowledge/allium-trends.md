@@ -1,8 +1,14 @@
 ### Allium Issue Trends
 **Recurring patterns** across all strategies:
 
-- **Add risk assessment**: 1 occurrence(s)
-- **Clarify the 12 targets**: 1 occurrence(s)
-- **Define success metrics**: 1 occurrence(s)
-- **Formulate a hypothesis**: 1 occurrence(s)
+- **98 Experiments → 12 Targets**: 1 occurrence(s)
+- **Kept Hypothesis Specificity**: 1 occurrence(s)
+- **Target Scope**: 1 occurrence(s)
+- **Missing Discarded Hypotheses**: 1 occurrence(s)
+- **Elisp module targets**: 1 occurrence(s)
+- **Environment targets**: 1 occurrence(s)
+
+**Regression warnings** (1 strategies with increased issues):
+
+- `template-default`: 4 → 6 issues (worse)
 
