@@ -1808,11 +1808,15 @@ Captures executor reasoning from the dynamic variable
       (setq experiment
             (plist-put experiment :controller-decision
                        (or (and ctx (plist-get ctx :controller-decision)) "unknown")))
-      ;; Track which nucleus persona was used for self-evolution feedback
+      ;; Track ontology category + actual persona archetype for self-evolution
       (setq experiment
             (plist-put experiment :persona-category
                        (when (and target (fboundp 'gptel-auto-workflow--categorize-target))
-                         (gptel-auto-workflow--categorize-target target)))))
+                         (gptel-auto-workflow--categorize-target target))))
+      (setq experiment
+            (plist-put experiment :persona-archetype
+                       (and (boundp 'gptel-ai-behaviors--current-archetype)
+                            gptel-ai-behaviors--current-archetype))))
     (with-temp-buffer
       (insert-file-contents file)
       (unless (gptel-auto-experiment--drop-replaceable-tsv-rows

@@ -1480,15 +1480,18 @@ alternate personas 20% of the time for A/B testing."
          (learned-archetype
           (and (fboundp 'gptel-ai-behaviors--best-persona)
                (gptel-ai-behaviors--best-persona category)))
-         ;; Explore 20% of the time when we have data but not enough to be sure
+         ;; Explore 20% of the time when learned != default (gather A/B data)
          (explore-p (and learned-archetype
                          (not (string= learned-archetype default-archetype))
                          (< (random 100) 20)))
          (archetype (if explore-p
-                        (if (string= learned-archetype default-archetype)
-                            (car (remove default-archetype
-                                         '("Guardian" "Craftsman" "Engineer" "Writer")))
-                          learned-archetype)
+                        (progn
+                          (when (boundp 'gptel-ai-behaviors--exploration-tag)
+                            (setq gptel-ai-behaviors--exploration-tag t))
+                          (if (string= learned-archetype default-archetype)
+                              (car (remove default-archetype
+                                           '("Guardian" "Craftsman" "Engineer" "Writer")))
+                            learned-archetype))
                       (or learned-archetype default-archetype)))
          (base-persona
           (pcase agent-type

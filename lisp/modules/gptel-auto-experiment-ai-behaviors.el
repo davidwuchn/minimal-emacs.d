@@ -1015,14 +1015,24 @@ Returns first relevant code addition line, or nil."
 ;; Tracks kept-rate per (category × persona-archetype) for self-evolution.
 (defvar gptel-ai-behaviors--persona-stats (make-hash-table :test 'equal)
   "Hash: (category . archetype) → (kept . total).")
-(defun gptel-ai-behaviors--record-persona (category archetype kept)
-  "Record experiment outcome for (CATEGORY × ARCHETYPE)."
+(defvar gptel-ai-behaviors--exploration-tag nil
+  "Non-nil when current dispatch is an exploration experiment.
+Exploration experiments are weighted 50% less in persona-stats to avoid
+polluting the learning signal with random trials.")
+
+(defun gptel-ai-behaviors--record-persona (category archetype kept &optional subagent)
+  "Record experiment outcome for (CATEGORY × ARCHETYPE) for SUBAGENT.
+SUBAGENT defaults to \"executor\". Exploration experiments (gptel-ai-behaviors--exploration-tag)
+are weighted 50% less to avoid polluting the learning signal."
   (when (and category archetype)
     (let* ((key (cons category archetype))
-           (entry (gethash key gptel-ai-behaviors--persona-stats (cons 0 0))))
-      (setf (car entry) (+ (car entry) (if kept 1 0)))
-      (setf (cdr entry) (1+ (cdr entry)))
-      (puthash key entry gptel-ai-behaviors--persona-stats))))
+           (entry (gethash key gptel-ai-behaviors--persona-stats (cons 0 0)))
+           (weight (if (bound-and-true-p gptel-ai-behaviors--exploration-tag) 0.5 1.0)))
+      ;; Use floating point for kept/total to support fractional weights
+      (setf (car entry) (+ (car entry) (* (if kept 1 0) weight)))
+      (setf (cdr entry) (+ (cdr entry) weight))
+      (puthash key entry gptel-ai-behaviors--persona-stats))
+    (setq gptel-ai-behaviors--exploration-tag nil)))
 (defun gptel-ai-behaviors--best-persona (category)
   "Return archetype with highest keep-rate for CATEGORY."
   (let ((best nil) (best-rate 0))
