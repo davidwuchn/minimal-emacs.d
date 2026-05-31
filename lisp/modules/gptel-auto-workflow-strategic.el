@@ -168,10 +168,12 @@ AutoTTS: Controller stops early if confidence threshold met."
   :type 'integer
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-workflow-analyzer-time-budget 180
+(defcustom gptel-auto-workflow-analyzer-time-budget 300
   "Minimum timeout in seconds for analyzer target selection.
-Reduced from 240→180s: DeepSeek v4-pro thinking mode still exceeds 240s.
-Let it fail fast and fall back to faster backends (MiniMax/moonshot)."
+Increased from 180→300s: all backends are slow from this network,
+and a 180s timeout causes cascading failures (analyzer → static
+targets → experiments all timeout). Better to wait longer for a
+good analysis than to fall back to unfocused targets."
   :type 'integer
   :group 'gptel-tools-agent)
 
