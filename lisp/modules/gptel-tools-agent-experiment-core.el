@@ -231,13 +231,27 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
             (gptel-auto-experiment--call-in-context
              experiment-buffer experiment-worktree
              (lambda ()
-                 (let* ((patterns (when (proper-list-p analysis) (plist-get analysis :patterns)))
-                       ;; Select prompt-building strategy based on historical performance
-                       (strategy-name (if (and (boundp 'gptel-auto-workflow--strategy-evolution-enabled)
-                                               gptel-auto-workflow--strategy-evolution-enabled
-                                               (fboundp 'gptel-auto-workflow--select-best-strategy))
-                                          (gptel-auto-workflow--select-best-strategy target)
-                                        "template-default"))
+                  (let* ((patterns (when (proper-list-p analysis) (plist-get analysis :patterns)))
+                        ;; Select prompt-building strategy based on historical performance
+                        (strategy-name (if (and (boundp 'gptel-auto-workflow--strategy-evolution-enabled)
+                                                gptel-auto-workflow--strategy-evolution-enabled
+                                                (fboundp 'gptel-auto-workflow--select-best-strategy))
+                                           (let* ((selected (gptel-auto-workflow--select-best-strategy target))
+                                                  (keep-rate (gptel-auto-experiment--target-keep-rate
+                                                              target previous-results))
+                                                  (tries-with-strategy
+                                                   (gptel-auto-experiment--count-consecutive-strategy
+                                                    target selected previous-results)))
+                                             ;; Strategy rotation: if 0% keep-rate and same strategy
+                                             ;; used 3+ times, force rotation to next available
+                                             (if (and keep-rate (= keep-rate 0.0)
+                                                   (>= tries-with-strategy 3))
+                                                  (progn
+                                                    (message "[strategy-rotate] ⚠ %s: 0%% keep-rate after %d× with %s — forcing template-default"
+                                                             target tries-with-strategy selected)
+                                                    "template-default")
+                                               selected))
+                                         "template-default"))
                        (prompt (if (and (fboundp 'gptel-auto-experiment-build-prompt-with-strategy)
                                         (not (equal strategy-name "template-default")))
                                    (gptel-auto-experiment-build-prompt-with-strategy

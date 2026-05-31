@@ -102,6 +102,54 @@ Tries multiple patterns in order:
        (or (string-match-p "^Error:" output)
            (gptel-auto-experiment--aborted-agent-output-p output))))
 
+(defun gptel-auto-experiment--target-keep-rate (target previous-results)
+  "Return keep-rate (0.0-1.0) for TARGET from PREVIOUS-RESULTS, or nil."
+  (when (and target previous-results (listp previous-results) (> (length previous-results) 0))
+    (let ((kept 0) (total 0))
+      (dolist (r previous-results)
+        (when (equal (plist-get r :target) target)
+          (when (plist-get r :kept) (cl-incf kept))
+          (cl-incf total)))
+      (when (> total 0)
+        (/ (float kept) total)))))
+
+(defun gptel-auto-experiment--target-keep-rate-from-tsv (target)
+  "Return keep-rate (0.0-1.0) for TARGET from TSV results file, or nil."
+  (when (fboundp 'gptel-auto-workflow--results-file-path)
+    (let ((results-file (gptel-auto-workflow--results-file-path)))
+      (when (and results-file (file-exists-p results-file))
+        (let ((kept 0) (total 0))
+          (with-temp-buffer
+            (insert-file-contents results-file)
+            (goto-char (point-min))
+            (forward-line 1) ; skip header
+            (while (not (eobp))
+              (let* ((line (buffer-substring (line-beginning-position) (line-end-position)))
+                     (fields (split-string line "\t"))
+                     (r-target (nth 1 fields))
+                     (r-decision (nth 7 fields)))
+                (when (and r-target (string-match-p (regexp-quote (file-name-nondirectory target)) r-target))
+                  (cl-incf total)
+                  (when (equal r-decision "kept")
+                    (cl-incf kept))))
+              (forward-line 1)))
+          (when (> total 0)
+            (/ (float kept) total)))))))
+
+(defun gptel-auto-experiment--count-consecutive-strategy (target strategy previous-results)
+  "Count consecutive experiments on TARGET using STRATEGY, 0-indexed.
+Returns number of consecutive experiments with this strategy."
+  (let ((count 0))
+    (dolist (r (reverse previous-results))
+      (when (and (equal (plist-get r :target) target)
+                 (equal (plist-get r :strategy) strategy))
+        (cl-incf count))
+      (when (and (equal (plist-get r :target) target)
+                 (not (equal (plist-get r :strategy) strategy)))
+        ;; Found a different strategy — stop counting
+        nil))
+    count))
+
 (defun gptel-auto-experiment--summarize (hypothesis)
   "Create short summary of HYPOTHESIS."
   (when (stringp hypothesis)

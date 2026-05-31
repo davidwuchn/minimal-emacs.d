@@ -914,7 +914,23 @@ into staging or main."
           (plist-put gptel-auto-workflow--stats :kept 0))
     (gptel-auto-workflow--persist-status)
     (message "[auto-workflow] Starting %s with %d targets" run-id (length targets))
-    (cl-labels
+    ;; Priority ordering: sort targets by keep-rate ascending (hardest first)
+    (let* ((ordered-targets
+            (if (fboundp 'gptel-auto-experiment--target-keep-rate-from-tsv)
+                (sort (copy-sequence targets)
+                      (lambda (a b)
+                        (let ((rate-a (or (gptel-auto-experiment--target-keep-rate-from-tsv a) 0.5))
+                              (rate-b (or (gptel-auto-experiment--target-keep-rate-from-tsv b) 0.5)))
+                          (< rate-a rate-b))))
+              targets))
+           (redistributed-budget 0))
+      (when (and (> (length ordered-targets) 1)
+                 (not (equal ordered-targets targets)))
+        (message "[priority-order] Reordered %d targets by keep-rate (hardest first): %s"
+                 (length ordered-targets)
+                 (mapconcat (lambda (tgt) (format "%s(%.0f%%)" tgt (* 100 (or (gptel-auto-experiment--target-keep-rate-from-tsv tgt) 50))))
+                            ordered-targets " → ")))
+      (cl-labels
          ((finish-run ()
             ;; Record any pending research batch before finishing
             (when (and (fboundp 'gptel-auto-workflow--record-research-batch)
@@ -939,25 +955,43 @@ into staging or main."
                            (setq gptel-auto-workflow--stats
                                  (plist-put gptel-auto-workflow--stats :kept kept-count))
                            (gptel-auto-workflow--persist-status)
-                            (if gptel-auto-experiment--quota-exhausted
-                                (progn
-                                  (message "[auto-workflow] Provider quota exhausted for %s; continuing with remaining targets"
-                                           target)
-                                  (setq gptel-auto-experiment--quota-exhausted nil)
-                                  (gptel-auto-workflow--clear-rate-limited-backends)
-                                  (if (buffer-live-p run-buffer)
-                                      (with-current-buffer run-buffer
-                                        (let ((default-directory proj-root)
-                                              (gptel-auto-workflow--project-root-override proj-root)
-                                              (gptel-auto-workflow--current-project proj-root)
-                                              (gptel-auto-workflow--run-project-root proj-root))
-                                          (run-next (cdr remaining-targets))))
-                                    (let ((default-directory proj-root)
-                                          (gptel-auto-workflow--project-root-override proj-root)
-                                          (gptel-auto-workflow--current-project proj-root)
-                                          (gptel-auto-workflow--run-project-root proj-root))
-                                      (run-next (cdr remaining-targets)))))
-                             (if (buffer-live-p run-buffer)
+                           (if gptel-auto-experiment--quota-exhausted
+                                 (progn
+                                   (message "[auto-workflow] Provider quota exhausted for %s; continuing with remaining targets"
+                                            target)
+                                   (setq gptel-auto-experiment--quota-exhausted nil)
+                                   (gptel-auto-workflow--clear-rate-limited-backends)
+                                   (if (buffer-live-p run-buffer)
+                                       (with-current-buffer run-buffer
+                                         (let ((default-directory proj-root)
+                                               (gptel-auto-workflow--project-root-override proj-root)
+                                               (gptel-auto-workflow--current-project proj-root)
+                                               (gptel-auto-workflow--run-project-root proj-root))
+                                           (run-next (cdr remaining-targets))))
+                                     (let ((default-directory proj-root)
+                                           (gptel-auto-workflow--project-root-override proj-root)
+                                           (gptel-auto-workflow--current-project proj-root)
+                                           (gptel-auto-workflow--run-project-root proj-root))
+                                       (run-next (cdr remaining-targets)))))
+                              ;; Budget reallocation: redistribute unused slots from
+                              ;; early-saturating targets to targets that need more help
+                              (let* ((actual-count (length results))
+                                     (budget (max gptel-auto-experiment-max-per-target 1))
+                                     (unused (max 0 (- budget actual-count)))
+                                     (new-redistributed (+ redistributed-budget unused)))
+                                (when (> unused 0)
+                                  (message "[budget-realloc] %s used %d/%d experiments (+%d spare → %d total redistributed)"
+                                           target actual-count budget unused new-redistributed))
+                                (setq redistributed-budget new-redistributed)
+                                ;; Boost next target's budget with redistributed slots
+                                (when (and (> redistributed-budget 0) (cdr remaining-targets))
+                                  (let ((boosted (+ gptel-auto-experiment-max-per-target
+                                                     redistributed-budget)))
+                                    (setq gptel-auto-experiment-max-per-target boosted)
+                                    (setq redistributed-budget 0)
+                                    (message "[budget-realloc] Next target gets budget=%d (including %d redistributed)"
+                                             boosted unused)))
+                                (if (buffer-live-p run-buffer)
                                  (with-current-buffer run-buffer
                                    (let ((default-directory proj-root)
                                          (gptel-auto-workflow--project-root-override proj-root)
@@ -981,7 +1015,8 @@ into staging or main."
               (gptel-auto-workflow--project-root-override proj-root)
               (gptel-auto-workflow--current-project proj-root)
               (gptel-auto-workflow--run-project-root proj-root))
-          (run-next targets))))))
+           (run-next targets))))))))
+
 
 (defun gptel-auto-workflow-run (&optional targets)
   "Run auto-workflow asynchronously.
