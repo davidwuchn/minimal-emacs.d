@@ -4,8 +4,8 @@
 ;; It runs automatically when the auto-workflow daemon is active.
 
 (require 'cl-lib)
-;; ∃ Truth: evolution.el refactored (2026-05-22) — re-enabled
-(require 'gptel-auto-workflow-evolution)
+(declare-function gptel-auto-workflow-evolution-run-cycle "gptel-auto-workflow-evolution")
+(declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
 
 ;; ─── Configuration ───
 
