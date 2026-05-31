@@ -1442,6 +1442,8 @@ PROMPT is the detailed prompt instructing the agent on what is required."
               ;; the shared agent config in gptel-agent--agents on first call.
               (copy-sequence
                (cdr (assoc agent-type gptel-agent--agents))))
+    (message "[agent-task] agent-type=%s use-tools=%s tool-names=%S known-tools=%d"
+             agent-type gptel-use-tools gptel--tool-names (length gptel--known-tools))
     ;; Ensure tools are populated when gptel-use-tools is active but
     ;; gptel--tool-names is nil (fresh headless buffer with no tool context).
     (unless (or gptel--tool-names (not gptel-use-tools))
