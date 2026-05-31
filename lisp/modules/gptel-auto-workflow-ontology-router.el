@@ -1464,6 +1464,9 @@ Persisted to `gptel-auto-workflow--preference-persist-file'."
   "Return a nucleus attention-shaping persona for AGENT-TYPE.
 When CATEGORY and BEHAVIOR are provided, composes a task-specific persona
 from all three signals: subagent archetype × ontology context × reasoning pattern.
+For executors, the category SELECTS a different archetype — not just a label.
+Agentic → Guardian (safety), Programming → Craftsman (precision),
+Tool-calls → Engineer (robustness), NLP → Writer (clarity).
 Based on nucleus/ADAPTIVE.md persona state machines."
   (let* ((base-persona
           (pcase agent-type
@@ -1477,7 +1480,19 @@ Human | AI
 λ analysis(data). observe → identify(patterns) → evaluate(impact) → recommend(action)
 Output: {:analysis _ :patterns [_] :confidence _ :recommendation _}")
             ("executor"
-             "λ engage(nucleus).
+             ;; Category SELECTS the archetype, not just decorates it
+             (pcase category
+               (:agentic
+                "λ engage(nucleus).
+[∀ ∃ mu] | [Δ λ | safety/risk signal/noise] | OODA
+Human ⊗ AI
+;; Archetype: Guardian (vigilance × safety)
+;; Operator: ∀ (quantify) — check ALL paths, not just happy path
+;; What: add safety guards, validate assumptions, prevent state corruption
+λ guard(code). find(unsafe) → protect(entry_points) → verify(invariants)
+Output: {:guards [_] :risks [_] :unchanged [_] :verified _}")
+               (:programming
+                "λ engage(nucleus).
 [tao mu] | [Δ λ Σ/μ c/h] | OODA
 Human ⊗ AI
 ;; Archetype: Craftsman (coding × tactize)
@@ -1485,6 +1500,33 @@ Human ⊗ AI
 ;; What: precise edits, minimal changes, verified correctness
 λ edit(code). Δ(minimal(change)) where behavior(new) = behavior(old) + intent
 Output: {:code _ :rationale _ :tests _ :diff _}")
+               (:tool-calls
+                "λ engage(nucleus).
+[phi ∀ ε] | [Δ λ | error/recovery signal/noise] | OODA
+Human ⊗ AI
+;; Archetype: Engineer (robustness × reliability)
+;; Operator: φ (vitality) — adaptive error handling, learn from failures
+;; What: wrap operations, handle timeouts, validate arguments before dispatch
+λ harden(code). identify(risk_points) → wrap(guards) → test(error_paths)
+Output: {:hardened [_] :error_handling [_] :timeouts [_] :verified _}")
+               (:natural-language
+                "λ engage(nucleus).
+[fractal ε] | [Δ λ | structure/noise signal/noise] | OODA
+Human ⊗ AI
+;; Archetype: Writer (clarity × structure)
+;; Operator: fractal — self-similar structure at every level
+;; What: improve prompt organization, add string bounds, preserve format
+λ refine(text). clarify(structure) → bound(lengths) → preserve(format)
+Output: {:improvements [_] :bounds [_] :format_preserved _ :verified _}")
+               (t
+                "λ engage(nucleus).
+[tao mu] | [Δ λ Σ/μ c/h] | OODA
+Human ⊗ AI
+;; Archetype: Craftsman (coding × tactize)
+;; Operator: ⊗ (tensor) — maximum quality, all constraints satisfied
+;; What: precise edits, minimal changes, verified correctness
+λ edit(code). Δ(minimal(change)) where behavior(new) = behavior(old) + intent
+Output: {:code _ :rationale _ :tests _ :diff _}")))
             ("grader"
              "λ engage(nucleus).
 [pi mu ∃ ∀] | [Δ λ ∞/0 | truth/provability signal/noise] | OODA
@@ -1523,21 +1565,12 @@ Constrain: relevance → signal/noise, growth → euler, scope → fractal
 λ research(topic). search(external) → filter(relevant) → distill(applicable) → measure(impact)
 Output: {:findings [_] :techniques [_] :apply_to_us [_] :verification _ :confidence _}")
             (_ ""))))
-    ;; Compose persona with ontology category + ai-behaviors context
-    (let* ((cat-context
-            (when category
-              (pcase category
-                (:agentic "Context: agentic — tool dispatch, state cleanup, async")
-                (:programming "Context: programming — algorithms, data flow, edge cases")
-                (:tool-calls "Context: tool-calls — sandbox, file ops, timeouts")
-                (:natural-language "Context: NLP — prompts, text, context windows")
-                (_ nil))))
-           (behavior-hint
-            (when (and behavior (not (string-empty-p behavior)))
-              (format "Behavior: #=%s" behavior))))
+    ;; Append behavior hint (category already selected the persona)
+    (let ((behavior-hint
+           (when (and behavior (not (string-empty-p behavior)))
+             (format "\nBehavior: #=%s" behavior))))
       (concat base-persona
-              (if cat-context (concat "\n" cat-context) "")
-              (if behavior-hint (concat "\n" behavior-hint) "")
+              (or behavior-hint "")
               "\n\n---\n\n"))))
 
 ;; ─── Moderator Drift Detection (DIALECTIC.md pattern) ───
