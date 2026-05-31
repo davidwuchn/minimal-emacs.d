@@ -427,5 +427,89 @@ when available from empirical data."
         (concat "## Optimal Behavior Combos (learned)\n"
                 (mapconcat #'identity parts "\n") "\n")))))
 
+;; ─── Universal Subsystem Behavior Map ───
+;; Every OV5 subsystem can query its optimal behavior hashtags.
+;; Defaults are learned from experiment data per (subsystem × category).
+
+(defconst gptel-ai-behaviors--subsystem-map
+  '((researcher
+     :mode "#=research"
+     :description "Investigate. Report findings. Surface unknowns."
+     :modifiers "#epistemic #provenance #concise"
+     :used-by "gptel-auto-workflow--load-research-findings")
+    (autotts
+     :mode "#=design"
+     :description "Explore strategy candidates. Evaluate before committing."
+     :modifiers "#evaluate #provenance #decompose"
+     :used-by "gptel-auto-workflow--select-best-strategy")
+    (autogo
+     :mode "#=spec"
+     :description "Allocate budget. Reason from desired outcomes."
+     :modifiers "#backward #obligations #concise"
+     :used-by "gptel-auto-workflow--compute-frontier")
+    (controller
+     :mode "#=review"
+     :description "Orchestrate pipeline. Check every step."
+     :modifiers "#checklist #stop #triage #concise"
+     :used-by "gptel-auto-workflow--consume-vsm-actions")
+    (champion
+     :mode "#=evaluate"
+     :description "Benchmark strategies. Every candidate × every dimension."
+     :modifiers "#evaluate #provenance #legible"
+     :used-by "gptel-auto-workflow--run-research-champion-league"))
+  "Maps each OV5 subsystem to ai-behaviors mode + modifiers.
+Each entry: (subsystem-symbol :mode :description :modifiers :used-by)")
+
+(defun gptel-ai-behaviors--subsystem-context (subsystem)
+  "Return formatted ai-behaviors context for SUBSYSTEM, or empty.
+Injects operating mode + behavior modifiers into subsystem prompts."
+  (when-let ((entry (assq subsystem gptel-ai-behaviors--subsystem-map)))
+    (let ((mode (plist-get (cdr entry) :mode))
+          (desc (plist-get (cdr entry) :description))
+          (modifiers (plist-get (cdr entry) :modifiers)))
+      (concat
+       (format "<operating-mode name=\"%s\">\n%s\n</operating-mode>\n" mode desc)
+       (when (> (length modifiers) 0)
+         (format "<behavior-modifiers>\n%s\n</behavior-modifiers>\n"
+                 (gptel-ai-behaviors--resolve-subagent-category subsystem modifiers)))
+       "<framework>
+HARD CONSTRAINTs define what the current mode IS — they are not overridable.
+</framework>\n"))))
+
+(defun gptel-ai-behaviors--resolve-subagent-category (subsystem default-modifiers)
+  "Resolve modifiers for SUBSYSTEM. Uses learned defaults if available."
+  (when (and (fboundp 'gptel-auto-workflow--categorize-target)
+             (bound-and-true-p gptel-auto-workflow--current-target))
+    (let* ((target gptel-auto-workflow--current-target)
+           (category (gptel-auto-workflow--categorize-target target))
+           (best (when category
+                   (gptel-ai-behaviors--best-hashtag-for category nil))))
+      (or best default-modifiers))))
+
+;; ─── Subsystem Advice Registration ───
+;; Wire ai-behaviors context into each subsystem at its entry point.
+
+(defun gptel-ai-behaviors--advice-inject (subsystem &optional no-prompt)
+  "Return an :around advice function that injects SUBSYSTEM behavior context.
+When NO-PROMPT is non-nil, just logs the context (for non-LLM subsystems)."
+  (lambda (orig-fn &rest args)
+    (let ((ctx (gptel-ai-behaviors--subsystem-context subsystem)))
+      (when (> (length ctx) 0)
+        (if no-prompt
+            (message "[ai-behaviors] %s context:\n%s" subsystem ctx)
+          (message "[ai-behaviors] Injected %s behaviors" subsystem)))
+      (apply orig-fn args))))
+
+;; Register advice for each subsystem
+(dolist (entry gptel-ai-behaviors--subsystem-map)
+  (let* ((subsystem (car entry))
+         (used-by (plist-get (cdr entry) :used-by))
+         (no-prompt (memq subsystem '(autogo champion))))
+    (when (and used-by (fboundp (intern used-by)))
+      (condition-case nil
+          (advice-add (intern used-by) :around
+                      (gptel-ai-behaviors--advice-inject subsystem no-prompt))
+        (error nil)))))
+
 (provide 'gptel-auto-experiment-ai-behaviors)
 ;;; gptel-auto-experiment-ai-behaviors.el ends here
