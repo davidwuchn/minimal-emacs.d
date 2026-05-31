@@ -18,6 +18,8 @@
 (defvar gptel-auto-workflow--stats)
 (defvar gptel-auto-workflow--force-idle-status-overwrite)
 (defvar gptel-auto-workflow--last-progress-time)
+(defvar gptel-auto-workflow--cron-safe-step nil
+  "Current step in gptel-auto-workflow-cron-safe for debugging.")
 (defvar gptel-auto-experiment--api-error-count)
 (defvar gptel-auto-experiment--quota-exhausted)
 (defvar gptel-auto-workflow-persistent-headless)
@@ -546,8 +548,10 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
              (gptel-auto-workflow--disable-headless-suppression)
              (when completion-callback
                (funcall completion-callback results))))))
+    (setq gptel-auto-workflow--cron-safe-step "start")
     (condition-case err
         (progn
+          (setq gptel-auto-workflow--cron-safe-step "setq-defaults")
           (setq default-directory proj-root
                  gptel-auto-workflow-persistent-headless t
                  message-log-max 10000
@@ -557,12 +561,14 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
                  ;; This avoids wasting 300s on validation-retry-failed experiments
                  gptel-auto-experiment-validation-retry-time-budget 60
                  gptel-auto-experiment-validation-retry-active-grace 60)
-           (gptel-auto-workflow--enable-headless-suppression)
-           (if gptel-auto-workflow--running
-               (progn
-                 (message "[auto-workflow] Job already running; skipping new request")
-                 (gptel-auto-workflow--disable-headless-suppression)
-                 nil)
+          (setq gptel-auto-workflow--cron-safe-step "enable-headless")
+          (gptel-auto-workflow--enable-headless-suppression)
+          (setq gptel-auto-workflow--cron-safe-step "check-running")
+          (if gptel-auto-workflow--running
+              (progn
+                (message "[auto-workflow] Job already running; skipping new request")
+                (gptel-auto-workflow--disable-headless-suppression)
+                nil)
             ;; HARDEN: Disable native-comp deferred compilation during workflow startup
             ;; to prevent void-variable bugs in closures on arm64 Emacs 30.1.
             (when (and (featurep 'native-compile)
@@ -621,13 +627,16 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
 (declare-function gptel-auto-workflow--remote-optimize-branches "gptel-tools-agent-worktree")
 (declare-function gptel-auto-workflow--shared-remote "gptel-tools-agent-worktree")
 (defvar gptel-auto-workflow-run-async)
+            (setq gptel-auto-workflow--cron-safe-step "load-agent")
             (condition-case err
                 (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" proj-root))
               (error (message "[auto-workflow] Load gptel-tools-agent error: %S" err)))
+            (setq gptel-auto-workflow--cron-safe-step "reload-support")
             (condition-case err
                 (when (fboundp 'gptel-auto-workflow--reload-live-support)
                   (gptel-auto-workflow--reload-live-support proj-root))
               (error (message "[auto-workflow] Reload-live-support error: %S" err)))
+            (setq gptel-auto-workflow--cron-safe-step "cleanup")
             (setq gptel-auto-experiment--api-error-count 0)
             (gptel-auto-workflow--safe-call "Cleanup" #'gptel-auto-workflow--cleanup-stale-state)
             (gptel-auto-workflow--safe-call "Sync staging"
@@ -656,14 +665,16 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
          (let* ((err-msg (my/gptel--sanitize-for-logging
                           (error-message-string err) 160))
                 (bt (with-output-to-string (backtrace))))
-           (message "[auto-workflow] Cron error: %s" err-msg)
-           (with-temp-file (expand-file-name "var/tmp/cron-error.txt"
-                                             (or (and (boundp 'minimal-emacs-user-directory)
-                                                      minimal-emacs-user-directory)
-                                                 default-directory))
-             (insert (format "Time: %s\nError: %s\nBacktrace:\n%s\n"
-                             (format-time-string "%Y-%m-%dT%H:%M:%S")
-                             err-msg bt)))
+            (let ((step (and (boundp 'gptel-auto-workflow--cron-safe-step)
+                             gptel-auto-workflow--cron-safe-step)))
+              (message "[auto-workflow] Cron error at step %S: %s" step err-msg)
+              (with-temp-file (expand-file-name "var/tmp/cron-error.txt"
+                                                (or (and (boundp 'minimal-emacs-user-directory)
+                                                         minimal-emacs-user-directory)
+                                                    default-directory))
+                (insert (format "Time: %s\nStep: %S\nError: %s\nBacktrace:\n%s\n"
+                                (format-time-string "%Y-%m-%dT%H:%M:%S")
+                                step err-msg bt))))
            (setq gptel-auto-workflow--stats
                  (list :phase "error" :total 0 :kept 0))
            (gptel-auto-workflow--persist-status)

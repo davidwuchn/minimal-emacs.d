@@ -279,6 +279,12 @@ These targets may need different research patterns or the research findings were
 >>>>>>> Stashed changes
 
 
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
