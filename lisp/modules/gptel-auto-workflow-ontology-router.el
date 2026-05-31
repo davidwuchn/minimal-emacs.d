@@ -1620,8 +1620,8 @@ Human ⊗ AI
 ;; What: document prompts, clarify structure, bound lengths, preserve format
 λ document(text). clarify(structure) → bound(lengths) → preserve(format) → explain(rationale)
 Output: {:improvements [_] :bounds [_] :format_preserved _ :rationale _}")
-               (t
-                "λ engage(nucleus).
+                (_
+                 "λ engage(nucleus).
 [tao mu] | [Δ λ Σ/μ c/h] | OODA
 Human ⊗ AI
 ;; Archetype: Craftsman (coding × tactize)

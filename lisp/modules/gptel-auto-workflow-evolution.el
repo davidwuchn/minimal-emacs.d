@@ -3477,11 +3477,18 @@ Promotion: challenger must exceed category champion by >5% relative."
                  ((> cat-keep-rate champion-rate)
                    (push (cons name (intern (format "passed-%s" cat))) results)
                     (throw 'category-result t)))))))
-        ;; Fallback: no category hit, use global composite
-        (let ((champion-rate gptel-auto-workflow--champion-keep-rate))
+         ;; Fallback: no category hit, use global composite
+        (let* ((champion-rate gptel-auto-workflow--champion-keep-rate)
+               (onto (gptel-auto-workflow--generate-experiment-ontology))
+               (classes (plist-get onto :classes))
+               (strategy-entry (cl-find name classes :test #'string=
+                                         :key (lambda (c) (plist-get c :name))))
+               (strategy-total (if strategy-entry (plist-get strategy-entry :total) 0)))
           (cond
            ((and champion-rate (> composite champion-rate))
             (push (cons name 'passed-composite) results))
+           ((= strategy-total 0)
+            (push (cons name 'unevaluated) results))
            (t
             (push (cons name 'rejected) results)))))))
     (dolist (cat categories)
