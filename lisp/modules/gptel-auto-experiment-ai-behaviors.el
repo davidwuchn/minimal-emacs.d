@@ -1203,11 +1203,18 @@ Returns (NEW-MODEL . NEW-EFFORT) or nil if no bump needed."
 DeepSeek v4-pro: high→\"high\", max→\"max\" (reasoning_effort API param).
 MiniMax: high/max → upgrade to highspeed variant (nil for API param).
 Kimi: high/max → upgrade to k2.6 variant (nil for API param).
-Returns nil when no API param is needed (effort is \"default\")."
+Returns nil when no API param is needed (effort is \"default\").
+
+NOTE: When lambda notation (persona state machine) is present in the prompt,
+thinking mode competes for the same compute budget as the state machine,
+causing empty output (nucleus SYSTEM_DESIGN.md §5).  We return nil to
+disable thinking mode when active behaviors are present."
   (when (and (stringp model) (stringp effort) (not (equal effort "default")))
     (let ((model-down (downcase model)))
       (cond ((string-match-p "deepseek.*pro" model-down)
-             (if (member effort '("high" "max")) effort nil))
+             ;; Disable thinking mode when lambda notation is active
+             ;; (persona state machine + behaviors compete with thinking)
+             nil)
             ((string-match-p "minimax" model-down)
              nil)  ; MiniMax uses model variant switching, not API param
             ((string-match-p "kimi" model-down)
