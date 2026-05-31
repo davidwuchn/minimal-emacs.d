@@ -1,7 +1,5 @@
 ### Allium Issue Trends
-**Recurring patterns** across all strategies:
+**Regression warnings** (1 strategies with increased issues):
 
-- **Discard rationale**: 1 occurrence(s)
-- **Cross-reference**: 1 occurrence(s)
-- **Add metrics**: 1 occurrence(s)
+- `template-default`: 0 → 3 issues (worse)
 
