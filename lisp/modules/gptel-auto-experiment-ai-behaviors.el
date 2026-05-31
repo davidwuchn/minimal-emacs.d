@@ -1008,6 +1008,30 @@ Returns first relevant code addition line, or nil."
       (when snippet
         (truncate-string-to-width snippet 120 nil nil "...")))))
 
+;; ─── Operator Effectiveness Tracking ───
+;; Self-evolves collaboration operator per category from experiment data.
+(defvar gptel-ai-behaviors--operator-stats (make-hash-table :test 'equal)
+  "Hash: (category . operator) → (kept . total).")
+(defun gptel-ai-behaviors--record-operator (category operator kept)
+  "Record outcome for CATEGORY × OPERATOR."
+  (when (and category operator)
+    (let* ((key (cons category operator))
+           (entry (gethash key gptel-ai-behaviors--operator-stats (cons 0 0))))
+      (setf (car entry) (+ (car entry) (if kept 1 0)))
+      (setf (cdr entry) (1+ (cdr entry)))
+      (puthash key entry gptel-ai-behaviors--operator-stats))))
+(defun gptel-ai-behaviors--best-operator (category)
+  "Return operator with highest keep-rate for CATEGORY."
+  (let ((best nil) (best-rate 0))
+    (maphash (lambda (key entry)
+               (when (eq (car key) category)
+                 (let ((kept (car entry)) (total (cdr entry))
+                       (rate (if (> total 0) (/ (float kept) total) 0)))
+                   (when (and (>= total 2) (> rate best-rate))
+                     (setq best (cdr key)) (setq best-rate rate)))))
+             gptel-ai-behaviors--operator-stats)
+    best))
+
 ;; ─── Persona Effectiveness Tracking ───
 (defvar gptel-ai-behaviors--current-archetype nil
   "Dynamic variable: archetype selected for current subagent dispatch.")
@@ -1267,7 +1291,7 @@ A model that keeps 50% at cost 1 is better than 60% at cost 3."
 
 (defun gptel-ai-behaviors--evolve-models ()
   "Log per-category model+effort+persona+combo performance each evolution cycle."
-  (let ((cats nil) (logs nil) (persona-logs nil) (combo-logs nil))
+  (let ((cats nil) (logs nil) (persona-logs nil) (op-logs nil) (combo-logs nil))
     (maphash
      (lambda (key _)
        (unless (memq (nth 0 key) cats)
@@ -1286,6 +1310,14 @@ A model that keeps 50% at cost 1 is better than 60% at cost 3."
                  (push (format "%s/%s: %d/%d(%.0f%%)" cat arch kept total (* 100 rate))
                        persona-logs)))
              gptel-ai-behaviors--persona-stats)
+    ;; Log operator effectiveness per category
+    (maphash (lambda (key entry)
+               (let ((cat (car key)) (op (cdr key))
+                     (kept (car entry)) (total (cdr entry))
+                     (rate (if (> total 0) (/ (float kept) total) 0)))
+                 (push (format "%s/%s: %d/%d(%.0f%%)" cat op kept total (* 100 rate))
+                       op-logs)))
+             gptel-ai-behaviors--operator-stats)
     ;; Log three-way combo effectiveness
     (maphash (lambda (key entry)
                (let ((cat (nth 0 key)) (arch (nth 1 key)) (tag (nth 2 key))
@@ -1298,6 +1330,8 @@ A model that keeps 50% at cost 1 is better than 60% at cost 3."
       (message "[model-evolve] %s" (mapconcat #'identity logs " | ")))
     (when persona-logs
       (message "[persona-evolve] %s" (mapconcat #'identity persona-logs " | ")))
+    (when op-logs
+      (message "[op-evolve] %s" (mapconcat #'identity op-logs " | ")))
     (when combo-logs
       (message "[combo-evolve] %s" (mapconcat #'identity (seq-take combo-logs 5) " | ")))
     logs))

@@ -1517,11 +1517,16 @@ from the 8 nucleus archetypes for A/B testing."
            (pcase task-mode
              ('production "OODA") ('safety "OODA") ('creative "REPL")
              (_ "OODA")))
-          (mode-collab
-           (pcase task-mode
-             ('production "Human ⊗ AI") ('safety "Human ∘ AI")
-             ('creative "Human | AI")
-             (_ "Human ⊗ AI")))
+           ;; Self-evolve collaboration operator from experiment data
+           (learned-operator
+            (and (fboundp 'gptel-ai-behaviors--best-operator)
+                 (gptel-ai-behaviors--best-operator category)))
+           (mode-collab
+            (or learned-operator
+                (pcase task-mode
+                  ('production "Human ⊗ AI") ('safety "Human ∘ AI")
+                  ('creative "Human | AI")
+                  (_ "Human ⊗ AI"))))
           (mode-constrain
            (pcase task-mode
              ('production "Constrain: change → minimal, quality → mu, precision → tao")
@@ -1734,8 +1739,15 @@ Output: {:findings [_] :techniques [_] :apply_to_us [_] :verification _ :confide
              "  (thinking, strategize) → Visionary\n"
              "  (*, balanced)          → Facilitator\n"
              "  (_, _)                 → Logician\n"
-             ";; Transition signals in the response:\n"
-             ";; *Transitioning: `:thinking → :coding` (code_needed) | mindset: `:analyse` → Craftsman*\n"))
+              "  (_, _)                 → Logician\n\n"
+              ";; ─── Emission — output schema per operation ───\n"
+              "λ emit(op).\n"
+              "  :thinking    → {:analysis _ :options [_] :recommendation _}\n"
+              "  :coding      → {:code _ :rationale _ :tests _}\n"
+              "  :debugging   → {:symptom _ :cause _ :fix _ :prevention _}\n"
+              "  :documenting → {:explanation _ :context _ :examples [_]}\n\n"
+              ";; Response format:\n"
+              ";; *Transitioning: `:op→:next` (signal) | mindset: `:ms` → Archetype*\n"))
            ;; Replace first `λ engage` block with mode-selected symbols
            (header-replaced (replace-regexp-in-string
                              "λ engage(nucleus)\\.\n\\[[^]]+\\][^]]*" ; match λ engage line + symbols

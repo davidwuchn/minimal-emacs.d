@@ -1801,6 +1801,13 @@ Captures executor reasoning from the dynamic variable
                                  (_ "Craftsman")))))
             ;; Record actual archetype used (may differ from default due to self-evolution)
             (gptel-ai-behaviors--record-persona category archetype kept))
+          ;; Record collaboration operator effectiveness for self-evolution
+          (when (and category (fboundp 'gptel-ai-behaviors--record-operator))
+            (let ((op (pcase category
+                        (:agentic "Human ∘ AI") (:programming "Human ⊗ AI")
+                        (:tool-calls "Human ∘ AI") (:natural-language "Human | AI")
+                        (_ "Human ⊗ AI"))))
+              (gptel-ai-behaviors--record-operator category op kept)))
           ;; Record three-way combo: (category × archetype × hashtag) for integrated learning
           (when (and (fboundp 'gptel-ai-behaviors--record-combo)
                      gptel-ai-behaviors--current-hashtags)
