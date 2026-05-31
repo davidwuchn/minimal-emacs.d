@@ -2299,10 +2299,11 @@ the user has not explicitly customized the variable."
   (let (migrated)
     (unless (gptel-auto-workflow--custom-var-user-customized-p
              'gptel-auto-workflow-headless-fallback-agents)
-      (when (or (equal gptel-auto-workflow-headless-fallback-agents
+      (when (and (boundp 'gptel-auto-workflow-headless-fallback-agents)
+                 (or (equal gptel-auto-workflow-headless-fallback-agents
                        '("analyzer" "grader" "reviewer"))
                 (equal gptel-auto-workflow-headless-fallback-agents
-                       '("analyzer" "executor" "grader" "reviewer")))
+                       '("analyzer" "executor" "grader" "reviewer"))))
         (setq gptel-auto-workflow-headless-fallback-agents
               '("analyzer" "comparator" "executor" "grader" "reviewer"))
         (push 'gptel-auto-workflow-headless-fallback-agents migrated)))
