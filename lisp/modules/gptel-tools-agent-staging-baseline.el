@@ -505,13 +505,16 @@ Reviewer checks for Blocker/Critical issues."
       (let* ((category (gptel-auto-workflow--review-category-for-branch optimize-branch))
              (schema (and category
                          (cdr (assoc category gptel-auto-workflow--category-action-schemas))))
-             (schema-guidance
-              (if schema
-                  (format "CATEGORY-SPECIFIC COMMIT CRITERIA (%s):\n%s\n\n"
-                          (plist-get schema :description)
-                          (mapconcat (lambda (c) (format "  ✓ %s" c))
-                                     (plist-get schema :commit-criteria) "\n"))
-                ""))
+              (schema-guidance
+               (let* ((schema-text (if schema
+                                       (format "CATEGORY-SPECIFIC COMMIT CRITERIA (%s):\n%s\n"
+                                               (plist-get schema :description)
+                                               (mapconcat (lambda (c) (format "  ✓ %s" c))
+                                                          (plist-get schema :commit-criteria) "\n"))
+                                     ""))
+                      (accuracy (gptel-auto-workflow--review-accuracy-feedback category))
+                      (accuracy-text (if accuracy (concat accuracy "\n") "")))
+                 (concat schema-text accuracy-text)))
              (review-prompt (format "Review the following changes for blockers, critical bugs, and security issues.
 
 CHANGES (diff):
@@ -1196,6 +1199,34 @@ decisions against test results when available."
      gptel-auto-workflow--review-outcomes)
     (when parts
       (concat "Review outcomes:\n" (mapconcat #'identity (nreverse parts) "\n")))))
+
+(defun gptel-auto-workflow--review-accuracy-feedback (category)
+  "Return formatted accuracy feedback for CATEGORY based on past review outcomes.
+Returns a string to inject into the review prompt, or nil if insufficient data.
+Tells the reviewer its historical bias so it can self-calibrate."
+  (when category
+    (let* ((outcomes (gethash category gptel-auto-workflow--review-outcomes))
+           (approve (and outcomes (plist-get outcomes :approved)))
+           (total (and outcomes (plist-get outcomes :total))))
+      (when (and total (>= total 3))
+        (let* ((blocked (- total approve))
+               (approval-rate (/ (float approve) total))
+               (cat-name (pcase category
+                           (:agentic "agentic")
+                           (:programming "programming")
+                           (:tool-calls "tool-calls")
+                           (:natural-language "NLP")
+                           (_ (format "%s" category))))
+               (calibration (if (> approval-rate 0.7)
+                                "You are historically lenient here. Only block for clear vulnerabilities."
+                              (if (< approval-rate 0.3)
+                                  "You are historically strict here. Consider that tests catch most issues."
+                                "Your calibration is balanced. Continue as-is."))))
+          (concat "ACCURACY FEEDBACK for " cat-name " category:\n"
+                  "  Past " (number-to-string total) " reviews: "
+                  (number-to-string approve) " approved (" (number-to-string blocked) " blocked) — "
+                  (format "%.0f" (* 100 approval-rate)) "% approval rate\n"
+                  "  " calibration "\n"))))))
 
 (provide 'gptel-tools-agent-staging-baseline)
 ;;; gptel-tools-agent-staging-baseline.el ends here
