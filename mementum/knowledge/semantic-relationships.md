@@ -4,11 +4,8 @@
 
 # Semantic File Relationships
 
-<<<<<<< Updated upstream
 Generated: 2026-05-30T11:11
-=======
 Generated: 2026-05-31T02:21
->>>>>>> Stashed changes
 
 | lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-auto-workflow-bootstrap.el | 0.831 |
 | lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-tools-agent-base.el | 0.829 |

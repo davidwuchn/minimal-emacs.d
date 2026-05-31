@@ -3,11 +3,8 @@ title: Research Insights - template-default
 status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
-<<<<<<< Updated upstream
 insight-quality: 0.1/10
-=======
 insight-quality: 0.6/10
->>>>>>> Stashed changes
 allium-issues: 3
 allium-severity: 0.00
 allium-status: ok
@@ -15,7 +12,6 @@ allium-status: ok
 
 # Research Strategy: template-default
 
-<<<<<<< Updated upstream
 *Consolidated from 105 experiments (1% keep rate).*
 
 **Performance:** 1 kept / 1 discarded / 12 failed (EXTRACTED — from TSV)
@@ -23,7 +19,6 @@ allium-status: ok
 ## Successful Targets
 
 - `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 5 failed)
-=======
 *Consolidated from 34 experiments (6% keep rate).*
 
 **Performance:** 2 kept / 0 discarded / 17 failed (EXTRACTED — from TSV)
@@ -31,7 +26,6 @@ allium-status: ok
 ## Successful Targets
 
 - `lisp/modules/gptel-auto-workflow-projects.el` (2 kept / 3 failed)
->>>>>>> Stashed changes
 
 ### Structure (deterministic scan)
 
@@ -50,19 +44,16 @@ advised: gptel-agent--task, gptel-agent--task-overlay
 
 These targets may need different research patterns or the research findings were misleading.
 
-<<<<<<< Updated upstream
 - `lisp/modules/gptel-ext-context.el` (1 failed)
 - `lisp/modules/gptel-auto-workflow-research-integration.el` (1 discarded / 1 failed)
 - `lisp/modules/gptel-auto-workflow-strategic.el` (4 failed)
 - `lisp/modules/gptel-auto-workflow-projects.el` (1 kept / 5 failed)
 - `lisp/modules/gptel-tools-agent-error.el` (1 failed)
-=======
 - `lisp/modules/gptel-auto-workflow-projects.el` (2 kept / 3 failed)
 - `lisp/modules/gptel-benchmark-subagent.el` (3 failed)
 - `lisp/modules/gptel-tools-agent-error.el` (3 failed)
 - `lisp/modules/gptel-tools-agent-prompt-build.el` (3 failed)
 - `lisp/modules/gptel-auto-workflow-strategic.el` (3 failed)
->>>>>>> Stashed changes
 
 ## Allium Behavioral Coherence
 
@@ -105,7 +96,6 @@ These targets may need different research patterns or the research findings were
 
 
 
-<<<<<<< Updated upstream
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *2 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
@@ -118,7 +108,14 @@ These targets may need different research patterns or the research findings were
 **Outcome:**
 *   **Kept:** Refinement of `gptel-auto-workflow-list-project-buffers` remains a viable hypothesis.
 *   **Discarded:** Adding `(listp class)` guard in `gptel-auto-workflow--ontology-research-gaps` was rejected.
-=======
+
+
+
+
+
+
+
+
 
 
 
@@ -163,110 +160,92 @@ These targets may need different research patterns or the research findings were
 
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy Distillation
+## Research Strategy: Distilled
 
-**Strategy:** template-default  
-**Scope:** 34 experiments across 8 target files
+**Template**: template-default  
+**Scope**: 34 experiments across 8 target files
 
----
+### Target Files
+- `gptel-tools-agent-benchmark.el`
+- `gptel-benchmark-subagent.el`
+- `gptel-tools-agent-error.el`
+- `gptel-tools-agent-prompt-build.el`
+- `gptel-auto-workflow-strategic.el`
+- `gptel-auto-workflow-projects.el`
+- `gptel-auto-workflow-ontology-strategy.el`
+- `gptel-tools-agent-experiment-core.el`
 
-## Kept Hypotheses
+### Kept Hypotheses
 
-1. **Marker-live check for `where` parameter** — Handle killed buffer markers gracefully instead of passing dead markers to original functions
+1. **Marker-live check for `where` parameter** — Handle gracefully if `where` is a marker from a killed buffer, avoiding dead marker errors.
 
-2. **`hash-table-p` guard in `gptel-auto-workflow--research-cache-get`** — Add nil-safety pattern (already exists in `strategic.el` lines 2719-2721) to prevent `wrong-type-argument` errors during early startup or error recovery
+2. **Add `hash-table-p` guard in `gptel-auto-workflow--research-cache-get`** — Prevent `wrong-type-argument` errors when cache is nil. The pattern exists in `strategic.el` (line 2719-2721) but is missing here, creating an inconsistency that could crash during early startup or error recovery.
 
----
+### Discarded Hypotheses
 
-## Discarded Hypotheses
-
-*None recorded*
->>>>>>> Stashed changes
+None.
 ```
 
 ### Check Issues
 
-<<<<<<< Updated upstream
-# Review
+# Research Strategy Review
 
-The update is clear and well-structured. A few observations:
+## Summary Assessment
 
-**Consistency:** ✓
-- Module naming conventions match (prefixes: `gptel-auto-workflow-*`, etc.)
-- Scopes are properly labeled
+The distilled strategy presents **2 focused hypotheses** across **8 target files** with **34 experiments**. This is a high ratio of experiments to hypotheses—may indicate fine-grained test cases or potential overlap.
 
-**Clarity:** ✓
-- Binary outcomes properly categorized (kept/discarded)
-- Minimal but sufficient detail
+---
 
-**Suggestions for improvement:**
+## Hypothesis Validation
 
-| Area | Current | Potential Enhancement |
-|------|---------|----------------------|
-| Rejection reason | Absent | Brief rationale for `(listp class)` rejection |
-| Next steps | Absent | What tests follow the "viable hypothesis"? |
-| Metrics | Absent | Any benchmarks supporting the kept hypothesis? |
+### ✅ Hypothesis 1: Marker-live check for `where`
 
-**Questions:**
-1. Was the `(listp class)` guard rejected due to:
-   - Redundancy (caller already guarantees type)?
-   - Performance cost?
-   - Incorrect assumption about the codebase?
+**Valid concern.** Dead markers cause `marker-is-dead` errors.  
+**Typical fix pattern:**
 
-2. What defines "viable" for the kept hypothesis—performance gain, correctness, maintainability?
-=======
-# Review: Research Strategy Distillation
-
-## Overall Assessment
-
-**Status:** Well-structured strategy document. The scope (34 experiments / 8 files) is appropriately scoped for systematic debugging.
->>>>>>> Stashed changes
-
-**Verdict:** Usable as a summary, but the rationale sections would improve long-term maintainability if you need to revisit decisions later.
-
-<<<<<<< Updated upstream
-Want me to expand any section or draft next steps?
-=======
-## Verification of Kept Hypotheses
-
-### ✅ Hypothesis 1: Marker-live check for `where` parameter
-
-**Correctness:** Valid concern. Dead markers in `where` parameters are a known source of cryptic errors in Emacs when functions like `marker-buffer`, `marker-position`, or buffer operations are called on killed buffers.
-
-**Typical pattern to implement:**
 ```elisp
-(when (and (markerp where)
-           (buffer-live-p (marker-buffer where)))
-  ;; proceed with original logic
+(when (and (markerp where) (marker-buffer where))
+  ;; safe to use marker
   )
 ```
 
-### ✅ Hypothesis 2: `hash-table-p` guard in cache-get
+**Verify:** Search for all call sites of `where` parameter across target files.
 
-**Correctness:** Good defensive programming. Early startup and error recovery can leave `research-cache` as nil or in an inconsistent state.
+---
 
-**Pattern to verify exists:**
+### ✅ Hypothesis 2: `hash-table-p` guard in `research-cache-get`
+
+**Valid defensive coding.** Referencing `strategic.el` line 2719-2721 shows consistent pattern exists elsewhere.  
+**Typical fix:**
+
 ```elisp
-(when (hash-table-p research-cache)
-  (gethash key research-cache))
+(when (hash-table-p cache)
+  (gethash key cache))
 ```
+
+**Verify:** 
+- Confirm pattern is actually at line ~2719 in `strategic.el`
+- Check if other files in scope have same missing guard
+
+---
+
+## Concerns
+
+| Issue | Detail |
+|-------|--------|
+| **34 experiments** | High count for 2 hypotheses—may be over-partitioned |
+| **Discarded: None** | Unusual—typically some hypotheses get filtered |
+| **No priority** | Which experiments are critical path vs. nice-to-have? |
 
 ---
 
 ## Recommendations
 
-| Item | Status | Note |
-|------|--------|------|
-| Scope clarity | ✅ | 8 files / 34 experiments is tractable |
-| Nil recording of discarded hypotheses | ⚠️ | Consider noting *why* none were discarded (or that this is initial pass) |
-| Template-default strategy | ℹ️ | Standard iterative debugging approach |
+1. **Collapse experiments** — 34 experiments for 2 hypotheses suggests each hypothesis has ~17 variants. Consider reducing to 6-10 focused tests.
 
----
+2. **Document discarded hypotheses** — A "None" entry looks like an 
 
-## Ready for Execution? 
-
-**Yes**, if the hypotheses are based on observed errors. Consider adding minimal test cases or error traces that motivated each hypothesis to future-proof the documentation.
->>>>>>> Stashed changes
+... (truncated)
