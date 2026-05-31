@@ -65,5 +65,64 @@
   "Status active check should handle nil."
   (should-not (gptel-auto-workflow--status-active-p nil)))
 
+;;; Self-heal tool-call failure tests
+
+(ert-deftest test-loop/make-retry-prompt-prepends-for-no-code-changes ()
+  "make-retry-prompt should prepend self-heal directive for 'no code changes'."
+  (let* ((original "Original prompt with task instructions")
+         (result (gptel-auto-experiment--make-retry-prompt
+                  "test.el"
+                  "Agent made no code changes. Use Edit or Write tools to modify files."
+                  original))
+         (pos-self-heal (string-match "SELF-HEAL" result))
+         (pos-original (string-match (regexp-quote original) result)))
+    (should (stringp result))
+    (should (> (length result) (length original)))
+    ;; Self-heal box should appear BEFORE original prompt (prepended, not appended)
+    (should pos-self-heal)
+    (should (string-match-p "MANDATORY.*Edit/Write" result))
+    (should (string-match-p "YOU WILL FAIL" result))
+    (should (string-match-p "λ tool_call" result))
+    ;; Original prompt should appear in the result
+    (should pos-original)
+    ;; Self-heal must appear before original prompt
+    (should (< pos-self-heal pos-original))
+    ;; Self-heal should be near the beginning (within first 100 chars)
+    (should (< pos-self-heal 100))))
+
+(ert-deftest test-loop/make-retry-prompt-wont-prepend-for-syntax-error ()
+  "make-retry-prompt should NOT prepend self-heal for syntax errors."
+  (let* ((original "Original prompt with task instructions")
+         (result (gptel-auto-experiment--make-retry-prompt
+                  "test.el"
+                  "Syntax error: unmatched paren"
+                  original)))
+    (should (stringp result))
+    ;; Original prompt should still appear
+    (should (string-match-p (regexp-quote original) result))
+    ;; No self-heal box
+    (should-not (string-match-p "SELF-HEAL" result))
+    (should-not (string-match-p "YOU WILL FAIL" result))))
+
+(ert-deftest test-loop/make-retry-prompt-wont-prepend-for-unknown ()
+  "make-retry-prompt should NOT prepend self-heal for unknown validation-error."
+  (let* ((original "Original prompt with task instructions")
+         (result (gptel-auto-experiment--make-retry-prompt
+                  "test.el"
+                  "Unknown validation error"
+                  original)))
+    (should (stringp result))
+    (should (string-match-p (regexp-quote original) result))
+    (should-not (string-match-p "SELF-HEAL" result))))
+
+(ert-deftest test-loop/make-retry-prompt-handles-empty-original ()
+  "make-retry-prompt should handle nil original-prompt."
+  (let ((result (gptel-auto-experiment--make-retry-prompt
+                 "test.el"
+                 "Agent made no code changes"
+                 nil)))
+    (should (stringp result))
+    (should (string-match-p "SELF-HEAL" result))))
+
 (provide 'test-gptel-tools-agent-experiment-loop)
 ;;; test-gptel-tools-agent-experiment-loop.el ends here

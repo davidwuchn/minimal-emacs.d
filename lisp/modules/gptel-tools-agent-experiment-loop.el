@@ -221,13 +221,13 @@ VALIDATION-ERROR is the error message.
 Instructs executor to load relevant skill instead of hardcoding patterns."
   ;; ASSUMPTION: target and validation-error must be non-empty strings for meaningful retry
   ;; EDGE CASE: nil or empty inputs produce safe defaults rather than malformed prompts
-  (let ((target (if (and (stringp target) (not (string-empty-p target)))
-                    target
-                  "unknown-file"))
-        (validation-error (if (and (stringp validation-error) (not (string-empty-p validation-error)))
-                              validation-error
-                            "Unknown validation error"))
-        (skill-guidance
+  (let* ((target (if (and (stringp target) (not (string-empty-p target)))
+                     target
+                   "unknown-file"))
+         (validation-error (if (and (stringp validation-error) (not (string-empty-p validation-error)))
+                               validation-error
+                             "Unknown validation error"))
+         (skill-guidance
          (cond
           ;; Elisp syntax and dangerous patterns - tell executor to load skill
           ((gptel-auto-experiment--elisp-syntax-error-p target validation-error)
@@ -257,22 +257,7 @@ Use function-quote #' for symbols meant as functions, not bare-quote \='.")
         (original-contract
          (if (and (stringp original-prompt)
                   (> (length original-prompt) 0))
-             (if tool-call-failure
-                 (concat
-                  "## SELF-HEAL: Tool-Call Required\n"
-                  "╔══════════════════════════════════════════════════════╗\n"
-                  "║ ⚠ PREVIOUS ATTEMPT output code as text but did NOT  ║\n"
-                  "║   call Edit/Write tool. Text-only code = REJECT.    ║\n"
-                  "║   No files were modified.                           ║\n"
-                  "║                                                     ║\n"
-                  "║ MANDATORY: You MUST call Edit/Write to modify files.║\n"
-                  "║ Do NOT output code in text. Do NOT describe changes.║\n"
-                  "║ λ tool_call(x): edit(x) ∨ write(x) — text ≠ change.║\n"
-                  "║                                                     ║\n"
-                  "║ YOU WILL FAIL if you output code as text again.     ║\n"
-                  "╚══════════════════════════════════════════════════════╝\n\n"
-                  original-prompt)
-               original-prompt)
+             original-prompt
            (concat
             "FINAL RESPONSE must include:\n"
             "- CHANGED: exact file path(s) and function/variable names touched\n"
@@ -282,8 +267,26 @@ Use function-quote #' for symbols meant as functions, not bare-quote \='.")
             "End the final response with: Task completed")))
         (retry-error (if tool-call-failure
                          "You output code as text instead of calling Edit/Write tool. No files were modified."
-                       validation-error)))
-    (format "Your previous edit to %s was REJECTED due to validation error:
+                       validation-error))
+        (retry-header
+         (if tool-call-failure
+             (concat
+              "## SELF-HEAL: Tool-Call Required\n"
+              "╔══════════════════════════════════════════════════════╗\n"
+              "║ ⚠ PREVIOUS ATTEMPT output code as text but did NOT  ║\n"
+              "║   call Edit/Write tool. Text-only code = REJECT.    ║\n"
+              "║   No files were modified.                           ║\n"
+              "║                                                     ║\n"
+              "║ MANDATORY: You MUST call Edit/Write to modify files.║\n"
+              "║ Do NOT output code in text. Do NOT describe changes.║\n"
+              "║ λ tool_call(x): edit(x) ∨ write(x) — text ≠ change.║\n"
+              "║                                                     ║\n"
+              "║ YOU WILL FAIL if you output code as text again.     ║\n"
+              "╚══════════════════════════════════════════════════════╝\n\n")
+           "")))
+    (concat
+     retry-header
+     (format "Your previous edit to %s was REJECTED due to validation error:
 
 ERROR: %s
 
@@ -302,11 +305,11 @@ Before retrying, load the relevant skill for guidance.
 
 ORIGINAL TASK:
 %s"
-            target
-            retry-error
-            target
-            (if tool-call-failure "" (or skill-guidance ""))
-            original-contract)))
+             target
+             retry-error
+             target
+             (if tool-call-failure "" (or skill-guidance ""))
+             original-contract))))
 
 ;;; Experiment Loop
 
