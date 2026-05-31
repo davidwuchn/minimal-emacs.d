@@ -2,7 +2,7 @@
 
 > **The snake that researches what to eat, executes what it learned, and feeds outcomes back into its own appetite.**
 >
-> **V5.1 update (2026-05-31):** 75+ commits, 9K+ lines — ai-behaviors integration (4 layers), ontology co-evolution, two-phase grader (#=test + #=review), digital twin dependency graph, subagent HARD CONSTRAINT enforcement, convergence invariant tracking, strike decay + auto-thaw, grader-bypass commit flow, category→hashtag learning, universal subsystem behavior injection via advice, research coordinator (AutoTTS×AutoGo×Ontology), concrete task evolution, kept pattern memory, λ-compressed behavior prompts (59% reduction), adaptive injection, DeepSeek curl timeout fix, validation self-evolution (learn from → inject → avoid), grader-decides-pre-grade (60% bypass threshold), research coordinator (ontology × AutoTTS × AutoGo), token efficiency (59% behavior prompt reduction).
+> **V5.1 update (2026-05-31):** 290+ commits, 15K+ lines — ai-behaviors integration (4 layers), ontology co-evolution, two-phase grader (#=test + #=attack → #=review + #=evaluate), digital twin dependency graph, subagent HARD CONSTRAINT enforcement, convergence invariant tracking, strike decay + auto-thaw, grader-bypass commit flow, category→hashtag learning, universal subsystem behavior injection via advice, research coordinator (AutoTTS×AutoGo×Ontology), concrete task evolution, kept pattern memory, λ-compressed behavior prompts (59% reduction), adaptive injection, DeepSeek curl timeout fix, validation self-evolution (learn from → inject → avoid), grader-decides-pre-grade (60% bypass threshold), research coordinator (ontology × AutoTTS × AutoGo), token efficiency (59% behavior prompt reduction), self-evolving persona state machine (nucleus ADAPTIVE.md), parallel mindset track, emission contracts per operation, category-specific symbol subsets (EXECUTIVE.md + WRITING.md), self-evolving collaboration operators (OPERATOR_ALGEBRA.md), three-way combo tracking (category×archetype×hashtag), per-subagent nucleus modes (#=code/#=review/#=frame/#=research), KV cache-optimized prompt ordering, pre-grade byte-compile check, date-aware DeepSeek pricing, bump-model escalation on consecutive failures, curiosity exploration (5% random persona A/B), exploration-weighted persona stats.
 
 Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) + [gptel](https://github.com/karthink/gptel). 3 pipeline runs/day (macOS: 10AM/2PM/6PM; Linux: every 4h) + hourly self-evolution + watchdog every 30min. The snake eating its own tail — every subsystem improves every other subsystem.
 
@@ -48,8 +48,8 @@ These come from 2,000+ experiments across 4 backends, 12 architectures, measured
 | Metric | What it means for you |
 |--------|----------------------|
 | **20% keep-rate** | 1 in 5 experiments produces production-ready code. The system wastes API calls so you don't waste time. |
-| **2,061 tests** | Every merge passes the full suite. Zero regression risk from automated changes. |
-| **4 backends** | Fallover when one provider fails. Your pipeline doesn't block on an API outage. |
+| **2,678 tests** | Every merge passes the full suite. Zero regression risk from automated changes. |
+| **3 backends** (2 active) | DeepSeek + MiniMax active, Moonshot rate-limited. Automatic failover when provider fails. |
 | **59% prompt compression** | Lambda notation tokens cost less. Same capability, lower cost. |
 | **100+ experiments/month** | More iteration in a weekend than a human team does in a sprint. |
 
@@ -442,7 +442,7 @@ The system does not just run experiments — it builds a **formal knowledge grap
 | **Ambiguity filtering** | Multi-stage confidence gating — defer high-ambiguity candidates |
 | **Second-chance repair** | Soft-deleted patterns re-evaluated each cycle |
 | **Interval Labelling Schema** | O(1) subsumption over pattern hierarchy via preorder/postorder |
-| **Backend performance analysis** | 1,200+ experiments tracked across 4+ backends → keep-rate statistics; three-way (category×strategy×hashtags) combo learning |
+| **Backend performance analysis** | 2,000+ experiments tracked across 3 backends → keep-rate statistics; three-way (category×strategy×hashtags) combo learning |
 | **Pre-flight prediction** | Anti-pattern detection (3+ consecutive failures), target saturation (≥10), prediction threshold (0.15) |
 | **Ontology vs LLM decider** | Formal decision framework: data-availability × complexity × EMA confidence → ontology or LLM. Low EMA (<0.3) bypasses ontology, high EMA (>0.6) accepts weaker picks |
 | | φ freshness: EMA history persists across daemon restarts via cross-subsystem-state.json | Controller starts with informed confidence, not from zero |
@@ -543,7 +543,7 @@ The snake's own immune system:
 | Guard | Prevents |
 |-------|---------|
 | Git worktree isolation | `main` never touched directly |
-| 2,061+ tests + 300s timeout | Broken code caught before staging |
+| 2,678+ tests + 300s timeout | Broken code caught before staging |
 | Ontology-aware provider routing | VSM-auto-tuned scoring + recency-weighted keep-rate + per-axis KIBC boost + per-run cooldown; backends with elevated health auto-excluded |
 | Per-target model preference | Historical performance data selects strongest model for each target |
 | Routing audit trail | Every decision recorded with component scores and VSM adjustment history |
