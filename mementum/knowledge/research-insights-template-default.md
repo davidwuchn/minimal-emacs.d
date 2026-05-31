@@ -310,84 +310,91 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*5 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
 # Research Strategy Distillation
 
-**Template**: `template-default`
-
-**Scope**: 42 experiments across 8 target files
-
-**Targets**:
-- `gptel-tools-agent-benchmark.el`
-- `gptel-benchmark-subagent.el`
-- `gptel-tools-agent-error.el`
-- `gptel-tools-agent-prompt-build.el`
-- `gptel-auto-workflow-strategic.el`
-- `gptel-auto-workflow-projects.el`
-- `gptel-auto-workflow-ontology-strategy.el`
-- `gptel-tools-agent-experiment-core.el`
-
-**Kept hypotheses**: *(none documented)*
-
-**Discarded hypotheses**:
-1. Add marker-live check for the `where` parameter — guard against dead markers from killed buffers
-2. Add `hash-table-p` guard in `gptel-auto-workflow--research-cache-get` — prevent `wrong-type-argument` errors when cache hash table is nil (inconsistency vs. strategic.el line 2719-2721)
+## Overview
+- **Template**: template-default
+- **Experiments**: 100 across 15 Lisp modules + 3 staging targets
 
 ---
 
-**Note**: Document appears incomplete — "Kept hypotheses" section is empty but bullets are present, suggesting content may have been lost or cut off during extraction.
+## Kept Hypotheses (8)
+
+| # | Focus | Improvement Axes |
+|---|-------|------------------|
+| 1 | Simplify lambda-prompt extraction (remove redundant `if apply-lines` check, nil guard for `english-findings`) | φ Vitality, Fractal Clarity |
+| 2 | Add nil/empty guard for `allium-spec`, remove redundant callback check | Fractal Clarity, Vitality |
+| 3 | Add explicit `(symbolp backend)` type check before fallback `t` | Fractal Clarity, Vitality (new error strategy) |
+| 4 | Add `buffer-live-p` guard + nil check in lambda | φ Vitality, Fractal Clarity |
+| 5 | Extract provider selection into `gptel-benchmark--select-provider` function | Fractal Clarity, Vitality |
+| 6 | Error recovery + explicit assumptions | Error Handling, Safety |
+| 7 | Defensive coding | Safety, Robustness |
+| 8 | Timeout sentinel value in `gptel-benchmark-call-subagent-sync` | Error Handling, Safety |
+
+---
+
+## Discarded Hypotheses (3)
+
+| Hypothesis | Reason for Discard |
+|------------|-------------------|
+| Derive heading from `gptel-auto-workflow--mementum-symbol-map` | Maintenance bug fix; not core to current goals |
+| Fix error message formatting (`(error-message-string err)`) | Low priority; deferred |
+| Remove items from hash table | Incomplete/infeasible |
 ```
 
 ### Check Issues
 
-# Review: Research Strategy Distillation Document
+# Review: Research Strategy Distillation
 
-## Summary
-
-The document is a **snapshot of an incomplete research tracking record** for a gptel-related project.
-
----
-
-## Issues Identified
-
-| Issue | Location | Severity |
-|-------|----------|----------|
-| Empty "Kept hypotheses" section | Lines 7-8 | **High** |
-| No documented experiments (0 of 42) | Scope line | **Critical** |
-| No methodology described | Missing section | **Medium** |
-| No results or conclusions | Missing section | **High** |
+## Overall Assessment
+The document is well-structured with clear categorization. Here are observations and questions:
 
 ---
 
-## What's Present
-
-✅ **Discarded hypotheses** (2 items) — These are clear and actionable:
-1. Marker-live check for `where` parameter
-2. `hash-table-p` guard in cache getter function
-
----
-
-## What's Missing
-
-- [ ] **Kept hypotheses** — At least one should exist if experiments were run
-- [ ] **Experiment results** — No data for any of the 42 experiments
-- [ ] **Files modified** — No evidence of changes made
-- [ ] **Next steps** — No actionable roadmap
+## Strengths ✓
+- Clean tabular format with focused columns
+- Logical separation between kept (8) and discarded (3) hypotheses
+- Improvement axes provide categorization framework
+- Specific technical focus (emacs-lisp specifics, function names)
 
 ---
 
-## Questions
+## Questions / Points to Clarify
 
-1. Was this document truncated during extraction, or is this the complete state?
-2. Should the 42 experiments be distributed as a separate artifact?
-3. Are the discarded hypotheses **rejected** permanently, or pending revisit?
+| # | Issue | Suggestion |
+|---|-------|------------|
+| 1, 4 | **"φ" symbol** appears in Focus column for hypotheses 1 and 4 | What does φ denote? Priority marker? Already-implemented flag? |
+| 5 | "Extract into...function" | Does function already exist, or is this *create* new function? |
+| 8 | "Timeout sentinel value" | Specify what value (e.g., `0`, `nil`, `-1`)? |
+| — | **Ordering** | Is there a dependency/order? Hypothesis 5 (extraction) may need to precede others |
+| — | **Criteria** | What defines success for each hypothesis? |
 
 ---
 
-## Recommendation
+## Minor Suggestions
 
-If this is an active project, consider regenerating or completing this document before archiving. The discarded hypotheses alone don't justify "42 experiments" of scope.
+1. **Hypothesis 3** — "new error strategy" is vague; consider specifying error behavior
+2. **Hypothesis 7** — "Defensive coding" is generic; could be more specific
+3. **"allium-spec"** — Is this a code-named module or literal? (Allium = onion/garlic family)
+
+---
+
+## Discarded Hypotheses
+Good that reasons are documented. Consider adding **effort vs. impact** notation if applicable (e.g., "low impact, high effort").
+
+---
+
+Want me to elaborate on any specific hypothesis or restructure the document?

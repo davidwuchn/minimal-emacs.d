@@ -3715,12 +3715,12 @@ Guards: skips enrichment when EMA confidence < 0.3 (untrusted research signal)."
   (let* ((root (gptel-auto-workflow--worktree-base-root))
          (findings-file (expand-file-name "var/tmp/research-findings.md" root))
          (new-concepts nil))
-    (when (< (or (and (boundp 'gptel-auto-workflow--research-ema-conf)
-                       gptel-auto-workflow--research-ema-conf) 0.5) 0.01)
-      (message "[onto-enrich] EMA confidence %.2f < 0.01 — skipping enrichment (untrusted research)"
-               (or (and (boundp 'gptel-auto-workflow--research-ema-conf)
-                        gptel-auto-workflow--research-ema-conf) 0.0))
-      (cl-return-from gptel-auto-workflow--enrich-ontology-from-research nil))
+    (let ((ema-conf (or (and (boundp 'gptel-auto-workflow--research-ema-conf)
+                              gptel-auto-workflow--research-ema-conf)
+                        0.0)))
+      (when (and (> ema-conf 0) (< ema-conf 0.15))
+        (message "[onto-enrich] EMA confidence %.2f < 0.15 — skipping enrichment (untrusted research)" ema-conf)
+        (cl-return-from gptel-auto-workflow--enrich-ontology-from-research nil)))
     (when (file-readable-p findings-file)
       (with-temp-buffer
         (insert-file-contents findings-file)
