@@ -422,10 +422,11 @@ Loads gptel-benchmark-principles if not already available."
 
 ;;; Subagent Integrations
 
-(defun gptel-auto-experiment--call-in-context (buffer directory fn &optional run-root)
+(defun gptel-auto-experiment--call-in-context (buffer directory fn &optional run-root &rest _ignored)
   "Call FN in BUFFER with DIRECTORY bound as `default-directory'.
 When RUN-ROOT is non-nil, preserve that workflow root for async callbacks that
-resume from buffers outside the original project context."
+resume from buffers outside the original project context.
+Accepts extra IGNORED args passed by byte-compiled closure callers."
   (gptel-auto-workflow--call-in-run-context
    run-root fn buffer directory))
 

@@ -346,12 +346,13 @@ FALLBACK is used before falling back to the ambient `default-directory'."
         (ignore-errors (gptel-auto-workflow--project-root))
         default-directory))))
 
-(defun gptel-auto-workflow--call-in-run-context (run-root fn &optional buffer directory)
+(defun gptel-auto-workflow--call-in-run-context (run-root fn &optional buffer directory &rest _ignored)
   "Call FN with workflow globals rebound to RUN-ROOT.
 When BUFFER is live, execute there. DIRECTORY controls `default-directory'
 for FN and defaults to RUN-ROOT.
 If DIRECTORY no longer exists (e.g., worktree cleaned up), falls back to ROOT
-gracefully to prevent timer callbacks from crashing."
+gracefully to prevent timer callbacks from crashing.
+Accepts extra IGNORED args from byte-compiled closure dispatch paths."
   (let* ((root (gptel-auto-workflow--resolve-run-root run-root))
          (context-dir (if (and (stringp directory) (> (length directory) 0)
                                (file-directory-p directory))
