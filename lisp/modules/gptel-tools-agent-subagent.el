@@ -102,23 +102,8 @@ Populated by `my/gptel--run-agent-tool-with-timeout', consumed by evolution cycl
 
 (defun my/gptel--reset-agent-task-state ()
   "Drain completed subagent tasks and let in-flight tasks drain naturally.
-If the task state hash is corrupted (e.g. non-plist values or string keys
-where numbers are expected), wrap in ignore-errors to prevent blocking
-the entire pipeline on a non-critical cleanup operation."
+Corrupted entries are handled gracefully."
   (ignore-errors
-
-Completed entries are removed. In-flight entries are kept (not aborted)
-so their callbacks still have state to consult when they arrive — the
-caller's stale-run-id check prevents interference.
-
-CRITICAL: We do NOT call `gptel-abort` on in-flight buffers because the
-subagent's tool-dispatch loop runs asynchronously and crashes with
-\"Selecting deleted buffer\" when the session buffer is killed mid-flight.
-In-flight subagents drain naturally; the stale-run-id check in callbacks
-provides the safety net.
-
-ALGORITHM: Collect task IDs first, then process, to avoid modifying
-the hash table during maphash iteration."
   (when (hash-table-p my/gptel--agent-task-state)
     (let (done-ids stale-ids in-flight-count)
       ;; Phase 1: classify all task IDs
