@@ -53,3 +53,40 @@ These targets may need different research patterns or the research findings were
 - **This strategy underperforms.** Consider evolving a new approach.
 - The findings may be too generic or targeting the wrong files.
 - Try combining with git history for recency bias.
+
+
+
+
+
+
+
+
+## Allium Behavioral Spec (auto-generated, v3)
+
+*2 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+
+```allium
+Distilled findings from the 42 experiments across the listed modules:
+
+1. **Marker liveness guard for the `where` parameter** – When a marker points to a killed buffer, passing it directly to the original function can cause errors or undefined behavior. Adding a `marker-live` check before use ensures graceful degradation and avoids crashes.
+
+2. **Nil‑safety for research findings cache** – `gptel-auto-workflow--research-cache-get` lacks a `hash-table-p` guard, although its sibling in `strategic.el` already uses this pattern. If the cache hash table is nil (e.g., early startup, failed initialization, or error recovery), a bare `gethash` call will raise a `wrong-type-argument` error. Inserting a simple `(when (hash-table-p cache) …)` wrapper eliminates this risk and makes the code consistent with the rest of the system.
+
+No hypotheses were discarded, indicating that these two issues are the only remaining actionable problems uncovered in this round of experimentation. The next steps would be to implement the marker-live check at the relevant call sites and to add the `hash-table-p` guard in `gptel-auto-workflow--research-cache-get` (mirroring the safety check already present at `strategic.el:2719‑2721`).
+```
+
+### Check Issues
+
+The two findings are precise and actionable. Both address real failure modes:
+
+1. **Marker liveness for `where` parameter** – Passing a marker whose buffer has been killed to a function that expects a live buffer is a classic source of hard-to-debug errors. The fix is straightforward: before calling the original function, check `(marker-buffer where)` and, if `nil`, either skip the operation, signal a meaningful error, or fall back to a safe default (e.g., the current buffer).
+
+2. **Nil‑safety for `gptel-auto-workflow--research-cache-get`** – Using `gethash` on a `nil` cache table raises `wrong-type-argument` (e.g., during early startup or after a failed cache initialization). Wrapping the lookup with `(when (hash-table-p cache) ...)` mirrors the pattern already used in `strategic.el` (around line 2719‑2721) and makes the function robust against that scenario. The `get` should return `nil` if the cache isn’t ready, which is safe and consistent.
+
+Both changes are low-risk, defensive improvements. The fact that no other hypotheses survived the experiments suggests the codebase is otherwise in good shape regarding these types of guard conditions.
+
+**Next steps for implementation:**
+
+- For the marker issue: locate every call site where the raw `where` marker is passed to a function that assumes a live buffer (likely inside `gptel-auto-workflow`’s directive handling). Insert a `(when (marker-buffer where) ...)` check, or use `(or (marker-buffer where) (current-buffer))` if a 
+
+... (truncated)
