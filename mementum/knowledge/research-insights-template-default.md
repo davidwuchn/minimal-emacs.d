@@ -11,7 +11,7 @@ allium-status: ok
 
 # Research Strategy: template-default
 
-*Consolidated from 107 experiments (2% keep rate).*
+*Consolidated from 103 experiments (2% keep rate).*
 
 **Performance:** 2 kept / 0 discarded / 13 failed (EXTRACTED — from TSV)
 
@@ -28,8 +28,8 @@ defvars: gptel-auto-workflow--skills), gptel-auto-experiment-large-target-byte-t
 requires: cl-lib, seq, subr-x
 provides: gptel-tools-agent-prompt-build
 declares: gptel-agent-read-file, gptel-auto-workflow--valid-strategy-name-p, gptel-auto-workflow-load-research-findings, gptel-benchmark--detect-task-type, my/gptel-get-model-metadata, gptel-auto-workflow--current-run-id, gptel-auto-workflow--ensure-results-file, gptel-auto-workflow--make-idempotent-callback, gptel-auto-workflow--non-empty-string-p, gptel-auto-workflow--plist-get, gptel-auto-workflow--results-file-path, gptel-auto-workflow--worktree-base-root, gptel-auto-experiment--eight-keys-scores, gptel-auto-workflow--project-root, gptel-auto-workflow--persist-status, my/gptel--sanitize-for-logging, gptel-auto-workflow--extract-mutation-templates, gptel-auto-workflow--format-weakest-keys, gptel-auto-workflow-skill-suggest-hypothesis, gptel-auto-experiment--inspection-thrash-result-p
-errors: Error, error, error, error, error, Error, signal, error, signal, error, error, error, error, error
-handlers: nil, nil, err, ...), err, err, err, err, err, nil
+errors: Error, error, error, ERROR, error, error, error, Error, signal, error, signal, error, error, error, error, error, error, error
+handlers: nil, nil, err, ..., ...), err, err, err, err, err, nil
 ```
 
 ## Targets with Validation Failures
@@ -60,73 +60,105 @@ These targets may need different research patterns or the research findings were
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.05). EXTRACTED from distill→check pipeline.*
+*2 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy Distillation
+## Research Strategy Summary
 
-## Summary
-
-| Metric | Value |
-|--------|-------|
-| Strategy | template-default |
-| Experiments | 65 |
-| Targets | 13 files (gptel/treesit/nucleus modules) |
-| Kept hypotheses | 0 |
-| Discarded | 3 |
-
-## Discarded Hypotheses (with rationale)
-
-1. **L362 anti-pattern refactor** — Remove redundant `(consp val) (keywordp (car val))` guard; move `make-hash-table` inside guard; replace `condition-case nil` with `ignore-errors`. Rationale: reduces speculative allocation, uses idiomatic suppression.
-
-2. **Nil guard for empty `status-lines`** — Add nil guard in `gptel-auto-workflow-research-status-all`. Rationale: prevents caching empty results; improves error resilience and clarity.
-
-3. **Indentation fixes** — Fix misleading indentation in `gptel-auto-workflow-run-all-projects` and `gptel-auto-workflow--get-worktree-buffer`. Rationale: aligns visual structure with actual parse tree (Clarity/fractal).
+**Strategy:** template-default
 
 ---
 
-**Conclusion**: No hypotheses met the threshold for retention under template-default evaluation.
+### Experiments
+**103 experiments** across 11 targets:
+
+| Component | File |
+|-----------|------|
+| Extension permissions | `gptel-ext-tool-permits.el` |
+| Staging review | `staging-review` |
+| Benchmark analysis | `gptel-benchmark-analysis.el` |
+| Testing | `test` |
+| Subagent | `gptel-benchmark-subagent.el` |
+| Agent error handling | `gptel-tools-agent-error.el` |
+| Comparator | `gptel-benchmark-comparator.el` |
+| Prompt building | `gptel-tools-agent-prompt-build.el` |
+| Strategic workflow | `gptel-auto-workflow-strategic.el` |
+| Projects workflow | `gptel-auto-workflow-projects.el` |
+
+---
+
+### Status
+
+| Category | Count |
+|----------|-------|
+| **Kept hypotheses** | 1 |
+| **Discarded hypotheses** | 0 |
+| **No hypothesis stated** | 1 |
+
+---
+
+### Active Hypothesis
+
+> Improving the function `gptel-auto-workflow-list-project-buffers`
 ```
 
 ### Check Issues
 
-# Review
+# Research Strategy Check
 
-**Missing data**: 65 experiments → 3 discarded + 0 kept = 62 unaccounted. Need clarification on outcomes.
+## ✅ What's Working
 
-**Structural issue**: If 65 attempts produced zero retained hypotheses, that's a systematic failure—not just a threshold problem.
+- **Comprehensive coverage**: 103 experiments across 11 targets shows thorough investigation
+- **Clear file mapping**: Each component has an associated file
+- **Categorization present**: Status tracking with kept/discarded hypotheses
 
-**Discarded hypotheses** look minor (style, cosmetics). For a 65-experiment run, I'd expect at least one non-trivial change.
+---
 
-**What needs verification:**
-1. What happened to the other 62 experiments?
-2. Are the 3 discarded actually the *best* of 65? Or cherry-picked examples?
-3. What was the actual evaluation criteria for template-default?
+## ⚠️ Issues to Address
 
-**Concern**: The conclusion reads like "nothing worked" but doesn't explain *why* nothing worked.
+### 1. Hypothesis Status Mismatch
+| Issue | Details |
+|-------|---------|
+| **Count discrepancy** | 103 experiments but only 2 hypotheses have status |
+| **Missing statuses** | 101 experiments have no stated hypothesis outcome |
+| **Recommendation** | Add hypothesis status to remaining experiments or clarify grouping |
+
+### 2. File Table Inconsistencies
+| Row | Issue |
+|-----|-------|
+| Staging review | No file extension |
+| Testing | No file extension or path |
+| Entry count | 10 files listed, but header says "11 targets" |
+
+### 3. Active Hypothesis Vagueness
+Current:
+> Improving the function `gptel-auto-workflow-list-project-buffers`
+
+**Needs more specificity:**
+- What aspect to improve? (performance, accuracy, scope?)
+- What metric defines success?
+- What was the problem with the current implementation?
+
+---
+
+## Suggested Improvements
+
+```
+### Active Hypothesis
+
+> **Improving `gptel-auto-workflow-list-project-buffers`**  
+> **Problem**: Function misses [specific buffer type]  
+> **Expected outcome**: Increase detection accuracy by X%  
+> **Metric**: Match rate vs manual enumeration
+```
+
+---
+
+## Questions
+
+1. How are the 11 targets organized? (Is one missing from the table?)
+2. Are the "no hypothesis sta
+
+... (truncated)
