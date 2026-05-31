@@ -500,6 +500,41 @@ When NO-PROMPT is non-nil, just logs the context (for non-LLM subsystems)."
           (message "[ai-behaviors] Injected %s behaviors" subsystem)))
       (apply orig-fn args))))
 
+;; ─── Allium Validation of Research Findings ───
+
+(defun gptel-ai-behaviors--validate-research (findings)
+  "Validate research FINDINGS with Allium BDD. Returns validation result."
+  (when (and (stringp findings) (> (length findings) 50)
+             (fboundp 'gptel-auto-workflow--allium-bdd-assert))
+    (let ((checks
+           (list
+            (gptel-auto-workflow--allium-bdd-assert
+             (format "Research findings have actionable recommendations: %s"
+                     (if (string-match-p "apply\\|recommend\\|use\\|try\\|switch" findings) "YES" "NO")))
+            (gptel-auto-workflow--allium-bdd-assert
+             (format "Research findings reference experiment data: %s"
+                     (if (string-match-p "kept\\|keep.rate\\|experiment\\|\\d+%" findings) "YES" "NO")))
+            (gptel-auto-workflow--allium-bdd-assert
+             (format "Research findings are category-aware: %s"
+                     (if (string-match-p ":agentic\\|:programming\\|:tool.calls\\|:natural.language\\|programming\\|agentic"
+                                         findings) "YES" "NO"))))))
+      (let ((passed (cl-count-if #'identity checks))
+            (total (length checks)))
+        (message "[researcher-allium] Validated findings: %d/%d checks passed" passed total)
+        (list :passed passed :total total :pct (if (> total 0) (/ (float passed) total) 0))))))
+
+;; Wrap load-research-findings with Allium validation
+(defun gptel-ai-behaviors--wrap-research-with-validation (orig-fn &rest args)
+  "Wrap research findings loading with Allium validation."
+  (let ((findings (apply orig-fn args)))
+    (when (and (stringp findings) (> (length findings) 0)
+               (fboundp 'gptel-ai-behaviors--validate-research))
+      (let ((validation (gptel-ai-behaviors--validate-research findings)))
+        (when (and validation (< (plist-get validation :pct) 0.67))
+          (message "[researcher-allium] ⚠ Findings validation weak (%d/%d) — consider refining research approach"
+                   (plist-get validation :passed) (plist-get validation :total)))))
+    findings))
+
 ;; Register advice for each subsystem
 (dolist (entry gptel-ai-behaviors--subsystem-map)
   (let* ((subsystem (car entry))
@@ -507,8 +542,12 @@ When NO-PROMPT is non-nil, just logs the context (for non-LLM subsystems)."
          (no-prompt (memq subsystem '(autogo champion))))
     (when (and used-by (fboundp (intern used-by)))
       (condition-case nil
-          (advice-add (intern used-by) :around
-                      (gptel-ai-behaviors--advice-inject subsystem no-prompt))
+          (progn
+            (advice-add (intern used-by) :around
+                        (gptel-ai-behaviors--advice-inject subsystem no-prompt))
+            (when (eq subsystem 'researcher)
+              (advice-add (intern used-by) :around
+                          #'gptel-ai-behaviors--wrap-research-with-validation)))
         (error nil)))))
 
 (provide 'gptel-auto-experiment-ai-behaviors)
