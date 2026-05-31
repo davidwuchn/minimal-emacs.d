@@ -4,14 +4,14 @@ status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
 insight-quality: 0.2/10
-allium-issues: 2
+allium-issues: 3
 allium-severity: 0.00
 allium-status: ok
 ---
 
 # Research Strategy: template-default
 
-*Consolidated from 93 experiments (2% keep rate).*
+*Consolidated from 84 experiments (2% keep rate).*
 
 **Performance:** 2 kept / 0 discarded / 13 failed (EXTRACTED — from TSV)
 
@@ -43,7 +43,7 @@ These targets may need different research patterns or the research findings were
 
 ## Allium Behavioral Coherence
 
-*2 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
+*3 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
 
 
 
@@ -60,256 +60,68 @@ These targets may need different research patterns or the research findings were
 
 
 
-<<<<<<< Updated upstream
-=======
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
->>>>>>> Stashed changes
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-nil
+# Research Strategy Distillation
+
+## Summary
+
+**Template**: template-default  
+**Experiments**: 84 total across 7 target files
+
+---
+
+## Kept Hypotheses (1)
+
+1. **Improving `gptel-auto-workflow-list-project-buffers`** — The only stated hypothesis retained for further investigation
+
+---
+
+## Discarded Hypotheses
+
+- None recorded
+
+---
+
+## Key Observation
+
+The research log shows **83 of 84 experiments** resulted in no documented hypotheses being kept, indicating either:
+
+- Exploratory/confirmatory testing without formal hypotheses, or
+- Most experiments validated existing behavior (null results not tracked)
 ```
 
+### Check Issues
+
+# Research Strategy Distillation — Check
+
+## Observations
+
+**Concerns:**
+
+| Issue | Detail |
+|-------|--------|
+| Low retention rate | 1.2% (1/84) hypothesis retention is unusual |
+| No discarded hypotheses | Missing 83 experiments worth of documentation |
+| Asymmetry | "Discarded = None" but 83 were not kept |
+
+## Likely Interpretation
+
+The 83 untagged experiments likely fall into:
+
+1. **Null results** — behavior confirmed, no action needed
+2. **Inconclusive** — unable to validate or reject
+3. **Merged** — folded into the single kept hypothesis
+
+## Recommendations
+
+- Add explicit categories for "null result" or "behavior confirmed"
+- Distinguish between "discarded" (rejected) vs. "absorbed" (merged)
+- Consider tracking effort/impact per experiment
+
+---
+
+**Verdict**: Summary is plausible but incomplete. The gap between "kept" and "discarded" suggests documentation gaps rather than 83 failures.

@@ -1755,7 +1755,7 @@ Output: {:findings [_] :techniques [_] :apply_to_us [_] :verification _ :confide
              "  → :innovate     when greenfield (fresh start)\n\n"
              ";; ─── Archetype Matrix — derived from (operation × mindset) ───\n"
              "λ archetype(op, mind).\n"
-             "  (coding, tactize)      → " (or (and (= agent-type "executor") archetype) "Craftsman") "\n"
+             "  (coding, tactize)      → " (or (and (equal agent-type "executor") archetype) "Craftsman") "\n"
              "  (debugging, analyse)   → Investigator\n"
              "  (thinking, analyse)    → Logician\n"
              "  (coding, innovate)     → Synthesizer\n"
