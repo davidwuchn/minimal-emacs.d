@@ -77,3 +77,4 @@ mementum/knowledge/*REJECTED*
  mementum/knowledge/token-efficiency.md
 __pycache__/
 *.pyc
+*.elc
