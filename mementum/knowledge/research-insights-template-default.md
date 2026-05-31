@@ -60,36 +60,41 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-<think>
-The user wants me to distill this research strategy document. Let me analyze what's provided:
+## Research Strategy Distillation
 
-1. **Research strategy**: template-default
-2. **Experiments**: 76 experiments across 6 targets (Emacs Lisp modules)
-3. **Kept hypotheses**: Mostly empty, with one stated hypothesis about improving `gptel-auto-workflow-list-project-buffers`
-4. **Discarded hypotheses**: None listed
+**Strategy:** Template-default
 
-This appears to be a summary or status report about some research/experimentation process. The user wants me to distill this into a concise summary.
+**Scope:** 76 experiments across 6 Emacs Lisp modules
 
-Let me create a clear, brief distillation.
-</think>
+**Modules examined:**
+- `gptel-benchmark-subagent.el`
+- `gptel-tools-agent-error.el`
+- `gptel-benchmark-comparator.el`
+- `gptel-tools-agent-prompt-build.el`
+- `gptel-auto-workflow-strategic.el`
+- `gptel-auto-workflow-projects.el`
+
+**Outcome:**
+
+| Category | Count |
+|----------|-------|
+| Kept hypotheses | 1 |
+| Discarded hypotheses | 0 |
+| Unstated hypotheses | 5 modules worth |
+
+**Active focus:** Improving `gptel-auto-workflow-list-project-buffers`
+
+**Summary:** Most hypotheses remain unstated or unspecified. One hypothesis about the project buffer listing function was retained for iteration.
 ```
 
-### Check Issues
-
-## Research Strategy Summary
-
-**Strategy**: template-default
-
-**Scope**: 76 experiments targeting 6 Emacs Lisp modules.
-
-**Outcome**:
-
-- **Hypotheses retained**: 1 — "Improve `gptel-auto-workflow-list-project-buffers`"
-- **Hypotheses discarded**: 0
-
-**Note**: One active hypothesis with no discards suggests either early-stage evaluation or highly selective criteria for hypothesis generation.
