@@ -1011,6 +1011,8 @@ Returns first relevant code addition line, or nil."
 ;; ─── Self-Evolving Model + Effort Selection ───
 ;; Learns per (category × subagent) which (model variant × effort level)
 ;; produces the highest keep-rate. Auto-bumps stuck categories.
+;; Maps to actual API: DeepSeek high→reasoning_effort"high", max→"max".
+;; MiniMax/Kimi: effort maps to model variant selection (faster↔slower).
 
 (defconst gptel-ai-behaviors--model-variants
   '((deepseek . (deepseek-v4-flash deepseek-v4-pro))     ; flash=fast, pro=thinking+effort
@@ -1019,8 +1021,10 @@ Returns first relevant code addition line, or nil."
   "Model families and variants ordered by capability (fast→powerful).")
 
 (defconst gptel-ai-behaviors--effort-levels
-  '("low" "medium" "high" "xhigh" "max")
-  "Reasoning effort levels ordered by compute cost.")
+  '("default" "high" "max")
+  "Reasoning effort levels. Maps to reasoning_effort API param.
+DeepSeek: high→reasoning_effort=high, max→reasoning_effort=max.
+MiniMax/Kimi: default→default model, high/max→upgrade model variant.")
 
 (defvar gptel-ai-behaviors--model-stats (make-hash-table :test 'equal)
   "Hash: (category subagent model effort) → (kept . total).")
@@ -1086,6 +1090,14 @@ Returns (NEW-MODEL . NEW-EFFORT) or nil if no bump needed."
             (message "[model-select] ⚠ Bumping %s/%s: %s→%s effort=%s→%s (%d consecutive failures)"
                      category subagent current-model model current-effort effort consecutive-failures)
             (cons model effort)))))))
+
+(defun gptel-ai-behaviors--effort-for-api (model effort)
+  "Return `:reasoning_effort' value for MODEL+EFFORT combo.
+DeepSeek v4-pro: high/max map to reasoning_effort. Other models: nil (no effort param)."
+  (when (and (stringp model) (stringp effort))
+    (let ((model-down (downcase model)))
+      (when (string-match-p "deepseek.*pro" model-down)
+        (if (member effort '("max" "high")) effort nil)))))
 
 (defun gptel-ai-behaviors--evolve-models ()
   "Log per-category model+effort performance each evolution cycle."
