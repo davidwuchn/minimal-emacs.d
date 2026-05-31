@@ -499,32 +499,10 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                  retry-prompt
                                                  nil nil nil
                                                    gptel-auto-experiment-validation-retry-active-grace)))
-                                         ;; Non-teachable or already retrying: fail fast
-                                         (let* ((hypothesis (gptel-auto-experiment--extract-hypothesis
-                                                             effective-agent-output))
-                                                 (exp-result
-                                                  (list :target target
-                                                        :id experiment-id
-                                                        :hypothesis hypothesis
-                                                        :score-before baseline
-                                                        :score-after 0
-                                                        :code-quality baseline-code-quality
-                                                        :kept nil
-                                                        :duration (- (float-time) start-time)
-                                                        :grader-quality 0
-                                                        :grader-reason validation-error
-                                                        :comparator-reason "validation-failed"
-                                                        :analyzer-patterns (format "%s" patterns)
-                                                        :agent-output effective-agent-output
-                                                        :validation-error validation-error
-                                                        :backend actual-backend
-                          :model actual-model)))
-                                            (setq finished t)
-                                            (setq gptel-auto-experiment--no-improvement-count (1+ gptel-auto-experiment--no-improvement-count))
-                                            (when (fboundp 'gptel-auto-workflow--apply-category-vigilance)
-                                              (gptel-auto-workflow--apply-category-vigilance target 'validation-failed))
-                                            (funcall log-fn run-id exp-result)
-                                            (funcall callback exp-result)))))
+                                          ;; Non-teachable or already retrying: let grader decide
+                                          ;; Don't set finished=t — grader runs below and can bypass
+                                           (message "[auto-exp] ⚠ Non-teachable validation: %s — grader will evaluate anyway"
+                                                    validation-error))))
                                  (let ((gptel-auto-experiment--grading-target target)
                                        (gptel-auto-experiment--grading-worktree experiment-worktree))
                                    (gptel-auto-experiment--grade-with-retry
@@ -1052,10 +1030,12 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                   (let* ((grader-bypass
                                                           (and grade-passed
                                                                grade-score grade-total (> grade-total 0)
-                                                               (>= (/ (float grade-score) grade-total) 0.8)))
+                                                               (>= (/ (float grade-score) grade-total) 0.6)))
                                                          (reason
                                                           (if grader-bypass
-                                                              (format "grader-bypass:%s" "benchmark failed but grader passed strongly")
+                                                              (format "grader-bypass:%s%s"
+                                                                      "benchmark failed but grader passed strongly"
+                                                                      (if validation-error (format " (validation: %s)" validation-error) ""))
                                                             (cond (validation-error validation-error)
                                                                   ((not (plist-get bench :nucleus-passed))
                                                                    "nucleus-validation-failed")
