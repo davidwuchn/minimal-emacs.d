@@ -2402,7 +2402,8 @@ analysis/compare may still be too slow for code generation (DashScope:
     ;; Do NOT sort by router position: if DashScope is at position 0 in the
     ;; aggregate ranking, sorting by it would put DashScope first again.
     ;; Only remove backends the router explicitly deprioritizes.
-    (or (and gptel-auto-workflow-executor-rate-limit-fallbacks
+    (or (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+             gptel-auto-workflow-executor-rate-limit-fallbacks
              (let ((ranked (and (fboundp 'gptel-auto-workflow--ranked-subagent-backends)
                                 (gptel-auto-workflow--ranked-subagent-backends agent-type))))
                (if ranked
@@ -2417,7 +2418,8 @@ analysis/compare may still be too slow for code generation (DashScope:
                       gptel-auto-workflow-executor-rate-limit-fallbacks))
                  gptel-auto-workflow-executor-rate-limit-fallbacks)))
          gptel-auto-workflow-executor-rate-limit-fallbacks))
-   ((member agent-type gptel-auto-workflow-headless-fallback-agents)
+   ((and (boundp 'gptel-auto-workflow-headless-fallback-agents)
+         (member agent-type gptel-auto-workflow-headless-fallback-agents))
     (or (and (fboundp 'gptel-auto-workflow--ranked-subagent-backends)
              (gptel-auto-workflow--ranked-subagent-backends agent-type))
         gptel-auto-workflow-headless-subagent-fallbacks))))

@@ -4,14 +4,13 @@
 
 # Semantic File Relationships
 
-Generated: 2026-05-31T17:08
+Generated: 2026-05-31T06:40
 
-| lisp/modules/gptel-auto-experiment-ai-behaviors.el | lisp/modules/gptel-tools-agent-prompt-build.el | 0.750 |
-| lisp/modules/gptel-auto-workflow-ontology-router.el | lisp/modules/gptel-tools-agent-prompt-build.el | 0.392 |
-| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-auto-workflow-recovery.el | 0.333 |
-| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-ext-checkpoint.el | 0.333 |
-| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-ext-circuit-breaker.el | 0.333 |
-| lisp/modules/gptel-auto-workflow-evolution.el | lisp/modules/gptel-tools-agent-prompt-build.el | 0.213 |
+| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-tools-agent-main.el | 0.833 |
+| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-auto-workflow-bootstrap.el | 0.831 |
+| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-tools-agent-base.el | 0.828 |
+| lisp/modules/gptel-tools-agent-prompt-build.el | lisp/modules/gptel-tools-agent.el | 0.821 |
+| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-tools-agent-experiment-loop.el | 0.820 |
 
 ## Ontology Implications
 
