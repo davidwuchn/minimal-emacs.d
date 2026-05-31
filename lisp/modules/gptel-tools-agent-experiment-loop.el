@@ -540,6 +540,15 @@ Increased from 10m to 20m: experiments with slow backends (2-5min per call)
 can exceed the old limit across multiple phases (executor, validation, grading).
 Each phase is a separate subagent call with no progress update between them.")
 
+(defvar gptel-auto-workflow--total-budget-minutes 60
+  "Maximum TOTAL minutes for a workflow before watchdog force-stops.
+Prevents runaway workflows that make progress but never finish.
+Set to 60min: 5 targets × 3 phases × 4min avg = 60min budget.")
+
+(defvar gptel-auto-workflow--watchdog-start-time nil
+  "Timestamp when the current workflow run started.
+Set by `gptel-auto-workflow--restart-watchdog-timer'.")
+
 (defcustom gptel-auto-workflow-status-file "var/tmp/cron/auto-workflow-status.sexp"
   "Path to the persisted auto-workflow status snapshot.
 Relative paths are resolved from the project root."
@@ -1199,25 +1208,34 @@ Force-stops when:
         (let* ((stuck-minutes (and gptel-auto-workflow--last-progress-time
                                    (/ (float-time (time-subtract (current-time) gptel-auto-workflow--last-progress-time))
                                       60)))
+               (elapsed-minutes (and gptel-auto-workflow--watchdog-start-time
+                                    (/ (float-time (time-subtract (current-time) gptel-auto-workflow--watchdog-start-time))
+                                       60)))
                (active-tasks (and (boundp 'my/gptel--agent-task-state)
                                   (hash-table-p my/gptel--agent-task-state)
                                   (hash-table-count my/gptel--agent-task-state))))
           (cond
+            ;; Total budget exceeded — workflow ran too long overall
+            ((and (numberp elapsed-minutes) (> elapsed-minutes gptel-auto-workflow--total-budget-minutes))
+             (message "[auto-workflow] WATCHDOG: Workflow exceeded total budget (%.0f > %d min), force-stopping"
+                      elapsed-minutes gptel-auto-workflow--total-budget-minutes)
+             (gptel-auto-workflow--force-stop))
+            ;; No active subagent tasks and stuck for grace period
             ((and (numberp stuck-minutes)
                   (> stuck-minutes 10)  ; 10 min grace for backend delays (2-5min per call)
                   (not (and (numberp active-tasks) (> active-tasks 0))))
-            (message "[auto-workflow] WATCHDOG: No active subagent tasks for %.1f min, force-stopping"
-                     stuck-minutes)
-            (gptel-auto-workflow--force-stop))
-           ((null stuck-minutes)
-            (message "[auto-workflow] WATCHDOG: No progress time recorded, force-stopping")
-            (gptel-auto-workflow--force-stop))
-           ((> stuck-minutes gptel-auto-workflow--max-stuck-minutes)
-            (message "[auto-workflow] WATCHDOG: Workflow stuck for %.1f minutes, force-stopping"
-                     stuck-minutes)
-            (gptel-auto-workflow--force-stop))
-           (t
-            t))))
+             (message "[auto-workflow] WATCHDOG: No active subagent tasks for %.1f min, force-stopping"
+                      stuck-minutes)
+             (gptel-auto-workflow--force-stop))
+            ((null stuck-minutes)
+             (message "[auto-workflow] WATCHDOG: No progress time recorded, force-stopping")
+             (gptel-auto-workflow--force-stop))
+            ((> stuck-minutes gptel-auto-workflow--max-stuck-minutes)
+             (message "[auto-workflow] WATCHDOG: Workflow stuck for %.1f minutes, force-stopping"
+                      stuck-minutes)
+             (gptel-auto-workflow--force-stop))
+            (t
+             t))))
     (error
      (message "[auto-workflow] WATCHDOG: Check failed: %S\n%s"
               err
@@ -1252,6 +1270,7 @@ Force-stops when:
   (when (timerp gptel-auto-workflow--watchdog-timer)
     (cancel-timer gptel-auto-workflow--watchdog-timer))
   (setq gptel-auto-workflow--watchdog-timer nil)
+  (setq gptel-auto-workflow--watchdog-start-time (current-time))
   (when (or gptel-auto-workflow--running
             gptel-auto-workflow--cron-job-running)
     (setq gptel-auto-workflow--watchdog-timer

@@ -638,6 +638,11 @@ Logs subagent dispatch to ontology for self-evolution tracking."
                     (min timeout 120)  ; probation/dead → max 120s
                   timeout))
             timeout))
+         ;; Update workflow progress on every subagent dispatch so the watchdog
+         ;; sees activity even during long-running experiments (which use direct
+         ;; gptel-request, not subagent tasks, so active-tasks remains 0).
+         (progress-time (and (fboundp 'gptel-auto-workflow--update-progress)
+                            (gptel-auto-workflow--update-progress)))
          (previous-timeout my/gptel-agent-task-timeout)
          (previous-hard-timeout my/gptel-agent-task-hard-timeout)
          (grace (or active-grace gptel-auto-experiment-active-grace)))
