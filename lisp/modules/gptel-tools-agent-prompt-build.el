@@ -1064,9 +1064,10 @@ Returns a compact lambda-notation string ready for the LLM."
          (strat-f (cdr (assoc 'strategy-frontier vars)))
          (agent-b (cdr (assoc 'agent-behavior vars)))
           (val-pipe (cdr (assoc 'validation-pipeline vars)))
-          (ai-b (cdr (assoc 'ai-behaviors vars)))
-          (rec-b (cdr (assoc 'recommended-behaviors vars)))
-          (vio-b (cdr (assoc 'mode-violations vars))))
+           (ai-b (cdr (assoc 'ai-behaviors vars)))
+           (rec-b (cdr (assoc 'recommended-behaviors vars)))
+           (vio-b (cdr (assoc 'mode-violations vars)))
+           (uni-d (cdr (assoc 'unified-directive vars))))
     (concat
      ;; HEADER
      (format "λ experiment(%s). id=%d/%d budget=%smin path=%s/%s\nbaseline(8keys): %s"
@@ -1082,9 +1083,10 @@ Returns a compact lambda-notation string ready for the LLM."
      (if act-s (concat act-s "\n") "")
      (if ai-b (concat ai-b "\n") "")
      (if rec-b (concat rec-b "\n") "")
-     (if vio-b (concat vio-b "\n") "")
-     "## Spec Assessment\n"
-     "Before implementing, identify ambiguities in the task:\n"
+      (if vio-b (concat vio-b "\n") "")
+      (if uni-d (concat uni-d "\n\n") "")
+      "## Spec Assessment\n"
+      "Before implementing, identify ambiguities in the task:\n"
      "  · What's NOT specified that needs a decision?\n"
      "  · Which edge cases are undefined?\n"
      "  · What assumptions must I make?\n"
@@ -1444,8 +1446,9 @@ Read ONE function. Edit ONE line. Verify. Done."))))
                (task-type-diversity . ,(gptel-auto-experiment--format-task-type-diversity target))
                (cross-target-patterns . ,(gptel-auto-experiment--format-cross-target-patterns target))
                (ontology-guidance . ,(gptel-auto-experiment--format-ontology-guidance target))
-               (action-schema . ,(if (fboundp 'gptel-auto-workflow--format-schema-guidance)
-                                     (gptel-auto-workflow--format-schema-guidance target) ""))
+                (unified-directive . ,(gptel-auto-experiment--format-unified-directive target))
+                (action-schema . ,(if (fboundp 'gptel-auto-workflow--format-schema-guidance)
+                                      (gptel-auto-workflow--format-schema-guidance target) ""))
                (ai-behaviors . ,(if (fboundp 'gptel-ai-behaviors--inject-for-target)
                                     (gptel-ai-behaviors--inject-for-target target) ""))
                (recommended-behaviors . ,(if (fboundp 'gptel-ai-behaviors--recommend-for-prompt)
@@ -3053,6 +3056,50 @@ Returns string warning about common rejection reasons, or empty string."
         (concat (mapconcat #'identity (nreverse parts) "\n\n") "\n\n"
                 "To succeed, actively avoid the failure patterns and address grader feedback above.\n\n")
       "")))
+
+;; ─── Unified Per-Category Code Generation Directive ───
+
+(defun gptel-auto-experiment--format-unified-directive (target)
+  "Combine ontology + failures + behaviors + grader feedback into one directive.
+Returns a single compact section that tells the executor WHAT to do, WHAT to avoid,
+and WHAT pattern to use — from all OV5 signals combined."
+  (when (and target (fboundp 'gptel-auto-workflow--categorize-target))
+    (let* ((category (gptel-auto-workflow--categorize-target target))
+           (cat-name (pcase category
+                       (:agentic "agentic") (:programming "programming")
+                       (:tool-calls "tool-calls") (:natural-language "NLP")
+                       (_ "unknown")))
+           (focus-avoid
+            (pcase category
+              (:agentic "tool dispatch, state cleanup, async contracts")
+              (:programming "performance, edge cases, code deduplication")
+              (:tool-calls "error handling, tool dispatch safety, timeout")
+              (:natural-language "prompt quality, context window efficiency")
+              (_ "minimal changes, nil guards, condition-case")))
+           (best-hashtag (and (fboundp 'gptel-ai-behaviors--best-hashtag-for)
+                              (gptel-ai-behaviors--best-hashtag-for category)))
+           (best-task (and (fboundp 'gptel-ai-behaviors--best-task-for-category)
+                           (gptel-ai-behaviors--best-task-for-category category)))
+           (task-text (pcase best-task
+                        (:nil-guard "ADD a nil guard — wrap ONE call in ignore-errors or when")
+                        (:condition-case "ADD error handling — wrap ONE operation in condition-case")
+                        (:replicate-pattern "REPLICATE past pattern — find gethash/assoc, add nil guard")
+                        (_ "ADD a nil guard or condition-case around ONE function call")))
+           (failures (and (fboundp 'gptel-auto-experiment--get-category-failure-reasons)
+                          (gptel-auto-experiment--get-category-failure-reasons category 2)))
+           (fail-text (if failures
+                          (mapconcat (lambda (p) (format "%s (%d×)" (car p) (cdr p))) failures ", ")
+                        ""))
+           (parts nil))
+      (push (format "## DIRECTIVE (%s)" cat-name) parts)
+      (push (format "FOCUS: %s" focus-avoid) parts)
+      (when best-hashtag
+        (push (format "BEHAVIOR: #=%s (learned best for %s)" best-hashtag cat-name) parts))
+      (push (format "TASK: %s" task-text) parts)
+      (when (and fail-text (not (string-empty-p fail-text)))
+        (push (format "AVOID: %s" fail-text) parts))
+      (push (format "CHANGE: ONE function. Edit ONE line. Verify with byte-compile.") parts)
+      (mapconcat #'identity (nreverse parts) "\n"))))
 
 ;;; Cross-Target Pattern Transfer
 
