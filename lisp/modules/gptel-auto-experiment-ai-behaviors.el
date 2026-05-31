@@ -341,12 +341,12 @@ Cleared each evolution cycle. Used by prompt builder to recommend behaviors.")
     blocks))
 
 (defun gptel-ai-behaviors--recommend-behaviors (category &optional n)
-  "Return the N most frequently hit hashtags for CATEGORY (min 2 hits).
+  "Return the N most frequently hit hashtags for CATEGORY (min 3 hits).
 Returns string of space-separated hashtags, or empty string."
   (when category
     (let ((hits (make-hash-table :test 'equal)))
       (maphash (lambda (key count)
-                 (when (and (eq (car key) category) (>= count 2))
+                 (when (and (eq (car key) category) (>= count 3))
                    (puthash (cdr key) (+ (gethash (cdr key) hits 0) count) hits)))
                gptel-ai-behaviors--reasoning-hits)
       (let ((sorted (sort (let (result)
