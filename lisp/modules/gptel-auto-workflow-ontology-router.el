@@ -3123,6 +3123,12 @@ Runs during the self-evolution cycle.  Results are stored in
                      total-dispatch (length pairs))
             (dolist (pair (seq-take (sort pairs (lambda (a b) (> (cdr a) (cdr b)))) 5))
               (message "[ontology-evolve]     %s: %d×" (car pair) (cdr pair))))))
+      ;; Log review outcomes per category (ontology-evolved staging gate)
+      (let ((summary (and (bound-and-true-p gptel-auto-workflow--review-outcomes)
+                          (fboundp 'gptel-auto-workflow--summarize-review-outcomes)
+                          (gptel-auto-workflow--summarize-review-outcomes))))
+        (when summary
+          (message "[ontology-evolve] 📋 %s" (replace-regexp-in-string "\n" " " summary))))
       ;; Log category drift + attempt repair
       (condition-case nil
           (let* ((drifts (gptel-auto-workflow--detect-category-drift))
