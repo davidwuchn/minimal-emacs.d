@@ -666,7 +666,8 @@ remove it."
       (with-temp-buffer
         (insert-file-contents file-path)
         (goto-char (point-min))
-        (when (re-search-forward "^\\(          (message "[guard] Refusing to parse %s: unresolved merge conflict markers"
+        (when (re-search-forward "^\\(<<<<<<< \\|>>>>>>> \\|=======\\)" nil t)
+          (message "[guard] Refusing to parse %s: unresolved merge conflict markers"
                    (file-name-nondirectory file-path))
           (let ((body (buffer-substring-no-properties (point-min) (point-max))))
             ;; metadata-only is the 4th positional arg (3rd in &rest)
