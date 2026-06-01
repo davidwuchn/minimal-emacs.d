@@ -39,6 +39,15 @@
 (defvar gptel-benchmark-default-dir)
 (defvar my/gptel-agent-task-timeout)
 (defvar gptel-agent-preset)
+(defvar log-model nil
+  "Dynamic variable bound in `gptel-benchmark-call-subagent' for the selected model name.
+Used for cost tracking and routing context.")
+(defvar log-backend nil
+  "Dynamic variable bound in `gptel-benchmark-call-subagent' for the selected backend name.
+Used for logging and routing context.")
+(defvar bumped-model nil
+  "Dynamic variable bound in `gptel-benchmark-call-subagent' for model bump escalation.
+Set by bump-model when consecutive failures exceed thresholds.")
 (defvar gptel-auto-workflow--analyzer-failed-backends nil
   "Analyzer backend names skipped during target-selection retry.")
 
