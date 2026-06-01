@@ -252,13 +252,17 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                     "template-default")
                                                selected))
                                          "template-default"))
-                       (prompt (if (and (fboundp 'gptel-auto-experiment-build-prompt-with-strategy)
-                                        (not (equal strategy-name "template-default")))
-                                   (gptel-auto-experiment-build-prompt-with-strategy
-                                    strategy-name target experiment-id max-experiments analysis baseline previous-results)
-                                 (gptel-auto-experiment-build-prompt
-                                  target experiment-id max-experiments analysis baseline previous-results))))
-                  (message "[strategy] Using strategy '%s' for %s experiment %d" strategy-name target experiment-id)
+                        (strategy-prompt (when (and (fboundp 'gptel-auto-experiment-build-prompt-with-strategy)
+                                                   (not (equal strategy-name "template-default")))
+                                              (gptel-auto-experiment-build-prompt-with-strategy
+                                               strategy-name target experiment-id max-experiments analysis baseline previous-results)))
+                        (prompt (or (and (stringp strategy-prompt)
+                                         (> (length strategy-prompt) 0)
+                                         strategy-prompt)
+                                    (gptel-auto-experiment-build-prompt
+                                     target experiment-id max-experiments analysis baseline previous-results))))
+                   (when (and (stringp prompt) (> (length prompt) 0))
+                     (message "[strategy] Using strategy '%s' for %s experiment %d" strategy-name target experiment-id))
                   ;; Trace strategy execution
                   (when (fboundp 'gptel-auto-workflow--trace-strategy-execution)
                     (gptel-auto-workflow--trace-strategy-execution
@@ -267,9 +271,17 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                      (length prompt)
                      (and (boundp 'gptel-auto-workflow--last-prompt-sections)
                           (split-string gptel-auto-workflow--last-prompt-sections ","))))
-                  (setq executor-prompt prompt)
-               (setq executor-callback
-                     (lambda (agent-output)
+                   (setq executor-prompt prompt)
+                   (unless (and (stringp prompt) (> (length prompt) 0))
+                     (message "[auto-exp] ⚠ Empty prompt for %s experiment %d — skipping" target experiment-id)
+                     (setq finished t)
+                     (funcall callback
+                              (list :target target :id experiment-id :kept nil
+                                    :score-after 0
+                                    :error "empty-prompt"))
+                     (cl-return-from gptel-auto-experiment--run-single))
+                (setq executor-callback
+                      (lambda (agent-output)
                    (gptel-auto-experiment--call-in-context
                     experiment-buffer experiment-worktree
                     (lambda ()
