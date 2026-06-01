@@ -1273,18 +1273,22 @@ Used to normalize keep-rate by cost.")
     ("MiniMax-M3"           . (:input 0.60 :output 2.40 :cache-hit 0.12))
     ("minimax-m2.7"         . (:input 0.30 :output 1.20 :cache-hit 0.06))
     ("minimax-m2.7-highspeed" . (:input 0.15 :output 0.60 :cache-hit 0.03))
-    ;; DashScope / Qwen (USD/1M, estimated)
-    ("qwen3.6-plus"         . (:input 0.35 :output 1.40))
-    ("qwen3.5-plus"         . (:input 0.20 :output 0.80))
-    ;; moonshot / Kimi (USD/1M, estimated)
-    ("kimi-k2.6"            . (:input 0.60 :output 2.40))
-    ;; Gemini / GLM (USD/1M, estimated)
-    ("glm-5"                . (:input 0.50 :output 2.00))
-    ("glm-4.7"              . (:input 0.30 :output 1.20)))
+    ;; DashScope/Qwen (USD/1M, ~7 CNY/USD, implicit cache 20% via Bailian)
+    ;;   plus:  ¥2.00/8.00/0.40 → $0.29/1.14/0.06
+    ;;   flash: ¥0.50/2.00/0.10 → $0.07/0.29/0.01
+    ("qwen3.6-plus"         . (:input 0.29 :output 1.14 :cache-hit 0.06))
+    ("qwen3.5-plus"         . (:input 0.14 :output 0.57 :cache-hit 0.03))
+    ("qwen3-coder-plus"     . (:input 0.29 :output 1.14 :cache-hit 0.06))
+    ("qwen3.6-flash"        . (:input 0.07 :output 0.29 :cache-hit 0.01))
+    ;; moonshot/Kimi via Bailian (USD/1M, ~7 CNY, implicit cache ~17%)
+    ("kimi-k2.6"            . (:input 0.60 :output 2.40 :cache-hit 0.10))
+    ;; GLM via Bailian (USD/1M, ~7 CNY, implicit cache 25%)
+    ("glm-5"                . (:input 0.50 :output 2.00 :cache-hit 0.13))
+    ("glm-4.7"              . (:input 0.30 :output 1.20 :cache-hit 0.08)))
   "Per-model pricing in USD per 1M tokens (:input :output :cache-hit).
-Used by gptel-ai-behaviors--model-cost to estimate API call cost.
-DeepSeek: api-docs.deepseek.com, MiniMax: platform.minimaxi.com/docs.
-Verified 2026-06-01.")
+DeepSeek: api-docs.deepseek.com, MiniMax: platform.minimaxi.com,
+DashScope: help.aliyun.com context-cache docs. Verified 2026-06-01.
+ALL backends through Bailian support implicit cache (auto-enabled).")
 
 (defvar gptel-ai-behaviors--cache-hit-rate 0.5
   "Estimated cache-hit rate (0-1) for KV cache.
