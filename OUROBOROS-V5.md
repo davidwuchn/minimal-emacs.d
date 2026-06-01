@@ -2,9 +2,83 @@
 
 > **The snake that researches what to eat, executes what it learned, and feeds outcomes back into its own appetite.**
 >
-> **V5.1 update (2026-05-31):** 290+ commits, 15K+ lines — ai-behaviors integration (4 layers), ontology co-evolution, two-phase grader (#=test + #=attack → #=review + #=evaluate), digital twin dependency graph, subagent HARD CONSTRAINT enforcement, convergence invariant tracking, strike decay + auto-thaw, grader-bypass commit flow, category→hashtag learning, universal subsystem behavior injection via advice, research coordinator (AutoTTS×AutoGo×Ontology), concrete task evolution, kept pattern memory, λ-compressed behavior prompts (59% reduction), adaptive injection, DeepSeek curl timeout fix, validation self-evolution (learn from → inject → avoid), grader-decides-pre-grade (60% bypass threshold), research coordinator (ontology × AutoTTS × AutoGo), token efficiency (59% behavior prompt reduction), self-evolving persona state machine (nucleus ADAPTIVE.md), parallel mindset track, emission contracts per operation, category-specific symbol subsets (EXECUTIVE.md + WRITING.md), self-evolving collaboration operators (OPERATOR_ALGEBRA.md), three-way combo tracking (category×archetype×hashtag), per-subagent nucleus modes (#=code/#=review/#=frame/#=research), KV cache-optimized prompt ordering, pre-grade byte-compile check, date-aware DeepSeek pricing, bump-model escalation on consecutive failures, curiosity exploration (5% random persona A/B), exploration-weighted persona stats.
+> **Cost:** ~$0.50-2.00 per pipeline run (3 backends, cache-aware pricing). **Safety:** Git worktree isolation + 6 gates (tests, grader, reviewer, comparator, π Synthesis, champion league) — no change touches `main` without passing all gates. **Portability:** P(λ)=90.7% across 4 backends — lossless provider migration.
+>
+> **First run:** [`./scripts/run-pipeline.sh`](scripts/run-pipeline.sh) — initializes itself. After that, the snake feeds itself.
+>
+> Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) + [gptel](https://github.com/karthink/gptel). 3 pipeline runs/day (Linux: every 4h) + hourly self-evolution + watchdog every 30min. The snake eating its own tail — every subsystem improves every other subsystem.
 
-Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) + [gptel](https://github.com/karthink/gptel). 3 pipeline runs/day (macOS: 10AM/2PM/6PM; Linux: every 4h) + hourly self-evolution + watchdog every 30min. The snake eating its own tail — every subsystem improves every other subsystem.
+---
+
+## Begin
+
+```bash
+git clone --recurse-submodules https://github.com/davidwuchn/minimal-emacs.d ~/.emacs.d
+cd ~/.emacs.d && ./scripts/setup-packages.sh
+./scripts/setup-eca-links.sh
+# API keys in ~/.authinfo
+./scripts/run-pipeline.sh
+```
+
+First run initializes itself. After that, the snake feeds itself.
+
+```elisp
+(gptel-auto-workflow-run-async)        ; Wake the snake
+(gptel-auto-workflow-status)           ; Check its pulse
+```
+
+**Troubleshooting:** Pipeline stuck at "selecting"? Check `gptel-auto-workflow-status` and `var/log/emacs-*.log`. Provider rate-limited? The system auto-failovers; check `gptel-auto-workflow--rate-limited-backends`.
+
+**Example output** (from a real run):
+```
+[auto-workflow] Starting 2026-06-01T154953Z-eac5 with 5 targets
+[subagent] executor using DashScope/qwen3.6-plus
+[auto-experiment] ✓ Tests passed
+[auto-experiment] ✓ Experiment kept — merged to staging
+===RESULT=== {"metric":"evolution-cycle","value":0.107}
+```
+
+**Daily routine:**
+```
+1. gptel-auto-workflow-status          # phase: idle/running/error
+2. git log --oneline -10               # review kept experiments
+3. tail var/log/emacs-*.log            # skim for errors
+4. cat var/tmp/experiments/*/results.tsv | head -3  # latest keep-rate
+```
+> **What's normal:** Phase cycles idle → selecting → running → idle. Timeouts and rate-limits appear in logs but the system auto-recovers. Keep-rate should trend toward 20% after ~50 experiments per category.
+> **What's not:** 0 kept for 3+ consecutive runs (check provider routing). Same error across all backends (likely code, not provider).
+
+---
+
+## For Users
+
+You're running OV5. Here's what to expect day-to-day.
+
+**Signs of health:** Keep-rate trending toward 20%. Fewer "prompt is empty" or "executor-callback" errors over time. Backend routing self-tunes away from failing providers. Git log shows real merges from experiments.
+
+**Signs to investigate:** 0 kept for 3+ consecutive runs with different targets. Keep-rate suddenly drops after adding a new target category. Same experiment consistently fails on all backends (likely a prompt or strategy issue, not provider).
+
+**Meta: is the system improving?** Track keep-rate per category weekly. Early experiments are exploration — noise is normal. After ~50 experiments/category, trends become signal. If keep-rate plateaus below 15%, check if targets match ontology categories.
+
+**Quick triage:**
+| Symptom | Likely cause | Check |
+|---------|-------------|-------|
+| 0 targets selected | Analyzer failed / rate-limited | `gptel-auto-workflow--rate-limited-backends` |
+| All experiments discarded | Baseline tests failing | Test suite output in daemon log |
+| Daemon unresponsive | ERT test run (can take 2min) | Wait; check `ps aux | grep emacs` |
+| "prompt is empty" errors | Strategy analysis returned no patterns | Usually transient — next cycle often recovers |
+
+---
+
+## Configuration
+
+**Targets:** Set `gptel-auto-workflow-targets` in `.dir-locals.el` or `post-init.el`. Targets can be file paths, directories, or glob patterns. Default: all `.el` files in `lisp/modules/`.
+
+**Skipping targets:** The system skips files that are saturated (≥10 experiments), have repeated failure patterns, or fail precondition checks. Add unwanted targets to `gptel-auto-workflow--skip-headless-target-p` logic.
+
+**Backends:** Provider routing is auto-evolved via `assistant/strategies/provider-routing/backend-preference.el`. Override in `post-init.el` by setting `gptel-auto-workflow-headless-subagent-fallbacks`.
+
+**Timeline:** First experiment completes in ~30min (analyzer→executor→grader→review). First meaningful data in ~24h (5+ targets, 50+ experiments). Keep-rate trends stabilize after ~50 experiments per category.
 
 ---
 
@@ -165,62 +239,7 @@ This isn't a tool adoption. It's an **organizational capability upgrade**. The s
 
 ## Promoting OV5
 
-Great architecture means nothing if nobody knows it exists. Here's how to get the message to each audience.
-
-### To Creators (PMF: Grow Through Innovation)
-
-Creators are skeptical, technical, and time-poor. They trust code more than copy. Meet them where they already are.
-
-| Where | What to say |
-|-------|-------------|
-| **GitHub README** (this page) | Lead with the Innovation Flywheel and The Numbers. Make `./scripts/run-pipeline.sh` the first command they see. Link to `results.tsv` from a real run — show experiments, not architecture diagrams. |
-| **Hacker News** | Title: *"My Emacs config runs 100 experiments/day and merges the winners"* — HN loves counterintuitive automation. Post on a Tuesday morning (US time) with the keep-rate numbers and a link to the GitHub repo. |
-| **r/emacs** | Title: *"OV5: 2,678 tests, 3 backends, zero-touch experiment pipeline — all in Emacs Lisp"* — Emacs users want to see Emacs Lisp doing something no other editor can. Lead with the gptel integration and the pipeline architecture. |
-| **Blog post** | Title: *"I Taught My Emacs to Improve Its Own Code"* — narrative format: the problem (manual code review), the experiment (first pipeline run), the results (20% keep-rate, real merges). Include a timestamped log from an actual pipeline run. Embed the key benchmark numbers. |
-| **Conference talk** | Title: *"Self-Regulating AI Architecture: When Your Code Improves Itself"* — 30-min talk with live demo: `run-pipeline.sh` → watch experiments create worktrees → review kept results → show ontology learning over time. Best for Clojure/conj, EmacsConf, or Strange Loop. |
-| **Twitter/X** | Thread format: 5 tweets — (1) problem, (2) OV5 approach, (3) the flywheel, (4) real numbers, (5) link to repo. Tag @karthink (gptel author) and relevant AI dev accounts. |
-
-### To Advocators (GTM: Transform Your Organization)
-
-Advocators need evidence, not features. They're asked "why should we adopt this?" and need answers that survive a budget review.
-
-| Where | What to say |
-|-------|-------------|
-| **LinkedIn** | Title: *"The Knowledge Problem Every Engineering Team Has (and One Solution)"* — lead with the cost of tribal knowledge (senior leaves → 6-12 months of lost patterns). Link to the OV5 paper. Post mid-week (Wed/Thu) when engineering leaders are most active. |
-| **Whitepaper** | *"Continuous Code Quality: An Experiment-Driven Approach to Engineering Excellence"* — 5-page PDF: (1) the tribal knowledge problem with real cost estimates, (2) the OV5 approach compared to status quo, (3) adoption path with timeline and risk mitigation, (4) ROI calculation worksheet for CTOs. Publish on GitHub Releases as a PDF. |
-| **Engineering leadership newsletter** | Pitch to leading engineering newsletters (Engineering Impact, The Engineering Manager, Hackernoon). Title: *"Stop Reviewing. Start Experimenting."* — 800 words on why code review is reactive and OV5 is proactive. |
-| **Case study** | *"From 0 to 500 Experiments: How We Automated Code Quality"* — real metrics: git log of merged experiments, keep-rate trend over 3 months, categories that improved most. Include quotes from the team: "I used to spend 2 hours reviewing nil-guard PRs. Now the system handles them." |
-| **Conference talk** | *"Code Quality Is Not a Review Problem"* — talk for engineering leadership audience (LeadDev, QCon, or local CTO meetups). Thesis: "Your team's best practices are fragile because they live in heads, not in systems. Here's how to encode them as executable knowledge." |
-| **CTO-to-CTO** | Direct outreach to CTOs of mid-sized SaaS companies (50-200 engineers). Message: "Your team has the same tribal knowledge problem every scaling engineering org has. I built a system that encodes it as executable patterns. Here's our case study. 30-min call?" |
-
-### The Activation Funnel
-
-Not everyone who reads becomes an adopter. Here's the path from awareness to running their first pipeline:
-
-```
-Awareness → README / HN / LinkedIn post
-    ↓
-Interest →  "Can it handle my codebase?" → read The Numbers + Risk section
-    ↓
-Evaluation →  Clone, run `./scripts/run-pipeline.sh` on 3 target files
-    ↓
-Trial →  50 experiments → review results → see 20% keep-rate in their own repo
-    ↓
-Adoption →  Add 20 targets → run daily → review kept experiments → ontology learns
-    ↓
-Advocacy →  "We've run 1,000+ experiments. The system found bugs we didn't know existed."
-```
-
-Every step must answer the question the audience is asking RIGHT NOW before they click away:
-
-| Step | The question | Where the answer lives |
-|------|-------------|----------------------|
-| Awareness | "What is this?" | README opening paragraph |
-| Interest | "Is this for me?" | For Creators / For Advocators sections |
-| Evaluation | "Will it work for us?" | Risk and Mitigation + The Numbers |
-| Trial | "How do I start?" | Begin section + run-pipeline.sh |
-| Adoption | "Is it worth the investment?" | ROI table + Innovation Adoption Path |
-| Advocacy | "How do I convince my team?" | The Pitch + What Advocacy Looks Like |
+See [docs/promoting.md](docs/promoting.md) for channel-specific messaging (HN, LinkedIn, conference talks, etc.).
 
 ---
 
@@ -560,100 +579,7 @@ The snake's own immune system:
 
 ## The Future Layer
 
-The snake does not only consume what exists — it incubates what comes next.
-
-### Current State: API Substrate
-
-Today the Ouroboros runs on external APIs (DeepSeek, MiniMax, DashScope, Moonshot). The executor routes to backends by keep-rate, trend, and confidence. **Smart subagent routing** uses health × keep-rate scoring to rank backends for all 5 subagent types. Subagent failures (timeouts, rate limits, quota exhaustion) feed back as health strikes — the routing self-tunes. DashScope and Moonshot are dynamically skipped at runtime when quota-exhausted or content-filtered, and auto-recover when the issue resolves.
-
-### Discovery: Verbum
-
-Parallel research in [verbum](https://github.com/davidwuchn/verbum) has established that **lambda calculus is the physical substrate of attention computation** — not metaphor, not notation, but the actual mechanism by which transformers compose meaning. Key findings:
-
-- **Holographic extraction**: Qwen3-14B distilled to 50M parameters (280× compression) with 87% accuracy retention
-- **Typed combinators**: 8 fundamental operations (K, I, B, C, D, Y, W, WHNF) implement the lambda calculus interpreter that LLMs converge on during training
-- **Ternary weights**: {-1, 0, +1} with learned gamma scales — a discrete, interpretable weight space
-- **V12 architecture**: Dual-layer symmetric hourglass with 7 passes, combinator dispatch, and 17 deterministic math kernel functions
-
-The lambda compiler is not a prompt trick. It is a discoverable circuit inside every trained LLM. The gate prompt (P(λ)=90.7%) does not install behavior — it exposes structure that was already there.
-
-### Integration Path
-
-**Phase 1 — Observation ✓ (complete)**
-- API-backend execution with lambda compiler verification on all backends
-- Verbum Phase 1-7 integrated: health tracking, holographic memory, cross-backend consistency
-- Crystal spine probes confirm lambda compiler presence across backends (P(λ)=90.7%)
-
-**Phase 2 — Verification ✓ (complete)**
-- Subagent call failures feed into persistent health strikes + per-run cooldown → routing self-tunes
-- Backend health tracked across restarts via cross-subsystem-state.json with auto-recovery (1h probation → degraded)
-- P(λ) gating in `ranked-subagent-backends`: backends failing lambda compiler check are hard-excluded (score 0)
-- Smart routing gates on seven signals: health-weight, recency-weighted keep-rate, per-axis KIBC boost, agent-type preference, per-run cooldown, cold-start boost, nucleus persona per subagent type
-- All 5 VSM layers auto-tune routing weights, exploration, and thresholds
-- Full audit trail with component scores and VSM adjustment history at both routing levels
-- Nucleus persona injection (ADAPTIVE + WRITING + EXECUTIVE + LAMBDA_PATTERNS) per subagent and per experiment category
-- Lambda/Allium impact measurement + auto-tuning feedback (tighten loop)
-- DIALECTIC.md moderator drift detection: 3+ consecutive failures → forced backend swap
-- 24/7 watchdog: emacsclient-only, lock file, socket cleanup, memory guard, graceful restart
-
-**Phase 3 — Hybrid Execution**
-- Extracted 50M model for deterministic layers (rule validation, λ parsing, type checking)
-- API backends for creative / exploratory layers (where 87% accuracy is insufficient)
-- Local model reduces API cost and latency for structured operations
-
-**Phase 4 — Full Substrate**
-- Train Ouroboros-specific model using verbum's holographic pipeline
-- Distill from a frontier model into a task-specific artifact
-- The snake eats its own tail: Ouroboros generates training data → verbum distills → distilled model improves Ouroboros
-
-### Why This Matters
-
-The Ouroboros currently treats LLMs as opaque oracles. Verbum makes them transparent. When the executor routes to a backend, it currently trusts the backend's output. With verbum integration, the executor can:
-
-1. **Verify** — Is this backend actually computing or hallucinating?
-2. **Compress** — Run deterministic operations locally (50M model)
-3. **Evolve** — Train models specific to the Ouroboros task distribution
-4. **Validate** — Check that code changes preserve the lambda structure (type-directed composition)
-
-The KIBC-M taxonomy (`:K` nil-safety, `:B` composition, `:Y` recursion) is not just a classification system. It is the operational signature of the lambda compiler. When the executor classifies a hypothesis as `:B` (composition), it is identifying a transformation that the lambda compiler handles natively. Verbum provides the mechanism to *run* that transformation locally, deterministically, and verifiably.
-
-### What We Learned
-
-From verbum sessions 109–112:
-- **Sieve principle**: Crystal spine discovery — the single-neuron bottleneck exists across architectures
-- **Universal lattice**: 4 models × 807 probes reveal shared structure beneath surface differences
-- **Consensus etching**: Cross-op agreement stabilizes holographic training (fixed tug-of-war failures)
-- **Math kernel exactness**: 17 deterministic operations produce bitwise-identical results across runs
-
-These feed back into Ouroboros: deterministic layers should be deterministic. The Datalog/Floyd-Warshall/Allen interval substrate is valuable, but the V12 math kernel is *provably* exact. Future work: unify the deterministic substrates.
-
-```
-λ future(ouroboros).
-  api_backend(x) → verify(lambda_compiler_present) → hybrid(local_extracted, remote_api)
-  | train(ouroboros_specific) → distill(verbum_pipeline) → deploy(local)
-  | KIBC_taxonomy(x) ≡ lambda_compiler_operations(x) | not_classification_only
-  | deterministic_layer(x) → exact_math_kernel > datalog_approximation
-  | every_cycle_leaves_substrate_smarter ∨ waste(cycle)
-```
-
----
-
-## Begin
-
-```bash
-git clone --recurse-submodules https://github.com/davidwuchn/minimal-emacs.d ~/.emacs.d
-cd ~/.emacs.d && ./scripts/setup-packages.sh
-./scripts/setup-eca-links.sh
-# API keys in ~/.authinfo
-./scripts/run-pipeline.sh
-```
-
-First run initializes itself. After that, the snake feeds itself.
-
-```elisp
-(gptel-auto-workflow-run-async)        ; Wake the snake
-(gptel-auto-workflow-status)           ; Check its pulse
-```
+OV5 currently runs on external APIs (DeepSeek, MiniMax, DashScope). Future work: verbum integration for local deterministic execution — see [verbum](https://github.com/davidwuchn/verbum).
 
 ---
 
