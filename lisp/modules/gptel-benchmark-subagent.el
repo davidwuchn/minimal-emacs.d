@@ -222,8 +222,8 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                      (plist-get override-preset :backend))
                    (when (plistp gptel-agent-preset)
                      (plist-get gptel-agent-preset :backend))))
-               (selected-model
-                (or bumped-model                      ; bump-model escalation
+                (selected-model
+                 (or (bound-and-true-p bumped-model)   ; bump-model escalation (let* forward ref)
                     category-model                    ; best-model from ontology
                     (cdr chain-pick)
                     (when (plistp override-preset)
