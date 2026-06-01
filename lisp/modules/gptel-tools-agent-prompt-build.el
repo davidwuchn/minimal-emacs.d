@@ -1413,6 +1413,27 @@ Read ONE function. Edit ONE line. Verify. Done."))))
       (let ((feedback (when (fboundp 'gptel-auto-workflow--get-review-feedback)
                         (gptel-auto-workflow--get-review-feedback target))))
         (setq gptel-auto-experiment--review-feedback (or feedback "")))
+      ;; Mementum recall: inject relevant past learnings into prompt context.
+      ;; Searches memories + knowledge for patterns matching this target.
+      (let ((recall (when (and (fboundp 'gptel-mementum--recall)
+                               (fboundp 'gptel-auto-workflow--project-root))
+                      (condition-case nil
+                          (gptel-mementum--recall
+                           (format "%s %s"
+                                   target
+                                   (or gptel-auto-workflow--current-strategy-name
+                                       "template-default"))
+                           3)
+                        (error nil)))))
+        (setq gptel-auto-experiment--mementum-recall
+              (if recall
+                  (concat "## RELEVANT PAST LEARNINGS\n"
+                          (mapconcat
+                           (lambda (r)
+                             (format "- %s: %s" (car r)
+                                     (truncate-string-to-width (cdr r) 200 nil nil "...")))
+                           recall "\n"))
+                "")))
       (setq gptel-auto-workflow--last-prompt-sections
           (mapconcat #'symbol-name included-sections ","))
   ;; Build variables plist and resolve to lambda via EDN pipeline
@@ -1434,6 +1455,9 @@ Read ONE function. Edit ONE line. Verify. Done."))))
                                         ""))
               (keep-rate . ,(or keep-rate ""))
               (review-feedback . ,(or gptel-auto-experiment--review-feedback ""))
+              (mementum-recall . ,(or (and (boundp 'gptel-auto-experiment--mementum-recall)
+                                           gptel-auto-experiment--mementum-recall)
+                                     ""))
               (category-instructions . ,(if (fboundp 'gptel-auto-workflow--category-instructions)
                                            (gptel-auto-workflow--category-instructions target)
                                          ""))

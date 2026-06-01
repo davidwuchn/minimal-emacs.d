@@ -138,7 +138,57 @@ Manual: M-x gptel-auto-workflow-run-autonomous"
              (gptel-auto-workflow-metabolize run-id all-results)
              (message "[autonomous] Complete: %d experiments" (length all-results)))))))))
 
-;;; Mementum Optimization
+(defun gptel-mementum--recall (query &optional max-results)
+  "Search mementum memories + knowledge for content relevant to QUERY.
+Returns list of (file . snippet) sorted by relevance score (TF-IDF-like).
+MAX-RESULTS defaults to 3. Used before experiments to inject relevant
+past learnings into the prompt context."
+  (let* ((max (or max-results 3))
+         (memories-dir (expand-file-name "mementum/memories"
+                                         (gptel-auto-workflow--project-root)))
+         (knowledge-dir (expand-file-name "mementum/knowledge"
+                                          (gptel-auto-workflow--project-root)))
+         (query-terms (split-string (downcase query) "[^a-z0-9]+" t))
+         (scores nil))
+    (dolist (dir (list memories-dir knowledge-dir))
+      (when (file-exists-p dir)
+        (dolist (file (directory-files-recursively dir "\\.md$"))
+          (let* ((content (gptel-auto-workflow--read-file-contents file))
+                 (lower (downcase content))
+                 (score 0)
+                 (first-match nil))
+            (dolist (term query-terms)
+              (when (> (length term) 2)  ; skip very short terms
+                (let ((count 0) (pos 0))
+                  (while (string-match (regexp-quote term) lower pos)
+                    (cl-incf count)
+                    (unless first-match (setq first-match (match-beginning 0)))
+                    (setq pos (1+ (match-end 0))))
+                  (cl-incf score count)))
+              ;; Recency bonus: newer files score higher
+              (let ((mtime (nth 5 (file-attributes file))))
+                (when mtime
+                  (let ((days-old (/ (float-time (time-since mtime)) 86400.0)))
+                    (cl-incf score (max 0 (- 5 days-old)))))))  ; up to 5 bonus
+            (when (> score 0)
+              (let* ((rel (file-relative-name file dir))
+                     (snippet (if first-match
+                                  (let ((start (max 0 (- first-match 80)))
+                                        (end (min (length content) (+ first-match 200))))
+                                    (concat "..."
+                                            (substring content start end)
+                                            "..."))
+                                (truncate-string-to-width content 200 nil nil "..."))))
+                (push (cons rel (cons score snippet)) scores)))))))
+    ;; Sort by score descending, take top max-results
+    (setq scores (sort scores (lambda (a b) (> (cadr a) (cadr b)))))
+    (let ((results (seq-take scores max)))
+      (when results
+        (message "[mementum-recall] Query '%s' → %d results: %s"
+                 query (length results)
+                 (mapconcat (lambda (r) (format "%s(%.0f)" (car r) (cadr r)))
+                            results " ")))
+      (mapcar (lambda (r) (cons (car r) (cddr r))) results))))
 
 (defvar gptel-mementum-index-file "mementum/.index"
   "Path to recall index file.")
