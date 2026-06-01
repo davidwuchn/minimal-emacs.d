@@ -39,6 +39,9 @@
 (defvar gptel-benchmark-default-dir)
 (defvar my/gptel-agent-task-timeout)
 (defvar gptel-agent-preset)
+(defvar gptel--request-params)
+(defvar gptel-ai-behaviors--subagent-failures)
+(defvar gptel-ai-behaviors--current-hashtags)
 (defvar log-model nil
   "Dynamic variable bound in `gptel-benchmark-call-subagent' for the selected model name.
 Used for cost tracking and routing context.")
@@ -91,6 +94,16 @@ for thorough analysis but produces better results."
 When nil, falls back to local evaluation."
   :type 'boolean
   :group 'gptel-benchmark-subagent)
+
+(defun gptel-benchmark--plist-delete-all (plist prop)
+  "Return PLIST without any entries for PROP."
+  (let (result)
+    (while plist
+      (let ((key (pop plist))
+            (val (pop plist)))
+        (unless (eq key prop)
+          (setq result (append result (list key val))))))
+    result))
 
 (defvar gptel-benchmark--subagent-files nil
   "Dynamic file context for the next benchmark subagent dispatch.
@@ -211,18 +224,19 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                      (fboundp 'gptel-ai-behaviors--best-model)
                      (gptel-ai-behaviors--best-model category
                                                      (intern agent-type) 2)))
-               (category-model (and category-best (car category-best)))
-               (category-effort (or (and category-best (cdr category-best)) "default"))
-               ;; Phase 2: per-subagent base effort (cheaper subagents get lower effort)
-               (base-effort
-                (cond ((member agent-type '("executor" "grader")) "high")
-                      ((member agent-type '("analyzer" "comparator")) "default")
-                      (t "default")))
-               (effort (or (and (not (equal category-effort "default")) category-effort)
-                           base-effort))
-               (chain-pick
-                (when (and candidates
-                           (fboundp 'gptel-auto-workflow--first-available-provider-candidate))
+              (category-model (and category-best (car category-best)))
+              (category-effort (or (and category-best (cdr category-best)) "default"))
+              ;; Phase 2: per-subagent base effort (cheaper subagents get lower effort)
+              (base-effort
+               (cond ((member agent-type '("executor" "grader")) "high")
+                     ((member agent-type '("analyzer" "comparator")) "default")
+                     (t "default")))
+              (selected-effort
+               (or (and (not (equal category-effort "default")) category-effort)
+                   base-effort))
+              (chain-pick
+               (when (and candidates
+                          (fboundp 'gptel-auto-workflow--first-available-provider-candidate))
                   (gptel-auto-workflow--first-available-provider-candidate
                    candidates excluded)))
               (selected-backend
@@ -231,25 +245,48 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                      (plist-get override-preset :backend))
                    (when (plistp gptel-agent-preset)
                      (plist-get gptel-agent-preset :backend))))
-                (selected-model
-                 (or (bound-and-true-p bumped-model)   ; bump-model escalation (let* forward ref)
-                    category-model                    ; best-model from ontology
-                    (cdr chain-pick)
-                    (when (plistp override-preset)
-                      (plist-get override-preset :model))
-                    (when (plistp gptel-agent-preset)
-                      (plist-get gptel-agent-preset :model))))
+              (base-model
+               (or category-model                    ; best-model from ontology
+                   (cdr chain-pick)
+                   (when (plistp override-preset)
+                     (plist-get override-preset :model))
+                   (when (plistp gptel-agent-preset)
+                     (plist-get gptel-agent-preset :model))))
+              ;; Check if bump-model wants to escalate (>=5 consecutive failures).
+              ;; Use the routed base model/effort, not later logging vars.
+              (bump-result
+               (and category base-model
+                    (fboundp 'gptel-ai-behaviors--bump-model)
+                    (let* ((sub-key (cons category (intern agent-type)))
+                           (count (if (boundp 'gptel-ai-behaviors--subagent-failures)
+                                      (gethash sub-key gptel-ai-behaviors--subagent-failures 0)
+                                    0))
+                           (current-model (if (symbolp base-model)
+                                              base-model
+                                            (intern (format "%s" base-model)))))
+                      ;; Pass actual count - bump-model handles thresholds internally.
+                      (gptel-ai-behaviors--bump-model category (intern agent-type)
+                                                      count current-model
+                                                      selected-effort))))
+              (bumped-model (and bump-result (car bump-result)))
+              (bumped-effort (and bump-result (cdr bump-result)))
+              (selected-model
+               (or bumped-model base-model))
+              (selected-model-name
+               (cond ((stringp selected-model) selected-model)
+                     ((symbolp selected-model) (symbol-name selected-model))
+                     (selected-model (format "%s" selected-model))))
               (selected-model-sym
-               (and selected-model
-                    selected-model
+               (and selected-model-name
                     (or (and (fboundp 'gptel-auto-workflow--backend-object)
                              (fboundp 'gptel-auto-workflow--backend-model-symbol)
                              (let ((backend-obj (gptel-auto-workflow--backend-object
                                                  selected-backend)))
                                (when backend-obj
                                  (gptel-auto-workflow--backend-model-symbol
-                                  backend-obj selected-model))))
-                        selected-model)))
+                                  backend-obj selected-model-name))))
+                        (and (symbolp selected-model) selected-model)
+                        selected-model-name)))
               (effective-preset
                (if selected-backend
                    ;; Include both backend and model so gptel-with-preset
@@ -258,40 +295,33 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                    (let ((preset (copy-sequence
                                   (cond
                                    ((plistp override-preset) override-preset)
-                                  ((plistp gptel-agent-preset) gptel-agent-preset)
-                                  (t nil)))))
-                     (setq preset (plist-put preset :backend selected-backend))
-                     (if selected-model-sym
-                         (plist-put preset :model selected-model-sym)
-                       preset))
-                (or override-preset gptel-agent-preset)))
-             (log-backend
-              (or (car chain-pick)
-                  (when (plistp effective-preset)
-                    (let ((backend (plist-get effective-preset :backend)))
-                      (if (and backend
-                               (fboundp 'gptel-auto-workflow--preset-backend-name))
-                          (gptel-auto-workflow--preset-backend-name backend)
-                        backend)))))
-             (log-model
-               (or (cdr chain-pick)
+                                   ((plistp gptel-agent-preset) gptel-agent-preset)
+                                   (t nil)))))
+                     (setq preset (gptel-benchmark--plist-delete-all preset :backend))
+                      (setq preset (gptel-benchmark--plist-delete-all preset :model))
+                      (setq preset (plist-put preset :backend selected-backend))
+                      (if selected-model-sym
+                          (plist-put preset :model selected-model-sym)
+                        preset))
+                  (or override-preset gptel-agent-preset)))
+               (log-backend
+                (or (and selected-backend
+                         (if (fboundp 'gptel-auto-workflow--preset-backend-name)
+                             (gptel-auto-workflow--preset-backend-name selected-backend)
+                          (format "%s" selected-backend)))
                    (when (plistp effective-preset)
-                     (plist-get effective-preset :model))))
-              ;; Check if bump-model wants to escalate (≥5, ≥7, ≥10 consecutive failures)
-              ;; Must come AFTER log-model — bump-result needs the model name.
-              (bump-result
-               (and category log-model
-                    (fboundp 'gptel-ai-behaviors--bump-model)
-                    (let* ((sub-key (cons category (intern agent-type)))
-                           (count (if (boundp 'gptel-ai-behaviors--subagent-failures)
-                                      (gethash sub-key gptel-ai-behaviors--subagent-failures 0)
-                                    0)))
-                      (gptel-ai-behaviors--bump-model category (intern agent-type)
-                                                      count log-model
-                                                      (or category-effort base-effort)))))
-              (bumped-model (and bump-result (car bump-result)))
-              (bumped-effort (and bump-result (cdr bump-result)))
-              )
+                     (let ((backend (plist-get effective-preset :backend)))
+                       (if (and backend
+                                (fboundp 'gptel-auto-workflow--preset-backend-name))
+                           (gptel-auto-workflow--preset-backend-name backend)
+                         backend)))))
+              (log-model
+                (or selected-model-name
+                    (when (plistp effective-preset)
+                      (let ((model (plist-get effective-preset :model)))
+                        (cond ((stringp model) model)
+                              ((symbolp model) (symbol-name model))
+                              (model (format "%s" model))))))))
          (when log-backend
            (message "[subagent] %s using fallback provider: %s (model: %s)"
                     agent-type
@@ -338,14 +368,14 @@ Auto-applies LLM backend failover when current provider is rate-limited."
             ;; Track API cost per model+effort for cost-adjusted keep-rate
             (when (and log-model (fboundp 'gptel-ai-behaviors--record-cost))
               (gptel-ai-behaviors--record-cost log-model
-                                               (or bumped-effort category-effort base-effort)))
+                                              (or bumped-effort selected-effort)))
             ;; Inject dynamic reasoning_effort: bump → category → subagent default
-            (let ((effective-effort (or bumped-effort category-effort base-effort))
+            (let ((effective-effort (or bumped-effort selected-effort))
                   (effort-param
                    (and log-model
                         (fboundp 'gptel-ai-behaviors--effort-for-api)
                         (gptel-ai-behaviors--effort-for-api log-model
-                                                            (or bumped-effort category-effort base-effort)))))
+                                                           (or bumped-effort selected-effort)))))
               (if (fboundp 'my/gptel--agent-task-with-timeout)
                (let ((my/gptel-agent-task-timeout
                       (gptel-benchmark--subagent-timeout timeout effective-preset))

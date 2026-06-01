@@ -394,13 +394,20 @@ large-result truncation, and result caching."
                  (partial (format "%s result for task: %s\n\n"
                                   (capitalize (or agent-type "agent"))
                                   (or description "unknown"))))
-            (my/gptel--register-agent-task-buffer parent-buf)
+             (my/gptel--register-agent-task-buffer parent-buf)
             (gptel--update-status " Calling Agent..." 'font-lock-escape-face)
-             (with-current-buffer parent-buf
-               (setq-local gptel--fsm-last child-fsm)
-               ;; Ensure gptel-tools is buffer-local in parent-buf so
-               ;; gptel--with-buffer-copy-internal picks it up via buffer-local-value.
-               ;; Dynamic bindings from cl-progv are invisible to buffer-local-value.
+              (with-current-buffer parent-buf
+                ;; gptel-request reads backend/model from the request buffer.
+                ;; Dynamic cl-progv bindings above are not enough when this
+                ;; buffer already has stale local MiniMax values.
+                (gptel--apply-preset
+                 preset
+                 (lambda (sym val)
+                   (set (make-local-variable sym) val)))
+                (setq-local gptel--fsm-last child-fsm)
+                ;; Ensure gptel-tools is buffer-local in parent-buf so
+                ;; gptel--with-buffer-copy-internal picks it up via buffer-local-value.
+                ;; Dynamic bindings from cl-progv are invisible to buffer-local-value.
                (unless (local-variable-p 'gptel-tools (current-buffer))
                  (setq-local gptel--tool-names
                              (cl-loop for (_cat . tools) in gptel--known-tools

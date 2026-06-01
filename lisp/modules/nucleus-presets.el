@@ -257,14 +257,14 @@ normally sets `gptel--preset'."
           ((and (eq preset 'gptel-plan)
                 (assq 'nucleus-gptel-plan gptel--known-presets))
            'nucleus-gptel-plan)
-          ((and (consp preset)
-                setter
-                (boundp 'gptel--known-presets))
-           (when-let* ((cell (cl-find preset gptel--known-presets
-                                      :key #'cdr :test #'eq)))
-             (set (make-local-variable 'gptel--preset) (car cell))
-             preset))
-          (t preset))))
+           ((and (consp preset)
+                 setter
+                 (boundp 'gptel--known-presets))
+            (when-let* ((cell (cl-find preset gptel--known-presets
+                                       :key #'cdr :test #'eq)))
+              (set (make-local-variable 'gptel--preset) (car cell)))
+            preset)
+           (t preset))))
     (funcall orig effective-preset setter)))
 
 (defun nucleus--after-transform-apply-preset (&rest args)
