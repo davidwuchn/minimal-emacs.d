@@ -1925,7 +1925,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
           ;; Negative count means experiments were cleaned up (last-total > current).
           ;; Also trigger experiments when <= 0 — no new data to analyze.
           (message "[evolution] new-experiments=%d has-research=%s" new-experiments has-research)
-          (when (and (<= new-experiments 0) (not has-research))
+          (when (<= new-experiments 0)
             ;; No experiments to analyze — trigger them instead.
             ;; This enables local development machines to run experiments,
             ;; not just Pi5 (which runs via cron).
