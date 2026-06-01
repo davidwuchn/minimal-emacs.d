@@ -48,11 +48,90 @@ These targets may need different research patterns or the research findings were
 - Try combining with git history for recency bias.
 
 
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-nil
+# Research Strategy: Template-Default Distillation
+
+## Scope
+- **57 experiments** across 6 target files
+- Focus: `gptel-auto-workflow-projects.el`, `gptel-benchmark-*.el`, `gptel-tools-*.el`
+
+## Kept Hypotheses (Consolidated)
+
+1. **Cache invalidation optimization** — Use `equal` instead of `eq` for project list comparison; check cache before `ensure-buffer-tables`
+2. **Buffer lookup robustness** — Extract lookup into validation sequence with explicit nil guards
+3. **Edge case handling** — Add `ignore-errors` around `file-attributes`; guard for empty project lists
+4. **FSM state adaptation** — Add adaptive error recovery for invalid paths
+5. **Symbolic comparison** — Replace `format-mode-line` with direct `mode-name` access; use `when` over `if`
+6. **Runtime error prevention** — Filter `not-applicable` entries before sorting in `gptel-benchmark-eight-keys-weakest`
+
+## Discarded
+- None explicitly documented beyond the `not-applicable` crash (now kept)
+
+## Meta-Properties Targeted
+- **φ Vitality**: Progressive improvement, adaptive error recovery, edge case handling
+- **Fractal Clarity**: Explicit assumptions, testable hypotheses, visible data flow
 ```
 
+### Check Issues
+
+# Review: Research Strategy Document
+
+## Structure Assessment ✓
+
+Well-organized with clear hierarchical sections. The breakdown is readable and scannable.
+
+---
+
+## Observations
+
+### Strengths
+- **Concrete scope definition** — 57 experiments, 6 files, explicit targets
+- **Actionable hypotheses** — each numbered item implies a specific code change
+- **Meta-properties mapped** — links technical approach to abstract quality attributes
+
+---
+
+### Issues to Address
+
+| # | Issue | Location |
+|---|-------|----------|
+| 1 | **Hypothesis 4 is vague** — "adaptive error recovery for invalid paths" doesn't specify *what* recovery mechanism | FSM state adaptation |
+| 2 | **Missing hypothesis numbering in Discarded** — unclear if `not-applicable` crash is "kept" or "discarded" | Discarded section |
+| 3 | **No prioritization** — 57 experiments but no ordering (highest-impact first?) | Scope |
+| 4 | **No dependency mapping** — are some experiments blocking others? | Scope |
+| 5 | **Missing validation criteria** — how will you know if each hypothesis succeeds/fails? | Kept Hypotheses |
+
+---
+
+### Suggested Improvements
+
+```markdown
+## Success Metrics
+- Each hypothesis should have: [ ] Before → [ ] After measurement
+
+## Priority Ranking
+1. Cache invalidation optimization  (likely highest impact)
+2. Buffer lookup robustness         (stability)
+3. ...
+```
+
+---
+
+### Grammar Note
+> "none explicitly documented beyond" → "none documented beyond"
+
+---
+
+Want me to expand on any hypothesis or draft concrete test cases?
