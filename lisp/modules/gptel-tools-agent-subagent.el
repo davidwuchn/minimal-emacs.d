@@ -642,6 +642,17 @@ Logs subagent dispatch to ontology for self-evolution tracking."
                     (min timeout 120)  ; probation/dead → max 120s
                   timeout))
             timeout))
+         ;; Context sandbox: per-agent-type result limits reduce token cost.
+         ;; Hot path (executor/grader) gets more context; analysis gets less.
+         (my/gptel-subagent-result-limit
+          (pcase agent-name
+            ("executor"   5000)     ; need edit output for downstream grading
+            ("grader"     8000)     ; need full score + reasoning
+            ("analyzer"   2000)     ; just target list, not analysis
+            ("researcher" 2000)     ; just findings, not search results
+            ("reviewer"   3000)     ; review comments
+            ("comparator" 2000)     ; comparison result
+            (_           4000)))    ; default conservative
          ;; Update workflow progress on every subagent dispatch so the watchdog
          ;; sees activity even during long-running experiments (which use direct
          ;; gptel-request, not subagent tasks, so active-tasks remains 0).
