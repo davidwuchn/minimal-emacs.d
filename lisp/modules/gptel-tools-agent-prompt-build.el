@@ -1458,6 +1458,13 @@ Read ONE function. Edit ONE line. Verify. Done."))))
               (mementum-recall . ,(or (and (boundp 'gptel-auto-experiment--mementum-recall)
                                            gptel-auto-experiment--mementum-recall)
                                      ""))
+              (resume-context . ,(format "## RESUME STATE
+You are running experiment %d of %d.
+Target: %s
+If context was compacted: resume from here.
+Your hypothesis and target remain unchanged.
+Continue with the next tool call."
+                                        experiment-id max-experiments target))
               (category-instructions . ,(if (fboundp 'gptel-auto-workflow--category-instructions)
                                            (gptel-auto-workflow--category-instructions target)
                                          ""))
