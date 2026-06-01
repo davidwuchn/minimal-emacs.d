@@ -1274,12 +1274,9 @@ Used to normalize keep-rate by cost.")
     ("minimax-m2.7"         . (:input 0.30 :output 1.20 :cache-hit 0.06))
     ("minimax-m2.7-highspeed" . (:input 0.15 :output 0.60 :cache-hit 0.03))
     ;; DashScope/Qwen (USD/1M, ~7 CNY/USD, implicit cache 20% via Bailian)
-    ;;   plus:  ¥2.00/8.00/0.40 → $0.29/1.14/0.06
-    ;;   flash: ¥0.50/2.00/0.10 → $0.07/0.29/0.01
+    ;;   plus: ¥2.00/8.00/0.40 → $0.29/1.14/0.06
     ("qwen3.6-plus"         . (:input 0.29 :output 1.14 :cache-hit 0.06))
     ("qwen3.5-plus"         . (:input 0.14 :output 0.57 :cache-hit 0.03))
-    ("qwen3-coder-plus"     . (:input 0.29 :output 1.14 :cache-hit 0.06))
-    ("qwen3.6-flash"        . (:input 0.07 :output 0.29 :cache-hit 0.01))
     ;; moonshot/Kimi (USD/1M, platform.kimi.ai verified)
     ;;   k2.6: $0.95/4.00/0.16 → auto context caching, 6x cheaper hits
     ("kimi-k2.6"            . (:input 0.95 :output 4.00 :cache-hit 0.16))
