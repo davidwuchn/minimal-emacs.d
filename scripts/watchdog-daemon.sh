@@ -16,6 +16,22 @@ RESTART_COOLDOWN=300  # 5 min between restarts to avoid restart loops
 
 mkdir -p "$(dirname "$LOG")"
 
+daemon_pids() {
+    local name="$1"
+
+    if command -v pgrep >/dev/null 2>&1; then
+        pgrep -f -i "emacs.*daemon.*${name}" 2>/dev/null || true
+    else
+        ps -axo pid=,command= | awk -v name="$name" '
+            index(tolower($0), "emacs") && index(tolower($0), tolower(name)) { print $1 }
+        '
+    fi
+}
+
+first_daemon_pid() {
+    daemon_pids "$1" | awk 'NF { print; exit }'
+}
+
 # Prevent concurrent watchdog runs. If the previous instance is still
 # running after 120s, force-clear the lock (stale lock from crash).
 if [ -f "$LOCK_FILE" ]; then
@@ -76,7 +92,7 @@ daemon_responds() {
     # Daemon didn't respond via emacsclient — it might be busy with an API call.
     # Check if the process itself is still alive (R=Running, S=Sleeping).
     local pid
-    pid=$(ps aux | grep '[e]macs' | grep "$SERVER_NAME" | awk '{print $2}' | head -1)
+    pid=$(first_daemon_pid "$SERVER_NAME")
     if [ -n "$pid" ]; then
         local state
         state=$(ps -p "$pid" -o state= 2>/dev/null | tr -d ' ')
@@ -145,7 +161,7 @@ if daemon_responds; then
         fi
     fi
     # Also check researcher daemon memory (persists between pipeline runs)
-    RESEARCHER_PID=$(ps aux | grep '[e]macs.*ov5-researcher' | awk '{print $2}' | head -1)
+    RESEARCHER_PID=$(first_daemon_pid "ov5-researcher")
     if [ -n "$RESEARCHER_PID" ]; then
         RSS_KB=$(ps -p "$RESEARCHER_PID" -o rss= 2>/dev/null | tr -d ' ')
         if [ -n "$RSS_KB" ] && [ "$RSS_KB" -gt 5242880 ]; then
@@ -168,7 +184,7 @@ fi
 
 # Daemon is truly gone. Kill all processes, clean sockets, restart.
 echo "[$(date '+%H:%M:%S')] Daemon unresponsive — restarting" >> "$LOG"
-ps aux | grep '[e]macs.*ov5-auto' | awk '{print $2}' | xargs kill -9 2>/dev/null || true
+daemon_pids "$SERVER_NAME" | xargs kill -9 2>/dev/null || true
 sleep 3
 clean_all_sockets "$SERVER_NAME" "$MY_UID"
 echo "$(date +%s)" > "$LAST_RESTART_FILE"

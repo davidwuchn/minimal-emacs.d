@@ -337,11 +337,11 @@ worker_daemon_pids() {
     # Use pgrep -f to search the full process list (handles embedded
     # newlines correctly).
     if command -v pgrep >/dev/null 2>&1; then
-        pgrep -f "emacs.*daemon.*${SERVER_NAME}" 2>/dev/null || true
+        pgrep -f -i "emacs.*daemon.*${SERVER_NAME}" 2>/dev/null || true
     else
         # Fallback: ps with no standard/wide output, awk across records
         ps -eo pid=,args= | awk -v s="$SERVER_NAME" '
-            tolower($2) ~ /(^|\/)emacs/ { found = index($0, s) }
+            tolower($2) ~ /(^|\/)emacs/ { found = index(tolower($0), tolower(s)) }
             /./ { if (!found) prev = prev $0 "\n" }
             END { if (found) print $1 }
         '
