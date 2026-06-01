@@ -209,16 +209,132 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
          (run-id gptel-auto-workflow--run-id)
          (workflow-root (gptel-auto-workflow--resolve-run-root))
           ;; The subagent timeout wrapper owns executor timeout/abort behavior.
-          (_my/gptel-agent-task-timeout experiment-timeout)
-          (start-time (float-time))
-          (finished nil)
-          (provisional-commit-hash nil)
-          (executor-prompt nil)
-          (executor-callback nil)
-          (validation-retry-active nil)
-          (grader-retry-active nil)
-          (experiment-backend nil)
-          (experiment-model nil))
+           (_my/gptel-agent-task-timeout experiment-timeout)
+           (start-time (float-time))
+           (finished nil)
+           (provisional-commit-hash nil)
+           (executor-prompt nil)
+           (executor-callback nil)
+           (effective-agent-output nil)
+           (actual-backend nil)
+           (actual-model nil)
+           (candidate-validation nil)
+           (repeated-focus nil)
+           (duplicate-hypothesis nil)
+           (pre-existing-breakage nil)
+           (validation-retry-active nil)
+           (grader-retry-active nil)
+           (experiment-backend nil)
+           (experiment-model nil)
+           (launch-executor nil))
+    (setq launch-executor
+          (lambda ()
+            (cond
+             ((not (functionp executor-callback))
+              (unless finished
+                (setq finished t)
+                (message "[auto-exp] Executor callback missing for %s experiment %d"
+                         target experiment-id)
+                (when (functionp callback)
+                  (funcall callback
+                           (list :target target :id experiment-id :kept nil
+                                 :duration (- (float-time) start-time)
+                                 :error "executor-callback-missing"
+                                 :grader-reason "executor-callback-missing"
+                                 :comparator-reason "executor-callback-missing"
+                                 :backend (or experiment-backend "none")
+                                 :model (or experiment-model "unknown"))))))
+             ((or (not (stringp executor-prompt))
+                  (= (length executor-prompt) 0))
+              (unless finished
+                (setq finished t)
+                (message "[auto-exp] Executor prompt empty for %s experiment %d"
+                         target experiment-id)
+                (when (functionp callback)
+                  (funcall callback
+                           (list :target target :id experiment-id :kept nil
+                                 :duration (- (float-time) start-time)
+                                 :error "executor-prompt-empty"
+                                 :grader-reason "executor-prompt-empty"
+                                 :comparator-reason "executor-prompt-empty"
+                                 :backend (or experiment-backend "none")
+                                 :model (or experiment-model "unknown"))))))
+             (t
+              ;; Capture the backend and model that will actually be used by the
+              ;; executor, including any subagent provider override.
+              ;; Note: gptel-auto-workflow--get-active-agent-preset does not exist.
+              ;; Use agent-base-preset + maybe-override-subagent-provider directly.
+              ;; Wrap in condition-case: agent-base-preset calls into the ranked
+              ;; backend chain which may fail if ontology hash tables are unbound.
+              (condition-case err
+                  (setq experiment-backend
+                        (let* ((base-preset
+                                (when (fboundp 'gptel-auto-workflow--agent-base-preset)
+                                  (gptel-auto-workflow--agent-base-preset "executor")))
+                               (override-preset
+                                (when (and base-preset
+                                           (fboundp 'gptel-auto-workflow--maybe-override-subagent-provider))
+                                  (gptel-auto-workflow--maybe-override-subagent-provider "executor" base-preset)))
+                               (effective-preset (or override-preset base-preset))
+                               (effective-backend
+                                (or (and effective-preset
+                                         (fboundp 'gptel-auto-workflow--preset-backend-name)
+                                         (gptel-auto-workflow--preset-backend-name
+                                          (plist-get effective-preset :backend)))
+                                    (and (boundp 'gptel-backend) gptel-backend
+                                         (fboundp 'gptel-backend-name)
+                                         (gptel-auto-workflow--safe-backend-name gptel-backend))
+                                    "unknown")))
+                          effective-backend))
+                (error
+                 (message "[auto-exp] Backend capture failed: %s" (error-message-string err))
+                 (setq experiment-backend
+                       (and (boundp 'gptel-backend) gptel-backend
+                            (fboundp 'gptel-backend-name)
+                            (gptel-auto-workflow--safe-backend-name gptel-backend)))))
+              (condition-case err
+                  (setq experiment-model
+                        (let* ((base-preset
+                                (when (fboundp 'gptel-auto-workflow--agent-base-preset)
+                                  (gptel-auto-workflow--agent-base-preset "executor")))
+                               (override-preset
+                                (when (and base-preset
+                                           (fboundp 'gptel-auto-workflow--maybe-override-subagent-provider))
+                                  (gptel-auto-workflow--maybe-override-subagent-provider "executor" base-preset)))
+                               (effective-preset (or override-preset base-preset))
+                               (effective-model
+                                (or (and (boundp 'gptel-model) gptel-model)
+                                    (and effective-preset (plist-get effective-preset :model))
+                                    "unknown")))
+                          (if (stringp effective-model) effective-model
+                            (format "%s" effective-model))))
+                (error
+                 (message "[auto-exp] Model capture failed: %s" (error-message-string err))
+                 (setq experiment-model
+                       (and (boundp 'gptel-model) gptel-model
+                            (symbol-name gptel-model)))))
+              ;; Layer 1 — Hard Block: Check action preconditions before execution
+              (let ((precondition-error
+                     (when (fboundp 'gptel-auto-workflow--check-action-preconditions)
+                       (gptel-auto-workflow--check-action-preconditions target))))
+                (if precondition-error
+                    (let ((default-directory experiment-worktree))
+                      (message "[auto-exp] 🚫 %s" precondition-error)
+                      (magit-git-success "checkout" "--" ".")
+                      (setq finished t)
+                      (funcall callback
+                               (list :target target :id experiment-id :kept nil
+                                     :duration (- (float-time start-time))
+                                     :grader-reason precondition-error
+                                     :comparator-reason "precondition-blocked")))
+                  ;; Routing handled by gptel-auto-workflow--advice-task-override
+                  (my/gptel--run-agent-tool-with-timeout
+                   experiment-timeout
+                   executor-callback
+                   "executor"
+                   (format "Experiment %d: optimize %s" experiment-id target)
+                   executor-prompt
+                   nil "false" nil)))))))
     (if (not worktree)
         (when (functionp callback)
           (funcall callback (list :target target :error "Failed to create worktree" :backend "none")))
@@ -281,54 +397,56 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                           (funcall callback
                                    (gptel-auto-experiment--stale-run-result
                                     target experiment-id)))
-                      (let* ((salvaged-agent-output
-                              (gptel-auto-experiment--timeout-salvage-output
-                               agent-output executor-prompt target experiment-worktree))
-                              (effective-agent-output
-                               (or salvaged-agent-output agent-output))
+                      (let ((salvaged-agent-output
+                             (gptel-auto-experiment--timeout-salvage-output
+                              agent-output executor-prompt target experiment-worktree)))
+                        (setq effective-agent-output
+                              (or salvaged-agent-output agent-output)
                               ;; Capture actual backend AFTER executor completes.
-                               ;; gptel-backend may have been dynamically rebound by
-                               ;; cl-progv inside the subagent task override — after
-                               ;; the callback runs, the global default (MiniMax) is
-                               ;; restored.  Fall back to the pre-computed
-                               ;; experiment-backend when gptel-backend is MiniMax
-                               ;; (the interactive default, not the routed one).
-                               (actual-backend
-                                (let* ((post-backend (and (boundp 'gptel-backend) gptel-backend
-                                                         (fboundp 'gptel-backend-name)
-                                                         (gptel-auto-workflow--safe-backend-name gptel-backend)))
-                                       (pre-backend (and (stringp experiment-backend)
-                                                         experiment-backend))
-                                       (global-default "MiniMax"))
-                                  (if (and (stringp post-backend)
-                                           (not (string= post-backend global-default)))
-                                      post-backend
-                                    (or pre-backend post-backend global-default))))
-                              (actual-model
-                               (or (and (boundp 'gptel-model) gptel-model)
-                                   experiment-model))
-                              (candidate-validation
-                               (when (fboundp 'gptel-auto-experiment--batch-validate-candidates)
-                                 (condition-case err
-                                     (gptel-auto-experiment--batch-validate-candidates
-                                      effective-agent-output
-                                      (expand-file-name target experiment-worktree))
-                                   (error
-                                    (message "[auto-exp] Candidate validation error: %s" err)
-                                    nil))))
-                              (repeated-focus
-                               (gptel-auto-experiment--repeated-focus-match
-                                effective-agent-output previous-results target))
-                              (duplicate-hypothesis
-                               (and previous-results
-                                    (fboundp 'gptel-auto-experiment--hypothesis-already-tested-p)
-                                    (gptel-auto-experiment--hypothesis-already-tested-p
-                                     (gptel-auto-experiment--extract-hypothesis effective-agent-output)
-                                     previous-results))))
-                          (when candidate-validation
-                             (let ((best-score (plist-get (cdar candidate-validation) :score)))
-                              (message "[auto-exp] Validated %d candidates for %s, best score: %.2f"
-                                       (length candidate-validation) target (or best-score 0.0))))
+                              ;; gptel-backend may have been dynamically rebound by
+                              ;; cl-progv inside the subagent task override — after
+                              ;; the callback runs, the global default (MiniMax) is
+                              ;; restored. Fall back to the pre-computed
+                              ;; experiment-backend when gptel-backend is MiniMax
+                              ;; (the interactive default, not the routed one).
+                              actual-backend
+                              (let* ((post-backend (and (boundp 'gptel-backend) gptel-backend
+                                                       (fboundp 'gptel-backend-name)
+                                                       (gptel-auto-workflow--safe-backend-name gptel-backend)))
+                                     (pre-backend (and (stringp experiment-backend)
+                                                       experiment-backend))
+                                     (global-default "MiniMax"))
+                                (if (and (stringp post-backend)
+                                         (not (string= post-backend global-default)))
+                                    post-backend
+                                  (or pre-backend post-backend global-default)))
+                              actual-model
+                              (or (and (boundp 'gptel-model) gptel-model)
+                                  experiment-model)
+                              candidate-validation
+                              (when (fboundp 'gptel-auto-experiment--batch-validate-candidates)
+                                (condition-case err
+                                    (gptel-auto-experiment--batch-validate-candidates
+                                     effective-agent-output
+                                     (expand-file-name target experiment-worktree))
+                                  (error
+                                   (message "[auto-exp] Candidate validation error: %s" err)
+                                   nil)))
+                              repeated-focus
+                              (gptel-auto-experiment--repeated-focus-match
+                               effective-agent-output previous-results target)
+                              duplicate-hypothesis
+                              (and previous-results
+                                   (fboundp 'gptel-auto-experiment--hypothesis-already-tested-p)
+                                   (gptel-auto-experiment--hypothesis-already-tested-p
+                                    (gptel-auto-experiment--extract-hypothesis effective-agent-output)
+                                    previous-results))
+                              pre-existing-breakage
+                              (gptel-auto-experiment--pre-existing-breakage-p target))
+                           (when candidate-validation
+                              (let ((best-score (plist-get (cdar candidate-validation) :score)))
+                               (message "[auto-exp] Validated %d candidates for %s, best score: %.2f"
+                                        (length candidate-validation) target (or best-score 0.0))))
                          (when salvaged-agent-output
                           (message "[auto-exp] Executor timed out after partial changes for %s; evaluating actual worktree diff"
                                    target))
@@ -473,11 +591,9 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                      (message "[auto-exp] ✗ Pre-grade validation failed: %s"
                                               (my/gptel--sanitize-for-logging validation-error 200))
                                      ;; Trigger retry or fail immediately without grader
-                                       (let ((default-directory experiment-worktree)
-                                             (_gptel-auto-experiment--grading-target target)
-                                             (_gptel-auto-experiment--grading-worktree experiment-worktree)
-                                             (pre-existing-breakage
-                                              (gptel-auto-experiment--pre-existing-breakage-p target)))
+                                        (let ((default-directory experiment-worktree)
+                                              (_gptel-auto-experiment--grading-target target)
+                                              (_gptel-auto-experiment--grading-worktree experiment-worktree))
                                         ;; Skip retry if file was already broken before experiment
                                         (when pre-existing-breakage
                                           (message "[auto-exp] ⚠ Pre-existing breakage detected for %s, skipping retry"
@@ -616,7 +732,34 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                   (error-category (car-safe error-info))
                                                   (grader-only-failure
                                                    (and (not normal-grade-rejection)
-                                                        (plist-get grade :grader-only-failure))))
+                                                        (plist-get grade :grader-only-failure)))
+                                                  (exp-result
+                                                   (let ((result (list :target target
+                                                                       :id experiment-id
+                                                                       :hypothesis hypothesis
+                                                                       :score-before baseline
+                                                                       :score-after 0
+                                                                       :kept nil
+                                                                       :duration (- (float-time) start-time)
+                                                                       :grader-quality grade-score
+                                                                       :grader-reason grade-details
+                                                                       :comparator-reason
+                                                                       (cond
+                                                                        (normal-grade-rejection "grader-rejected")
+                                                                        (grader-only-failure
+                                                                         (gptel-auto-experiment--grader-only-error-label error-category))
+                                                                        (t (symbol-name (or error-category :unknown))))
+                                                                       :analyzer-patterns (format "%s" patterns)
+                                                                       :agent-output effective-agent-output
+                                                                       :backend actual-backend
+                                                                       :model actual-model)))
+                                                     (when grade-error-output
+                                                       (setq result
+                                                             (plist-put result :error grade-error-output)))
+                                                     (when grader-only-failure
+                                                       (setq result
+                                                             (plist-put result :grader-only-failure t)))
+                                                     result)))
                                               (setq finished t)
                                               ;; Grader rejection retry: specific feedback → one fix shot
                                               (if (and normal-grade-rejection
@@ -640,7 +783,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                     "λ fix(specific) > re-read(all) | ¬thrash\n"
                                                                     "Address each FAIL criterion.\n")))
                                                       (my/gptel--run-agent-tool-with-timeout
-                                                       gptel-auto-experiment-retry-time-budget
+                                                       gptel-auto-experiment-validation-retry-time-budget
                                                        (lambda (retry-output)
                                                          (if (and (stringp retry-output)
                                                                   (string-match-p "\\`Error:" retry-output))
@@ -654,40 +797,16 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                        retry-prompt nil nil nil
                                                        gptel-auto-experiment-validation-retry-active-grace)))
                                                 ;; Non-teachable: fail normally
-                                                (let ((exp-result (list :target target
-                                                                        :id experiment-id
-                                                                        :hypothesis hypothesis
-                                                                        :score-before baseline
-                                                                        :score-after 0
-                                                                        :kept nil
-                                                                        :duration (- (float-time) start-time)
-                                                                        :grader-quality grade-score
-                                                                        :grader-reason grade-details
-                                                                        :comparator-reason
-                                                                        (cond
-                                                                         (normal-grade-rejection "grader-rejected")
-                                                                         (grader-only-failure
-                                                                          (gptel-auto-experiment--grader-only-error-label error-category))
-                                                                         (t (symbol-name (or error-category :unknown))))
-                                                                        :analyzer-patterns (format "%s" patterns)
-                                                                        :agent-output effective-agent-output
-                                                                        :backend actual-backend
-                           :model actual-model)))
-                                                  (when grade-error-output
-                                                    (setq exp-result
-                                                          (plist-put exp-result :error grade-error-output)))
-                                                  (when grader-only-failure
-                                                    (setq exp-result
-                                                          (plist-put exp-result :grader-only-failure t)))
                                                   (funcall log-fn run-id exp-result)
                                                   (funcall callback exp-result))))
-                                         ;; Grader passed - create a provisional commit so the
-                                         ;; benchmark/scope logic can diff against HEAD~1.
-                                         (let ((default-directory experiment-worktree))
-                                           (setq provisional-commit-hash
-                                                 (gptel-auto-workflow--create-provisional-experiment-commit
-                                                  target hypothesis
-                                                  (max 300 gptel-auto-workflow-git-timeout))))
+                                         (when grade-passed
+                                           ;; Grader passed - create a provisional commit so the
+                                           ;; benchmark/scope logic can diff against HEAD~1.
+                                           (let ((default-directory experiment-worktree))
+                                             (setq provisional-commit-hash
+                                                   (gptel-auto-workflow--create-provisional-experiment-commit
+                                                    target hypothesis
+                                                    (max 300 gptel-auto-workflow-git-timeout))))
                                            (let* ((bench (gptel-auto-experiment-benchmark t hypothesis))
                                                   (passed (plist-get bench :passed))
                                                   (validation-error (plist-get bench :validation-error))
@@ -1209,85 +1328,9 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                          (message "[auto-experiment] ✗ %s for %s (passed=%s tests-passed=%s validation-error=%s)"
                                                                   reason target passed tests-passed validation-error)
                                                          (funcall log-fn run-id exp-result)
-                                                         (funcall callback exp-result))))))))
+                                                         (funcall callback exp-result)))))))))
                                            ))))))))))))))))
-                                     ))
-                ;; Capture the backend and model that will actually be used by the
-                ;; executor, including any subagent provider override.
-                ;; Note: gptel-auto-workflow--get-active-agent-preset does not exist.
-                ;; Use agent-base-preset + maybe-override-subagent-provider directly.
-                ;; Wrap in condition-case: agent-base-preset calls into the ranked
-                ;; backend chain which may fail if ontology hash tables are unbound.
-                (condition-case err
-                    (setq experiment-backend
-                          (let* ((base-preset
-                                  (when (fboundp 'gptel-auto-workflow--agent-base-preset)
-                                    (gptel-auto-workflow--agent-base-preset "executor")))
-                                 (override-preset
-                                  (when (and base-preset
-                                             (fboundp 'gptel-auto-workflow--maybe-override-subagent-provider))
-                                    (gptel-auto-workflow--maybe-override-subagent-provider "executor" base-preset)))
-                                 (effective-preset (or override-preset base-preset))
-                                 (effective-backend
-                                  (or (and effective-preset
-                                           (fboundp 'gptel-auto-workflow--preset-backend-name)
-                                           (gptel-auto-workflow--preset-backend-name
-                                            (plist-get effective-preset :backend)))
-                                      (and (boundp 'gptel-backend) gptel-backend
-                                           (fboundp 'gptel-backend-name)
-                                           (gptel-auto-workflow--safe-backend-name gptel-backend))
-                                      "unknown")))
-                            effective-backend))
-                  (error
-                   (message "[auto-exp] Backend capture failed: %s" (error-message-string err))
-                   (setq experiment-backend
-                         (and (boundp 'gptel-backend) gptel-backend
-                              (fboundp 'gptel-backend-name)
-                              (gptel-auto-workflow--safe-backend-name gptel-backend)))))
-                (condition-case err
-                    (setq experiment-model
-                          (let* ((base-preset
-                                  (when (fboundp 'gptel-auto-workflow--agent-base-preset)
-                                    (gptel-auto-workflow--agent-base-preset "executor")))
-                                 (override-preset
-                                  (when (and base-preset
-                                             (fboundp 'gptel-auto-workflow--maybe-override-subagent-provider))
-                                    (gptel-auto-workflow--maybe-override-subagent-provider "executor" base-preset)))
-                                 (effective-preset (or override-preset base-preset))
-                                  (effective-model
-                                   (or (and (boundp 'gptel-model) gptel-model)
-                                       (and effective-preset (plist-get effective-preset :model))
-                                       "unknown")))
-                            (if (stringp effective-model) effective-model
-                              (format "%s" effective-model))))
-                  (error
-                   (message "[auto-exp] Model capture failed: %s" (error-message-string err))
-                   (setq experiment-model
-                         (and (boundp 'gptel-model) gptel-model
-                              (symbol-name gptel-model)))))
-                 ;; Layer 1 — Hard Block: Check action preconditions before execution
-                 (let ((precondition-error
-                        (when (fboundp 'gptel-auto-workflow--check-action-preconditions)
-                          (gptel-auto-workflow--check-action-preconditions target))))
-                   (if precondition-error
-                       (let ((default-directory experiment-worktree))
-                         (message "[auto-exp] 🚫 %s" precondition-error)
-                         (magit-git-success "checkout" "--" ".")
-                         (setq finished t)
-                         (funcall callback
-                                  (list :target target :id experiment-id :kept nil
-                                        :duration (- (float-time start-time))
-                                        :grader-reason precondition-error
-                                        :comparator-reason "precondition-blocked")))
-                     ;; Routing handled by gptel-auto-workflow--advice-task-override
-                     (my/gptel--run-agent-tool-with-timeout
-                      experiment-timeout
-                      executor-callback
-                      "executor"
-                      (format "Experiment %d: optimize %s" experiment-id target)
-                      executor-prompt
-                        nil "false" nil))))))))
-                  )))
+                 (funcall launch-executor))))))))))
 
 
 

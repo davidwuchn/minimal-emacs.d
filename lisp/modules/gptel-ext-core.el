@@ -95,6 +95,7 @@ by `my/gptel--mode-hook-setup' before this runs).
 Skip in headless workflow to preserve the bootstrap default (moonshot)."
   (when (and (bound-and-true-p gptel-mode)
              (not (bound-and-true-p gptel--preset))
+             (not my/gptel--in-subagent-task)
              my/gptel-plain-model
              (boundp 'gptel--minimax)
              (not (bound-and-true-p gptel-auto-workflow-persistent-headless)))

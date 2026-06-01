@@ -2133,7 +2133,7 @@ Set by `gptel-auto-workflow--migrate-legacy-provider-defaults' on startup.")
     ("grader"     "moonshot"   . "kimi-k2.6")
     ("executor"   "DashScope"  . "qwen3.6-plus")
     ("executor"   "moonshot"   . "kimi-k2.6")
-    ("executor"   "DeepSeek"   . "deepseek-v4-flash-no-think")
+    ("executor"   "DeepSeek"   . "deepseek-v4-flash")
     ("executor"   "MiniMax"    . "minimax-m2.7-highspeed")
     ("researcher" "MiniMax"    . "minimax-m2.7-highspeed")
     ("researcher" "DashScope"  . "qwen3.6-plus")
@@ -2386,6 +2386,16 @@ Preserves rate-limited backends blacklist across experiments within a run."
 Call at the start of a new workflow run."
   (setq gptel-auto-workflow--rate-limited-backends nil))
 
+(defun gptel-auto-workflow--prompt-plist-delete-all (plist prop)
+  "Return PLIST without any entries for PROP."
+  (let (result)
+    (while plist
+      (let ((key (pop plist))
+            (val (pop plist)))
+        (unless (eq key prop)
+          (setq result (append result (list key val))))))
+    result))
+
 (defun gptel-auto-workflow--rate-limit-failover-candidates (agent-type)
   "Return fallback provider candidates for AGENT-TYPE after rate limiting.
 When ontology health data is available, ranks backends by health × keep-rate
@@ -2457,21 +2467,23 @@ chain so that subagent calls do not fall through to the mode-hook default
               (excluded (and (boundp 'gptel-auto-workflow--rate-limited-backends)
                              gptel-auto-workflow--rate-limited-backends)))
           (if candidates
-              (let ((pick (gptel-auto-workflow--first-available-provider-candidate
-                           candidates excluded)))
-                (when pick
-                  (let* ((model-str (or (and (fboundp 'gptel-auto-workflow--best-model-for-task)
-                                           (gptel-auto-workflow--best-model-for-task
-                                            agent-type (car pick)))
-                                       (cdr pick)))
-                         (backend-obj (gptel-auto-workflow--backend-object (car pick)))
-                         (model-sym (and backend-obj model-str
-                                         (gptel-auto-workflow--backend-model-symbol
-                                          backend-obj model-str))))
-                    (message "[subagent] %s base-preset auto-selected %s/%s"
-                             agent-type (car pick) model-str)
-                    (setq merged (plist-put merged :backend (car pick)))
-                     (setq merged (plist-put merged :model model-str)))))
+               (let ((pick (gptel-auto-workflow--first-available-provider-candidate
+                            candidates excluded)))
+                 (when pick
+                   (let* ((model-str (or (and (fboundp 'gptel-auto-workflow--best-model-for-task)
+                                            (gptel-auto-workflow--best-model-for-task
+                                             agent-type (car pick)))
+                                        (cdr pick)))
+                          (backend-obj (gptel-auto-workflow--backend-object (car pick)))
+                          (model-sym (and backend-obj model-str
+                                          (gptel-auto-workflow--backend-model-symbol
+                                           backend-obj model-str))))
+                     (message "[subagent] %s base-preset auto-selected %s/%s"
+                              agent-type (car pick) model-str)
+                     (setq merged (gptel-auto-workflow--prompt-plist-delete-all merged :backend))
+                     (setq merged (gptel-auto-workflow--prompt-plist-delete-all merged :model))
+                     (setq merged (plist-put merged :backend (car pick)))
+                      (setq merged (plist-put merged :model model-str)))))
             ;; Headless active but no candidates: fall back to
             ;; gptel-backend so the call goes through.
             (when (and (null (plist-get merged :backend))

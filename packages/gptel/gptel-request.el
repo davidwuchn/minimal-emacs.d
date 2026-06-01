@@ -1086,11 +1086,11 @@ If positions START and END are provided, insert that part of BUF first."
 For BUF, START, END and BODY-THUNK see `gptel--with-buffer-copy'."
   (let ((temp-buffer (gptel--temp-buffer " *gptel-prompt*")))
     (with-current-buffer temp-buffer
-      (dolist (sym '( gptel-backend gptel--system-message gptel-model
-                      gptel-mode gptel-track-response gptel-track-media
-                      gptel-use-tools gptel-tools gptel-use-curl gptel--schema
-                      gptel-use-context gptel-context gptel--num-messages-to-send
-                      gptel-stream gptel-include-reasoning gptel--request-params
+      (dolist (sym '( gptel-backend gptel--preset gptel--system-message gptel-model
+                       gptel-mode gptel-track-response gptel-track-media
+                       gptel-use-tools gptel-tools gptel-use-curl gptel--schema
+                       gptel-use-context gptel-context gptel--num-messages-to-send
+                       gptel-stream gptel-include-reasoning gptel--request-params
                       gptel-temperature gptel-max-tokens gptel-cache))
         (set (make-local-variable sym) (buffer-local-value sym buf)))
       (when (and start end) (insert-buffer-substring buf start end))

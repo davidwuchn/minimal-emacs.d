@@ -26,6 +26,9 @@
 (defvar my/gptel-plain-model nil)
 (defvar my/gptel--in-subagent-task nil)
 
+(defconst test-gptel-ext-core--repo-root
+  (expand-file-name ".." (file-name-directory (or load-file-name buffer-file-name default-directory))))
+
 ;;; Functions under test
 
 (defun test-temp-dir ()
@@ -186,6 +189,21 @@
   "Should handle empty messages array."
   (let ((info (list :data (list :messages (vector)))))
     (should (null (test-pre-serialize-sanitize-messages info nil)))))
+
+(ert-deftest core/plain-model/skips-subagent-buffers ()
+  "Plain-model fallback should not override active subagent buffers."
+  (load-file (expand-file-name "lisp/modules/gptel-ext-core.el"
+                               test-gptel-ext-core--repo-root))
+  (let ((my/gptel-plain-model 'minimax-m2.7-highspeed)
+        (my/gptel--in-subagent-task t)
+        (gptel--minimax 'stub-minimax))
+    (with-temp-buffer
+      (setq-local gptel-mode t)
+      (setq-local gptel-backend 'deepseek-backend)
+      (setq-local gptel-model 'deepseek-v4-flash)
+      (my/gptel--apply-plain-model)
+      (should (eq gptel-backend 'deepseek-backend))
+      (should (eq gptel-model 'deepseek-v4-flash)))))
 
 ;;; Tests for my/gptel--curl-parse-response-safe
 

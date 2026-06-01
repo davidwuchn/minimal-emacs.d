@@ -76,6 +76,16 @@ the configured fallback chain is exhausted.")
   "Pre-compiled shared retryable error patterns as a plist.
 Keys :general (used in is-retryable-error-p) and :transient (used in provider-pressure-error-p).")
 
+(defun gptel-auto-workflow--plist-delete-all (plist prop)
+  "Return PLIST without any entries for PROP."
+  (let (result)
+    (while plist
+      (let ((key (pop plist))
+            (val (pop plist)))
+        (unless (eq key prop)
+          (setq result (append result (list key val))))))
+    result))
+
 (defun gptel-auto-workflow--first-available-provider-candidate (candidates &optional excluded-backends)
   "Return the first available entry from CANDIDATES, skipping EXCLUDED-BACKENDS.
 
@@ -140,14 +150,16 @@ Returns PRESET unchanged if CANDIDATE is nil or malformed."
              (max-output
               (gptel-auto-workflow--model-max-output-tokens
                (or model-symbol model-name)))
-             (existing-max-tokens
-              (let ((value (plist-get override :max-tokens)))
-                (cond
-                 ((integerp value) value)
-                 ((and (stringp value)
-                       (string-match-p "^[0-9]+$" value))
-                  (string-to-number value))
-                 (t nil)))))
+              (existing-max-tokens
+               (let ((value (plist-get override :max-tokens)))
+                 (cond
+                  ((integerp value) value)
+                  ((and (stringp value)
+                        (string-match-p "^[0-9]+$" value))
+                   (string-to-number value))
+                  (t nil)))))
+        (setq override (gptel-auto-workflow--plist-delete-all override :backend))
+        (setq override (gptel-auto-workflow--plist-delete-all override :model))
         (setq override (plist-put override :backend
                                   (or backend-object backend-name)))
         (setq override (plist-put override :model
