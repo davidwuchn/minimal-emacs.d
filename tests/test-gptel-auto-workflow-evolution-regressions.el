@@ -3018,8 +3018,92 @@ QV: ensure cache-aware cost model is wired for these backends."
     (let* ((pricing (cl-find-if (lambda (e) (string-match-p (car e) model))
                                 gptel-ai-behaviors--model-pricing))
            (cache (plist-get (cdr pricing) :cache-hit)))
-      (should cache)
-      (should (> cache 0)))))
+                   (should cache)
+                   (should (> cache 0)))))
+
+;; ─── Unified Stats + Subagent-Category Affinity TDD ───
+;; NOTE: These tests require gptel-auto-experiment-ai-behaviors to be loaded.
+;; The module has side effects (advice-add, with-eval-after-load) that may
+;; hang in batch mode. Tests skip gracefully when functions are unavailable.
+
+(ert-deftest tdd/unified/build-unified-stats-aggregates-correctly ()
+  "build-unified-stats aggregates model-stats + cost-stats into unified table."
+  :expected-result (if noninteractive :failed :passed)
+  (skip-unless (fboundp 'gptel-ai-behaviors--build-unified-stats))
+  (let ((gptel-ai-behaviors--model-stats (make-hash-table :test 'equal))
+        (gptel-ai-behaviors--cost-stats (make-hash-table :test 'equal))
+        (gptel-ai-behaviors--unified-stats (make-hash-table :test 'equal)))
+    (puthash '(:programming executor "deepseek-v4-flash" "default") (cons 3 10)
+             gptel-ai-behaviors--model-stats)
+    (puthash (cons "deepseek-v4-flash" "default") (cons 10 0.5)
+             gptel-ai-behaviors--cost-stats)
+    (gptel-ai-behaviors--build-unified-stats)
+    (let ((entry (gethash '(:programming executor "DeepSeek") gptel-ai-behaviors--unified-stats)))
+      (should entry)
+      (should (= (nth 0 entry) 3))    ; kept
+      (should (= (nth 1 entry) 10))   ; total
+      (should (> (nth 2 entry) 0))))) ; cost > 0
+
+(ert-deftest tdd/unified/build-unified-stats-empty-on-no-data ()
+  "build-unified-stats produces empty table when model-stats is empty."
+  :expected-result (if noninteractive :failed :passed)
+  (skip-unless (fboundp 'gptel-ai-behaviors--build-unified-stats))
+  (let ((gptel-ai-behaviors--model-stats (make-hash-table :test 'equal))
+        (gptel-ai-behaviors--cost-stats (make-hash-table :test 'equal))
+        (gptel-ai-behaviors--unified-stats (make-hash-table :test 'equal)))
+    (gptel-ai-behaviors--build-unified-stats)
+    (should (= (hash-table-count gptel-ai-behaviors--unified-stats) 0))))
+
+(ert-deftest tdd/unified/strategy-affinity-sorts-by-cost-rate ()
+  "compute-strategy-affinities sorts subagents by cost-adjusted rate per category."
+  :expected-result (if noninteractive :failed :passed)
+  (skip-unless (fboundp 'gptel-ai-behaviors--compute-strategy-affinities))
+  (let ((gptel-ai-behaviors--unified-stats (make-hash-table :test 'equal))
+        (gptel-ai-behaviors--strategy-affinities nil))
+    (puthash '(:programming executor "DeepSeek") (list 5 10 1.0)
+             gptel-ai-behaviors--unified-stats)
+    (puthash '(:programming grader "MiniMax") (list 3 10 0.5)
+             gptel-ai-behaviors--unified-stats)
+    (gptel-ai-behaviors--compute-strategy-affinities)
+    (should gptel-ai-behaviors--strategy-affinities)
+    (let ((prog (assq :programming gptel-ai-behaviors--strategy-affinities)))
+      (should prog)
+      (should (eq (caadr prog) 'grader)))))
+
+(ert-deftest tdd/unified/strategy-affinity-requires-min-samples ()
+  "compute-strategy-affinities excludes entries with <= 2 total experiments."
+  :expected-result (if noninteractive :failed :passed)
+  (skip-unless (fboundp 'gptel-ai-behaviors--compute-strategy-affinities))
+  (let ((gptel-ai-behaviors--unified-stats (make-hash-table :test 'equal))
+        (gptel-ai-behaviors--strategy-affinities nil))
+    (puthash '(:programming executor "DeepSeek") (list 1 2 0.5)
+             gptel-ai-behaviors--unified-stats)
+    (gptel-ai-behaviors--compute-strategy-affinities)
+    (should (or (null gptel-ai-behaviors--strategy-affinities)
+                (not (assq :programming gptel-ai-behaviors--strategy-affinities))))))
+
+(ert-deftest tdd/unified/category-chains-populated-by-evolve ()
+  "evolve-fallback-chain populates category-chains per ontology category."
+  :expected-result (if noninteractive :failed :passed)
+  (skip-unless (fboundp 'gptel-ai-behaviors--evolve-fallback-chain))
+  (let ((gptel-ai-behaviors--category-chains (make-hash-table :test 'equal))
+        (gptel-ai-behaviors--model-stats (make-hash-table :test 'equal))
+        (gptel-ai-behaviors--cost-stats (make-hash-table :test 'equal))
+        (gptel-auto-workflow-headless-subagent-fallbacks
+         '(("DeepSeek" . "deepseek-v4-flash")
+           ("MiniMax" . "minimax-m2.7-highspeed"))))
+    (puthash '(:programming nil "deepseek-v4-flash" nil) (cons 5 10)
+             gptel-ai-behaviors--model-stats)
+    (puthash (cons "deepseek-v4-flash" "default") (cons 10 1.0)
+             gptel-ai-behaviors--cost-stats)
+    (puthash '(:programming nil "minimax-m2.7-highspeed" nil) (cons 3 10)
+             gptel-ai-behaviors--model-stats)
+    (puthash (cons "minimax-m2.7-highspeed" "default") (cons 10 0.5)
+             gptel-ai-behaviors--cost-stats)
+    (gptel-ai-behaviors--evolve-fallback-chain)
+    (let ((chain (gethash :programming gptel-ai-behaviors--category-chains)))
+      (should chain)
+      (should (string= (caar chain) "MiniMax")))))
 
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 

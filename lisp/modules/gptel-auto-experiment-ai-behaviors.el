@@ -1405,9 +1405,9 @@ A model that keeps 50% at cost 1 is better than 60% at cost 3."
     logs))
 
 (defvar gptel-ai-behaviors--unified-stats (make-hash-table :test 'equal)
-  "Hash: (category strategy backend) → (kept total cost).
+  "Hash: (category subagent backend) → (kept total cost).
 Built from model-stats + cost-stats each evolution cycle.
-Drives per-category backend chains and strategy-category affinity scores.")
+Drives per-category backend chains and subagent-category affinity scores.")
 
 (defun gptel-ai-behaviors--build-unified-stats ()
   "Build gptel-ai-behaviors--unified-stats from model-stats + cost-stats.
@@ -1415,20 +1415,21 @@ Aggregates across subagents and models for each (category strategy backend)."
   (clrhash gptel-ai-behaviors--unified-stats)
   (maphash
    (lambda (key entry)
-     (let* ((category (nth 0 key))
-            (strategy (nth 1 key))
-            (model (nth 2 key))
-            (kept (car entry))
-            (total (cdr entry))
+        (let* ((category (nth 0 key))
+               (subagent (nth 1 key))
+               (model (nth 2 key))
+               (kept (car entry))
+               (total (cdr entry))
             (cost-key (cons model "default"))
             (cost-entry (gethash cost-key gptel-ai-behaviors--cost-stats))
             (cost (if cost-entry (cdr cost-entry) 0.0)))
-       (when (and category strategy model)
-         (dolist (backend '("DeepSeek" "MiniMax" "DashScope" "moonshot"))
-           (when (string-match-p (regexp-quote backend) (or model ""))
-             (let* ((uni-key (list category strategy backend))
-                    (uni-entry (gethash uni-key gptel-ai-behaviors--unified-stats
-                                        (list 0 0 0.0))))
+        (when (and category subagent model)
+          (dolist (backend '("DeepSeek" "MiniMax" "DashScope" "moonshot"))
+            (when (let ((case-fold-search t))
+                    (string-match-p (regexp-quote backend) (or model "")))
+              (let* ((uni-key (list category subagent backend))
+                     (uni-entry (gethash uni-key gptel-ai-behaviors--unified-stats
+                                         (list 0 0 0.0))))
                (cl-incf (nth 0 uni-entry) kept)
                (cl-incf (nth 1 uni-entry) total)
                (cl-incf (nth 2 uni-entry) cost)
