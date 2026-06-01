@@ -14,11 +14,15 @@ LOCK_FILE="$DIR/var/tmp/cron/watchdog.lock"
 MAX_WAIT=60
 RESTART_COOLDOWN=300  # 5 min between restarts to avoid restart loops
 
+# Cron runs without TMPDIR set; emacsclient needs it for socket discovery on macOS.
+export TMPDIR=${TMPDIR:-/tmp}
+
 mkdir -p "$(dirname "$LOG")"
 
 start_workflow_daemon() {
     env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
         EMACSNATIVELOADPATH= \
+        TMPDIR=/tmp \
         AUTO_WORKFLOW_EMACS_SERVER="$SERVER_NAME" \
         MINIMAL_EMACS_WORKFLOW_ROLE=auto-workflow \
         MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
@@ -32,6 +36,17 @@ daemon_pids() {
 
     if command -v pgrep >/dev/null 2>&1; then
         pgrep -f -i "emacs.*daemon.*${name}" 2>/dev/null || true
+        # macOS --bg-daemon args can have embedded newlines that prevent
+        # pgrep from matching. Fall back to ps grep on zero results.
+        local found
+        found=$(pgrep -f -i "emacs.*daemon.*${name}" 2>/dev/null | wc -l | tr -d ' ')
+        if [ "$found" -gt 0 ]; then
+            return 0
+        fi
+        # pgrep found nothing — try ps as fallback for macOS bg-daemon
+        ps -axo pid=,command= | awk -v name="$name" '
+            index(tolower($0), "emacs") && index(tolower($0), tolower(name)) { print $1 }
+        '
     else
         ps -axo pid=,command= | awk -v name="$name" '
             index(tolower($0), "emacs") && index(tolower($0), tolower(name)) { print $1 }

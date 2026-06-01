@@ -128,6 +128,9 @@ EMACS="$(resolve_emacs)" || {
     exit 1
 }
 
+# Cron runs without TMPDIR set; emacsclient needs it for socket discovery on macOS.
+export TMPDIR=${TMPDIR:-/tmp}
+
 ROOT_LISP=$(lisp_escape "$DIR")
 mkdir -p "$DIR/var/tmp/cron" "$DIR/var/tmp/experiments"
 
