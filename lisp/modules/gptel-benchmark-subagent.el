@@ -51,13 +51,6 @@ Set by bump-model when consecutive failures exceed thresholds.")
 (defvar gptel-auto-workflow--analyzer-failed-backends nil
   "Analyzer backend names skipped during target-selection retry.")
 
-(defvar log-model nil
-  "Sentinel for native-comp closure capture on arm64 Emacs 30.1.
-Prevents void-variable in call-subagent byte-compiled let* closures.")
-
-(defvar log-backend nil
-  "Sentinel for native-comp closure capture on arm64 Emacs 30.1.")
-
 (declare-function gptel-agent--task "gptel-tools-agent")
 (declare-function gptel-auto-workflow--read-file-contents "gptel-tools-agent")
 (declare-function my/gptel--agent-task-with-timeout "gptel-tools-agent"
