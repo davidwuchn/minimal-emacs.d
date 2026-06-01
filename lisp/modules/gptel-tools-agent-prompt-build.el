@@ -2439,6 +2439,34 @@ analysis/compare may still be too slow for code generation (DashScope:
              (gptel-auto-workflow--ranked-subagent-backends agent-type))
         gptel-auto-workflow-headless-subagent-fallbacks))))
 
+;; ─── Category-Aware Fallback Chain ───
+
+(defun gptel-auto-workflow--category-fallback-chain (agent-type)
+  "Return ordered fallback chain for AGENT-TYPE, preferring category-specific ordering.
+When gptel-ai-behaviors--category-chains has data for the current target's
+ontology category, returns that category's ordered chain. Otherwise falls
+back to the global headless-subagent-fallbacks.
+This enables per-category self-evolving backend selection."
+  (let* ((target (and (boundp 'gptel-auto-workflow--current-target)
+                      gptel-auto-workflow--current-target))
+         (category (and target
+                        (fboundp 'gptel-auto-workflow--categorize-target)
+                        (gptel-auto-workflow--categorize-target target)))
+         (cat-chain (and category
+                         (boundp 'gptel-ai-behaviors--category-chains)
+                         (hash-table-p gptel-ai-behaviors--category-chains)
+                         (gethash category gptel-ai-behaviors--category-chains)))
+         (global-chain (and (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
+                            gptel-auto-workflow-headless-subagent-fallbacks)))
+    (if cat-chain
+        (progn
+          (let ((ordered (mapcar (lambda (s) (assoc (car s) global-chain)) cat-chain)))
+            (message "[category-chain] %s/%s using %s chain: %s"
+                     category agent-type category
+                     (mapconcat 'car ordered " → "))
+            ordered))
+      global-chain)))
+
 (defun gptel-auto-workflow--agent-base-preset (agent-type)
   "Return the current base preset plist for AGENT-TYPE, or nil when unavailable.
 

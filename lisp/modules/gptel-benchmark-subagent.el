@@ -202,10 +202,12 @@ Auto-applies LLM backend failover when current provider is rate-limited."
              (headless-provider-override-active
               (and (fboundp 'gptel-auto-workflow--headless-provider-override-active-p)
                    (gptel-auto-workflow--headless-provider-override-active-p)))
-             (candidates
-              (and headless-provider-override-active
-                   (fboundp 'gptel-auto-workflow--rate-limit-failover-candidates)
-                   (gptel-auto-workflow--rate-limit-failover-candidates agent-type)))
+              (candidates
+               (and headless-provider-override-active
+                    (or (and (fboundp 'gptel-auto-workflow--category-fallback-chain)
+                             (gptel-auto-workflow--category-fallback-chain agent-type))
+                        (and (fboundp 'gptel-auto-workflow--rate-limit-failover-candidates)
+                             (gptel-auto-workflow--rate-limit-failover-candidates agent-type)))))
               (excluded (append
                          (and (string= agent-type "analyzer")
                               (boundp 'gptel-auto-workflow--analyzer-failed-backends)

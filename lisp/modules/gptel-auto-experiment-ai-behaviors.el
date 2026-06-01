@@ -1405,34 +1405,65 @@ A model that keeps 50% at cost 1 is better than 60% at cost 3."
 (defun gptel-ai-behaviors--evolve-fallback-chain ()
   "Reorder gptel-auto-workflow-headless-subagent-fallbacks by cost-adjusted keep-rate.
 Backends with higher keeps-per-dollar move to front (preferred).
+Also computes per-category chains stored in gptel-ai-behaviors--category-chains.
 Only runs when >= 2 backends have sufficient data to avoid overfitting."
+  ;; ── Global chain (all categories combined) ──
   (let ((scores nil))
     (dolist (pair gptel-auto-workflow-headless-subagent-fallbacks)
       (let* ((backend (car pair))
              (total-kept 0) (total-cost 0.0))
-        ;; Aggregate cost-adjusted rate from model-stats (kept/total)
-        ;; combined with cost-stats (calls/total-cost)
         (maphash
          (lambda (key entry)
            (let* ((model (nth 2 key))
-                  (kept (car entry))         ; from model-stats: kept count
+                  (kept (car entry))
                   (cost-key (cons model "default"))
                   (cost-entry (gethash cost-key gptel-ai-behaviors--cost-stats))
-                  (cost (if cost-entry (cdr cost-entry) 1.0)))  ; cost or fallback
+                  (cost (if cost-entry (cdr cost-entry) 1.0)))
              (cl-incf total-kept kept)
              (cl-incf total-cost cost)))
          gptel-ai-behaviors--model-stats)
         (when (and (> total-kept 0) (> total-cost 0))
           (push (cons backend (/ (float total-kept) total-cost)) scores))))
-    ;; Reorder if we have enough data
     (when (>= (length scores) 2)
       (setq scores (sort scores (lambda (a b) (> (cdr a) (cdr b)))))
       (setq gptel-auto-workflow-headless-subagent-fallbacks
             (mapcar (lambda (s) (assoc (car s) gptel-auto-workflow-headless-subagent-fallbacks))
                     scores))
-      (message "[chain-evolve] Fallback reordered by keeps-per-dollar: %s"
+      (message "[chain-evolve] Global chain by keeps-per-dollar: %s"
                (mapconcat (lambda (s) (format "%s(%.4f)" (car s) (cdr s)))
-                          scores " -> ")))))
+                          scores " -> "))))
+  ;; ── Per-category chains ──
+  (dolist (cat '(:programming :agentic :tool-calls :natural-language :synthesis))
+    (let ((cat-scores nil))
+      (dolist (pair gptel-auto-workflow-headless-subagent-fallbacks)
+        (let* ((backend (car pair))
+               (total-kept 0) (total-cost 0.0))
+          (maphash
+           (lambda (key entry)
+             (when (eq (nth 0 key) cat)
+               (let* ((model (nth 2 key))
+                      (kept (car entry))
+                      (cost-key (cons model "default"))
+                      (cost-entry (gethash cost-key gptel-ai-behaviors--cost-stats))
+                      (cost (if cost-entry (cdr cost-entry) 1.0)))
+                 (cl-incf total-kept kept)
+                 (cl-incf total-cost cost))))
+           gptel-ai-behaviors--model-stats)
+          (when (and (> total-kept 0) (> total-cost 0))
+            (push (cons backend (/ (float total-kept) total-cost)) cat-scores))))
+      (when (>= (length cat-scores) 2)
+        (setq cat-scores (sort cat-scores (lambda (a b) (> (cdr a) (cdr b)))))
+        (puthash cat cat-scores gptel-ai-behaviors--category-chains)
+        (message "[chain-evolve] %s chain: %s" cat
+                 (mapconcat (lambda (s) (format "%s(%.4f)" (car s) (cdr s)))
+                            cat-scores " -> "))))))
+
+(defvar gptel-ai-behaviors--category-chains (make-hash-table :test 'equal)
+  "Hash table mapping ontology category keyword to ordered backend list.
+Each entry: ((backend . keeps-per-dollar-score) ...).
+Populated by gptel-ai-behaviors--evolve-fallback-chain each evolution cycle.
+When available, gptel-auto-workflow--rate-limit-failover-candidates uses
+the category-specific chain instead of the global fallback.")
 
 ;; ─── KV Cache Hit Rate Self-Evolution ───
 
