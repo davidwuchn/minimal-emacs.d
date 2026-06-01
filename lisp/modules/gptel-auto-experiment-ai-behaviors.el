@@ -1261,27 +1261,30 @@ Used to normalize keep-rate by cost.")
   (if (string< (format-time-string "%Y%m%d") "20260601") 3 12))
 
 (defconst gptel-ai-behaviors--model-pricing
-  `(;; DeepSeek (USD/1M tokens, ~7 CNY/USD, cache-hit separate)
+  `(;; DeepSeek (USD/1M tokens, ~7 CNY/USD, KV cache auto-detected)
     ;;   flash: ¥1/2/0.02 → $0.14/0.28/0.003 per 1M input/output/cache-hit
-    ;;   pro:   ¥3/6/0.025 → $0.43/0.86/0.004 (2.5折 until May 31,
-    ;;          then ¥12/24/0.1 → $1.71/3.43/0.014)
+    ;;   pro:   ¥3/6/0.025 → $0.43/0.86/0.004 (2.5折 until May 31)
     ("deepseek-v4-flash"    . (:input 0.14 :output 0.28 :cache-hit 0.003))
     ("deepseek-v4-pro"      . (:input 0.43 :output 0.86 :cache-hit 0.004))
-    ;; MiniMax (USD/1M, OpenAI-compatible pricing)
-    ("MiniMax-M3"           . (:input 0.50 :output 2.00))
-    ("minimax-m2.7"         . (:input 0.30 :output 1.20))
-    ("minimax-m2.7-highspeed" . (:input 0.15 :output 0.60))
-    ;; DashScope / Qwen (USD/1M)
+    ;; MiniMax (USD/1M, ~7 CNY/USD, auto prompt caching)
+    ;;   M3:    ¥4.20/16.80/0.84 → $0.60/2.40/0.12 input/output/cache-hit
+    ;;   m2.7:  ¥2.10/8.40/0.42 → $0.30/1.20/0.06
+    ;;   high:  ¥1.05/4.20/0.21 → $0.15/0.60/0.03
+    ("MiniMax-M3"           . (:input 0.60 :output 2.40 :cache-hit 0.12))
+    ("minimax-m2.7"         . (:input 0.30 :output 1.20 :cache-hit 0.06))
+    ("minimax-m2.7-highspeed" . (:input 0.15 :output 0.60 :cache-hit 0.03))
+    ;; DashScope / Qwen (USD/1M, estimated)
     ("qwen3.6-plus"         . (:input 0.35 :output 1.40))
     ("qwen3.5-plus"         . (:input 0.20 :output 0.80))
-    ;; moonshot / Kimi (USD/1M)
+    ;; moonshot / Kimi (USD/1M, estimated)
     ("kimi-k2.6"            . (:input 0.60 :output 2.40))
-    ;; Gemini / GLM (USD/1M)
+    ;; Gemini / GLM (USD/1M, estimated)
     ("glm-5"                . (:input 0.50 :output 2.00))
     ("glm-4.7"              . (:input 0.30 :output 1.20)))
-  "Per-model pricing in USD per 1M tokens (:input . :output . :cache-hit).
+  "Per-model pricing in USD per 1M tokens (:input :output :cache-hit).
 Used by gptel-ai-behaviors--model-cost to estimate API call cost.
-DeepSeek pricing from api-docs.deepseek.com, verified 2026-06-01.")
+DeepSeek: api-docs.deepseek.com, MiniMax: platform.minimaxi.com/docs.
+Verified 2026-06-01.")
 
 (defvar gptel-ai-behaviors--cache-hit-rate 0.5
   "Estimated cache-hit rate (0-1) for KV cache.
@@ -1298,19 +1301,22 @@ Falls back to $2.0 if model pricing not found."
                                gptel-ai-behaviors--model-pricing))
          (input-price (or (plist-get (cdr pricing) :input) 1.0))
          (output-price (or (plist-get (cdr pricing) :output) 2.0))
-         (cache-price (or (plist-get (cdr pricing) :cache-hit) (/ input-price 50.0)))
-         (cache-rate (or (and (boundp 'gptel-ai-behaviors--cache-hit-rate)
-                              gptel-ai-behaviors--cache-hit-rate)
-                         0.8))
+          (cache-price (plist-get (cdr pricing) :cache-hit))
+          (cache-rate (if cache-price
+                          (or (and (boundp 'gptel-ai-behaviors--cache-hit-rate)
+                                   gptel-ai-behaviors--cache-hit-rate)
+                              0.8)
+                        0.0))
          (total-input-tokens (if (and prompt-chars (> prompt-chars 0))
                                  (* (float prompt-chars) 0.3) 0))
          (output-tokens (if (and response-chars (> response-chars 0))
                             (* (float response-chars) 0.3) 0))
-         (cached-input-tokens (* total-input-tokens cache-rate))
-         (missed-input-tokens (- total-input-tokens cached-input-tokens)))
+          (cached-input-tokens (if (> cache-rate 0)
+                                   (* total-input-tokens cache-rate) 0))
+          (missed-input-tokens (- total-input-tokens cached-input-tokens)))
     (/ (+ (* missed-input-tokens input-price)
-          (* cached-input-tokens cache-price)
-          (* output-tokens output-price))
+           (if cache-price (* cached-input-tokens cache-price) 0)
+           (* output-tokens output-price))
        1000000.0)))  ; convert from per-million to absolute
 
 (defvar gptel-ai-behaviors--cache-hit-rate 0.8
@@ -1448,12 +1454,17 @@ Updates gptel-ai-behaviors--cache-hit-rate via EMA."
 
 ;; Hook into gptel token accumulation to capture real cache hit data.
 ;; Runs after every API response (including subagent calls).
+;; Supports DeepSeek (prompt_cache_hit_tokens) and MiniMax
+;; (cache_read_input_tokens via Anthropic compat, cached_tokens via OpenAI compat).
 (with-eval-after-load 'gptel-openai
   (advice-add 'gptel--openai--accumulate-token-usage :after
               (lambda (usage info)
                 (when (and (boundp 'gptel-auto-workflow--running)
                            gptel-auto-workflow--running)
-                  (let* ((hit (or (plist-get usage :prompt_cache_hit_tokens) 0))
+                  (let* ((hit (or (plist-get usage :prompt_cache_hit_tokens)     ; DeepSeek
+                                  (plist-get usage :cache_read_input_tokens)     ; MiniMax Anthropic
+                                  (or (map-nested-elt usage '(:prompt_tokens_details :cached_tokens)) 0)  ; OpenAI
+                                  0))
                          (miss (or (plist-get usage :prompt_cache_miss_tokens) 0))
                          (total (+ hit miss (or (plist-get usage :prompt_tokens) 0))))
                     (when (and (> total 0) (fboundp 'gptel-ai-behaviors--record-cache-hit))
