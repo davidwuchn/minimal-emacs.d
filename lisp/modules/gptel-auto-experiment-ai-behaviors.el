@@ -1261,9 +1261,12 @@ Used to normalize keep-rate by cost.")
   (if (string< (format-time-string "%Y%m%d") "20260601") 3 12))
 
 (defconst gptel-ai-behaviors--model-pricing
-  `(;; DeepSeek (USD per 1M tokens input/output)
-    ("deepseek-v4-flash"    . (:input 0.27 :output 1.10))
-    ("deepseek-v4-pro"      . (:input 0.55 :output 2.19))
+  `(;; DeepSeek (USD/1M tokens, ~7 CNY/USD, cache-hit separate)
+    ;;   flash: ¥1/2/0.02 → $0.14/0.28/0.003 per 1M input/output/cache-hit
+    ;;   pro:   ¥3/6/0.025 → $0.43/0.86/0.004 (2.5折 until May 31,
+    ;;          then ¥12/24/0.1 → $1.71/3.43/0.014)
+    ("deepseek-v4-flash"    . (:input 0.14 :output 0.28 :cache-hit 0.003))
+    ("deepseek-v4-pro"      . (:input 0.43 :output 0.86 :cache-hit 0.004))
     ;; MiniMax (USD/1M, OpenAI-compatible pricing)
     ("MiniMax-M3"           . (:input 0.50 :output 2.00))
     ("minimax-m2.7"         . (:input 0.30 :output 1.20))
@@ -1276,9 +1279,9 @@ Used to normalize keep-rate by cost.")
     ;; Gemini / GLM (USD/1M)
     ("glm-5"                . (:input 0.50 :output 2.00))
     ("glm-4.7"              . (:input 0.30 :output 1.20)))
-  "Per-model pricing in USD per 1M tokens (input . output).
-Used by gptel-ai-behaviors--model-cost to estimate API call cost
-from prompt and response lengths.")
+  "Per-model pricing in USD per 1M tokens (:input . :output . :cache-hit).
+Used by gptel-ai-behaviors--model-cost to estimate API call cost.
+DeepSeek pricing from api-docs.deepseek.com, verified 2026-06-01.")
 
 (defvar gptel-ai-behaviors--cache-hit-rate 0.5
   "Estimated cache-hit rate (0-1) for KV cache.
@@ -1287,16 +1290,16 @@ WARNING: Set from API response when `prompt_cache_hit_tokens' is available.")
 
 (defun gptel-ai-behaviors--model-cost (model &optional prompt-chars response-chars)
   "Return estimated USD cost for MODEL given PROMPT-CHARS and RESPONSE-CHARS.
-If lengths not provided, returns 0. Uses ~4 chars/token ratio.
-Pricing from gptel-ai-behaviors--model-pricing, falls back to 2.0."
+Uses DeepSeek token ratio: 1 English char ≈ 0.3 tokens (~3.3 chars/token).
+Falls back to $2.0 if model pricing not found."
   (let* ((pricing (cl-find-if (lambda (e) (string-match-p (car e) model))
                                gptel-ai-behaviors--model-pricing))
          (input-price (or (plist-get (cdr pricing) :input) 1.0))
          (output-price (or (plist-get (cdr pricing) :output) 2.0))
          (input-tokens (if (and prompt-chars (> prompt-chars 0))
-                           (/ (float prompt-chars) 4) 0))
+                           (* (float prompt-chars) 0.3) 0))
          (output-tokens (if (and response-chars (> response-chars 0))
-                            (/ (float response-chars) 4) 0)))
+                            (* (float response-chars) 0.3) 0)))
     (/ (+ (* input-tokens input-price) (* output-tokens output-price))
        1000000.0)))  ; convert from per-million to absolute
 
