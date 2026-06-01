@@ -548,8 +548,14 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                             (gptel-auto-workflow--apply-category-vigilance target 'validation-failed))
                                                           (funcall log-fn run-id retry-exp-result)
                                                           (funcall callback retry-exp-result))
-                                                     ;; Retry succeeded: treat output as new executor output
-                                                     (funcall executor-callback retry-output)))
+                                                      ;; Retry succeeded: treat output as new executor output
+                                                      (if (functionp executor-callback)
+                                                          (funcall executor-callback retry-output)
+                                                        (message "[auto-exp] exec-callback nil after retry, calling callback directly")
+                                                        (funcall callback
+                                                                 (list :target target :id experiment-id
+                                                                       :kept nil :score-after 0
+                                                                       :error "executor-callback-nil-after-retry")))))
                                                  "executor"
                                                  "Validation retry"
                                                  retry-prompt
@@ -649,7 +655,13 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                (message "[auto-exp] ✗ Grader retry failed")
                                                                (funcall log-fn run-id exp-result)
                                                                (funcall callback exp-result))
-                                                           (funcall executor-callback retry-output)))
+                                                           (if (functionp executor-callback)
+                                                               (funcall executor-callback retry-output)
+                                                             (message "[auto-exp] exec-callback nil after grader retry")
+                                                             (funcall callback
+                                                                      (list :target target :id experiment-id
+                                                                            :kept nil :score-after 0
+                                                                            :error "executor-callback-nil-grader-retry")))))
                                                        "executor" "Grader rejection retry"
                                                        retry-prompt nil nil nil
                                                        gptel-auto-experiment-validation-retry-active-grace)))
@@ -1279,14 +1291,22 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                         :duration (- (float-time start-time))
                                         :grader-reason precondition-error
                                         :comparator-reason "precondition-blocked")))
-                     ;; Routing handled by gptel-auto-workflow--advice-task-override
-                     (my/gptel--run-agent-tool-with-timeout
-                      experiment-timeout
-                      executor-callback
-                      "executor"
-                      (format "Experiment %d: optimize %s" experiment-id target)
-                      executor-prompt
-                        nil "false" nil))))))))
+                      ;; Routing handled by gptel-auto-workflow--advice-task-override
+                      (my/gptel--run-agent-tool-with-timeout
+                       experiment-timeout
+                       (or executor-callback
+                           (lambda (result)
+                             (message "[auto-exp] exec-callback fallback: %s"
+                                      (if (stringp result) (truncate-string-to-width result 80) "non-string"))
+                             (funcall callback
+                                      (list :target target :id experiment-id
+                                            :kept nil :score-after 0
+                                            :error (format "executor-callback-nil: %s"
+                                                           (if (stringp result) result "no-result"))))))
+                       "executor"
+                       (format "Experiment %d: optimize %s" experiment-id target)
+                       executor-prompt
+                         nil "false" nil))))))))
                   )))
 
 
