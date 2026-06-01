@@ -3,6 +3,7 @@
 
 (require 'json)
 (declare-function gptel-benchmark-call-subagent "gptel-benchmark-subagent")
+(define-error 'research-pipeline-defect "Research pipeline defect" 'error)
 (defvar gptel-auto-workflow--current-research-context)
 (defvar gptel-auto-workflow--research-in-progress)
 (defvar gptel-auto-workflow--research-findings-cache)
@@ -195,18 +196,22 @@ COMPLETION-CALLBACK receives the saved findings when provided."
               (setq gptel-auto-workflow--research-findings-cache (make-hash-table :test 'equal)))
             (gptel-auto-workflow--research-patterns
              (lambda (findings)
-               (if (slr--usable-findings-p findings)
-                   (progn
-                     (slr--save-findings findings)
-                     (when (functionp completion-callback)
-                       (funcall completion-callback findings)))
-                 (slr--signal-missing-research
-                  'empty-response
-                  (format "Multi-turn EMA returned %d chars (need >100 with content)"
-                          (length (or findings ""))))))))
+               (condition-case inner-err
+                   (if (slr--usable-findings-p findings)
+                       (progn
+                         (slr--save-findings findings)
+                         (when (functionp completion-callback)
+                           (funcall completion-callback findings)))
+                     (slr--signal-missing-research
+                      'empty-response
+                      (format "Multi-turn EMA returned %d chars (need >100 with content)"
+                              (length (or findings "")))))
+               (research-pipeline-defect
+                   (message "[slr] Empty research result from EMA, falling back to single-turn...")
+                   (slr--run-single-turn (slr--build-prompt) completion-callback))))))
         (error
          (message "[slr] Multi-turn failed (%s)" err)
-         (slr--signal-missing-research 'daemon-disappeared (format "%s" err))))
+         (slr--run-single-turn (slr--build-prompt) completion-callback)))
     ;; Fallback: single-turn research (raw SKILL.md, no controller)
     (slr--run-single-turn (slr--build-prompt) completion-callback)))
 

@@ -48,7 +48,9 @@
         (callback-findings nil))
     (cl-letf (((symbol-function 'gptel-benchmark-call-subagent)
                (lambda (_type _description _prompt callback &optional _timeout)
-                 (funcall callback "Error: timed out after 300s")))
+                 (funcall callback (concat "Local Research Fallback\n"
+                                           (make-string 200 ?x)
+                                           "\n--- End of Local Research Fallback ---\n"))))
               ((symbol-function 'slr--record-context)
                (lambda (_prompt findings)
                  (setq recorded findings)))
@@ -58,7 +60,7 @@
       (slr--run-single-turn "research prompt"
                             (lambda (findings)
                               (setq callback-findings findings)))
-      (sleep-for 0.5)  ; let run-with-timer 0 fire in batch mode
+      (sleep-for 0.5)
       (should (slr--usable-findings-p saved))
       (should (equal saved recorded))
       (should (equal saved callback-findings))

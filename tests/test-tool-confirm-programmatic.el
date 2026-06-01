@@ -81,6 +81,12 @@ Search backward for PROPERTY equal to VALUE, optionally filtering with PREDICATE
   "Return non-nil when TOOL-NAME is remembered as permitted."
   (gethash tool-name my/gptel-permitted-tools))
 
+(defun gptel-auto-workflow--safe-backend-name (backend)
+  "Stub that returns a readable name for BACKEND."
+  (cond ((stringp backend) backend)
+        ((symbolp backend) (symbol-name backend))
+        (t (format "%s" backend))))
+
 (defun my/gptel-permit-tool (tool-name)
   "Remember TOOL-NAME as permitted."
   (puthash tool-name t my/gptel-permitted-tools))
