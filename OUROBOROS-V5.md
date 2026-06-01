@@ -60,6 +60,8 @@ You're running OV5. Here's what to expect day-to-day.
 
 **Meta: is the system improving?** Track keep-rate per category weekly. Early experiments are exploration — noise is normal. After ~50 experiments/category, trends become signal. If keep-rate plateaus below 15%, check if targets match ontology categories.
 
+**Cowork with AI coding agents:** Run `./scripts/setup-ov5-cowork.sh` to install OV5 integration for OpenCode, Claude Code, Cursor, and MCP-compatible agents. Lets your coding agent trigger experiments and review results via emacsclient.
+
 **Quick triage:**
 | Symptom | Likely cause | Check |
 |---------|-------------|-------|
