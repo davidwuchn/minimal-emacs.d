@@ -209,17 +209,24 @@ def update_skill_metadata(skills_dir, analysis):
     for skill_file in skills_dir.rglob("SKILL.md"):
         with open(skill_file, 'r') as f:
             content = f.read()
+        # Skip empty or whitespace-only files — nothing to update
+        if not content.strip():
+            continue
+        # Skip files without frontmatter (no name/description)
+        if not content.strip().startswith('---'):
+            continue
         content = re.sub(r'^updated:\s*\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?\n', '', content, flags=re.MULTILINE)
         content = re.sub(r'^\s*last-evolution:\s*\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?\n', '', content, flags=re.MULTILINE)
         
         # Add evolution metadata if not present
         if 'evolution-stats:' not in content:
-            # Insert metadata inside the existing frontmatter block
-            # Handle both "---\n\n#" and "---\n#" patterns
+            # Insert metadata inside the existing frontmatter block,
+            # BEFORE the closing --- (not creating a new frontmatter).
+            # Matches the last --- that closes frontmatter (followed by body text).
             content = re.sub(
-                r'^---\n+#',
-                f'---\nmetadata:\n  evolution-stats:\n    total-experiments: {analysis["total_experiments"]}\n\n#',
-                content, count=1, flags=re.MULTILINE
+                r'\n(---\s*\n(?!#))',
+                f'\nmetadata:\n  evolution-stats:\n    total-experiments: {analysis["total_experiments"]}\n\\1',
+                content, count=1
             )
         
         # Normalize: collapse 3+ consecutive newlines to max 2

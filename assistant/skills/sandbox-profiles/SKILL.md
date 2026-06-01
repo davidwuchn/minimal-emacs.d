@@ -8,7 +8,6 @@ evolve-script: evolve_profiles.py
 metadata:
   category: security
   author: auto-workflow
-metadata:
   evolution-stats:
     total-experiments: 870
 
