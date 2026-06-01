@@ -1421,5 +1421,44 @@ Only runs when ≥2 backends have sufficient data to avoid overfitting."
                (mapconcat (lambda (s) (format "%s(%.2f)" (car s) (cdr s)))
                           scores " → ")))))
 
+;; ─── KV Cache Hit Rate Self-Evolution ───
+
+(defvar gptel-ai-behaviors--cache-observations '()
+  "List of (hit-tokens . total-tokens) observations from API responses.
+Used to compute an exponential moving average of cache hit rate.")
+
+(defun gptel-ai-behaviors--record-cache-hit (hit-tokens total-tokens)
+  "Record KV cache hit observation from API response.
+HIT-TOKENS and TOTAL-TOKENS come from usage.prompt_cache_hit_tokens
+and usage.prompt_tokens (or prompt_cache_hit_tokens + prompt_cache_miss_tokens).
+Updates gptel-ai-behaviors--cache-hit-rate via EMA."
+  (when (and (numberp hit-tokens) (numberp total-tokens) (> total-tokens 0))
+    (let* ((rate (/ (float hit-tokens) total-tokens))
+           (alpha 0.3)  ; EMA weight for new observations
+           (current (or gptel-ai-behaviors--cache-hit-rate 0.8)))
+      (setq gptel-ai-behaviors--cache-hit-rate
+            (+ (* alpha rate) (* (- 1 alpha) current)))
+      ;; Keep last 100 observations for debugging
+      (push (cons hit-tokens total-tokens) gptel-ai-behaviors--cache-observations)
+      (when (> (length gptel-ai-behaviors--cache-observations) 100)
+        (setq gptel-ai-behaviors--cache-observations
+              (seq-take gptel-ai-behaviors--cache-observations 100)))
+      (message "[cache-evolve] KV cache hit: %d/%d tokens (%.0f%%), EMA rate now %.2f"
+               hit-tokens total-tokens (* 100 rate) gptel-ai-behaviors--cache-hit-rate))))
+
+;; Hook into gptel token accumulation to capture real cache hit data.
+;; Runs after every API response (including subagent calls).
+(with-eval-after-load 'gptel-openai
+  (advice-add 'gptel--openai--accumulate-token-usage :after
+              (lambda (usage info)
+                (when (and (boundp 'gptel-auto-workflow--running)
+                           gptel-auto-workflow--running)
+                  (let* ((hit (or (plist-get usage :prompt_cache_hit_tokens) 0))
+                         (miss (or (plist-get usage :prompt_cache_miss_tokens) 0))
+                         (total (+ hit miss (or (plist-get usage :prompt_tokens) 0))))
+                    (when (and (> total 0) (fboundp 'gptel-ai-behaviors--record-cache-hit))
+                      (gptel-ai-behaviors--record-cache-hit hit total)))))
+              '((name . gptel-ai-behaviors--capture-cache-tokens))))
+
 (provide 'gptel-auto-experiment-ai-behaviors)
 ;;; gptel-auto-experiment-ai-behaviors.el ends here
