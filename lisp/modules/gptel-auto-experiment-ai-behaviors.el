@@ -195,9 +195,9 @@ Uses learned defaults when available, falls back to hardcoded.
 All hashtags reference real behavior directories in packages/ai-behaviors/."
   (or (cdr (assq category gptel-ai-behaviors--category-defaults))
       (pcase category
-        (:agentic "#=code #contract #checklist #stop #legible #concise #=act")
+        (:agentic "#=code #contract #checklist #stop #legible #concise #=act #=compute")
         (:programming "#=tdd #decompose #bisect #concrete #legible #=act")
-        (:tool-calls "#=code #simulate #boundary #temporal #legible #=act")
+        (:tool-calls "#=code #simulate #boundary #temporal #legible #=act #=compute")
         (:natural-language "#=code #user-lens #coherence #concrete #legible #=act")
         (_ "#=code #legible #concise #=act"))))
 
