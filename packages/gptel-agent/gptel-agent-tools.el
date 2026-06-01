@@ -1451,7 +1451,7 @@ PROMPT is the detailed prompt instructing the agent on what is required."
                   (cl-loop for (_cat . tools) in gptel--known-tools
                            append (mapcar (lambda (entry)
                                             (gptel-tool-name
-                                             (if (consp (cdr entry)) (cdr entry) entry)))
+                                             (if (consp entry) (cdr entry) entry)))
                                           tools))))
     (let* ((info (when gptel--fsm-last (gptel-fsm-info gptel--fsm-last)))
            (pos (or (and info (plist-get info :tracking-marker))
