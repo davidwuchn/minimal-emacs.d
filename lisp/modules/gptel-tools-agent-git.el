@@ -357,7 +357,8 @@ large-result truncation, and result caching."
                                  append (mapcar #'gptel-tool-name tools)))
             (setq-local gptel-tools
                         (cl-loop for name in gptel--tool-names
-                                 for tool = (gptel-get-tool name)
+                                 for raw = (gptel-get-tool name)
+                                 for tool = (if (gptel-tool-p raw) raw nil)
                                  if tool collect tool)))
           (let* ((request-tools (and gptel-use-tools (copy-sequence gptel-tools)))
                  (parent-fsm

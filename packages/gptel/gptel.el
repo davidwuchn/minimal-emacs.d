@@ -723,8 +723,9 @@ applied before being re-persisted in the new structure."
       (when gptel--tool-names
         (if-let* ((tools (cl-loop
                           for tname in gptel--tool-names
-                          for tool = (with-demoted-errors "gptel: %S"
+                          for raw = (with-demoted-errors "gptel: %S"
                                        (gptel-get-tool tname))
+                          for tool = (if (gptel-tool-p raw) raw nil)
                           if tool collect tool else do
                           (display-warning
                            '(gptel org tools)

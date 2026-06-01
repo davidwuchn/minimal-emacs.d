@@ -3,23 +3,22 @@ title: Research Insights - template-default
 status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
-insight-quality: 1.0/10
-allium-issues: 5
+insight-quality: 0.6/10
+allium-issues: 3
 allium-severity: 0.00
 allium-status: ok
 ---
 
 # Research Strategy: template-default
 
-*Consolidated from 93 experiments (10% keep rate).*
+*Consolidated from 32 experiments (6% keep rate).*
 
-**Performance:** 9 kept / 2 discarded / 11 failed (EXTRACTED — from TSV)
+**Performance:** 2 kept / 0 discarded / 3 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
-- `lisp/modules/gptel-tools-agent-prompt-build.el` (3 kept / 2 failed)
-- `lisp/modules/gptel-auto-workflow-projects.el` (4 kept / 2 discarded / 1 failed)
-- `lisp/modules/gptel-benchmark-subagent.el` (2 kept / 3 failed)
+- `lisp/modules/gptel-tools-agent-prompt-build.el` (1 kept / 2 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (1 kept)
 
 ### Structure (deterministic scan)
 
@@ -37,15 +36,12 @@ handlers: nil, nil, err, ..., ...), err, err, err, err, err, nil, nil
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-auto-workflow-projects.el` (4 kept / 2 discarded / 1 failed)
-- `lisp/modules/gptel-auto-workflow-strategic.el` (4 failed)
-- `lisp/modules/gptel-benchmark-subagent.el` (2 kept / 3 failed)
-- `lisp/modules/gptel-tools-agent-error.el` (1 failed)
-- `lisp/modules/gptel-tools-agent-prompt-build.el` (3 kept / 2 failed)
+- `lisp/modules/gptel-tools-agent-prompt-build.el` (1 kept / 2 failed)
+- `lisp/modules/gptel-auto-workflow-strategic.el` (1 failed)
 
 ## Allium Behavioral Coherence
 
-*5 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
+*3 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
 
 
 
@@ -62,99 +58,125 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<<<<<<< Updated upstream
+
+
+
+
+
+
+
+
+
+
+=======
+>>>>>>> Stashed changes
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-## Distilled Research Strategy
-
-### Overview
-- **Strategy**: template-default
-- **Scope**: 93 experiments across 11 gptel modules
-- **Status**: Active research with kept and discarded hypotheses
+<<<<<<< Updated upstream
+**Research Strategy: Template-Default**
+*93 experiments across 11 targets*
 
 ---
 
-### Kept Hypotheses (6 Core Improvements)
+**Kept Hypotheses:**
 
-| # | Hypothesis | Improves | Rationale |
-|---|------------|----------|-----------|
-| 1 | Remove redundant `if apply-lines` check in lambda-prompt extraction; add nil guard for `english-findings` | φ Vitality, fractal Clarity | Robustness + reduced branching |
-| 2 | Explicit nil/empty-string guard for `allium-spec`; remove redundant callback check | fractal Clarity | Prevents wasted LLM calls on invalid input |
-| 3 | Add explicit `(symbolp backend)` branch before fallback `t` | fractal Clarity, φ Vitality | Explicit type validation; adapts to implicit code paths |
-| 4 | Add `buffer-live-p` guard + nil check in lambda | φ Vitality, fractal Clarity | Handles async buffer lifecycle |
-| 5 | Extract provider selection into `gptel-benchmark--select-provider` | fractal Clarity, φ Vitality | Makes selection testable; enables isolated improvement |
-| 6 | Add timeout sentinel value in `gptel-benchmark-call-subagent-sync` | Error Handling (Axis A), Safety (Axis D) | Explicit timeout handling |
+1. **Lambda-prompt extraction**: Remove redundant `if apply-lines` check (mapconcat on empty list returns "") and add early nil guard for `english-findings` → improves Vitality + fractal Clarity
 
-**Cross-cutting themes**: error recovery, explicit assumptions, defensive coding.
+2. **Allium-spec guard**: Add nil/empty-string guard + remove redundant callback check → prevents wasted LLM calls on invalid input
+
+3. **Backend type validation**: Add explicit `(symbolp backend)` branch before fallback `t` → explicit type assumptions, testable code, adapts to implicit code paths
+
+4. **Buffer lifecycle guard**: Add `buffer-live-p` + nil check in lambda → adapts to async buffer lifecycle
+
+5. **Provider selection extraction**: Extract into `gptel-benchmark--select-provider` → explicit testable selection logic, enables progressive improvement
+
+6. **Timeout sentinel**: Add explicit timeout sentinel value in `gptel-benchmark-call-subagent-sync` → distinct timeout handling vs nil responses
+
+7. **Defensive coding**: Nil guard on `where`, wrap overlay creation in `condition-case` → prevents overlay failures from breaking execution
 
 ---
 
-### Discarded Hypotheses (2)
-
-| # | Hypothesis | Reason |
-|---|------------|--------|
-| 1 | Replace `(format "%s" err)` with `(error-message-string err)` in weekly job functions | Low priority |
-| 2 | Remove entries from hash table | Discarded |
+**Discarded Hypotheses:**
+- Fixing error message formatting (`(format "%s" err)` → `(error-message-string err)`)
+- Removing entries from hash tables
 ```
 
 ### Check Issues
 
-# Research Strategy Review
+# Review: Research Strategy - Template-Default
 
-## ✅ Structure Validation
+**Context**: 93 experiments across 11 targets is substantial. Good scope for statistical confidence.
 
-| Element | Status | Notes |
-|---------|--------|-------|
-| Overview | ✓ | Clear scope, experiment count, status |
-| Hypothesis table | ✓ | Consistent columns, concrete descriptions |
-| Discard rationale | ✓ | "Low priority" is valid but thin |
-| Cross-cutting themes | ✓ | Good synthesis of intent |
+## Kept Hypotheses — Assessment
 
-## ⚠️ Issues / Gaps
+| # | Hypothesis | Verdict | Notes |
+|---|------------|---------|-------|
+| 1 | Lambda-prompt extraction | ✅ Sound | Removing redundant `mapconcat` check + nil guard = less branching |
+| 2 | Allium-spec guard | ✅ Sound | Nil guard + redundant callback removal = fewer wasted LLM calls |
+| 3 | Backend type validation | ✅ Sound | Explicit `(symbolp backend)` branch improves debuggability |
+| 4 | Buffer lifecycle guard | ✅ Sound | Async buffers are a real footgun; `buffer-live-p` is the right primitive |
+| 5 | Provider selection extraction | ✅ Strong | Extracting to named function enables unit testing + reuse |
+| 6 | Timeout sentinel | ✅ Strong | Distinct sentinel vs `nil` is cleaner than "nil means timeout or error" |
+| 7 | Defensive coding | ✅ Sound | `condition-case` around overlay = resilient to edge cases |
 
-### 1. Missing Discard Detail for #2
-> "Remove entries from hash table — Discarded"
+## Discarded Hypotheses — Assessment
 
-Why? Empty table removes complexity; keeping it keeps data. Need rationale.
+| Hypothesis | Verdict | Reasoning |
+|------------|---------|-----------|
+| `format` → `error-message-string` | ⚠️ Marginal | `format` is idempotent; `error-message-string` adds dependency but improves UX |
+| Removing hash table entries | ❌ Correct discard | GC handles it; explicit removal adds complexity for unclear gain |
 
-### 2. Hypothesis #6 Scope Creep
-Adding timeout sentinel touches **Axis A** (Error Handling) *and* **Axis D** (Safety). This is a multi-axis change—verify intentional.
+## Overall Impression
 
-### 3. Kept Hypothesis Count Mismatch
-Header says **6 core improvements** → table has 6 entries. ✓
-
-### 4. "Low Priority" Discard Too Vague
-Why low priority? Could be:
-- Low impact
-- High effort
-- Out of scope for current sprint
-
-Suggest: `Reason: Low impact / effort ratio` or similar.
-
-### 5. No Priority Ordering
-The kept hypotheses have no sequence. Are they independent? Any dependencies?
-
----
-
-## Suggested Improvements
-
-```markdown
-### Discarded Hypotheses (2)
-
-| # | Hypothesis | Reason |
-|---|------------|--------|
-| 1 | Replace `(format "%s" err)`... | Low impact: error messages rarely inspected in batch jobs |
-| 2 | Remove entries from hash table | Retained: needed for incremental benchmark runs |
-```
-
----
-
-## Summary
-
-| Dimension | Score | Comment |
-|-----------|-------|---------|
-| Completeness | 8/10 | Missing
+**Strategy quality**: High. You're targeting:
+- **Complexity reduction** (hypotheses 1, 2)
+- **Testability** (hyp
 
 ... (truncated)
+=======
+nil
+```
+
+>>>>>>> Stashed changes
