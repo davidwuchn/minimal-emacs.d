@@ -348,23 +348,23 @@ large-result truncation, and result caching."
                                 (cdr agent-config)))))))
              (syms (cons 'gptel--preset (gptel--preset-syms preset)))
              (vals (mapcar (lambda (sym) (if (boundp sym) (symbol-value sym) nil)) syms)))
-        (cl-progv syms vals
+         (cl-progv syms vals
           (gptel--apply-preset preset)
-          ;; Ensure tools are populated when gptel-use-tools is active
-            (unless (or (and gptel--tool-names gptel-tools) (not gptel-use-tools))
-              (setq-local gptel--tool-names
-                          (cl-loop for (_cat . tools) in gptel--known-tools
-                                   append (mapcar (lambda (entry)
-                                                    (gptel-tool-name
-                                                     (if (consp entry) (cdr entry) entry)))
-                                                  tools)))
-              (setq-local gptel-tools
-                        (cl-loop for name in gptel--tool-names
-                                 for raw = (gptel-get-tool name)
-                                 for tool = (if (gptel-tool-p raw) raw nil)
-                                 if tool collect tool)))
-          (let* ((request-tools (and gptel-use-tools (copy-sequence gptel-tools)))
-                 (parent-fsm
+           ;; Ensure tools are populated when gptel-use-tools is active
+             (unless (or (and gptel--tool-names gptel-tools) (not gptel-use-tools))
+               (setq-local gptel--tool-names
+                           (cl-loop for (_cat . tools) in gptel--known-tools
+                                    append (mapcar (lambda (entry)
+                                                     (gptel-tool-name
+                                                      (if (consp entry) (cdr entry) entry)))
+                                                   tools)))
+               (setq-local gptel-tools
+                         (cl-loop for name in gptel--tool-names
+                                  for raw = (gptel-get-tool name)
+                                  for tool = (if (gptel-tool-p raw) raw nil)
+                                  if tool collect tool)))
+           (let* ((request-tools (and gptel-use-tools (copy-sequence gptel-tools)))
+                  (parent-fsm
                   (and (boundp 'gptel--fsm-last)
                        (fboundp 'my/gptel--coerce-fsm)
                        (my/gptel--coerce-fsm gptel--fsm-last)))
