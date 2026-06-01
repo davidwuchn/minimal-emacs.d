@@ -2106,6 +2106,7 @@ exhaustion.")
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
   '(("MiniMax" . "MiniMax-M3")
     ("DeepSeek" . "deepseek-v4-pro")
+    ("DashScope" . "qwen3.6-plus")
     ("moonshot" . "kimi-k2.6"))
   "Ordered backend/model fallbacks for headless auto-workflow subagents.
 
