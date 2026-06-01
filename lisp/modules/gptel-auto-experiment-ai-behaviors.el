@@ -1404,32 +1404,35 @@ A model that keeps 50% at cost 1 is better than 60% at cost 3."
 
 (defun gptel-ai-behaviors--evolve-fallback-chain ()
   "Reorder gptel-auto-workflow-headless-subagent-fallbacks by cost-adjusted keep-rate.
-Backends with higher cost-adjusted keep-rate move to front (preferred).
-Only runs when ≥2 backends have sufficient data to avoid overfitting."
+Backends with higher keeps-per-dollar move to front (preferred).
+Only runs when >= 2 backends have sufficient data to avoid overfitting."
   (let ((scores nil))
     (dolist (pair gptel-auto-workflow-headless-subagent-fallbacks)
       (let* ((backend (car pair))
-             ;; Compute aggregate cost-adjusted rate across all subagent types
-             (total-kept 0) (total-cost 0) (min-samples 3))
+             (total-kept 0) (total-cost 0.0))
+        ;; Aggregate cost-adjusted rate from model-stats (kept/total)
+        ;; combined with cost-stats (calls/total-cost)
         (maphash
          (lambda (key entry)
-           (let ((model (nth 2 key)))
-             (when (and (boundp 'gptel-ai-behaviors--cost-stats)
-                        (gethash (cons model "default") gptel-ai-behaviors--cost-stats))
-               (cl-incf total-kept (car entry))
-               (cl-incf total-cost (cdr entry)))))
+           (let* ((model (nth 2 key))
+                  (kept (car entry))         ; from model-stats: kept count
+                  (cost-key (cons model "default"))
+                  (cost-entry (gethash cost-key gptel-ai-behaviors--cost-stats))
+                  (cost (if cost-entry (cdr cost-entry) 1.0)))  ; cost or fallback
+             (cl-incf total-kept kept)
+             (cl-incf total-cost cost)))
          gptel-ai-behaviors--model-stats)
-        (when (> total-kept 0)
-          (push (cons backend (/ (float total-kept) (max 1 total-cost))) scores))))
+        (when (and (> total-kept 0) (> total-cost 0))
+          (push (cons backend (/ (float total-kept) total-cost)) scores))))
     ;; Reorder if we have enough data
     (when (>= (length scores) 2)
       (setq scores (sort scores (lambda (a b) (> (cdr a) (cdr b)))))
       (setq gptel-auto-workflow-headless-subagent-fallbacks
             (mapcar (lambda (s) (assoc (car s) gptel-auto-workflow-headless-subagent-fallbacks))
                     scores))
-      (message "[chain-evolve] Fallback chain reordered by cost-adjusted keep-rate: %s"
-               (mapconcat (lambda (s) (format "%s(%.2f)" (car s) (cdr s)))
-                          scores " → ")))))
+      (message "[chain-evolve] Fallback reordered by keeps-per-dollar: %s"
+               (mapconcat (lambda (s) (format "%s(%.4f)" (car s) (cdr s)))
+                          scores " -> ")))))
 
 ;; ─── KV Cache Hit Rate Self-Evolution ───
 
