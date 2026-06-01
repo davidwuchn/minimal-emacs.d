@@ -774,7 +774,10 @@ send in queries.  (See `gptel--num-messages-to-send' for the last one.)"
                 (add-file-local-variable 'gptel--system-message parsed)
               (delete-file-local-variable 'gptel--system-message)))
           ;; Tools
-          (let ((tool-names (mapcar #'gptel-tool-name gptel-tools)))
+          (let ((tool-names (mapcar (lambda (t-entry)
+                                      (gptel-tool-name
+                                       (if (consp (cdr t-entry)) (cdr t-entry) t-entry)))
+                                    gptel-tools)))
             (if (gptel--preset-mismatch-value preset-spec :tools tool-names)
                 (add-file-local-variable 'gptel--tool-names tool-names)
               (delete-file-local-variable 'gptel--tool-names)))
