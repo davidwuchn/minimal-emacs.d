@@ -256,9 +256,20 @@ fi
 # give it a generous grace period (API calls can take minutes).
 if workflow_active; then
     echo "[$(date '+%H:%M:%S')] Workflow active — using 600s grace period" >> "$LOG"
-    if timeout 600 emacsclient -a false -s "$SERVER_NAME" --eval 't' >/dev/null 2>&1; then
-        exit 0  # Daemon came back
-    fi
+    # The daemon may be initializing (process alive but no socket yet).
+    # Poll for the socket and responsiveness instead of returning immediately.
+    _deadline=$(($(date +%s) + 600))
+    while [ $(date +%s) -lt $_deadline ]; do
+        if daemon_responds; then
+            exit 0  # Daemon came back
+        fi
+        # If the daemon process exists, keep waiting for the socket.
+        _pid=$(first_daemon_pid "$SERVER_NAME")
+        if [ -z "$_pid" ] || ! kill -0 "$_pid" 2>/dev/null; then
+            break  # Process is gone — not coming back
+        fi
+        sleep 5
+    done
 fi
 
 # Daemon is truly gone. Kill all processes, clean sockets, restart.
