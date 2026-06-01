@@ -1290,18 +1290,34 @@ WARNING: Set from API response when `prompt_cache_hit_tokens' is available.")
 
 (defun gptel-ai-behaviors--model-cost (model &optional prompt-chars response-chars)
   "Return estimated USD cost for MODEL given PROMPT-CHARS and RESPONSE-CHARS.
-Uses DeepSeek token ratio: 1 English char ≈ 0.3 tokens (~3.3 chars/token).
+Uses DeepSeek token ratio: 1 English char ≈ 0.3 tokens.
+Accounts for KV cache: prompt has ~80% cache-hit rate (same system prompt
+and tool definitions across experiments saves 50-120x on input cost).
 Falls back to $2.0 if model pricing not found."
   (let* ((pricing (cl-find-if (lambda (e) (string-match-p (car e) model))
                                gptel-ai-behaviors--model-pricing))
          (input-price (or (plist-get (cdr pricing) :input) 1.0))
          (output-price (or (plist-get (cdr pricing) :output) 2.0))
-         (input-tokens (if (and prompt-chars (> prompt-chars 0))
-                           (* (float prompt-chars) 0.3) 0))
+         (cache-price (or (plist-get (cdr pricing) :cache-hit) (/ input-price 50.0)))
+         (cache-rate (or (and (boundp 'gptel-ai-behaviors--cache-hit-rate)
+                              gptel-ai-behaviors--cache-hit-rate)
+                         0.8))
+         (total-input-tokens (if (and prompt-chars (> prompt-chars 0))
+                                 (* (float prompt-chars) 0.3) 0))
          (output-tokens (if (and response-chars (> response-chars 0))
-                            (* (float response-chars) 0.3) 0)))
-    (/ (+ (* input-tokens input-price) (* output-tokens output-price))
+                            (* (float response-chars) 0.3) 0))
+         (cached-input-tokens (* total-input-tokens cache-rate))
+         (missed-input-tokens (- total-input-tokens cached-input-tokens)))
+    (/ (+ (* missed-input-tokens input-price)
+          (* cached-input-tokens cache-price)
+          (* output-tokens output-price))
        1000000.0)))  ; convert from per-million to absolute
+
+(defvar gptel-ai-behaviors--cache-hit-rate 0.8
+  "Estimated KV cache hit rate (0-1) for DeepSeek API input tokens.
+Default 0.8: ~80% of prompt is shared prefix (system prompt + tools).
+Self-evolves from observed prompt_cache_hit_tokens/prompt_cache_miss_tokens.
+Set from API response when available for real data.")
 
 (defun gptel-ai-behaviors--record-cost (model effort &optional prompt-chars response-chars)
   "Record one API call for MODEL+EFFORT with actual token-based cost.
