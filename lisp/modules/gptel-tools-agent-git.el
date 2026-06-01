@@ -351,14 +351,14 @@ large-result truncation, and result caching."
         (cl-progv syms vals
           (gptel--apply-preset preset)
           ;; Ensure tools are populated when gptel-use-tools is active
-          (unless (or (and gptel--tool-names gptel-tools) (not gptel-use-tools))
-           (setq-local gptel--tool-names
-                       (cl-loop for (_cat . tools) in gptel--known-tools
-                                append (mapcar (lambda (entry)
-                                                 (gptel-tool-name
-                                                  (if (consp entry) (cdr entry) entry)))
-                                               tools)))
-            (setq-local gptel-tools
+            (unless (or (and gptel--tool-names gptel-tools) (not gptel-use-tools))
+              (setq-local gptel--tool-names
+                          (cl-loop for (_cat . tools) in gptel--known-tools
+                                   append (mapcar (lambda (entry)
+                                                    (gptel-tool-name
+                                                     (if (consp entry) (cdr entry) entry)))
+                                                  tools)))
+              (setq-local gptel-tools
                         (cl-loop for name in gptel--tool-names
                                  for raw = (gptel-get-tool name)
                                  for tool = (if (gptel-tool-p raw) raw nil)
@@ -396,9 +396,24 @@ large-result truncation, and result caching."
                                   (or description "unknown"))))
             (my/gptel--register-agent-task-buffer parent-buf)
             (gptel--update-status " Calling Agent..." 'font-lock-escape-face)
-            (with-current-buffer parent-buf
-              (setq-local gptel--fsm-last child-fsm))
-            (let ((request-started nil))
+             (with-current-buffer parent-buf
+               (setq-local gptel--fsm-last child-fsm)
+               ;; Ensure gptel-tools is buffer-local in parent-buf so
+               ;; gptel--with-buffer-copy-internal picks it up via buffer-local-value.
+               ;; Dynamic bindings from cl-progv are invisible to buffer-local-value.
+               (unless (local-variable-p 'gptel-tools (current-buffer))
+                 (setq-local gptel--tool-names
+                             (cl-loop for (_cat . tools) in gptel--known-tools
+                                      append (mapcar (lambda (entry)
+                                                       (gptel-tool-name
+                                                        (if (consp entry) (cdr entry) entry)))
+                                                     tools)))
+                 (setq-local gptel-tools
+                             (cl-loop for name in gptel--tool-names
+                                      for raw = (gptel-get-tool name)
+                                      for tool = (if (gptel-tool-p raw) raw nil)
+                                      if tool collect tool))))
+             (let ((request-started nil))
               (unwind-protect
                   (progn
                     (gptel-request prompt
