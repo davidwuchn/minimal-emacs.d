@@ -1400,7 +1400,86 @@ A model that keeps 50% at cost 1 is better than 60% at cost 3."
       (message "[combo-evolve] %s" (mapconcat #'identity (seq-take combo-logs 5) " | ")))
     ;; Self-evolve the fallback chain: reorder by cost-adjusted keep-rate
     (gptel-ai-behaviors--evolve-fallback-chain)
+    ;; Build unified (category strategy backend) stats from model-stats + cost-stats
+    (gptel-ai-behaviors--build-unified-stats)
     logs))
+
+(defvar gptel-ai-behaviors--unified-stats (make-hash-table :test 'equal)
+  "Hash: (category strategy backend) → (kept total cost).
+Built from model-stats + cost-stats each evolution cycle.
+Drives per-category backend chains and strategy-category affinity scores.")
+
+(defun gptel-ai-behaviors--build-unified-stats ()
+  "Build gptel-ai-behaviors--unified-stats from model-stats + cost-stats.
+Aggregates across subagents and models for each (category strategy backend)."
+  (clrhash gptel-ai-behaviors--unified-stats)
+  (maphash
+   (lambda (key entry)
+     (let* ((category (nth 0 key))
+            (strategy (nth 1 key))
+            (model (nth 2 key))
+            (kept (car entry))
+            (total (cdr entry))
+            (cost-key (cons model "default"))
+            (cost-entry (gethash cost-key gptel-ai-behaviors--cost-stats))
+            (cost (if cost-entry (cdr cost-entry) 0.0)))
+       (when (and category strategy model)
+         (dolist (backend '("DeepSeek" "MiniMax" "DashScope" "moonshot"))
+           (when (string-match-p (regexp-quote backend) (or model ""))
+             (let* ((uni-key (list category strategy backend))
+                    (uni-entry (gethash uni-key gptel-ai-behaviors--unified-stats
+                                        (list 0 0 0.0))))
+               (cl-incf (nth 0 uni-entry) kept)
+               (cl-incf (nth 1 uni-entry) total)
+               (cl-incf (nth 2 uni-entry) cost)
+                (puthash uni-key uni-entry gptel-ai-behaviors--unified-stats)))))))
+   gptel-ai-behaviors--model-stats)
+  (message "[unified-stats] Built %d (category strategy backend) entries"
+           (hash-table-count gptel-ai-behaviors--unified-stats))
+  ;; Compute strategy-category affinities from unified stats
+  (gptel-ai-behaviors--compute-strategy-affinities))
+
+(defun gptel-ai-behaviors--compute-strategy-affinities ()
+  "Compute which strategies work best for each category.
+Stores results in gptel-ai-behaviors--strategy-affinities as
+((category . (strategy . cost-adjusted-rate) ...) ...).
+Used by ontology budget allocator to increase experiment budget
+for high-affinity strategy-category pairs."
+  (let ((affinities nil)
+        (by-cat (make-hash-table :test 'equal)))
+    (maphash
+     (lambda (key entry)
+       (let* ((category (nth 0 key))
+              (strategy (nth 1 key))
+              (kept (nth 0 entry))
+              (total (nth 1 entry))
+              (cost (nth 2 entry))
+              (rate (if (and (> total 0) (> cost 0))
+                        (/ (float kept) total cost)
+                      0.0)))
+         (when (and category strategy (> total 2))
+           (let ((cat-strategies (gethash category by-cat nil)))
+             (push (cons strategy rate) cat-strategies)
+              (puthash category cat-strategies by-cat))))))
+      gptel-ai-behaviors--unified-stats)
+    (maphash
+     (lambda (cat strats)
+       (when strats
+         (setq strats (sort strats (lambda (a b) (> (cdr a) (cdr b)))))
+         (push (cons cat strats) affinities)))
+     by-cat)
+    (setq gptel-ai-behaviors--strategy-affinities affinities)
+    (when affinities
+      (message "[strategy-affinity] Top pairs: %s"
+               (mapconcat
+                (lambda (a)
+                   (format "%s->%s(%.2f)" (car a) (caadr a) (cdadr a)))
+                (seq-take affinities 3) " | "))))
+
+(defvar gptel-ai-behaviors--strategy-affinities nil
+  "List of (category . ((strategy . cost-adjusted-rate) ...)).
+Computed by gptel-ai-behaviors--compute-strategy-affinities.
+Used to allocate experiment budget to high-affinity pairs.")
 
 (defun gptel-ai-behaviors--evolve-fallback-chain ()
   "Reorder gptel-auto-workflow-headless-subagent-fallbacks by cost-adjusted keep-rate.
