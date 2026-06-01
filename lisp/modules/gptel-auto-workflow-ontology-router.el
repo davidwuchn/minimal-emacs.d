@@ -3254,22 +3254,24 @@ before the executor runs, not just listed in the prompt."
             (setq result
                   (pcase pre
                     ("file-byte-compiles"
-                     (when (and target-file
-                                (not (zerop (call-process
-                                            "emacs" nil nil nil
-                                            "--batch" "-Q"
-                                            "-f" "batch-byte-compile"
-                                            target-file))))
-                       (format "Precondition FAILED: %s does not byte-compile" target)))
+                      (when (and target-file
+                                 (not (zerop (call-process
+                                             (expand-file-name "scripts/byte-compile-check.sh"
+                                                               (or (and (boundp 'minimal-emacs-user-directory)
+                                                                        minimal-emacs-user-directory)
+                                                                   user-emacs-directory))
+                                             nil nil nil
+                                             target-file))))
+                        (format "Precondition FAILED: %s does not byte-compile" target)))
                     ("no-syntax-errors"
-                     (when (and target-file
-                                (with-temp-buffer
-                                  (insert-file-contents target-file)
-                                  (not (zerop (call-process
-                                               "emacs" nil nil nil
-                                               "--batch" "--eval"
-                                               (format "(check-parens)"))))))
-                       (format "Precondition FAILED: %s has syntax errors" target)))
+                      (when target-file
+                        (condition-case nil
+                            (with-temp-buffer
+                              (insert-file-contents target-file)
+                              (check-parens)
+                              nil)  ; no error = passes
+                          (error
+                           (format "Precondition FAILED: %s has syntax errors" target)))))
                     ("tool-registry-initialized"
                      (unless (and (boundp 'gptel-agent--agents)
                                   gptel-agent--agents)
