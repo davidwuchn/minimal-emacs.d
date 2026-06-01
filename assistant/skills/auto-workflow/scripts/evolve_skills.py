@@ -218,16 +218,14 @@ def update_skill_metadata(skills_dir, analysis):
         content = re.sub(r'^updated:\s*\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?\n', '', content, flags=re.MULTILINE)
         content = re.sub(r'^\s*last-evolution:\s*\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?\n', '', content, flags=re.MULTILINE)
         
-        # Add evolution metadata if not present
+        # Add evolution metadata if not present.
+        # Insert inside existing frontmatter before the closing ---.
         if 'evolution-stats:' not in content:
-            # Insert metadata inside the existing frontmatter block,
-            # BEFORE the closing --- (not creating a new frontmatter).
-            # Matches the last --- that closes frontmatter (followed by body text).
-            content = re.sub(
-                r'\n(---\s*\n(?!#))',
-                f'\nmetadata:\n  evolution-stats:\n    total-experiments: {analysis["total_experiments"]}\n\\1',
-                content, count=1
-            )
+            parts = content.split('---', 2)
+            if len(parts) >= 3:
+                frontmatter = parts[1]
+                body = parts[2]
+                content = f'---{frontmatter}metadata:\n  evolution-stats:\n    total-experiments: {analysis["total_experiments"]}\n---{body}'
         
         # Normalize: collapse 3+ consecutive newlines to max 2
         content = re.sub(r'\n{3,}', '\n\n', content)
