@@ -366,9 +366,38 @@ experiment phases do not trip the real pre-grade target validator."
                 ":hook (after-init . my/enable-recentf-mode-if-appropriate)")
                (buffer-string)))
       (should (string-match-p
-               (regexp-quote
-                "(unless (and (fboundp 'my/workflow-daemon-p)\n               (my/workflow-daemon-p))\n    (add-hook 'kill-emacs-hook #'recentf-cleanup -90))")
-               (buffer-string))))))
+                (regexp-quote
+                 "(unless (and (fboundp 'my/workflow-daemon-p)\n               (my/workflow-daemon-p))\n    (add-hook 'kill-emacs-hook #'recentf-cleanup -90))")
+                (buffer-string))))))
+
+(ert-deftest regression/init-dev/apheleia-skips-workflow-daemon ()
+  "Workflow daemons should not enable Apheleia automatically."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (init-dev (expand-file-name "lisp/init-dev.el" repo-root)))
+    (with-temp-buffer
+      (insert-file-contents init-dev)
+      (let ((contents (buffer-string)))
+        (should (string-match-p
+                 (regexp-quote "(defun my/enable-apheleia-mode-if-appropriate ()")
+                 contents))
+        (should (string-match-p
+                 (regexp-quote "(unless (and (fboundp 'my/workflow-daemon-p)")
+                 contents))
+        (should (string-match-p
+                 (regexp-quote "(my/workflow-daemon-p))")
+                 contents))
+        (should (string-match-p
+                 (regexp-quote "(when (require 'apheleia nil t)")
+                 contents))
+        (should (string-match-p
+                 (regexp-quote "(apheleia-mode))))")
+                 contents))
+        (should (string-match-p
+                 (regexp-quote ":hook ((prog-mode . my/enable-apheleia-mode-if-appropriate))")
+                 contents))
+        (should (string-match-p
+                 (regexp-quote "(apheleia-global-mode +1)")
+                 contents))))))
 
 (ert-deftest regression/auto-workflow/verify-nucleus-binds-worktree-root-before-early-init ()
   "verify-nucleus.sh should start from the worktree init dir before loading early-init."
@@ -3479,8 +3508,66 @@ experiment phases do not trip the real pre-grade target validator."
           (should (file-exists-p temp-file)))
       (when (and temp-file (file-exists-p temp-file))
         (delete-file temp-file))
-      (when (file-directory-p temp-root)
-        (delete-directory temp-root t)))))
+       (when (file-directory-p temp-root)
+         (delete-directory temp-root t)))))
+
+(ert-deftest regression/gptel-agent/execute-bash-ignores-missing-callback ()
+  "Async bash sentinel should not crash when CALLBACK is nil."
+  (let ((captured-sentinel nil)
+        (buffer (get-buffer-create " *gptel-agent-bash-test*"))
+        process)
+    (unwind-protect
+        (cl-letf (((symbol-function 'make-process)
+                   (lambda (&rest args)
+                     (setq captured-sentinel (plist-get args :sentinel))
+                     (setq process :fake-process)))
+                  ((symbol-function 'process-status)
+                   (lambda (_proc) 'exit))
+                  ((symbol-function 'process-exit-status)
+                   (lambda (_proc) 0))
+                  ((symbol-function 'process-buffer)
+                   (lambda (_proc) buffer))
+                  ((symbol-function 'kill-buffer)
+                   (lambda (_buf) nil)))
+          (with-current-buffer buffer
+            (erase-buffer)
+            (insert "ok"))
+          (should (eq (gptel-agent--execute-bash nil "true") :fake-process))
+          (should (functionp captured-sentinel))
+          (should (eq (condition-case nil
+                          (progn (funcall captured-sentinel process "finished") t)
+                        (error nil))
+                      t)))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
+
+(ert-deftest regression/gptel-agent/truncate-callback-ignores-missing-callback ()
+  "Truncate callback wrapper should tolerate nil CALLBACK."
+  (let ((wrapped (gptel-agent--truncate-callback nil "bash")))
+    (should (functionp wrapped))
+    (should (eq (condition-case nil
+                    (progn (funcall wrapped "result") t)
+                  (error nil))
+                t))))
+
+(ert-deftest regression/auto-experiment/validate-diff-content-counts-lines-from-buffer ()
+  "Diff validation should count diff lines without treating the diff text as a position."
+  (let ((worktree (make-temp-file "aw-validate-diff" t))
+        (diff-text (mapconcat #'identity
+                              (append
+                               '("diff --git a/demo.el b/demo.el"
+                                 "index 1111111..2222222 100644"
+                                 "--- a/demo.el"
+                                 "+++ b/demo.el"
+                                 "@@ -1,0 +1,82 @@")
+                               (make-list 81 "+(message \"x\")"))
+                              "\n")))
+    (unwind-protect
+        (cl-letf (((symbol-function 'shell-command-to-string)
+                   (lambda (_command) diff-text)))
+          (should (equal (gptel-auto-experiment--validate-diff-content worktree)
+                         "Cheap check: diff too large (86 lines)")))
+      (delete-directory worktree t))))
 
 (ert-deftest regression/gptel-agent/write-file-creates-parent-dir-before-upstream ()
   "Local write advice should create missing parent directories before save."
@@ -10230,9 +10317,45 @@ failure."
           (should-not recentf-mode)
           (should (equal recentf-calls '(-1)))
           (gptel-auto-workflow--disable-headless-suppression)
-          (should recentf-mode)
-          (should (equal recentf-calls '(1 -1))))
-      (makunbound 'recentf-mode))))
+           (should recentf-mode)
+           (should (equal recentf-calls '(1 -1))))
+       (makunbound 'recentf-mode))))
+
+(ert-deftest regression/auto-workflow/headless-suppression-disables-and-restores-apheleia ()
+  "Headless suppression should suspend Apheleia formatter runs during workflow runs."
+  (let ((apheleia-calls nil)
+        (had-skip-functions (boundp 'apheleia-skip-functions))
+        (old-skip-functions (and (boundp 'apheleia-skip-functions)
+                                 apheleia-skip-functions))
+        (gptel-auto-workflow--headless nil)
+        (gptel-auto-workflow-persistent-headless nil)
+        (gptel-auto-workflow--apheleia-was-enabled nil))
+    (setq apheleia-skip-functions nil
+          apheleia-global-mode t)
+    (unwind-protect
+        (cl-letf (((symbol-function 'advice-add) (lambda (&rest _) nil))
+                  ((symbol-function 'advice-remove) (lambda (&rest _) nil))
+                  ((symbol-function 'global-auto-revert-mode) (lambda (&rest _) nil))
+                  ((symbol-function 'add-hook) (lambda (&rest _) nil))
+                  ((symbol-function 'remove-hook) (lambda (&rest _) nil))
+                  ((symbol-function 'apheleia-global-mode)
+                   (lambda (arg)
+                     (push arg apheleia-calls)
+                     (setq apheleia-global-mode (> arg 0)))))
+          (gptel-auto-workflow--enable-headless-suppression)
+          (should-not apheleia-global-mode)
+          (should (memq #'gptel-auto-workflow--suppress-apheleia-p
+                        apheleia-skip-functions))
+          (should (equal apheleia-calls '(-1)))
+          (gptel-auto-workflow--disable-headless-suppression)
+          (should apheleia-global-mode)
+          (should-not (memq #'gptel-auto-workflow--suppress-apheleia-p
+                            apheleia-skip-functions))
+          (should (equal apheleia-calls '(1 -1))))
+      (if had-skip-functions
+          (setq apheleia-skip-functions old-skip-functions)
+        (makunbound 'apheleia-skip-functions))
+      (makunbound 'apheleia-global-mode))))
 
 (ert-deftest regression/auto-workflow/watchdog-clears-cron-job-running ()
   "Watchdog force-stop should clear the cron-job latch."
@@ -10788,6 +10911,40 @@ failure."
     (should (string-match-p
              "Missing target file"
              (gptel-auto-experiment--validate-code file)))))
+
+(ert-deftest regression/auto-workflow/validate-code-resolves-byte-compile-helper-from-live-root ()
+  "Validation should resolve its compile helper from the target file's repo root."
+  (defvar minimal-emacs-user-directory)
+  (let* ((repo-root (file-name-as-directory (make-temp-file "validate-code-live-root" t)))
+         (stale-root (file-name-as-directory (make-temp-file "validate-code-stale-root" t)))
+         (scripts-dir (expand-file-name "scripts" repo-root))
+         (script-file (expand-file-name "byte-compile-check.sh" scripts-dir))
+         (target (expand-file-name "lisp/modules/target.el" repo-root))
+         (user-emacs-directory (expand-file-name "var/" repo-root))
+         (minimal-emacs-user-directory stale-root)
+         seen-program
+         seen-args)
+    (unwind-protect
+        (progn
+          (make-directory scripts-dir t)
+          (make-directory (file-name-directory target) t)
+          (with-temp-file script-file
+            (insert "#!/bin/sh\nexit 0\n"))
+          (with-temp-file target
+            (insert ";;; target.el -*- lexical-binding: t; -*-\n"
+                    "(defun validate-code-target () t)\n"))
+          (cl-letf (((symbol-function 'call-process)
+                     (lambda (program infile destination display &rest args)
+                       (setq seen-program program
+                             seen-args args)
+                       0))
+                    ((symbol-function 'gptel-auto-experiment--diff-against-head)
+                     (lambda (_file) nil)))
+            (should-not (gptel-auto-experiment--validate-code target))
+            (should (equal seen-program script-file))
+            (should (equal (car seen-args) target))))
+      (delete-directory repo-root t)
+      (delete-directory stale-root t))))
 
 (ert-deftest regression/auto-workflow/validate-code-ignores-cl-return-from-in-docs ()
   "Code validation should ignore cl-return-from mentions in comments and strings."
@@ -11977,7 +12134,7 @@ failure."
                     "    print('t')\n"
                     "elif 'gptel-auto-workflow--status-plist' in expr:\n"
                     "    print('(:running nil :kept 0 :total 0 :phase \"idle\" :results \"var/tmp/experiments/2026-04-03/results.tsv\")')\n"
-                    "elif 'gptel-auto-workflow-queue-all-projects' in expr:\n"
+                    "elif 'gptel-auto-workflow-bootstrap-run root \"auto-workflow\"' in expr:\n"
                     "    print('queued')\n"
                     "else:\n"
                     "    print('nil')\n"
@@ -12182,10 +12339,10 @@ failure."
             (insert-file-contents emacs-log)
             (should (string-empty-p (buffer-string))))
           (with-temp-buffer
-            (insert-file-contents argv-log)
-             (should (string-match-p
-                      (regexp-quote "gptel-auto-workflow-queue-all-projects")
-                      (buffer-string)))))
+             (insert-file-contents argv-log)
+              (should (string-match-p
+                       (regexp-quote "gptel-auto-workflow-bootstrap-run root")
+                       (buffer-string)))))
       (delete-directory status-dir t)
       (delete-directory fake-bin t)
       (when (file-exists-p argv-log)
@@ -13099,36 +13256,38 @@ failure."
              (should (seq-some
                       (lambda (elisp)
                         (and (string-match-p
-                              (regexp-quote "(load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))")
+                              (regexp-quote "(load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-bootstrap.el\" root))")
                               elisp)
                              (string-match-p
-                              (regexp-quote "(gptel-auto-workflow--activate-live-root root)")
-                              elisp)
-                             (string-match-p
-                              (regexp-quote "(gptel-auto-workflow--reload-live-support root)")
-                              elisp)
-                             (string-match-p
-                              (regexp-quote "(gptel-auto-workflow-queue-all-projects)")
+                              (regexp-quote "(gptel-auto-workflow-bootstrap-run root \"auto-workflow\")")
                               elisp)
                              (string-match-p
                               (regexp-quote (format "(setenv \"AUTO_WORKFLOW_STATUS_FILE\" \"%s\")"
                                                     status-file))
-                             elisp)
+                              elisp)
                             (string-match-p
                              (regexp-quote (format "(setenv \"AUTO_WORKFLOW_MESSAGES_FILE\" \"%s\")"
                                                    messages-file))
                               elisp)
                              (not (string-match-p
-                                   (regexp-quote "bound-and-true-p minimal-emacs-user-directory")
-                                   elisp))
-                             (not (string-match-p
-                                    (regexp-quote "gptel-auto-workflow-bootstrap.el")
+                                    (regexp-quote "bound-and-true-p minimal-emacs-user-directory")
                                     elisp))
                              (not (string-match-p
-                                   (regexp-quote "(require 'gptel)")
-                                   elisp))
-                             (not (string-match-p "\n" elisp))))
-                      elisp-payloads))))
+                                     (regexp-quote "(load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))")
+                                     elisp))
+                             (not (string-match-p
+                                    (regexp-quote "(gptel-auto-workflow--activate-live-root root)")
+                                    elisp))
+                              (not (string-match-p
+                                    (regexp-quote "(gptel-auto-workflow--reload-live-support root)")
+                                    elisp))
+                              (not (string-match-p
+                                    (regexp-quote "(gptel-auto-workflow-queue-all-projects)")
+                                    elisp))
+                              (not (string-match-p
+                                    (regexp-quote "(require 'gptel)")
+                                    elisp))))
+                       elisp-payloads))))
       (delete-directory status-dir t)
       (delete-directory fake-bin t)
       (when (file-exists-p messages-file)

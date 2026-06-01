@@ -680,6 +680,7 @@ run_emacsclient_eval() {
 import subprocess
 import os
 import shutil
+import socket
 import sys
 import tempfile
 from pathlib import Path
@@ -707,10 +708,23 @@ def server_socket_path():
             return path
     return deduped[0]
 
-def socket_has_owner():
+def socket_accepts_connections():
     socket_path = server_socket_path()
     if not socket_path.exists():
         return False
+    probe_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    probe_socket.settimeout(1)
+    try:
+        probe_socket.connect(str(socket_path))
+        return True
+    except ConnectionRefusedError:
+        return False
+    except socket.timeout:
+        return True
+    except OSError:
+        pass
+    finally:
+        probe_socket.close()
     lsof = shutil.which("lsof")
     if not lsof:
         return True
@@ -793,7 +807,7 @@ if proc_returncode != 0 and any(marker in stderr_text for marker in busy_markers
 
 if (proc_returncode != 0
         and "Connection refused" in stderr_text
-        and socket_has_owner()):
+        and socket_accepts_connections()):
     if proc_stdout:
         sys.stdout.write(proc_stdout)
     if proc_stderr:
@@ -978,19 +992,37 @@ ensure_ssh_keys_loaded() {
 
 workflow_action_elisp() {
     local action="$1"
-    local dispatch
-
     case "$action" in
-        auto-workflow) dispatch="(gptel-auto-workflow-queue-all-projects)" ;;
-    research) dispatch="(gptel-auto-workflow-queue-all-research t)" ;;
-        mementum) dispatch="(progn (setq gptel-mementum-headless-auto-approve t) (gptel-auto-workflow-queue-all-mementum))" ;;
-        instincts) dispatch="(gptel-auto-workflow-queue-all-instincts)" ;;
-        evolution) dispatch="(when (fboundp 'gptel-auto-workflow-evolution-run-cycle) (gptel-auto-workflow-evolution-run-cycle))" ;;
+        auto-workflow|research|mementum|instincts)
+            printf '(condition-case _err
+                        (let ((root (file-name-as-directory "%s"))
+                              (load-prefer-newer t))
+                          (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-bootstrap.el" root))
+                          (gptel-auto-workflow-bootstrap-run root "%s"))
+                      (error (format "[workflow-action] load-error: %%s" (error-message-string _err))))' \
+                   "$ROOT_LISP" "$action"
+            ;;
+        evolution)
+            printf '(condition-case _err
+                        (let ((root (file-name-as-directory "%s"))
+                              (load-prefer-newer t))
+                          (let ((inhibit-message t) (load-verbose nil))
+                            (ignore-errors (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root)))
+                            (dolist (module (list "gptel-tools-agent-prompt-build.el" "gptel-tools-agent-error.el" "gptel-benchmark-subagent.el" "gptel-tools-agent-main.el" "gptel-auto-workflow-evolution.el" "gptel-auto-experiment-ai-behaviors.el" "gptel-tools-agent-base.el"))
+                              (ignore-errors (load-file (expand-file-name (concat "lisp/modules/" module) root))))
+                            (ignore-errors (when (fboundp (quote gptel-auto-workflow--activate-live-root))
+                                             (gptel-auto-workflow--activate-live-root root)))
+                            (ignore-errors (when (fboundp (quote gptel-auto-workflow--reload-live-support))
+                                             (gptel-auto-workflow--reload-live-support root))))
+                          (condition-case action-err
+                              (when (fboundp (quote gptel-auto-workflow-evolution-run-cycle))
+                                (gptel-auto-workflow-evolution-run-cycle))
+                            (error (format "[workflow-action] action-error: %%s" (error-message-string action-err)))))
+                      (error (format "[workflow-action] load-error: %%s" (error-message-string _err))))' \
+                   "$ROOT_LISP"
+            ;;
         *) return 1 ;;
     esac
-
-    printf '(condition-case _err (let ((root (file-name-as-directory "%s")) (load-prefer-newer t)) (let ((inhibit-message t) (load-verbose nil)) (ignore-errors (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root)))     (dolist (module (list "gptel-tools-agent-prompt-build.el" "gptel-tools-agent-error.el" "gptel-benchmark-subagent.el" "gptel-tools-agent-main.el" "gptel-auto-workflow-evolution.el" "gptel-auto-experiment-ai-behaviors.el" "gptel-tools-agent-base.el")) (ignore-errors (load-file (expand-file-name (concat "lisp/modules/" module) root)))) (ignore-errors (when (fboundp (quote gptel-auto-workflow--activate-live-root)) (gptel-auto-workflow--activate-live-root root))) (ignore-errors (when (fboundp (quote gptel-auto-workflow--reload-live-support)) (gptel-auto-workflow--reload-live-support root)))) (condition-case action-err %s (error (format "[workflow-action] action-error: %%s" (error-message-string action-err))))) (error (format "[workflow-action] load-error: %%s" (error-message-string _err))))' \
-           "$ROOT_LISP" "$dispatch"
 }
 
 stop_action_elisp() {

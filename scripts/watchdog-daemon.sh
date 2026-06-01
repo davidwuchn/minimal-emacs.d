@@ -16,6 +16,17 @@ RESTART_COOLDOWN=300  # 5 min between restarts to avoid restart loops
 
 mkdir -p "$(dirname "$LOG")"
 
+start_workflow_daemon() {
+    env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
+        EMACSNATIVELOADPATH= \
+        AUTO_WORKFLOW_EMACS_SERVER="$SERVER_NAME" \
+        MINIMAL_EMACS_WORKFLOW_ROLE=auto-workflow \
+        MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
+        MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
+        bash -c 'ulimit -s 65532 2>/dev/null; exec emacs --init-directory="$0" --daemon="$1" --eval "(setq native-comp-jit-compilation nil)" </dev/null' \
+        "$DIR" "$SERVER_NAME" &
+}
+
 daemon_pids() {
     local name="$1"
 
@@ -83,12 +94,67 @@ resolve_live_socket() {
     return 1
 }
 
+socket_accepts_connections() {
+    python3 - "$SERVER_NAME" "$MY_UID" <<'PY'
+from pathlib import Path
+import os
+import socket
+import sys
+import tempfile
+
+server_name = sys.argv[1]
+uid = sys.argv[2]
+
+def candidate_socket_paths(name, uid_value):
+    candidates = []
+    for base in filter(None, [os.environ.get("XDG_RUNTIME_DIR"),
+                              os.environ.get("TMPDIR"),
+                              tempfile.gettempdir(),
+                              "/tmp"]):
+        if base == os.environ.get("XDG_RUNTIME_DIR"):
+            candidates.append(Path(base) / "emacs" / name)
+        else:
+            candidates.append(Path(base) / f"emacs{uid_value}" / name)
+    deduped = []
+    seen = set()
+    for path in candidates:
+        key = str(path)
+        if key not in seen:
+            deduped.append(path)
+            seen.add(key)
+    return deduped
+
+for socket_path in candidate_socket_paths(server_name, uid):
+    if not socket_path.exists():
+        continue
+    probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    probe.settimeout(1)
+    try:
+        probe.connect(str(socket_path))
+        raise SystemExit(0)
+    except ConnectionRefusedError:
+        raise SystemExit(1)
+    except socket.timeout:
+        raise SystemExit(0)
+    except OSError:
+        continue
+    finally:
+        probe.close()
+
+raise SystemExit(1)
+PY
+}
+
 # Check if daemon is reachable via emacsclient.
 # First verify the process exists — a busy Emacs blocked on API calls
 # still has its process running, just can't respond to emacsclient.
 # Returns 0 if responsive or process is alive (busy), 1 if truly gone.
 daemon_responds() {
     timeout 5 emacsclient -a false -s "$SERVER_NAME" --eval 't' >/dev/null 2>&1 && return 0
+    # A refused Unix socket means the server endpoint is broken, not just busy.
+    if ! socket_accepts_connections; then
+        return 1
+    fi
     # Daemon didn't respond via emacsclient — it might be busy with an API call.
     # Check if the process itself is still alive (R=Running, S=Sleeping).
     local pid
@@ -154,9 +220,7 @@ if daemon_responds; then
             sleep 5
             clean_all_sockets "$SERVER_NAME" "$MY_UID"
             echo "$(date +%s)" > "$LAST_RESTART_FILE"
-            MINIMAL_EMACS_WORKFLOW_DAEMON=1 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
-                bash -c 'ulimit -s 65532 2>/dev/null; exec emacs --init-directory="$0" --daemon="$1" </dev/null' \
-                "$DIR" "$SERVER_NAME" &
+            start_workflow_daemon
             exit 0
         fi
     fi
@@ -188,8 +252,6 @@ daemon_pids "$SERVER_NAME" | xargs kill -9 2>/dev/null || true
 sleep 3
 clean_all_sockets "$SERVER_NAME" "$MY_UID"
 echo "$(date +%s)" > "$LAST_RESTART_FILE"
-MINIMAL_EMACS_WORKFLOW_DAEMON=1 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
-    bash -c 'ulimit -s 65532 2>/dev/null; exec emacs --init-directory="$0" --daemon="$1" </dev/null' \
-    "$DIR" "$SERVER_NAME" &
+start_workflow_daemon
 echo "[$(date '+%H:%M:%S')] Daemon restarted" >> "$LOG"
 exit 0

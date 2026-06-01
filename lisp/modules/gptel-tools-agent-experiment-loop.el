@@ -510,6 +510,9 @@ before headless operation.")
 (defvar gptel-auto-workflow--recentf-was-enabled nil
   "Remember whether `recentf-mode' was enabled before headless operation.")
 
+(defvar gptel-auto-workflow--apheleia-was-enabled nil
+  "Remember whether `apheleia-global-mode' was enabled before headless operation.")
+
 (defvar gptel-auto-workflow--create-lockfiles-value t
   "Remember `create-lockfiles' before headless operation.")
 
@@ -790,10 +793,15 @@ In headless mode, marks buffer as unmodified before killing to bypass prompt."
         (funcall orig-fn buffer-or-name))
     (funcall orig-fn buffer-or-name)))
 
+(defun gptel-auto-workflow--suppress-apheleia-p ()
+  "Skip Apheleia formatting while headless workflow mode is active."
+  gptel-auto-workflow--headless)
+
 (defun gptel-auto-workflow--enable-headless-suppression ()
   "Enable suppression of interactive prompts for headless operation.
-Also disables auto-revert, compile-angel, undo-fu-session, recentf, and
-uniquify to prevent buffer churn in ephemeral workflow worktrees."
+Also disables auto-revert, compile-angel, Apheleia, undo-fu-session,
+recentf, and uniquify to prevent buffer churn in ephemeral workflow
+worktrees."
   (setq gptel-auto-workflow--headless t)
   ;; Remember and disable auto-revert
   (setq gptel-auto-workflow--auto-revert-was-enabled 
@@ -821,6 +829,17 @@ uniquify to prevent buffer churn in ephemeral workflow worktrees."
   (when (and gptel-auto-workflow--recentf-was-enabled
              (fboundp 'recentf-mode))
     (recentf-mode -1))
+  ;; Disable Apheleia so save-time formatting does not spawn async formatter
+  ;; work inside headless experiment buffers. Keep a skip function installed so
+  ;; old prog-mode hooks in long-lived daemons cannot re-enable formatter runs.
+  (setq gptel-auto-workflow--apheleia-was-enabled
+        (bound-and-true-p apheleia-global-mode))
+  (when (boundp 'apheleia-skip-functions)
+    (add-to-list 'apheleia-skip-functions
+                 #'gptel-auto-workflow--suppress-apheleia-p))
+  (when (and gptel-auto-workflow--apheleia-was-enabled
+             (fboundp 'apheleia-global-mode))
+    (apheleia-global-mode -1))
   ;; Disable lockfiles so repeated experiment/worktree reuse does not prompt.
   (setq gptel-auto-workflow--create-lockfiles-value create-lockfiles
         create-lockfiles nil)
@@ -852,9 +871,8 @@ Set to t when running as daemon/cron to prevent interactive prompts."
 
 (defun gptel-auto-workflow--disable-headless-suppression ()
   "Disable suppression of interactive prompts.
-Restores auto-revert, compile-angel, undo-fu-session, recentf, and uniquify if
-they were
-enabled before headless operation.
+Restores auto-revert, compile-angel, Apheleia, undo-fu-session, recentf,
+and uniquify if they were enabled before headless operation.
 Does nothing if `gptel-auto-workflow-persistent-headless' is non-nil."
   (when (and (not gptel-auto-workflow-persistent-headless)
              gptel-auto-workflow--headless)
@@ -878,6 +896,15 @@ Does nothing if `gptel-auto-workflow-persistent-headless' is non-nil."
                (fboundp 'recentf-mode))
       (recentf-mode 1))
     (setq gptel-auto-workflow--recentf-was-enabled nil)
+    ;; Restore Apheleia only when this session disabled it.
+    (when (boundp 'apheleia-skip-functions)
+      (setq apheleia-skip-functions
+            (delq #'gptel-auto-workflow--suppress-apheleia-p
+                  apheleia-skip-functions)))
+    (when (and gptel-auto-workflow--apheleia-was-enabled
+               (fboundp 'apheleia-global-mode))
+      (apheleia-global-mode 1))
+    (setq gptel-auto-workflow--apheleia-was-enabled nil)
     ;; Restore lockfile behavior
     (setq create-lockfiles gptel-auto-workflow--create-lockfiles-value)
     ;; Restore uniquify

@@ -173,87 +173,93 @@ Optional MAX-AGE-DAYS limits to runs within that many days (default: all).
 Caches when MAX-AGE-DAYS is nil for cycle-local reuse."
   (or (and (not max-age-days) gptel-auto-workflow--results-cache)
       (let* ((results-dir (expand-file-name "var/tmp/experiments"
-                                         (gptel-auto-workflow--worktree-base-root)))
-         (cutoff-time (when max-age-days
-                        (- (float-time) (* max-age-days 24 60 60))))
-         (records nil)
-         (runs-parsed 0)
-         (max-runs 50))  ; Hard limit to prevent excessive parsing
-    (when (file-directory-p results-dir)
-      (let ((all-dirs (directory-files results-dir t "^202[0-9]-")))
-        ;; Sort by modification time (newest first) and take only recent ones
-        (setq all-dirs (sort all-dirs
-                             (lambda (a b)
-                               (> (float-time (file-attribute-modification-time (file-attributes a)))
-                                  (float-time (file-attribute-modification-time (file-attributes b)))))))
-        (dolist (run-dir (seq-take all-dirs max-runs))
-          (when (or (not cutoff-time)
-                    (> (float-time (file-attribute-modification-time (file-attributes run-dir)))
-                       cutoff-time))
-            (let ((tsv-file (expand-file-name "results.tsv" run-dir)))
-              (when (file-exists-p tsv-file)
-                (setq runs-parsed (1+ runs-parsed))
-                (with-temp-buffer
-                  (insert-file-contents tsv-file)
-                  (goto-char (point-min))
-                  (forward-line 1)
-                  (while (not (eobp))
-                    (let ((line (buffer-substring-no-properties
-                                 (line-beginning-position) (line-end-position))))
-                      (unless (string-empty-p line)
-                        (let* ((fields (split-string line "\t"))
-                               (field-count (length fields))
-                               ;; Handle multiple TSV format versions:
-                               ;; 14 cols: earliest (no backend/strategy/research fields)
-                               ;; 20 cols: backend at index 14, no research fields
-                               ;; 24 cols: backend at index 14, research fields at 20-23
-                               ;; 27 cols: backend at index 15, full research fields
-                               (format-version (cond ((<= field-count 14) 14)
-                                                     ((<= field-count 20) 20)
-                                                     ((<= field-count 24) 24)
-                                                     (t 27)))
-                               (target (nth 1 fields))
-                               (hypothesis (nth 2 fields))
-                               (score-before (string-to-number (or (nth 3 fields) "0")))
-                               (score-after (string-to-number (or (nth 4 fields) "0")))
-                               (quality (string-to-number (or (nth 5 fields) "0")))
-                               (delta (string-to-number (or (nth 6 fields) "+0.00")))
-                               (decision (nth 7 fields))
-                               (grader-q (string-to-number (or (nth 9 fields) "0")))
-                               (backend (cond ((<= format-version 14) "unknown")
-                                              ((<= format-version 24)
-                                               (or (nth 14 fields) "unknown"))
-                                              (t (or (nth 15 fields) "unknown"))))
-                               (prompt-chars (string-to-number
-                                              (or (nth (if (<= format-version 24) 15 16) fields) "0")))
-                               (research-strategy (or (nth (if (<= format-version 20) 20 21) fields) "none"))
-                               (research-hash (or (nth (if (<= format-version 20) 20 22) fields) "none"))
-                               (research-quality (or (nth (if (<= format-version 20) 20 23) fields) "none"))
-                               (kibcm-axis (or (nth (if (<= format-version 24) 20 25) fields) "?"))
-                               (model (or (nth (if (<= format-version 24) 20 26) fields) "unknown")))
-                          (push (list :target target
-                                      :hypothesis hypothesis
-                                      :score-before score-before
-                                      :score-after score-after
-                                      :code-quality quality
-                                      :delta delta
-                                      :decision decision
-                                      :grader-quality grader-q
-                                      :prompt-chars prompt-chars
-                                      :backend backend
-                                      :research-strategy research-strategy
-                                      :research-hash research-hash
-                                      :research-quality research-quality
-                                      :kibcm-axis kibcm-axis
-                                      :model model
-                                      :run-dir (file-name-nondirectory run-dir))
-                                records))))
-                    (forward-line 1)))))))))
-    (message "[parse-all-results] Parsed %d runs, %d records" runs-parsed (length records))
-    (let ((result (nreverse records)))
-      (unless max-age-days
-        (setq gptel-auto-workflow--results-cache result))
-      result))))
+                                            (gptel-auto-workflow--worktree-base-root)))
+             (cutoff-time (when max-age-days
+                            (- (float-time) (* max-age-days 24 60 60))))
+             (records nil)
+             (runs-parsed 0)
+             (max-runs 50)
+             (max-candidates 200))
+        (when (file-directory-p results-dir)
+          (let ((all-dirs (directory-files results-dir t "^202[0-9]-")))
+            ;; Sort by modification time (newest first).
+            (setq all-dirs
+                  (sort all-dirs
+                        (lambda (a b)
+                          (> (float-time (file-attribute-modification-time (file-attributes a)))
+                             (float-time (file-attribute-modification-time (file-attributes b)))))))
+            ;; Recent runs are often header-only when experiments are still in flight
+            ;; or aborted early. Keep scanning until we have enough non-empty runs.
+            (dolist (run-dir (seq-take all-dirs max-candidates))
+              (when (and (< runs-parsed max-runs)
+                         (or (not cutoff-time)
+                             (> (float-time (file-attribute-modification-time (file-attributes run-dir)))
+                                cutoff-time)))
+                (let ((tsv-file (expand-file-name "results.tsv" run-dir)))
+                  (when (file-exists-p tsv-file)
+                    (with-temp-buffer
+                      (insert-file-contents tsv-file)
+                      (goto-char (point-min))
+                      (forward-line 1)
+                      (unless (eobp)
+                        (setq runs-parsed (1+ runs-parsed))
+                        (while (not (eobp))
+                          (let ((line (buffer-substring-no-properties
+                                       (line-beginning-position) (line-end-position))))
+                            (unless (string-empty-p line)
+                              (let* ((fields (split-string line "\t"))
+                                     (field-count (length fields))
+                                     ;; Handle multiple TSV format versions:
+                                     ;; 14 cols: earliest (no backend/strategy/research fields)
+                                     ;; 20 cols: backend at index 14, no research fields
+                                     ;; 24 cols: backend at index 14, research fields at 20-23
+                                     ;; 27 cols: backend at index 15, full research fields
+                                     (format-version (cond ((<= field-count 14) 14)
+                                                           ((<= field-count 20) 20)
+                                                           ((<= field-count 24) 24)
+                                                           (t 27)))
+                                     (target (nth 1 fields))
+                                     (hypothesis (nth 2 fields))
+                                     (score-before (string-to-number (or (nth 3 fields) "0")))
+                                     (score-after (string-to-number (or (nth 4 fields) "0")))
+                                     (quality (string-to-number (or (nth 5 fields) "0")))
+                                     (delta (string-to-number (or (nth 6 fields) "+0.00")))
+                                     (decision (nth 7 fields))
+                                     (grader-q (string-to-number (or (nth 9 fields) "0")))
+                                     (backend (cond ((<= format-version 14) "unknown")
+                                                    ((<= format-version 24)
+                                                     (or (nth 14 fields) "unknown"))
+                                                    (t (or (nth 15 fields) "unknown"))))
+                                     (prompt-chars (string-to-number
+                                                    (or (nth (if (<= format-version 24) 15 16) fields) "0")))
+                                     (research-strategy (or (nth (if (<= format-version 20) 20 21) fields) "none"))
+                                     (research-hash (or (nth (if (<= format-version 20) 20 22) fields) "none"))
+                                     (research-quality (or (nth (if (<= format-version 20) 20 23) fields) "none"))
+                                     (kibcm-axis (or (nth (if (<= format-version 24) 20 25) fields) "?"))
+                                     (model (or (nth (if (<= format-version 24) 20 26) fields) "unknown")))
+                                (push (list :target target
+                                            :hypothesis hypothesis
+                                            :score-before score-before
+                                            :score-after score-after
+                                            :code-quality quality
+                                            :delta delta
+                                            :decision decision
+                                            :grader-quality grader-q
+                                            :prompt-chars prompt-chars
+                                            :backend backend
+                                            :research-strategy research-strategy
+                                            :research-hash research-hash
+                                            :research-quality research-quality
+                                            :kibcm-axis kibcm-axis
+                                            :model model
+                                            :run-dir (file-name-nondirectory run-dir))
+                                      records))))
+                          (forward-line 1))))))))))
+        (message "[parse-all-results] Parsed %d runs, %d records" runs-parsed (length records))
+        (let ((result (nreverse records)))
+          (unless max-age-days
+            (setq gptel-auto-workflow--results-cache result))
+          result))))
 
 (defvar gptel-auto-workflow--evolution-patterns-cache nil
   "Cached evolution patterns from skill. Reset on skill reload.")
@@ -6116,4 +6122,3 @@ Signals ert-test-failed if check fails. Use in ERT tests."
 
 (provide 'gptel-auto-workflow-evolution)
 ;;; gptel-auto-workflow-evolution.el ends here
-

@@ -4,6 +4,8 @@
 (require 'cl-lib)
 (require 'subr-x)
 
+(defvar minimal-emacs-user-directory)
+
 (declare-function gptel-auto-workflow--read-file-contents "gptel-tools-agent-base" (filepath))
 
 (defun gptel-auto-experiment--invalid-cl-return-target-in-forms (forms &optional blocks)
@@ -258,12 +260,33 @@ variable names are not mistaken for undefined function calls."
                        (walk (cadr spec))
                        (walk (caddr spec))))
                    (mapc #'walk (nthcdr 2 form)))
+                  ('cl-loop
+                   (push head calls)
+                   ;; Expand loop syntax once so binding vars do not look callable.
+                   (let ((expanded (condition-case nil
+                                       (macroexpand-1 form)
+                                     (error nil))))
+                     (if (and expanded (not (equal expanded form)))
+                         (walk expanded)
+                       (mapc #'walk (cdr form)))))
                   ((or 'cl-labels 'cl-flet)
                    (push head calls)
                    (dolist (binding (nth 1 form))
                      (when (consp binding)
                        (mapc #'walk (cddr binding))))
                    (mapc #'walk (nthcdr 2 form)))
+                  ('condition-case
+                   (push head calls)
+                   (walk (nth 2 form))
+                   (dolist (handler (nthcdr 3 form))
+                     (when (proper-list-p handler)
+                       (mapc #'walk (cdr handler)))))
+                  ('pcase
+                   (push head calls)
+                   (walk (nth 1 form))
+                   (dolist (clause (nthcdr 2 form))
+                     (when (proper-list-p clause)
+                       (mapc #'walk (cdr clause)))))
                   (_
                    (when (symbolp head)
                      (push head calls))
@@ -333,28 +356,33 @@ Returns nil if valid, or error message string if invalid."
                     (while (progn
                              (forward-comment (point-max))
                              (< (point) (point-max)))
-                      (push (read (current-buffer)) forms))
+                     (push (read (current-buffer)) forms))
                     nil)
                 (error (format "Syntax error in %s: %s" file err)))))
-            (let* ((parsed-forms (nreverse forms))
-                   (diff (gptel-auto-experiment--diff-against-head file))
-                   (undefined-call
-                    (gptel-auto-experiment--introduced-undefined-call
-                     diff parsed-forms))
-                   ;; Quick byte-compile check — uses project load-path so
-                   ;; require dependencies resolve (not emacs -Q which strips paths)
-                   (byte-compile-ok
-                     (condition-case nil
-                         (zerop (call-process
-                                 (expand-file-name "scripts/byte-compile-check.sh" user-emacs-directory)
-                                 nil nil nil
-                                 (expand-file-name file (or (bound-and-true-p minimal-emacs-user-directory)
-                                                           user-emacs-directory))))
-                       (error nil))))
-              (or
-               (when (gptel-auto-experiment--invalid-cl-return-target-in-forms
-                      parsed-forms)
-                 (format "Dangerous pattern in %s: cl-return-from without cl-block" file))
+             (let* ((project-root (or (locate-dominating-file file "scripts/byte-compile-check.sh")
+                                      (bound-and-true-p minimal-emacs-user-directory)
+                                      user-emacs-directory))
+                    (byte-compile-script (expand-file-name "scripts/byte-compile-check.sh"
+                                                           project-root))
+                    (parsed-forms (nreverse forms))
+                    (diff (gptel-auto-experiment--diff-against-head file))
+                    (undefined-call
+                     (gptel-auto-experiment--introduced-undefined-call
+                      diff parsed-forms))
+                    ;; Quick byte-compile check — resolve the helper from the
+                    ;; target file's live repo root, not `user-emacs-directory',
+                    ;; which points at var/ in workflow daemons.
+                    (byte-compile-ok
+                     (and (file-exists-p byte-compile-script)
+                          (condition-case nil
+                              (zerop (call-process byte-compile-script
+                                                   nil nil nil
+                                                   (expand-file-name file project-root)))
+                            (error nil)))))
+               (or
+                (when (gptel-auto-experiment--invalid-cl-return-target-in-forms
+                       parsed-forms)
+                  (format "Dangerous pattern in %s: cl-return-from without cl-block" file))
                (when undefined-call
                  (format "Undefined function introduced in %s: %S" file undefined-call))
                (when (gptel-auto-experiment--defensive-code-removal-p diff)
@@ -373,7 +401,7 @@ This runs between syntax validation and the grader API call."
   (when (and worktree (file-directory-p worktree))
     (let ((default-directory worktree)
           (diff-text (shell-command-to-string
-                      "git --no-pager diff --no-ext-diff --unified=10 HEAD -- . 2>/dev/null")))
+                       "git --no-pager diff --no-ext-diff --unified=10 HEAD -- . 2>/dev/null")))
       (cond
        ;; No diff at all — executor somehow produced no changes
        ((string-empty-p (string-trim diff-text))
@@ -383,28 +411,34 @@ This runs between syntax validation and the grader API call."
          "\\+```\\(emacs-lisp\\|lisp\\|elisp\\)?" diff-text)
         (format "Cheap check: LLM markdown artifacts in diff (``` blocks)"))
        ;; Check for debug artifacts: print/insert at top level
-       ((string-match-p
-         "^\\+\\(message\\|insert\\|print\\|princ\\|debug\\)" diff-text)
-        (format "Cheap check: debug artifact in diff (top-level %s)"
-                (match-string 1 diff-text)))
+        ((let ((debug-form nil))
+           (when (string-match
+                  "^\\+\\(message\\|insert\\|print\\|princ\\|debug\\)" diff-text)
+             (setq debug-form (match-string 1 diff-text))
+             (format "Cheap check: debug artifact in diff (top-level %s)"
+                     debug-form))))
        ;; Check for vandalism: removal of error handling patterns
-       ((string-match-p
-         "^-.*condition-case\\|^-.*ignore-errors\\|^-.*noninteractive"
-         diff-text)
-        (format "Cheap check: error handling removal detected in diff"))
-       ;; Check for excessive diff size (>80 lines touched is off-task)
-       ((> (count-matches "\n" diff-text) 80)
-        (format "Cheap check: diff too large (%d lines)"
-                (1+ (count-matches "\n" diff-text))))
-       ;; Check for trivial changes: only whitespace or comment additions
-       ((let ((non-trivial-lines 0))
-          (dolist (line (split-string diff-text "\n"))
-            (when (string-match-p "^\\+[^+ \t;]" line)
-              (cl-incf non-trivial-lines)))
-          (and (> non-trivial-lines 0) (< non-trivial-lines 2)))
-        (format "Cheap check: diff has only %d non-comment code lines" non-trivial-lines))
-       ;; Looks reasonable
-       (t nil)))))
+        ((string-match-p
+          "^-.*condition-case\\|^-.*ignore-errors\\|^-.*noninteractive"
+          diff-text)
+         (format "Cheap check: error handling removal detected in diff"))
+        ;; Check for excessive diff size (>80 lines touched is off-task)
+        ((let ((line-count (with-temp-buffer
+                             (insert diff-text)
+                             (count-matches "\n" (point-min) (point-max)))))
+           (when (> line-count 80)
+             (format "Cheap check: diff too large (%d lines)"
+                     (1+ line-count)))))
+        ;; Check for trivial changes: only whitespace or comment additions
+        ((let ((non-trivial-lines 0))
+           (dolist (line (split-string diff-text "\n"))
+             (when (string-match-p "^\\+[^+ \t;]" line)
+               (cl-incf non-trivial-lines)))
+           (when (and (> non-trivial-lines 0) (< non-trivial-lines 2))
+             (format "Cheap check: diff has only %d non-comment code lines"
+                     non-trivial-lines))))
+        ;; Looks reasonable
+        (t nil)))))
 
 (provide 'gptel-tools-agent-validation)
 ;;; gptel-tools-agent-validation.el ends here

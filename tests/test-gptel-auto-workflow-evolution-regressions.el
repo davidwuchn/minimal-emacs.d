@@ -1622,8 +1622,60 @@ before run-at-time, because the deferral breaks the dynamic scope chain."
            ,@body)
        (if old-allow (setenv "MINIMAL_EMACS_ALLOW_SECOND_DAEMON" old-allow)
          (setenv "MINIMAL_EMACS_ALLOW_SECOND_DAEMON" nil))
-       (if old-workflow (setenv "MINIMAL_EMACS_WORKFLOW_DAEMON" old-workflow)
-         (setenv "MINIMAL_EMACS_WORKFLOW_DAEMON" nil)))))
+        (if old-workflow (setenv "MINIMAL_EMACS_WORKFLOW_DAEMON" old-workflow)
+          (setenv "MINIMAL_EMACS_WORKFLOW_DAEMON" nil)))))
+
+(ert-deftest regression/daemon-guard/editor-daemon-checks-default-server-name ()
+  "The editor daemon should check only the default server socket."
+  (let ((old-allow (getenv "MINIMAL_EMACS_ALLOW_SECOND_DAEMON"))
+        (old-workflow (getenv "MINIMAL_EMACS_WORKFLOW_DAEMON"))
+        queried-name
+        kill-called)
+    (unwind-protect
+        (progn
+          (require 'server)
+          (setenv "MINIMAL_EMACS_ALLOW_SECOND_DAEMON" nil)
+          (setenv "MINIMAL_EMACS_WORKFLOW_DAEMON" nil)
+          (cl-letf (((symbol-function 'daemonp) (lambda () "server"))
+                    ((symbol-function 'server-running-p)
+                     (lambda (&optional name)
+                       (setq queried-name name)
+                       (equal name "ov5-auto-workflow")))
+                    ((symbol-function 'kill-emacs)
+                     (lambda (&optional _code) (setq kill-called t))))
+            (load-file test-post-early-init-file)
+            (should (equal queried-name "server"))
+            (should-not kill-called)))
+      (if old-allow (setenv "MINIMAL_EMACS_ALLOW_SECOND_DAEMON" old-allow)
+        (setenv "MINIMAL_EMACS_ALLOW_SECOND_DAEMON" nil))
+      (if old-workflow (setenv "MINIMAL_EMACS_WORKFLOW_DAEMON" old-workflow)
+        (setenv "MINIMAL_EMACS_WORKFLOW_DAEMON" nil)))))
+
+(ert-deftest regression/daemon-guard/editor-daemon-still-blocks-duplicate-default-server ()
+  "The editor daemon should still reject a second default server."
+  (let ((old-allow (getenv "MINIMAL_EMACS_ALLOW_SECOND_DAEMON"))
+        (old-workflow (getenv "MINIMAL_EMACS_WORKFLOW_DAEMON"))
+        queried-name
+        kill-code)
+    (unwind-protect
+        (progn
+          (require 'server)
+          (setenv "MINIMAL_EMACS_ALLOW_SECOND_DAEMON" nil)
+          (setenv "MINIMAL_EMACS_WORKFLOW_DAEMON" nil)
+          (cl-letf (((symbol-function 'daemonp) (lambda () "server"))
+                    ((symbol-function 'server-running-p)
+                     (lambda (&optional name)
+                       (setq queried-name name)
+                       (equal name "server")))
+                    ((symbol-function 'kill-emacs)
+                     (lambda (&optional code) (setq kill-code code))))
+            (load-file test-post-early-init-file)
+            (should (equal queried-name "server"))
+            (should (equal kill-code 0))))
+      (if old-allow (setenv "MINIMAL_EMACS_ALLOW_SECOND_DAEMON" old-allow)
+        (setenv "MINIMAL_EMACS_ALLOW_SECOND_DAEMON" nil))
+      (if old-workflow (setenv "MINIMAL_EMACS_WORKFLOW_DAEMON" old-workflow)
+        (setenv "MINIMAL_EMACS_WORKFLOW_DAEMON" nil)))))
 
 (ert-deftest regression/sentinel-deferral/always-defers-at-depth-zero ()
   "When >= 0 guard is active, even first sentinel call (depth 0) must defer.

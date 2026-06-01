@@ -264,20 +264,21 @@ COMMAND is the bash command string to execute."
                 :buffer output-buffer
                 :command (list "bash" "-c" command)
                 :connection-type 'pipe
-                :sentinel
-                (lambda (process _event)
-                  (when (memq (process-status process) '(exit signal))
-                    (let* ((exit-code (process-exit-status process))
-                           (output (with-current-buffer (process-buffer process)
-                                     (buffer-string))))
-                      (kill-buffer (process-buffer process))
-                      (funcall callback
-                               (gptel-agent--truncate-string
-                                "bash"
-                                (if (zerop exit-code)
-                                    output
-                                  (format "Command failed with exit code %d:\nSTDOUT+STDERR:\n%s"
-                                          exit-code output))))))))))
+                 :sentinel
+                 (lambda (process _event)
+                   (when (memq (process-status process) '(exit signal))
+                     (let* ((exit-code (process-exit-status process))
+                            (output (with-current-buffer (process-buffer process)
+                                      (buffer-string))))
+                       (kill-buffer (process-buffer process))
+                       (when (functionp callback)
+                         (funcall callback
+                                  (gptel-agent--truncate-string
+                                   "bash"
+                                   (if (zerop exit-code)
+                                       output
+                                     (format "Command failed with exit code %d:\nSTDOUT+STDERR:\n%s"
+                                             exit-code output)))))))))))
     proc))
 
 ;;; Web tools
@@ -1013,8 +1014,9 @@ PREFIX and MAX-LINES are passed through to `gptel-agent--truncate-buffer'."
 
 PREFIX and MAX-LINES are passed through to `gptel-agent--truncate-string'."
   (lambda (result)
-    (funcall callback
-             (gptel-agent--truncate-string prefix result max-lines))))
+    (when (functionp callback)
+      (funcall callback
+               (gptel-agent--truncate-string prefix result max-lines)))))
 
 (defun gptel-agent--glob (pattern &optional path depth)
   "Find files matching PATTERN using the `tree' command.

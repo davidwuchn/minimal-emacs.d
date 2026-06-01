@@ -100,6 +100,39 @@
          (calls (gptel-auto-experiment--call-symbols-in-forms forms)))
     (should-not (memq 'source calls))))
 
+(ert-deftest test-validation/call-symbols-skip-condition-case-handler-symbols ()
+  "Condition-case handler tags are not executable calls."
+  (let* ((forms '((defun validate-code-target (pattern string)
+                    (condition-case err
+                        (string-match-p pattern string)
+                      (invalid-regexp
+                       (message "%s" err)
+                       nil)))))
+         (calls (gptel-auto-experiment--call-symbols-in-forms forms)))
+    (should-not (memq 'invalid-regexp calls))
+    (should (memq 'string-match-p calls))))
+
+(ert-deftest test-validation/call-symbols-skip-pcase-pattern-symbols ()
+  "Pcase pattern heads like `_` are not executable calls."
+  (let* ((forms '((defun validate-code-target (decision)
+                    (pcase decision
+                      ('approved (message "ok"))
+                      (_ (message "fallback"))))))
+         (calls (gptel-auto-experiment--call-symbols-in-forms forms)))
+    (should-not (memq '_ calls))
+    (should (memq 'message calls))))
+
+(ert-deftest test-validation/call-symbols-skip-cl-loop-binding-symbols ()
+  "Cl-loop binding vars should not be treated as executable calls."
+  (let* ((forms '((defun validate-code-target (props)
+                    (cl-loop for (key val) on props by #'cddr
+                             do (when (listp val)
+                                  (message "%S" key))))))
+         (calls (gptel-auto-experiment--call-symbols-in-forms forms)))
+    (should-not (memq 'key calls))
+    (should-not (memq 'val calls))
+    (should (memq 'message calls))))
+
 (ert-deftest test-validation/introduced-call-honors-safe-requires ()
   "Safe top-level requires should be loaded before runtime call checks."
   (let ((forms '((require 'json)
@@ -115,6 +148,43 @@
                     (missing-format-only-call)))))
         (diff "-    (missing-format-only-call))\n+      (missing-format-only-call))\n"))
     (should-not (gptel-auto-experiment--introduced-undefined-call diff forms))))
+
+(ert-deftest test-validation/introduced-call-ignores-pcase-pattern-symbols ()
+  "Pcase fallback patterns should not be treated as introduced calls."
+  (let ((forms '((defun validate-code-target (decision)
+                   (pcase decision
+                     ('approved (message "ok"))
+                     (_ (message "fallback"))))))
+        (diff "+                     (_ (message \"fallback\"))\n"))
+    (should-not (gptel-auto-experiment--introduced-undefined-call diff forms))))
+
+(ert-deftest test-validation/introduced-call-ignores-condition-case-handler-symbols ()
+  "Condition-case handler tags should not be treated as introduced calls."
+  (let ((forms '((defun validate-code-target (pattern string)
+                   (condition-case err
+                       (string-match-p pattern string)
+                     (invalid-regexp
+                      (message "%s" err)
+                      nil)))))
+        (diff "+                     (invalid-regexp\n+                      (message \"%s\" err)\n+                      nil))\n"))
+    (should-not (gptel-auto-experiment--introduced-undefined-call diff forms))))
+
+(ert-deftest test-validation/introduced-call-ignores-cl-loop-binding-symbols ()
+  "Cl-loop binding vars should not be treated as introduced calls."
+  (let ((forms '((defun validate-code-target (props)
+                   (cl-loop for (key val) on props by #'cddr
+                            do (message "%S" key)))))
+        (diff "+                   (cl-loop for (key val) on props by #'cddr\n+                            do (message \"%S\" key))\n"))
+    (should-not (gptel-auto-experiment--introduced-undefined-call diff forms))))
+
+(ert-deftest test-validation/introduced-call-detects-real-call-inside-cl-loop-body ()
+  "Real undefined calls inside cl-loop bodies should still be detected."
+  (let ((forms '((defun validate-code-target (props)
+                   (cl-loop for (key val) on props by #'cddr
+                            do (missing-loop-call key)))))
+        (diff "+                   (cl-loop for (key val) on props by #'cddr\n+                            do (missing-loop-call key))\n"))
+    (should (eq (gptel-auto-experiment--introduced-undefined-call diff forms)
+                'missing-loop-call))))
 
 (provide 'test-gptel-tools-agent-validation)
 ;;; test-gptel-tools-agent-validation.el ends here
