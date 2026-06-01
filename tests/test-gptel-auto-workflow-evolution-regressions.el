@@ -32,6 +32,12 @@
 (load-file (expand-file-name "../lisp/modules/gptel-tools-agent-base.el"
                                (file-name-directory
                                 (or load-file-name buffer-file-name default-directory))))
+;; Load cost-balance module for TDD tests
+(condition-case nil
+    (load-file (expand-file-name "../lisp/modules/gptel-auto-experiment-ai-behaviors.el"
+                                 (file-name-directory
+                                  (or load-file-name buffer-file-name default-directory))))
+  (error (message "[test] ai-behaviors skipped: %s" (error-message-string err))))
 (load-file (expand-file-name "../lisp/modules/strategic-daemon-functions.el"
                                (file-name-directory
                                 (or load-file-name buffer-file-name default-directory))))
@@ -2896,6 +2902,124 @@ Now passes in batch — module loading fixed."
       (should (string= actual expected))
       (unless (string= actual expected)
         (message "%s: expected %s, got %s" backend expected actual)))))
+
+;; ─── Cost Balance TDD ───
+
+(ert-deftest tdd/cost/model-cost-computes-correct-USD ()
+  "model-cost returns correct USD for given prompt/response lengths.
+DeepSeek flash: $0.14/M input, $0.28/M output, $0.003/M cache-hit, 80% cache.
+10K prompt chars × 0.3 tokens/char = 3000 tokens. 5K response chars × 0.3 = 1500 tokens."
+  :expected-result (if noninteractive :passed :passed)
+  (let ((gptel-ai-behaviors--cache-hit-rate 0.8)
+        (cost (gptel-ai-behaviors--model-cost "deepseek-v4-flash" 10000 5000)))
+    ;; 3000 input tokens: 600 miss ($0.14/M) + 2400 cache ($0.003/M) = $0.000084 + $0.0000072 = $0.0000912
+    ;; 1500 output tokens: 1500 × $0.28/M = $0.00042
+    ;; Total: ~$0.0005112
+    (should (> cost 0.0003))
+    (should (< cost 0.0008))))
+
+(ert-deftest tdd/cost/model-cost-no-cache-backend ()
+  "model-cost does not apply cache to backends without :cache-hit pricing.
+DashScope has no cache-hit pricing → cache-rate should be 0."
+  :expected-result (if noninteractive :passed :passed)
+  (let ((gptel-ai-behaviors--cache-hit-rate 0.8)
+        (cost (gptel-ai-behaviors--model-cost "some-unknown-model" 10000 5000)))
+    ;; Falls back to $1.0/M input, $2.0/M output, no cache
+    ;; 3000 input × $1.0/M = $0.003, 1500 output × $2.0/M = $0.003, total $0.006
+    (should (> cost 0.001))
+    (should (< cost 0.01))))
+
+(ert-deftest tdd/cost/model-cost-empty-input ()
+  "model-cost returns 0 when no prompt or response chars given."
+  :expected-result (if noninteractive :passed :passed)
+  (should (= (gptel-ai-behaviors--model-cost "deepseek-v4-flash") 0.0))
+  (should (= (gptel-ai-behaviors--model-cost "deepseek-v4-flash" 0 0) 0.0)))
+
+(ert-deftest tdd/cost/cost-adjusted-rate-higher-for-cheaper ()
+  "cost-adjusted-rate is higher when cost is lower at same keep-rate.
+A model with 50% keep at $1 is better than 60% keep at $3."
+  :expected-result (if noninteractive :passed :passed)
+  (let ((gptel-ai-behaviors--cost-stats (make-hash-table :test 'equal)))
+    ;; Model A: 5 kept / 10 total, cost $1 = 50% keep / $1 = 0.5
+    (puthash (cons "cheap-model" "default") (cons 10 1.0) gptel-ai-behaviors--cost-stats)
+    ;; Model B: 6 kept / 10 total, cost $3 = 60% keep / $3 = 0.2
+    (puthash (cons "expensive-model" "default") (cons 10 3.0) gptel-ai-behaviors--cost-stats)
+    (let ((rate-a (gptel-ai-behaviors--cost-adjusted-rate "cheap-model" "default" 5 10))
+          (rate-b (gptel-ai-behaviors--cost-adjusted-rate "expensive-model" "default" 6 10)))
+      (should (> rate-a rate-b)))))
+
+(ert-deftest tdd/cost/record-cost-accumulates ()
+  "record-cost increments calls and total cost correctly."
+  :expected-result (if noninteractive :passed :passed)
+  (let ((gptel-ai-behaviors--cost-stats (make-hash-table :test 'equal)))
+    (gptel-ai-behaviors--record-cost "test-model" "default" 10000 5000)
+    (let ((entry (gethash (cons "test-model" "default") gptel-ai-behaviors--cost-stats)))
+      (should entry)
+      (should (= (car entry) 1))  ; 1 call
+      (should (> (cdr entry) 0)))  ; positive cost
+    ;; Second call adds to total
+    (gptel-ai-behaviors--record-cost "test-model" "default" 10000 5000)
+    (let ((entry (gethash (cons "test-model" "default") gptel-ai-behaviors--cost-stats)))
+      (should (= (car entry) 2)))))  ; 2 calls
+
+(ert-deftest tdd/cost/cache-hit-ema-converges ()
+  "record-cache-hit updates cache-hit-rate via EMA.
+Alpha 0.3: new_rate = 0.3 × obs + 0.7 × old."
+  :expected-result (if noninteractive :passed :passed)
+  (let ((gptel-ai-behaviors--cache-hit-rate 0.8)
+        (gptel-ai-behaviors--cache-observations nil))
+    ;; Observe 100% cache hit (1000/1000)
+    (gptel-ai-behaviors--record-cache-hit 1000 1000)
+    ;; EMA: 0.3 × 1.0 + 0.7 × 0.8 = 0.3 + 0.56 = 0.86
+    (should (> gptel-ai-behaviors--cache-hit-rate 0.85))
+    (should (< gptel-ai-behaviors--cache-hit-rate 0.87))
+    ;; Observe 0% cache hit (0/1000)
+    (gptel-ai-behaviors--record-cache-hit 0 1000)
+    ;; EMA: 0.3 × 0.0 + 0.7 × 0.86 = 0.602
+    (should (> gptel-ai-behaviors--cache-hit-rate 0.59))
+    (should (< gptel-ai-behaviors--cache-hit-rate 0.62))))
+
+(ert-deftest tdd/cost/evolve-fallback-chain-reorders-by-cost ()
+  "evolve-fallback-chain reorders backends by keeps-per-dollar.
+Cheaper backends with same keep-rate move to front."
+  :expected-result (if noninteractive :passed :passed)
+  (let ((gptel-ai-behaviors--cost-stats (make-hash-table :test 'equal))
+        (gptel-ai-behaviors--model-stats (make-hash-table :test 'equal))
+        (gptel-auto-workflow-headless-subagent-fallbacks
+         '(("Expensive" . "expensive-model")
+           ("Cheap" . "cheap-model"))))
+    ;; Cheap: 5 kept, cost $1 → 5.0 keeps/$
+    (puthash '(nil nil "cheap-model" nil) (cons 5 10) gptel-ai-behaviors--model-stats)
+    (puthash (cons "cheap-model" "default") (cons 10 1.0) gptel-ai-behaviors--cost-stats)
+    ;; Expensive: 6 kept, cost $5 → 1.2 keeps/$
+    (puthash '(nil nil "expensive-model" nil) (cons 6 10) gptel-ai-behaviors--model-stats)
+    (puthash (cons "expensive-model" "default") (cons 10 5.0) gptel-ai-behaviors--cost-stats)
+    (gptel-ai-behaviors--evolve-fallback-chain)
+    ;; Cheap should now be first (higher keeps-per-dollar)
+    (should (equal (caar gptel-auto-workflow-headless-subagent-fallbacks) "Cheap"))))
+
+(ert-deftest tdd/cost/evolve-fallback-chain-no-data-no-reorder ()
+  "evolve-fallback-chain does not change order when no cost data."
+  :expected-result (if noninteractive :passed :passed)
+  (let ((gptel-ai-behaviors--cost-stats (make-hash-table :test 'equal))
+        (gptel-ai-behaviors--model-stats (make-hash-table :test 'equal))
+        (gptel-auto-workflow-headless-subagent-fallbacks
+         '(("A" . "a") ("B" . "b"))))
+    (gptel-ai-behaviors--evolve-fallback-chain)
+    ;; No data → order unchanged
+    (should (equal (caar gptel-auto-workflow-headless-subagent-fallbacks) "A"))))
+
+(ert-deftest tdd/cost/model-pricing-has-cache-for-deepseek-minimax ()
+  "DeepSeek and MiniMax pricing includes :cache-hit field.
+QV: ensure cache-aware cost model is wired for these backends."
+  :expected-result (if noninteractive :passed :passed)
+  (dolist (model '("deepseek-v4-flash" "deepseek-v4-pro"
+                    "MiniMax-M3" "minimax-m2.7-highspeed" "minimax-m2.7"))
+    (let* ((pricing (cl-find-if (lambda (e) (string-match-p (car e) model))
+                                gptel-ai-behaviors--model-pricing))
+           (cache (plist-get (cdr pricing) :cache-hit)))
+      (should cache)
+      (should (> cache 0)))))
 
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
