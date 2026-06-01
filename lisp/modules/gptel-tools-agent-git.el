@@ -354,7 +354,11 @@ large-result truncation, and result caching."
           (unless (or (and gptel--tool-names gptel-tools) (not gptel-use-tools))
             (setq-local gptel--tool-names
                         (cl-loop for (_cat . tools) in gptel--known-tools
-                                 append (mapcar #'gptel-tool-name tools)))
+                                 append (mapcar
+                                         (lambda (entry)
+                                           (gptel-tool-name
+                                            (if (consp (cdr entry)) (cdr entry) entry)))
+                                         tools)))
             (setq-local gptel-tools
                         (cl-loop for name in gptel--tool-names
                                  for raw = (gptel-get-tool name)
