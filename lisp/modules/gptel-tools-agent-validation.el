@@ -343,7 +343,14 @@ Returns nil if valid, or error message string if invalid."
                      diff parsed-forms))
                    ;; Quick byte-compile check — uses project load-path so
                    ;; require dependencies resolve (not emacs -Q which strips paths)
-                   (byte-compile-ok (zerop (call-process "scripts/byte-compile-check.sh" nil nil nil file))))
+                   (byte-compile-ok
+                     (condition-case nil
+                         (zerop (call-process
+                                 (expand-file-name "scripts/byte-compile-check.sh" user-emacs-directory)
+                                 nil nil nil
+                                 (expand-file-name file (or (bound-and-true-p minimal-emacs-user-directory)
+                                                           user-emacs-directory))))
+                       (error nil))))
               (or
                (when (gptel-auto-experiment--invalid-cl-return-target-in-forms
                       parsed-forms)
