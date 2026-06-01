@@ -365,10 +365,14 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                              gptel-ai-behaviors--current-hashtags)
                     (car (split-string gptel-ai-behaviors--current-hashtags)))))
                 (prompt (concat prompt "\n" (or mode-note "") persona-note routing-note)))
-            ;; Track API cost per model+effort for cost-adjusted keep-rate
+            ;; Track API cost per model+effort for cost-adjusted keep-rate.
+            ;; Estimate from prompt length (assume ~50% response). Updated
+            ;; at completion with actual lengths when available.
             (when (and log-model (fboundp 'gptel-ai-behaviors--record-cost))
               (gptel-ai-behaviors--record-cost log-model
-                                              (or bumped-effort selected-effort)))
+                                              (or bumped-effort selected-effort)
+                                              (length prompt)   ; prompt chars
+                                              (/ (length prompt) 2)))  ; ~50% est
             ;; Inject dynamic reasoning_effort: bump → category → subagent default
             (let ((effective-effort (or bumped-effort selected-effort))
                   (effort-param

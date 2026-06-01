@@ -1261,45 +1261,57 @@ Used to normalize keep-rate by cost.")
   (if (string< (format-time-string "%Y%m%d") "20260601") 3 12))
 
 (defconst gptel-ai-behaviors--model-pricing
-  `(("deepseek-v4-flash" . (1 . 0.02))   ; (miss-cost . hit-cost) → ¥1/M vs ¥0.02/M
-    ("deepseek-v4-pro" . (,(gptel-ai-behaviors--pro-cost) . 0.025)) ; ¥3-12/M vs ¥0.025/M
-    ("kimi-for-coding" . (3 . 0.5))      ; estimated
-    ("kimi-k2.6" . (6 . 1))              ; estimated
-    ("minimax-m2.7" . (2 . 0.3))         ; estimated
-    ("minimax-m2.7-highspeed" . (4 . 0.6))) ; estimated
-  "Relative cost multipliers per model: (cache-miss-cost . cache-hit-cost).
-Base unit = deepseek-v4-flash miss cost (¥1/M).
-Cache hit is 50-120× cheaper on DeepSeek due to KV cache.
-Effective cost is weighted by observed hit-rate: miss×rate + hit×(1-rate).")
+  `(;; DeepSeek (USD per 1M tokens input/output)
+    ("deepseek-v4-flash"    . (:input 0.27 :output 1.10))
+    ("deepseek-v4-pro"      . (:input 0.55 :output 2.19))
+    ;; MiniMax (USD/1M, OpenAI-compatible pricing)
+    ("MiniMax-M3"           . (:input 0.50 :output 2.00))
+    ("minimax-m2.7"         . (:input 0.30 :output 1.20))
+    ("minimax-m2.7-highspeed" . (:input 0.15 :output 0.60))
+    ;; DashScope / Qwen (USD/1M)
+    ("qwen3.6-plus"         . (:input 0.35 :output 1.40))
+    ("qwen3.5-plus"         . (:input 0.20 :output 0.80))
+    ;; moonshot / Kimi (USD/1M)
+    ("kimi-k2.6"            . (:input 0.60 :output 2.40))
+    ;; Gemini / GLM (USD/1M)
+    ("glm-5"                . (:input 0.50 :output 2.00))
+    ("glm-4.7"              . (:input 0.30 :output 1.20)))
+  "Per-model pricing in USD per 1M tokens (input . output).
+Used by gptel-ai-behaviors--model-cost to estimate API call cost
+from prompt and response lengths.")
 
 (defvar gptel-ai-behaviors--cache-hit-rate 0.5
   "Estimated cache-hit rate (0-1) for KV cache.
 Default 0.5 = half of tokens hit cache. Self-evolves from observed data.
 WARNING: Set from API response when `prompt_cache_hit_tokens' is available.")
 
-(defun gptel-ai-behaviors--model-cost (model &optional cache-hit-rate)
-  "Return estimated effective cost multiplier for MODEL.
-CACHE-HIT-RATE (0-1) defaults to `gptel-ai-behaviors--cache-hit-rate'.
-Returns effective cost = miss×(1-rate) + hit×rate.
-Auto-switches pro pricing based on date (discount expired 2026-06-01)."
+(defun gptel-ai-behaviors--model-cost (model &optional prompt-chars response-chars)
+  "Return estimated USD cost for MODEL given PROMPT-CHARS and RESPONSE-CHARS.
+If lengths not provided, returns 0. Uses ~4 chars/token ratio.
+Pricing from gptel-ai-behaviors--model-pricing, falls back to 2.0."
   (let* ((pricing (cl-find-if (lambda (e) (string-match-p (car e) model))
-                              gptel-ai-behaviors--model-pricing))
-         (miss-cost (car (cdr pricing)))
-         (hit-cost (cdr (cdr pricing)))
-         (rate (or cache-hit-rate gptel-ai-behaviors--cache-hit-rate)))
-    (if (and miss-cost hit-cost (> rate 0))
-        (+ (* miss-cost (- 1 rate)) (* hit-cost rate))
-      (or miss-cost 2))))
+                               gptel-ai-behaviors--model-pricing))
+         (input-price (or (plist-get (cdr pricing) :input) 1.0))
+         (output-price (or (plist-get (cdr pricing) :output) 2.0))
+         (input-tokens (if (and prompt-chars (> prompt-chars 0))
+                           (/ (float prompt-chars) 4) 0))
+         (output-tokens (if (and response-chars (> response-chars 0))
+                            (/ (float response-chars) 4) 0)))
+    (/ (+ (* input-tokens input-price) (* output-tokens output-price))
+       1000000.0)))  ; convert from per-million to absolute
 
-(defun gptel-ai-behaviors--record-cost (model effort &optional estimated-cost)
-  "Record one API call for MODEL+EFFORT with ESTIMATED-COST.
-Uses `gptel-ai-behaviors--model-pricing' when ESTIMATED-COST is nil."
+(defun gptel-ai-behaviors--record-cost (model effort &optional prompt-chars response-chars)
+  "Record one API call for MODEL+EFFORT with actual token-based cost.
+Computes cost from PROMPT-CHARS and RESPONSE-CHARS using pricing table.
+Stores in gptel-ai-behaviors--cost-stats for cost-adjusted model selection."
   (when model
     (let* ((key (cons model (or effort "default")))
-           (cost (or estimated-cost (gptel-ai-behaviors--model-cost model)))
-           (entry (gethash key gptel-ai-behaviors--cost-stats (cons 0 0))))
-      (setf (car entry) (1+ (car entry)))       ;; total calls
-      (setf (cdr entry) (+ (cdr entry) cost))   ;; total estimated cost
+           (cost (gptel-ai-behaviors--model-cost model
+                                                  (or prompt-chars 0)
+                                                  (or response-chars 0)))
+           (entry (gethash key gptel-ai-behaviors--cost-stats (cons 0 0.0))))
+      (setf (car entry) (1+ (car entry)))
+      (setf (cdr entry) (+ (cdr entry) (max 0 cost)))
       (puthash key entry gptel-ai-behaviors--cost-stats))))
 
 (defun gptel-ai-behaviors--cost-adjusted-rate (model effort kept total)
@@ -1357,7 +1369,38 @@ A model that keeps 50% at cost 1 is better than 60% at cost 3."
       (message "[op-evolve] %s" (mapconcat #'identity op-logs " | ")))
     (when combo-logs
       (message "[combo-evolve] %s" (mapconcat #'identity (seq-take combo-logs 5) " | ")))
+    ;; Self-evolve the fallback chain: reorder by cost-adjusted keep-rate
+    (gptel-ai-behaviors--evolve-fallback-chain)
     logs))
+
+(defun gptel-ai-behaviors--evolve-fallback-chain ()
+  "Reorder gptel-auto-workflow-headless-subagent-fallbacks by cost-adjusted keep-rate.
+Backends with higher cost-adjusted keep-rate move to front (preferred).
+Only runs when ≥2 backends have sufficient data to avoid overfitting."
+  (let ((scores nil))
+    (dolist (pair gptel-auto-workflow-headless-subagent-fallbacks)
+      (let* ((backend (car pair))
+             ;; Compute aggregate cost-adjusted rate across all subagent types
+             (total-kept 0) (total-cost 0) (min-samples 3))
+        (maphash
+         (lambda (key entry)
+           (let ((model (nth 2 key)))
+             (when (and (boundp 'gptel-ai-behaviors--cost-stats)
+                        (gethash (cons model "default") gptel-ai-behaviors--cost-stats))
+               (cl-incf total-kept (car entry))
+               (cl-incf total-cost (cdr entry)))))
+         gptel-ai-behaviors--model-stats)
+        (when (> total-kept 0)
+          (push (cons backend (/ (float total-kept) (max 1 total-cost))) scores))))
+    ;; Reorder if we have enough data
+    (when (>= (length scores) 2)
+      (setq scores (sort scores (lambda (a b) (> (cdr a) (cdr b)))))
+      (setq gptel-auto-workflow-headless-subagent-fallbacks
+            (mapcar (lambda (s) (assoc (car s) gptel-auto-workflow-headless-subagent-fallbacks))
+                    scores))
+      (message "[chain-evolve] Fallback chain reordered by cost-adjusted keep-rate: %s"
+               (mapconcat (lambda (s) (format "%s(%.2f)" (car s) (cdr s)))
+                          scores " → ")))))
 
 (provide 'gptel-auto-experiment-ai-behaviors)
 ;;; gptel-auto-experiment-ai-behaviors.el ends here
