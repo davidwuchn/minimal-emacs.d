@@ -776,8 +776,7 @@ Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
 ;;; Configuration
 
 (defcustom gptel-auto-workflow-targets
-  '("lisp/modules/gptel-benchmark-comparator.el"
-    "lisp/modules/gptel-tools-agent-runtime.el"
+  '("lisp/modules/gptel-tools-agent-runtime.el"
     "lisp/modules/gptel-ext-tool-permits.el"
     "lisp/modules/gptel-benchmark-core.el"
     "lisp/modules/gptel-tools-memory.el"

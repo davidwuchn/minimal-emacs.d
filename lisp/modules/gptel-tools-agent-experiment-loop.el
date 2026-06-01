@@ -456,23 +456,29 @@ Adapts max-experiments based on API error rate."
                                 (error
                                  (message "[strategy] Evolution error during experiment callback: %s" err)
                                  (message "[strategy] Evolution error debug: next-exp-id=%S type=%S" next-exp-id (type-of next-exp-id)))))
-                           (let ((continue
-                                  (lambda ()
-                                    (if (gptel-auto-workflow--run-callback-live-p run-id)
-                                        (gptel-auto-workflow--call-in-run-context
-                                         workflow-root
-                                         (lambda () (run-next next-exp-id))
-                                         loop-buffer
-                                         workflow-root)
-                                      (progn
-                                        (message "[auto-experiment] Run %s no longer active; returning accumulated results for %s"
-                                                 run-id target)
-                                        (funcall callback (nreverse results)))))))
-                             (if (> gptel-auto-experiment-delay-between 0)
-                                 (run-with-timer gptel-auto-experiment-delay-between nil continue)
-                               ;; delay=0: call directly — async subagent callbacks
-                               ;; inside run-with-retry already reset the stack
-                               (funcall continue)))))))))
+                            (let ((continue
+                                   (lambda ()
+                                     (if (gptel-auto-workflow--run-callback-live-p run-id)
+                                         (gptel-auto-workflow--call-in-run-context
+                                          workflow-root
+                                          (lambda () (run-next next-exp-id))
+                                          loop-buffer
+                                          workflow-root)
+                                       (progn
+                                         (message "[auto-experiment] Run %s no longer active; returning accumulated results for %s"
+                                                  run-id target)
+                                         (funcall callback (nreverse results))))))
+                                  (headless-run
+                                   (or (bound-and-true-p gptel-auto-workflow--headless)
+                                       (bound-and-true-p gptel-auto-workflow-persistent-headless)
+                                       (bound-and-true-p gptel-auto-workflow--cron-job-running))))
+                              (if (and (> gptel-auto-experiment-delay-between 0)
+                                       (not headless-run))
+                                  (run-with-timer gptel-auto-experiment-delay-between nil continue)
+                                ;; Headless cron runs should advance immediately. The
+                                ;; async subagent callbacks already break the stack, and
+                                ;; timer-based continuation has proven unreliable there.
+                                (funcall continue)))))))))
         (gptel-auto-workflow--call-in-run-context
          workflow-root
          (lambda () (run-next 1))

@@ -457,12 +457,28 @@ Usage:
                  (message "[mem] Post-run RSS: %.0fMB" (/ rss 1024.0))))
              (when completion-callback
                (funcall completion-callback results)))))
-      (if targets
-          (gptel-auto-workflow--run-with-targets targets cleanup-callback)
-        (require 'gptel-auto-workflow-strategic)
-        (gptel-auto-workflow-select-targets
-         (lambda (selected-targets)
-           (gptel-auto-workflow--run-with-targets selected-targets cleanup-callback)))))
+      (cl-labels ((dispatch-targets (selected-targets)
+                    (unless (fboundp 'gptel-auto-workflow--run-with-targets)
+                      (condition-case nil
+                          (load-file (expand-file-name "lisp/modules/gptel-tools-agent-main.el"
+                                                       proj-root))
+                        (error nil)))
+                    (if (fboundp 'gptel-auto-workflow--run-with-targets)
+                        (gptel-auto-workflow--run-with-targets selected-targets cleanup-callback)
+                      (setq gptel-auto-workflow--running nil
+                            gptel-auto-workflow--current-target nil
+                            gptel-auto-workflow--current-project nil
+                            gptel-auto-workflow--run-project-root nil)
+                      (setq gptel-auto-workflow--stats
+                            (plist-put gptel-auto-workflow--stats :phase "error"))
+                      (gptel-auto-workflow--persist-status)
+                      (message "[auto-workflow] Dispatch function unavailable after target selection")
+                      (when completion-callback
+                        (funcall completion-callback nil)))))
+        (if targets
+            (dispatch-targets targets)
+          (require 'gptel-auto-workflow-strategic)
+          (gptel-auto-workflow-select-targets #'dispatch-targets))))
     'started))
 
 (defun gptel-auto-workflow-run-async--guarded (&optional targets completion-callback)
@@ -500,25 +516,24 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
     ;; Ensure gptel-agent--task has FSM position guard for analyzer dispatch
     (load-file (expand-file-name "packages/gptel-agent/gptel-agent-tools.el" root))
     (condition-case err (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root)) (error (message "[reload] strategic.el skipped (load error: %s)" (error-message-string err))))
-    ;; Populate targets if empty (daemon mode doesn't load .dir-locals.el)
-    ;; NOTE: defcustom in gptel-tools-agent-subagent.el resets the global
-    ;; gptel-auto-workflow-targets to '() when loaded.  Re-read dir-locals
-    ;; after module loading so the 5 configured targets win over discover.
-    ;; Use setq-default because hack-dir-local-variables-non-file-buffer
-    ;; creates a buffer-local binding that shadows the global.
-    (when (and (boundp 'gptel-auto-workflow-targets)
-               (or (null gptel-auto-workflow-targets)
-                   (equal gptel-auto-workflow-targets '())))
+    ;; Always re-read .dir-locals after module load. The defcustom in
+    ;; gptel-tools-agent-subagent.el can overwrite project-local targets with
+    ;; the fallback list during daemon startup, so empty-checking is not enough.
+    ;; Use setq-default because hack-dir-local-variables-non-file-buffer creates
+    ;; a buffer-local binding that shadows the global.
+    (let ((loaded-targets nil))
       (condition-case nil
           (with-temp-buffer
             (setq-local default-directory root)
             (setq-local enable-local-variables t)
             (hack-dir-local-variables-non-file-buffer)
             (when (local-variable-p 'gptel-auto-workflow-targets)
-              (setq-default gptel-auto-workflow-targets
-                            (buffer-local-value 'gptel-auto-workflow-targets
-                                                (current-buffer)))))
+              (setq loaded-targets
+                    (buffer-local-value 'gptel-auto-workflow-targets
+                                        (current-buffer)))))
         (error nil))
+      (when loaded-targets
+        (setq-default gptel-auto-workflow-targets loaded-targets))
       (when (and (boundp 'gptel-auto-workflow-targets)
                  (or (null gptel-auto-workflow-targets)
                      (equal gptel-auto-workflow-targets '())))
@@ -579,6 +594,7 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
           (setq default-directory proj-root
                  gptel-auto-workflow-persistent-headless t
                  message-log-max 10000
+                 gptel-auto-experiment-delay-between 0
                  gptel-auto-experiment-max-retries 3  ; 3 attempts for transient network errors
                  gptel-auto-experiment-time-budget 900
                  ;; Reduced from 120s to 60s to fail faster on slow model retries
@@ -603,54 +619,6 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
             ;; packages on load.
             (require 'magit)
             (require 'json)
-(declare-function cl-block "cl-lib")
-(declare-function cl-remove-if-not "cl-lib")
-(declare-function gptel-benchmark-eight-keys-weakest-with-signals "gptel-benchmark-principles")
-(declare-function gptel-auto-workflow--commit-integrated-p "gptel-tools-agent-base")
-(declare-function gptel-auto-workflow--current-run-id "gptel-tools-agent-base")
-(declare-function gptel-auto-workflow--default-dir "gptel-tools-agent-base")
-(declare-function gptel-auto-workflow--ensure-results-file "gptel-tools-agent-base")
-(declare-function gptel-auto-workflow--make-idempotent-callback "gptel-tools-agent-base")
-(declare-function gptel-auto-workflow--make-run-id "gptel-tools-agent-base")
-(declare-function gptel-auto-workflow--non-empty-string-p "gptel-tools-agent-base")
-(declare-function gptel-auto-workflow--plist-get "gptel-tools-agent-base")
-(declare-function gptel-auto-workflow--read-file-contents "gptel-tools-agent-base")
-(declare-function gptel-auto-workflow--recover-orphans "gptel-tools-agent-base")
-(declare-function gptel-auto-workflow--require-magit-dependencies "gptel-tools-agent-base")
-(declare-function gptel-auto-workflow--run-callback-live-p "gptel-tools-agent-base")
-(declare-function gptel-auto-workflow--safe-call "gptel-tools-agent-base")
-(declare-function gptel-auto-workflow--seed-live-root-load-path "gptel-tools-agent-base")
-(declare-function gptel-auto-workflow--terminate-active-shell-processes "gptel-tools-agent-base")
-(declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
-(declare-function gptel-auto-experiment--reset-grade-state "gptel-tools-agent-benchmark")
-(declare-function gptel-auto-workflow--project-root "gptel-tools-agent-benchmark")
-(declare-function gptel-auto-experiment-loop "gptel-tools-agent-experiment-loop")
-(declare-function gptel-auto-workflow--disable-headless-suppression "gptel-tools-agent-experiment-loop")
-(declare-function gptel-auto-workflow--enable-headless-suppression "gptel-tools-agent-experiment-loop")
-(declare-function gptel-auto-workflow--git-result "gptel-tools-agent-experiment-loop")
-(declare-function gptel-auto-workflow--mark-messages-start "gptel-tools-agent-experiment-loop")
-(declare-function gptel-auto-workflow--persist-status "gptel-tools-agent-experiment-loop")
-(declare-function gptel-auto-workflow--restart-watchdog-timer "gptel-tools-agent-experiment-loop")
-(declare-function gptel-auto-workflow--status-active-p "gptel-tools-agent-experiment-loop")
-(declare-function gptel-auto-workflow--status-placeholder-p "gptel-tools-agent-experiment-loop")
-(declare-function gptel-auto-workflow--status-plist "gptel-tools-agent-experiment-loop")
-(declare-function gptel-auto-workflow--update-progress "gptel-tools-agent-experiment-loop")
-(declare-function gptel-auto-workflow--with-skipped-submodule-sync "gptel-tools-agent-experiment-loop")
-(declare-function gptel-auto-workflow-read-persisted-status "gptel-tools-agent-experiment-loop")
-(declare-function gptel-auto-workflow--sync-staging-with-main "gptel-tools-agent-git")
-(declare-function my/gptel--sanitize-for-logging "gptel-tools-agent-git")
-(declare-function gptel-auto-workflow--clear-rate-limited-backends "gptel-tools-agent-prompt-build")
-(declare-function gptel-auto-workflow--clear-runtime-subagent-provider-overrides "gptel-tools-agent-prompt-build")
-(declare-function gptel-auto-workflow--migrate-legacy-provider-defaults "gptel-tools-agent-prompt-build")
-(declare-function gptel-mementum--reset-synthesis-state "gptel-tools-agent-research")
-(declare-function gptel-auto-workflow--optimize-branches "gptel-tools-agent-subagent")
-(declare-function gptel-auto-workflow--optimize-worktrees "gptel-tools-agent-subagent")
-(declare-function gptel-auto-workflow--remote-tracking-optimize-branches "gptel-tools-agent-subagent")
-(declare-function my/gptel--reset-agent-task-state "gptel-tools-agent-subagent")
-(declare-function gptel-auto-workflow--discard-worktree-buffers "gptel-tools-agent-worktree")
-(declare-function gptel-auto-workflow--remote-optimize-branches "gptel-tools-agent-worktree")
-(declare-function gptel-auto-workflow--shared-remote "gptel-tools-agent-worktree")
-(defvar gptel-auto-workflow-run-async)
             (setq gptel-auto-workflow--cron-safe-step "load-agent")
             (condition-case err
                 (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" proj-root))
@@ -1050,10 +1018,16 @@ into staging or main."
 
 (defun gptel-auto-workflow--run-with-targets (targets completion-callback)
   "Run experiments for TARGETS sequentially."
-  (let* ((run-id (gptel-auto-workflow--current-run-id))
+  (let* ((proj-root (gptel-auto-workflow--default-dir))
+         (validated-targets
+          (if (fboundp 'gptel-auto-workflow--filter-valid-targets)
+              (gptel-auto-workflow--filter-valid-targets
+               targets proj-root most-positive-fixnum)
+            targets))
+         (dropped-count (- (length targets) (length validated-targets)))
+         (run-id (gptel-auto-workflow--current-run-id))
          (callback-run-id (and gptel-auto-workflow--running
                                gptel-auto-workflow--run-id))
-         (proj-root (gptel-auto-workflow--default-dir))
          (run-buffer (current-buffer))
          (all-results '())
          (kept-count 0)
@@ -1078,29 +1052,45 @@ into staging or main."
                 (gptel-auto-workflow--persist-status)
                (when completion-callback
                  (funcall completion-callback all-results)))))))
+    (when (> dropped-count 0)
+      (message "[auto-workflow] Dropped %d invalid target%s before dispatch"
+               dropped-count
+               (if (= dropped-count 1) "" "s")))
+    (when (null validated-targets)
+      (setq gptel-auto-workflow--running nil
+            gptel-auto-workflow--current-target nil
+            gptel-auto-workflow--current-project nil
+            gptel-auto-workflow--run-project-root nil)
+      (setq gptel-auto-workflow--stats
+            (plist-put gptel-auto-workflow--stats :phase "complete"))
+      (gptel-auto-workflow--persist-status)
+      (message "[auto-workflow] No valid targets remain after filtering")
+      (when completion-callback
+        (funcall completion-callback nil))
+      (cl-return-from gptel-auto-workflow--run-with-targets nil))
     ;; Set project context for subagent routing
     (setq gptel-auto-workflow--current-project proj-root
           gptel-auto-workflow--run-project-root proj-root)
     (setq gptel-auto-workflow--stats
           (plist-put gptel-auto-workflow--stats :phase "running"))
     (setq gptel-auto-workflow--stats
-          (plist-put gptel-auto-workflow--stats :total (length targets)))
+          (plist-put gptel-auto-workflow--stats :total (length validated-targets)))
     (setq gptel-auto-workflow--stats
           (plist-put gptel-auto-workflow--stats :kept 0))
     (gptel-auto-workflow--persist-status)
-    (message "[auto-workflow] Starting %s with %d targets" run-id (length targets))
+    (message "[auto-workflow] Starting %s with %d targets" run-id (length validated-targets))
     ;; Priority ordering: sort targets by keep-rate ascending (hardest first)
     (let* ((ordered-targets
             (if (fboundp 'gptel-auto-experiment--target-keep-rate-from-tsv)
-                (sort (copy-sequence targets)
+                (sort (copy-sequence validated-targets)
                       (lambda (a b)
                         (let ((rate-a (or (gptel-auto-experiment--target-keep-rate-from-tsv a) 0.5))
                               (rate-b (or (gptel-auto-experiment--target-keep-rate-from-tsv b) 0.5)))
                           (< rate-a rate-b))))
-              targets))
+              validated-targets))
            (redistributed-budget 0))
       (when (and (> (length ordered-targets) 1)
-                 (not (equal ordered-targets targets)))
+                 (not (equal ordered-targets validated-targets)))
         (message "[priority-order] Reordered %d targets by keep-rate (hardest first): %s"
                  (length ordered-targets)
                  (mapconcat (lambda (tgt) (format "%s(%.0f%%)" tgt (* 100 (or (gptel-auto-experiment--target-keep-rate-from-tsv tgt) 50))))
@@ -1173,24 +1163,37 @@ into staging or main."
                                          (gptel-auto-workflow--current-project proj-root)
                                          (gptel-auto-workflow--run-project-root proj-root))
                                      (run-next (cdr remaining-targets))))
-                               (let ((default-directory proj-root)
-                                     (gptel-auto-workflow--project-root-override proj-root)
-                                     (gptel-auto-workflow--current-project proj-root)
-                                     (gptel-auto-workflow--run-project-root proj-root))
-                                 (run-next (cdr remaining-targets))))))))))
+                                (let ((default-directory proj-root)
+                                      (gptel-auto-workflow--project-root-override proj-root)
+                                      (gptel-auto-workflow--current-project proj-root)
+                                      (gptel-auto-workflow--run-project-root proj-root))
+                                  (run-next (cdr remaining-targets)))))))))))
                  (gptel-auto-experiment-loop target target-complete))))))
-      (if (buffer-live-p run-buffer)
-          (with-current-buffer run-buffer
+      (condition-case err
+          (if (buffer-live-p run-buffer)
+              (with-current-buffer run-buffer
+                (let ((default-directory proj-root)
+                      (gptel-auto-workflow--project-root-override proj-root)
+                      (gptel-auto-workflow--current-project proj-root)
+                      (gptel-auto-workflow--run-project-root proj-root))
+                  (run-next validated-targets)))
             (let ((default-directory proj-root)
                   (gptel-auto-workflow--project-root-override proj-root)
                   (gptel-auto-workflow--current-project proj-root)
                   (gptel-auto-workflow--run-project-root proj-root))
-              (run-next targets)))
-        (let ((default-directory proj-root)
-              (gptel-auto-workflow--project-root-override proj-root)
-              (gptel-auto-workflow--current-project proj-root)
-              (gptel-auto-workflow--run-project-root proj-root))
-           (run-next targets))))))))
+              (run-next validated-targets)))
+        (error
+         (setq gptel-auto-workflow--running nil
+               gptel-auto-workflow--current-target nil
+               gptel-auto-workflow--current-project nil
+               gptel-auto-workflow--run-project-root nil)
+         (setq gptel-auto-workflow--stats
+               (plist-put gptel-auto-workflow--stats :phase "error"))
+         (gptel-auto-workflow--persist-status)
+         (message "[auto-workflow] Initial target dispatch failed: %s"
+                  (error-message-string err))
+         (when completion-callback
+           (funcall completion-callback nil))))))))
 
 
 (defun gptel-auto-workflow-run (&optional targets)
