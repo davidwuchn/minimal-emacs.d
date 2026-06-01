@@ -352,22 +352,12 @@ large-result truncation, and result caching."
           (gptel--apply-preset preset)
           ;; Ensure tools are populated when gptel-use-tools is active
           (unless (or (and gptel--tool-names gptel-tools) (not gptel-use-tools))
-<<<<<<< HEAD
-            (setq-local gptel--tool-names
-                        (cl-loop for (_cat . tools) in gptel--known-tools
-                                 append (mapcar
-                                         (lambda (entry)
-                                           (gptel-tool-name
-                                            (if (consp (cdr entry)) (cdr entry) entry)))
-                                         tools)))
-=======
-          (setq-local gptel--tool-names
-                      (cl-loop for (_cat . tools) in gptel--known-tools
-                               append (mapcar (lambda (entry)
-                                                (gptel-tool-name
-                                                 (if (consp entry) (cdr entry) entry)))
-                                              tools)))
->>>>>>> 15b34519 (◇ Fix ALL 3 gptel-tool-name cons-cell paths: gptel-agent-tools, gptel.el, git.el)
+           (setq-local gptel--tool-names
+                       (cl-loop for (_cat . tools) in gptel--known-tools
+                                append (mapcar (lambda (entry)
+                                                 (gptel-tool-name
+                                                  (if (consp entry) (cdr entry) entry)))
+                                               tools)))
             (setq-local gptel-tools
                         (cl-loop for name in gptel--tool-names
                                  for raw = (gptel-get-tool name)
