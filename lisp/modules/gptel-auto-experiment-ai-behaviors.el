@@ -1283,11 +1283,11 @@ Used to normalize keep-rate by cost.")
     ;; moonshot/Kimi (USD/1M, platform.kimi.ai verified)
     ;;   k2.6: $0.95/4.00/0.16 → auto context caching, 6x cheaper hits
     ("kimi-k2.6"            . (:input 0.95 :output 4.00 :cache-hit 0.16))
-    ;; GLM via Zhipu (USD/1M, ~7 CNY/USD, bigmodel.cn pricing)
-    ;;   glm-5: ¥4/18/0 → $0.57/2.57/0.00 [0-32K], cache FREE (限时免费)
+    ;; GLM via Zhipu (USD/1M, ~7 CNY/USD, bigmodel.cn verified)
+    ;;   glm-5: ¥4/18/1.0 → $0.57/2.57/0.14 [0-32K], cache storage free
     ;;   glm-4.7: estimated similar ratio
-    ("glm-5"                . (:input 0.57 :output 2.57 :cache-hit 0.00))
-    ("glm-4.7"              . (:input 0.43 :output 1.71 :cache-hit 0.00)))
+    ("glm-5"                . (:input 0.57 :output 2.57 :cache-hit 0.14))
+    ("glm-4.7"              . (:input 0.43 :output 1.71 :cache-hit 0.10)))
   "Per-model pricing in USD per 1M tokens (:input :output :cache-hit).
 DeepSeek: api-docs.deepseek.com, MiniMax: platform.minimaxi.com,
 DashScope: help.aliyun.com context-cache docs. Verified 2026-06-01.
