@@ -2104,7 +2104,7 @@ exhaustion.")
   "Maximum seconds between retries for rate-limited API failures.")
 
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
-  '(("MiniMax" . "minimax-m2.7-highspeed")
+  '(("MiniMax" . "MiniMax-M3")
     ("DeepSeek" . "deepseek-v4-pro")
     ("moonshot" . "kimi-k2.6"))
   "Ordered backend/model fallbacks for headless auto-workflow subagents.
