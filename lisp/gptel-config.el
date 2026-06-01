@@ -73,16 +73,16 @@
 ;; --- Configuration Defaults ---
 ;; Use setq-default to set the global default values
 (setq-default gptel-backend gptel--minimax
-              gptel-model 'minimax-m2.7-highspeed)
+              gptel-model 'MiniMax-M3)
 ;; Also set current values for this buffer
 (setq gptel-backend gptel--minimax
-      gptel-model 'minimax-m2.7-highspeed)
+      gptel-model 'MiniMax-M3)
 
 ;; Safety: Ensure gptel-model is never nil (falls back to default)
 (defun my/gptel--ensure-model-not-nil (orig-fun &rest args)
   "Ensure `gptel-model' is not nil before calling ORIG-FUN."
   (unless gptel-model
-    (setq-local gptel-model 'minimax-m2.7-highspeed))
+    (setq-local gptel-model 'MiniMax-M3))
   (apply orig-fun args))
 
 (with-eval-after-load 'gptel
