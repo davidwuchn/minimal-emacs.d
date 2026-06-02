@@ -1,8 +1,36 @@
 # Mementum State
 
-> Last session: 2026-06-02 (deep study: skill graphs + self-evolution)
+> Last session: 2026-06-02 (four-way relationship: ontology × behaviors × skill graph × context)
 > Next pipeline: 23:00
-> Status: Architecture designed, awaiting implementation
+> Status: Architecture complete — awaiting implementation
+
+## Session: Ontology × Behaviors × Skill Graph × Context — Four-Way Relationship (2026-06-02)
+
+**Key insight:** Four systems form a decision hierarchy that must co-evolve from the same execution traces.
+
+**The hierarchy:**
+1. Ontology classifies task → :programming
+2. Ontology selects strategy/backend → DeepSeek
+3. Behaviors select persona → #deterministic
+4. Skill graph selects skills → [planning → clojure-expert]
+5. Context checks budget → Task + Behaviors + Skills + Reserve = 7.5k ✓
+6. Execute → Agent runs
+7. Evolve → AutoTTS trace updates all four systems
+
+**Cross-system links:**
+| From | To | Mechanism |
+|------|----|-----------|
+| Ontology | Behaviors | Category selects default hashtags |
+| Ontology | Skill Graph | Router seeds feed graph; graph adds dimensions to ontology scores |
+| Behaviors + Skills | Context | Both consume token pool; skills truncate first on overflow |
+| Context | Skill Graph | Molecule ≤10 atoms = context physics (3k token budget) |
+| Execution Trace | All four | Single AutoTTS trace updates ontology, behaviors, graph, context |
+
+**Constraint:** All four must co-evolve. Optimizing one dimension while ignoring others breaks the stack.
+
+**Memory created:** `mementum/memories/ontology-behaviors-skill-context-relationship.md`
+
+---
 
 ## Session: AI Behaviors vs Skill Graph — Orthogonal Systems (2026-06-02)
 
