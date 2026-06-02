@@ -1,12 +1,10 @@
 ---
 name: ov5
 description: Cowork with OV5 (Ouroboros V5) — trigger experiments, review results, integrate feedback between coding agent and self-evolving pipeline
-level: compound
-molecules: [auto-workflow]
----
 metadata:
   evolution-stats:
     total-experiments: 870
+---
 
 # OV5 Cowork
 

@@ -4,5 +4,4 @@ description: Scrape and submit code improvement opportunities from external requ
 metadata:
   evolution-stats:
     total-experiments: 870
-level: atom
 ---
