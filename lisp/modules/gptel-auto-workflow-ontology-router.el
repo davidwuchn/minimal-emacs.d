@@ -22,7 +22,7 @@
 (defvar gptel-auto-workflow-executor-rate-limit-fallbacks
   '(("MiniMax" . "MiniMax-M3")
     ("moonshot" . "kimi-k2.6")
-    ("DeepSeek" . "deepseek-v4-flash")
+    ("DeepSeek" . "deepseek-v4-pro")
     ("DashScope" . "qwen3.6-plus")
     ("Copilot" . "gpt-5.4-mini"))
   "Fallback chain for executor when rate-limited.
@@ -39,7 +39,8 @@ Ordered by keep-rate from experiment data.")
     ("moonshot" . distributed)             ; Backend name
     ("kimi-k2.6" . distributed)            ; Model name
     ("DeepSeek" . distributed)             ; Backend name
-    ("deepseek-v4-flash" . distributed)    ; Model name
+    ("deepseek-v4-pro" . distributed)     ; Model name
+    ("deepseek-v4-pro" . distributed)    ; Fast variant
     ("MiniMax" . distributed)              ; Backend name
     ("MiniMax-M3" . distributed) ; Model name
     ("CF-Gateway" . distributed)           ; Backend name
@@ -814,7 +815,7 @@ DashScope reinstated as tertiary backend — qwen3.6-plus confirmed working
 on 2026-05-31 (was previously excluded due to transient quota issue)."
   (when (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
     (setq gptel-auto-workflow-executor-rate-limit-fallbacks
-          '(("DeepSeek" . "deepseek-v4-flash")
+          '(("DeepSeek" . "deepseek-v4-pro")
             ("MiniMax" . "MiniMax-M3")
             ("DashScope" . "qwen3.6-plus")))
     ;; Clear any stale health strikes for DashScope from health cache
@@ -1179,7 +1180,7 @@ Returns plist with :overall status and per-backend results."
                         gptel-auto-workflow-headless-subagent-fallbacks
                       '(("DashScope" . "qwen3.6-plus")
                         ("moonshot" . "kimi-k2.6")
-                        ("DeepSeek" . "deepseek-v4-flash")
+                        ("DeepSeek" . "deepseek-v4-pro")
                         ("MiniMax" . "MiniMax-M3"))))
         (results nil)
         (healthy-count 0)
@@ -2371,7 +2372,7 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
         ;; reorder-fallbacks-by-ontology) is picked up here too.
         (default-models (or (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
                                 gptel-auto-workflow-executor-rate-limit-fallbacks)
-             '(("DeepSeek" . "deepseek-v4-flash")
+             '(("DeepSeek" . "deepseek-v4-pro")
                ("MiniMax" . "MiniMax-M3")
                ("DashScope" . "qwen3.6-plus")
                ("moonshot" . "kimi-k2.6"))))
@@ -2649,7 +2650,7 @@ Returns plist with :total :healthy :degraded :unknown :backends."
                         gptel-auto-workflow-headless-subagent-fallbacks
                       '(("DashScope" . "qwen3.6-plus")
                         ("moonshot" . "kimi-k2.6")
-                        ("DeepSeek" . "deepseek-v4-flash")
+                        ("DeepSeek" . "deepseek-v4-pro")
                         ("MiniMax" . "MiniMax-M3"))))
         (healthy-count 0)
         (degraded-count 0)
