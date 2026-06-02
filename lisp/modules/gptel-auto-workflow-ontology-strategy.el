@@ -162,6 +162,44 @@ Eight Keys→Strategy: category-aligned scoring for better targeting."
              (gptel-auto-workflow--ontology-strategy-status best))
     best))
 
+(defun gptel-auto-workflow--ontology-backend-per-target (strategy target)
+  "Return backend performance data for STRATEGY+TARGET combination.
+Returns plist with :backend, :kept-count, :total-count, :rate,
+or nil if no data."
+  (let ((results (gptel-auto-workflow--parse-all-results))
+        (by-backend (make-hash-table :test 'equal)))
+    ;; Aggregate kept/total per backend for this strategy+target
+    (dolist (r results)
+      (let* ((s (plist-get r :strategy))
+             (tgt (plist-get r :target))
+             (backend (or (plist-get r :backend) "unknown"))
+             (decision (plist-get r :decision)))
+        (when (and (string= s strategy)
+                   (string= tgt target))
+          (let* ((entry (gethash backend by-backend))
+                 (kept (if (equal decision "kept") 1 0))
+                 (total 1))
+            (puthash backend
+                     (list :kept (+ kept (or (plist-get entry :kept) 0))
+                           :total (+ total (or (plist-get entry :total) 0)))
+                     by-backend)))))
+    ;; Find best backend
+    (when (> (hash-table-count by-backend) 0)
+      (let (best-backend best-entry best-rate)
+        (maphash
+         (lambda (b entry)
+           (let ((rate (/ (float (plist-get entry :kept))
+                          (max 1 (plist-get entry :total)))))
+             (when (or (null best-rate) (> rate best-rate))
+               (setq best-backend b best-entry entry best-rate rate))))
+         by-backend)
+        (when best-backend
+          (list :backend best-backend
+                :kept-count (plist-get best-entry :kept)
+                :total-count (plist-get best-entry :total)
+                :rate best-rate))))))
+
+
 ;; ─── Backend Recommendation ───
 
 (defun gptel-auto-workflow--ontology-recommend-backend (strategy target)

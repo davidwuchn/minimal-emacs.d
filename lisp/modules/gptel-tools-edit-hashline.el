@@ -48,15 +48,20 @@ Returns string: \"line-num:hash|content\""
           (gptel-tools-edit-hashline--hash line-text)
           line-text))
 
-(defun gptel-tools-edit-hashline-format-file (file-path)
+(defun gptel-tools-edit-hashline-format-file (file-path &optional start-line end-line)
   "Format FILE-PATH contents with hashline tags.
 Returns string with each line prefixed by hashline tag.
-Use this when agent reads a file to provide stable edit anchors."
+Use this when agent reads a file to provide stable edit anchors.
+Optional START-LINE and END-LINE specify line range (1-indexed)."
   (with-temp-buffer
     (insert-file-contents file-path)
-    (let ((lines (split-string (buffer-string) "\n" t))
-          (result nil)
-          (line-num 1))
+    (let* ((all-lines (split-string (buffer-string) "\n" t))
+           (total-lines (length all-lines))
+           (start (max 1 (or start-line 1)))
+           (end (min (or end-line total-lines) total-lines))
+           (lines (seq-subseq all-lines (1- start) end))
+           (result nil)
+           (line-num start))
       (dolist (line lines)
         (push (gptel-tools-edit-hashline--parse-line line line-num) result)
         (setq line-num (1+ line-num)))

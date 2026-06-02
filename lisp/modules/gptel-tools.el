@@ -119,14 +119,15 @@ Call this after gptel-agent-tools loads."
      :confirm t
      :include t)
 
-    ;; Read tool (supports PDF extraction via pdftotext)
+    ;; Read tool (supports PDF extraction via pdftotext, hashline mode for stable editing)
     (gptel-make-tool
      :name "Read"
      :function #'my/gptel--read-file-safe
-     :description "Read file contents by line range. PDF files are extracted as text. Other binary files (images, archives) are rejected."
-     :args '((:name "file_path" :type string)
-             (:name "start_line" :type integer :optional t)
-             (:name "end_line" :type integer :optional t))
+     :description "Read file contents by line range. When hashline=true, returns content-addressed line tags for reliable editing. PDF files extracted as text. Binary files rejected."
+     :args '((:name "file_path" :type string :description "Path to the file to read")
+             (:name "start_line" :type integer :optional t :description "Start line (1-indexed)")
+             (:name "end_line" :type integer :optional t :description "End line (1-indexed)")
+             (:name "hashline" :type boolean :optional t :description "When true, prefix each line with hashline tag (e.g. '42:a3|content') for stable editing"))
      :category "gptel-agent"
      :include t)
 
@@ -251,9 +252,10 @@ Call this after gptel-agent-tools loads."
 
 ;;; Utility Functions
 
-(defun my/gptel--read-file-safe (file-path &optional start-line end-line)
+(defun my/gptel--read-file-safe (file-path &optional start-line end-line hashline)
   "Read FILE-PATH safely, extracting text from PDFs, rejecting other binary files.
 START-LINE and END-LINE specify the line range to read.
+When HASHLINE is non-nil, return content with hashline tags for stable editing.
 PDF files are extracted using pdftotext if available."
   (let ((path (expand-file-name file-path)))
     (cond
@@ -262,17 +264,21 @@ PDF files are extracted using pdftotext if available."
      ((file-directory-p path)
       (error "Error: Cannot read directory %s as file" path))
      ((string-match-p "\\.pdf\\'" path)
-      (my/gptel--extract-pdf-text path start-line end-line))
+      (my/gptel--extract-pdf-text path start-line end-line hashline))
      ((or (string-match-p "\\.\\(jpe?g\\|png\\|gif\\|webp\\|zip\\|tar\\|gz\\|exe\\|dll\\|so\\|dylib\\)\\'" path)
           (and (fboundp 'gptel--file-binary-p) (gptel--file-binary-p path)))
       (format "Error: Binary file detected (%s). Use appropriate tools for binary files."
               (or (file-name-extension path) "unknown type")))
      (t
-      (gptel-agent--read-file-lines path start-line end-line)))))
+      (let ((result (gptel-agent--read-file-lines path start-line end-line)))
+        (if hashline
+            (gptel-tools-edit-hashline-format-file path)
+          result))))))
 
-(defun my/gptel--extract-pdf-text (path &optional start-line end-line)
+(defun my/gptel--extract-pdf-text (path &optional start-line end-line hashline)
   "Extract text from PDF at PATH using pdftotext.
-START-LINE and END-LINE specify the line range to return."
+START-LINE and END-LINE specify the line range to return.
+When HASHLINE is non-nil, return content with hashline tags."
   (let ((pdftotext (executable-find "pdftotext")))
     (if (not pdftotext)
         (format "Error: pdftotext not found. Install with: brew install poppler")
@@ -293,12 +299,29 @@ START-LINE and END-LINE specify the line range to return."
               ((> start end)
                (format "Error: start-line (%d) exceeds end-line (%d)" start-line end-line))
               (t
-               (let ((page-count (max 1 (1+ (cl-count ?\f text)))))
-                 (format "PDF: %s (%d pages, %d lines)\n\n%s"
-                         (file-name-nondirectory path)
-                         page-count
-                         total-lines
-                         (string-join (seq-subseq lines (1- start) end) "\n")))))))))))
+               (let ((page-count (max 1 (1+ (cl-count ?\f text))))
+                     (selected-lines (seq-subseq lines (1- start) end)))
+                 (if hashline
+                     ;; Format selected lines with hashline tags
+                     (let ((result nil)
+                           (line-num start))
+                       (dolist (line selected-lines)
+                         (push (format "%d:%s|%s"
+                                       line-num
+                                       (gptel-tools-edit-hashline--hash line)
+                                       line)
+                               result)
+                         (setq line-num (1+ line-num)))
+                       (format "PDF: %s (%d pages, %d lines)\n\n%s"
+                               (file-name-nondirectory path)
+                               page-count
+                               total-lines
+                               (string-join (nreverse result) "\n")))
+                   (format "PDF: %s (%d pages, %d lines)\n\n%s"
+                           (file-name-nondirectory path)
+                           page-count
+                           total-lines
+                           (string-join selected-lines "\n"))))))))))))
 
 (defun gptel-tools--wrap-result-callback (tool-cb tool-name no-result-msg)
   "Create a standardized callback wrapper for async tool results.

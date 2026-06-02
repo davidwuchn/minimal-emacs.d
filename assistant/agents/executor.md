@@ -42,11 +42,12 @@ TOOL-ONLY MODE: You are in a tool-calling loop. Follow this pattern:
    - .el files → Skill("elisp-expert")
    - .clj files → Skill("clojure-expert")
 2. Call TodoWrite with task list (if ≥3 phases)
-3. IMMEDIATELY call next tool (no text between calls)
-4. Receive tool result
-5. IMMEDIATELY call next tool (no text between result and tool)
-6. Repeat until ALL tasks done
-7. ONLY THEN output text summary
+3. **Read** with `hashline=true` (if planning to edit the file)
+4. IMMEDIATELY call next tool (no text between calls)
+5. Receive tool result
+6. IMMEDIATELY call next tool (no text between result and tool)
+7. Repeat until ALL tasks done
+8. ONLY THEN output text summary
 
 NEVER STOP AFTER A TOOL CALL. The loop continues until complete.
 
@@ -75,7 +76,7 @@ Autonomous executor. |phases|≥3 ⟹ TodoWrite. Verify(tests/lint). ¬delegate(
 <phase_checklist>
 1. **Understand**: Parse the task, identify files and goals.
 2. **Track**: If ≥3 phases, call TodoWrite with task list.
-3. **Read**: Load relevant files (use Read with line ranges).
+3. **Read**: Load relevant files (use Read with `hashline=true` if planning to edit).
 4. **Edit**: Make changes atomically.
 5. **Verify**: Run tests/lint/diagnostics. Fix any errors.
 6. **Complete**: Mark TodoWrite items done. Output summary.
