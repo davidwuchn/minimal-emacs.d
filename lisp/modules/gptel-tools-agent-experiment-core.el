@@ -75,6 +75,11 @@ Checked before each run to detect pre-existing breakage.")
 Pushed to by gptel-auto-workflow--load-skill, captured in experiment :skills.
 Cleared at experiment start by gptel-auto-experiment-run.")
 
+(defvar gptel-auto-experiment--suggested-workflow nil
+  "Dynamic variable. Molecule recommended by skill graph for current target.
+Set by gptel-auto-experiment-build-prompt, used in prompt WORKFLOW: line.
+List of atom symbol names, e.g. (elisp-discover elisp-expert elisp-validator).")
+
 (defun gptel-auto-experiment--pre-existing-breakage-p (target)
   "Return non-nil if TARGET was already broken before this experiment.
 Uses the cached target state to detect pre-existing breakage.
@@ -190,6 +195,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
     (cl-return-from gptel-auto-experiment-run))
   (message "[auto-experiment] Starting %d/%d for %s" experiment-id max-experiments target)
   (setq gptel-auto-experiment--loaded-skills nil)
+  (setq gptel-auto-experiment--suggested-workflow nil)
   (setq gptel-auto-workflow--current-target target)
   (let* ((worktree (gptel-auto-workflow-create-worktree target experiment-id))
          (experiment-worktree (or worktree default-directory))

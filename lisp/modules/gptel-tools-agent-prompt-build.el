@@ -1273,7 +1273,12 @@ Implements section-level A/B testing to identify effective prompt components."
            (setq gptel-ai-behaviors--current-strategy strategy)
            ;; Reset combo tag after use
            (when (boundp 'gptel-ai-behaviors--combo-hashtag)
-             (setq gptel-ai-behaviors--combo-hashtag nil))))))
+              (setq gptel-ai-behaviors--combo-hashtag nil))))))
+  ;; Select workflow molecule from skill graph (matching category → files)
+  (when (and target (fboundp 'skill-graph--recommend-molecule))
+    (setq gptel-auto-experiment--suggested-workflow
+          (let ((mol (skill-graph--recommend-molecule target)))
+            (when mol (mapconcat #'symbol-name mol " → ")))))
   ;; Adapt compression based on token efficiency analysis
   (gptel-auto-workflow--adapt-prompt-compression)
   
@@ -1291,10 +1296,11 @@ Implements section-level A/B testing to identify effective prompt components."
          (suggestions (when (proper-list-p analysis) (plist-get analysis :recommendations)))
           (skills (cdr (assoc target gptel-auto-workflow--skills)))
           (suggested-workflow
-           (when (fboundp 'skill-graph--recommend-molecule)
-             (let ((mol (skill-graph--recommend-molecule target)))
-               (when mol
-                 (mapconcat #'symbol-name mol " → ")))))
+           (or (bound-and-true-p gptel-auto-experiment--suggested-workflow)
+               (when (fboundp 'skill-graph--recommend-molecule)
+                 (let ((mol (skill-graph--recommend-molecule target)))
+                   (when mol
+                     (mapconcat #'symbol-name mol " → "))))))
           (scores (gptel-auto-experiment--eight-keys-scores))
          (weakest-keys (when scores (gptel-auto-workflow--format-weakest-keys scores)))
          (mutation-templates (when skills (gptel-auto-workflow--extract-mutation-templates skills)))
