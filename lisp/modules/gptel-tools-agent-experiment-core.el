@@ -167,7 +167,7 @@ Checks `gptel-auto-workflow--rate-limited-backends' and uses
           (message "[auto-experiment] Main backend %s is rate-limited but no fallback available"
                    current-name))))))
 
-(defun gptel-auto-experiment-run (target experiment-id max-experiments baseline baseline-code-quality previous-results callback &optional log-fn)
+(cl-defun gptel-auto-experiment-run (target experiment-id max-experiments baseline baseline-code-quality previous-results callback &optional log-fn)
   "Run single experiment. Call CALLBACK with result plist.
 BASELINE-CODE-QUALITY is the initial code quality score.
 LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
@@ -429,7 +429,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                               (list :target target :id experiment-id :kept nil
                                     :score-after 0
                                     :error "empty-prompt"))
-                     (cl-return-from gptel-auto-experiment--run-single))
+                      (cl-return-from gptel-auto-experiment-run))
                 (setq executor-callback
                       (lambda (agent-output)
                    (gptel-auto-experiment--call-in-context
