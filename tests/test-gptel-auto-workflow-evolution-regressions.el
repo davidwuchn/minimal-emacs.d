@@ -3294,6 +3294,29 @@ QV: ensure cache-aware cost model is wired for these backends."
                 (should (gethash "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789" cache))))))
         (delete-directory root t)))))
 
+;; ─── TSV Escape Arity Resilience ───
+
+(ert-deftest tdd/tsv-escape/accepts-single-arg ()
+  "tsv-escape works with exactly 1 argument."
+  (when (fboundp 'gptel-auto-experiment--tsv-escape)
+    (let ((result (gptel-auto-experiment--tsv-escape "hello\tworld\n")))
+      (should (stringp result))
+      (should-not (string-match-p "[\t\n]" result)))))
+
+(ert-deftest tdd/tsv-escape/accepts-extra-args ()
+  "tsv-escape ignores extra arguments (stale byte-compiled caller resilience)."
+  (when (fboundp 'gptel-auto-experiment--tsv-escape)
+    (let ((err (condition-case e
+                   (progn (gptel-auto-experiment--tsv-escape "test" "extra1" "extra2") nil)
+                 (wrong-number-of-arguments e)
+                 (error e))))
+      (should-not err))))
+
+(ert-deftest tdd/tsv-escape/nil-input-safe ()
+  "tsv-escape returns nil for nil input."
+  (when (fboundp 'gptel-auto-experiment--tsv-escape)
+    (should-not (gptel-auto-experiment--tsv-escape nil))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here

@@ -4,4 +4,6 @@ description: Propose meta-level experiment harnesses for self-improvement. Gener
 metadata:
   evolution-stats:
     total-experiments: 870
+atoms: [benchmark-improver, strategy-proposer]
+level: molecule
 ---

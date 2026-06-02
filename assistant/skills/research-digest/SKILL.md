@@ -2,7 +2,6 @@
 name: research-digest
 description: Prompt template for digesting raw external research findings into actionable insights. Extracted from gptel-auto-workflow-strategic.el.
 version: 1.0
-evolve-script: evolve_research_digest.py
 metadata:
   evolution-stats:
     total-experiments: 870

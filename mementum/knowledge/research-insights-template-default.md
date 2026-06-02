@@ -70,55 +70,93 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Research Strategy: Template-Default
+The user has provided a list of "kept hypotheses" from what seems to be a research distillation process. There are no discarded hypotheses listed. The user seems to want me to distill these hypotheses into a coherent summary or analysis.
 
-## Scope
-- **61 experiments** across 6 targets
-- **Targets**: gptel-tools-agent-error, gptel-tools-agent-prompt-build, gptel-auto-workflow-strategic, gptel-benchmark-subagent, staging-review, gptel-auto-workflow-projects
+Let me understand the context - this appears to be about a multi-experiment research project across various Emacs Lisp files related to gptel (an Emacs AI assistant package). The hypotheses are about code improvements focusing on two key principles:
 
-## Kept Hypotheses
+1. **φ Vitality** - progressive improvement, adapts to discovery/usage patterns
+2. **fractal Clarity** - explicit assumptions, testable code
 
-| Category | Focus |
-|----------|-------|
-| **Lambda-prompt extraction** | Remove redundant `if apply-lines` check; add early nil guard for `english-findings` |
-| **Input validation** | Explicit nil/empty guard for `allium-spec`; remove redundant callback check |
-| **Type handling** | Explicit `(symbolp backend)` branch before fallback `t` case |
-| **Buffer lifecycle** | Secondary `buffer-live-p` guard in async lambda |
-| **Provider selection** | Extract to dedicated `gptel-benchmark--select-provider` function |
-| **Timeout handling** | Sentinel value for timeout failures (distinct from successful nil) |
-| **Overlay safety** | Nil guard on `where` param; `condition-case` around overlay creation |
-
-## Common Themes
-- **φ Vitality**: Robustness to edge cases, async lifecycle, invalid inputs
-- **Fractal Clarity**: Explicit assumptions, testable branches, removable unnecessary conditionals
-- **Error handling**: Defensive coding, explicit type validation, recovery strategies
+Let me distill these into a coherent summary.
 ```
 
 ### Check Issues
 
-This is a clean, operationally useful summary. The hypotheses are technically sound and the scope is well-bounded. Below is a structured review.
+Now I have the full picture. Here is a coherent distillation of all **29 kept hypotheses** from the prompt-building strategy research, organized under the two architectural principles you mentioned.
 
-## ✅ What Checks Out
+---
 
-**Defensive focus is appropriate.** For an async-heavy Emacs package like `gptel`, the emphasis on buffer lifecycle guards, timeout sentinels, and overlay safety directly addresses the most common failure modes (dead buffer references in lambdas, ambiguous nil returns, and stale UI state).
+## Distillation: 29 Kept Hypotheses
 
-**Compression is evident.** 61 experiments collapsing into 7 kept hypotheses indicates good filtering. The retained items are *cross-cutting infrastructure* rather than one-off fixes, which suggests the experiments successfully identified systemic patterns.
+### Essence
+The experiment loop tests 29 hypotheses across 5 axes—compression, ordering, failure-awareness, adaptive skill selection, and context/surprise—all converging on two meta-principles: **φ Vitality** (systems that improve progressively by adapting to discovery patterns) and **fractal Clarity** (explicit assumptions expressed as testable, structurally clear code).
 
-**Theme alignment is logical.**
-- *φ Vitality* → Buffer lifecycle, input validation, overlay safety (runtime resilience)
-- *Fractal Clarity* → Type handling, provider extraction, lambda simplification (static reasoning)
+---
 
-## 🔍 Technical Observations
+### φ Vitality — Progressive Improvement, Adapts to Discovery/Usage Patterns
 
-| Hypothesis | Note |
-|------------|------|
-| **Lambda-prompt extraction** | Removing the `apply-lines` branch is safe only if the caller already normalizes the argument. Ensure the nil guard on `english-findings` happens *before* any string operations. |
-| **Timeout sentinel** | This is the highest-impact item for `gptel-benchmark-subagent`. A distinct timeout signal (e.g., a unique keyword or tagged cons) prevents false positives in success metrics. |
-| **Buffer lifecycle** | A *secondary* `buffer-live-p` guard is correct, b
+*Hypotheses where the system learns from accumulated experience, weights recent signals more heavily, and adjusts its behavior without human intervention.*
+
+| # | Hypothesis | Axis |
+|---|-----------|------|
+| 1 | **Failure-pattern-guided**: Analyzing failure patterns from previous experiments and amplifying relevant guidance improves success rates. | Failure Awareness |
+| 2 | **Failure-weighted guidance**: Prioritizing guidance based on historical failure patterns is more effective than uniform guidance. | Failure Awareness |
+| 3 | **Recency-weighted guidance**: Weighting historical recommendations by recency and score delta focuses the AI on recently validated improvements rather than treating all past experiments equally. | Temporal |
+| 4 | **Recency-weighted skills**: Recent successful ski
 
 ... (truncated)

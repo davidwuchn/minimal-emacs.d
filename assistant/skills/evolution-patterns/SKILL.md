@@ -4,6 +4,8 @@ description: Evolved patterns for code improvement — high-signal keywords, fai
 metadata:
   evolution-stats:
     total-experiments: 870
+atoms: [provider-error-analyzer]
+level: molecule
 ---
 
 ## Evolved Patterns

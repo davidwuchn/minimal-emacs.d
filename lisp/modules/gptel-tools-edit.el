@@ -118,7 +118,7 @@ to prevent callers from hanging indefinitely."
         (progn
           (let ((patch-mode (and diffp (not (eq diffp :json-false))))
                 (hashline-mode (and old_str
-n                                    (string-match-p "^[0-9]+:[a-f0-9]+" old_str))))
+                                    (string-match-p "^[0-9]+:[a-f0-9]+" old_str))))
             (when (and patch-mode (not (executable-find "patch")))
               (error "Command \"patch\" not available, cannot apply diffs"))
             (unless (file-exists-p file_path)

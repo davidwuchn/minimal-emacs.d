@@ -4,7 +4,6 @@ description: |
   Emacs Lisp code validation rules for AI-generated code. Checks for syntax errors,
   dangerous patterns, undefined symbols, and Common Lisp compatibility issues.
 version: 1.0
-evolve-script: evolve_rules.py
 metadata:
   category: code-quality
   language: emacs-lisp
