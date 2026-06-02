@@ -2,7 +2,7 @@
 
 > **The snake that researches what to eat, executes what it learned, and feeds outcomes back into its own appetite.**
 >
-> **Cost:** ~$0.50-2.00 per pipeline run (3 backends, cache-aware pricing). **Safety:** Git worktree isolation + 6 gates (tests, grader, reviewer, comparator, π Synthesis, champion league) — no change touches `main` without passing all gates. **Portability:** P(λ)=90.7% across 4 backends — lossless provider migration.
+> **Cost:** ~$0.50-2.00 per pipeline run (5 backends, cache-aware pricing). **Safety:** Git worktree isolation + 6 gates (tests, grader, reviewer, comparator, π Synthesis, champion league) — no change touches `main` without passing all gates. **Portability:** P(λ)=90.7% across 5 backends — lossless provider migration.
 >
 > **First run:** [`./scripts/run-pipeline.sh`](scripts/run-pipeline.sh) — initializes itself. After that, the snake feeds itself.
 >
@@ -97,7 +97,7 @@ Your job shifts from "write better code" to "teach the system what better code l
 | Fixing the same nil-guard bug in 12 files | Mark the target once; the system propagates the fix | 12× leverage on every pattern |
 | Code reviewing PRs for style consistency | Review kept experiments (the ontology already blocked style violations) | Review time drops 60% — focus on architecture, not syntax |
 | Writing docs for your patterns | The ontology records every kept/discarded experiment as executable knowledge | Documentation that never goes stale |
-| Wondering "did I break anything?" | 2,678+ tests run before every merge | Ship with confidence, not hope |
+| Wondering "did I break anything?" | 2,138+ tests run before every merge | Ship with confidence, not hope |
 | Spending 4h on a refactor | The system experiments with 5 approaches; you review the winner | 5× more exploration, same time budget |
 
 ### The Innovation Flywheel
@@ -119,13 +119,13 @@ That's the innovation path. Not "AI writes code for you." **Your codebase become
 
 ### The Numbers
 
-These come from 2,000+ experiments across 3 backends, 12 architectures, measured over 6 months:
+These come from 2,000+ experiments across 5 backends, 12 architectures, measured over 6 months:
 
 | Metric | What it means for you |
 |--------|----------------------|
 | **20% keep-rate** | 1 in 5 experiments produces production-ready code. The system wastes API calls so you don't waste time. |
-| **2,678 tests** | Every merge passes the full suite. Zero regression risk from automated changes. |
-| **3 backends** (2 active) | DeepSeek + MiniMax active, Moonshot rate-limited. Automatic failover when provider fails. |
+| **2,138 tests** | Every merge passes the full suite. Zero regression risk from automated changes. |
+| **5 backends** (4 tested) | MiniMax-M3 (default, 7s), moonshot/k2.6 (11s), DeepSeek v4-pro (60s, reasoning), DashScope, Copilot/gpt-5.4-mini. Automatic failover when provider fails. |
 | **59% prompt compression** | Lambda notation tokens cost less. Same capability, lower cost. |
 | **100+ experiments/month** | More iteration in a weekend than a human team does in a sprint. |
 
@@ -218,7 +218,7 @@ Every AI coding tool today generates code with no memory of what your team rejec
 | "What if the system makes bad changes?" | Worktree isolation + 6 gates (tests, grader, reviewer, comparator, π Synthesis, champion league). No change touches `main` without passing all gates. |
 | "What if the ontology learns wrong patterns?" | Category drift detection (>20% deviation flagged). Eight-keys scoring catches overfitting. Holdout evaluation prevents self-deception. |
 | "What if it doesn't work for our codebase?" | It runs on every `.el` file by default. 4 ontology categories cover all file types. No special integration needed. |
-| "What if a backend goes down?" | 3 backends with automatic failover. Subagent routing self-tunes: unhealthy backends get health strikes → probation → exclusion. Auto-recovery after 1h without new strikes. |
+| "What if a backend goes down?" | 5 backends with automatic failover. Subagent routing self-tunes: unhealthy backends get health strikes → probation → exclusion. Auto-recovery after 1h without new strikes. |
 
 ### The Pitch
 
@@ -352,7 +352,7 @@ Every experiment is an isolated git worktree. `main` is never touched directly. 
 | Gate | What it checks | What happens on failure |
 |------|---------------|------------------------|
 | **Category routing** | Best backend for this target RIGHT NOW? (Δ-from-baseline + trend + confidence) | Routes to strongest current performer; unhealthy backends dropped |
-| **Test execution** | Did 2,678+ tests pass? | Experiment discarded, pattern learned |
+| **Test execution** | Did 2,138+ tests pass? | Experiment discarded, pattern learned |
 | **AI grading** | Is the change well-structured and principled? | Scored 0.0-1.0, fed to analyzer |
 | **AI review** | Does it pass security, conventions, architecture? | Multi-agent review with feedback |
 | **π Synthesis** | Which similar files should inherit this strategy? | Semantic cluster auto-queue |
@@ -407,7 +407,7 @@ AI model calls are expensive (120s+ timeouts, 6 backends, retries). Where data a
 
 - **Analyzer**: `frontier-select-targets` reads TSV history → ranks by Pareto frontier size → <1s. AI analyzer only as emergency fallback on first run.
 - **Comparator**: `decision-gate` computes winner from score/quality deltas without AI. LLM comparator is confirmation only; gate always wins.
-- **Executor chain**: Static fallback ordered by keep-rate (DeepSeek 25% > MiniMax 16% > moonshot > DashScope 0%). Router aggregate data (across all task types) cannot override hand-tuned ordering.
+- **Executor chain**: Static fallback ordered by speed/quality (MiniMax-M3 7s > moonshot/k2.6 11s > DeepSeek v4-pro 60s [reasoning] > DashScope 0% > Copilot/gpt-5.4-mini 24%). Router aggregate data (across all task types) cannot override hand-tuned ordering.
 
 ### Three-Format Rule (Enforced by TDD)
 
@@ -434,6 +434,7 @@ Every cycle runs through six compilers — each examining the system's own behav
 | **Nucleus Lambda** | Hypothesis → λ expression | "What principle does this encode?" |
 | **Allium v3** | Research findings → behavioral spec | "Are these internally coherent?" |
 | **OWL/SHACL** | Ontology dict → Turtle/SHACL | "What is the formal shape of what we've learned?" |
+| **Skill Graph** | Skill frontmatter → compiled molecules → executor workflows | "Which capabilities compose into effective workflows?" |
 | **Ontology Router** | Target file → category → backend ranking | "Which backend is best RIGHT NOW — not just historically?" |
 | | Scoring: VSM-auto-tuned weights (40/30/20/10 → adaptive) + recency decay (14d half-life) + per-axis KIBC boost from holographic consensus | Penalty for unhealthy backends (probation with auto-recovery after 1h) |
 | | **Smart subagent routing**: all 6 subagent types (researcher, analyzer, executor, grader, reviewer, explorer) | Backends ranked by health-weight × keep-rate + per-axis boost + cold-start boost (+0.15 for <3 experiments); quarantined excluded; per-run cooldown hard-excludes failed backends |
@@ -443,6 +444,29 @@ Every cycle runs through six compilers — each examining the system's own behav
 | | **Moderator drift detection** (DIALECTIC.md): 3+ consecutive failures → forced backend swap | Intervention lenses: consequence_check, evidence_nudge, assumption_probe |
 
 Results feed back into the next cycle's analyzer, strategy evolver, and π Synthesis cluster queue. The compiler output is not a log — it is **input to the next iteration**.
+
+### Skill Graph (ν-compiler extension)
+
+Skills are not just documentation — they are **executable capabilities**. The skill graph reads `assistant/skills/*/SKILL.md` frontmatter (`level:`, `atoms:`, `molecules:`) and compiles them into runtime workflows:
+
+```
+Skill frontmatter → Load nodes + edges → Compile molecules → Validate → Execute
+```
+
+| Component | What it does |
+|-----------|-------------|
+| **Node loader** | Reads 25+ skills, extracts `level` (atom/molecule/compound) |
+| **Edge builder** | Dependency edges (+0.5 boost) from `atoms:`/`molecules:` frontmatter; sequence edges learned from experiments |
+| **Molecule compiler** | Greedy selection: prefers dependency edges, max 10 atoms, no duplicates, min weight 0.05 |
+| **Validator** | 4 constraints: size ≤10, known atoms, no dups, edge ≥0.05 |
+| **Executor** | Sequential FN callback per atom; records actual skills used in experiment TSV |
+| **Evolution** | Hourly cron updates edge weights (+0.05 success, ×0.99 failure) |
+
+**Integration**: The ontology router uses `graph-neighbor-success` and `graph-edge-strength` as scoring dimensions. The prompt builder injects `WORKFLOW:` lines from compiled molecules. Behaviors (how to act) stack orthogonally with skills (what to do).
+
+**Hashline editing**: The executor defaults to hashline mode for the Edit tool — eliminates text reproduction failures by referencing line numbers instead of reproducing text. Recorded in TSV column 29 (`edit_mode`).
+
+**Programmatic tool**: Added to 4 agents (executor, researcher, comparator, analyzer) for multi-step reasoning and batch operations — reduces single-prompt complexity.
 
 ---
 
@@ -463,7 +487,7 @@ The system does not just run experiments — it builds a **formal knowledge grap
 | **Ambiguity filtering** | Multi-stage confidence gating — defer high-ambiguity candidates |
 | **Second-chance repair** | Soft-deleted patterns re-evaluated each cycle |
 | **Interval Labelling Schema** | O(1) subsumption over pattern hierarchy via preorder/postorder |
-| **Backend performance analysis** | 2,000+ experiments tracked across 3 backends → keep-rate statistics; three-way (category×strategy×hashtags) combo learning |
+| **Backend performance analysis** | 2,000+ experiments tracked across 5 backends → keep-rate statistics; three-way (category×strategy×hashtags) combo learning |
 | **Pre-flight prediction** | Anti-pattern detection (3+ consecutive failures), target saturation (≥10), prediction threshold (0.15) |
 | **Ontology vs LLM decider** | Formal decision framework: data-availability × complexity × EMA confidence → ontology or LLM. Low EMA (<0.3) bypasses ontology, high EMA (>0.6) accepts weaker picks |
 | | φ freshness: EMA history persists across daemon restarts via cross-subsystem-state.json | Controller starts with informed confidence, not from zero |
@@ -564,7 +588,7 @@ The snake's own immune system:
 | Guard | Prevents |
 |-------|---------|
 | Git worktree isolation | `main` never touched directly |
-| 2,678+ tests + 300s timeout | Broken code caught before staging |
+| 2,138+ tests + 300s timeout | Broken code caught before staging |
 | Ontology-aware provider routing | VSM-auto-tuned scoring + recency-weighted keep-rate + per-axis KIBC boost + per-run cooldown; backends with elevated health auto-excluded |
 | Per-target model preference | Historical performance data selects strongest model for each target |
 | Routing audit trail | Every decision recorded with component scores and VSM adjustment history |
