@@ -1926,10 +1926,11 @@ Captures executor reasoning from the dynamic variable
       (unless (gptel-auto-experiment--drop-replaceable-tsv-rows
                experiment-id target)
         (goto-char (point-max))
-         (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
+        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
                         experiment-id
                         target
-                        (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
+                        (gptel-auto-experiment--tsv-escape
+                         (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
                         score-before
                         score-after
                         code-quality
@@ -1937,12 +1938,16 @@ Captures executor reasoning from the dynamic variable
                         decision
                         (round duration)
                         (gptel-auto-workflow--plist-get experiment :grader-quality "?")
-                        (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :grader-reason "N/A"))
-                        (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A"))
-                        (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
+                        (gptel-auto-experiment--tsv-escape
+                         (gptel-auto-workflow--plist-get experiment :grader-reason "N/A"))
+                        (gptel-auto-experiment--tsv-escape
+                         (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A"))
+                        (gptel-auto-experiment--tsv-escape
+                         (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
                         truncated-output
                         (round output-chars)
-                        (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :backend "unknown"))
+                        (gptel-auto-experiment--tsv-escape
+                         (gptel-auto-workflow--plist-get experiment :backend "unknown"))
                         (round prompt-chars)
                         (or (gptel-auto-experiment--tsv-escape
                              (gptel-auto-workflow--plist-get experiment :sections-included "all"))
@@ -1956,9 +1961,9 @@ Captures executor reasoning from the dynamic variable
                                    (mapconcat (lambda (c)
                                                 (format "%s:%.1f:%s"
                                                         (substring (or (car c) "") 0 (min 20 (length (or (car c) ""))))
-                                                         (gptel-auto-experiment--tsv-number
-                                                          (plist-get (cdr c) :score)
-                                                          0.0)
+                                                        (gptel-auto-experiment--tsv-number
+                                                         (plist-get (cdr c) :score)
+                                                         0.0)
                                                         (if (plist-get (cdr c) :valid) "V" "X")))
                                               candidates ";")
                                  "")))
@@ -1974,7 +1979,8 @@ Captures executor reasoning from the dynamic variable
                           ;; so feedback loop is always preserved.
                           (when (equal hash "none")
                             (setq hash (sha1 (format "pipeline-defect-%s-%s" target (format-time-string "%s"))))
-                            (message "[auto-workflow] WARNING: TSV-level fallback hash for %s (upstream should have set it)" (or target "unknown")))
+                            (message "[auto-workflow] WARNING: TSV-level fallback hash for %s (upstream should have set it)"
+                                     (or target "unknown")))
                           (gptel-auto-experiment--tsv-escape hash))
                         (or (gptel-auto-experiment--tsv-escape
                              (gptel-auto-workflow--plist-get experiment :research-quality "none"))
@@ -1987,18 +1993,20 @@ Captures executor reasoning from the dynamic variable
                             "?")
                         (or (gptel-auto-experiment--tsv-escape
                              (gptel-auto-workflow--plist-get experiment :model "unknown"))
-                             "unknown")
+                            "unknown")
                         (gptel-auto-experiment--tsv-escape
                          (let ((ks (gptel-auto-workflow--plist-get experiment :eight-keys-scores nil)))
-                            (if ks (concat "{" (mapconcat
-                                                 (lambda (pair)
-                                                   (format "%s:%.2f" (car pair) (cdr pair)))
-                                                 ks ",") "}")
-                              ""))
-                         (gptel-auto-experiment--tsv-escape
-                          (gptel-auto-workflow--plist-get experiment :skills ""))
-                         (gptel-auto-workflow--plist-get experiment :edit-mode "none")))))
-
+                           (if ks
+                               (concat "{" (mapconcat
+                                            (lambda (pair)
+                                              (format "%s:%.2f" (car pair) (cdr pair)))
+                                            ks ",") "}")
+                             "")))
+                        (gptel-auto-experiment--tsv-escape
+                         (gptel-auto-workflow--plist-get experiment :skills ""))
+                        (or (gptel-auto-experiment--tsv-escape
+                             (gptel-auto-workflow--plist-get experiment :edit-mode "none"))
+                            "none"))))
       (write-region (point-min) (point-max) file))
     ;; Keep strategy metrics independent from the per-run TSV.
     (when (fboundp 'gptel-auto-workflow--record-strategy-evaluation)
