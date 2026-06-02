@@ -4,6 +4,29 @@
 > Next pipeline: 23:00
 > Status: Architecture designed, awaiting implementation
 
+## Session: AI Behaviors vs Skill Graph — Orthogonal Systems (2026-06-02)
+
+**Key insight:** AI Behaviors (`ai-behaviors` module) and Skill Graph are **orthogonal** — they solve different problems and stack.
+
+**The split:**
+- **Behaviors** = agent's personality (how to act) — hashtags like #deterministic, #creative
+- **Skill Graph** = agent's playbook (what to do) — atoms → molecules → compounds
+
+**They stack:**
+```
+Compound: "Build this feature"
+  ├─ Behavior: #creative
+  ├─ Molecule: [research → design → implement]
+  │     ├─ Atom: research (behavior: #thorough)
+  │     └─ Atom: implement (behavior: #deterministic)
+```
+
+**Integration:** Skill graph evolution considers behavior performance (did molecule X + #deterministic outperform #creative?). Behavior evolution considers skill level (atoms → deterministic, compounds → creative).
+
+**Memory created:** `mementum/memories/ai-behaviors-vs-skill-graph.md`
+
+---
+
 ## Session: Self-Evolving Skill Graph Architecture (2026-06-02)
 
 **Key insight:** OV5 already has all infrastructure. No new systems needed.
