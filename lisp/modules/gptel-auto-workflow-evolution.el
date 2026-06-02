@@ -23,6 +23,7 @@
 ;; External functions from other modules
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base" ())
 (declare-function gptel-auto-workflow--load-skill-content "gptel-tools-agent-prompt-build" (skill-name))
+(declare-function gptel-auto-workflow-run-async "gptel-tools-agent-main" (&optional targets completion-callback))
 (declare-function gptel-auto-workflow--discover-strategies "gptel-tools-agent-strategy-harness" ())
 (declare-function gptel-benchmark-eight-keys-score-for "gptel-benchmark-principles" (output subsystem &optional hypothesis))
 (declare-function gptel-auto-workflow--evolve-research-strategy "gptel-auto-workflow-research-benchmark" ())
@@ -172,87 +173,93 @@ Optional MAX-AGE-DAYS limits to runs within that many days (default: all).
 Caches when MAX-AGE-DAYS is nil for cycle-local reuse."
   (or (and (not max-age-days) gptel-auto-workflow--results-cache)
       (let* ((results-dir (expand-file-name "var/tmp/experiments"
-                                         (gptel-auto-workflow--worktree-base-root)))
-         (cutoff-time (when max-age-days
-                        (- (float-time) (* max-age-days 24 60 60))))
-         (records nil)
-         (runs-parsed 0)
-         (max-runs 50))  ; Hard limit to prevent excessive parsing
-    (when (file-directory-p results-dir)
-      (let ((all-dirs (directory-files results-dir t "^202[0-9]-")))
-        ;; Sort by modification time (newest first) and take only recent ones
-        (setq all-dirs (sort all-dirs
-                             (lambda (a b)
-                               (> (float-time (file-attribute-modification-time (file-attributes a)))
-                                  (float-time (file-attribute-modification-time (file-attributes b)))))))
-        (dolist (run-dir (seq-take all-dirs max-runs))
-          (when (or (not cutoff-time)
-                    (> (float-time (file-attribute-modification-time (file-attributes run-dir)))
-                       cutoff-time))
-            (let ((tsv-file (expand-file-name "results.tsv" run-dir)))
-              (when (file-exists-p tsv-file)
-                (setq runs-parsed (1+ runs-parsed))
-                (with-temp-buffer
-                  (insert-file-contents tsv-file)
-                  (goto-char (point-min))
-                  (forward-line 1)
-                  (while (not (eobp))
-                    (let ((line (buffer-substring-no-properties
-                                 (line-beginning-position) (line-end-position))))
-                      (unless (string-empty-p line)
-                        (let* ((fields (split-string line "\t"))
-                               (field-count (length fields))
-                               ;; Handle multiple TSV format versions:
-                               ;; 14 cols: earliest (no backend/strategy/research fields)
-                               ;; 20 cols: backend at index 14, no research fields
-                               ;; 24 cols: backend at index 14, research fields at 20-23
-                               ;; 27 cols: backend at index 15, full research fields
-                               (format-version (cond ((<= field-count 14) 14)
-                                                     ((<= field-count 20) 20)
-                                                     ((<= field-count 24) 24)
-                                                     (t 27)))
-                               (target (nth 1 fields))
-                               (hypothesis (nth 2 fields))
-                               (score-before (string-to-number (or (nth 3 fields) "0")))
-                               (score-after (string-to-number (or (nth 4 fields) "0")))
-                               (quality (string-to-number (or (nth 5 fields) "0")))
-                               (delta (string-to-number (or (nth 6 fields) "+0.00")))
-                               (decision (nth 7 fields))
-                               (grader-q (string-to-number (or (nth 9 fields) "0")))
-                               (backend (cond ((<= format-version 14) "unknown")
-                                              ((<= format-version 24)
-                                               (or (nth 14 fields) "unknown"))
-                                              (t (or (nth 15 fields) "unknown"))))
-                               (prompt-chars (string-to-number
-                                              (or (nth (if (<= format-version 24) 15 16) fields) "0")))
-                               (research-strategy (or (nth (if (<= format-version 20) 20 21) fields) "none"))
-                               (research-hash (or (nth (if (<= format-version 20) 20 22) fields) "none"))
-                               (research-quality (or (nth (if (<= format-version 20) 20 23) fields) "none"))
-                               (kibcm-axis (or (nth (if (<= format-version 24) 20 25) fields) "?"))
-                               (model (or (nth (if (<= format-version 24) 20 26) fields) "unknown")))
-                          (push (list :target target
-                                      :hypothesis hypothesis
-                                      :score-before score-before
-                                      :score-after score-after
-                                      :code-quality quality
-                                      :delta delta
-                                      :decision decision
-                                      :grader-quality grader-q
-                                      :prompt-chars prompt-chars
-                                      :backend backend
-                                      :research-strategy research-strategy
-                                      :research-hash research-hash
-                                      :research-quality research-quality
-                                      :kibcm-axis kibcm-axis
-                                      :model model
-                                      :run-dir (file-name-nondirectory run-dir))
-                                records))))
-                    (forward-line 1)))))))))
-    (message "[parse-all-results] Parsed %d runs, %d records" runs-parsed (length records))
-    (let ((result (nreverse records)))
-      (unless max-age-days
-        (setq gptel-auto-workflow--results-cache result))
-      result))))
+                                            (gptel-auto-workflow--worktree-base-root)))
+             (cutoff-time (when max-age-days
+                            (- (float-time) (* max-age-days 24 60 60))))
+             (records nil)
+             (runs-parsed 0)
+             (max-runs 50)
+             (max-candidates 200))
+        (when (file-directory-p results-dir)
+          (let ((all-dirs (directory-files results-dir t "^202[0-9]-")))
+            ;; Sort by modification time (newest first).
+            (setq all-dirs
+                  (sort all-dirs
+                        (lambda (a b)
+                          (> (float-time (file-attribute-modification-time (file-attributes a)))
+                             (float-time (file-attribute-modification-time (file-attributes b)))))))
+            ;; Recent runs are often header-only when experiments are still in flight
+            ;; or aborted early. Keep scanning until we have enough non-empty runs.
+            (dolist (run-dir (seq-take all-dirs max-candidates))
+              (when (and (< runs-parsed max-runs)
+                         (or (not cutoff-time)
+                             (> (float-time (file-attribute-modification-time (file-attributes run-dir)))
+                                cutoff-time)))
+                (let ((tsv-file (expand-file-name "results.tsv" run-dir)))
+                  (when (file-exists-p tsv-file)
+                    (with-temp-buffer
+                      (insert-file-contents tsv-file)
+                      (goto-char (point-min))
+                      (forward-line 1)
+                      (unless (eobp)
+                        (setq runs-parsed (1+ runs-parsed))
+                        (while (not (eobp))
+                          (let ((line (buffer-substring-no-properties
+                                       (line-beginning-position) (line-end-position))))
+                            (unless (string-empty-p line)
+                              (let* ((fields (split-string line "\t"))
+                                     (field-count (length fields))
+                                     ;; Handle multiple TSV format versions:
+                                     ;; 14 cols: earliest (no backend/strategy/research fields)
+                                     ;; 20 cols: backend at index 14, no research fields
+                                     ;; 24 cols: backend at index 14, research fields at 20-23
+                                     ;; 27 cols: backend at index 15, full research fields
+                                     (format-version (cond ((<= field-count 14) 14)
+                                                           ((<= field-count 20) 20)
+                                                           ((<= field-count 24) 24)
+                                                           (t 27)))
+                                     (target (nth 1 fields))
+                                     (hypothesis (nth 2 fields))
+                                     (score-before (string-to-number (or (nth 3 fields) "0")))
+                                     (score-after (string-to-number (or (nth 4 fields) "0")))
+                                     (quality (string-to-number (or (nth 5 fields) "0")))
+                                     (delta (string-to-number (or (nth 6 fields) "+0.00")))
+                                     (decision (nth 7 fields))
+                                     (grader-q (string-to-number (or (nth 9 fields) "0")))
+                                     (backend (cond ((<= format-version 14) "unknown")
+                                                    ((<= format-version 24)
+                                                     (or (nth 14 fields) "unknown"))
+                                                    (t (or (nth 15 fields) "unknown"))))
+                                     (prompt-chars (string-to-number
+                                                    (or (nth (if (<= format-version 24) 15 16) fields) "0")))
+                                     (research-strategy (or (nth (if (<= format-version 20) 20 21) fields) "none"))
+                                     (research-hash (or (nth (if (<= format-version 20) 20 22) fields) "none"))
+                                     (research-quality (or (nth (if (<= format-version 20) 20 23) fields) "none"))
+                                     (kibcm-axis (or (nth (if (<= format-version 24) 20 25) fields) "?"))
+                                     (model (or (nth (if (<= format-version 24) 20 26) fields) "unknown")))
+                                (push (list :target target
+                                            :hypothesis hypothesis
+                                            :score-before score-before
+                                            :score-after score-after
+                                            :code-quality quality
+                                            :delta delta
+                                            :decision decision
+                                            :grader-quality grader-q
+                                            :prompt-chars prompt-chars
+                                            :backend backend
+                                            :research-strategy research-strategy
+                                            :research-hash research-hash
+                                            :research-quality research-quality
+                                            :kibcm-axis kibcm-axis
+                                            :model model
+                                            :run-dir (file-name-nondirectory run-dir))
+                                      records))))
+                          (forward-line 1))))))))))
+        (message "[parse-all-results] Parsed %d runs, %d records" runs-parsed (length records))
+        (let ((result (nreverse records)))
+          (unless max-age-days
+            (setq gptel-auto-workflow--results-cache result))
+          result))))
 
 (defvar gptel-auto-workflow--evolution-patterns-cache nil
   "Cached evolution patterns from skill. Reset on skill reload.")
@@ -1422,7 +1429,7 @@ Returns output string or nil on failure."
         (message "[evolution] %s completed" script-name)
         output))))
 
-(declare-function gptel-auto-workflow--load-directive-skill "gptel-auto-workflow-strategic" ())
+
 
 ;;; ─── Dynamic Content Generators ───
 
@@ -1854,8 +1861,18 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (cl-block gptel-auto-workflow-evolution-run-cycle
   (condition-case early-err
       (progn
+  ;; Rebuild digital twin dependency graph
+  (when (fboundp 'gptel-auto-workflow--build-digital-twin)
+    (condition-case nil (gptel-auto-workflow--build-digital-twin) (error nil)))
   ;; Invalidate parse cache so this cycle sees fresh data
   (setq gptel-auto-workflow--results-cache nil)
+  ;; Clear reasoning hit counts for new cycle
+  (when (fboundp 'gptel-ai-behaviors--clear-reasoning-hits)
+    (gptel-ai-behaviors--clear-reasoning-hits))
+  (when (fboundp 'gptel-ai-behaviors--clear-violations)
+    (gptel-ai-behaviors--clear-violations))
+  (when (fboundp 'gptel-ai-behaviors--clear-convergence)
+    (gptel-ai-behaviors--clear-convergence))
   ;; Throttle: don't run more than once per 300s (5min) unless forced
   (let ((now (float-time (current-time))))
     (when (and gptel-auto-workflow--evolution-last-run
@@ -1904,18 +1921,32 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (dolist (w (plist-get v :warnings))
           (message "[pipeline] WARN: %s" w)))
     (error nil))
+  ;; Ensure required modules are loaded before evolution checks
+  (mapc (lambda (m) (require m nil t))
+        '(gptel-tools-agent-base gptel-tools-agent-main))
   (condition-case nil
       (let ((new-experiments (or (gptel-auto-workflow--evolution-count-new) 0))
             (has-research (and (getenv "PIPELINE_FINDINGS_FILE")
                                (file-exists-p (getenv "PIPELINE_FINDINGS_FILE")))))
-         ;; Negative count means experiments were cleaned up (last-total > current).
-         ;; Run anyway — we still have data to analyze. Only skip when genuinely 0.
-         (when (and (= new-experiments 0) (not has-research))
-           ;; Persist hints before early return so state survives daemon restarts
-           (gptel-auto-workflow--persist-next-cycle-hints)
-           (let ((message (format "[evolution] No new experiments (0 new, no research). Skipping.")))
-             (message "%s" message)
-             (cl-return-from gptel-auto-workflow-evolution-run-cycle message))))
+          ;; Negative count means experiments were cleaned up (last-total > current).
+          ;; Also trigger experiments when <= 0 — no new data to analyze.
+          (message "[evolution] new-experiments=%d has-research=%s" new-experiments has-research)
+          (when (<= new-experiments 0)
+            ;; No experiments to analyze — trigger them instead.
+            ;; This enables local development machines to run experiments,
+            ;; not just Pi5 (which runs via cron).
+            (message "[evolution] No new experiments to analyze. Triggering experiment run...")
+            (condition-case err
+                (progn
+                  (require 'gptel-tools-agent-main nil t)
+                  (gptel-auto-workflow-run-async
+                   nil
+                   (lambda (&optional _results)
+                     (gptel-auto-workflow-evolution-run-cycle))))
+              (error (message "[evolution] Experiment run error: %s" err)))
+            ;; Persist hints before returning
+            (gptel-auto-workflow--persist-next-cycle-hints)
+            (cl-return-from gptel-auto-workflow-evolution-run-cycle "triggered-experiments")))
     (error (message "[evolution] Warning: new-experiments check failed, continuing cycle")))
   ;; Consume pipeline env vars for research-aware evolution
   (let ((research-quality (getenv "PIPELINE_RESEARCH_QUALITY"))
@@ -1996,6 +2027,33 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                    (plist-get result :changes)
                    (plist-get result :saturated)))
       (error (message "[evolution] Step ontology-evolve: %s" err))))
+  ;; Step C.7d: Evolve ai-behaviors model+effort selection from experiment data
+  (when (fboundp 'gptel-ai-behaviors--evolve-models)
+    (condition-case err
+        (gptel-ai-behaviors--evolve-models)
+      (error (message "[evolution] Step model-evolve: %s" err))))
+  ;; Step C.7e: Evolve ai-behaviors hashtag mappings from experiment data
+  (when (fboundp 'gptel-ai-behaviors--evolve-hashtags)
+    (condition-case err
+        (progn
+          (gptel-ai-behaviors--evolve-hashtags)
+          (message "[ai-behaviors] Evolved category→hashtags from experiment data"))
+      (error (message "[evolution] Step ai-behaviors-evolve: %s" err))))
+  ;; Step C.7e: Evolve concrete task-type preferences per category
+  (when (fboundp 'gptel-ai-behaviors--evolve-concrete-tasks)
+    (condition-case err
+        (progn
+          (gptel-ai-behaviors--evolve-concrete-tasks)
+          (message "[concrete-task] Analyzed task-type keep-rates per category"))
+      (error (message "[evolution] Step concrete-task-evolve: %s" err))))
+  ;; Step C.7f: Evolve validation error patterns into HARD CONSTRAINT suggestions
+  (when (fboundp 'gptel-ai-behaviors--evolve-validation-rules)
+    (condition-case err
+        (progn
+          (gptel-ai-behaviors--evolve-validation-rules)
+          (message "[validation-evolve] Analyzed validation error patterns"))
+      (error (message "[evolution] Step validation-evolve: %s" err))))
+
   ;; Step C.8: Allium issue trend analysis + regression detection
   (condition-case err
       (let ((trends-report (gptel-auto-workflow--allium-trends-report)))
@@ -2771,7 +2829,11 @@ Pattern from Semantica PolicyEngine.check_compliance()."
       (when (and max-target (stringp target))
         (let ((count (cl-count-if (lambda (r) (equal (plist-get r :target) target)) results)))
           (when (> count max-target)
-            (push (format "Target '%s' has %d experiments (max %d)" target count max-target) errors))))
+            ;; Only report as violation if target is NOT already saturated
+            ;; (saturation preflight check independently blocks new experiments)
+            (unless (and (fboundp 'gptel-auto-workflow--target-saturated-p)
+                         (gptel-auto-workflow--target-saturated-p target max-target))
+              (push (format "Target '%s' has %d experiments (max %d)" target count max-target) errors)))))
       (when (and max-strategy (stringp strategy))
         (let ((count (cl-count-if (lambda (r) (equal (plist-get r :strategy) strategy)) results)))
           (when (> count max-strategy)
@@ -3440,11 +3502,18 @@ Promotion: challenger must exceed category champion by >5% relative."
                  ((> cat-keep-rate champion-rate)
                    (push (cons name (intern (format "passed-%s" cat))) results)
                     (throw 'category-result t)))))))
-        ;; Fallback: no category hit, use global composite
-        (let ((champion-rate gptel-auto-workflow--champion-keep-rate))
+         ;; Fallback: no category hit, use global composite
+        (let* ((champion-rate gptel-auto-workflow--champion-keep-rate)
+               (onto (gptel-auto-workflow--generate-experiment-ontology))
+               (classes (plist-get onto :classes))
+               (strategy-entry (cl-find name classes :test #'string=
+                                         :key (lambda (c) (plist-get c :name))))
+               (strategy-total (if strategy-entry (plist-get strategy-entry :total) 0)))
           (cond
            ((and champion-rate (> composite champion-rate))
             (push (cons name 'passed-composite) results))
+           ((= strategy-total 0)
+            (push (cons name 'unevaluated) results))
            (t
             (push (cons name 'rejected) results)))))))
     (dolist (cat categories)
@@ -3671,12 +3740,12 @@ Guards: skips enrichment when EMA confidence < 0.3 (untrusted research signal)."
   (let* ((root (gptel-auto-workflow--worktree-base-root))
          (findings-file (expand-file-name "var/tmp/research-findings.md" root))
          (new-concepts nil))
-    (when (< (or (and (boundp 'gptel-auto-workflow--research-ema-conf)
-                      gptel-auto-workflow--research-ema-conf) 0.5) 0.3)
-      (message "[onto-enrich] EMA confidence %.2f < 0.3 — skipping enrichment (untrusted research)"
-               (or (and (boundp 'gptel-auto-workflow--research-ema-conf)
-                        gptel-auto-workflow--research-ema-conf) 0.0))
-      (cl-return-from gptel-auto-workflow--enrich-ontology-from-research nil))
+    (let ((ema-conf (or (and (boundp 'gptel-auto-workflow--research-ema-conf)
+                              gptel-auto-workflow--research-ema-conf)
+                        0.0)))
+      (when (and (> ema-conf 0) (< ema-conf 0.15))
+        (message "[onto-enrich] EMA confidence %.2f < 0.15 — skipping enrichment (untrusted research)" ema-conf)
+        (cl-return-from gptel-auto-workflow--enrich-ontology-from-research nil)))
     (when (file-readable-p findings-file)
       (with-temp-buffer
         (insert-file-contents findings-file)
@@ -6053,4 +6122,3 @@ Signals ert-test-failed if check fails. Use in ERT tests."
 
 (provide 'gptel-auto-workflow-evolution)
 ;;; gptel-auto-workflow-evolution.el ends here
-

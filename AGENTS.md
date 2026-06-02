@@ -28,13 +28,14 @@
 3. **Both machines** can push mementum memories (`mementum/memories/`) and state (`mementum/state.md`).
 4. **Local machine MUST `git pull --rebase` before running experiments** to get Pi5's latest evolved skills.
 5. **No machine force-pushes `origin/main`**. Conflicts are resolved via rebase.
-6. **Auto-evolved files** (`DIRECTIVE.md`, `strategy-guidance.json`, `mementum/knowledge/*.md`) are marked `--assume-unchanged` on non-Pi5 machines to prevent accidental conflicts.
+6. **Auto-evolved files** (`DIRECTIVE.md`, `strategy-guidance.json`, `mementum/knowledge/*.md`) use `merge=theirs` in `.gitattributes` — Pi5 version always wins on pull. Non-Pi5 machines should NOT modify these files locally; if accidentally changed, `git checkout HEAD -- path` discards them.
 
 ### Conflict Resolution
 
 - **Skill conflicts**: Pi5's version wins (it has the most experiment data).
 - **Knowledge conflicts**: Merge both versions (newer knowledge supplements older).
 - **Mementum conflicts**: Accept both (memories are atomic and additive).
+- **Never use `git reset --hard`**: Destroys uncommitted work irreversibly. Use `git stash push -m "msg"` to save work, then `git checkout HEAD -- path/...` to discard only specific auto-generated files, then `git stash pop` to restore. Add `git merge --abort` to clear stale merge state before pulling.
 
 ### Document Map
 

@@ -346,16 +346,16 @@ daemon alive."
         (when (and skip-tests gptel-auto-experiment-require-tests)
           (message "[auto-exp] Tests required before staging merge: %s"
                    (if tests-passed "PASS" "FAIL")))
-         (list :passed tests-passed
-               :debug-info debug-info
-               :nucleus-passed t
-               :nucleus-skipped t
-               :tests-passed tests-passed
-              :tests-output final-tests-output
-              :tests-skipped (not should-run-tests)
-              :time (- (float-time) start)
-              :eight-keys (when scores (alist-get 'overall scores))
-              :eight-keys-scores scores)))))
+          (list :passed tests-passed
+                :debug-info debug-info
+                :nucleus-passed t
+                :nucleus-skipped t
+                :tests-passed tests-passed
+               :tests-output final-tests-output
+               :tests-skipped (not should-run-tests)
+               :time (- (float-time) start)
+               :eight-keys (when scores (alist-get 'overall scores))
+               :eight-keys-scores scores)))))
 
 (defun gptel-auto-experiment--eight-keys-scores (&optional hypothesis)
   "Get full Eight Keys scores alist from current codebase.
@@ -422,10 +422,11 @@ Loads gptel-benchmark-principles if not already available."
 
 ;;; Subagent Integrations
 
-(defun gptel-auto-experiment--call-in-context (buffer directory fn &optional run-root)
+(defun gptel-auto-experiment--call-in-context (buffer directory fn &optional run-root &rest _ignored)
   "Call FN in BUFFER with DIRECTORY bound as `default-directory'.
 When RUN-ROOT is non-nil, preserve that workflow root for async callbacks that
-resume from buffers outside the original project context."
+resume from buffers outside the original project context.
+Accepts extra IGNORED args passed by byte-compiled closure callers."
   (gptel-auto-workflow--call-in-run-context
    run-root fn buffer directory))
 
@@ -721,10 +722,12 @@ Values are plist: (:done :timer).")
 (defvar gptel-auto-experiment--grading-worktree nil
   "Dynamically bound experiment worktree for the current grade request.")
 
-(defvar gptel-auto-experiment-grade-timeout 180
+(defvar gptel-auto-experiment-grade-timeout 450
   "Timeout in seconds for grading subagent.
-Default 180s — grading normally takes 8-10s but slow backends
-(CF-Gateway, DeepSeek under load) need more headroom.")
+Increased from 180 to 450: slow backends (DeepSeek, MiniMax) routinely
+take 2-5 minutes per call, and the grader prompt includes file context
+that can be several KB. 450s = 7.5min headroom within 15min experiment
+budget.")
 
 (defun gptel-auto-experiment--reset-grade-state ()
   "Cancel and clear all pending grade callbacks."
@@ -732,11 +735,60 @@ Default 180s — grading normally takes 8-10s but slow backends
    (lambda (_grade-id state)
      (when (timerp (plist-get state :timer))
        (cancel-timer (plist-get state :timer))))
-   gptel-auto-experiment--grade-state)
+    gptel-auto-experiment--grade-state)
   (clrhash gptel-auto-experiment--grade-state))
 
+(defun gptel-auto-experiment--normalize-grade-result (result)
+  "Return RESULT as a grade plist with numeric score fields."
+  (cl-labels ((number-string-p
+               (value)
+               (and (stringp value)
+                    (string-match-p
+                     "\\`[[:space:]]*[+-]?[0-9]+\\(?:\\.[0-9]+\\)?[[:space:]]*\\'"
+                     value)))
+              (number-or-default
+               (value default)
+               (cond
+                ((numberp value) value)
+                ((number-string-p value) (string-to-number value))
+                (t default))))
+    (let* ((plist-result-p (proper-list-p result))
+           (grade (if plist-result-p
+                      (copy-sequence result)
+                    (list :details (format "Error: malformed grader result: %S" result)
+                          :grader-only-failure t)))
+           (raw-score (plist-get grade :score))
+           (raw-total (plist-get grade :total))
+           (score (number-or-default raw-score 0))
+           (total (max 1 (number-or-default raw-total (max 1 score))))
+           (malformed (or (not plist-result-p)
+                          (and raw-score (not (numberp raw-score))
+                               (not (number-string-p raw-score)))
+                          (and raw-total (not (numberp raw-total))
+                               (not (number-string-p raw-total)))))
+           (percentage
+            (number-or-default (plist-get grade :percentage)
+                               (* 100.0 (/ (float score) total))))
+           (details (plist-get grade :details)))
+      (setq grade (plist-put grade :score score))
+      (setq grade (plist-put grade :total total))
+      (setq grade (plist-put grade :percentage percentage))
+      (setq grade (plist-put grade :passed (and (not malformed)
+                                                (eq (plist-get grade :passed) t))))
+      (unless (stringp details)
+        (setq grade (plist-put grade :details
+                               (format "Error: malformed grader result: %S" result))))
+      (when malformed
+        (setq grade (plist-put grade :grader-only-failure t))
+        (unless (plist-get grade :error-source)
+          (setq grade
+                (plist-put grade :error-source
+                           (format "Error: malformed grader result: score=%S total=%S"
+                                   raw-score raw-total)))))
+      grade)))
+
 (defun gptel-auto-experiment--finish-grade (grade-id callback result
-                                                     &optional cancel-timer)
+                                                      &optional cancel-timer)
   "Finalize GRADE-ID with RESULT, always cleaning grade state.
 CALLBACK receives RESULT.  When CANCEL-TIMER is non-nil, cancel the
 stored timeout timer before invoking CALLBACK."
@@ -747,9 +799,10 @@ stored timeout timer before invoking CALLBACK."
       (when (and cancel-timer
                  (timerp (plist-get state :timer)))
         (cancel-timer (plist-get state :timer)))
-      (unwind-protect
-          (my/gptel--invoke-callback-safely callback result)
-        (remhash grade-id gptel-auto-experiment--grade-state))
+      (let ((result (gptel-auto-experiment--normalize-grade-result result)))
+        (unwind-protect
+            (my/gptel--invoke-callback-safely callback result)
+          (remhash grade-id gptel-auto-experiment--grade-state)))
       t)))
 
 (defun gptel-auto-experiment--build-grading-output (output &optional target worktree)
@@ -925,7 +978,7 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
                 (and (stringp output) (string-empty-p (string-trim output))))
         (message "[auto-exp] Skipping grader: nil or empty executor output")
         (my/gptel--invoke-callback-safely
-         callback (list :score 0 :passed nil
+         callback (list :score 0 :total 1 :percentage 0.0 :passed nil
                         :details "no-executor-output"
                         :grader-only-failure t))
         (cl-return-from gptel-auto-experiment-grade))
@@ -936,17 +989,17 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
                (error-category (car (gptel-auto-experiment--categorize-error output))))
           (message "[auto-exp] Executor error detected: %s" error-snippet)
           (my/gptel--invoke-callback-safely
-           callback (list :score 0 :passed nil
-                          :details (format "Agent error: %s" error-snippet)
-                          :error-category error-category))
+           callback (list :score 0 :total 1 :percentage 0.0 :passed nil
+                           :details (format "Agent error: %s" error-snippet)
+                           :error-category error-category))
           (cl-return-from gptel-auto-experiment-grade)))
       ;; Quota exhausted: skip grading, no backend can respond
       (when (bound-and-true-p gptel-auto-experiment--quota-exhausted)
         (message "[auto-exp] Quota exhausted, skipping grader")
         (my/gptel--invoke-callback-safely
-         callback (list :score 0 :passed nil
-                        :details "quota-exhausted"
-                        :quota-exhausted t))
+          callback (list :score 0 :total 1 :percentage 0.0 :passed nil
+                         :details "quota-exhausted"
+                         :quota-exhausted t))
         (cl-return-from gptel-auto-experiment-grade))
       (puthash grade-id (list :done nil :timer nil)
                gptel-auto-experiment--grade-state)
@@ -966,23 +1019,38 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
                  gptel-auto-experiment--grade-state))
       (if (and gptel-auto-experiment-use-subagents
                (fboundp 'gptel-benchmark-grade))
-          ;; Ensure grader runs in the captured buffer context so overlay appears in right place
-          (with-current-buffer grade-buffer
-            (gptel-benchmark-grade
-             (gptel-auto-experiment--build-grading-output output target worktree)
-               '("change clearly described"
-                "change is minimal and focused"
-                "improves code: fixes bug, improves performance, addresses TODO/FIXME, or enhances clarity/testability"
-                "verification attempted (byte-compile, syntax, load-test, nucleus, or tests — also check VERIFICATION EVIDENCE FROM <think> section and <think> reasoning blocks)")
-             '("large refactor unrelated to stated improvement"
-               "changed security files without review"
-               "no description or unclear purpose"
-               "style-only change without functional impact"
-               "replaces working code without clear improvement")
-             (lambda (result)
-               (gptel-auto-experiment--finish-grade
-                grade-id callback result t))
-             gptel-auto-experiment-grade-timeout))
+          ;; Ensure grader dispatch cannot strand the experiment without a
+          ;; result when routing/prompt construction fails synchronously.
+          (condition-case err
+              (with-current-buffer grade-buffer
+                (gptel-benchmark-grade
+                 (gptel-auto-experiment--build-grading-output output target worktree)
+                 '("change clearly described"
+                   "change is minimal and focused"
+                   "improves code: fixes bug, improves performance, addresses TODO/FIXME, or enhances clarity/testability"
+                   "verification attempted (byte-compile, syntax, load-test, nucleus, or tests — also check VERIFICATION EVIDENCE FROM <think> section and <think> reasoning blocks)")
+                 '("large refactor unrelated to stated improvement"
+                   "changed security files without review"
+                   "no description or unclear purpose"
+                   "style-only change without functional impact"
+                   "replaces working code without clear improvement")
+                 (lambda (result)
+                   (gptel-auto-experiment--finish-grade
+                    grade-id callback result t))
+                 gptel-auto-experiment-grade-timeout))
+            (error
+             (message "[auto-exp] Grader dispatch failed: %s"
+                      (my/gptel--sanitize-for-logging
+                       (error-message-string err) 200))
+             (gptel-auto-experiment--finish-grade
+              grade-id callback
+              (list :score 0 :total 1 :percentage 0.0 :passed nil
+                    :details (format "Error: grader dispatch failed: %s"
+                                     (error-message-string err))
+                    :error-source (format "Error: grader dispatch failed: %s"
+                                          (error-message-string err))
+                    :grader-only-failure t)
+              t)))
         (gptel-auto-experiment--finish-grade
          grade-id callback (list :score 100 :passed t) t)))))
 
@@ -1083,6 +1151,140 @@ is reduced because well-written code is harder to improve measurably."
       (list :winner (if (string= winner "tie") "B" winner)
             :note (and (string= winner "tie")
                        "Kept: score improved despite combined tie"))))))
+
+;; ─── Think-Block Intelligence ───
+
+(require 'subr-x)  ; for string-trim
+
+(defun gptel-auto-experiment--extract-think-blocks (output)
+  "Extract all <think>...</think> blocks from OUTPUT.
+Returns list of strings, each a single think block's content."
+  (when (stringp output)
+    (let ((result nil)
+          (start 0))
+      (while (string-match "<think>" output start)
+        (let ((block-start (match-end 0))
+              (block-end (when (string-match "</think>" output (match-end 0))
+                           (match-beginning 0))))
+          (when block-end
+            (push (string-trim (substring output block-start block-end)) result)
+            (setq start (match-end 0)))
+          (unless block-end
+            (push (string-trim (substring output block-start)) result)
+            (setq start (length output)))))
+      (nreverse result))))
+
+(defun gptel-auto-experiment--classify-think-blocks (blocks)
+  "Classify each think BLOCK into a reasoning category.
+Returns plist: (:categories LIST :dominant SYMBOL :score FLOAT :verdict STRING)."
+  (let ((categories nil)
+        (scores nil)
+        (patterns
+         '(;; Category: planning — agent is strategizing
+           (planning . ("let me plan" "i need to" "first.*then" "step[s]?"
+                        "approach" "strategy" "before.*implement"
+                        "create a plan" "what.*need to do"))
+           ;; Category: exploring — agent is reading/investigating
+           (exploring . ("let me (read|look|check|find|search|see|examine|understand)"
+                         "let.s (read|look|check|find|search|see|examine|understand)"
+                         "i don.t see" "what does" "how does"
+                         "let me.*open" "let me.*file"
+                         "reading.*file" "to understand"))
+           ;; Category: acting — agent is making changes
+           (acting . ("i.ll (edit|write|change|modify|fix|add|remove|replace|update|refactor)"
+                      "let me.*(edit|write|change|modify|fix|add)"
+                      "making.*change" "apply.*patch"
+                      "i.(ve| have) (made|changed|fixed|added)"))
+           ;; Category: verifying — agent is testing
+           (verifying . ("byte.compile" "check.parens" "run.*(test|verify)"
+                         "syntax.*(check|ok)" "compile.*(pass|fail|error)"
+                         "verify.*(works|pass)" "tests.*pass"))
+           ;; Category: confused — agent doesn't know what to do
+           (confused . ("i.m not sure" "i don.t (know|understand)" "this is (unclear|confusing)"
+                        "what (should|am i)" "need more (context|information)"
+                        "i think.*but" "not sure what"))
+           ;; Category: self-correcting — agent realizes mistake
+           (self-correcting . ("actually" "wait" "on second thought" "let me (rethink|reconsider|redo)"
+                               "that.s wrong" "i made a mistake" "that didn.t work"
+                               "let me try (again|differently)")))))
+    (dolist (block blocks)
+      (let ((lower (downcase block))
+            (best-category 'exploring)
+            (best-score 0))
+        (dolist (entry patterns)
+          (let ((cat (car entry))
+                (kws (cdr entry)))
+            (dolist (kw kws)
+              (when (string-match-p kw lower)
+                (let ((hits (length (split-string lower kw t))))
+                  (when (> (1- hits) best-score)
+                    (setq best-category cat
+                          best-score (1- hits))))))))
+        (push best-category categories)
+        (push best-score scores)))
+    (let* ((counts (make-hash-table))
+           (total-score 0))
+      (dolist (cat categories)
+        (puthash cat (1+ (gethash cat counts 0)) counts))
+      (dolist (s scores)
+        (setq total-score (+ total-score s)))
+      (let* ((dominant
+              (let ((best (car categories))
+                    (best-n 0))
+                (maphash (lambda (cat n) (when (> n best-n) (setq best cat best-n n))) counts)
+                best))
+             (act-count (or (gethash 'acting counts) 0))
+             (explore-count (or (gethash 'exploring counts) 0))
+             (confused-count (or (gethash 'confused counts) 0))
+             (plan-count (or (gethash 'planning counts) 0))
+             (n-blocks (length blocks))
+             (reasoning-score
+              ;; Higher score = more likely to succeed
+              (/ (+ (* act-count 3.0)   ; acting is best
+                    (* (- n-blocks plan-count explore-count confused-count) 1.0)
+                    ;; Penalize no action
+                    (if (and (> n-blocks 3) (= act-count 0)) -3.0 0.0)
+                    ;; Penalize confusion
+                    (* confused-count -2.0))
+                 (max n-blocks 1)))
+             (verdict
+              (cond
+               ((= act-count 0)
+                (cond
+                 ((> confused-count 2) "STUCK-CONFUSED: agent does not understand task")
+                 ((> explore-count 2) "STUCK-EXPLORING: agent reads but never edits")
+                 ((> plan-count 2) "STUCK-PLANNING: agent plans but never acts")
+                 (t "STUCK-NO-ACTION: agent never attempted code changes")))
+               ((> act-count 2) "ACTIVE: agent made multiple edit attempts")
+               ((> act-count 0) "PROGRESS: agent made at least one edit")
+               (t "UNKNOWN"))))
+        (list :categories categories
+              :dominant dominant
+              :acts act-count
+              :explores explore-count
+              :confused confused-count
+              :plans plan-count
+              :n-blocks n-blocks
+              :score reasoning-score
+              :verdict verdict)))))
+
+(defun gptel-auto-experiment--analyze-agent-output (output)
+  "Analyze agent OUTPUT to extract think-block intelligence.
+Returns plist suitable for experiment result enrichment."
+  (let* ((blocks (gptel-auto-experiment--extract-think-blocks output))
+         (analysis (when blocks
+                     (gptel-auto-experiment--classify-think-blocks blocks))))
+    (if analysis
+        (progn
+          (message "[think-intel] %s (n=%d acts=%d explores=%d confused=%d score=%.1f)"
+                   (plist-get analysis :verdict)
+                   (plist-get analysis :n-blocks)
+                   (plist-get analysis :acts)
+                   (plist-get analysis :explores)
+                   (plist-get analysis :confused)
+                   (plist-get analysis :score))
+          analysis)
+      (list :verdict "NO-THINK" :score 0.0))))
 
 (provide 'gptel-tools-agent-benchmark)
 ;;; gptel-tools-agent-benchmark.el ends here

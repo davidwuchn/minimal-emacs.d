@@ -48,14 +48,21 @@
 ;; Tree-sitter auto configuration with custom recipes
 (require 'init-treesit)
 
+(defun my/enable-apheleia-mode-if-appropriate ()
+  "Enable `apheleia-mode' unless this is a dedicated workflow daemon."
+  (unless (and (fboundp 'my/workflow-daemon-p)
+               (my/workflow-daemon-p))
+    (when (require 'apheleia nil t)
+      (apheleia-mode))))
+
 (use-package apheleia
   :ensure t
   :commands (apheleia-mode apheleia-global-mode)
-  :hook ((prog-mode . (lambda ()
-                        (when (require 'apheleia nil t)
-                          (apheleia-mode)))))
+  :hook ((prog-mode . my/enable-apheleia-mode-if-appropriate))
   :config
-  (apheleia-global-mode +1))
+  (unless (and (fboundp 'my/workflow-daemon-p)
+               (my/workflow-daemon-p))
+    (apheleia-global-mode +1)))
 
 (use-package clojure-mode
   :ensure t

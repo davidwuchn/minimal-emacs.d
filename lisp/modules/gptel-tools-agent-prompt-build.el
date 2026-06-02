@@ -1063,69 +1063,99 @@ Returns a compact lambda-notation string ready for the LLM."
           (cross (cdr (assoc 'cross-target-patterns vars)))
          (strat-f (cdr (assoc 'strategy-frontier vars)))
          (agent-b (cdr (assoc 'agent-behavior vars)))
-         (val-pipe (cdr (assoc 'validation-pipeline vars))))
+          (val-pipe (cdr (assoc 'validation-pipeline vars)))
+           (ai-b (cdr (assoc 'ai-behaviors vars)))
+           (rec-b (cdr (assoc 'recommended-behaviors vars)))
+           (vio-b (cdr (assoc 'mode-violations vars)))
+            (val-ap (cdr (assoc 'validation-anti-patterns vars)))
+             (rejection-feedback (cdr (assoc 'rejection-feedback vars)))
+             (success-feedback (cdr (assoc 'success-feedback vars)))
+             (keep-rate (cdr (assoc 'keep-rate vars)))
+             (uni-d (cdr (assoc 'unified-directive vars))))
     (concat
-     ;; HEADER
-     (format "λ experiment(%s). id=%d/%d budget=%smin path=%s/%s\nbaseline(8keys): %s"
-             target exp-id max-exp budget worktree tgt-full baseline)
-     (if weakest (concat "\n  " weakest) "")
-     (if controller (concat "\n  " controller) "")
-     (if inspection (concat "\n  " inspection) "")
-     (if large (concat "\n  " large) "")
-     (if moderator (concat "\n  " moderator) "")
-     "\n\n"
-     ;; ONTOLOGY FRAME (harness — structures the action space first)
-     (if onto-g (concat "CATEGORY: " onto-g "\n") "")
-     (if act-s (concat act-s "\n") "")
-     (when (or onto-g act-s) "\n")
-     ;; CONTEXT (what you know about this target)
-     (if persona (concat "PERSONA: " persona "\n") "")
-     (if skills (concat "SKILLS: " skills "\n") "")
-     (if allium-i (concat "ALLIUM: " allium-i "\n") "")
-     (if allium-r (concat "REPAIR: " allium-r "\n") "")
-     (if (or topic prev) (concat "PAST: " (or topic "")
-                                 (if prev (concat " " prev) "") "\n") "")
-      (if (or sugg hyp mut evol)
-          (let ((sugg-str (if (listp sugg) (mapconcat #'identity sugg " | ") (or sugg "")))
-                (mut-str (if (listp mut) (mapconcat (lambda (x) (format "- %s" x)) mut "\n") (or mut ""))))
-            (concat "SUGGEST: " sugg-str
-                    (if hyp (concat " " hyp) "")
-                    (if mut-str (concat "\n" mut-str) "")
-                    (if evol (concat " " evol) "") "\n"))
-        "")
-     (if research (concat "RESEARCH: " research "\n") "")
-     (if git-hist (concat "GIT: " git-hist "\n") "")
-     (if axis-g (concat "AXIS: " axis-g "\n") "")
-     (if axis-p (concat "AXIS-PERF: " axis-p "\n") "")
-     (if frontier (concat "FRONTIER: " frontier "\n") "")
-     (if satur (concat "SATUR: " satur "\n") "")
-     ;; FAILURE PATTERNS (guardrails — what went wrong before)
-     (if fail-p (concat "FAIL: " fail-p "\n") "")
-     (if div (concat "DIVERSITY: " div "\n") "")
-     (if cross (concat "CROSS: " cross "\n") "")
-     (if strat-f (concat "STRATEGY: " strat-f "\n") "")
-     (if agent-b (concat "AGENT: " agent-b "\n") "")
-     (if val-pipe (concat "VALIDATE: " val-pipe "\n") "")
-       "\nRULES:\n"
-       "| ¬touch(early-init.el, pre-early-init.el, lisp/eca-security.el)\n"
-       "| ¬doc_only | ¬comment_only | Δ(code) ≡ required\n"
+      ;; KV CACHE PREFIX — STATIC sections first (shared across experiments)
+      ;; These tokens are identical for every experiment → high cache-hit rate.
+      ;; Dynamic sections (target, budget) moved later to maximize prefix length.
+      "\nRULES:\n"
+      "| ¬touch(early-init.el, pre-early-init.el, lisp/eca-security.el)\n"
+      "| ¬doc_only | ¬comment_only | Δ(code) ≡ required\n"
        "| MUST edit files — analysis-only responses will be rejected without grading\n"
-       "| 1st_line ≡ \"HYPOTHESIS: [what changes & why]\" (NEVER leave blank — always state concrete change)\n"
-       (if focus (concat "  " focus "\n") "")
-        "| use(Edit,Write) — text-only responses will be rejected | minimal(change) | ¬git(add,commit,push)\n"
-        "| ∀cl-return-from: ∃cl-block ∧ name_match | ¬call_undefined_fn\n"
-        "| MANDATORY: Run `emacs --batch --eval \"(byte-compile-file \\\"FILE\\\")\"` on changed files before finishing\n"
-       (concat "| MANDATORY: verify command: " (or sexp "emacs --batch --eval '...'")
-               " && ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh\n"
-               "| REPORT: In OUTPUT section, show exactly which verify commands ran and their exit codes\n")
-       "\nOUTPUT:  CHANGED(file+fn) EVIDENCE(1-2 diffs) VERIFY(cmds+exit_codes) COMMIT(\"not committed\")\n"
-      "TYPE(pick_one): bug_fix | performance | refactoring | safety | test_coverage"
+       "| MANDATORY: Call Edit/Write tool — do NOT output code as text. Text-only code output = REJECT.\n"
+        "| 1st_line ≡ \"HYPOTHESIS: [what changes & why]\" (NEVER leave blank — always state concrete change)\n"
+      (if focus (concat "  " focus "\n") "")
+       "| use(Edit,Write,ApplyPatch) — text output ≠ code change. YOU MUST CALL THE EDIT TOOL.\n"
+       "| After hypothesis, call Read tool to examine the target, then call Edit/Write to apply changes.\n"
+       "| ¬text_only_code | minimal(change) | ¬git(add,commit,push)\n"
+       "| ∀cl-return-from: ∃cl-block ∧ name_match | ¬call_undefined_fn\n"
+       "| MANDATORY: Run `emacs --batch --eval \"(byte-compile-file \\\"FILE\\\")\"` on changed files before finishing\n"
+      (concat "| MANDATORY: verify command: " (or sexp "emacs --batch --eval '...'")
+              " && ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh\n"
+              "| REPORT: In OUTPUT section, show exactly which verify commands ran and their exit codes\n")
+      "\nOUTPUT:  CHANGED(file+fn) EVIDENCE(1-2 diffs) VERIFY(cmds+exit_codes) COMMIT(\"not committed\")\n"
+      "TYPE(pick_one): bug_fix | performance | refactoring | safety | test_coverage\n"
+      "\n"
+      ;; ONTOLOGY FRAME — semi-static (same for all targets in same category)
+      (if onto-g (concat "CATEGORY: " onto-g "\n") "")
+      (if act-s (concat act-s "\n") "")
+      (if ai-b (concat ai-b "\n") "")
+      (if rec-b (concat rec-b "\n") "")
+       (if vio-b (concat vio-b "\n") "")
+       (if uni-d (concat uni-d "\n\n") "")
+       (if val-ap (concat val-ap "\n") "")
+      ;; HEADER — DYNAMIC (changes every experiment → cache miss starts here)
+      (format "\n---\nλ experiment(%s). id=%d/%d budget=%smin path=%s/%s\nbaseline(8keys): %s"
+               target exp-id max-exp budget worktree tgt-full baseline)
+      (if weakest (concat "\n  " weakest) "")
+      (if controller (concat "\n  " controller) "")
+      (if inspection (concat "\n  " inspection) "")
+      (if large (concat "\n  " large) "")
+      (if moderator (concat "\n  " moderator) "")
+      (if keep-rate (concat "\nKEEP-RATE: " keep-rate) "")
+      (if success-feedback (concat "\n" success-feedback "\n") "")
+      (if rejection-feedback (concat "\n" rejection-feedback "\n") "")
+      ;; Spec Assessment — semi-static
+       "## Spec Assessment\n"
+       "Before implementing, identify ambiguities in the task:\n"
+      "  · What's NOT specified that needs a decision?\n"
+      "  · Which edge cases are undefined?\n"
+      "  · What assumptions must I make?\n"
+      "State these briefly in HYPOTHESIS before coding.\n"
+      "\n"
+      ;; CONTEXT (what you know about this target — DYNAMIC)
+      (if persona (concat "PERSONA: " persona "\n") "")
+      (if skills (concat "SKILLS: " skills "\n") "")
+      (if allium-i (concat "ALLIUM: " allium-i "\n") "")
+      (if allium-r (concat "REPAIR: " allium-r "\n") "")
+      (if (or topic prev) (concat "PAST: " (or topic "")
+                                  (if prev (concat " " prev) "") "\n") "")
+       (if (or sugg hyp mut evol)
+           (let ((sugg-str (if (listp sugg) (mapconcat #'identity sugg " | ") (or sugg "")))
+                 (mut-str (if (listp mut) (mapconcat (lambda (x) (format "- %s" x)) mut "\n") (or mut ""))))
+             (concat "SUGGEST: " sugg-str
+                     (if hyp (concat " " hyp) "")
+                     (if mut-str (concat "\n" mut-str) "")
+                     (if evol (concat " " evol) "") "\n"))
+         "")
+      (if research (concat "RESEARCH: " research "\n") "")
+      (if git-hist (concat "GIT: " git-hist "\n") "")
+      (if axis-g (concat "AXIS: " axis-g "\n") "")
+      (if axis-p (concat "AXIS-PERF: " axis-p "\n") "")
+      (if frontier (concat "FRONTIER: " frontier "\n") "")
+      (if satur (concat "SATUR: " satur "\n") "")
+      ;; FAILURE PATTERNS — semi-dynamic
+      (if fail-p (concat "FAIL: " fail-p "\n") "")
+      (if div (concat "DIVERSITY: " div "\n") "")
+      (if cross (concat "CROSS: " cross "\n") "")
+      (if strat-f (concat "STRATEGY: " strat-f "\n") "")
+      (if agent-b (concat "AGENT: " agent-b "\n") "")
+      (if val-pipe (concat "VALIDATE: " val-pipe "\n") "")
       "\n\nANTI-PATTERNS (causes instant REJECT):\n"
       "| ¬broad_indentation_changes (never re-indent entire functions)\n"
       "| ¬extract_helpers_for_single_use (don't create abstractions with one caller)\n"
       "| ¬rename_vars_unless_bug | ¬reorder_existing_logic\n"
       "| ¬remove_commented_code | ¬add_comments_to_working_code\n"
       "| ¬change_indentation_style | ¬convert_let*→let_unless_semantic\n"
+      (if rejection-feedback (concat "\nPREVIOUS REJECTIONS (learn from these):\n" rejection-feedback "\n") "")
       "\nPATTERNS THAT PASS (copy these):\n"
       "| add `nil` guard before car/assq on optional arg\n"
       "| change `(when x (progn ...))` to `(when x ...)` (remove redundant progn)\n"
@@ -1135,10 +1165,23 @@ Returns a compact lambda-notation string ready for the LLM."
       "| replace `(append (list a) (list b))` with `(list a b)`\n"
       "\nCRITICAL: Your code quality delta MUST be >= 0. If you break existing tests or decrease readability, you will be REJECTED.\n")))
 
-(defun gptel-auto-workflow--load-prompt-template ()
-  "Load prompt template from skill file.
-Returns template string or fallback hardcoded template."
-  (let ((skill-content (gptel-auto-workflow--load-skill-content "auto-workflow/prompt-template")))
+(defun gptel-auto-workflow--load-prompt-template (&optional target)
+  "Load prompt template from skill file, category-specific when TARGET provided.
+Returns template string or fallback hardcoded template.
+Uses ontology category to select the best template for TARGET."
+  (let* ((category (and target (fboundp 'gptel-auto-workflow--categorize-target)
+                       (gptel-auto-workflow--categorize-target target)))
+         (cat-name (pcase category
+                     (:programming "programming")
+                     (:agentic "agentic")
+                     (:tool-calls "tool-calls")
+                     (:natural-language "natural-language")
+                     (_ nil)))
+         (cat-template (when cat-name
+                         (gptel-auto-workflow--load-skill-content
+                          (format "auto-workflow/prompt-template-%s" cat-name))))
+         (skill-content (or (and cat-template (> (length cat-template) 0) cat-template)
+                           (gptel-auto-workflow--load-skill-content "auto-workflow/prompt-template"))))
     (if (> (length skill-content) 0)
         skill-content
       ;; Fallback: inline template (for bootstrapping)
@@ -1206,6 +1249,26 @@ Returns template string or fallback hardcoded template."
   "Build prompt for experiment EXPERIMENT-ID on TARGET.
 Uses loaded skills and Eight Keys breakdown for focused improvements.
 Implements section-level A/B testing to identify effective prompt components."
+  ;; Record ai-behaviors hashtags for this experiment (read by log-tsv)
+  (when (fboundp 'gptel-ai-behaviors--category-hashtags)
+    (let ((category (and target (fboundp 'gptel-auto-workflow--categorize-target)
+                         (gptel-auto-workflow--categorize-target target)))
+          (strategy (and (boundp 'gptel-auto-workflow--current-strategy-name)
+                         gptel-auto-workflow--current-strategy-name)))
+      (when category
+         (let ((best (when (fboundp 'gptel-ai-behaviors--best-hashtag-for)
+                       (gptel-ai-behaviors--best-hashtag-for category strategy)))
+               ;; Prefer combo-recommended hashtag over best-hashtag when available
+               (combo-tag (and (boundp 'gptel-ai-behaviors--combo-hashtag)
+                               gptel-ai-behaviors--combo-hashtag)))
+           (setq gptel-ai-behaviors--current-hashtags
+                 (or (and combo-tag (format "#=%s" combo-tag))
+                     best
+                     (gptel-ai-behaviors--category-hashtags category)))
+           (setq gptel-ai-behaviors--current-strategy strategy)
+           ;; Reset combo tag after use
+           (when (boundp 'gptel-ai-behaviors--combo-hashtag)
+             (setq gptel-ai-behaviors--combo-hashtag nil))))))
   ;; Adapt compression based on token efficiency analysis
   (gptel-auto-workflow--adapt-prompt-compression)
   
@@ -1235,8 +1298,18 @@ Implements section-level A/B testing to identify effective prompt components."
              "(progn (find-file %S) (emacs-lisp-mode) (condition-case err (progn (scan-sexps (point-min) (point-max)) (message \"OK\")) (error (message \"ERROR: %%s\" err) (kill-emacs 1))))"
              target-full-path))))
          (target-bytes (gptel-auto-experiment--target-byte-size target-full-path))
-         (recovery-p
-          (gptel-auto-experiment--needs-inspection-thrash-recovery-p previous-results))
+          (recovery-p
+           (gptel-auto-experiment--needs-inspection-thrash-recovery-p previous-results))
+          (keep-rate
+           (when (and previous-results (listp previous-results) (> (length previous-results) 0))
+             (let ((kept 0) (total 0))
+               (dolist (r previous-results)
+                 (when (plist-get r :kept) (cl-incf kept))
+                 (cl-incf total))
+               (if (> total 0)
+                   (format "%.0f%% (%d/%d experiments kept on this target)"
+                           (* 100.0 (/ kept (float total))) kept total)
+                 "No previous experiments on this target"))))
          (large-target-p
           (and (numberp target-bytes)
                (>= target-bytes gptel-auto-experiment-large-target-byte-threshold)))
@@ -1282,7 +1355,86 @@ Implements section-level A/B testing to identify effective prompt components."
                     "4. Your NEXT tool call MUST be a write (Edit, Write, ApplyPatch) on that same symbol.\n"
                     "5. If you do more than 2 read-only calls without writing, your turn will be aborted.\n"
                     "6. Do not inspect a second subsystem before the first edit exists.\n\n"))))
-    (setq gptel-auto-workflow--last-prompt-sections
+     ;; Concrete task hint: generate single-action instruction from target history
+     ;; Uses ontology-learned task type preferences when available
+     (let* ((target-history (and (boundp 'gptel-auto-experiment--target-history)
+                                 (gethash target gptel-auto-experiment--target-history)))
+            (failures (or (plist-get target-history :validation-failed) 0))
+            (kept-count (or (plist-get target-history :kept) 0))
+            (last-kept-action (plist-get target-history :last-kept-action))
+            (category (and (fboundp 'gptel-auto-workflow--categorize-target)
+                           (gptel-auto-workflow--categorize-target target)))
+            (best-task (and category (fboundp 'gptel-ai-behaviors--best-task-for-category)
+                            (gptel-ai-behaviors--best-task-for-category category)))
+            (task-hint
+             (cond
+              (best-task
+               (pcase best-task
+                 (:nil-guard "## TASK (BEST KNOWN FOR THIS CATEGORY)
+ADD A NIL GUARD: find any function call in the file and wrap it in
+(ignore-errors ...) or add a nil-check with (when ...).
+Read ONE function. Edit ONE line. Verify. Done.
+DO NOT explore other functions. DO NOT plan further changes.")
+                 (:condition-case "## TASK (BEST KNOWN FOR THIS CATEGORY)
+ADD ERROR HANDLING: find a file/process/network operation and wrap it in
+(condition-case ... (error ...)).
+Read ONE function. Edit ONE line. Verify. Done.")
+                 (:replicate-pattern "## TASK (BEST KNOWN FOR THIS CATEGORY)
+ADD A SIMILAR FIX: find a function that calls gethash/assoc and add
+a nil guard or when-let wrapper. Look at recent kept patterns.
+Read ONE function. Edit ONE line. Verify. Done.")
+                 (_ "## TASK (BEST KNOWN FOR THIS CATEGORY)
+Add (ignore-errors ...) around a function call or
+wrap a gethash/assoc in (or ...) nil guard.
+Read ONE function. Edit ONE line. Verify. Done.")))
+              ;; No kept experiments, many failures → simplest possible task
+              ((and (= kept-count 0) (> failures 3))
+               "## TASK (DO THIS EXACTLY)
+ADD A NIL GUARD: find any function call in the file and wrap it in
+(ignore-errors ...) or add a nil-check with (when ...).
+Read ONE function. Edit ONE line. Verify. Done.
+DO NOT explore other functions. DO NOT plan further changes.")
+              ;; Previously kept → replicate the pattern
+              ((and (> kept-count 0) last-kept-action)
+               (format "## TASK (REPLICATE PATTERN)
+Previous kept change: %s
+Find a SIMILAR pattern elsewhere in this file and apply the SAME fix.
+Read ONE function. Edit ONE line. Verify. Done."
+                       last-kept-action))
+              ;; New target → gentle guidance
+              (t
+               "## TASK (PICK ONE, DO IT NOW)
+- Add (ignore-errors ...) around a function call
+- Wrap a gethash/assoc in (when-let ...) or (or ...) nil guard
+- Add (condition-case ...) around a file operation
+Read ONE function. Edit ONE line. Verify. Done."))))
+        (setq gptel-auto-experiment--current-task-hint task-hint))
+      ;; Review feedback: teach agent from previous staging review block reasons
+      (let ((feedback (when (fboundp 'gptel-auto-workflow--get-review-feedback)
+                        (gptel-auto-workflow--get-review-feedback target))))
+        (setq gptel-auto-experiment--review-feedback (or feedback "")))
+      ;; Mementum recall: inject relevant past learnings into prompt context.
+      ;; Searches memories + knowledge for patterns matching this target.
+      (let ((recall (when (and (fboundp 'gptel-mementum--recall)
+                               (fboundp 'gptel-auto-workflow--project-root))
+                      (condition-case nil
+                          (gptel-mementum--recall
+                           (format "%s %s"
+                                   target
+                                   (or gptel-auto-workflow--current-strategy-name
+                                       "template-default"))
+                           3)
+                        (error nil)))))
+        (setq gptel-auto-experiment--mementum-recall
+              (if recall
+                  (concat "## RELEVANT PAST LEARNINGS\n"
+                          (mapconcat
+                           (lambda (r)
+                             (format "- %s: %s" (car r)
+                                     (truncate-string-to-width (cdr r) 200 nil nil "...")))
+                           recall "\n"))
+                "")))
+      (setq gptel-auto-workflow--last-prompt-sections
           (mapconcat #'symbol-name included-sections ","))
   ;; Build variables plist and resolve to lambda via EDN pipeline
   (let* ((variables
@@ -1294,6 +1446,26 @@ Implements section-level A/B testing to identify effective prompt components."
               (large-target-guidance . ,(or large-target-guidance ""))
               (controller-focus . ,(or controller-focus ""))
               (inspection-thrash-contract . ,(or inspection-thrash-contract ""))
+              (task-hint . ,(or gptel-auto-experiment--current-task-hint ""))
+              (rejection-feedback . ,(or (and (fboundp 'gptel-auto-experiment--get-rejection-feedback)
+                                              (gptel-auto-experiment--get-rejection-feedback target))
+                                        ""))
+              (success-feedback . ,(or (and (fboundp 'gptel-auto-experiment--get-success-feedback)
+                                              (gptel-auto-experiment--get-success-feedback target))
+                                        ""))
+              (keep-rate . ,(or keep-rate ""))
+              (review-feedback . ,(or gptel-auto-experiment--review-feedback ""))
+              (mementum-recall . ,(or (and (boundp 'gptel-auto-experiment--mementum-recall)
+                                           gptel-auto-experiment--mementum-recall)
+                                     ""))
+              (resume-snapshot . ,(or (and (fboundp 'gptel-nucleus-context--build-resume-snapshot)
+                                           (gptel-nucleus-context--build-resume-snapshot
+                                            (number-to-string experiment-id)))
+                                     (format "Running experiment %d of %d on target: %s."
+                                             experiment-id max-experiments target)))
+              (category-instructions . ,(if (fboundp 'gptel-auto-workflow--category-instructions)
+                                           (gptel-auto-workflow--category-instructions target)
+                                         ""))
               (previous-experiment-analysis . ,(or patterns "No previous experiments"))
               (suggestions . ,(if (funcall section-included-p 'suggestions)
                                   (or suggestions "None")
@@ -1364,8 +1536,17 @@ Implements section-level A/B testing to identify effective prompt components."
                (task-type-diversity . ,(gptel-auto-experiment--format-task-type-diversity target))
                (cross-target-patterns . ,(gptel-auto-experiment--format-cross-target-patterns target))
                (ontology-guidance . ,(gptel-auto-experiment--format-ontology-guidance target))
-               (action-schema . ,(if (fboundp 'gptel-auto-workflow--format-schema-guidance)
-                                     (gptel-auto-workflow--format-schema-guidance target) ""))
+                (unified-directive . ,(gptel-auto-experiment--format-unified-directive target))
+                (action-schema . ,(if (fboundp 'gptel-auto-workflow--format-schema-guidance)
+                                      (gptel-auto-workflow--format-schema-guidance target) ""))
+               (ai-behaviors . ,(if (fboundp 'gptel-ai-behaviors--inject-for-target)
+                                    (gptel-ai-behaviors--inject-for-target target) ""))
+               (recommended-behaviors . ,(if (fboundp 'gptel-ai-behaviors--recommend-for-prompt)
+                                             (gptel-ai-behaviors--recommend-for-prompt target) ""))
+               (mode-violations . ,(if (fboundp 'gptel-ai-behaviors--violations-for-prompt)
+                                       (gptel-ai-behaviors--violations-for-prompt) ""))
+               (validation-anti-patterns . ,(if (fboundp 'gptel-ai-behaviors--format-validation-anti-patterns)
+                                                (gptel-ai-behaviors--format-validation-anti-patterns target) ""))
               (strategy-frontier . ,(if (fboundp 'gptel-auto-workflow--format-strategy-frontier)
                                         (gptel-auto-workflow--format-strategy-frontier)
                                       ""))
@@ -1380,8 +1561,22 @@ Implements section-level A/B testing to identify effective prompt components."
               (time-budget . ,(/ gptel-auto-experiment-time-budget 60))
               (focus-line . ,focus-line)
               (sexp-check-command . ,sexp-check-command))))
-      ;; EDN resolve: deterministic, no template substitution, no escaping
-      (gptel-auto-experiment--prompt-edn-resolve variables))))
+      ;; Try category-specific template first; fall back to EDN resolve
+      (let ((cat-template (gptel-auto-workflow--load-prompt-template target)))
+        (if (and cat-template (> (length cat-template) 100))
+            ;; Category template available: substitute variables
+            (let ((result cat-template))
+              (dolist (pair variables)
+                (let ((key (car pair))
+                      (val (cdr pair)))
+                  (setq result
+                        (replace-regexp-in-string
+                         (concat "{{" (symbol-name key) "}}")
+                         (if (stringp val) val (format "%s" val))
+                         result t t))))
+              result)
+          ;; Fallback: deterministic EDN resolve
+          (gptel-auto-experiment--prompt-edn-resolve variables))))))
 
 (defun gptel-auto-experiment--get-topic-knowledge (target)
   "Get compressed topic-specific knowledge for TARGET.
@@ -1445,6 +1640,10 @@ Uses cache to avoid repeated file reads."
   (when str
     (let ((s (if (stringp str) str (format "%s" str))))
       (replace-regexp-in-string "[\t\n\r]+" " | " s))))
+
+(defun gptel-auto-experiment--tsv-number (value &optional default)
+  "Return VALUE when numeric, otherwise DEFAULT or 0."
+  (if (numberp value) value (or default 0)))
 
 (defun gptel-auto-experiment--tsv-decision-token (value)
   "Return a normalized TSV decision token extracted from VALUE, or nil."
@@ -1564,7 +1763,20 @@ Captures executor reasoning from the dynamic variable
          (decision (gptel-auto-experiment--tsv-decision-label experiment))
          (agent-output (gptel-auto-workflow--plist-get experiment :agent-output ""))
          (truncated-output (gptel-auto-experiment--tsv-escape
-                            (truncate-string-to-width agent-output 500 nil nil "..."))))
+                            (truncate-string-to-width agent-output 500 nil nil "...")))
+         (score-before (gptel-auto-experiment--tsv-number
+                        (gptel-auto-workflow--plist-get experiment :score-before 0)))
+         (score-after (gptel-auto-experiment--tsv-number
+                       (gptel-auto-workflow--plist-get experiment :score-after 0)))
+         (code-quality (gptel-auto-experiment--tsv-number
+                        (gptel-auto-workflow--plist-get experiment :code-quality 0.5)
+                        0.5))
+         (duration (gptel-auto-experiment--tsv-number
+                    (gptel-auto-workflow--plist-get experiment :duration 0)))
+         (output-chars (gptel-auto-experiment--tsv-number
+                        (gptel-auto-workflow--plist-get experiment :output-chars 0)))
+         (prompt-chars (gptel-auto-experiment--tsv-number
+                        (gptel-auto-workflow--plist-get experiment :prompt-chars 0))))
     ;; Capture executor reasoning for self-evolution feedback
     (when (and target (bound-and-true-p gptel-auto-experiment--executor-reasoning))
       (let* ((insights (gethash target gptel-auto-experiment--grader-insights))
@@ -1579,6 +1791,96 @@ Captures executor reasoning from the dynamic variable
                                          0 (min 500 (length gptel-auto-experiment--executor-reasoning))))
                    gptel-auto-experiment--grader-insights))))
     (setq gptel-auto-experiment--executor-reasoning nil)
+    ;; Remember rejection reasons for cross-experiment learning
+    (when (and target (not (equal decision "kept")))
+      (let ((grader-reason (plist-get experiment :grader-reason))
+            (comparator-reason (plist-get experiment :comparator-reason)))
+        (when (and (fboundp 'gptel-auto-experiment--remember-rejection)
+                   (stringp grader-reason) (> (length grader-reason) 5))
+          (gptel-auto-experiment--remember-rejection target grader-reason))
+        (when (and (fboundp 'gptel-auto-experiment--remember-rejection)
+                   (stringp comparator-reason) (> (length comparator-reason) 5))
+          (gptel-auto-experiment--remember-rejection target comparator-reason))))
+    ;; Remember success patterns for cross-experiment learning
+    (when (and target (equal decision "kept")
+               (fboundp 'gptel-auto-experiment--remember-success))
+      (let ((hypothesis (plist-get experiment :hypothesis))
+            (agent-output (plist-get experiment :agent-output))
+            (diff-snippet nil))
+        (when (and (stringp agent-output)
+                   (fboundp 'gptel-ai-behaviors--extract-diff-snippet))
+          (setq diff-snippet (gptel-ai-behaviors--extract-diff-snippet agent-output)))
+        (gptel-auto-experiment--remember-success target (or hypothesis "kept") diff-snippet)))
+    ;; Record ai-behaviors hashtag + strategy tracking for this experiment
+    (when (and target (fboundp 'gptel-ai-behaviors--record-experiment))
+      (let ((category (and (fboundp 'gptel-auto-workflow--categorize-target)
+                           (gptel-auto-workflow--categorize-target target)))
+            (kept (equal decision "kept"))
+            (strategy (plist-get experiment :strategy)))
+        (when (and category gptel-ai-behaviors--current-hashtags)
+          (gptel-ai-behaviors--record-experiment
+           category gptel-ai-behaviors--current-hashtags kept
+            (or strategy gptel-ai-behaviors--current-strategy)
+            (plist-get experiment :backend)))
+      ;; Record concrete task outcome for ontology self-evolution
+      (when (and (fboundp 'gptel-ai-behaviors--record-concrete-task-outcome)
+                 (bound-and-true-p gptel-auto-experiment--current-task-hint))
+        (let* ((hint gptel-auto-experiment--current-task-hint)
+               (task-type (cond ((string-match-p "NIL GUARD\\|nil guard\\|ignore-errors" hint) :nil-guard)
+                                ((string-match-p "REPLICATE PATTERN" hint) :replicate-pattern)
+                                ((string-match-p "condition-case" hint) :condition-case)
+                                ((string-match-p "PICK ONE" hint) :pick-one)
+                                (t :unknown))))
+          (gptel-ai-behaviors--record-concrete-task-outcome category task-type kept)))
+      ;; Store kept experiment pattern for future prompt injection
+      (when (and kept (fboundp 'gptel-ai-behaviors--record-kept-pattern)
+                 (fboundp 'gptel-ai-behaviors--extract-diff-snippet)
+                 gptel-ai-behaviors--current-hashtags
+                  agent-output (> (length agent-output) 0))
+       ;; Record model+effort performance for self-evolving selection
+       (let ((active-effort
+              (and (fboundp 'gptel-ai-behaviors--best-model)
+                   (let ((best (gptel-ai-behaviors--best-model category "executor")))
+                     (and best (cdr best))))))
+         (when (and category (fboundp 'gptel-ai-behaviors--record-model)
+                    (plist-get experiment :model))
+           (gptel-ai-behaviors--record-model
+            category "executor" (plist-get experiment :model) kept
+            (or active-effort "default"))))
+       ;; Track persona archetype effectiveness per category
+       (when (and category (fboundp 'gptel-ai-behaviors--record-persona))
+          (let ((archetype (or (and (boundp 'gptel-ai-behaviors--current-archetype)
+                                    gptel-ai-behaviors--current-archetype)
+                               ;; Nucleus archetypes from (op × mindset) matrix
+                               (pcase category
+                                 (:agentic "Investigator") (:programming "Craftsman")
+                                 (:tool-calls "Synthesizer") (:natural-language "Academic")
+                                 (_ "Craftsman")))))
+            ;; Record actual archetype used (may differ from default due to self-evolution)
+            (gptel-ai-behaviors--record-persona category archetype kept))
+          ;; Record collaboration operator effectiveness for self-evolution
+          (when (and category (fboundp 'gptel-ai-behaviors--record-operator))
+            (let ((op (pcase category
+                        (:agentic "Human ∘ AI") (:programming "Human ⊗ AI")
+                        (:tool-calls "Human ∘ AI") (:natural-language "Human | AI")
+                        (_ "Human ⊗ AI"))))
+              (gptel-ai-behaviors--record-operator category op kept)))
+          ;; Record three-way combo: (category × archetype × hashtag) for integrated learning
+          (when (and (fboundp 'gptel-ai-behaviors--record-combo)
+                     gptel-ai-behaviors--current-hashtags)
+            (gptel-ai-behaviors--record-combo category archetype
+                                               gptel-ai-behaviors--current-hashtags kept)))
+        ;; Track per-subagent consecutive failures for bump-model
+       (when category
+         (if kept
+             (when (fboundp 'gptel-ai-behaviors--reset-subagent-failures)
+               (gptel-ai-behaviors--reset-subagent-failures category 'executor))
+           (when (fboundp 'gptel-ai-behaviors--record-subagent-failure)
+             (gptel-ai-behaviors--record-subagent-failure category 'executor))))
+        (let* ((hashtag-str (format "%s" (car (split-string gptel-ai-behaviors--current-hashtags))))
+               (snippet (gptel-ai-behaviors--extract-diff-snippet agent-output)))
+          (when snippet
+            (gptel-ai-behaviors--record-kept-pattern category hashtag-str snippet))))))
     ;; Inject research metadata from global context into experiment record.
     ;; This closes the feedback loop: experiments carry the research run that
     ;; influenced the prompt so trace outcomes can be linked after logging.
@@ -1605,11 +1907,15 @@ Captures executor reasoning from the dynamic variable
       (setq experiment
             (plist-put experiment :controller-decision
                        (or (and ctx (plist-get ctx :controller-decision)) "unknown")))
-      ;; Track which nucleus persona was used for self-evolution feedback
+      ;; Track ontology category + actual persona archetype for self-evolution
       (setq experiment
             (plist-put experiment :persona-category
                        (when (and target (fboundp 'gptel-auto-workflow--categorize-target))
-                         (gptel-auto-workflow--categorize-target target)))))
+                         (gptel-auto-workflow--categorize-target target))))
+      (setq experiment
+            (plist-put experiment :persona-archetype
+                       (and (boundp 'gptel-ai-behaviors--current-archetype)
+                            gptel-ai-behaviors--current-archetype))))
     (with-temp-buffer
       (insert-file-contents file)
       (unless (gptel-auto-experiment--drop-replaceable-tsv-rows
@@ -1619,22 +1925,20 @@ Captures executor reasoning from the dynamic variable
                         experiment-id
                         target
                         (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
-                        (gptel-auto-workflow--plist-get experiment :score-before 0)
-                        (gptel-auto-workflow--plist-get experiment :score-after 0)
-                        (gptel-auto-workflow--plist-get experiment :code-quality 0.5)
-                        (- (gptel-auto-workflow--plist-get experiment :score-after 0)
-                           (gptel-auto-workflow--plist-get experiment :score-before 0))
+                        score-before
+                        score-after
+                        code-quality
+                        (- score-after score-before)
                         decision
-                        (round (gptel-auto-workflow--plist-get experiment :duration 0))
+                        (round duration)
                         (gptel-auto-workflow--plist-get experiment :grader-quality "?")
                         (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :grader-reason "N/A"))
                         (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A"))
                         (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
                         truncated-output
-                        (round (or (gptel-auto-workflow--plist-get experiment :output-chars 0) 0))
+                        (round output-chars)
                         (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :backend "unknown"))
-                        (round (or (gptel-auto-workflow--plist-get experiment :prompt-chars 0)
-                                   0))
+                        (round prompt-chars)
                         (or (gptel-auto-experiment--tsv-escape
                              (gptel-auto-workflow--plist-get experiment :sections-included "all"))
                             "all")
@@ -1647,7 +1951,9 @@ Captures executor reasoning from the dynamic variable
                                    (mapconcat (lambda (c)
                                                 (format "%s:%.1f:%s"
                                                         (substring (or (car c) "") 0 (min 20 (length (or (car c) ""))))
-                                                        (or (plist-get (cdr c) :score) 0.0)
+                                                         (gptel-auto-experiment--tsv-number
+                                                          (plist-get (cdr c) :score)
+                                                          0.0)
                                                         (if (plist-get (cdr c) :valid) "V" "X")))
                                               candidates ";")
                                  "")))
@@ -1693,7 +1999,7 @@ Captures executor reasoning from the dynamic variable
            (gptel-auto-workflow--plist-get experiment :strategy "template-default")
            target
            experiment-id
-           (gptel-auto-workflow--plist-get experiment :score-after 0)
+            score-after
            (if (equal decision "kept") 'kept 'discarded)
            (gptel-auto-workflow--plist-get experiment :exploration-axis "?"))
         (error
@@ -1705,7 +2011,7 @@ Captures executor reasoning from the dynamic variable
            (gptel-auto-workflow--plist-get experiment :strategy "template-default")
            target
            (list :decision decision
-                 :score-after (gptel-auto-workflow--plist-get experiment :score-after 0)
+                  :score-after score-after
                  :exploration-axis (gptel-auto-workflow--plist-get experiment :exploration-axis "?")
                  :comparator-reason (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A")))
         (error
@@ -1844,58 +2150,43 @@ exhaustion.")
   "Maximum seconds between retries for rate-limited API failures.")
 
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
-  '(("DeepSeek" . "deepseek-v4-pro")
-    ("MiniMax" . "minimax-m2.7-highspeed")
+  '(("MiniMax" . "MiniMax-M3")
+    ("DeepSeek" . "deepseek-v4-pro")
+    ("DashScope" . "qwen3.6-plus")
     ("moonshot" . "kimi-k2.6"))
   "Ordered backend/model fallbacks for headless auto-workflow subagents.
 
-DeepSeek first (working, no content filter), then MiniMax (highspeed, but
-may hit rate limits), then moonshot (content_filter blocks code gen).
+MiniMax first (fast, no thinking mode — ideal for analysis/grader tasks),
+then DeepSeek (deep reasoning for complex tasks), then moonshot (last resort).
 DashScope removed — quota exhausted (HTTP 429) on this account.
 CF-Gateway removed — does not support tool calls reliably."
   :type '(repeat (cons (string :tag "Backend")
                        (string :tag "Model")))
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-workflow-headless-fallback-agents
-  '("analyzer" "comparator" "executor" "grader" "researcher" "reviewer")
-  "Headless subagents that should use the fallback provider list.
-
-DashScope is preferred for headless runs (faster, independent quota).
-The fallback chain DNS-polls through DashScope, DeepSeek, moonshot,
-CF-Gateway, then MiniMax."
-  :type '(repeat string)
-  :group 'gptel-tools-agent)
-
-(defcustom gptel-auto-workflow-executor-rate-limit-fallbacks
-  '(("DeepSeek" . "deepseek-v4-pro")
-    ("MiniMax" . "minimax-m2.7-highspeed")
-    ("moonshot" . "kimi-k2.6"))
-  "Ordered backend/model fallbacks for executor after rate limits.
-
-DeepSeek first — deepseek-v4-pro confirmed working (no content filter).
-MiniMax second — minimax-m2.7-highspeed fast but may hit rate limits.
-moonshot third — kimi-k2.6 content_filter blocks code gen (last resort).
-DashScope removed — quota exhausted (HTTP 429) on this account.
-CF-Gateway removed — @cf/moonshotai/kimi-k2.6 does not support tool calls reliably."
-  :type '(repeat (cons (string :tag "Backend")
-                       (string :tag "Model")))
-  :group 'gptel-tools-agent)
+(defvar gptel-auto-workflow-headless-fallback-agents
+  '("analyzer" "comparator" "executor" "grader" "reviewer")
+  "Agent types that use the headless fallback chain instead of gptel interaction.
+Set by `gptel-auto-workflow--migrate-legacy-provider-defaults' on startup.")
 
 (defcustom gptel-auto-workflow-per-task-model-map
-  '(("analyzer"   "MiniMax"    . "minimax-m2.7-highspeed")
+  '(    ("analyzer"   "MiniMax"    . "minimax-m2.7-highspeed")
     ("analyzer"   "DashScope"  . "qwen3.6-plus")
-    ("analyzer"   "DeepSeek"   . "deepseek-v4-pro")
     ("analyzer"   "moonshot"   . "kimi-k2.6")
+    ("analyzer"   "DeepSeek"   . "deepseek-v4-flash")
     ("grader"     "MiniMax"    . "minimax-m2.7-highspeed")
     ("grader"     "DashScope"  . "qwen3.6-plus")
     ("grader"     "DeepSeek"   . "deepseek-v4-pro")
     ("grader"     "moonshot"   . "kimi-k2.6")
     ("executor"   "DashScope"  . "qwen3.6-plus")
     ("executor"   "moonshot"   . "kimi-k2.6")
-    ("executor"   "DeepSeek"   . "deepseek-v4-pro")
+    ("executor"   "DeepSeek"   . "deepseek-v4-flash")
     ("executor"   "MiniMax"    . "minimax-m2.7-highspeed")
     ("researcher" "MiniMax"    . "minimax-m2.7-highspeed")
+    ("researcher" "DashScope"  . "qwen3.6-plus")
+    ("researcher" "DeepSeek"   . "deepseek-v4-pro")
+    ("researcher" "moonshot"   . "kimi-k2.6")
+    ("reviewer"   "MiniMax"    . "minimax-m2.7-highspeed")
     ("researcher" "DashScope"  . "qwen3.6-plus")
     ("researcher" "DeepSeek"   . "deepseek-v4-pro")
     ("researcher" "moonshot"   . "kimi-k2.6")
@@ -2064,10 +2355,11 @@ the user has not explicitly customized the variable."
   (let (migrated)
     (unless (gptel-auto-workflow--custom-var-user-customized-p
              'gptel-auto-workflow-headless-fallback-agents)
-      (when (or (equal gptel-auto-workflow-headless-fallback-agents
+      (when (and (boundp 'gptel-auto-workflow-headless-fallback-agents)
+                 (or (equal gptel-auto-workflow-headless-fallback-agents
                        '("analyzer" "grader" "reviewer"))
                 (equal gptel-auto-workflow-headless-fallback-agents
-                       '("analyzer" "executor" "grader" "reviewer")))
+                       '("analyzer" "executor" "grader" "reviewer"))))
         (setq gptel-auto-workflow-headless-fallback-agents
               '("analyzer" "comparator" "executor" "grader" "reviewer"))
         (push 'gptel-auto-workflow-headless-fallback-agents migrated)))
@@ -2081,7 +2373,7 @@ the user has not explicitly customized the variable."
                        ("Gemini" . "gemini-3.1-pro-preview"))
                        (("DashScope" . "qwen3.6-plus")
                         ("moonshot" . "kimi-k2.6")
-                        ("DeepSeek" . "deepseek-v4-pro")
+    ("DeepSeek" . "deepseek-v4-pro")
                         ("MiniMax" . "minimax-m2.7-highspeed"))))
          (setq gptel-auto-workflow-headless-subagent-fallbacks
                '(("DashScope" . "qwen3.6-plus")
@@ -2091,11 +2383,12 @@ the user has not explicitly customized the variable."
         (push 'gptel-auto-workflow-headless-subagent-fallbacks migrated)))
     (unless (gptel-auto-workflow--custom-var-user-customized-p
              'gptel-auto-workflow-executor-rate-limit-fallbacks)
-      (when (equal gptel-auto-workflow-executor-rate-limit-fallbacks
+      (when (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+                 (equal gptel-auto-workflow-executor-rate-limit-fallbacks
                    '(("DeepSeek" . "deepseek-chat")
                      ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
                      ("DashScope" . "qwen3.6-plus")
-                     ("Gemini" . "gemini-3.1-pro-preview")))
+                     ("Gemini" . "gemini-3.1-pro-preview"))))
           (setq gptel-auto-workflow-executor-rate-limit-fallbacks
                 '(("MiniMax" . "minimax-m2.7-highspeed")
                   ("moonshot" . "kimi-k2.6")
@@ -2140,6 +2433,16 @@ Preserves rate-limited backends blacklist across experiments within a run."
 Call at the start of a new workflow run."
   (setq gptel-auto-workflow--rate-limited-backends nil))
 
+(defun gptel-auto-workflow--prompt-plist-delete-all (plist prop)
+  "Return PLIST without any entries for PROP."
+  (let (result)
+    (while plist
+      (let ((key (pop plist))
+            (val (pop plist)))
+        (unless (eq key prop)
+          (setq result (append result (list key val))))))
+    result))
+
 (defun gptel-auto-workflow--rate-limit-failover-candidates (agent-type)
   "Return fallback provider candidates for AGENT-TYPE after rate limiting.
 When ontology health data is available, ranks backends by health × keep-rate
@@ -2160,7 +2463,8 @@ analysis/compare may still be too slow for code generation (DashScope:
     ;; Do NOT sort by router position: if DashScope is at position 0 in the
     ;; aggregate ranking, sorting by it would put DashScope first again.
     ;; Only remove backends the router explicitly deprioritizes.
-    (or (and gptel-auto-workflow-executor-rate-limit-fallbacks
+    (or (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+             gptel-auto-workflow-executor-rate-limit-fallbacks
              (let ((ranked (and (fboundp 'gptel-auto-workflow--ranked-subagent-backends)
                                 (gptel-auto-workflow--ranked-subagent-backends agent-type))))
                (if ranked
@@ -2175,10 +2479,39 @@ analysis/compare may still be too slow for code generation (DashScope:
                       gptel-auto-workflow-executor-rate-limit-fallbacks))
                  gptel-auto-workflow-executor-rate-limit-fallbacks)))
          gptel-auto-workflow-executor-rate-limit-fallbacks))
-   ((member agent-type gptel-auto-workflow-headless-fallback-agents)
+   ((and (boundp 'gptel-auto-workflow-headless-fallback-agents)
+         (member agent-type gptel-auto-workflow-headless-fallback-agents))
     (or (and (fboundp 'gptel-auto-workflow--ranked-subagent-backends)
              (gptel-auto-workflow--ranked-subagent-backends agent-type))
         gptel-auto-workflow-headless-subagent-fallbacks))))
+
+;; ─── Category-Aware Fallback Chain ───
+
+(defun gptel-auto-workflow--category-fallback-chain (agent-type)
+  "Return ordered fallback chain for AGENT-TYPE, preferring category-specific ordering.
+When gptel-ai-behaviors--category-chains has data for the current target's
+ontology category, returns that category's ordered chain. Otherwise falls
+back to the global headless-subagent-fallbacks.
+This enables per-category self-evolving backend selection."
+  (let* ((target (and (boundp 'gptel-auto-workflow--current-target)
+                      gptel-auto-workflow--current-target))
+         (category (and target
+                        (fboundp 'gptel-auto-workflow--categorize-target)
+                        (gptel-auto-workflow--categorize-target target)))
+         (cat-chain (and category
+                         (boundp 'gptel-ai-behaviors--category-chains)
+                         (hash-table-p gptel-ai-behaviors--category-chains)
+                         (gethash category gptel-ai-behaviors--category-chains)))
+         (global-chain (and (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
+                            gptel-auto-workflow-headless-subagent-fallbacks)))
+    (if cat-chain
+        (progn
+          (let ((ordered (mapcar (lambda (s) (assoc (car s) global-chain)) cat-chain)))
+            (message "[category-chain] %s/%s using %s chain: %s"
+                     category agent-type category
+                     (mapconcat 'car ordered " → "))
+            ordered))
+      global-chain)))
 
 (defun gptel-auto-workflow--agent-base-preset (agent-type)
   "Return the current base preset plist for AGENT-TYPE, or nil when unavailable.
@@ -2209,21 +2542,23 @@ chain so that subagent calls do not fall through to the mode-hook default
               (excluded (and (boundp 'gptel-auto-workflow--rate-limited-backends)
                              gptel-auto-workflow--rate-limited-backends)))
           (if candidates
-              (let ((pick (gptel-auto-workflow--first-available-provider-candidate
-                           candidates excluded)))
-                (when pick
-                  (let* ((model-str (or (and (fboundp 'gptel-auto-workflow--best-model-for-task)
-                                           (gptel-auto-workflow--best-model-for-task
-                                            agent-type (car pick)))
-                                       (cdr pick)))
-                         (backend-obj (gptel-auto-workflow--backend-object (car pick)))
-                         (model-sym (and backend-obj model-str
-                                         (gptel-auto-workflow--backend-model-symbol
-                                          backend-obj model-str))))
-                    (message "[subagent] %s base-preset auto-selected %s/%s"
-                             agent-type (car pick) model-str)
-                    (setq merged (plist-put merged :backend (car pick)))
-                    (setq merged (plist-put merged :model (or model-sym model-str))))))
+               (let ((pick (gptel-auto-workflow--first-available-provider-candidate
+                            candidates excluded)))
+                 (when pick
+                   (let* ((model-str (or (and (fboundp 'gptel-auto-workflow--best-model-for-task)
+                                            (gptel-auto-workflow--best-model-for-task
+                                             agent-type (car pick)))
+                                        (cdr pick)))
+                          (backend-obj (gptel-auto-workflow--backend-object (car pick)))
+                          (model-sym (and backend-obj model-str
+                                          (gptel-auto-workflow--backend-model-symbol
+                                           backend-obj model-str))))
+                     (message "[subagent] %s base-preset auto-selected %s/%s"
+                              agent-type (car pick) model-str)
+                     (setq merged (gptel-auto-workflow--prompt-plist-delete-all merged :backend))
+                     (setq merged (gptel-auto-workflow--prompt-plist-delete-all merged :model))
+                     (setq merged (plist-put merged :backend (car pick)))
+                      (setq merged (plist-put merged :model model-str)))))
             ;; Headless active but no candidates: fall back to
             ;; gptel-backend so the call goes through.
             (when (and (null (plist-get merged :backend))
@@ -2730,6 +3065,24 @@ Optional N limits number of reasons (default 3)."
   "Hash table keyed by target file, values are plists of grader insight data.
 Each entry: (:grader-output RAW-TEXT :criteria ((DESC . REASON) ...)).")
 
+(defvar gptel-auto-experiment--rejection-memory (make-hash-table :test 'equal)
+  "Per-target rejection reasons for cross-experiment learning.
+Key: target file path. Value: list of (REASON . TIMESTAMP) in reverse-chronological.
+Kept to `gptel-auto-experiment--rejection-memory-max' entries per target.
+Persisted alongside the digital twin for survival across daemon restarts.")
+
+(defconst gptel-auto-experiment--rejection-memory-max 3
+  "Maximum rejection reasons to retain per target.")
+
+(defvar gptel-auto-experiment--success-memory (make-hash-table :test 'equal)
+  "Per-target success patterns for cross-experiment learning.
+Key: target file path. Value: list of (HYPOTHESIS . DIFF-SNIPPET) in reverse-chronological.
+Kept to `gptel-auto-experiment--success-memory-max' entries per target.
+Persisted alongside the digital twin for survival across daemon restarts.")
+
+(defconst gptel-auto-experiment--success-memory-max 3
+  "Maximum success patterns to retain per target.")
+
 (defun gptel-auto-experiment--parse-grader-output (target grader-output)
   "Parse GRADER-OUTPUT for per-criterion PASS/FAIL reasoning.
 Extracts numbered items like '1. description: PASS - reason' from the
@@ -2768,6 +3121,188 @@ output, including <think> blocks.  Stores results in
                        :criteria (nreverse criteria))
                  gptel-auto-experiment--grader-insights)))))
 
+;; ─── Rejection Memory: Cross-Experiment Learning ───
+
+(defun gptel-auto-experiment--remember-rejection (target reason)
+  "Store REASON for TARGET in rejection memory.
+Keeps at most `gptel-auto-experiment--rejection-memory-max' entries.
+Deduplicates: if REASON is similar to an existing entry, updates timestamp."
+  (when (and target (stringp reason) (> (length reason) 5))
+    (let* ((now (float-time))
+           (existing (gethash target gptel-auto-experiment--rejection-memory))
+           (normalized (substring reason 0 (min 80 (length reason))))
+           (found nil)
+           (new-list (delq nil
+                          (mapcar (lambda (entry)
+                                    (let ((old-reason (car entry)))
+                                      (if (string-prefix-p (substring normalized 0 (min 30 (length normalized)))
+                                                             (or old-reason ""))
+                                          (progn (setq found t)
+                                                 (cons normalized now))
+                                        entry)))
+                                  existing))))
+      (unless found
+        (push (cons normalized now) new-list))
+      (puthash target
+               (seq-take new-list gptel-auto-experiment--rejection-memory-max)
+               gptel-auto-experiment--rejection-memory))))
+
+(defun gptel-auto-experiment--get-rejection-feedback (target)
+  "Return formatted rejection feedback string for TARGET, or nil.
+Format: 'REJECTION PATTERNS TO AVOID:\n- <reason 1>\n- <reason 2>\n...'"
+  (let ((entries (gethash target gptel-auto-experiment--rejection-memory)))
+    (when entries
+      (format "REJECTION PATTERNS TO AVOID:\n%s"
+              (mapconcat (lambda (entry)
+                           (format "- %s" (car entry)))
+                         entries "\n")))))
+
+;; ─── Success Memory: Cross-Experiment Learning from Wins ───
+
+(defun gptel-auto-experiment--remember-success (target hypothesis diff-snippet)
+  "Store successful HYPOTHESIS and DIFF-SNIPPET for TARGET in success memory.
+Keeps at most `gptel-auto-experiment--success-memory-max' entries."
+  (when (and target (stringp hypothesis) (> (length hypothesis) 5))
+    (let* ((existing (gethash target gptel-auto-experiment--success-memory))
+           (new-entry (cons (substring hypothesis 0 (min 80 (length hypothesis)))
+                            (or (and (stringp diff-snippet)
+                                     (substring diff-snippet 0 (min 120 (length diff-snippet))))
+                                ""))))
+      (push new-entry existing)
+      (puthash target
+               (seq-take existing gptel-auto-experiment--success-memory-max)
+               gptel-auto-experiment--success-memory))))
+
+(defun gptel-auto-experiment--get-success-feedback (target)
+  "Return formatted success feedback string for TARGET, or nil.
+Format: 'PATTERNS THAT WORKED (replicate):\n- <hypothesis>\n  <diff>\n...'"
+  (let ((entries (gethash target gptel-auto-experiment--success-memory)))
+    (when entries
+      (format "PATTERNS THAT WORKED (replicate):\n%s"
+              (mapconcat (lambda (entry)
+                           (format "- %s\n  %s" (car entry) (cdr entry)))
+                         entries "\n")))))
+
+(defun gptel-auto-experiment--replay-grader-insights-from-tsv ()
+  "Re-parse grader insights from persisted TSV results on startup.
+Reads col 10 (grader_reason) from every non-kept experiment in results.tsv
+and re-parses it into `gptel-auto-experiment--grader-insights'.
+This bridges the daemon-restart gap where in-memory grader insights are lost."
+  (when (fboundp 'gptel-auto-experiment--parse-grader-output)
+    (let ((results-file (gptel-auto-workflow--results-file-path)))
+      (when (and results-file (file-exists-p results-file))
+        (let ((count 0))
+          (with-temp-buffer
+            (insert-file-contents results-file)
+            (goto-char (point-min))
+            (forward-line 1)  ; skip header
+            (while (not (eobp))
+              (let* ((fields (split-string
+                              (buffer-substring (line-beginning-position) (line-end-position))
+                              "\t"))
+                     (target (nth 1 fields))
+                     (grader-reason (nth 10 fields)))
+                (when (and target (stringp grader-reason)
+                           (not (string-empty-p grader-reason))
+                           (not (string= grader-reason "N/A")))
+                  ;; TSV-escaped newlines (|) degrade the PASS/FAIL line parsing,
+                  ;; but the structured content with SCORE: and criterion patterns
+                  ;; may still be recoverable — attempt re-parse
+                  (condition-case nil
+                      (progn
+                        (gptel-auto-experiment--parse-grader-output
+                         target (replace-regexp-in-string " | " "\n" grader-reason))
+                        (cl-incf count))
+                    (error nil))))
+              (forward-line 1)))
+          (when (> count 0)
+            (message "[grader-insights] Replayed %d grader outputs from TSV" count))
+          count)))))
+
+;; ─── Run Diagnostic Summary ───
+
+(defun gptel-auto-experiment--log-run-summary (results &optional run-id)
+  "Log structured diagnostic summary from RESULTS plist list.
+Computes keep-rate, top failure reasons, backend performance,
+strategy stats, and anomaly flags.  Logs as multi-line message."
+  (when (and results (listp results) (> (length results) 0))
+    (let* ((total (length results))
+           (kept (cl-count-if (lambda (r) (plist-get r :kept)) results))
+           (keep-rate (if (> total 0) (/ (float kept) total) 0.0))
+           ;; Failure reason aggregation
+           (fail-reasons (make-hash-table :test 'equal))
+           (backend-stats (make-hash-table :test 'equal))
+           (strategy-stats (make-hash-table :test 'equal))
+           (error-cats (make-hash-table :test 'equal)))
+      ;; Aggregate across all results
+      (dolist (r results)
+        (let* ((kept-p (plist-get r :kept))
+               (reason (plist-get r :comparator-reason))
+               (backend (plist-get r :backend))
+               (strategy (plist-get r :strategy))
+               (error-cat (plist-get r :error-category)))
+          (unless kept-p
+            (let ((short (cond ((stringp reason) (car (split-string reason ":" t)))
+                               ((symbolp reason) (symbol-name reason))
+                               (t "unknown"))))
+              (puthash short (1+ (gethash short fail-reasons 0)) fail-reasons)))
+          (when backend
+            (let ((entry (gethash backend backend-stats (list :total 0 :kept 0))))
+              (setf (nth 0 entry) (1+ (nth 0 entry)))
+              (when kept-p (setf (nth 1 entry) (1+ (nth 1 entry))))
+              (puthash backend entry backend-stats)))
+          (when strategy
+            (let ((entry (gethash strategy strategy-stats (list :total 0 :kept 0))))
+              (setf (nth 0 entry) (1+ (nth 0 entry)))
+              (when kept-p (setf (nth 1 entry) (1+ (nth 1 entry))))
+              (puthash strategy entry strategy-stats)))
+          (when error-cat
+            (puthash error-cat (1+ (gethash error-cat error-cats 0)) error-cats))))
+      ;; Sort for display
+      (let* ((sorted-fails (sort (let (r) (maphash (lambda (k v) (push (cons k v) r)) fail-reasons) r)
+                                 (lambda (a b) (> (cdr a) (cdr b)))))
+             (sorted-backends (sort (let (r) (maphash (lambda (k v) (push (cons k v) r)) backend-stats) r)
+                                    (lambda (a b) (> (nth 0 (cdr a)) (nth 0 (cdr b))))))
+             (top-fails (seq-take sorted-fails 5))
+             (anomalies nil))
+        ;; Anomaly detection
+        (when (< keep-rate 0.1)
+          (push (format "keep-rate %.0f%% < 10%% — systemic failure suspected" (* 100 keep-rate)) anomalies))
+        (when (and (>= total 3) (= kept 0))
+          (push "zero kept experiments — all experiments failed" anomalies))
+        (when (and top-fails (>= (cdar top-fails) (/ total 2)))
+          (push (format "dominant failure: %s (%d/%d, %.0f%%)" (caar top-fails) (cdar top-fails) total
+                        (* 100.0 (/ (float (cdar top-fails)) total)))
+                anomalies))
+        ;; Log structured summary as single message
+        (message "\n═══════════════════════════════════════════════════════════\n\
+%s ║ %d experiments | %d kept (%.0f%%) | %d targets\n\
+╠══ FAILURES\n\
+%s\
+╠══ BACKENDS\n\
+%s\
+╠══ ANOMALIES\n\
+%s\
+╚═══════════════════════════════════════════════════════════"
+                (or run-id "RUN")
+                total kept (* 100 keep-rate)
+                (length (delete-dups (mapcar (lambda (r) (plist-get r :target)) results)))
+                (if top-fails
+                    (mapconcat (lambda (p) (format "║  • %s: %d×" (car p) (cdr p))) top-fails "\n")
+                  "║  (none)")
+                (if sorted-backends
+                    (mapconcat (lambda (p)
+                                 (let ((name (car p))
+                                       (t0 (nth 0 (cdr p)))
+                                       (k0 (nth 1 (cdr p))))
+                                   (format "║  • %s: %d exp, %d kept (%.0f%%)" name t0 k0
+                                           (if (> t0 0) (* 100.0 (/ (float k0) t0)) 0.0))))
+                               sorted-backends "\n")
+                  "║  (no backend data)")
+                (if anomalies
+                    (mapconcat (lambda (a) (format "║  ⚠ %s" a)) anomalies "\n")
+                  "║  (none detected)"))))))
+
 (defun gptel-auto-experiment--get-category-failure-reasons (category &optional n)
   "Aggregate failure reasons from ALL targets in CATEGORY.
 Returns alist of (REASON . COUNT) for the N most common, or nil."
@@ -2783,10 +3318,13 @@ Returns alist of (REASON . COUNT) for the N most common, or nil."
           (let* ((fields (split-string
                           (buffer-substring (line-beginning-position) (line-end-position))
                           "\t"))
-                 (r-target (nth 1 fields))
-                 (r-reason (nth 12 fields)))
-            (when (and r-target r-reason (not (string-empty-p r-reason))
-                       (eq (gptel-auto-workflow--categorize-target r-target) category))
+                  (r-target (nth 1 fields))
+                  ;; Read grader_reason (col 10) for meaningful failure categories.
+                  ;; Old code read analyzer-patterns (col 12) which is section metadata.
+                  (r-reason (nth 10 fields)))
+             (when (and r-target r-reason (not (string-empty-p r-reason))
+                        (not (string= r-reason "N/A"))
+                        (eq (gptel-auto-workflow--categorize-target r-target) category))
               (let ((short (car (split-string r-reason ":" t))))
                 (when (and short (not (string= short "N/A")))
                   (puthash short (1+ (gethash short reasons 0)) reasons))))
@@ -2891,6 +3429,8 @@ axes from kept experiments across the category."
               parts))
       (mapconcat #'identity (nreverse parts) "\n"))))
 
+
+
 (defun gptel-auto-experiment--format-failure-patterns (target)
   "Format common failure patterns for TARGET as prompt guidance.
 Includes grader insight PASS/FAIL criteria when available.
@@ -2944,6 +3484,81 @@ Returns string warning about common rejection reasons, or empty string."
         (concat (mapconcat #'identity (nreverse parts) "\n\n") "\n\n"
                 "To succeed, actively avoid the failure patterns and address grader feedback above.\n\n")
       "")))
+
+;; ─── Unified Per-Category Code Generation Directive ───
+
+(defun gptel-auto-experiment--format-unified-directive (target)
+  "Combine ontology + failures + behaviors + grader feedback into one directive.
+Returns a single compact section that tells the executor WHAT to do, WHAT to avoid,
+and WHAT pattern to use — from all OV5 signals combined."
+  (when (and target (fboundp 'gptel-auto-workflow--categorize-target))
+    (let* ((category (gptel-auto-workflow--categorize-target target))
+           (cat-name (pcase category
+                       (:agentic "agentic") (:programming "programming")
+                       (:tool-calls "tool-calls") (:natural-language "NLP")
+                       (_ "unknown")))
+           (focus-avoid
+            (pcase category
+              (:agentic "tool dispatch, state cleanup, async contracts")
+              (:programming "performance, edge cases, code deduplication")
+              (:tool-calls "error handling, tool dispatch safety, timeout")
+              (:natural-language "prompt quality, context window efficiency")
+              (_ "minimal changes, nil guards, condition-case")))
+           (best-hashtag (and (fboundp 'gptel-ai-behaviors--best-hashtag-for)
+                              (gptel-ai-behaviors--best-hashtag-for category)))
+           (best-task (and (fboundp 'gptel-ai-behaviors--best-task-for-category)
+                           (gptel-ai-behaviors--best-task-for-category category)))
+           (task-text (pcase best-task
+                        (:nil-guard "ADD a nil guard — wrap ONE call in ignore-errors or when")
+                        (:condition-case "ADD error handling — wrap ONE operation in condition-case")
+                        (:replicate-pattern "REPLICATE past pattern — find gethash/assoc, add nil guard")
+                        (_ "ADD a nil guard or condition-case around ONE function call")))
+           (failures (and (fboundp 'gptel-auto-experiment--get-category-failure-reasons)
+                          (gptel-auto-experiment--get-category-failure-reasons category 2)))
+           (fail-text (if failures
+                          (mapconcat (lambda (p) (format "%s (%d×)" (car p) (cdr p))) failures ", ")
+                        ""))
+           (parts nil))
+      (push (format "## DIRECTIVE (%s)" cat-name) parts)
+      (push (format "FOCUS: %s" focus-avoid) parts)
+      (when best-hashtag
+        (push (format "BEHAVIOR: #=%s (learned best for %s)" best-hashtag cat-name) parts))
+      (push (format "TASK: %s" task-text) parts)
+      (when (and fail-text (not (string-empty-p fail-text)))
+        (push (format "AVOID: %s" fail-text) parts))
+      ;; Grader feedback → concrete fix instructions
+      (let* ((insights (gethash target gptel-auto-experiment--grader-insights))
+             (grader-fails (and insights
+                                (cl-remove-if-not
+                                 (lambda (c) (eq :fail (plist-get c :verdict)))
+                                 (plist-get insights :criteria))))
+             (fix-text (when grader-fails
+                         (mapconcat
+                          (lambda (c)
+                            (let ((desc (plist-get c :description)))
+                              (cond ((string-match-p "verif" desc)
+                                     "MUST run + show output of: syntax-check + byte-compile + load-test")
+                                    ((string-match-p "describe" desc)
+                                     "MUST state HYPOTHESIS clearly — what changed and why")
+                                    ((string-match-p "improve" desc)
+                                     "MUST fix actual bug or performance issue — avoid style-only")
+                                    ((string-match-p "minimal" desc)
+                                     "MUST change ≤1 function, ≤3 lines — no scope creep")
+                                    (t (format "FIX: %s" (or (plist-get c :reason) desc))))))
+                          grader-fails
+                          "\n"))))
+        (when fix-text
+          (push (format "PREVIOUS GRADER FAILURES — FIX THESE:\n%s" fix-text) parts)))
+      ;; Past kept patterns for this category (learned from experiment history)
+      (when (and (fboundp 'gptel-ai-behaviors--format-kept-patterns)
+                 (bound-and-true-p gptel-ai-behaviors--kept-patterns)
+                 (hash-table-p gptel-ai-behaviors--kept-patterns)
+                 (> (hash-table-count gptel-ai-behaviors--kept-patterns) 0))
+        (let* ((past-pats (gptel-ai-behaviors--format-kept-patterns category)))
+          (when past-pats
+            (push (format "PAST PATTERNS (worked before):\n%s" past-pats) parts))))
+      (push (format "SCOPE: ONE function. Edit ONE line. Verify.") parts)
+      (mapconcat #'identity (nreverse parts) "\n"))))
 
 ;;; Cross-Target Pattern Transfer
 

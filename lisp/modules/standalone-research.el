@@ -3,6 +3,7 @@
 
 (require 'json)
 (declare-function gptel-benchmark-call-subagent "gptel-benchmark-subagent")
+(define-error 'research-pipeline-defect "Research pipeline defect" 'error)
 (defvar gptel-auto-workflow--current-research-context)
 (defvar gptel-auto-workflow--research-in-progress)
 (defvar gptel-auto-workflow--research-findings-cache)
@@ -25,7 +26,7 @@
       (setq score (+ score 0.3)))
     (when (> (length text) 1000)
       (setq score (+ score 0.2)))
-    (when (string-match-p "## \|### \|\\*\\*" text)
+    (when (string-match-p "## \\|### \\|\\*\\*" text)
       (setq score (+ score 0.2)))
     (when (string-match-p "```" text)
       (setq score (+ score 0.1)))
@@ -118,36 +119,83 @@
        (> (length findings) 100)
        (string-match-p "\\S-" findings)))
 
-(defun slr--local-fallback-findings (&optional reason)
-  "Return local fallback findings when external research fails for REASON."
-  (format "## Local Research Fallback
+(defun slr--record-research-defect (reason details)
+  "Record a research pipeline defect and return signal data.
+REASON is a symbol: daemon-disappeared, timeout, empty-response, or error.
+DETAILS is a string with additional context.
+Logs to var/tmp/research-defects.jsonl for experiment outcome correlation."
+  (let ((defect-data (list :reason reason
+                           :details details
+                           :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")
+                           :pipeline-defect t))
+        (signal-data
+         (list reason details
+               (format "[slr] Research pipeline defect: %s (%s)" reason details))))
+    ;; Log the defect to var/tmp for correlation with experiment outcomes
+    (let ((defect-file (expand-file-name "var/tmp/research-defects.jsonl"
+                                           (slr--root))))
+      (make-directory (file-name-directory defect-file) t)
+      (with-temp-file defect-file
+        (insert (json-encode defect-data))
+        (insert "\n")))
+    (message "[slr] RESEARCH PIPELINE DEFECT: %s — %s" reason details)
+    signal-data))
 
-Research subagent did not return usable external findings%s.
+(defun slr--signal-missing-research (reason details)
+  "Signal a research pipeline defect for tracking.
+REASON is a symbol: daemon-disappeared, timeout, empty-response, or error.
+DETAILS is a string with additional context.
+Logs to var/tmp/research-defects.jsonl for experiment outcome correlation."
+  (signal 'research-pipeline-defect
+          (slr--record-research-defect reason details)))
 
-Use this local context for the pipeline instead of treating research as absent:
+(defun slr--local-fallback-findings (reason details)
+  "Return usable local findings when external research fails.
+REASON and DETAILS describe the external research failure."
+  (let ((fallback
+         (when (fboundp 'gptel-auto-workflow--local-research-patterns)
+           (condition-case err
+               (gptel-auto-workflow--local-research-patterns)
+             (error
+              (message "[slr] Local fallback builder failed (%s)" err)
+              nil)))))
+    (if (slr--usable-findings-p fallback)
+        fallback
+      (format (concat "## Local Research Fallback\n\n"
+                      "> External research unavailable (%s).\n"
+                      "> %s\n\n"
+                      "- Project root: `%s`\n"
+                      "- Continue with local codebase analysis until researcher recovers.\n"
+                      "- Inspect `var/tmp/research-defects.jsonl` for defect correlation.\n")
+              reason
+              details
+              (directory-file-name (slr--root))))))
 
-- Prioritize daemon-loading safety: avoid `load-file` paths that can corrupt nested `lambda` or `maphash` forms in the workflow daemon.
-- Prefer nil-safety and proper-list guards around warm daemon state, cache lookups, and parsed subagent output.
-- Keep analyzer/controller outputs machine-parseable; when wrappers or code fences appear, scan for the first valid plist instead of parsing the whole response.
-- Treat timeout-sized or header-only research output as failed and fall back to local repository patterns.
-
-This fallback is intentionally local-only and should be replaced by fresh external research when the provider is healthy."
-          (if (and (stringp reason) (string-match-p "\\S-" reason))
-              (format " (%s)" (truncate-string-to-width reason 120 nil nil "..."))
-            "")))
+(defun slr--finish-local-fallback (prompt completion-callback reason details &optional defect-logged)
+  "Persist local fallback findings after a research failure.
+PROMPT and COMPLETION-CALLBACK are the original single-turn inputs.
+REASON and DETAILS describe the failure.
+When DEFECT-LOGGED is non-nil, skip recording the defect again."
+  (unless defect-logged
+    (slr--record-research-defect reason details))
+  (let ((fallback (slr--local-fallback-findings reason details)))
+    (message "[slr] Using local fallback for %s" reason)
+    (slr--record-context prompt fallback)
+    (slr--save-findings fallback)
+    (when (functionp completion-callback)
+      (funcall completion-callback fallback))))
 
 (defun slr--finish-single-turn (prompt findings completion-callback)
   "Persist FINDINGS for PROMPT and invoke COMPLETION-CALLBACK."
-  (let ((final-findings
-         (if (slr--usable-findings-p findings)
-             findings
-           (message "[slr] Single-turn returned unusable findings (%d chars), using local fallback"
-                    (length (or findings "")))
-           (slr--local-fallback-findings findings))))
-    (slr--record-context prompt final-findings)
-    (slr--save-findings final-findings)
-    (when (functionp completion-callback)
-      (funcall completion-callback final-findings))))
+  (unless (slr--usable-findings-p findings)
+    (slr--signal-missing-research
+     'empty-response
+     (format "finish-single-turn received %d chars (need >100 with content)"
+             (length (or findings "")))))
+  (slr--record-context prompt findings)
+  (slr--save-findings findings)
+  (when (functionp completion-callback)
+    (funcall completion-callback findings)))
 
 (defun slr--run-single-turn (prompt completion-callback)
   "Run a single-turn research subagent call with PROMPT.
@@ -161,14 +209,23 @@ during deeply nested subagent setup (FSM, 31 tools, preset, context init)."
        (condition-case err
            (gptel-benchmark-call-subagent
             'researcher "External research" prompt
-            (lambda (result)
-              (let ((findings (or result "")))
-                (message "[slr] Subagent returned %d chars" (length findings))
-                (slr--finish-single-turn prompt findings completion-callback)))
-            timeout)
+             (lambda (result)
+               (let* ((findings (or result ""))
+                      (details
+                       (format "Subagent returned %d chars (need >100 with content)"
+                               (length findings))))
+                 (message "[slr] Subagent returned %d chars" (length findings))
+                 (condition-case _err
+                     (slr--finish-single-turn prompt findings completion-callback)
+                   (research-pipeline-defect
+                    (slr--finish-local-fallback prompt completion-callback
+                                                'empty-response details t)))))
+             timeout)
          (error
-          (message "[slr] Single-turn subagent failed (%s), using local fallback" err)
-          (slr--finish-single-turn prompt (format "%s" err) completion-callback)))))))
+          (let ((details (format "%s" err)))
+            (message "[slr] Single-turn subagent error (%s)" err)
+            (slr--finish-local-fallback prompt completion-callback
+                                        'daemon-disappeared details))))))))
 
 (defun slr-run-research (&optional completion-callback)
   "Run external research using subagent and save results.
@@ -186,19 +243,23 @@ COMPLETION-CALLBACK receives the saved findings when provided."
             ;; Ensure nil-safety for findings cache
             (when (null gptel-auto-workflow--research-findings-cache)
               (setq gptel-auto-workflow--research-findings-cache (make-hash-table :test 'equal)))
-            (gptel-auto-workflow--research-patterns
-             (lambda (findings)
-               (if (slr--usable-findings-p findings)
-                   (progn
-                     (slr--save-findings findings)
-                     (when (functionp completion-callback)
-                       (funcall completion-callback findings)))
-                 (message "[slr] Multi-turn returned unusable findings (%d chars), falling back to single-turn"
-                          (length (or findings "")))
-                 (slr--run-single-turn (slr--build-prompt) completion-callback)))))
+             (gptel-auto-workflow--research-patterns
+              (lambda (findings)
+                (condition-case nil
+                    (if (slr--usable-findings-p findings)
+                        (progn
+                          (slr--save-findings findings)
+                         (when (functionp completion-callback)
+                           (funcall completion-callback findings)))
+                     (slr--signal-missing-research
+                      'empty-response
+                      (format "Multi-turn EMA returned %d chars (need >100 with content)"
+                              (length (or findings "")))))
+               (research-pipeline-defect
+                   (message "[slr] Empty research result from EMA, falling back to single-turn...")
+                   (slr--run-single-turn (slr--build-prompt) completion-callback))))))
         (error
-         (message "[slr] Multi-turn failed (%s), falling back to single-turn" err)
-         (message "[slr] Backtrace: %s" (with-output-to-string (backtrace)))
+         (message "[slr] Multi-turn failed (%s)" err)
          (slr--run-single-turn (slr--build-prompt) completion-callback)))
     ;; Fallback: single-turn research (raw SKILL.md, no controller)
     (slr--run-single-turn (slr--build-prompt) completion-callback)))
@@ -215,3 +276,4 @@ COMPLETION-CALLBACK receives the saved findings when provided."
     prompt))
 
 (provide 'standalone-research)
+;;; standalone-research.el ends here

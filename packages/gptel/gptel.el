@@ -723,8 +723,9 @@ applied before being re-persisted in the new structure."
       (when gptel--tool-names
         (if-let* ((tools (cl-loop
                           for tname in gptel--tool-names
-                          for tool = (with-demoted-errors "gptel: %S"
+                          for raw = (with-demoted-errors "gptel: %S"
                                        (gptel-get-tool tname))
+                          for tool = (if (gptel-tool-p raw) raw nil)
                           if tool collect tool else do
                           (display-warning
                            '(gptel org tools)
@@ -773,7 +774,10 @@ send in queries.  (See `gptel--num-messages-to-send' for the last one.)"
                 (add-file-local-variable 'gptel--system-message parsed)
               (delete-file-local-variable 'gptel--system-message)))
           ;; Tools
-          (let ((tool-names (mapcar #'gptel-tool-name gptel-tools)))
+          (let ((tool-names (mapcar (lambda (t-entry)
+                                      (gptel-tool-name
+                                       (if (consp t-entry) (cdr t-entry) t-entry)))
+                                    gptel-tools)))
             (if (gptel--preset-mismatch-value preset-spec :tools tool-names)
                 (add-file-local-variable 'gptel--tool-names tool-names)
               (delete-file-local-variable 'gptel--tool-names)))

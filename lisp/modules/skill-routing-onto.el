@@ -59,7 +59,7 @@
 (defun sr--read-skill-content (dir)
   "Read all content files from skill DIR."
   (let ((result ""))
-    (dolist (f (list "SKILL.md" "DIRECTIVE.md" "agent-behavior.md"
+    (dolist (f (list "SKILL.md" "agent-behavior.md"
                      "evals.json" "validation-pipeline.md"))
       (let ((file (expand-file-name f dir)))
         (when (file-readable-p file)
@@ -165,7 +165,7 @@ Penalty is subtracted from score. Ported from ontology-router `backend-quota-hea
                           default-directory)))
          (full-dir (expand-file-name skill-dir skills-dir))
          (latest-mtime 0))
-    (dolist (f '("SKILL.md" "DIRECTIVE.md" "agent-behavior.md"))
+    (dolist (f '("SKILL.md" "agent-behavior.md"))
       (let ((file (expand-file-name f full-dir)))
         (when (file-exists-p file)
           (setq latest-mtime (max latest-mtime

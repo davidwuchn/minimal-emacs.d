@@ -51,16 +51,16 @@ ARGS are passed to `gptel-make-openai'."
     :endpoint "/v1/chat/completions"
     :key (lambda () (my/gptel-api-key "api.minimaxi.com"))
     :stream t
-    :curl-args '("--http1.1" "--max-time" "180" "--connect-timeout" "30")
-    :models '(minimax-m2.7-highspeed minimax-m2.7 minimax-m2.5 minimax-m2.1)))
+    :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
+    :models '(MiniMax-M3 minimax-m2.7-highspeed minimax-m2.7)))
 
 (defvar gptel--dashscope
   (gptel-make-dashscope "DashScope"
     :host "coding.dashscope.aliyuncs.com"
     :key (lambda () (my/gptel-api-key "coding.dashscope.aliyuncs.com"))
     :stream t
-    :curl-args '("--http1.1" "--max-time" "180" "--connect-timeout" "30")
-    :models '(qwen3.6-plus qwen3.5-plus qwen3-max-2026-01-23 qwen3-coder-next qwen3-coder-plus kimi-k2.5 glm-5 glm-4.7 MiniMax-M2.5)))
+    :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
+    :models '(qwen3.6-plus qwen3.5-plus qwen3-max-2026-01-23 qwen3-coder-next qwen3-coder-plus kimi-k2.5 glm-5 glm-4.7)))
 
 ;; Refresh the backend object on reload so long-lived workflow daemons pick up
 ;; contract changes like header callback arity.
@@ -73,8 +73,8 @@ ARGS are passed to `gptel-make-openai'."
                   `(("Authorization" . ,(concat "Bearer " (gptel--get-api-key)))
                     ("User-Agent"    . "KimiCLI/1.3")))
         :stream t
-        :curl-args '("--http1.1" "--max-time" "120" "--connect-timeout" "15")
-        :models '((kimi-k2.6
+    :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
+    :models '((kimi-k2.6
                    :request-params (:reasoning (:effort "high")
                                                :thinking  (:type "enabled")))
                   kimi-for-coding)))
@@ -85,11 +85,12 @@ ARGS are passed to `gptel-make-openai'."
     :endpoint "/chat/completions"
     :key (lambda () (my/gptel-api-key "api.deepseek.com"))
     :stream t
-     :models '((deepseek-v4-flash
-                :request-params (:thinking (:type "enabled")))
-               (deepseek-v4-pro
-                :request-params (:thinking (:type "enabled")
-                                 :reasoning_effort "high")))))
+    :curl-args '("--http1.1" "--max-time" "900" "--connect-timeout" "30")
+    :models '((deepseek-v4-flash
+               :request-params (:thinking (:type "enabled")))
+              (deepseek-v4-pro
+               :request-params (:thinking (:type "enabled")
+                                :reasoning_effort "high")))))
 
 (defvar gptel--cf-gateway
   (gptel-make-openai "CF-Gateway"

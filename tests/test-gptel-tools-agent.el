@@ -20,6 +20,12 @@
 (require 'ert)
 (require 'cl-lib)
 
+(load (expand-file-name "../lisp/modules/gptel-tools-agent.el"
+                        (file-name-directory (or load-file-name
+                                                 buffer-file-name
+                                                 default-directory)))
+      nil 'nomessage)
+
 ;; Mock dependencies
 (defvar gptel-agent-request--handlers nil)
 (defvar gptel-agent--skills nil)
@@ -126,6 +132,28 @@ INCLUDE-DIFF injects git diff."
   (let ((result (gptel-agent--run-agent "explorer" "async test" "prompt")))
     ;; Mock returns immediately with status
     (should (equal (plist-get result :status) "mocked"))))
+
+(ert-deftest test-gptel-tools-agent-load-module-hot-reloads-source ()
+  "Readable split modules should reload even when their feature is already loaded."
+  (let* ((temp-dir (make-temp-file "gptel-tools-agent-loader" t))
+         (feature-name 'gptel-tools-agent-test-module)
+         (module-file (expand-file-name "gptel-tools-agent-test-module.el" temp-dir))
+         (gptel-tools-agent--module-dir (file-name-as-directory temp-dir))
+         (load-count 0))
+    (unwind-protect
+        (progn
+          (with-temp-file module-file
+            (insert "(provide 'gptel-tools-agent-test-module)\n"))
+          (provide feature-name)
+          (cl-letf (((symbol-function 'load)
+                     (lambda (file &rest _args)
+                       (when (equal file module-file)
+                         (cl-incf load-count)
+                         (provide feature-name)))))
+            (gptel-tools-agent--load-module feature-name)
+            (should (= load-count 1))))
+      (setq features (delq feature-name features))
+      (delete-directory temp-dir t))))
 
 ;;; Agent Type Validation
 

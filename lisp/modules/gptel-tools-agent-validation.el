@@ -4,7 +4,91 @@
 (require 'cl-lib)
 (require 'subr-x)
 
+(defvar minimal-emacs-user-directory)
+
+(defcustom gptel-auto-experiment-validation-process-timeout 30
+  "Maximum seconds for pre-grade validation subprocesses."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
 (declare-function gptel-auto-workflow--read-file-contents "gptel-tools-agent-base" (filepath))
+
+(defun gptel-auto-experiment--process-timeout-seconds ()
+  "Return the active validation subprocess timeout, or nil when disabled."
+  (when (and (integerp gptel-auto-experiment-validation-process-timeout)
+             (> gptel-auto-experiment-validation-process-timeout 0))
+    gptel-auto-experiment-validation-process-timeout))
+
+(defun gptel-auto-experiment--process-exit-code (process)
+  "Return PROCESS exit code, signal status, or nil while still running."
+  (pcase (process-status process)
+    ('exit (process-exit-status process))
+    ('signal 128)
+    (_ nil)))
+
+(defun gptel-auto-experiment--process-wait-timeboxed (process timeout)
+  "Wait for PROCESS until TIMEOUT seconds elapse.
+Return its exit status, or 124 when killed for timeout."
+  (let ((deadline (+ (float-time) timeout))
+        exit-code)
+    (while (and (not (setq exit-code
+                           (gptel-auto-experiment--process-exit-code process)))
+                (< (float-time) deadline))
+      (accept-process-output process 0.1))
+    (or exit-code
+        (progn
+          (when (process-live-p process)
+            (delete-process process))
+          124))))
+
+(defun gptel-auto-experiment--call-process-native-timeout (program args timeout)
+  "Run PROGRAM with ARGS and kill it after TIMEOUT seconds.
+This helper intentionally captures output in a temporary buffer because current
+validation callers only need the exit code."
+  (let* ((buffer (generate-new-buffer " *gptel-validation-process*"))
+         (process (make-process :name "gptel-validation-process"
+                                :buffer buffer
+                                :command (cons program args)
+                                :connection-type 'pipe
+                                :noquery t)))
+    (unwind-protect
+        (gptel-auto-experiment--process-wait-timeboxed process timeout)
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
+
+(defun gptel-auto-experiment--call-process-timeboxed (program &optional infile destination display &rest args)
+  "Run PROGRAM with ARGS using a native timeout when possible."
+  (if (and (null infile)
+           (null destination)
+           (null display)
+           (gptel-auto-experiment--process-timeout-seconds))
+      (gptel-auto-experiment--call-process-native-timeout
+       program args (gptel-auto-experiment--process-timeout-seconds))
+    (apply #'call-process program infile destination display args)))
+
+(defun gptel-auto-experiment--shell-command-native-timeout (command timeout)
+  "Return shell COMMAND output, killing it after TIMEOUT seconds."
+  (let* ((buffer (generate-new-buffer " *gptel-validation-shell*"))
+         (process (make-process :name "gptel-validation-shell"
+                                :buffer buffer
+                                :command (list shell-file-name
+                                               shell-command-switch
+                                               command)
+                                :connection-type 'pipe
+                                :noquery t)))
+    (unwind-protect
+        (progn
+          (gptel-auto-experiment--process-wait-timeboxed process timeout)
+          (with-current-buffer buffer
+            (buffer-string)))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
+
+(defun gptel-auto-experiment--shell-command-to-string-timeboxed (command)
+  "Return shell COMMAND output with validation timeout protection."
+  (if-let* ((timeout (gptel-auto-experiment--process-timeout-seconds)))
+      (gptel-auto-experiment--shell-command-native-timeout command timeout)
+    (shell-command-to-string command)))
 
 (defun gptel-auto-experiment--invalid-cl-return-target-in-forms (forms &optional blocks)
   "Return the first invalid `cl-return-from' target in FORMS.
@@ -107,7 +191,7 @@ regular file content."
               (root (locate-dominating-file absolute-file ".git")))
     (let ((default-directory root)
           (relative-file (file-relative-name absolute-file root)))
-      (shell-command-to-string
+      (gptel-auto-experiment--shell-command-to-string-timeboxed
        (format "git --no-pager diff --no-ext-diff --unified=0 HEAD -- %s 2>/dev/null"
                (shell-quote-argument relative-file))))))
 
@@ -258,12 +342,33 @@ variable names are not mistaken for undefined function calls."
                        (walk (cadr spec))
                        (walk (caddr spec))))
                    (mapc #'walk (nthcdr 2 form)))
+                  ('cl-loop
+                   (push head calls)
+                   ;; Expand loop syntax once so binding vars do not look callable.
+                   (let ((expanded (condition-case nil
+                                       (macroexpand-1 form)
+                                     (error nil))))
+                     (if (and expanded (not (equal expanded form)))
+                         (walk expanded)
+                       (mapc #'walk (cdr form)))))
                   ((or 'cl-labels 'cl-flet)
                    (push head calls)
                    (dolist (binding (nth 1 form))
                      (when (consp binding)
                        (mapc #'walk (cddr binding))))
                    (mapc #'walk (nthcdr 2 form)))
+                  ('condition-case
+                   (push head calls)
+                   (walk (nth 2 form))
+                   (dolist (handler (nthcdr 3 form))
+                     (when (proper-list-p handler)
+                       (mapc #'walk (cdr handler)))))
+                  ('pcase
+                   (push head calls)
+                   (walk (nth 1 form))
+                   (dolist (clause (nthcdr 2 form))
+                     (when (proper-list-p clause)
+                       (mapc #'walk (cdr clause)))))
                   (_
                    (when (symbolp head)
                      (push head calls))
@@ -333,22 +438,90 @@ Returns nil if valid, or error message string if invalid."
                     (while (progn
                              (forward-comment (point-max))
                              (< (point) (point-max)))
-                      (push (read (current-buffer)) forms))
+                     (push (read (current-buffer)) forms))
                     nil)
                 (error (format "Syntax error in %s: %s" file err)))))
-            (let* ((parsed-forms (nreverse forms))
-                   (diff (gptel-auto-experiment--diff-against-head file))
-                   (undefined-call
-                    (gptel-auto-experiment--introduced-undefined-call
-                     diff parsed-forms)))
-              (or
-               (when (gptel-auto-experiment--invalid-cl-return-target-in-forms
-                      parsed-forms)
-                 (format "Dangerous pattern in %s: cl-return-from without cl-block" file))
+             (let* ((project-root (or (locate-dominating-file file "scripts/byte-compile-check.sh")
+                                      (bound-and-true-p minimal-emacs-user-directory)
+                                      user-emacs-directory))
+                    (byte-compile-script (expand-file-name "scripts/byte-compile-check.sh"
+                                                           project-root))
+                    (parsed-forms (nreverse forms))
+                    (diff (gptel-auto-experiment--diff-against-head file))
+                    (undefined-call
+                     (gptel-auto-experiment--introduced-undefined-call
+                      diff parsed-forms))
+                    ;; Quick byte-compile check — resolve the helper from the
+                    ;; target file's live repo root, not `user-emacs-directory',
+                    ;; which points at var/ in workflow daemons.
+                    (byte-compile-ok
+                     (and (file-exists-p byte-compile-script)
+                          (condition-case nil
+                               (zerop (gptel-auto-experiment--call-process-timeboxed
+                                       byte-compile-script
+                                       nil nil nil
+                                       (expand-file-name file project-root)))
+                             (error nil)))))
+               (or
+                (when (gptel-auto-experiment--invalid-cl-return-target-in-forms
+                       parsed-forms)
+                  (format "Dangerous pattern in %s: cl-return-from without cl-block" file))
                (when undefined-call
                  (format "Undefined function introduced in %s: %S" file undefined-call))
                (when (gptel-auto-experiment--defensive-code-removal-p diff)
-                 (format "Defensive code removal detected in %s: removing or/assoc fallbacks without proof" file)))))))))
+                 (format "Defensive code removal detected in %s: removing or/assoc fallbacks without proof" file))
+               (unless byte-compile-ok
+                 (format "Byte-compile error in %s" file)))))))))
+
+;; ─── Cheap Diff Content Sanity Check ───
+
+(defun gptel-auto-experiment--validate-diff-content (worktree)
+  "Cheap pre-grade check of aggregate diff in WORKTREE.
+Returns nil if content seems reasonable, or an error string.
+Catches: trivial changes (whitespace/comments only), LLM artifacts in diff,
+vandalism (removal of error handling), and excessively large diffs.
+This runs between syntax validation and the grader API call."
+  (when (and worktree (file-directory-p worktree))
+    (let ((default-directory worktree)
+          (diff-text (gptel-auto-experiment--shell-command-to-string-timeboxed
+                      "git --no-pager diff --no-ext-diff --unified=10 HEAD -- . 2>/dev/null")))
+      (cond
+       ;; No diff at all — executor somehow produced no changes
+       ((string-empty-p (string-trim diff-text))
+        "Cheap check: experiment produced no file changes")
+       ;; Check for LLM/markdown artifacts in the diff
+       ((string-match-p
+         "\\+```\\(emacs-lisp\\|lisp\\|elisp\\)?" diff-text)
+        (format "Cheap check: LLM markdown artifacts in diff (``` blocks)"))
+       ;; Check for debug artifacts: print/insert at top level
+        ((let ((debug-form nil))
+           (when (string-match
+                  "^\\+\\(message\\|insert\\|print\\|princ\\|debug\\)" diff-text)
+             (setq debug-form (match-string 1 diff-text))
+             (format "Cheap check: debug artifact in diff (top-level %s)"
+                     debug-form))))
+       ;; Check for vandalism: removal of error handling patterns
+        ((string-match-p
+          "^-.*condition-case\\|^-.*ignore-errors\\|^-.*noninteractive"
+          diff-text)
+         (format "Cheap check: error handling removal detected in diff"))
+        ;; Check for excessive diff size (>80 lines touched is off-task)
+        ((let ((line-count (with-temp-buffer
+                             (insert diff-text)
+                             (count-matches "\n" (point-min) (point-max)))))
+           (when (> line-count 80)
+             (format "Cheap check: diff too large (%d lines)"
+                     (1+ line-count)))))
+        ;; Check for trivial changes: only whitespace or comment additions
+        ((let ((non-trivial-lines 0))
+           (dolist (line (split-string diff-text "\n"))
+             (when (string-match-p "^\\+[^+ \t;]" line)
+               (cl-incf non-trivial-lines)))
+           (when (and (> non-trivial-lines 0) (< non-trivial-lines 2))
+             (format "Cheap check: diff has only %d non-comment code lines"
+                     non-trivial-lines))))
+        ;; Looks reasonable
+        (t nil)))))
 
 (provide 'gptel-tools-agent-validation)
 ;;; gptel-tools-agent-validation.el ends here

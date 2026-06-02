@@ -264,20 +264,21 @@ COMMAND is the bash command string to execute."
                 :buffer output-buffer
                 :command (list "bash" "-c" command)
                 :connection-type 'pipe
-                :sentinel
-                (lambda (process _event)
-                  (when (memq (process-status process) '(exit signal))
-                    (let* ((exit-code (process-exit-status process))
-                           (output (with-current-buffer (process-buffer process)
-                                     (buffer-string))))
-                      (kill-buffer (process-buffer process))
-                      (funcall callback
-                               (gptel-agent--truncate-string
-                                "bash"
-                                (if (zerop exit-code)
-                                    output
-                                  (format "Command failed with exit code %d:\nSTDOUT+STDERR:\n%s"
-                                          exit-code output))))))))))
+                 :sentinel
+                 (lambda (process _event)
+                   (when (memq (process-status process) '(exit signal))
+                     (let* ((exit-code (process-exit-status process))
+                            (output (with-current-buffer (process-buffer process)
+                                      (buffer-string))))
+                       (kill-buffer (process-buffer process))
+                       (when (functionp callback)
+                         (funcall callback
+                                  (gptel-agent--truncate-string
+                                   "bash"
+                                   (if (zerop exit-code)
+                                       output
+                                     (format "Command failed with exit code %d:\nSTDOUT+STDERR:\n%s"
+                                             exit-code output)))))))))))
     proc))
 
 ;;; Web tools
@@ -1013,8 +1014,9 @@ PREFIX and MAX-LINES are passed through to `gptel-agent--truncate-buffer'."
 
 PREFIX and MAX-LINES are passed through to `gptel-agent--truncate-string'."
   (lambda (result)
-    (funcall callback
-             (gptel-agent--truncate-string prefix result max-lines))))
+    (when (functionp callback)
+      (funcall callback
+               (gptel-agent--truncate-string prefix result max-lines)))))
 
 (defun gptel-agent--glob (pattern &optional path depth)
   "Find files matching PATTERN using the `tree' command.
@@ -1442,9 +1444,21 @@ PROMPT is the detailed prompt instructing the agent on what is required."
               ;; the shared agent config in gptel-agent--agents on first call.
               (copy-sequence
                (cdr (assoc agent-type gptel-agent--agents))))
-    (let* ((info (gptel-fsm-info gptel--fsm-last))
-           (where (or (plist-get info :tracking-marker)
-                      (plist-get info :position)))
+    (message "[agent-task] agent-type=%s use-tools=%s tool-names=%S known-tools=%d"
+             agent-type gptel-use-tools gptel--tool-names (length gptel--known-tools))
+    ;; Ensure tools are populated when gptel-use-tools is active but
+    ;; gptel--tool-names is nil (fresh headless buffer with no tool context).
+    (unless (or gptel--tool-names (not gptel-use-tools))
+      (setq-local gptel--tool-names
+                  (cl-loop for (_cat . tools) in gptel--known-tools
+                           append (mapcar (lambda (entry)
+                                            (gptel-tool-name
+                                             (if (consp entry) (cdr entry) entry)))
+                                          tools))))
+    (let* ((info (when gptel--fsm-last (gptel-fsm-info gptel--fsm-last)))
+           (pos (or (and info (plist-get info :tracking-marker))
+                     (and info (plist-get info :position))))
+           (where (if (number-or-marker-p pos) pos (point-min)))
            (partial (format "%s result for task: %s\n\n"
                             (capitalize agent-type) description)))
       (gptel--update-status " Calling Agent..." 'font-lock-escape-face)

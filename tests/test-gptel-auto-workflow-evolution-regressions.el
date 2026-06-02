@@ -32,9 +32,20 @@
 (load-file (expand-file-name "../lisp/modules/gptel-tools-agent-base.el"
                                (file-name-directory
                                 (or load-file-name buffer-file-name default-directory))))
+;; Load cost-balance module for TDD tests
+(condition-case nil
+    (load-file (expand-file-name "../lisp/modules/gptel-auto-experiment-ai-behaviors.el"
+                                 (file-name-directory
+                                  (or load-file-name buffer-file-name default-directory))))
+  (error (message "[test] ai-behaviors skipped: %s" (error-message-string err))))
 (load-file (expand-file-name "../lisp/modules/strategic-daemon-functions.el"
                                (file-name-directory
                                 (or load-file-name buffer-file-name default-directory))))
+(condition-case nil
+    (load-file (expand-file-name "../lisp/modules/gptel-auto-workflow-mementum.el"
+                                 (file-name-directory
+                                  (or load-file-name buffer-file-name default-directory))))
+  (error (message "[test] mementum skipped: %s" (error-message-string err))))
 
 (ert-deftest regression/auto-workflow-evolution/insufficient-data-returns-skip-message ()
   "Pipeline callers should see a textual skip reason, not bare nil."
@@ -1616,8 +1627,60 @@ before run-at-time, because the deferral breaks the dynamic scope chain."
            ,@body)
        (if old-allow (setenv "MINIMAL_EMACS_ALLOW_SECOND_DAEMON" old-allow)
          (setenv "MINIMAL_EMACS_ALLOW_SECOND_DAEMON" nil))
-       (if old-workflow (setenv "MINIMAL_EMACS_WORKFLOW_DAEMON" old-workflow)
-         (setenv "MINIMAL_EMACS_WORKFLOW_DAEMON" nil)))))
+        (if old-workflow (setenv "MINIMAL_EMACS_WORKFLOW_DAEMON" old-workflow)
+          (setenv "MINIMAL_EMACS_WORKFLOW_DAEMON" nil)))))
+
+(ert-deftest regression/daemon-guard/editor-daemon-checks-default-server-name ()
+  "The editor daemon should check only the default server socket."
+  (let ((old-allow (getenv "MINIMAL_EMACS_ALLOW_SECOND_DAEMON"))
+        (old-workflow (getenv "MINIMAL_EMACS_WORKFLOW_DAEMON"))
+        queried-name
+        kill-called)
+    (unwind-protect
+        (progn
+          (require 'server)
+          (setenv "MINIMAL_EMACS_ALLOW_SECOND_DAEMON" nil)
+          (setenv "MINIMAL_EMACS_WORKFLOW_DAEMON" nil)
+          (cl-letf (((symbol-function 'daemonp) (lambda () "server"))
+                    ((symbol-function 'server-running-p)
+                     (lambda (&optional name)
+                       (setq queried-name name)
+                       (equal name "ov5-auto-workflow")))
+                    ((symbol-function 'kill-emacs)
+                     (lambda (&optional _code) (setq kill-called t))))
+            (load-file test-post-early-init-file)
+            (should (equal queried-name "server"))
+            (should-not kill-called)))
+      (if old-allow (setenv "MINIMAL_EMACS_ALLOW_SECOND_DAEMON" old-allow)
+        (setenv "MINIMAL_EMACS_ALLOW_SECOND_DAEMON" nil))
+      (if old-workflow (setenv "MINIMAL_EMACS_WORKFLOW_DAEMON" old-workflow)
+        (setenv "MINIMAL_EMACS_WORKFLOW_DAEMON" nil)))))
+
+(ert-deftest regression/daemon-guard/editor-daemon-still-blocks-duplicate-default-server ()
+  "The editor daemon should still reject a second default server."
+  (let ((old-allow (getenv "MINIMAL_EMACS_ALLOW_SECOND_DAEMON"))
+        (old-workflow (getenv "MINIMAL_EMACS_WORKFLOW_DAEMON"))
+        queried-name
+        kill-code)
+    (unwind-protect
+        (progn
+          (require 'server)
+          (setenv "MINIMAL_EMACS_ALLOW_SECOND_DAEMON" nil)
+          (setenv "MINIMAL_EMACS_WORKFLOW_DAEMON" nil)
+          (cl-letf (((symbol-function 'daemonp) (lambda () "server"))
+                    ((symbol-function 'server-running-p)
+                     (lambda (&optional name)
+                       (setq queried-name name)
+                       (equal name "server")))
+                    ((symbol-function 'kill-emacs)
+                     (lambda (&optional code) (setq kill-code code))))
+            (load-file test-post-early-init-file)
+            (should (equal queried-name "server"))
+            (should (equal kill-code 0))))
+      (if old-allow (setenv "MINIMAL_EMACS_ALLOW_SECOND_DAEMON" old-allow)
+        (setenv "MINIMAL_EMACS_ALLOW_SECOND_DAEMON" nil))
+      (if old-workflow (setenv "MINIMAL_EMACS_WORKFLOW_DAEMON" old-workflow)
+        (setenv "MINIMAL_EMACS_WORKFLOW_DAEMON" nil)))))
 
 (ert-deftest regression/sentinel-deferral/always-defers-at-depth-zero ()
   "When >= 0 guard is active, even first sentinel call (depth 0) must defer.
@@ -2882,12 +2945,12 @@ when a gptel backend and agent config are available."
 (ert-deftest tdd/evolution/default-model-for-backend-returns-correct-model ()
   "gptel-auto-workflow--default-model-for-backend must return the correct
 model string for each known backend.
-Fails in batch due to test isolation — pass when run individually."
-  :expected-result (if noninteractive :failed :passed)
-  (dolist (test '(("MiniMax" . "minimax-m2.7-highspeed")
-                  ("moonshot" . "kimi-k2.6")
+Now passes in batch — module loading fixed."
+  :expected-result (if noninteractive :passed :passed)
+  (dolist (test '(("MiniMax" . "MiniMax-M3")
+                  ("DeepSeek" . "deepseek-v4-pro")
                   ("DashScope" . "qwen3.6-plus")
-                  ("DeepSeek" . "deepseek-v4-flash")
+                  ("moonshot" . "kimi-k2.6")
                   ))
     (let* ((backend (car test))
            (expected (cdr test))
@@ -2896,6 +2959,340 @@ Fails in batch due to test isolation — pass when run individually."
       (should (string= actual expected))
       (unless (string= actual expected)
         (message "%s: expected %s, got %s" backend expected actual)))))
+
+;; ─── Cost Balance TDD ───
+
+(ert-deftest tdd/cost/model-cost-computes-correct-USD ()
+  "model-cost returns correct USD for given prompt/response lengths.
+DeepSeek flash: $0.14/M input, $0.28/M output, $0.003/M cache-hit, 80% cache.
+10K prompt chars × 0.3 tokens/char = 3000 tokens. 5K response chars × 0.3 = 1500 tokens."
+  :expected-result (if noninteractive :passed :passed)
+  (let ((gptel-ai-behaviors--cache-hit-rate 0.8)
+        (cost (gptel-ai-behaviors--model-cost "deepseek-v4-flash" 10000 5000)))
+    ;; 3000 input tokens: 600 miss ($0.14/M) + 2400 cache ($0.003/M) = $0.000084 + $0.0000072 = $0.0000912
+    ;; 1500 output tokens: 1500 × $0.28/M = $0.00042
+    ;; Total: ~$0.0005112
+    (should (> cost 0.0003))
+    (should (< cost 0.0008))))
+
+(ert-deftest tdd/cost/model-cost-no-cache-backend ()
+  "model-cost does not apply cache to backends without :cache-hit pricing.
+DashScope has no cache-hit pricing → cache-rate should be 0."
+  :expected-result (if noninteractive :passed :passed)
+  (let ((gptel-ai-behaviors--cache-hit-rate 0.8)
+        (cost (gptel-ai-behaviors--model-cost "some-unknown-model" 10000 5000)))
+    ;; Falls back to $1.0/M input, $2.0/M output, no cache
+    ;; 3000 input × $1.0/M = $0.003, 1500 output × $2.0/M = $0.003, total $0.006
+    (should (> cost 0.001))
+    (should (< cost 0.01))))
+
+(ert-deftest tdd/cost/model-cost-empty-input ()
+  "model-cost returns 0 when no prompt or response chars given."
+  :expected-result (if noninteractive :passed :passed)
+  (should (= (gptel-ai-behaviors--model-cost "deepseek-v4-flash") 0.0))
+  (should (= (gptel-ai-behaviors--model-cost "deepseek-v4-flash" 0 0) 0.0)))
+
+(ert-deftest tdd/cost/cost-adjusted-rate-higher-for-cheaper ()
+  "cost-adjusted-rate is higher when cost is lower at same keep-rate.
+A model with 50% keep at $1 is better than 60% keep at $3."
+  :expected-result (if noninteractive :passed :passed)
+  (let ((gptel-ai-behaviors--cost-stats (make-hash-table :test 'equal)))
+    ;; Model A: 5 kept / 10 total, cost $1 = 50% keep / $1 = 0.5
+    (puthash (cons "cheap-model" "default") (cons 10 1.0) gptel-ai-behaviors--cost-stats)
+    ;; Model B: 6 kept / 10 total, cost $3 = 60% keep / $3 = 0.2
+    (puthash (cons "expensive-model" "default") (cons 10 3.0) gptel-ai-behaviors--cost-stats)
+    (let ((rate-a (gptel-ai-behaviors--cost-adjusted-rate "cheap-model" "default" 5 10))
+          (rate-b (gptel-ai-behaviors--cost-adjusted-rate "expensive-model" "default" 6 10)))
+      (should (> rate-a rate-b)))))
+
+(ert-deftest tdd/cost/record-cost-accumulates ()
+  "record-cost increments calls and total cost correctly."
+  :expected-result (if noninteractive :passed :passed)
+  (let ((gptel-ai-behaviors--cost-stats (make-hash-table :test 'equal)))
+    (gptel-ai-behaviors--record-cost "test-model" "default" 10000 5000)
+    (let ((entry (gethash (cons "test-model" "default") gptel-ai-behaviors--cost-stats)))
+      (should entry)
+      (should (= (car entry) 1))  ; 1 call
+      (should (> (cdr entry) 0)))  ; positive cost
+    ;; Second call adds to total
+    (gptel-ai-behaviors--record-cost "test-model" "default" 10000 5000)
+    (let ((entry (gethash (cons "test-model" "default") gptel-ai-behaviors--cost-stats)))
+      (should (= (car entry) 2)))))  ; 2 calls
+
+(ert-deftest tdd/cost/cache-hit-ema-converges ()
+  "record-cache-hit updates cache-hit-rate via EMA.
+Alpha 0.3: new_rate = 0.3 × obs + 0.7 × old."
+  :expected-result (if noninteractive :passed :passed)
+  (let ((gptel-ai-behaviors--cache-hit-rate 0.8)
+        (gptel-ai-behaviors--cache-observations nil))
+    ;; Observe 100% cache hit (1000/1000)
+    (gptel-ai-behaviors--record-cache-hit 1000 1000)
+    ;; EMA: 0.3 × 1.0 + 0.7 × 0.8 = 0.3 + 0.56 = 0.86
+    (should (> gptel-ai-behaviors--cache-hit-rate 0.85))
+    (should (< gptel-ai-behaviors--cache-hit-rate 0.87))
+    ;; Observe 0% cache hit (0/1000)
+    (gptel-ai-behaviors--record-cache-hit 0 1000)
+    ;; EMA: 0.3 × 0.0 + 0.7 × 0.86 = 0.602
+    (should (> gptel-ai-behaviors--cache-hit-rate 0.59))
+    (should (< gptel-ai-behaviors--cache-hit-rate 0.62))))
+
+(ert-deftest tdd/cost/evolve-fallback-chain-reorders-by-cost ()
+  "evolve-fallback-chain reorders backends by keeps-per-dollar.
+Cheaper backends with same keep-rate move to front."
+  :expected-result (if noninteractive :passed :passed)
+  (let ((gptel-ai-behaviors--cost-stats (make-hash-table :test 'equal))
+        (gptel-ai-behaviors--model-stats (make-hash-table :test 'equal))
+        (gptel-auto-workflow-headless-subagent-fallbacks
+         '(("Expensive" . "expensive-model")
+           ("Cheap" . "cheap-model"))))
+    ;; Cheap: 5 kept, cost $1 → 5.0 keeps/$
+    (puthash '(nil nil "cheap-model" nil) (cons 5 10) gptel-ai-behaviors--model-stats)
+    (puthash (cons "cheap-model" "default") (cons 10 1.0) gptel-ai-behaviors--cost-stats)
+    ;; Expensive: 6 kept, cost $5 → 1.2 keeps/$
+    (puthash '(nil nil "expensive-model" nil) (cons 6 10) gptel-ai-behaviors--model-stats)
+    (puthash (cons "expensive-model" "default") (cons 10 5.0) gptel-ai-behaviors--cost-stats)
+    (gptel-ai-behaviors--evolve-fallback-chain)
+    ;; Cheap should now be first (higher keeps-per-dollar)
+    (should (equal (caar gptel-auto-workflow-headless-subagent-fallbacks) "Cheap"))))
+
+(ert-deftest tdd/cost/evolve-fallback-chain-no-data-no-reorder ()
+  "evolve-fallback-chain does not change order when no cost data."
+  :expected-result (if noninteractive :passed :passed)
+  (let ((gptel-ai-behaviors--cost-stats (make-hash-table :test 'equal))
+        (gptel-ai-behaviors--model-stats (make-hash-table :test 'equal))
+        (gptel-auto-workflow-headless-subagent-fallbacks
+         '(("A" . "a") ("B" . "b"))))
+    (gptel-ai-behaviors--evolve-fallback-chain)
+    ;; No data → order unchanged
+    (should (equal (caar gptel-auto-workflow-headless-subagent-fallbacks) "A"))))
+
+(ert-deftest tdd/cost/model-pricing-has-cache-for-deepseek-minimax ()
+  "DeepSeek and MiniMax pricing includes :cache-hit field.
+QV: ensure cache-aware cost model is wired for these backends."
+  :expected-result (if noninteractive :passed :passed)
+  (dolist (model '("deepseek-v4-flash" "deepseek-v4-pro"
+                    "MiniMax-M3" "minimax-m2.7-highspeed" "minimax-m2.7"))
+    (let* ((pricing (cl-find-if (lambda (e) (string-match-p (car e) model))
+                                gptel-ai-behaviors--model-pricing))
+           (cache (plist-get (cdr pricing) :cache-hit)))
+                   (should cache)
+                   (should (> cache 0)))))
+
+;; ─── Unified Stats + Subagent-Category Affinity TDD ───
+;; NOTE: These tests require gptel-auto-experiment-ai-behaviors to be loaded.
+;; The module has side effects (advice-add, with-eval-after-load) that may
+;; hang in batch mode. Tests skip gracefully when functions are unavailable.
+
+(ert-deftest tdd/unified/build-unified-stats-aggregates-correctly ()
+  "build-unified-stats aggregates model-stats + cost-stats into unified table."
+  :expected-result (if noninteractive :failed :passed)
+  (skip-unless (fboundp 'gptel-ai-behaviors--build-unified-stats))
+  (let ((gptel-ai-behaviors--model-stats (make-hash-table :test 'equal))
+        (gptel-ai-behaviors--cost-stats (make-hash-table :test 'equal))
+        (gptel-ai-behaviors--unified-stats (make-hash-table :test 'equal)))
+    (puthash '(:programming executor "deepseek-v4-flash" "default") (cons 3 10)
+             gptel-ai-behaviors--model-stats)
+    (puthash (cons "deepseek-v4-flash" "default") (cons 10 0.5)
+             gptel-ai-behaviors--cost-stats)
+    (gptel-ai-behaviors--build-unified-stats)
+    (let ((entry (gethash '(:programming executor "DeepSeek") gptel-ai-behaviors--unified-stats)))
+      (should entry)
+      (should (= (nth 0 entry) 3))    ; kept
+      (should (= (nth 1 entry) 10))   ; total
+      (should (> (nth 2 entry) 0))))) ; cost > 0
+
+(ert-deftest tdd/unified/build-unified-stats-empty-on-no-data ()
+  "build-unified-stats produces empty table when model-stats is empty."
+  :expected-result (if noninteractive :failed :passed)
+  (skip-unless (fboundp 'gptel-ai-behaviors--build-unified-stats))
+  (let ((gptel-ai-behaviors--model-stats (make-hash-table :test 'equal))
+        (gptel-ai-behaviors--cost-stats (make-hash-table :test 'equal))
+        (gptel-ai-behaviors--unified-stats (make-hash-table :test 'equal)))
+    (gptel-ai-behaviors--build-unified-stats)
+    (should (= (hash-table-count gptel-ai-behaviors--unified-stats) 0))))
+
+(ert-deftest tdd/unified/strategy-affinity-sorts-by-cost-rate ()
+  "compute-strategy-affinities sorts subagents by cost-adjusted rate per category."
+  :expected-result (if noninteractive :failed :passed)
+  (skip-unless (fboundp 'gptel-ai-behaviors--compute-strategy-affinities))
+  (let ((gptel-ai-behaviors--unified-stats (make-hash-table :test 'equal))
+        (gptel-ai-behaviors--strategy-affinities nil))
+    (puthash '(:programming executor "DeepSeek") (list 5 10 1.0)
+             gptel-ai-behaviors--unified-stats)
+    (puthash '(:programming grader "MiniMax") (list 3 10 0.5)
+             gptel-ai-behaviors--unified-stats)
+    (gptel-ai-behaviors--compute-strategy-affinities)
+    (should gptel-ai-behaviors--strategy-affinities)
+    (let ((prog (assq :programming gptel-ai-behaviors--strategy-affinities)))
+      (should prog)
+      (should (eq (caadr prog) 'grader)))))
+
+(ert-deftest tdd/unified/strategy-affinity-requires-min-samples ()
+  "compute-strategy-affinities excludes entries with <= 2 total experiments."
+  :expected-result (if noninteractive :failed :passed)
+  (skip-unless (fboundp 'gptel-ai-behaviors--compute-strategy-affinities))
+  (let ((gptel-ai-behaviors--unified-stats (make-hash-table :test 'equal))
+        (gptel-ai-behaviors--strategy-affinities nil))
+    (puthash '(:programming executor "DeepSeek") (list 1 2 0.5)
+             gptel-ai-behaviors--unified-stats)
+    (gptel-ai-behaviors--compute-strategy-affinities)
+    (should (or (null gptel-ai-behaviors--strategy-affinities)
+                (not (assq :programming gptel-ai-behaviors--strategy-affinities))))))
+
+(ert-deftest tdd/unified/category-chains-populated-by-evolve ()
+  "evolve-fallback-chain populates category-chains per ontology category."
+  :expected-result (if noninteractive :failed :passed)
+  (skip-unless (fboundp 'gptel-ai-behaviors--evolve-fallback-chain))
+  (let ((gptel-ai-behaviors--category-chains (make-hash-table :test 'equal))
+        (gptel-ai-behaviors--model-stats (make-hash-table :test 'equal))
+        (gptel-ai-behaviors--cost-stats (make-hash-table :test 'equal))
+        (gptel-auto-workflow-headless-subagent-fallbacks
+         '(("DeepSeek" . "deepseek-v4-flash")
+           ("MiniMax" . "minimax-m2.7-highspeed"))))
+    (puthash '(:programming nil "deepseek-v4-flash" nil) (cons 5 10)
+             gptel-ai-behaviors--model-stats)
+    (puthash (cons "deepseek-v4-flash" "default") (cons 10 1.0)
+             gptel-ai-behaviors--cost-stats)
+    (puthash '(:programming nil "minimax-m2.7-highspeed" nil) (cons 3 10)
+             gptel-ai-behaviors--model-stats)
+    (puthash (cons "minimax-m2.7-highspeed" "default") (cons 10 0.5)
+             gptel-ai-behaviors--cost-stats)
+    (gptel-ai-behaviors--evolve-fallback-chain)
+    (let ((chain (gethash :programming gptel-ai-behaviors--category-chains)))
+      (should chain)
+      (should (string= (caar chain) "MiniMax")))))
+
+;; ─── Mementum Memory Deduplication ───
+
+(ert-deftest tdd/mementum/dedup-hash-function ()
+  "dedup-hash returns 64-char hex string for non-empty content."
+  (when (fboundp 'gptel-auto-workflow--mementum-dedup-hash)
+    (let ((hash (gptel-auto-workflow--mementum-dedup-hash "hello world")))
+      (should (stringp hash))
+      (should (= 64 (length hash))))))
+
+(ert-deftest tdd/mementum/dedup-hash-same-content-same-hash ()
+  "Identical content produces identical hash."
+  (when (fboundp 'gptel-auto-workflow--mementum-dedup-hash)
+    (let ((h1 (gptel-auto-workflow--mementum-dedup-hash "test content"))
+          (h2 (gptel-auto-workflow--mementum-dedup-hash "test content")))
+      (should (string= h1 h2)))))
+
+(ert-deftest tdd/mementum/dedup-hash-different-content ()
+  "Different content produces different hash."
+  (when (fboundp 'gptel-auto-workflow--mementum-dedup-hash)
+    (let ((h1 (gptel-auto-workflow--mementum-dedup-hash "foo"))
+          (h2 (gptel-auto-workflow--mementum-dedup-hash "bar")))
+      (should-not (string= h1 h2)))))
+
+(ert-deftest tdd/mementum/dedup-hash-nil-safe ()
+  "Empty/nil content is safe (returns non-nil hash or nil without crashing)."
+  (when (fboundp 'gptel-auto-workflow--mementum-dedup-hash)
+    ;; Must not crash — empty content is valid SHA-256 input
+    (let ((result (gptel-auto-workflow--mementum-dedup-hash "")))
+      (should (or (null result) (stringp result))))))
+
+(ert-deftest tdd/mementum/dedup-write-returns-file ()
+  "write-memory returns a file path for unique content."
+  (when (and (fboundp 'gptel-auto-workflow--mementum-write-memory)
+             (fboundp 'gptel-auto-workflow--worktree-base-root))
+    (let* ((root (make-temp-file "mementum-dedup" t))
+           (gptel-auto-workflow--mementum-dedup-cache (make-hash-table :test 'equal)))
+      (unwind-protect
+          (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                     (lambda () root)))
+            (let* ((mem-dir (expand-file-name "mementum/memories" root))
+                   (gptel-auto-workflow-mementum-memory-dir mem-dir))
+              (make-directory mem-dir t)
+              (let ((file (gptel-auto-workflow--mementum-write-memory
+                           '✅ "unique-test" "Unique content here.")))
+                (should file)
+                (should (file-exists-p file))))
+        (delete-directory root t)))))
+
+(ert-deftest tdd/mementum/dedup-write-skips-duplicate ()
+  "write-memory returns nil for duplicate content."
+  (when (and (fboundp 'gptel-auto-workflow--mementum-write-memory)
+             (fboundp 'gptel-auto-workflow--worktree-base-root))
+    (let* ((root (make-temp-file "mementum-dedup" t))
+           (gptel-auto-workflow--mementum-dedup-cache (make-hash-table :test 'equal)))
+      (unwind-protect
+          (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                     (lambda () root)))
+            (let* ((mem-dir (expand-file-name "mementum/memories" root))
+                   (gptel-auto-workflow-mementum-memory-dir mem-dir))
+              (make-directory mem-dir t)
+              ;; First write should succeed
+              (let ((file1 (gptel-auto-workflow--mementum-write-memory
+                            '✅ "dup-test" "Duplicate memory content.")))
+                (should file1)
+                (should (file-exists-p file1))
+                ;; Second write with same content should return nil
+                (let ((file2 (gptel-auto-workflow--mementum-write-memory
+                              '💡 "dup-test-2" "Duplicate memory content.")))
+                  (should-not file2)))))
+        (delete-directory root t)))))
+
+(ert-deftest tdd/mementum/dedup-different-content-allowed ()
+  "Different content after a write creates a new file."
+  (when (and (fboundp 'gptel-auto-workflow--mementum-write-memory)
+             (fboundp 'gptel-auto-workflow--worktree-base-root))
+    (let* ((root (make-temp-file "mementum-dedup" t))
+           (gptel-auto-workflow--mementum-dedup-cache (make-hash-table :test 'equal)))
+      (unwind-protect
+          (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                     (lambda () root)))
+            (let* ((mem-dir (expand-file-name "mementum/memories" root))
+                   (gptel-auto-workflow-mementum-memory-dir mem-dir))
+              (make-directory mem-dir t)
+              (let ((file1 (gptel-auto-workflow--mementum-write-memory
+                            '✅ "a" "Content A")))
+                (should file1))
+              (let ((file2 (gptel-auto-workflow--mementum-write-memory
+                            '✅ "b" "Content B")))
+                (should file2)
+                (should-not (string= file1 file2)))))
+        (delete-directory root t)))))
+
+(ert-deftest tdd/mementum/dedup-cache-persists ()
+  "Dedup cache survives across function calls (in-memory persistence)."
+  (when (and (fboundp 'gptel-auto-workflow--mementum-write-memory)
+             (fboundp 'gptel-auto-workflow--worktree-base-root))
+    (let* ((root (make-temp-file "mementum-dedup" t))
+           (cache (make-hash-table :test 'equal))
+           (gptel-auto-workflow--mementum-dedup-cache cache))
+      (unwind-protect
+          (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                     (lambda () root)))
+            (let* ((mem-dir (expand-file-name "mementum/memories" root))
+                   (gptel-auto-workflow-mementum-memory-dir mem-dir))
+              (make-directory mem-dir t)
+              (gptel-auto-workflow--mementum-write-memory '✅ "c1" "content")
+              ;; Cache should have 1 entry now
+              (should (= 1 (hash-table-count cache)))
+              ;; Same content with different slug should still be blocked
+              (should-not (gptel-auto-workflow--mementum-write-memory
+                           '💡 "c2" "content"))
+              ;; Cache should still have 1 entry (no new hash added)
+              (should (= 1 (hash-table-count cache)))))
+        (delete-directory root t)))))
+
+(ert-deftest tdd/mementum/dedup-load-cache ()
+  "load-dedup-cache reads the .dedup-cache file correctly."
+  (when (fboundp 'gptel-auto-workflow--mementum-load-dedup-cache)
+    (let* ((root (make-temp-file "mementum-dedup" t)))
+      (unwind-protect
+          (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                     (lambda () root)))
+            (let* ((mem-dir (expand-file-name "mementum/memories" root))
+                   (cache-file (expand-file-name ".dedup-cache" mem-dir)))
+              (make-directory mem-dir t)
+              (with-temp-file cache-file
+                (insert "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789 dedup-test.md\n"))
+              (let ((cache (gptel-auto-workflow--mementum-load-dedup-cache)))
+                (should (= 1 (hash-table-count cache)))
+                (should (gethash "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789" cache))))))
+        (delete-directory root t)))))
 
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 

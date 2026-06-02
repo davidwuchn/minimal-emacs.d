@@ -25,11 +25,30 @@
   "Return non-nil when startup is for a dedicated workflow daemon."
   (string= (getenv my/workflow-daemon-env) "1"))
 
+(defun my/current-daemon-name ()
+  "Return the current daemon's server name."
+  (let ((name (daemonp)))
+    (cond
+     ((stringp name) name)
+     ((and (boundp 'server-name)
+           (stringp server-name)
+           (> (length server-name) 0))
+      server-name)
+     (t "server"))))
+
+(defun my/duplicate-daemon-running-p ()
+  "Return non-nil when another daemon already owns this server name."
+  (let ((name (my/current-daemon-name)))
+    (and name (server-running-p name))))
+
 (when (daemonp)
   (require 'server)
+  ;; Allow the default editor daemon (`server`) to coexist with dedicated
+  ;; worker daemons like `ov5-auto-workflow` and `ov5-researcher`.
   (when (and (not (my/secondary-daemon-allowed-p))
-             (server-running-p))
-    (message "[daemon] Another Emacs daemon is already running, exiting this one")
+             (my/duplicate-daemon-running-p))
+    (message "[daemon] Daemon %s already running, exiting this one"
+             (my/current-daemon-name))
     (kill-emacs 0)))
 
 ;; Set tree-sitter grammar directory early, before any tree-sitter modes are loaded

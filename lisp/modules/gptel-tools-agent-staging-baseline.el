@@ -495,19 +495,32 @@ Reviewer checks for Blocker/Critical issues."
            (default-directory proj-root)
            (review-timeout (max my/gptel-agent-task-timeout
                                 gptel-auto-workflow-review-time-budget))
-           (diff-content (gptel-auto-workflow--review-diff-content optimize-branch))
-           (attachment-note
-            (if skipped-review-files
-                (format "ATTACHED FILE CONTEXT:\n- Attached changed files: %d\n- Omitted oversized files: %s\n- Use repo tools to inspect omitted files when needed.\n\n"
-                        (length review-files)
-                        (mapconcat #'identity skipped-review-files ", "))
-              ""))
-            (review-prompt (format "Review the following changes for blockers, critical bugs, and security issues.
+            (diff-content (gptel-auto-workflow--review-diff-content optimize-branch))
+            (attachment-note
+             (if skipped-review-files
+                 (format "ATTACHED FILE CONTEXT:\n- Attached changed files: %d\n- Omitted oversized files: %s\n- Use repo tools to inspect omitted files when needed.\n\n"
+                         (length review-files)
+                         (mapconcat #'identity skipped-review-files ", "))
+               "")))
+      (let* ((category (gptel-auto-workflow--review-category-for-branch optimize-branch))
+             (schema (and category
+                         (cdr (assoc category gptel-auto-workflow--category-action-schemas))))
+              (schema-guidance
+               (let* ((schema-text (if schema
+                                       (format "CATEGORY-SPECIFIC COMMIT CRITERIA (%s):\n%s\n"
+                                               (plist-get schema :description)
+                                               (mapconcat (lambda (c) (format "  ✓ %s" c))
+                                                          (plist-get schema :commit-criteria) "\n"))
+                                     ""))
+                      (accuracy (gptel-auto-workflow--review-accuracy-feedback category))
+                      (accuracy-text (if accuracy (concat accuracy "\n") "")))
+                 (concat schema-text accuracy-text)))
+             (review-prompt (format "Review the following changes for blockers, critical bugs, and security issues.
 
 CHANGES (diff):
 %s
 
-CONTEXT: This change was already APPROVED by an automated grader which
+%sCONTEXT: This change was already APPROVED by an automated grader which
 evaluated quality, clarity, and correctness. A full test suite runs
 after review — functional regressions, compilation errors, and test
 failures will be caught by the next gate. Your review is for issues
@@ -541,9 +554,11 @@ BLOCKED requires a specific, observable vulnerability — not general concerns.
 If it would be caught by a test, let it through for the test suite.
 
 Maximum response: 1000 characters."
-                                  (truncate-string-to-width diff-content 3000 nil nil "...")
-                                  attachment-note)))
-      (message "[auto-workflow] Reviewing changes in %s..." optimize-branch)
+                                    (truncate-string-to-width diff-content 3000 nil nil "...")
+                                    schema-guidance
+                                    attachment-note)))
+        (message "[auto-workflow] Reviewing changes in %s (category: %s)..." optimize-branch (or category "unknown"))
+
       (when skipped-review-files
         (message "[auto-workflow] Reviewer attachments omitted oversized files: %s"
                  (mapconcat #'identity skipped-review-files ", ")))
@@ -554,17 +569,23 @@ Maximum response: 1000 characters."
              'reviewer
              "Review changes before merge"
              review-prompt
-             (lambda (result)
-               (let* ((response (if (stringp result) result (format "%S" result)))
-                      (approved (gptel-auto-workflow--review-approved-p response)))
-                 (message "[auto-workflow] Review %s: %s"
-                          (if approved "PASSED" "BLOCKED")
-                          (my/gptel--sanitize-for-logging response 100))
-                 (my/gptel--invoke-callback-safely
-                  callback
-                  (cons approved response))))
-             review-timeout))
-        (funcall callback (cons t "No reviewer agent available, auto-approving"))))))
+              (lambda (result)
+                (let* ((response (if (stringp result) result (format "%S" result)))
+                       (approved (gptel-auto-workflow--review-approved-p response)))
+                   (gptel-auto-workflow--track-review-outcome category approved)
+                   ;; Feed review block reason to agent for next experiment
+                   (unless approved
+                     (gptel-auto-workflow--record-review-feedback
+                      optimize-branch category response))
+                   (message "[auto-workflow] Review %s: %s (category: %s)"
+                           (if approved "PASSED" "BLOCKED")
+                           (my/gptel--sanitize-for-logging response 100)
+                           (or category "unknown"))
+                  (my/gptel--invoke-callback-safely
+                   callback
+                   (cons approved response))))
+              review-timeout))
+        (funcall callback (cons t "No reviewer agent available, auto-approving")))))))
 
 (defun gptel-auto-workflow--review-approved-p (response)
   "Return non-nil when RESPONSE approves a staging review.
@@ -1127,6 +1148,126 @@ Returns non-nil on success, nil on failure."
                        (my/gptel--sanitize-for-logging (car failed-setup) 160))
               nil)
           t)))))
+
+;; ─── Category-Aware Review ───
+
+(defvar gptel-auto-workflow--review-outcomes (make-hash-table :test 'equal)
+  "Hash table (category . (approved . total)) tracking review outcomes.
+Used by evolution cycle to detect reviewer false-positive/false-negative bias.")
+
+(defun gptel-auto-workflow--review-category-for-branch (optimize-branch)
+  "Infer ontology category from OPTIMIZE-BRANCH's changed files.
+Scans changed Elisp files in the branch, returns the most specific
+category found."
+  (when (stringp optimize-branch)
+    (if (not (fboundp 'gptel-auto-workflow--categorize-target))
+        nil
+      (let* ((proj-root (gptel-auto-workflow--project-root))
+             (worktree (car (gptel-auto-workflow--branch-worktree-paths
+                             optimize-branch proj-root)))
+             (changed-files (and worktree
+                                 (gptel-auto-workflow--worktree-tip-changed-elisp-files
+                                  worktree)))
+             (categories (when changed-files
+                           (delq nil (mapcar #'gptel-auto-workflow--categorize-target
+                                             changed-files)))))
+        (when categories
+          (car (sort categories #'(lambda (a b)
+                                    (let ((order '(:agentic :programming :tool-calls :natural-language)))
+                                      (< (or (cl-position a order) 999)
+                                         (or (cl-position b order) 999)))))))))))
+
+(defun gptel-auto-workflow--track-review-outcome (category approved)
+  "Record review APPROVED/BLOCKED outcome for CATEGORY.
+Used by evolution cycle to detect reviewer bias per category."
+  (when category
+    (let* ((entry (gethash category gptel-auto-workflow--review-outcomes
+                           (list :approved 0 :total 0)))
+           (new-entry (list :approved (+ (plist-get entry :approved) (if approved 1 0))
+                            :total (1+ (plist-get entry :total)))))
+      (puthash category new-entry gptel-auto-workflow--review-outcomes))))
+
+(defun gptel-auto-workflow--summarize-review-outcomes ()
+  "Return formatted review outcome stats per category.
+Calls `gptel-auto-workflow--track-review-validation' to match review
+decisions against test results when available."
+  (let ((parts nil))
+    (maphash
+     (lambda (cat stats)
+       (let* ((approve (plist-get stats :approved))
+              (total (plist-get stats :total))
+              (rate (if (> total 0) (/ (float approve) total) 0.0)))
+         (push (format "  %s: %d/%d approved (%.0f%%)"
+                       cat approve total (* 100 rate))
+               parts)))
+     gptel-auto-workflow--review-outcomes)
+    (when parts
+      (concat "Review outcomes:\n" (mapconcat #'identity (nreverse parts) "\n")))))
+
+;; ─── Review Feedback → Agent Teaching Loop (Ontology-Aware) ───
+
+(defvar gptel-auto-workflow--review-feedback (make-hash-table :test 'equal)
+  "Hash table: category → latest review block reason.
+Ontology-aware: feedback from one target teaches all targets in the same category.
+Populated by staging review when experiments are blocked.
+Read by prompt builder to inject guidance into all experiments in that category.")
+
+(defun gptel-auto-workflow--record-review-feedback (branch category response)
+  "Extract block reason from REVIEW RESPONSE and store per CATEGORY.
+Ontology bridge: review failures on one target teach all targets in the same
+category. This enables cross-target learning (e.g. 'missing require' on
+projects.el teaches all :agentic experiments)."
+  (let* ((block-reason (when (and (stringp response)
+                                  (string-match "BLOCKED:\\s-*\\(.+?\\)\\(?:$\\|[\n\r]\\)" response))
+                         (match-string 1 response)))
+         (guidance
+          (cond
+           ((not block-reason) nil)
+           ((string-match-p "byte.compile\\|compil" block-reason)
+            "⚠ REVIEW: byte-compile error on a similar file. Run byte-compile BEFORE Edit.")
+           ((string-match-p "require\\|undefined function\\|void.function\\|void.variable" block-reason)
+            "⚠ REVIEW: missing require blocked a similar file. Add (require ...) before new functions.")
+           ((string-match-p "style\\|format\\|indent\\|whitespace" block-reason)
+            "⚠ REVIEW: formatting blocked a similar file. Change logic only, never indent/reformat.")
+           ((string-match-p "security\\|eval\\|inject\\|dangerous" block-reason)
+            "⚠ REVIEW: security issue blocked a similar file. Avoid eval, shell injection.")
+           (t (concat "⚠ REVIEW: " (truncate-string-to-width block-reason 80))))))
+    (when (and guidance category)
+      (puthash category guidance gptel-auto-workflow--review-feedback)
+      (message "[review-feedback] %s → all %s targets: %s"
+               (or (when (string-match "^\\([a-z-]+\\)-" (or branch ""))
+                    (match-string 1 branch))
+                   "unknown")
+               category
+               (truncate-string-to-width guidance 60)))))
+
+(defun gptel-auto-workflow--get-review-feedback (target)
+  "Return review feedback for TARGET's ontology category, or empty string.
+Cross-target within category + cross-category transfer: if current category
+has no feedback, borrows from adjacent categories."
+  (when target
+    (let* ((category (and (fboundp 'gptel-auto-workflow--categorize-target)
+                         (gptel-auto-workflow--categorize-target target)))
+           (direct (when category (gethash category gptel-auto-workflow--review-feedback))))
+      (or direct
+          (when category
+            (let* ((adjacent
+                    (pcase category
+                      (:programming '(:agentic :tool-calls))
+                      (:agentic '(:programming :tool-calls))
+                      (:tool-calls '(:programming :agentic))
+                      (:natural-language '(:agentic :tool-calls))
+                      (_ '(:programming :agentic :tool-calls))))
+                   (borrowed nil))
+              (dolist (adj adjacent)
+                (unless borrowed
+                  (let ((adj-feedback (gethash adj gptel-auto-workflow--review-feedback)))
+                    (when adj-feedback
+                      (setq borrowed adj-feedback)
+                      (message "[review-feedback] %s ← %s: cross-category transfer"
+                               category adj)))))
+              borrowed))
+          ""))))
 
 (provide 'gptel-tools-agent-staging-baseline)
 ;;; gptel-tools-agent-staging-baseline.el ends here

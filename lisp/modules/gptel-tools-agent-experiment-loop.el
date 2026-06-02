@@ -30,6 +30,7 @@
 
 (declare-function gptel-auto-experiment--frontier-saturated-p "gptel-tools-agent-prompt-build" (target &optional min-frontier-size min-axes min-quality))
 (declare-function gptel-auto-experiment--compute-frontier "gptel-tools-agent-prompt-build" (target))
+(declare-function gptel-auto-workflow--target-saturated-p "gptel-auto-workflow-ontology-predict" (target &optional max-experiments))
 
 (defvar gptel-auto-experiment-max-per-target)
 (defvar gptel-auto-experiment-no-improvement-threshold)
@@ -102,11 +103,82 @@ Tries multiple patterns in order:
        (or (string-match-p "^Error:" output)
            (gptel-auto-experiment--aborted-agent-output-p output))))
 
+(defun gptel-auto-experiment--target-keep-rate (target previous-results)
+  "Return keep-rate (0.0-1.0) for TARGET from PREVIOUS-RESULTS, or nil."
+  (when (and target previous-results (listp previous-results) (> (length previous-results) 0))
+    (let ((kept 0) (total 0))
+      (dolist (r previous-results)
+        (when (equal (plist-get r :target) target)
+          (when (plist-get r :kept) (cl-incf kept))
+          (cl-incf total)))
+      (when (> total 0)
+        (/ (float kept) total)))))
+
+(defun gptel-auto-experiment--target-keep-rate-from-tsv (target)
+  "Return keep-rate (0.0-1.0) for TARGET from TSV results file, or nil."
+  (when (fboundp 'gptel-auto-workflow--results-file-path)
+    (let ((results-file (gptel-auto-workflow--results-file-path)))
+      (when (and results-file (file-exists-p results-file))
+        (let ((kept 0) (total 0))
+          (with-temp-buffer
+            (insert-file-contents results-file)
+            (goto-char (point-min))
+            (forward-line 1) ; skip header
+            (while (not (eobp))
+              (let* ((line (buffer-substring (line-beginning-position) (line-end-position)))
+                     (fields (split-string line "\t"))
+                     (r-target (nth 1 fields))
+                     (r-decision (nth 7 fields)))
+                (when (and r-target (string-match-p (regexp-quote (file-name-nondirectory target)) r-target))
+                  (cl-incf total)
+                  (when (equal r-decision "kept")
+                    (cl-incf kept))))
+              (forward-line 1)))
+          (when (> total 0)
+            (/ (float kept) total)))))))
+
+(defun gptel-auto-experiment--count-consecutive-strategy (target strategy previous-results)
+  "Count consecutive experiments on TARGET using STRATEGY, 0-indexed.
+Returns number of consecutive experiments with this strategy."
+  (let ((count 0))
+    (dolist (r (reverse previous-results))
+      (when (and (equal (plist-get r :target) target)
+                 (equal (plist-get r :strategy) strategy))
+        (cl-incf count))
+      (when (and (equal (plist-get r :target) target)
+                 (not (equal (plist-get r :strategy) strategy)))
+        ;; Found a different strategy — stop counting
+        nil))
+    count))
+
 (defun gptel-auto-experiment--summarize (hypothesis)
   "Create short summary of HYPOTHESIS."
   (when (stringp hypothesis)
     (let ((words (split-string hypothesis)))
       (string-join (cl-subseq words 0 (min 6 (length words))) " "))))
+
+(defun gptel-auto-experiment--hypothesis-already-tested-p (hypothesis previous-results)
+  "Return non-nil when HYPOTHESIS was already tested on this target.
+Compares against `:hypothesis' fields in PREVIOUS-RESULTS.
+Uses fuzzy matching: share at least 3 significant tokens after normalization."
+  (when (and hypothesis previous-results (listp previous-results))
+    (let* ((normalized (replace-regexp-in-string
+                        "[^a-zA-Z0-9 ]" " " (downcase hypothesis)))
+           (tokens (delete-dups (split-string normalized "[ \t]+" t)))
+           (sig-tokens (cl-remove-if (lambda (tkn) (< (length tkn) 4)) tokens)))
+      (catch 'found
+        (dolist (prev previous-results)
+          (let ((prev-hyp (plist-get prev :hypothesis)))
+            (when (stringp prev-hyp)
+              (let* ((prev-norm (replace-regexp-in-string
+                                 "[^a-zA-Z0-9 ]" " " (downcase prev-hyp)))
+                     (prev-tokens (split-string prev-norm "[ \t]+" t))
+                     (shared 0))
+                (dolist (tkn sig-tokens)
+                  (when (member tkn prev-tokens)
+                    (cl-incf shared)))
+                (when (>= shared 3)
+                  (throw 'found prev-hyp))))))))))
 
 (defvar gptel-auto-experiment-max-validation-retries 1
   "Maximum retries when validation fails due to teachable patterns.
@@ -149,13 +221,13 @@ VALIDATION-ERROR is the error message.
 Instructs executor to load relevant skill instead of hardcoding patterns."
   ;; ASSUMPTION: target and validation-error must be non-empty strings for meaningful retry
   ;; EDGE CASE: nil or empty inputs produce safe defaults rather than malformed prompts
-  (let ((target (if (and (stringp target) (not (string-empty-p target)))
-                    target
-                  "unknown-file"))
-        (validation-error (if (and (stringp validation-error) (not (string-empty-p validation-error)))
-                              validation-error
-                            "Unknown validation error"))
-        (skill-guidance
+  (let* ((target (if (and (stringp target) (not (string-empty-p target)))
+                     target
+                   "unknown-file"))
+         (validation-error (if (and (stringp validation-error) (not (string-empty-p validation-error)))
+                               validation-error
+                             "Unknown validation error"))
+         (skill-guidance
          (cond
           ;; Elisp syntax and dangerous patterns - tell executor to load skill
           ((gptel-auto-experiment--elisp-syntax-error-p target validation-error)
@@ -175,20 +247,13 @@ If you see a function like \='tool\=' or \='key\=' in the error, it means you wr
 (tool ...) or (key ...) — these are NOT valid Emacs Lisp functions.
 Replace undefined calls with valid Emacs Lisp equivalents or remove them.
 Use function-quote #' for symbols meant as functions, not bare-quote \='.")
-           ;; Agent made no file modifications — it only analyzed, didn't edit
-           ((string-match-p "no code changes\\|no file modifications\\|Agent made no"
-                            validation-error)
-            "Your response contained ANALYSIS but NO FILE EDITS. This is always rejected.
-You MUST use Edit or Write tools to modify the target file. The validation
-gate checks git diff and rejects sessions where no files changed.
-CRITICAL rules for retry:
-- Start by editing the target file — do NOT just analyze or describe what to change
-- Even small, minimal edits are better than no edits
-- If you are uncertain what to change, make a small safe improvement (e.g. add a docstring,
-  fix an edge case, improve error handling) rather than returning analysis text
-- After editing, verify the file byte-compiles: `emacs --batch --eval \"(byte-compile-file \\\"FILE\\\")\"`")
-           ;; Add more skill mappings here as needed
-           (t "")))
+            ;; Agent made no file modifications — it only analyzed, didn't edit
+            ((string-match-p "no code changes\\|no file modifications\\|Agent made no"
+                             validation-error)
+             "TOOL-CALL-FAILURE")
+            ;; Add more skill mappings here as needed
+            (t "")))
+        (tool-call-failure (string= skill-guidance "TOOL-CALL-FAILURE"))
         (original-contract
          (if (and (stringp original-prompt)
                   (> (length original-prompt) 0))
@@ -199,8 +264,21 @@ CRITICAL rules for retry:
             "- EVIDENCE: 1-2 concrete code snippets or diff hunks showing the real edit\n"
             "- VERIFY: exact command(s) run and whether they passed or failed\n"
             "- COMMIT: always \"not committed\"\n"
-            "End the final response with: Task completed"))))
-    (format "Your previous edit to %s was REJECTED due to validation error:
+            "End the final response with: Task completed")))
+        (retry-error (if tool-call-failure
+                         "You output code as text instead of calling Edit/Write tool. No files were modified."
+                       validation-error))
+        (retry-header
+         (if tool-call-failure
+             (concat
+             "## SELF-HEAL: Tool-Call Required\n"
+             "λ self-heal(x).    output(code_as_text) → ¬tool_call ∧ ¬file_change\n"
+             "                   | ¬code_in_text | ¬description | ∀change: ∃tool_call\n"
+             "                   | text_only(x) ≡ reject(x) | repeat → fail(experiment)\n\n")
+           "")))
+    (concat
+     retry-header
+     (format "Your previous edit to %s was REJECTED due to validation error:
 
 ERROR: %s
 
@@ -219,11 +297,11 @@ Before retrying, load the relevant skill for guidance.
 
 ORIGINAL TASK:
 %s"
-            target
-            validation-error
-            target
-            skill-guidance
-            original-contract)))
+             target
+             retry-error
+             target
+             (if tool-call-failure "" (or skill-guidance ""))
+             original-contract))))
 
 ;;; Experiment Loop
 
@@ -258,7 +336,19 @@ Adapts max-experiments based on API error rate."
         (when saturated
           (message "[ontology-gate] ⚠ %s: category %s saturated — reducing experiments" target category)
           (setq gptel-auto-experiment-max-per-target
-                (min gptel-auto-experiment-max-per-target 2)))))
+                (min gptel-auto-experiment-max-per-target 2)))
+        ;; Target-level saturation: skip if same error 3+ times
+        (when (and (fboundp 'gptel-ai-behaviors--target-saturated-p)
+                   (gptel-ai-behaviors--target-saturated-p target))
+          (message "[saturation] ⏭ %s: skipping due to repeated failure pattern" target)
+          (funcall callback nil)
+           (cl-return-from gptel-auto-experiment-loop))))
+        ;; Target-experiment saturation: skip if target has enough experiments
+        (when (and (fboundp 'gptel-auto-workflow--target-saturated-p)
+                   (gptel-auto-workflow--target-saturated-p target))
+          (message "[onto-sat] ⏭ %s: skipping — target has enough experiments" target)
+          (funcall callback nil)
+          (cl-return-from gptel-auto-experiment-loop))
     (let* ((original-max gptel-auto-experiment-max-per-target)
            (max-exp (gptel-auto-experiment--adaptive-max-experiments original-max))
            ;; Adjust max-exp based on frontier size: underexplored targets get more experiments
@@ -326,12 +416,25 @@ Adapts max-experiments based on API error rate."
                          (lambda (result)
                            (push result results)
                           (gptel-auto-workflow--update-progress)
-                         (let* ((score-after (gptel-auto-workflow--plist-get result :score-after 0))
-                                (kept (gptel-auto-workflow--plist-get result :kept nil))
-                                (quality-after
-                                 (gptel-auto-workflow--plist-get result :code-quality baseline-code-quality))
-                                (hard-timeout
-                                 (gptel-auto-experiment--result-hard-timeout-p result))
+                          (let* ((raw-score-after (gptel-auto-workflow--plist-get result :score-after 0))
+                                 (score-after
+                                  (cond
+                                   ((numberp raw-score-after) raw-score-after)
+                                   ((and (stringp raw-score-after)
+                                         (string-match-p
+                                          "\\`[[:space:]]*[+-]?[0-9]+\\(?:\\.[0-9]+\\)?[[:space:]]*\\'"
+                                          raw-score-after))
+                                    (string-to-number raw-score-after))
+                                   (t 0)))
+                                 (kept (gptel-auto-workflow--plist-get result :kept nil))
+                                 (raw-quality-after
+                                  (gptel-auto-workflow--plist-get result :code-quality baseline-code-quality))
+                                 (quality-after
+                                  (if (numberp raw-quality-after)
+                                      raw-quality-after
+                                    baseline-code-quality))
+                                 (hard-timeout
+                                  (gptel-auto-experiment--result-hard-timeout-p result))
                                 (grader-only-failure
                                  (plist-get result :grader-only-failure))
                                 (next-exp-id (1+ exp-id)))
@@ -344,10 +447,10 @@ Adapts max-experiments based on API error rate."
                                     baseline-code-quality quality-after
                                     no-improvement-count 0
                                     consecutive-timeouts 0))
-                            (when (and (not kept)
-                                       score-after
-                                       (<= score-after best-score))
-                               (setq no-improvement-count (1+ no-improvement-count)))
+                             (when (and (not kept)
+                                        score-after
+                                        (<= score-after (if (numberp best-score) best-score 0)))
+                                (setq no-improvement-count (1+ no-improvement-count)))
                              (unless hard-timeout
                                (setq consecutive-timeouts 0))
                              (when hard-timeout
@@ -366,23 +469,29 @@ Adapts max-experiments based on API error rate."
                                 (error
                                  (message "[strategy] Evolution error during experiment callback: %s" err)
                                  (message "[strategy] Evolution error debug: next-exp-id=%S type=%S" next-exp-id (type-of next-exp-id)))))
-                           (let ((continue
-                                  (lambda ()
-                                    (if (gptel-auto-workflow--run-callback-live-p run-id)
-                                        (gptel-auto-workflow--call-in-run-context
-                                         workflow-root
-                                         (lambda () (run-next next-exp-id))
-                                         loop-buffer
-                                         workflow-root)
-                                      (progn
-                                        (message "[auto-experiment] Run %s no longer active; returning accumulated results for %s"
-                                                 run-id target)
-                                        (funcall callback (nreverse results)))))))
-                             (if (> gptel-auto-experiment-delay-between 0)
-                                 (run-with-timer gptel-auto-experiment-delay-between nil continue)
-                               ;; delay=0: call directly — async subagent callbacks
-                               ;; inside run-with-retry already reset the stack
-                               (funcall continue)))))))))
+                            (let ((continue
+                                   (lambda ()
+                                     (if (gptel-auto-workflow--run-callback-live-p run-id)
+                                         (gptel-auto-workflow--call-in-run-context
+                                          workflow-root
+                                          (lambda () (run-next next-exp-id))
+                                          loop-buffer
+                                          workflow-root)
+                                       (progn
+                                         (message "[auto-experiment] Run %s no longer active; returning accumulated results for %s"
+                                                  run-id target)
+                                         (funcall callback (nreverse results))))))
+                                  (headless-run
+                                   (or (bound-and-true-p gptel-auto-workflow--headless)
+                                       (bound-and-true-p gptel-auto-workflow-persistent-headless)
+                                       (bound-and-true-p gptel-auto-workflow--cron-job-running))))
+                              (if (and (> gptel-auto-experiment-delay-between 0)
+                                       (not headless-run))
+                                  (run-with-timer gptel-auto-experiment-delay-between nil continue)
+                                ;; Headless cron runs should advance immediately. The
+                                ;; async subagent callbacks already break the stack, and
+                                ;; timer-based continuation has proven unreliable there.
+                                (funcall continue)))))))))
         (gptel-auto-workflow--call-in-run-context
          workflow-root
          (lambda () (run-next 1))
@@ -414,6 +523,9 @@ before headless operation.")
 (defvar gptel-auto-workflow--recentf-was-enabled nil
   "Remember whether `recentf-mode' was enabled before headless operation.")
 
+(defvar gptel-auto-workflow--apheleia-was-enabled nil
+  "Remember whether `apheleia-global-mode' was enabled before headless operation.")
+
 (defvar gptel-auto-workflow--create-lockfiles-value t
   "Remember `create-lockfiles' before headless operation.")
 
@@ -444,11 +556,19 @@ before headless operation.")
 (defvar gptel-auto-workflow--messages-start-pos nil
   "Buffer position where the current workflow run's messages begin.")
 
-(defvar gptel-auto-workflow--max-stuck-minutes 10
+(defvar gptel-auto-workflow--max-stuck-minutes 20
   "Maximum minutes without progress before watchdog force-stops the workflow.
-Reduced from 90m to 10m: when a subagent task hangs or the experiment loop
-gets stuck between experiments, the old timeout let daemon burn CPU for 1.5
-hours before recovery.")
+Increased from 10m to 20m: experiments with slow backends (2-5min per call)
+can exceed the old limit across multiple phases (executor, validation, grading).
+Each phase is a separate subagent call with no progress update between them.")
+
+(defvar gptel-auto-workflow--total-budget-minutes 120
+  "Maximum TOTAL minutes for a workflow before watchdog force-stops.
+Set to 120min: 5 targets × 2 experiments × 10min avg = 100min budget.")
+
+(defvar gptel-auto-workflow--watchdog-start-time nil
+  "Timestamp when the current workflow run started.
+Set by `gptel-auto-workflow--restart-watchdog-timer'.")
 
 (defcustom gptel-auto-workflow-status-file "var/tmp/cron/auto-workflow-status.sexp"
   "Path to the persisted auto-workflow status snapshot.
@@ -686,10 +806,15 @@ In headless mode, marks buffer as unmodified before killing to bypass prompt."
         (funcall orig-fn buffer-or-name))
     (funcall orig-fn buffer-or-name)))
 
+(defun gptel-auto-workflow--suppress-apheleia-p ()
+  "Skip Apheleia formatting while headless workflow mode is active."
+  gptel-auto-workflow--headless)
+
 (defun gptel-auto-workflow--enable-headless-suppression ()
   "Enable suppression of interactive prompts for headless operation.
-Also disables auto-revert, compile-angel, undo-fu-session, recentf, and
-uniquify to prevent buffer churn in ephemeral workflow worktrees."
+Also disables auto-revert, compile-angel, Apheleia, undo-fu-session,
+recentf, and uniquify to prevent buffer churn in ephemeral workflow
+worktrees."
   (setq gptel-auto-workflow--headless t)
   ;; Remember and disable auto-revert
   (setq gptel-auto-workflow--auto-revert-was-enabled 
@@ -717,6 +842,17 @@ uniquify to prevent buffer churn in ephemeral workflow worktrees."
   (when (and gptel-auto-workflow--recentf-was-enabled
              (fboundp 'recentf-mode))
     (recentf-mode -1))
+  ;; Disable Apheleia so save-time formatting does not spawn async formatter
+  ;; work inside headless experiment buffers. Keep a skip function installed so
+  ;; old prog-mode hooks in long-lived daemons cannot re-enable formatter runs.
+  (setq gptel-auto-workflow--apheleia-was-enabled
+        (bound-and-true-p apheleia-global-mode))
+  (when (boundp 'apheleia-skip-functions)
+    (add-to-list 'apheleia-skip-functions
+                 #'gptel-auto-workflow--suppress-apheleia-p))
+  (when (and gptel-auto-workflow--apheleia-was-enabled
+             (fboundp 'apheleia-global-mode))
+    (apheleia-global-mode -1))
   ;; Disable lockfiles so repeated experiment/worktree reuse does not prompt.
   (setq gptel-auto-workflow--create-lockfiles-value create-lockfiles
         create-lockfiles nil)
@@ -748,9 +884,8 @@ Set to t when running as daemon/cron to prevent interactive prompts."
 
 (defun gptel-auto-workflow--disable-headless-suppression ()
   "Disable suppression of interactive prompts.
-Restores auto-revert, compile-angel, undo-fu-session, recentf, and uniquify if
-they were
-enabled before headless operation.
+Restores auto-revert, compile-angel, Apheleia, undo-fu-session, recentf,
+and uniquify if they were enabled before headless operation.
 Does nothing if `gptel-auto-workflow-persistent-headless' is non-nil."
   (when (and (not gptel-auto-workflow-persistent-headless)
              gptel-auto-workflow--headless)
@@ -774,6 +909,15 @@ Does nothing if `gptel-auto-workflow-persistent-headless' is non-nil."
                (fboundp 'recentf-mode))
       (recentf-mode 1))
     (setq gptel-auto-workflow--recentf-was-enabled nil)
+    ;; Restore Apheleia only when this session disabled it.
+    (when (boundp 'apheleia-skip-functions)
+      (setq apheleia-skip-functions
+            (delq #'gptel-auto-workflow--suppress-apheleia-p
+                  apheleia-skip-functions)))
+    (when (and gptel-auto-workflow--apheleia-was-enabled
+               (fboundp 'apheleia-global-mode))
+      (apheleia-global-mode 1))
+    (setq gptel-auto-workflow--apheleia-was-enabled nil)
     ;; Restore lockfile behavior
     (setq create-lockfiles gptel-auto-workflow--create-lockfiles-value)
     ;; Restore uniquify
@@ -1109,25 +1253,34 @@ Force-stops when:
         (let* ((stuck-minutes (and gptel-auto-workflow--last-progress-time
                                    (/ (float-time (time-subtract (current-time) gptel-auto-workflow--last-progress-time))
                                       60)))
+               (elapsed-minutes (and gptel-auto-workflow--watchdog-start-time
+                                    (/ (float-time (time-subtract (current-time) gptel-auto-workflow--watchdog-start-time))
+                                       60)))
                (active-tasks (and (boundp 'my/gptel--agent-task-state)
                                   (hash-table-p my/gptel--agent-task-state)
                                   (hash-table-count my/gptel--agent-task-state))))
           (cond
+            ;; Total budget exceeded — workflow ran too long overall
+            ((and (numberp elapsed-minutes) (> elapsed-minutes gptel-auto-workflow--total-budget-minutes))
+             (message "[auto-workflow] WATCHDOG: Workflow exceeded total budget (%.0f > %d min), force-stopping"
+                      elapsed-minutes gptel-auto-workflow--total-budget-minutes)
+             (gptel-auto-workflow--force-stop))
+            ;; No active subagent tasks and stuck for grace period
             ((and (numberp stuck-minutes)
-                  (> stuck-minutes 5)  ; 5 min grace for grader retry delays
+                  (> stuck-minutes 10)  ; 10 min grace for backend delays (2-5min per call)
                   (not (and (numberp active-tasks) (> active-tasks 0))))
-            (message "[auto-workflow] WATCHDOG: No active subagent tasks for %.1f min, force-stopping"
-                     stuck-minutes)
-            (gptel-auto-workflow--force-stop))
-           ((null stuck-minutes)
-            (message "[auto-workflow] WATCHDOG: No progress time recorded, force-stopping")
-            (gptel-auto-workflow--force-stop))
-           ((> stuck-minutes gptel-auto-workflow--max-stuck-minutes)
-            (message "[auto-workflow] WATCHDOG: Workflow stuck for %.1f minutes, force-stopping"
-                     stuck-minutes)
-            (gptel-auto-workflow--force-stop))
-           (t
-            t))))
+             (message "[auto-workflow] WATCHDOG: No active subagent tasks for %.1f min, force-stopping"
+                      stuck-minutes)
+             (gptel-auto-workflow--force-stop))
+            ((null stuck-minutes)
+             (message "[auto-workflow] WATCHDOG: No progress time recorded, force-stopping")
+             (gptel-auto-workflow--force-stop))
+            ((> stuck-minutes gptel-auto-workflow--max-stuck-minutes)
+             (message "[auto-workflow] WATCHDOG: Workflow stuck for %.1f minutes, force-stopping"
+                      stuck-minutes)
+             (gptel-auto-workflow--force-stop))
+            (t
+             t))))
     (error
      (message "[auto-workflow] WATCHDOG: Check failed: %S\n%s"
               err
@@ -1162,6 +1315,7 @@ Force-stops when:
   (when (timerp gptel-auto-workflow--watchdog-timer)
     (cancel-timer gptel-auto-workflow--watchdog-timer))
   (setq gptel-auto-workflow--watchdog-timer nil)
+  (setq gptel-auto-workflow--watchdog-start-time (current-time))
   (when (or gptel-auto-workflow--running
             gptel-auto-workflow--cron-job-running)
     (setq gptel-auto-workflow--watchdog-timer

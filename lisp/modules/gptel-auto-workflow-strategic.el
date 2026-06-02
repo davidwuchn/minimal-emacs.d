@@ -168,10 +168,12 @@ AutoTTS: Controller stops early if confidence threshold met."
   :type 'integer
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-workflow-analyzer-time-budget 180
+(defcustom gptel-auto-workflow-analyzer-time-budget 300
   "Minimum timeout in seconds for analyzer target selection.
-Reduced from 240→180s: DeepSeek v4-pro thinking mode still exceeds 240s.
-Let it fail fast and fall back to faster backends (MiniMax/moonshot)."
+Increased from 180→300s: all backends are slow from this network,
+and a 180s timeout causes cascading failures (analyzer → static
+targets → experiments all timeout). Better to wait longer for a
+good analysis than to fall back to unfocused targets."
   :type 'integer
   :group 'gptel-tools-agent)
 
@@ -293,12 +295,15 @@ BEHAVIOR: Uses wc -l for efficient line counting without loading files into buff
   "Gather context for LLM target selection.
 Scans only root-repo targets that can be integrated into staging.
 Uses caching to avoid redundant shell command execution.
-EDGE CASE: Only caches context when shell commands produce non-empty output."
+EDGE CASE: Only caches context when shell commands produce non-empty output.
+BUG FIX: Uses `equal' not `eq' for cache key comparison — `eq' on strings
+compares object identity, causing cache misses when a freshly-computed
+string has the same content but different identity."
   (let* ((proj-root (gptel-auto-workflow--effective-project-root))
          (cache-ttl (* 5 60))
          (now (float-time))
          (cache-entry (and (listp gptel-auto-workflow--context-cache)
-                           (eq (car gptel-auto-workflow--context-cache) proj-root)
+                           (equal (car gptel-auto-workflow--context-cache) proj-root)
                            (listp (cdr gptel-auto-workflow--context-cache))
                            (cdr gptel-auto-workflow--context-cache)))
          (cached-context (and cache-entry
@@ -445,17 +450,6 @@ Returns findings content or empty string if not found."
         (message "[research] Loaded evolved findings (%d chars)" (length content))
         content))))
 
-(defun gptel-auto-workflow--load-directive-skill ()
-  "Load evolved directive skill from DIRECTIVE.md.
-Returns skill content or empty string if not found.
-Uses standard skill loader for consistency."
-  (let ((content (gptel-auto-workflow--load-skill-content "auto-workflow/DIRECTIVE")))
-    (if (or (null content) (string-empty-p content))
-        ""
-      (progn
-        (message "[directive] Loaded evolved skill (%d chars)" (length content))
-        content))))
-
 (defun gptel-auto-workflow--research-topics-string ()
   "Return current research topics based on project focus and recent experiments.
 
@@ -553,7 +547,7 @@ EDGE CASE: Empty plist data returns empty hash table (not nil)."
 
 (defun gptel-auto-workflow--load-researcher-meta-learning ()
   "Load meta-learning data for researcher skill.
-Reads topic-performance.json and returns formatted stats.
+Reads topic-performance.json and enriches with ontology category data.
 Returns nil if data not available."
   (let* ((data-dir (expand-file-name "assistant/skills/researcher-prompt/data" 
                                      (gptel-auto-workflow--effective-project-root)))
@@ -564,7 +558,9 @@ Returns nil if data not available."
                  (topics (when data (gethash "topics" data))))
             (when (and topics (hash-table-p topics))
               (let ((total-exp (gethash "total_experiments" data 0))
-                    (total-kept 0))
+                    (total-kept 0)
+                    ;; Ontology enrichment: per-category research impact
+                    (cat-impact (gptel-auto-workflow--research-impact-by-category)))
                 (maphash
                  (lambda (_topic-key stats)
                    (when (hash-table-p stats)
@@ -575,10 +571,49 @@ Returns nil if data not available."
                                        0)
                       :kept total-kept
                       :total total-exp
-                      :topics topics))))
+                      :topics topics
+                      :category-impact cat-impact))))  ; ontology enrichment
         (error 
          (message "[research] Error loading meta-learning data: %s" err)
          nil)))))
+
+(defun gptel-auto-workflow--research-impact-by-category ()
+  "Compute per-category research impact from experiment outcomes.
+Returns formatted string showing which categories benefit from research,
+or nil if insufficient data."
+  (let* ((results (condition-case nil (gptel-auto-workflow--parse-all-results) (error nil)))
+         (cat-stats (make-hash-table :test 'equal))
+         (parts nil))
+    (when results
+      (dolist (r results)
+        (let* ((target (plist-get r :target))
+               (kept (equal (plist-get r :decision) "kept"))
+               (has-research (plist-get r :has-research))
+               (cat (and target (fboundp 'gptel-auto-workflow--categorize-target)
+                         (gptel-auto-workflow--categorize-target target))))
+          (when cat
+            (let ((entry (gethash cat cat-stats (list :total 0 :kept 0 :with-research 0 :kept-with-research 0))))
+              (setf (plist-get entry :total) (1+ (plist-get entry :total)))
+              (when kept (setf (plist-get entry :kept) (1+ (plist-get entry :kept))))
+              (when has-research
+                (setf (plist-get entry :with-research) (1+ (plist-get entry :with-research)))
+                (when kept (setf (plist-get entry :kept-with-research) (1+ (plist-get entry :kept-with-research)))))
+              (puthash cat entry cat-stats))))))
+    (maphash
+     (lambda (cat stats)
+       (let* ((with-r (plist-get stats :with-research))
+              (kept-r (plist-get stats :kept-with-research))
+              (total (plist-get stats :total))
+              (rate (if (> with-r 0) (/ (float kept-r) with-r) 0))
+              (need (if (> rate 0.1) "HIGH — continue" (if (> total 5) "LOW — skip" "INSUFFICIENT DATA"))))
+         (when (>= total 3)
+           (push (format "  %s: %.0f%% kept with research (%d/%d) → %s"
+                         cat (* 100 rate) kept-r with-r need)
+                 parts))))
+     cat-stats)
+    (when parts
+      (concat "### Per-category research impact (ontology-enriched)\n"
+              (mapconcat #'identity (nreverse parts) "\n")))))
 
 (defun gptel-auto-workflow--substitute-researcher-variables (skill-content)
   "Substitute template variables in SKILL-CONTENT with meta-learning data.
@@ -652,6 +687,13 @@ daemon's evolve_researcher.py, restores template variables before substituting."
                    (gptel-auto-workflow--format-strategy-guidance-json guidance-json)
                  "*Controller not yet evolved.*")
                skill-content t t)))
+      ;; Inject per-category research impact (ontology-enriched)
+      (let ((cat-impact (plist-get meta-data :category-impact)))
+        (when cat-impact
+          (setq skill-content
+                (replace-regexp-in-string
+                 "{{category-impact}}" cat-impact
+                 skill-content t t))))
       ;; Inject current executor bottlenecks so researcher targets real problems
       (let ((bottlenecks (gptel-auto-workflow--current-bottleneck-report)))
         (setq skill-content
@@ -943,10 +985,8 @@ substituted into the template before building the prompt.
 Results feed into directive's 'Next Hypotheses' for target selection."
   (let* ((raw-skill (gptel-auto-workflow--load-researcher-skill))
          (base-prompt (gptel-auto-workflow--substitute-researcher-variables raw-skill))
-         (skill-content (gptel-auto-workflow--load-research-skill))
-         (directive-content (gptel-auto-workflow--load-directive-skill))
-         (priority-targets (gptel-auto-workflow--directive-extract-priority-targets directive-content))
-         ;; Research variant selected by champion league (reuses strategy infrastructure)
+          (skill-content (gptel-auto-workflow--load-research-skill))
+          ;; Research variant selected by champion league (reuses strategy infrastructure)
          (research-variant (gptel-auto-workflow--select-best-research-variant))
          (variant-content (gptel-auto-workflow--load-research-variant-content research-variant))
          ;; Load AutoTTS-style strategy guidance via {{strategy-guidance}} template injection only
@@ -969,12 +1009,6 @@ Results feed into directive's 'Next Hypotheses' for target selection."
                 (concat "### Previous Research Outcomes (Last 14 Days)\n"
                         "*How recent research runs performed downstream. Prioritize what worked, avoid what failed.*\n\n"
                         recent-outcomes
-                        "\n\n")
-              "")
-            (if priority-targets
-                (concat "### Current Project Targets (from directive)\n"
-                        "*Research ideas that could improve these specific modules:*\n"
-                        priority-targets
                         "\n\n")
               "")
             (if (and source-guidance (not (string-empty-p source-guidance)))
@@ -1149,27 +1183,6 @@ Returns t if evolution was triggered, nil otherwise."
        (setq triggered t)))
     
     triggered))
-
-
-
-(defun gptel-auto-workflow--directive-extract-priority-targets (directive-content)
-  "Extract high-priority targets from DIRECTIVE-CONTENT.
-Returns formatted string or nil."
-  (when (and directive-content (not (string-empty-p directive-content)))
-    (with-temp-buffer
-      (insert directive-content)
-      (goto-char (point-min))
-      (let ((targets nil))
-        ;; Look for Active Targets table
-        (when (re-search-forward "## Active Targets" nil t)
-          (forward-line 2) ; Skip header
-          (forward-line 1) ; Skip separator
-          (while (looking-at "| `\\([^`]+\\)` | [^|]+ | [^|]+ | [^|]+ | \\(✅\\|🟡\\)")
-            (push (match-string 1) targets)
-            (forward-line 1)))
-        (if targets
-            (mapconcat (lambda (targ) (format "- %s" targ)) (nreverse targets) "\n")
-          nil)))))
 
 
 
@@ -1369,20 +1382,38 @@ least explored = highest opportunity.  This is instant, requires
 no AI call, and never times out.
 
 Only calls the AI analyzer when frontier data is empty (first run
-or TSV history was cleared)."
+or TSV history was cleared).
+
+VALIDATION: Guards frontier-targets with proper-list-p to prevent
+runtime errors when frontier-select-targets returns a malformed value."
   (let* ((frontier-ranked
           (and (fboundp 'gptel-auto-experiment--frontier-select-targets)
                (condition-case nil
                    (gptel-auto-experiment--frontier-select-targets
                     gptel-auto-workflow-max-targets-per-run)
                  (error nil))))
-         (frontier-targets (mapcar #'car frontier-ranked)))
+         (frontier-targets (and (proper-list-p frontier-ranked)
+                                (mapcar #'car frontier-ranked))))
     (if (and frontier-targets (> (length frontier-targets) 0))
         ;; Fast path: frontier data available — skip the AI call entirely.
-        (let* ((targets (seq-take frontier-targets
-                                  gptel-auto-workflow-max-targets-per-run)))
-          (message "[auto-workflow] Frontier: %d ranked targets (skipping AI analyzer)"
-                   (length targets))
+        (let* ((ranked (seq-take frontier-ranked
+                                 (* 2 gptel-auto-workflow-max-targets-per-run)))
+               ;; Ontology scheduler: filter by category health
+               (healthy (seq-filter
+                         (lambda (pair)
+                           (let* ((target (car pair))
+                                  (cat (and (fboundp 'gptel-auto-workflow--categorize-target)
+                                            (gptel-auto-workflow--categorize-target target)))
+                                  (frozen (and cat (fboundp 'gptel-auto-workflow--category-frozen-p)
+                                               (gptel-auto-workflow--category-frozen-p cat))))
+                             (if frozen
+                                 (progn (message "[scheduler] ⏭ %s — category %s FROZEN" target cat) nil)
+                               t)))
+                         ranked))
+               (targets (mapcar #'car (seq-take healthy gptel-auto-workflow-max-targets-per-run))))
+          (message "[auto-workflow] Frontier: %d ranked → %d healthy (skipped %d frozen)"
+                   (length frontier-ranked) (length targets)
+                   (- (length ranked) (length healthy)))
           (funcall callback targets))
       ;; Slow path: no frontier data — call AI analyzer with the full prompt.
       (if gptel-auto-workflow-research-targets
@@ -1397,20 +1428,10 @@ or TSV history was cleared)."
 CONTEXT is the gathered context plist.
 RESEARCH-FINDINGS is the research findings string or empty.
 MAX-TARGETS is the maximum number of targets to select.
-META-LEARNING: Loads evolved directive and research skills from mementum."
+META-LEARNING: Loads evolved research skills from mementum."
   (unless (plistp context)
     (setq context '()))
-  (let* ((directive (gptel-auto-workflow--load-directive-skill))
-         (research-skill (gptel-auto-workflow--load-research-skill))
-         (directive-section (if directive
-                                (format "EVOLVED PROGRAM DIRECTIVE (from %d experiments):\n%s\n\n"
-                                        (or (when (string-match "total-experiments: \\([0-9]+\\)" directive)
-                                              (string-to-number (match-string 1 directive)))
-                                            0)
-                                        (truncate-string-to-width
-                                         (replace-regexp-in-string "^---$\\|^---\\n.*\\n---\\n" "" directive)
-                                         1500 nil nil "..."))
-                              ""))
+  (let* ((research-skill (gptel-auto-workflow--load-research-skill))
          (research-section (if (and research-skill (not (string-empty-p research-skill)))
                                (format "RESEARCH STRATEGY GUIDE:\n%s\n\n"
                                        (truncate-string-to-width research-skill 800 nil nil "..."))
@@ -1489,40 +1510,43 @@ META-LEARNING: Loads evolved directive and research skills from mementum."
                                            similar "\n"))
                         parts))))
             (if parts (concat (mapconcat #'identity (nreverse parts) "\n") "\n\n") ""))))
-            (format "λ select(project). max=%d path=lisp/modules/
-  | ∀f: size(f) ≤ 1000ℓ ∧ ¬nested_repo(f) ∧ file(f)
-  | priority ∝ 1 / (frontier_size(f) + 1)
-  | prefer(bug_fix) > style_change | prefer(TODO_match) > random
+    (format "You are a code analyzer. Select target files to optimize.
 
-%s%s%sINPUT:
+RULES:
+1. ONLY output the JSON below. NO explanation, NO commentary, NO markdown.
+2. Every target must exist in the INPUT files list.
+3. Prioritize files with TODO/FIXME comments and recent git activity.
+4. Max %d targets.
+
+OUTPUT FORMAT — copy this exactly:
+{\"targets\": [{\"file\": \"lisp/modules/foo.el\", \"priority\": 1, \"reason\": \"has 3 TODO comments and recent changes\"}]}
+
+%s%sINPUT:
   files: %s
   git(30d): %s
   sizes(top20): %s
   todo/fixme(30): %s
   research: %s
-  history: %s
-
-OUTPUT: {\"targets\": [{\"file\": \"lisp/modules/X.el\", \"priority\": N, \"reason\": \"R\"}]}"
+  history: %s"
             max-targets
-            directive-section
             research-section
             (or hints-section "")
             (or (plist-get context :file-list) "")
             (or (plist-get context :git-history) "")
             (or (plist-get context :file-sizes) "")
             (or (plist-get context :todos) "")
-             (if (or (null research-findings) (string-empty-p research-findings))
-                 "Not available (research disabled)"
-               (let* ((lines (split-string research-findings "\n"))
-                      (apply-lines (seq-filter (lambda (l) (string-match-p "\\*\\*Apply:\\*\\*" l)) lines))
-                      (apply-section
-                       (if apply-lines
-                           (concat "\n### Actionable Research Patterns (match to files below)\n"
-                                   (mapconcat #'identity apply-lines "\n")
-                                   "\n\n")
-                         "")))
-                 (concat apply-section
-                         (truncate-string-to-width research-findings 3000 nil nil "..."))))
+            (if (or (null research-findings) (string-empty-p research-findings))
+                "Not available (research disabled)"
+              (let* ((lines (split-string research-findings "\n"))
+                     (apply-lines (seq-filter (lambda (l) (string-match-p "\\*\\*Apply:\\*\\*" l)) lines))
+                     (apply-section
+                      (if apply-lines
+                          (concat "\n### Actionable Research Patterns (match to files below)\n"
+                                  (mapconcat #'identity apply-lines "\n")
+                                  "\n\n")
+                        "")))
+                (concat apply-section
+                        (truncate-string-to-width research-findings 3000 nil nil "..."))))
             (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
                 (gptel-auto-workflow--evolution-get-knowledge)
               "HISTORICAL SUCCESS PATTERNS (from past experiments):\n- Focus on bug fixes and error handling for best results"))))
@@ -1534,10 +1558,10 @@ ASSUMPTION: my/gptel-agent-task-timeout may be unbound in some configurations.
 EDGE CASE: Unbound timeout variable defaults to 0, letting analyzer-time-budget govern."
   (let* ((context (gptel-auto-workflow--gather-context))
          (max-targets gptel-auto-workflow-max-targets-per-run)
-         (analyzer-timeout (min (or (and (boundp 'my/gptel-agent-task-timeout)
-                                         my/gptel-agent-task-timeout)
-                                    0)
-                                gptel-auto-workflow-analyzer-time-budget))
+          (analyzer-timeout (min (or (and (boundp 'my/gptel-agent-task-timeout)
+                                          my/gptel-agent-task-timeout)
+                                     gptel-auto-workflow-analyzer-time-budget)
+                                 gptel-auto-workflow-analyzer-time-budget))
          (prompt (gptel-auto-workflow--build-analyzer-prompt
                   context research-findings max-targets)))
     (if (and gptel-auto-experiment-use-subagents
@@ -1753,6 +1777,19 @@ CALLBACK must be a function; guarded with fallback on invalid input.
 BEHAVIOR: Returns non-nil if error state was handled.
 EDGE CASE: Non-nil but malformed targets (improper list, atom) caught before downstream crash."
   (cl-block gptel-auto-workflow--handle-analyzer-error-state
+    ;; CRITICAL: clear accumulated backend health strikes from analyzer retries.
+    ;; The analyzer probes every backend; if all are slow (network issues),
+    ;; every one gets a strike and experiments can't dispatch. Reset after
+    ;; target selection so experiments see a clean slate.
+    (condition-case nil
+        (progn
+          (when (and (boundp 'gptel-auto-workflow--lambda-strike-count)
+                     (hash-table-p gptel-auto-workflow--lambda-strike-count))
+            (clrhash gptel-auto-workflow--lambda-strike-count))
+          (when (and (boundp 'gptel-auto-workflow--lambda-dead-until)
+                     (hash-table-p gptel-auto-workflow--lambda-dead-until))
+            (clrhash gptel-auto-workflow--lambda-dead-until)))
+      (error nil))
     ;; Guard: validate callback, use no-op fallback if invalid
     (unless (functionp callback)
       (message "[auto-workflow] Error state handler: callback is not a function (%S)" callback)
@@ -1814,45 +1851,63 @@ EDGE CASE: nil or non-list returns nil safely."
 
 (defun gptel-auto-workflow--parse-json-targets (response proj-root max-targets)
   "Parse JSON from RESPONSE to extract targets.
+Strips markdown code fences, tries multiple start positions.
 Returns nil if parsing fails or no targets found.
 Logs parsing failures for debugging."
   (cl-block gptel-auto-workflow--parse-json-targets
     (unless (gptel-auto-workflow--nonempty-string-p response)
       (message "[auto-workflow] Empty response in parse-json-targets")
       (cl-return-from gptel-auto-workflow--parse-json-targets nil))
-    (condition-case err
-        (with-temp-buffer
-          (insert response)
-          (goto-char (point-min))
-          (when (re-search-forward "[{[]" nil t)
-            (goto-char (match-beginning 0))
-            (let* ((json-array-type 'list)
-                   (json-object-type 'alist)
-                   (json-key-type 'symbol)
-                   (data (json-read))
-                   (target-list
-                    (cond
-                     ((gptel-auto-workflow--json-object-p data)
-                      (or (alist-get 'targets data)
-                          (alist-get 'files data)
-                          (alist-get 'paths data)
-                          (and (gptel-auto-workflow--json-target-file data)
-                               (list data))))
-                     ((listp data) data)))
-                   (candidates
-                    (and (listp target-list)
-                         (delq nil
-                               (mapcar #'gptel-auto-workflow--json-target-file
-                                       target-list)))))
-              (when candidates
-                (gptel-auto-workflow--filter-valid-targets
-                 candidates proj-root max-targets)))))
-      (json-error
-       (message "[auto-workflow] JSON parse error: %s" (error-message-string err))
-       nil)
-      (error
-       (message "[auto-workflow] Target parse error: %s" (error-message-string err))
-       nil))))
+    (let ((cleaned (gptel-auto-workflow--strip-markdown-fences response))
+          (result nil))
+      (condition-case err
+          (with-temp-buffer
+            (insert cleaned)
+            (goto-char (point-min))
+            (while (and (null result)
+                        (re-search-forward "[{[]" nil t))
+              (goto-char (match-beginning 0))
+              (condition-case json-err
+                  (let* ((json-array-type 'list)
+                         (json-object-type 'alist)
+                         (json-key-type 'symbol)
+                         (data (json-read))
+                         (target-list
+                          (cond
+                           ((gptel-auto-workflow--json-object-p data)
+                            (or (alist-get 'targets data)
+                                (alist-get 'files data)
+                                (alist-get 'paths data)
+                                (and (gptel-auto-workflow--json-target-file data)
+                                     (list data))))
+                           ((listp data) data)))
+                         (candidates
+                          (and (listp target-list)
+                               (delq nil
+                                     (mapcar #'gptel-auto-workflow--json-target-file
+                                             target-list)))))
+                    (when candidates
+                      (setq result
+                            (gptel-auto-workflow--filter-valid-targets
+                             candidates proj-root max-targets))))
+                (json-error
+                 (goto-char (1+ (match-beginning 0))) ; skip past broken {
+                 nil)))
+            result)
+        (error
+         (message "[auto-workflow] Target parse error: %s" (error-message-string err))
+         nil)))))
+
+(defun gptel-auto-workflow--strip-markdown-fences (text)
+  "Extract content from markdown code fences if present.
+Returns TEXT unchanged if no code fences found."
+  (let ((trimmed (string-trim text)))
+    (cond
+     ((string-match "```[a-z]*\n\\(\\(?:.\\|\n\\)*?\\)```" trimmed)
+      (string-trim (match-string 1 trimmed)))
+     ((string-match "`\\([^`]+\\)`" trimmed)
+      (match-string 1 trimmed))
+     (t trimmed))))
 
 (defun gptel-auto-workflow--parse-regex-targets (response proj-root max-targets)
   "Parse RESPONSE using regex fallback to extract targets.
@@ -2160,78 +2215,78 @@ BEHAVIOR: Validates filtered result is a list before using it, falls back to unf
       (if gptel-auto-workflow-strategic-selection
           (gptel-auto-workflow--ask-analyzer-for-targets
            (lambda (targets)
-              (if (gptel-auto-workflow--handle-analyzer-error-state targets safe-targets callback)
-                  nil  ; Error already handled
-                (if (null targets)
-                    (let* ((frontier-ranked
-                            (and (fboundp 'gptel-auto-experiment--frontier-select-targets)
-                                 (gptel-auto-experiment--frontier-select-targets
-                                  gptel-auto-workflow-max-targets-per-run)))
-                           (frontier-targets (mapcar #'car frontier-ranked))
-                           (effective-static (or safe-targets
-                                                  (and (fboundp 'gptel-auto-workflow--discover-targets)
-                                                       (gptel-auto-workflow--discover-targets))))
-                           ;; Frontier ranking first, static targets as padding
-                           (merged (if frontier-targets
-                                       (let ((remaining (- gptel-auto-workflow-max-targets-per-run
-                                                           (length frontier-targets))))
-                                         (append frontier-targets
-                                                 (seq-take (cl-remove-if (lambda (t2) (member t2 frontier-targets))
-                                                                         effective-static)
-                                                           (max 0 remaining))))
-                                     effective-static))
-                           (augmented (gptel-auto-workflow--semantic-target-augmentation merged)))
-                      (message "[auto-workflow] Analyzer returned no targets; using frontier-ranked (%d) + static (%d) = %d targets"
-                               (length frontier-targets) (length effective-static) (length augmented))
-                      (funcall callback augmented))
-                  (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
-                         (final-targets (if (and filtered-targets (listp filtered-targets))
-                                            filtered-targets
-                                          targets))
-                         ;; Pad with safe-targets when analyst returns fewer than max
-                         (padded (if (and safe-targets
-                                          (< (length final-targets) gptel-auto-workflow-max-targets-per-run))
-                                     (append final-targets
-                                             (seq-take (cl-remove-if (lambda (t2)
-                                                                       (member t2 final-targets))
-                                                                     safe-targets)
-                                                       (- gptel-auto-workflow-max-targets-per-run
-                                                          (length final-targets))))
-                                   final-targets))
-                         (budgeted-targets (if (fboundp 'gptel-auto-workflow--enforce-category-budget)
-                                                (gptel-auto-workflow--enforce-category-budget padded)
-                                              padded))
-                         (augmented (gptel-auto-workflow--semantic-target-augmentation budgeted-targets))
-                         (with-queued (gptel-auto-workflow--inject-queued-targets augmented)))
+             (if (gptel-auto-workflow--handle-analyzer-error-state targets safe-targets callback)
+                 nil  ; Error already handled
+               (if (null targets)
+                   (let* ((frontier-ranked
+                           (and (fboundp 'gptel-auto-experiment--frontier-select-targets)
+                                (gptel-auto-experiment--frontier-select-targets
+                                 gptel-auto-workflow-max-targets-per-run)))
+                          (frontier-targets (mapcar #'car frontier-ranked))
+                          (effective-static (or safe-targets
+                                                (and (fboundp 'gptel-auto-workflow--discover-targets)
+                                                     (gptel-auto-workflow--discover-targets))))
+                          ;; Frontier ranking first, static targets as padding
+                          (merged (if frontier-targets
+                                      (let ((remaining (- gptel-auto-workflow-max-targets-per-run
+                                                          (length frontier-targets))))
+                                        (append frontier-targets
+                                                (seq-take (cl-remove-if (lambda (t2) (member t2 frontier-targets))
+                                                                        effective-static)
+                                                          (max 0 remaining))))
+                                    effective-static))
+                          (augmented (gptel-auto-workflow--semantic-target-augmentation merged)))
+                     (message "[auto-workflow] Analyzer returned no targets; using frontier-ranked (%d) + static (%d) = %d targets"
+                              (length frontier-targets) (length effective-static) (length augmented))
+                     (funcall callback augmented))
+                 (let* ((filtered-targets (gptel-auto-workflow--filter-frontier-saturated-targets targets))
+                        (final-targets (if (and filtered-targets (listp filtered-targets))
+                                           filtered-targets
+                                         targets))
+                        ;; Pad with safe-targets when analyst returns fewer than max
+                        (padded (if (and safe-targets
+                                         (< (length final-targets) gptel-auto-workflow-max-targets-per-run))
+                                    (append final-targets
+                                            (seq-take (cl-remove-if (lambda (t2)
+                                                                      (member t2 final-targets))
+                                                                    safe-targets)
+                                                      (- gptel-auto-workflow-max-targets-per-run
+                                                         (length final-targets))))
+                                  final-targets))
+                        (budgeted-targets (if (fboundp 'gptel-auto-workflow--enforce-category-budget)
+                                              (gptel-auto-workflow--enforce-category-budget padded)
+                                            padded))
+                        (augmented (gptel-auto-workflow--semantic-target-augmentation budgeted-targets))
+                        (with-queued (gptel-auto-workflow--inject-queued-targets augmented)))
                    (unless (or (null filtered-targets) (listp filtered-targets))
                      (message "[auto-workflow] Frontier filter returned non-list (%S); using unfiltered targets"
                               filtered-targets))
                    (message "[auto-workflow] Analyzer selected %d targets, %d after frontier filtering"
                             (length targets) (length final-targets))
-                    (funcall callback with-queued))))))
-          (let* ((fallback-targets
-                  (or static-targets
-                      (and (fboundp 'gptel-auto-experiment--frontier-select-targets)
-                           (mapcar #'car (gptel-auto-experiment--frontier-select-targets
-                                          gptel-auto-workflow-max-targets-per-run)))
-                      (and (fboundp 'gptel-auto-workflow--discover-targets)
-                           (gptel-auto-workflow--discover-targets))))
-                 (filtered-targets (if fallback-targets
-                                       (gptel-auto-workflow--filter-frontier-saturated-targets fallback-targets)
-                                     nil))
-                 (final-targets (if (and filtered-targets (listp filtered-targets))
-                                    filtered-targets
-                                  fallback-targets))
-                (budgeted-targets (if (fboundp 'gptel-auto-workflow--enforce-category-budget)
-                                      (gptel-auto-workflow--enforce-category-budget final-targets)
-                                    final-targets))
-                (augmented (gptel-auto-workflow--semantic-target-augmentation budgeted-targets))
-                (with-queued (gptel-auto-workflow--inject-queued-targets augmented)))
+                   (funcall callback with-queued))))))
+        (let* ((fallback-targets
+                (or static-targets
+                    (and (fboundp 'gptel-auto-experiment--frontier-select-targets)
+                         (mapcar #'car (gptel-auto-experiment--frontier-select-targets
+                                        gptel-auto-workflow-max-targets-per-run)))
+                    (and (fboundp 'gptel-auto-workflow--discover-targets)
+                         (gptel-auto-workflow--discover-targets))))
+               (filtered-targets (if fallback-targets
+                                     (gptel-auto-workflow--filter-frontier-saturated-targets fallback-targets)
+                                   nil))
+               (final-targets (if (and filtered-targets (listp filtered-targets))
+                                  filtered-targets
+                                fallback-targets))
+               (budgeted-targets (if (fboundp 'gptel-auto-workflow--enforce-category-budget)
+                                     (gptel-auto-workflow--enforce-category-budget final-targets)
+                                   final-targets))
+               (augmented (gptel-auto-workflow--semantic-target-augmentation budgeted-targets))
+               (with-queued (gptel-auto-workflow--inject-queued-targets augmented)))
           (unless (or (null filtered-targets) (listp filtered-targets))
             (message "[auto-workflow] Frontier filter returned non-list (%S); using unfiltered targets"
                      filtered-targets))
-           (message "[auto-workflow] Static/fallback: %d targets, %d after frontier filtering"
-                    (length fallback-targets) (length final-targets))
+          (message "[auto-workflow] Static/fallback: %d targets, %d after frontier filtering"
+                   (length fallback-targets) (length final-targets))
           (funcall callback with-queued))))))
 
 ;;; ─── AutoTTS Trace Collection & Controller ───

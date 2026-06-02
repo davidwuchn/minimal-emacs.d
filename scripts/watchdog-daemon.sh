@@ -14,7 +14,49 @@ LOCK_FILE="$DIR/var/tmp/cron/watchdog.lock"
 MAX_WAIT=60
 RESTART_COOLDOWN=300  # 5 min between restarts to avoid restart loops
 
+# Cron runs without TMPDIR set; emacsclient needs it for socket discovery on macOS.
+export TMPDIR=${TMPDIR:-/tmp}
+
 mkdir -p "$(dirname "$LOG")"
+
+start_workflow_daemon() {
+    env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
+        EMACSNATIVELOADPATH= \
+        TMPDIR=/tmp \
+        AUTO_WORKFLOW_EMACS_SERVER="$SERVER_NAME" \
+        MINIMAL_EMACS_WORKFLOW_ROLE=auto-workflow \
+        MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
+        MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
+        bash -c 'ulimit -s 65532 2>/dev/null; exec emacs --init-directory="$0" --daemon="$1" --eval "(setq native-comp-jit-compilation nil)" </dev/null' \
+        "$DIR" "$SERVER_NAME" &
+}
+
+daemon_pids() {
+    local name="$1"
+
+    if command -v pgrep >/dev/null 2>&1; then
+        pgrep -f -i "emacs.*daemon.*${name}" 2>/dev/null || true
+        # macOS --bg-daemon args can have embedded newlines that prevent
+        # pgrep from matching. Fall back to ps grep on zero results.
+        local found
+        found=$(pgrep -f -i "emacs.*daemon.*${name}" 2>/dev/null | wc -l | tr -d ' ')
+        if [ "$found" -gt 0 ]; then
+            return 0
+        fi
+        # pgrep found nothing — try ps as fallback for macOS bg-daemon
+        ps -axo pid=,command= | awk -v name="$name" '
+            index(tolower($0), "emacs") && index(tolower($0), tolower(name)) { print $1 }
+        '
+    else
+        ps -axo pid=,command= | awk -v name="$name" '
+            index(tolower($0), "emacs") && index(tolower($0), tolower(name)) { print $1 }
+        '
+    fi
+}
+
+first_daemon_pid() {
+    daemon_pids "$1" | awk 'NF { print; exit }'
+}
 
 # Prevent concurrent watchdog runs. If the previous instance is still
 # running after 120s, force-clear the lock (stale lock from crash).
@@ -67,16 +109,71 @@ resolve_live_socket() {
     return 1
 }
 
+socket_accepts_connections() {
+    python3 - "$SERVER_NAME" "$MY_UID" <<'PY'
+from pathlib import Path
+import os
+import socket
+import sys
+import tempfile
+
+server_name = sys.argv[1]
+uid = sys.argv[2]
+
+def candidate_socket_paths(name, uid_value):
+    candidates = []
+    for base in filter(None, [os.environ.get("XDG_RUNTIME_DIR"),
+                              os.environ.get("TMPDIR"),
+                              tempfile.gettempdir(),
+                              "/tmp"]):
+        if base == os.environ.get("XDG_RUNTIME_DIR"):
+            candidates.append(Path(base) / "emacs" / name)
+        else:
+            candidates.append(Path(base) / f"emacs{uid_value}" / name)
+    deduped = []
+    seen = set()
+    for path in candidates:
+        key = str(path)
+        if key not in seen:
+            deduped.append(path)
+            seen.add(key)
+    return deduped
+
+for socket_path in candidate_socket_paths(server_name, uid):
+    if not socket_path.exists():
+        continue
+    probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    probe.settimeout(1)
+    try:
+        probe.connect(str(socket_path))
+        raise SystemExit(0)
+    except ConnectionRefusedError:
+        raise SystemExit(1)
+    except socket.timeout:
+        raise SystemExit(0)
+    except OSError:
+        continue
+    finally:
+        probe.close()
+
+raise SystemExit(1)
+PY
+}
+
 # Check if daemon is reachable via emacsclient.
 # First verify the process exists — a busy Emacs blocked on API calls
 # still has its process running, just can't respond to emacsclient.
 # Returns 0 if responsive or process is alive (busy), 1 if truly gone.
 daemon_responds() {
     timeout 5 emacsclient -a false -s "$SERVER_NAME" --eval 't' >/dev/null 2>&1 && return 0
+    # A refused Unix socket means the server endpoint is broken, not just busy.
+    if ! socket_accepts_connections; then
+        return 1
+    fi
     # Daemon didn't respond via emacsclient — it might be busy with an API call.
     # Check if the process itself is still alive (R=Running, S=Sleeping).
     local pid
-    pid=$(ps aux | grep '[e]macs' | grep "$SERVER_NAME" | awk '{print $2}' | head -1)
+    pid=$(first_daemon_pid "$SERVER_NAME")
     if [ -n "$pid" ]; then
         local state
         state=$(ps -p "$pid" -o state= 2>/dev/null | tr -d ' ')
@@ -138,14 +235,12 @@ if daemon_responds; then
             sleep 5
             clean_all_sockets "$SERVER_NAME" "$MY_UID"
             echo "$(date +%s)" > "$LAST_RESTART_FILE"
-            MINIMAL_EMACS_WORKFLOW_DAEMON=1 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
-                bash -c 'ulimit -s 65532 2>/dev/null; exec emacs --init-directory="$0" --daemon="$1" </dev/null' \
-                "$DIR" "$SERVER_NAME" &
+            start_workflow_daemon
             exit 0
         fi
     fi
     # Also check researcher daemon memory (persists between pipeline runs)
-    RESEARCHER_PID=$(ps aux | grep '[e]macs.*ov5-researcher' | awk '{print $2}' | head -1)
+    RESEARCHER_PID=$(first_daemon_pid "ov5-researcher")
     if [ -n "$RESEARCHER_PID" ]; then
         RSS_KB=$(ps -p "$RESEARCHER_PID" -o rss= 2>/dev/null | tr -d ' ')
         if [ -n "$RSS_KB" ] && [ "$RSS_KB" -gt 5242880 ]; then
@@ -161,19 +256,28 @@ fi
 # give it a generous grace period (API calls can take minutes).
 if workflow_active; then
     echo "[$(date '+%H:%M:%S')] Workflow active — using 600s grace period" >> "$LOG"
-    if timeout 600 emacsclient -a false -s "$SERVER_NAME" --eval 't' >/dev/null 2>&1; then
-        exit 0  # Daemon came back
-    fi
+    # The daemon may be initializing (process alive but no socket yet).
+    # Poll for the socket and responsiveness instead of returning immediately.
+    _deadline=$(($(date +%s) + 600))
+    while [ $(date +%s) -lt $_deadline ]; do
+        if daemon_responds; then
+            exit 0  # Daemon came back
+        fi
+        # If the daemon process exists, keep waiting for the socket.
+        _pid=$(first_daemon_pid "$SERVER_NAME")
+        if [ -z "$_pid" ] || ! kill -0 "$_pid" 2>/dev/null; then
+            break  # Process is gone — not coming back
+        fi
+        sleep 5
+    done
 fi
 
 # Daemon is truly gone. Kill all processes, clean sockets, restart.
 echo "[$(date '+%H:%M:%S')] Daemon unresponsive — restarting" >> "$LOG"
-ps aux | grep '[e]macs.*ov5-auto' | awk '{print $2}' | xargs kill -9 2>/dev/null || true
+daemon_pids "$SERVER_NAME" | xargs kill -9 2>/dev/null || true
 sleep 3
 clean_all_sockets "$SERVER_NAME" "$MY_UID"
 echo "$(date +%s)" > "$LAST_RESTART_FILE"
-MINIMAL_EMACS_WORKFLOW_DAEMON=1 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
-    bash -c 'ulimit -s 65532 2>/dev/null; exec emacs --init-directory="$0" --daemon="$1" </dev/null' \
-    "$DIR" "$SERVER_NAME" &
+start_workflow_daemon
 echo "[$(date '+%H:%M:%S')] Daemon restarted" >> "$LOG"
 exit 0

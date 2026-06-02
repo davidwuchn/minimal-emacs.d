@@ -46,5 +46,22 @@
     (my/gptel--invoke-callback-safely (lambda (r) (setq captured r)) 'test-result)
     (should (eq captured 'test-result))))
 
+(ert-deftest test-subagent/invoke-callback-safely-catches-timer-errors ()
+  "Timer-dispatched callback errors should be caught inside the timer body."
+  (let ((debug-on-error nil)
+        (called nil))
+    (cl-letf (((symbol-function 'run-at-time)
+               (lambda (_time _repeat callback)
+                 (funcall callback)
+                 :fake-timer))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (my/gptel--invoke-callback-safely
+       (lambda (_result)
+         (setq called t)
+         (error "forced callback error"))
+       :result)
+      (should called))))
+
 (provide 'test-gptel-tools-agent-subagent)
 ;;; test-gptel-tools-agent-subagent.el ends here

@@ -102,19 +102,8 @@ Populated by `my/gptel--run-agent-tool-with-timeout', consumed by evolution cycl
 
 (defun my/gptel--reset-agent-task-state ()
   "Drain completed subagent tasks and let in-flight tasks drain naturally.
-
-Completed entries are removed. In-flight entries are kept (not aborted)
-so their callbacks still have state to consult when they arrive — the
-caller's stale-run-id check prevents interference.
-
-CRITICAL: We do NOT call `gptel-abort` on in-flight buffers because the
-subagent's tool-dispatch loop runs asynchronously and crashes with
-\"Selecting deleted buffer\" when the session buffer is killed mid-flight.
-In-flight subagents drain naturally; the stale-run-id check in callbacks
-provides the safety net.
-
-ALGORITHM: Collect task IDs first, then process, to avoid modifying
-the hash table during maphash iteration."
+Corrupted entries are handled gracefully."
+  (ignore-errors
   (when (hash-table-p my/gptel--agent-task-state)
     (let (done-ids stale-ids in-flight-count)
       ;; Phase 1: classify all task IDs
@@ -135,7 +124,7 @@ the hash table during maphash iteration."
         (remhash tid my/gptel--agent-task-state))
       (when (> in-flight-count 0)
         (message "[nucleus] Keeping %d in-flight subagent task(s) for natural drain (not aborting — stale-run check prevents interference)"
-                 in-flight-count)))))
+                 in-flight-count))))))
 
 (defun my/gptel--normalize-agent-activity-dir (dir)
   "Return DIR as a canonical directory path with trailing slash, or nil."
@@ -180,8 +169,22 @@ session buffer mid-flight causes 'Selecting deleted buffer' errors."
 (defun my/gptel--call-gptel-agent-task (callback agent-type description prompt)
   "Invoke the active gptel subagent task runner.
 In headless auto-workflow runs, bypass `gptel-agent-loop-task' to avoid
-its async continuation layer in the worker daemon."
+its async continuation layer in the worker daemon.
+Injects ai-behaviors pipeline mode context into PROMPT for known
+agent types (analyzer/executor/grader/comparator)."
   (require 'gptel-request)
+  ;; Inject ai-behaviors pipeline mode context
+  (when (and (fboundp 'gptel-ai-behaviors--format-pipeline-context)
+             (memq agent-type '(analyzer executor grader comparator)))
+    (let ((mode-ctx (gptel-ai-behaviors--format-pipeline-context agent-type)))
+      (when mode-ctx
+        (setq prompt (concat mode-ctx "\n" prompt))))
+    ;; Check HARD CONSTRAINTS before dispatch — block if violated
+    (when (fboundp 'gptel-ai-behaviors--check-subagent-preconditions)
+      (let ((violation (gptel-ai-behaviors--check-subagent-preconditions agent-type prompt)))
+        (when violation
+          (message "[ai-behaviors] 🚫 %s" violation)
+          (error "[ai-behaviors] Blocked %s dispatch: %s" agent-type violation)))))
   (let* ((headless-auto-workflow
           (and (or (bound-and-true-p gptel-auto-workflow--headless)
                    (bound-and-true-p gptel-auto-workflow-persistent-headless))
@@ -270,28 +273,32 @@ delete the request or file buffer that happened to be current when the
 subagent callback fired, and avoids reusing a deleted worktree as
 `default-directory'."
   (cond ((functionp callback)
-         (let* ((safe-buffer (get-buffer-create " *gptel-callback*"))
-                (safe-default-directory
-                 (or (my/gptel--first-existing-directory
-                      default-directory
-                      user-emacs-directory
-                      temporary-file-directory)
-                     temporary-file-directory)))
-            (condition-case err
-                (with-current-buffer safe-buffer
-                  (setq default-directory safe-default-directory)
-                  (if noninteractive
-                      (funcall callback result)
-                    (run-at-time 0 nil callback result)))
-              (error (let* ((err-text (error-message-string err))
-                            (short-err (if (> (length err-text) 300)
-                                           (concat (substring err-text 0 300) "...")
-                                         err-text)))
-                       (message "[nucleus] Callback error ignored after cleanup (%s %s): %s"
-                                (or agent-type "unknown")
-                                (if (symbolp callback) callback (type-of callback))
-                                short-err))
-                     (when (and (boundp 'debug-on-error) debug-on-error) (signal (car err) (cdr err)))))))
+          (let* ((safe-buffer (get-buffer-create " *gptel-callback*"))
+                 (safe-default-directory
+                  (or (my/gptel--first-existing-directory
+                       default-directory
+                       user-emacs-directory
+                       temporary-file-directory)
+                      temporary-file-directory))
+                 (safe-invoke
+                  (lambda ()
+                    (condition-case err
+                        (with-current-buffer safe-buffer
+                          (setq default-directory safe-default-directory)
+                          (funcall callback result))
+                      (error (let* ((err-text (error-message-string err))
+                                    (short-err (if (> (length err-text) 300)
+                                                   (concat (substring err-text 0 300) "...")
+                                                 err-text)))
+                               (message "[nucleus] Callback error ignored after cleanup (%s %s): %s"
+                                        (or agent-type "unknown")
+                                        (if (symbolp callback) callback (type-of callback))
+                                        short-err))
+                             (when (and (boundp 'debug-on-error) debug-on-error)
+                               (signal (car err) (cdr err))))))))
+            (if noninteractive
+                (funcall safe-invoke)
+              (run-at-time 0 nil safe-invoke))))
         (t
          (message "[nucleus] Warning: my/gptel--invoke-callback-safely skipped invalid callback: %S"
                   (type-of callback)))))
@@ -302,7 +309,9 @@ CALLBACK is called with the result or a timeout error.
 Uses hash table keyed by task-id to support parallel execution."
   (let* ((task-id (setq my/gptel--agent-task-counter (1+ my/gptel--agent-task-counter)))
          (start-time (current-time))
-         (task-timeout my/gptel-agent-task-timeout)
+          (task-timeout (if (numberp my/gptel-agent-task-timeout)
+                            my/gptel-agent-task-timeout
+                          300))
          (origin-buf (current-buffer))
          (activity-dir (and (stringp default-directory)
                             (expand-file-name default-directory)))
@@ -354,7 +363,11 @@ Uses hash table keyed by task-id to support parallel execution."
                    (funcall restore-origin-fsm child-fsm)
                    (unwind-protect
                        (my/gptel--invoke-callback-safely callback result agent-type)
-                     (remhash task-id my/gptel--agent-task-state))))))))
+                     ;; Defer remhash to periodic cleanup (reset-agent-task-state)
+                     ;; to prevent duplicate callbacks from seeing nil state and
+                     ;; discarding results as "stale" (the :done flag above prevents
+                     ;; double processing even when entry persists).
+                     nil)))))))
       (cl-labels
          ((finish-timeout (state timeout-seconds timeout-suffix
                                  &optional timeout-kind total-elapsed-seconds)
@@ -566,6 +579,8 @@ Uses hash table keyed by task-id to support parallel execution."
 
 (cl-defun my/gptel--run-agent-tool (callback &optional agent-name description prompt files include-history include-diff)
   "Run a gptel-agent agent by name.
+Injects ai-behaviors pipeline mode context into PROMPT when
+the agent type matches a known pipeline mode (analyzer/executor/grader/comparator).
 
 AGENT-NAME must exist in `gptel-agent--agents`.
 
@@ -610,12 +625,46 @@ AGENT-NAME must exist in `gptel-agent--agents`.
                                          include-history-bool include-diff-bool))))
 
 (defun my/gptel--run-agent-tool-with-timeout (timeout callback agent-name description prompt
-                                                       &optional files include-history include-diff active-grace)
+                                                        &optional files include-history include-diff active-grace)
   "Run `my/gptel--run-agent-tool' with TIMEOUT and optional ACTIVE-GRACE.
 Logs subagent dispatch to ontology for self-evolution tracking."
-  (let ((previous-timeout my/gptel-agent-task-timeout)
-        (previous-hard-timeout my/gptel-agent-task-hard-timeout)
-        (grace (or active-grace gptel-auto-experiment-active-grace)))
+  ;; GUARD: nil callback → (void-function nil) crash on timer.
+  ;; Must come before ASYNC dispatch — replaced with safe logger.
+  (unless (functionp callback)
+    (message "[nucleus] ⚠ %s with nil callback — safe fallback" agent-name)
+    (setq callback (lambda (result)
+                     (message "[nucleus] %s callback (nil): %s" agent-name
+                              (if (stringp result) (truncate-string-to-width result 80) "non-string")))))
+  (let* ((adjusted-timeout
+          ;; Dynamic timeout: reduce for backends with strikes (verbum health ladder)
+          (if (and (fboundp 'gptel-auto-workflow--backend-health-level)
+                   (boundp 'gptel-backend) gptel-backend
+                   (fboundp 'gptel-backend-name))
+              (let* ((backend-name (gptel-auto-workflow--safe-backend-name gptel-backend))
+                     (health (gptel-auto-workflow--backend-health-level backend-name)))
+                (if (and (numberp health) (>= health 3))
+                    (min timeout 120)  ; probation/dead → max 120s
+                  timeout))
+            timeout))
+         ;; Context sandbox: per-agent-type result limits reduce token cost.
+         ;; Hot path (executor/grader) gets more context; analysis gets less.
+         (my/gptel-subagent-result-limit
+          (pcase agent-name
+            ("executor"   5000)     ; need edit output for downstream grading
+            ("grader"     8000)     ; need full score + reasoning
+            ("analyzer"   2000)     ; just target list, not analysis
+            ("researcher" 2000)     ; just findings, not search results
+            ("reviewer"   3000)     ; review comments
+            ("comparator" 2000)     ; comparison result
+            (_           4000)))    ; default conservative
+         ;; Update workflow progress on every subagent dispatch so the watchdog
+         ;; sees activity even during long-running experiments (which use direct
+         ;; gptel-request, not subagent tasks, so active-tasks remains 0).
+         (progress-time (and (fboundp 'gptel-auto-workflow--update-progress)
+                            (gptel-auto-workflow--update-progress)))
+         (previous-timeout my/gptel-agent-task-timeout)
+         (previous-hard-timeout my/gptel-agent-task-hard-timeout)
+         (grace (or active-grace gptel-auto-experiment-active-grace)))
     ;; Log subagent dispatch to ontology tracking (for self-evolution)
     (when (and (boundp 'gptel-auto-workflow--current-target)
                gptel-auto-workflow--current-target
@@ -742,10 +791,19 @@ Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
 ;;; Configuration
 
 (defcustom gptel-auto-workflow-targets
-  '()
+  '("lisp/modules/gptel-tools-agent-runtime.el"
+    "lisp/modules/gptel-ext-tool-permits.el"
+    "lisp/modules/gptel-benchmark-core.el"
+    "lisp/modules/gptel-tools-memory.el"
+    "lisp/modules/gptel-agent-loop.el"
+    "lisp/modules/gptel-auto-workflow-projects.el"
+    "lisp/modules/gptel-tools-agent-experiment-core.el"
+    "lisp/modules/gptel-tools-agent-benchmark.el"
+    "lisp/modules/gptel-benchmark-subagent.el")
   "Static fallback targets when LLM selection disabled or fails.
-Empty by default - LLM selects targets dynamically.
-Monthly subscription: LLM selection finds best targets each run."
+Bootstrap list from self-evolution top performers + critical safety files.
+These kickstart the experiment feedback loop when the analyzer cannot
+produce parseable targets (network latency, quota, unparseable output)."
   :type '(repeat string)
   :safe #'always
   :group 'gptel-tools-agent)
@@ -834,7 +892,7 @@ reviewer must inspect them via tools when needed."
   :safe #'integerp
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-max-per-target 7
+(defcustom gptel-auto-experiment-max-per-target 2
   "Maximum experiments per target.
 Increased to 7 to allow broader exploration across 9 axes."
   :type 'integer

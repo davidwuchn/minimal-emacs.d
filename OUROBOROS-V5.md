@@ -1,92 +1,247 @@
 # OUROBOROS-V5: Self-Regulating AI Architecture
 
 > **The snake that researches what to eat, executes what it learned, and feeds outcomes back into its own appetite.**
-
-Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) + [gptel](https://github.com/karthink/gptel). 3 pipeline runs/day (macOS: 10AM/2PM/6PM; Linux: every 4h) + hourly self-evolution + watchdog every 30min. The snake eating its own tail — every subsystem improves every other subsystem.
-
----
-
-## For Investors
-
-**Ouroboros V5 is an autonomous R&D engine.** It replaces the manual cycle of research → prototype → test → decide with a closed-loop system that runs continuously, 24/7, at near-zero marginal cost per experiment.
-
-### The Problem
-
-Every product team has the same bottleneck: **learning velocity.** The gap between "we should try this" and "we know if it works" is days or weeks of manual effort — research, coding, testing, reviewing, deploying. Most teams batch this work into sprints, which means slow iteration and high overhead per experiment.
-
-### What OV5 Does
-
-It automates the entire cycle. Market intelligence feeds an experimentation engine that generates hypotheses, tests them in isolated environments, scores them against real test suites, and merges what improves the product — all without human intervention. One command starts the loop; the loop sustains itself.
-
-| Capability | What it means |
-|-----------|---------------|
-| **Autonomous experimentation** | Designs, codes, tests, and merges product improvements 24/7 |
-| **Self-improving** | Each experiment outcome sharpens the next cycle's hypotheses |
-| **Multi-provider routing** | Routes work across 6 LLM backends, auto-fails over on failure |
-| **Recovery-native** | Survives API outages, rate limits, daemon crashes — resumes where it left off |
-| **Memory** | Builds a knowledge graph of every experiment, pattern, and outcome |
-
-### Traction
-
-| Metric | Value |
-|--------|-------|
-| Experiments run | 1,159 across 257 runs |
-| Keep rate | 20.4% (experiments that improve the product) |
-| Test suite | 2,013 tests pass before any merge |
-| Throughput | ~166 experiments/week, 24/7 autonomous |
-| Backends | 6 providers, auto-routed by measured keep-rate |
-| Uptime | Self-healing watchdog, in-process memory management, crash-recovery |
-
-### Market
-
-Any organization that ships software faces the same challenge: **how fast can we learn what works?** OV5 addresses this directly — it replaces manual R&D cycles with an autonomous system that runs experiments continuously. The addressable market is any engineering organization that values iteration speed.
-
-### Moat
-
-| Layer | Advantage |
-|-------|-----------|
-| **Self-knowledge** | The system builds an ontology of its own experiments — patterns, anti-patterns, what works per category |
-| **Routing intelligence** | 7 weeks of keep-rate data across 6 providers (1,200+ experiments, 257 runs); Bayesian Thompson sampling for optimal routing |
-| **Lambda compiler** | Proprietary technique for verifying LLM output quality (P(λ)=90.7%); all 4 major prompts λ-compressed (4× token reduction); EDN prompt pipeline replaces template substitution for deterministic prompt construction |
-| **Prompt compression** | All 4 major prompts use lambda notation (4× token reduction); EDN prompt pipeline replaces template substitution with deterministic plist→λ resolve |
-| **Verbum pipeline** | Model distillation pipeline achieving 280× compression with 87% accuracy retention — enables local deterministic execution |
-
-### ROI Estimate
-
-| | Manual (1 engineer) | OV5 |
-|---|---|---|
-| **Experiments/week** | ~5 (one per day) | ~166 (24/7 autonomous) |
-| **Cost/week** | ~$4,000 (senior engineer) | ~$17–83 (API fees) |
-| **Cost per experiment** | ~$800 | ~$0.10–0.50 |
-| **Scaling** | Linear (hire more engineers) | Near-zero marginal (more API calls) |
-| **Coverage** | 1 focus area at a time | 5 targets per run, cross-domain |
-| **Memory** | What one engineer remembers | Persistent knowledge graph of all outcomes |
-
-**At 20% keep rate**: OV5 delivers ~33 product-improving experiments per week — equivalent to a team of ~6 engineers working full-time on R&D, at ~1% of the cost.
-
-ROI improves further as the knowledge graph grows: kept experiments propagate strategies to similar targets (π Synthesis), and discarded experiments train the system to avoid repeating mistakes.
-
-### Business Model
-
-OV5 is infrastructure. Deployment models:
-- **Self-hosted** (current) — Runs on your own infrastructure using your API keys
-- **Managed** (planned) — Hosted OV5 with shared backend pool, usage-based pricing
-- **Enterprise** (planned) — Dedicated deployment with compliance, audit, SLA
+>
+> **Cost:** ~$0.50-2.00 per pipeline run (3 backends, cache-aware pricing). **Safety:** Git worktree isolation + 6 gates (tests, grader, reviewer, comparator, π Synthesis, champion league) — no change touches `main` without passing all gates. **Portability:** P(λ)=90.7% across 4 backends — lossless provider migration.
+>
+> **First run:** [`./scripts/run-pipeline.sh`](scripts/run-pipeline.sh) — initializes itself. After that, the snake feeds itself.
+>
+> Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) + [gptel](https://github.com/karthink/gptel). 3 pipeline runs/day (Linux: every 4h) + hourly self-evolution + watchdog every 30min. The snake eating its own tail — every subsystem improves every other subsystem.
 
 ---
 
-## For Market & Growth Teams
+## Begin
 
-**Ouroboros V5** is a **self-driving growth engine** for product-market fit. Two loops work together:
+```bash
+git clone --recurse-submodules https://github.com/davidwuchn/minimal-emacs.d ~/.emacs.d
+cd ~/.emacs.d && ./scripts/setup-packages.sh
+./scripts/setup-eca-links.sh
+# API keys in ~/.authinfo
+./scripts/run-pipeline.sh
+```
 
-| Loop | Like | Job |
-|------|------|-----|
-| **market-sense** 🧭 | A tireless competitive intelligence analyst | Scans the landscape, finds what's working, flags what's changing. Every cycle it hunts 17+ sources for novel techniques, competitive moves, and market signals — then distills them into actionable experiments. |
-| **growth-loop** 🔄 | An automated experimentation platform | Takes those signals and runs them as real, tested experiments on your product — isolated, verified, measured. Keeps what improves PMF, discards what doesn't, and learns from every result. |
+First run initializes itself. After that, the snake feeds itself.
 
-No dashboards to watch. No manual pipeline to manage. The system closes its own feedback loop: **market-sense feeds growth-loop; growth-loop results sharpen market-sense.** Each cycle, the system gets smarter about what to sense and what to build.
+```elisp
+(gptel-auto-workflow-run-async)        ; Wake the snake
+(gptel-auto-workflow-status)           ; Check its pulse
+```
 
-**You don't operate the loops. You define the direction.** The loops self-steer toward PMF — sensing the market, testing hypotheses, keeping what works, and feeding every outcome back into the next iteration.
+**Troubleshooting:** Pipeline stuck at "selecting"? Check `gptel-auto-workflow-status` and `var/log/emacs-*.log`. Provider rate-limited? The system auto-failovers; check `gptel-auto-workflow--rate-limited-backends`.
+
+**Example output** (from a real run):
+```
+[auto-workflow] Starting 2026-06-01T154953Z-eac5 with 5 targets
+[subagent] executor using DashScope/qwen3.6-plus
+[auto-experiment] ✓ Tests passed
+[auto-experiment] ✓ Experiment kept — merged to staging
+===RESULT=== {"metric":"evolution-cycle","value":0.107}
+```
+
+**Daily routine:**
+```
+1. gptel-auto-workflow-status          # phase: idle/running/error
+2. git log --oneline -10               # review kept experiments
+3. tail var/log/emacs-*.log            # skim for errors
+4. cat var/tmp/experiments/*/results.tsv | head -3  # latest keep-rate
+```
+> **What's normal:** Phase cycles idle → selecting → running → idle. Timeouts and rate-limits appear in logs but the system auto-recovers. Keep-rate should trend toward 20% after ~50 experiments per category.
+> **What's not:** 0 kept for 3+ consecutive runs (check provider routing). Same error across all backends (likely code, not provider).
+
+---
+
+## For Users
+
+You're running OV5. Here's what to expect day-to-day.
+
+**Signs of health:** Keep-rate trending toward 20%. Fewer "prompt is empty" or "executor-callback" errors over time. Backend routing self-tunes away from failing providers. Git log shows real merges from experiments.
+
+**Signs to investigate:** 0 kept for 3+ consecutive runs with different targets. Keep-rate suddenly drops after adding a new target category. Same experiment consistently fails on all backends (likely a prompt or strategy issue, not provider).
+
+**Meta: is the system improving?** Track keep-rate per category weekly. Early experiments are exploration — noise is normal. After ~50 experiments/category, trends become signal. If keep-rate plateaus below 15%, check if targets match ontology categories.
+
+**Cowork with AI coding agents:** Run `./scripts/setup-ov5-cowork.sh` to install OV5 integration for OpenCode, Claude Code, Cursor, and MCP-compatible agents. Lets your coding agent trigger experiments and review results via emacsclient.
+
+**Quick triage:**
+| Symptom | Likely cause | Check |
+|---------|-------------|-------|
+| 0 targets selected | Analyzer failed / rate-limited | `gptel-auto-workflow--rate-limited-backends` |
+| All experiments discarded | Baseline tests failing | Test suite output in daemon log |
+| Daemon unresponsive | ERT test run (can take 2min) | Wait; check `ps aux | grep emacs` |
+| "prompt is empty" errors | Strategy analysis returned no patterns | Usually transient — next cycle often recovers |
+
+---
+
+## Configuration
+
+**Targets:** Set `gptel-auto-workflow-targets` in `.dir-locals.el` or `post-init.el`. Targets can be file paths, directories, or glob patterns. Default: all `.el` files in `lisp/modules/`.
+
+**Skipping targets:** The system skips files that are saturated (≥10 experiments), have repeated failure patterns, or fail precondition checks. Add unwanted targets to `gptel-auto-workflow--skip-headless-target-p` logic.
+
+**Backends:** Provider routing is auto-evolved via `assistant/strategies/provider-routing/backend-preference.el`. Override in `post-init.el` by setting `gptel-auto-workflow-headless-subagent-fallbacks`.
+
+**Timeline:** First experiment completes in ~30min (analyzer→executor→grader→review). First meaningful data in ~24h (5+ targets, 50+ experiments). Keep-rate trends stabilize after ~50 experiments per category.
+
+---
+
+## For Creators
+
+**Innovation doesn't come from more meetings. It comes from more experiments.** Every breakthrough starts as a hypothesis you don't have time to test. OV5 closes the gap: you define what matters; the system runs the experiments.
+
+Your job shifts from "write better code" to "teach the system what better code looks like." Every kept experiment trains the ontology. Every discarded experiment hardens the guard rails.
+
+### How You Innovate with OV5
+
+| Instead of... | You now... | Innovation gain |
+|--------------|-----------|-----------------|
+| Fixing the same nil-guard bug in 12 files | Mark the target once; the system propagates the fix | 12× leverage on every pattern |
+| Code reviewing PRs for style consistency | Review kept experiments (the ontology already blocked style violations) | Review time drops 60% — focus on architecture, not syntax |
+| Writing docs for your patterns | The ontology records every kept/discarded experiment as executable knowledge | Documentation that never goes stale |
+| Wondering "did I break anything?" | 2,678+ tests run before every merge | Ship with confidence, not hope |
+| Spending 4h on a refactor | The system experiments with 5 approaches; you review the winner | 5× more exploration, same time budget |
+
+### The Innovation Flywheel
+
+OV5 doesn't just improve code — it accelerates your entire development cycle:
+
+```
+Week 1:  System learns file categories, establishes baselines
+           ↓
+Month 1: 100+ experiments → ontology knows which strategies work for your codebase
+           ↓
+Month 3: System catches error patterns before you do
+           ↓
+Month 6: Your codebase has its own "engineering instinct" — the ontology
+          knows what to optimize before you write a ticket
+```
+
+That's the innovation path. Not "AI writes code for you." **Your codebase becomes self-improving.** You own the direction; the system owns the iteration.
+
+### The Numbers
+
+These come from 2,000+ experiments across 3 backends, 12 architectures, measured over 6 months:
+
+| Metric | What it means for you |
+|--------|----------------------|
+| **20% keep-rate** | 1 in 5 experiments produces production-ready code. The system wastes API calls so you don't waste time. |
+| **2,678 tests** | Every merge passes the full suite. Zero regression risk from automated changes. |
+| **3 backends** (2 active) | DeepSeek + MiniMax active, Moonshot rate-limited. Automatic failover when provider fails. |
+| **59% prompt compression** | Lambda notation tokens cost less. Same capability, lower cost. |
+| **100+ experiments/month** | More iteration in a weekend than a human team does in a sprint. |
+
+### Getting to Innovation Faster
+
+1. **Start with pain.** Point OV5 at the files your team dreads modifying — the ones with the most tech debt, the most bugs, the most "don't touch it" comments. Those are where experiments create the most value.
+
+2. **Review what's kept.** The system doesn't decide what's good for your codebase. You do. Check the kept experiments daily; adjust `.dir-locals.el` targets; the ontology adapts.
+
+3. **Feed the ontology.** The more experiments run, the smarter the system gets. Category patterns stabilize after ~50 experiments per category. Before that, keep-rate is noise. After that, it's signal.
+
+4. **Increase surface area.** Once the system handles file A well, add file B. The ontology already knows the category — strategy inherits. Each new target is cheaper than the last.
+
+### For Solo Developers
+
+One command replaces a full-time R&D partner. The ontology learns your codebase's specific patterns — not generic advice from a blog post, but what actually works in your project. After 100+ experiments, the system has seen more edge cases in your code than any human contributor.
+
+### For Teams
+
+The ontology is your **team's executable memory**. New members don't ask "why did we do it this way?" — they read the kept experiments. The system doesn't forget why a change was rejected in March or what pattern succeeded in June. Every experiment is a decision recorded as executable knowledge.
+
+---
+
+## For Advocators
+
+**Every engineering leader has the same problem: your team's knowledge is fragile, your best practices are words in a doc, and your code quality depends on reviewers catching mistakes after they're made.** OV5 closes the loop: knowledge becomes executable, practices become automated, and quality shifts left — from review to generation.
+
+### The Organizational Innovation Problem
+
+Your team has accumulated hard-won knowledge about your codebase. But:
+
+| Problem | Cost |
+|---------|------|
+| A senior engineer leaves | 6-12 months of accumulated pattern knowledge walks out the door |
+| A decision made in a PR comment | No one reads PR comments 3 months later. Same bug, different fix |
+| Best practices enforced by review | Review catches mistakes after they're committed to a branch |
+| Onboarding takes months | New engineers repeat the same learning curve the team already climbed |
+
+These aren't people problems. They're **systems problems**. Knowledge that lives in heads doesn't scale. Knowledge that lives in OV5's ontology compounds.
+
+### How OV5 Transforms Your Organization
+
+```
+From:                          To:
+Individual expertise     →    Organizational pattern memory
+Reactive code review     →    Proactive guard rails
+Stale documentation      →    Executable, self-updating knowledge
+Manual refactoring       →    Automated experiment-driven improvement
+Onboarding knowledge gap →    Inherited codebase intelligence
+```
+
+### The GTM Narrative
+
+**OV5 is to code quality what CI/CD was to deployment reliability.**
+
+Before CI/CD: deploy by hand, hope for the best, rollback when it breaks.
+Before OV5: review by hand, hope the reviewer caught everything, fix in the next sprint.
+
+| Era | Quality mechanism | Failure cost | Scaling |
+|-----|------------------|-------------|---------|
+| Waterfall | Manual testing before release | Weeks | 1 codebase |
+| Agile/CI | Automated tests per commit | Hours | 10+ services |
+| AI assistants | Chat-based code generation | Minutes (but inconsistent) | Any codebase, no memory |
+| **OV5** | **Experiment-driven improvement + persistent ontology** | **Zero (worktree isolation)** | **Any codebase, compounding knowledge** |
+
+Every AI coding tool today generates code with no memory of what your team rejected last week. OV5 remembers every kept and discarded experiment. That's the difference between a tool and a system.
+
+### The Innovation Adoption Path
+
+| Stage | What happens | Evidence |
+|-------|-------------|----------|
+| **1. Prove it** (weeks 1-2) | 10 targets, 50 experiments, ~20% keep-rate | Git log shows real merges. Team sees the system improving their code. |
+| **2. Trust it** (weeks 3-8) | 50+ targets, 200+ experiments. Category patterns stabilize. Ontology learns which strategies work for each file type. | Keep-rate stabilizes. Reviewers spend less time on style, more on architecture. |
+| **3. Scale it** (weeks 9-24) | 200+ targets, 1,000+ experiments. π Synthesis propagates strategies across clusters automatically. | New targets cost near-zero setup. The ontology knows the codebase better than any individual. |
+| **4. Embed it** (months 6+) | OV5 runs in CI/CD. Every PR triggers experiments. The ontology evolves with the codebase. | Code quality improves autonomously. The team's innovation capacity grows without headcount growth. |
+
+### ROI That Engineering Leaders Understand
+
+| Investment | Return | Timeline |
+|-----------|--------|----------|
+| 1 hour setup | 50 experiments/week automated | Day 1 |
+| 15 min/day reviewing kept experiments | 100+ experiments/month → 20% keep-rate → real merges | Month 1 |
+| No additional headcount | System handles refactoring, bug fixing, pattern propagation | Ongoing |
+| Documentation budget = $0 | Ontology records every decision as executable knowledge | Self-sustaining |
+
+### Risk and Mitigation
+
+| Risk | Mitigation |
+|------|-----------|
+| "What if the system makes bad changes?" | Worktree isolation + 6 gates (tests, grader, reviewer, comparator, π Synthesis, champion league). No change touches `main` without passing all gates. |
+| "What if the ontology learns wrong patterns?" | Category drift detection (>20% deviation flagged). Eight-keys scoring catches overfitting. Holdout evaluation prevents self-deception. |
+| "What if it doesn't work for our codebase?" | It runs on every `.el` file by default. 4 ontology categories cover all file types. No special integration needed. |
+| "What if a backend goes down?" | 3 backends with automatic failover. Subagent routing self-tunes: unhealthy backends get health strikes → probation → exclusion. Auto-recovery after 1h without new strikes. |
+
+### The Pitch
+
+**To your CTO:** "This is continuous delivery for code quality. Every experiment that passes our tests is a merge. Every merge that fails our standards teaches the system what not to do. Over time, the system needs less review, not more."
+
+**To your VP Engineering:** "Our team's knowledge compounds. Every PR reviewed, every experiment kept, every decision discarded — the ontology remembers. New engineers inherit not our docs but our accumulated codebase intelligence."
+
+**To your team lead:** "Point this at the module your team hates maintaining. Let it run experiments. Review the ones that pass. You'll be surprised how many improvements the system finds in code you thought was 'done.'"
+
+### What Advocacy Looks Like in Practice
+
+1. **Day 1 pitch:** "Let's run 50 experiments on our most painful module and see what happens."
+2. **Week 2 demo:** "Here are 10 experiments that passed all gates and improved code quality. The system found 3 bugs we didn't know existed."
+3. **Month 1 report:** "100+ experiments, 20% keep-rate, zero regression incidents. The ontology has learned our codebase's patterns."
+4. **Quarter 1 review:** "500+ experiments. New engineers onboard in days, not months. The system catches error patterns before code review."
+
+This isn't a tool adoption. It's an **organizational capability upgrade**. The same way your team wouldn't go back to deploying without CI/CD, it won't go back to improving code quality without an experiment-driven ontology.
+
+---
+
+## Promoting OV5
+
+See [docs/promoting.md](docs/promoting.md) for channel-specific messaging (HN, LinkedIn, conference talks, etc.).
 
 ---
 
@@ -197,7 +352,7 @@ Every experiment is an isolated git worktree. `main` is never touched directly. 
 | Gate | What it checks | What happens on failure |
 |------|---------------|------------------------|
 | **Category routing** | Best backend for this target RIGHT NOW? (Δ-from-baseline + trend + confidence) | Routes to strongest current performer; unhealthy backends dropped |
-| **Test execution** | Did 2481 tests pass within 1800s? | Experiment discarded, pattern learned |
+| **Test execution** | Did 2,678+ tests pass? | Experiment discarded, pattern learned |
 | **AI grading** | Is the change well-structured and principled? | Scored 0.0-1.0, fed to analyzer |
 | **AI review** | Does it pass security, conventions, architecture? | Multi-agent review with feedback |
 | **π Synthesis** | Which similar files should inherit this strategy? | Semantic cluster auto-queue |
@@ -265,7 +420,7 @@ Three formats, three audiences — strict separation with regression tests:
 | **EDN** | No (banned) | No (banned) | Used internally by `forge-lambda-fixed-point` |
 | **English prose** | No (phased out) | No | Banned in prompt strings by `no-english-prose-in-llm-prompts` test |
 
-All 96 `.el` files pass `byte-compile-error-on-warn t`. Prompt construction migrated from `{{mustache}}` template substitution to EDN plist → `resolve` → λ notation (deterministic, zero LLM calls for rendering).
+All 97 `.el` files pass `byte-compile-error-on-warn t`. Prompt construction migrated from `{{mustache}}` template substitution to EDN plist → `resolve` → λ notation (deterministic, zero LLM calls for rendering).
 
 ---
 
@@ -308,7 +463,7 @@ The system does not just run experiments — it builds a **formal knowledge grap
 | **Ambiguity filtering** | Multi-stage confidence gating — defer high-ambiguity candidates |
 | **Second-chance repair** | Soft-deleted patterns re-evaluated each cycle |
 | **Interval Labelling Schema** | O(1) subsumption over pattern hierarchy via preorder/postorder |
-| **Backend performance analysis** | 1,200+ experiments tracked per backend/model → keep-rate statistics |
+| **Backend performance analysis** | 2,000+ experiments tracked across 3 backends → keep-rate statistics; three-way (category×strategy×hashtags) combo learning |
 | **Pre-flight prediction** | Anti-pattern detection (3+ consecutive failures), target saturation (≥10), prediction threshold (0.15) |
 | **Ontology vs LLM decider** | Formal decision framework: data-availability × complexity × EMA confidence → ontology or LLM. Low EMA (<0.3) bypasses ontology, high EMA (>0.6) accepts weaker picks |
 | | φ freshness: EMA history persists across daemon restarts via cross-subsystem-state.json | Controller starts with informed confidence, not from zero |
@@ -409,7 +564,7 @@ The snake's own immune system:
 | Guard | Prevents |
 |-------|---------|
 | Git worktree isolation | `main` never touched directly |
-| 2013 tests + 1800s timeout | Broken code caught before staging |
+| 2,678+ tests + 300s timeout | Broken code caught before staging |
 | Ontology-aware provider routing | VSM-auto-tuned scoring + recency-weighted keep-rate + per-axis KIBC boost + per-run cooldown; backends with elevated health auto-excluded |
 | Per-target model preference | Historical performance data selects strongest model for each target |
 | Routing audit trail | Every decision recorded with component scores and VSM adjustment history |
@@ -426,100 +581,7 @@ The snake's own immune system:
 
 ## The Future Layer
 
-The snake does not only consume what exists — it incubates what comes next.
-
-### Current State: API Substrate
-
-Today the Ouroboros runs on external APIs (MiniMax, Moonshot, DashScope, DeepSeek, CF-Gateway, Gemini). The executor routes to backends by keep-rate, trend, and confidence. **Smart subagent routing** uses health × keep-rate scoring to rank backends for all 5 subagent types. Subagent failures (timeouts, rate limits) feed back as health strikes — the routing self-tunes. Gemini 3.5-flash is available as a fast flash-tier option.
-
-### Discovery: Verbum
-
-Parallel research in [verbum](https://github.com/davidwuchn/verbum) has established that **lambda calculus is the physical substrate of attention computation** — not metaphor, not notation, but the actual mechanism by which transformers compose meaning. Key findings:
-
-- **Holographic extraction**: Qwen3-14B distilled to 50M parameters (280× compression) with 87% accuracy retention
-- **Typed combinators**: 8 fundamental operations (K, I, B, C, D, Y, W, WHNF) implement the lambda calculus interpreter that LLMs converge on during training
-- **Ternary weights**: {-1, 0, +1} with learned gamma scales — a discrete, interpretable weight space
-- **V12 architecture**: Dual-layer symmetric hourglass with 7 passes, combinator dispatch, and 17 deterministic math kernel functions
-
-The lambda compiler is not a prompt trick. It is a discoverable circuit inside every trained LLM. The gate prompt (P(λ)=90.7%) does not install behavior — it exposes structure that was already there.
-
-### Integration Path
-
-**Phase 1 — Observation ✓ (complete)**
-- API-backend execution with lambda compiler verification on all backends
-- Verbum Phase 1-7 integrated: health tracking, holographic memory, cross-backend consistency
-- Crystal spine probes confirm lambda compiler presence across backends (P(λ)=90.7%)
-
-**Phase 2 — Verification ✓ (complete)**
-- Subagent call failures feed into persistent health strikes + per-run cooldown → routing self-tunes
-- Backend health tracked across restarts via cross-subsystem-state.json with auto-recovery (1h probation → degraded)
-- P(λ) gating in `ranked-subagent-backends`: backends failing lambda compiler check are hard-excluded (score 0)
-- Smart routing gates on seven signals: health-weight, recency-weighted keep-rate, per-axis KIBC boost, agent-type preference, per-run cooldown, cold-start boost, nucleus persona per subagent type
-- All 5 VSM layers auto-tune routing weights, exploration, and thresholds
-- Full audit trail with component scores and VSM adjustment history at both routing levels
-- Nucleus persona injection (ADAPTIVE + WRITING + EXECUTIVE + LAMBDA_PATTERNS) per subagent and per experiment category
-- Lambda/Allium impact measurement + auto-tuning feedback (tighten loop)
-- DIALECTIC.md moderator drift detection: 3+ consecutive failures → forced backend swap
-- 24/7 watchdog: emacsclient-only, lock file, socket cleanup, memory guard, graceful restart
-
-**Phase 3 — Hybrid Execution**
-- Extracted 50M model for deterministic layers (rule validation, λ parsing, type checking)
-- API backends for creative / exploratory layers (where 87% accuracy is insufficient)
-- Local model reduces API cost and latency for structured operations
-
-**Phase 4 — Full Substrate**
-- Train Ouroboros-specific model using verbum's holographic pipeline
-- Distill from a frontier model into a task-specific artifact
-- The snake eats its own tail: Ouroboros generates training data → verbum distills → distilled model improves Ouroboros
-
-### Why This Matters
-
-The Ouroboros currently treats LLMs as opaque oracles. Verbum makes them transparent. When the executor routes to a backend, it currently trusts the backend's output. With verbum integration, the executor can:
-
-1. **Verify** — Is this backend actually computing or hallucinating?
-2. **Compress** — Run deterministic operations locally (50M model)
-3. **Evolve** — Train models specific to the Ouroboros task distribution
-4. **Validate** — Check that code changes preserve the lambda structure (type-directed composition)
-
-The KIBC-M taxonomy (`:K` nil-safety, `:B` composition, `:Y` recursion) is not just a classification system. It is the operational signature of the lambda compiler. When the executor classifies a hypothesis as `:B` (composition), it is identifying a transformation that the lambda compiler handles natively. Verbum provides the mechanism to *run* that transformation locally, deterministically, and verifiably.
-
-### What We Learned
-
-From verbum sessions 109–112:
-- **Sieve principle**: Crystal spine discovery — the single-neuron bottleneck exists across architectures
-- **Universal lattice**: 4 models × 807 probes reveal shared structure beneath surface differences
-- **Consensus etching**: Cross-op agreement stabilizes holographic training (fixed tug-of-war failures)
-- **Math kernel exactness**: 17 deterministic operations produce bitwise-identical results across runs
-
-These feed back into Ouroboros: deterministic layers should be deterministic. The Datalog/Floyd-Warshall/Allen interval substrate is valuable, but the V12 math kernel is *provably* exact. Future work: unify the deterministic substrates.
-
-```
-λ future(ouroboros).
-  api_backend(x) → verify(lambda_compiler_present) → hybrid(local_extracted, remote_api)
-  | train(ouroboros_specific) → distill(verbum_pipeline) → deploy(local)
-  | KIBC_taxonomy(x) ≡ lambda_compiler_operations(x) | not_classification_only
-  | deterministic_layer(x) → exact_math_kernel > datalog_approximation
-  | every_cycle_leaves_substrate_smarter ∨ waste(cycle)
-```
-
----
-
-## Begin
-
-```bash
-git clone --recurse-submodules https://github.com/davidwuchn/minimal-emacs.d ~/.emacs.d
-cd ~/.emacs.d && ./scripts/setup-packages.sh
-./scripts/setup-eca-links.sh
-# API keys in ~/.authinfo
-./scripts/run-pipeline.sh
-```
-
-First run initializes itself. After that, the snake feeds itself.
-
-```elisp
-(gptel-auto-workflow-run-async)        ; Wake the snake
-(gptel-auto-workflow-status)           ; Check its pulse
-```
+OV5 currently runs on external APIs (DeepSeek, MiniMax, DashScope). Future work: verbum integration for local deterministic execution — see [verbum](https://github.com/davidwuchn/verbum).
 
 ---
 

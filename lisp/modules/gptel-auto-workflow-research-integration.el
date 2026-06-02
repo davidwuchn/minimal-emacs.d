@@ -228,27 +228,30 @@ Strategy is queued for champion league evaluation against existing 4 strategies.
 (defun gptel-auto-workflow--run-research-champion-league ()
   "AutoGo: benchmark all proposed strategies against incumbents.
 Adopts winners, discards losers. Called from evolution cycle.
-∀ Vigilance: a strategy must beat the category baseline (~15%) to be adopted."
-  (when gptel-auto-workflow--proposed-research-strategies
-    (message "[research-champion] Running champion league for %d proposed strategies"
-             (length gptel-auto-workflow--proposed-research-strategies))
-    (dolist (proposed (copy-sequence gptel-auto-workflow--proposed-research-strategies))
-      (when (fboundp 'gptel-auto-workflow--benchmark-research-strategy)
-        (gptel-auto-workflow--benchmark-research-strategy
-         proposed "agentic"
-         (lambda (result)
-           (let ((efficiency (or (plist-get result :efficiency) 0))
-                 (baseline 0.15))
-             (if (> efficiency baseline)
-                 (progn
-                   (push proposed gptel-auto-workflow--research-strategies)
-                   (message "[research-champion] ADOPTED: %s (efficiency=%.3f > %.3f)"
+∀ Vigilance: a strategy must beat the category baseline (~15%) to be adopted.
+Errors are caught to prevent idle-timer cascade failures."
+  (condition-case err
+      (when gptel-auto-workflow--proposed-research-strategies
+        (message "[research-champion] Running champion league for %d proposed strategies"
+                 (length gptel-auto-workflow--proposed-research-strategies))
+        (dolist (proposed (copy-sequence gptel-auto-workflow--proposed-research-strategies))
+          (when (fboundp 'gptel-auto-workflow--benchmark-research-strategy)
+            (gptel-auto-workflow--benchmark-research-strategy
+             proposed "agentic"
+             (lambda (result)
+               (let ((efficiency (or (plist-get result :efficiency) 0))
+                     (baseline 0.15))
+                 (if (> efficiency baseline)
+                     (progn
+                       (push proposed gptel-auto-workflow--research-strategies)
+                       (message "[research-champion] ADOPTED: %s (efficiency=%.3f > %.3f)"
+                                proposed efficiency baseline))
+                   (message "[research-champion] REJECTED: %s (efficiency=%.3f <= %.3f)"
                             proposed efficiency baseline))
-               (message "[research-champion] REJECTED: %s (efficiency=%.3f <= %.3f)"
-                        proposed efficiency baseline))
-             (setq gptel-auto-workflow--proposed-research-strategies
-                   (cl-remove proposed gptel-auto-workflow--proposed-research-strategies
-                              :test #'string=)))))))))
+                 (setq gptel-auto-workflow--proposed-research-strategies
+                       (cl-remove proposed gptel-auto-workflow--proposed-research-strategies
+                                  :test #'string=))))))))
+    (error (message "[research-champion] League error (non-fatal): %s" (error-message-string err)))))
 
 (provide 'gptel-auto-workflow-research-integration)
 ;;; gptel-auto-workflow-research-integration.el ends here

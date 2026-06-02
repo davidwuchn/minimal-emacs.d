@@ -70,6 +70,22 @@
 - Executor prompt now warns VERIFY section must appear outside `<think>`
 - Duplicated function `get-category-failure-reasons` in remote code removed
 
+### Cumulative Session Summary (May 30-31)
+**Bottleneck found**: eight-keys scorer returned 0.0 for all experiments (not loaded in daemon) → comparator always rejected.
+
+**All 7 bugs fixed across ~35 commits:**
+1. Verification gate: think-block evidence extraction for grader
+2. Eight-keys root cause: auto-load `gptel-benchmark-principles`
+3. Comparator: use grader score when eight-keys is 0.0
+4. Grader bypass: ≥80% → kept directly (Pi5 parallel fix)
+5. Grader parser: format-agnostic, takes LAST score match
+6. Category freeze: strike decay + auto-thaw + backward compat
+7. Staging review: action schema injection + outcome tracking + DO NOT BLOCK list
+
+**Ontology now fully self-evolves**: strategy preferences, eight-key weights, drift detection, boundary repair, review outcomes, dispatch distribution — all in one evolution cycle.
+
+**Last gate**: staging review LLM. Improved to use category action schema and only block what tests cannot detect.
+
 ### Eight-Key Ontology Self-Evolution
 - TSV column `eight_key_scores` added (JSON-encoded per-key scores per experiment)
 - `gptel-auto-workflow--aggregate-category-eight-keys`: reads all results, computes per-category per-key average deltas

@@ -81,7 +81,7 @@ ORIG is the original function, PATH is the file path."
 ;; PLAIN MODEL CONFIG + MODE HOOK
 ;; ==============================================================================
 
-(defcustom my/gptel-plain-model 'minimax-m2.7-highspeed
+(defcustom my/gptel-plain-model 'MiniMax-M3
   "Model for plain `gptel' buffers (no preset / non-agent sessions).
 Set to nil to use the global `gptel-model' default."
   :type '(choice (const :tag "Global default" nil) symbol)
@@ -95,6 +95,7 @@ by `my/gptel--mode-hook-setup' before this runs).
 Skip in headless workflow to preserve the bootstrap default (moonshot)."
   (when (and (bound-and-true-p gptel-mode)
              (not (bound-and-true-p gptel--preset))
+             (not my/gptel--in-subagent-task)
              my/gptel-plain-model
              (boundp 'gptel--minimax)
              (not (bound-and-true-p gptel-auto-workflow-persistent-headless)))

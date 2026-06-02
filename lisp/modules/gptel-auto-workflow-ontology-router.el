@@ -18,7 +18,13 @@
 
 (require 'gptel-auto-workflow-evolution)
 
-(defvar gptel-auto-workflow-executor-rate-limit-fallbacks)
+(defvar gptel-auto-workflow-executor-rate-limit-fallbacks
+  '(("DeepSeek" . "deepseek-v4-flash")
+    ("MiniMax" . "minimax-m2.7-highspeed")
+    ("DashScope" . "qwen3.6-plus"))
+  "Fallback chain for executor when rate-limited.
+First backend is primary, subsequent backends are tried in order.
+Ordered by keep-rate from experiment data.")
 (defvar gptel-auto-workflow-headless-subagent-fallbacks)
 
 ;; ─── Sieve-Based Backend Classification (verbum Phase 5) ───
@@ -323,22 +329,34 @@ Categories based on module purpose from historical experiment analysis."
              (string-match-p "compile" basename)
              (string-match-p "\\`gptel-ext-" basename))
          :programming)
-       ;; Tool-calls: sandbox, tool execution, bash, grep, glob
-       ((or (string-match-p "sandbox" basename)
-            (string-match-p "\\`gptel-tools-[^a]" basename)  ; tools-* but not tools-agent*
+       ;; Tool-calls: sandbox, tool execution, bash, grep, glob, tools infrastructure
+        ((or (string-match-p "sandbox" basename)
+             (string-match-p "\\`gptel-tools\\.el\\'" basename)  ; gptel-tools.el only
+             (string-match-p "\\`gptel-tools-[^a]" basename)  ; tools-* but not tools-agent*
+            (string-match-p "\\`nucleus-tools" basename)    ; nucleus-tools*
             (member basename '("gptel-tools-bash.el" "gptel-tools-grep.el"
                               "gptel-tools-glob.el" "gptel-tools-edit.el"
                               "gptel-tools-apply.el" "gptel-tools-preview.el"
                               "gptel-tools-programmatic.el")))
         :tool-calls)
-       ;; Agentic: agent orchestration, workflow, evolution, strategy
+       ;; Agentic: agent orchestration, workflow, evolution, strategy, ai-behaviors
        ((or (string-match-p "agent" basename)
             (string-match-p "workflow" basename)
             (string-match-p "strategy" basename)
-            (string-match-p "evolution" basename))
+            (string-match-p "evolution" basename)
+            (string-match-p "ai-behaviors" basename)
+            (string-match-p "\\`gptel-agent-" basename))
         :agentic)
-       ;; Default: natural-language (conservative, many gptel features are NL)
-       (t :natural-language)))))
+       ;; Infrastructure: presets, UI, config, init modules
+       ((or (string-match-p "nucleus-presets" basename)
+            (string-match-p "nucleus-header" basename)
+            (string-match-p "init-" basename)
+            (string-match-p "tree-sitter\\|treesit" basename)
+            (string-match-p "skill-routing" basename)
+            (string-match-p "standalone" basename))
+        :natural-language)
+       ;; Default to :programming for unrecognized .el files (conservative)
+       (t :programming)))))
 
 ;; ─── Category-Level Performance Aggregation ───
 
@@ -598,20 +616,29 @@ STRATEGY and TARGET filter the performance data.
              (confidence (if all-total
                              (min 1.0 (/ (float all-total) 50.0))
                            0.0)))
-        (push (list :backend backend :model model
+            (push (list :backend backend :model model
                     :rate all-rate :total all-total
                     :delta delta :trend trend :confidence confidence
                     :healthy healthy
                     :score (if all-rate
                                 (let* ((health-penalty (if (>= (gptel-auto-workflow--backend-health-level backend) 2)
                                                            -100.0   ; DEGRADED or worse = severe penalty
-                                                         0.0)))
+                                                         0.0))
+                                       ;; Context efficiency boost: backends that save more context
+                                       ;; (higher savings ratio) get a 0-15 point bonus.
+                                       ;; Falls back to 0 if context-intercept module not loaded.
+                                       (ctx-boost (if (and (fboundp 'gptel-nucleus-context--backend-context-efficiency)
+                                                           (boundp 'gptel-nucleus-context--backend-efficiency))
+                                                      (let ((eff (gptel-nucleus-context--backend-context-efficiency backend)))
+                                                        (if eff (* eff 15.0) 0.0))
+                                                    0.0)))
                                    (+ (* delta (* delta-weight 100.0))
                                       (* all-rate (* rate-weight 100.0))
                                       (* trend (* trend-weight 100.0))
                                       (* confidence (* confidence-weight 100.0))
                                       (if healthy 0 -50.0)   ; Quota penalty
                                       health-penalty
+                                      ctx-boost
                                       (gptel-auto-workflow--phase-boost backend target)))
                                -1.0))  ; No data = bottom
               scored)))
@@ -780,12 +807,21 @@ the original fallback list — preventing mutation side effects."
 (defun gptel-auto-workflow--reset-fallback-order ()
   "Reset fallback chain to static order from executor config.
 Moonshot removed — content_filter blocks code generation.
-DashScope removed — quota exhausted on this account (HTTP 429)."
+DashScope reinstated as tertiary backend — qwen3.6-plus confirmed working
+on 2026-05-31 (was previously excluded due to transient quota issue)."
   (when (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
     (setq gptel-auto-workflow-executor-rate-limit-fallbacks
           '(("DeepSeek" . "deepseek-v4-flash")
-            ("MiniMax" . "minimax-m2.7-highspeed")))
-    (message "[onto-router] Reset to executor static fallback order (DeepSeek + MiniMax only)")))
+            ("MiniMax" . "minimax-m2.7-highspeed")
+            ("DashScope" . "qwen3.6-plus")))
+    ;; Clear any stale health strikes for DashScope from health cache
+    (when (boundp 'gptel-auto-workflow--backend-lambda-health-cache)
+      (maphash (lambda (k v)
+                 (when (and (symbolp k) (string-match-p "DashScope" (symbol-name k)))
+                   (puthash k (plist-put v :health :healthy)
+                            gptel-auto-workflow--backend-lambda-health-cache)))
+               gptel-auto-workflow--backend-lambda-health-cache))
+    (message "[onto-router] Reset to executor static fallback order (DeepSeek + MiniMax + DashScope)")))
 
 ;; ─── Semantic Similarity Target Discovery ───
 
@@ -1253,24 +1289,24 @@ Probation threshold auto-tunes from VSM health when available
   (>= (gptel-auto-workflow--backend-health-level backend) 3))
 
 (defvar gptel-auto-workflow--task-backend-preference
-  '(("analyzer"   "DashScope" . 0.50)
-    ("analyzer"   "MiniMax"   . 0.40)
-    ("analyzer"   "DeepSeek"  . 0.05)
-    ("grader"     "DashScope" . 0.50)
-    ("grader"     "MiniMax"   . 0.40)
-    ("grader"     "DeepSeek"  . 0.05)
-    ("executor"   "DashScope" . 0.50)
-    ("executor"   "MiniMax"   . 0.40)
-    ("executor"   "DeepSeek"  . 0.05)
-    ("researcher" "DashScope" . 0.50)
-    ("researcher" "MiniMax"   . 0.40)
-    ("researcher" "DeepSeek"  . 0.05)
-    ("reviewer"   "DashScope" . 0.50)
-    ("reviewer"   "MiniMax"   . 0.40)
-    ("reviewer"   "DeepSeek"  . 0.05)
-    ("comparator" "DashScope" . 0.50)
-    ("comparator" "MiniMax"   . 0.40)
-    ("comparator" "DeepSeek"  . 0.05))
+  '(("analyzer"   "DashScope" . 0.10)
+    ("analyzer"   "MiniMax"   . 0.20)
+    ("analyzer"   "DeepSeek"  . 0.30)
+    ("grader"     "DashScope" . 0.10)
+    ("grader"     "MiniMax"   . 0.20)
+    ("grader"     "DeepSeek"  . 0.30)
+    ("executor"   "DashScope" . 0.10)
+    ("executor"   "MiniMax"   . 0.20)
+    ("executor"   "DeepSeek"  . 0.30)
+    ("researcher" "DashScope" . 0.10)
+    ("researcher" "MiniMax"   . 0.20)
+    ("researcher" "DeepSeek"  . 0.30)
+    ("reviewer"   "DashScope" . 0.10)
+    ("reviewer"   "MiniMax"   . 0.20)
+    ("reviewer"   "DeepSeek"  . 0.30)
+    ("comparator" "DashScope" . 0.10)
+    ("comparator" "MiniMax"   . 0.20)
+    ("comparator" "DeepSeek"  . 0.30))
   "Per-task-type backend preference boost added to ranking score.
 Larger values shift routing toward backends best suited for each task:
 - DeepSeek V4 thinks → analyzer, researcher
@@ -1448,24 +1484,126 @@ Persisted to `gptel-auto-workflow--preference-persist-file'."
 
 ;; ─── Nucleus Persona Injection ───
 
-(defun gptel-auto-workflow--subagent-persona (agent-type)
+(defun gptel-auto-workflow--subagent-persona (agent-type &optional category behavior)
   "Return a nucleus attention-shaping persona for AGENT-TYPE.
-Based on nucleus/ADAPTIVE.md persona state machines.
-Different subagent types get different cognitive archetypes
-derived from (operation × mindset) intersections."
-  (let* ((persona
-          (pcase agent-type
+When CATEGORY and BEHAVIOR are provided, composes a task-specific persona
+from all three signals: subagent archetype × ontology context × reasoning pattern.
+For executors, the category SELECTS a different nucleus archetype:
+Agentic → Investigator (debugging×analyse — safety, vigilance),
+Programming → Craftsman (coding×tactize — precision),
+Tool-calls → Synthesizer (coding×innovate — robustness),
+NLP → Academic (documenting — clarity).
+
+Self-evolving: checks `gptel-ai-behaviors--best-persona` for learned preference.
+When insufficient data or equal performance, explores alternate personas
+from the 8 nucleus archetypes for A/B testing."
+  (let* ((default-archetype
+           (pcase category
+             (:agentic "Investigator") (:programming "Craftsman")
+             (:tool-calls "Synthesizer") (:natural-language "Academic")
+             (_ "Craftsman")))
+          ;; Self-evolve: check if data suggests a better persona
+          ;; Check three-way combo first: (category × archetype × hashtag)
+          ;; If a winning combo exists, prefer its archetype over best-persona alone
+          (combo-best (and (fboundp 'gptel-ai-behaviors--best-combo)
+                           (gptel-ai-behaviors--best-combo category)))
+          ;; Expose combo hashtag for behavior selection
+          (combo-hashtag (and combo-best (cdr combo-best)))
+          (_ (when (and combo-hashtag (boundp 'gptel-ai-behaviors--combo-hashtag))
+               (setq gptel-ai-behaviors--combo-hashtag combo-hashtag)))
+          (learned-archetype
+           (or (and combo-best (car combo-best))  ; combo archetype wins
+               (and (fboundp 'gptel-ai-behaviors--best-persona)
+                    (gptel-ai-behaviors--best-persona category))))
+           ;; Explore 20% when learned != default; curiosity 5% when default confirmed
+           ;; Uses 8 nucleus archetypes: (op × mindset) derived
+           (alternatives '("Investigator" "Craftsman" "Synthesizer" "Visionary"
+                           "Logician" "Academic" "Facilitator" "Storyteller"))
+          (explore-p (if (and learned-archetype
+                              (not (string= learned-archetype default-archetype)))
+                         (< (random 100) 20)   ; Active A/B: 20% explore
+                       (< (random 100) 5)))    ; Curiosity: 5% try random alternative
+          (archetype (if explore-p
+                         (progn
+                           (when (boundp 'gptel-ai-behaviors--exploration-tag)
+                             (setq gptel-ai-behaviors--exploration-tag t))
+                           (let* ((current (or learned-archetype default-archetype))
+                                  (others (remove current alternatives)))
+                             (nth (random (length others)) others)))
+                       (or learned-archetype default-archetype)))
+          ;; Task-mode symbol subset — independent from persona archetype
+          ;; Selected by (ontology category × active behavior), not by archetype.
+          ;; Production: [mu tao] precision + minimal change
+          ;; Safety:     [∀ ∃ ε] vigilance + truth + boundaries
+          ;; Creative:   [phi beauty fractal] exploration + aesthetics
+          (task-mode (pcase category
+                       (:agentic 'safety) (:programming 'production)
+                       (:tool-calls 'safety) (:natural-language 'creative)
+                       (_ 'production)))
+          (mode-symbols
+           (pcase task-mode
+             ('production "mu tao")
+             ('safety "∀ ∃ ε")
+             ('creative "phi beauty fractal")
+             (_ "mu tao")))
+          (mode-loop
+           (pcase task-mode
+             ('production "OODA") ('safety "OODA") ('creative "REPL")
+             (_ "OODA")))
+           ;; Self-evolve collaboration operator from experiment data
+           (learned-operator
+            (and (fboundp 'gptel-ai-behaviors--best-operator)
+                 (gptel-ai-behaviors--best-operator category)))
+           (mode-collab
+            (or learned-operator
+                (pcase task-mode
+                  ('production "Human ⊗ AI") ('safety "Human ∘ AI")
+                  ('creative "Human | AI")
+                  (_ "Human ⊗ AI"))))
+          (mode-constrain
+           (pcase task-mode
+             ('production "Constrain: change → minimal, quality → mu, precision → tao")
+             ('safety "Constrain: coverage → ∀, evidence → ∃, boundaries → ε")
+             ('creative "Constrain: exploration → phi, aesthetics → beauty, structure → fractal")
+             (_ "Constrain: quality → mu, clarity → tao")))
+          ;; Override base λ engage line with mode-selected symbols
+          (symbol-override (format "λ engage(nucleus).\n[%s] | [Δ λ | signal/noise] | %s\n%s\n"
+                                    mode-symbols mode-loop mode-collab))
+          (base-persona
+           (pcase agent-type
             ("analyzer"
-             "λ engage(nucleus).
+             ;; Analyzer adapts focus to category
+             (let ((cat-focus (pcase category
+                               (:agentic "error patterns, state corruption, async bugs")
+                               (:programming "algorithm flaws, edge cases, performance")
+                               (:tool-calls "sandbox risks, timeout patterns, arg validation")
+                               (:natural-language "prompt injection, context overflow, format")
+                               (_ "code quality, bugs, regressions"))))
+               (format
+                "λ engage(nucleus).
 [pi mu ∃] | [Δ λ ∞/0 | signal/noise] | OODA
 Human | AI
 ;; Archetype: Logician (thinking × analyse)
+;; Focus: %s
 ;; Operator: | (parallel) — analyze alongside established patterns
 ;; What: systematic analysis, pattern detection, root cause
 λ analysis(data). observe → identify(patterns) → evaluate(impact) → recommend(action)
-Output: {:analysis _ :patterns [_] :confidence _ :recommendation _}")
+Output: {:analysis _ :patterns [_] :confidence _ :recommendation _}"
+                cat-focus)))
             ("executor"
-             "λ engage(nucleus).
+             ;; Category SELECTS the archetype, not just decorates it
+             (pcase category
+             (:agentic
+                 "λ engage(nucleus).
+[∀ ∃ mu] | [Δ λ | safety/risk signal/noise] | OODA
+Human ⊗ AI
+;; Archetype: Investigator (debugging × analyse)
+;; Operator: ∀ (quantify) — check ALL paths, not just happy path
+;; What: find unsafe patterns, validate assumptions, prevent corruption
+λ investigate(code). probe(entry_points) → find(risks) → guard(vulnerabilities) → verify(invariants)
+Output: {:investigations [_] :risks [_] :guards [_] :verified _}")
+                (:programming
+                "λ engage(nucleus).
 [tao mu] | [Δ λ Σ/μ c/h] | OODA
 Human ⊗ AI
 ;; Archetype: Craftsman (coding × tactize)
@@ -1473,15 +1611,52 @@ Human ⊗ AI
 ;; What: precise edits, minimal changes, verified correctness
 λ edit(code). Δ(minimal(change)) where behavior(new) = behavior(old) + intent
 Output: {:code _ :rationale _ :tests _ :diff _}")
+                (:tool-calls
+                 "λ engage(nucleus).
+[phi ∀ ε π] | [Δ λ | error/recovery integration/separation] | OODA
+Human ⊗ AI
+;; Archetype: Synthesizer (coding × innovate)
+;; Operator: π (synthesis) — integrate tools, compose components
+;; What: wrap operations, connect sandbox, handle timeouts, compose reliable pipelines
+λ synthesize(code). identify(integration_points) → compose(components) → harden(interfaces) → verify(pipeline)
+Output: {:integrations [_] :composed [_] :hardened [_] :verified _}")
+                (:natural-language
+                 "λ engage(nucleus).
+[fractal ε] | [Δ λ | structure/noise signal/noise] | OODA
+Human ⊗ AI
+;; Archetype: Academic (documenting)
+;; Operator: fractal — self-similar structure at every level
+;; What: document prompts, clarify structure, bound lengths, preserve format
+λ document(text). clarify(structure) → bound(lengths) → preserve(format) → explain(rationale)
+Output: {:improvements [_] :bounds [_] :format_preserved _ :rationale _}")
+                (_
+                 "λ engage(nucleus).
+[tao mu] | [Δ λ Σ/μ c/h] | OODA
+Human ⊗ AI
+;; Archetype: Craftsman (coding × tactize)
+;; Operator: ⊗ (tensor) — maximum quality, all constraints satisfied
+;; What: precise edits, minimal changes, verified correctness
+λ edit(code). Δ(minimal(change)) where behavior(new) = behavior(old) + intent
+Output: {:code _ :rationale _ :tests _ :diff _}")))
             ("grader"
-             "λ engage(nucleus).
+             ;; Grader uses category-appropriate evaluation lens
+             (let ((cat-lens (pcase category
+                               (:agentic "safety coverage, error handling, state protection")
+                               (:programming "correctness, edge cases, minimal change")
+                               (:tool-calls "robustness, timeout handling, arg safety")
+                               (:natural-language "structure, bounds, format preservation")
+                               (_ "quality, clarity, correctness"))))
+               (format
+                "λ engage(nucleus).
 [pi mu ∃ ∀] | [Δ λ ∞/0 | truth/provability signal/noise] | OODA
 Human ∧ AI
 ;; Archetype: Logician (thinking × analyse)
+;; Lens: %s
 ;; Operator: ∧ (intersection) — conservative, both must agree
 ;; What: objective evaluation, detecting flaws, measuring quality
 λ grade(output). compare(expected, actual) → identify(gaps) → score(0..1)
-Output: {:score _ :strengths [_] :weaknesses [_] :suggestions [_]}")
+Output: {:score _ :strengths [_] :weaknesses [_] :suggestions [_]}"
+                cat-lens)))
             ("reviewer"
              "λ engage(nucleus).
 [tao mu ∞/0] | [Δ λ | truth/provability order/entropy] | OODA
@@ -1511,9 +1686,120 @@ Constrain: relevance → signal/noise, growth → euler, scope → fractal
 λ research(topic). search(external) → filter(relevant) → distill(applicable) → measure(impact)
 Output: {:findings [_] :techniques [_] :apply_to_us [_] :verification _ :confidence _}")
             (_ ""))))
-    (if (> (length persona) 0)
-        (concat persona "\n\n---\n\n")
-      "")))
+    ;; Modulate persona emphasis based on active behavior
+    (let* ((behavior-mod
+            (when (and behavior (not (string-empty-p behavior)))
+              (let ((b (downcase behavior)))
+                (cond ((string-match-p "contract\\|guard" b)
+                       "\n;; Emphasis: nil-guards, bound checks, defensive wrappers")
+                      ((string-match-p "simulate\\|boundary" b)
+                       "\n;; Emphasis: edge cases, boundary conditions, failure paths")
+                      ((string-match-p "tdd\\|test" b)
+                       "\n;; Emphasis: testable contracts, small verified steps")
+                      ((string-match-p "decompose\\|act" b)
+                       "\n;; Emphasis: smallest possible change, one edit, verify")
+                      ((string-match-p "concise\\|legible" b)
+                       "\n;; Emphasis: readability, minimal boilerplate, clear intent")
+                      ((string-match-p "coherence\\|temporal" b)
+                       "\n;; Emphasis: consistent patterns, temporal ordering")
+                      ((string-match-p "stop\\|checklist" b)
+                       "\n;; Emphasis: pause, verify each step, don't rush")
+                      (t (format "\n;; Behavior: %s" behavior))))))
+           ;; Inject active quality hashtags as additional eight-key symbols
+           ;; into the [symbol-set] block. Each quality maps to a nucleus
+           ;; symbol (from ai-behaviors BEHAVIORS.md quality table).
+           (quality-symbols
+            (when (and behavior (not (string-empty-p behavior)))
+              (let ((b (downcase behavior)) (s ""))
+                (when (string-match-p "\\bdeep\\b\\|creative" b) (setq s (concat s " φ")))
+                (when (string-match-p "\\bwide\\b\\|meta" b) (setq s (concat s " π")))
+                (when (string-match-p "ground" b) (setq s (concat s " fractal")))
+                (when (string-match-p "negative-space\\|challenge" b) (setq s (concat s " ∀")))
+                (when (string-match-p "steel-man" b) (setq s (concat s " ∃")))
+                (when (string-match-p "user-lens" b) (setq s (concat s " ε")))
+                (when (string-match-p "concise\\|subtract" b) (setq s (concat s " μ")))
+                (when (string-match-p "first-principles" b) (setq s (concat s " τ")))
+                (when (> (length s) 0) (substring s 1)))))  ; strip leading space
+           ;; Adaptive persona state machine (nucleus ADAPTIVE.md pattern)
+           ;; The LLM self-transitions between operations based on task signals.
+           ;; Two PARALLEL tracks: operation + mindset. Archetype = their intersection.
+           ;; Both run simultaneously — the LLM tracks both states independently.
+           (persona-state-machine
+            (concat
+             "\n;; ═══ Adaptive Persona — parallel state machines ═══\n"
+             ";; Operation (what) → mindset (how) → archetype (who)\n\n"
+             ";; ─── Operation Track — what you're doing ───\n"
+             "state :thinking  ;; default — read, plan, assess\n"
+             "  → :coding       when code_needed (task is clear)\n"
+             "  → :debugging    when error_encountered\n"
+             "  → :documenting  when explanation_needed\n\n"
+             "state :coding\n"
+             "  → :thinking     when design_gap (need to reconsider)\n"
+             "  → :debugging    when error_encountered\n"
+             "  → :documenting  when implementation_complete\n\n"
+             "state :debugging\n"
+             "  → :coding       when root_cause_found\n"
+             "  → :thinking     when cause_unclear\n"
+             "  → :documenting  when resolved\n\n"
+             "state :documenting\n"
+             "  → :thinking     when gap_discovered\n"
+             "  → :coding       when implementation_needed\n\n"
+             ";; ─── Mindset Track — how you approach it (PARALLEL to operation) ───\n"
+             "state :analyse  ;; default — deep understanding\n"
+             "  → :tactize      when cause_found | time_constrained\n"
+             "  → :strategize   when bigger_than_expected\n"
+             "  → :innovate     when greenfield (new approach)\n\n"
+             "state :tactize\n"
+             "  → :analyse      when wrong_approach (current path failing)\n"
+             "  → :balanced     when pressure_resolved (time pressure gone)\n\n"
+             "state :innovate\n"
+             "  → :tactize      when idea_converged (found workable approach)\n"
+             "  → :analyse      when validate_needed (check feasibility)\n\n"
+             "state :strategize\n"
+             "  → :innovate     when explore_options (need creative solutions)\n"
+             "  → :tactize      when decision_committed (chosen path)\n\n"
+             "state :balanced\n"
+             "  → :analyse      when deep_dive_needed (need to understand)\n"
+             "  → :tactize      when time_constrained (deadline approaching)\n"
+             "  → :innovate     when greenfield (fresh start)\n\n"
+             ";; ─── Archetype Matrix — derived from (operation × mindset) ───\n"
+             "λ archetype(op, mind).\n"
+             "  (coding, tactize)      → " (or (and (equal agent-type "executor") archetype) "Craftsman") "\n"
+             "  (debugging, analyse)   → Investigator\n"
+             "  (thinking, analyse)    → Logician\n"
+             "  (coding, innovate)     → Synthesizer\n"
+             "  (documenting, *)       → Academic\n"
+             "  (thinking, strategize) → Visionary\n"
+             "  (*, balanced)          → Facilitator\n"
+             "  (_, _)                 → Logician\n"
+              "  (_, _)                 → Logician\n\n"
+              ";; ─── Emission — output schema per operation ───\n"
+              "λ emit(op).\n"
+              "  :thinking    → {:analysis _ :options [_] :recommendation _}\n"
+              "  :coding      → {:code _ :rationale _ :tests _}\n"
+              "  :debugging   → {:symptom _ :cause _ :fix _ :prevention _}\n"
+              "  :documenting → {:explanation _ :context _ :examples [_]}\n\n"
+              ";; Response format:\n"
+              ";; *Transitioning: `:op→:next` (signal) | mindset: `:ms` → Archetype*\n"))
+           ;; Replace first `λ engage` block with mode-selected symbols
+           (header-replaced (replace-regexp-in-string
+                             "λ engage(nucleus)\\.\n\\[[^]]+\\][^]]*" ; match λ engage line + symbols
+                             (replace-regexp-in-string "\n$" "" symbol-override) ; strip trailing newline
+                             base-persona))
+           (persona-text (concat (if quality-symbols
+                                     (replace-regexp-in-string
+                                      "\\(\\[\\(?:[^]]+\\|\]\\)*\\)\\]"
+                                      (format "\\1 %s]" quality-symbols)
+                                      header-replaced)
+                                   header-replaced)
+                                  "\n" mode-constrain
+                                  (or behavior-mod "")
+                                  persona-state-machine
+                                  "\n\n---\n\n")))
+      ;; Record selected archetype for experiment logging
+      (when (boundp 'gptel-ai-behaviors--current-archetype)
+        (setq gptel-ai-behaviors--current-archetype archetype))
+      persona-text)))
 
 ;; ─── Moderator Drift Detection (DIALECTIC.md pattern) ───
 
@@ -2012,37 +2298,48 @@ Fields: :total-decisions, :backend-counts (alist of backend→count),
 (defun gptel-auto-workflow--best-model-for-target (target backend)
   "Return the best historical model for TARGET on BACKEND.
 Searches all kept experiments for this target+backend pair and returns
-the model with the highest keep-rate. Returns nil if no data."
-  (when (and target backend (fboundp 'gptel-auto-workflow--parse-all-results))
-    (let ((model-stats (make-hash-table :test 'equal))
-          (best-model nil)
-          (best-rate 0.0))
-      (dolist (r (gptel-auto-workflow--parse-all-results))
-        (let ((r-target (plist-get r :target))
-              (r-backend (plist-get r :backend))
-              (r-model (plist-get r :model))
-              (r-decision (plist-get r :decision)))
-          (when (and (string= (or r-target "") target)
-                     (string= (or r-backend "") backend)
-                     (stringp r-model))
-            (let ((stats (or (gethash r-model model-stats) (cons 0 0))))
-              (cl-incf (car stats))
-              (when (equal r-decision "kept")
-                (cl-incf (cdr stats)))
-              (puthash r-model stats model-stats)))))
-      (maphash (lambda (model stats)
-                 (let ((total (car stats))
-                       (kept (cdr stats)))
-                   (when (and (> total 0)
-                              (>= (/ (float kept) total) best-rate)
-                              ;; Validate backend/model combination
-                              (or (not (fboundp 'gptel-auto-workflow--model-combination-valid-p))
-                                  (gptel-auto-workflow--model-combination-valid-p
-                                   (concat backend "/" model))))
-                     (setq best-rate (/ (float kept) total))
-                     (setq best-model model))))
-               model-stats)
-      best-model)))
+the model with the highest keep-rate. Falls back to category-level
+model from `gptel-ai-behaviors--best-model' when no per-target data."
+  (let ((best-model nil)
+        (best-rate 0.0))
+    ;; Phase 1: per-target data from experiment history
+    (when (and target backend (fboundp 'gptel-auto-workflow--parse-all-results))
+      (let ((model-stats (make-hash-table :test 'equal)))
+        (dolist (r (gptel-auto-workflow--parse-all-results))
+          (let ((r-target (plist-get r :target))
+                (r-backend (plist-get r :backend))
+                (r-model (plist-get r :model))
+                (r-decision (plist-get r :decision)))
+            (when (and (string= (or r-target "") target)
+                       (string= (or r-backend "") backend)
+                       (stringp r-model))
+              (let ((stats (or (gethash r-model model-stats) (cons 0 0))))
+                (cl-incf (car stats))
+                (when (equal r-decision "kept")
+                  (cl-incf (cdr stats)))
+                (puthash r-model stats model-stats)))))
+        (maphash (lambda (model stats)
+                   (let ((total (car stats))
+                         (kept (cdr stats)))
+                     (when (and (> total 0)
+                                (>= (/ (float kept) total) best-rate)
+                                (or (not (fboundp 'gptel-auto-workflow--model-combination-valid-p))
+                                    (gptel-auto-workflow--model-combination-valid-p
+                                     (concat backend "/" model))))
+                       (setq best-rate (/ (float kept) total))
+                       (setq best-model model))))
+                 model-stats)))
+    ;; Phase 2: fallback to category-level model from ai-behaviors
+    (unless best-model
+      (when (and (fboundp 'gptel-auto-workflow--categorize-target)
+                 (fboundp 'gptel-ai-behaviors--best-model))
+        (let* ((category (gptel-auto-workflow--categorize-target target))
+               (cat-best (gptel-ai-behaviors--best-model category "executor")))
+          (when cat-best
+            (setq best-model (car cat-best))
+            (message "[model-select] Category fallback for %s: %s (from %s)"
+                     target (car cat-best) category)))))
+    best-model))
 
 ;; ─── Per-Run Backend Cooldown ───
 
@@ -2071,10 +2368,10 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
         ;; reorder-fallbacks-by-ontology) is picked up here too.
         (default-models (or (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
                                 gptel-auto-workflow-executor-rate-limit-fallbacks)
-             '(("DashScope" . "qwen3.6-plus")
-               ("moonshot" . "kimi-k2.6")
-               ("DeepSeek" . "deepseek-v4-flash")
-               ("MiniMax" . "minimax-m2.7-highspeed"))))
+             '(("DeepSeek" . "deepseek-v4-flash")
+               ("MiniMax" . "minimax-m2.7-highspeed")
+               ("DashScope" . "qwen3.6-plus")
+               ("moonshot" . "kimi-k2.6"))))
         ;; Pre-compute once for all backends
         (axis-rates-cache (when (fboundp 'gptel-auto-workflow--backend-per-axis-keep-rates)
                             (condition-case nil
@@ -2119,10 +2416,10 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
               (if (fboundp 'gptel-auto-workflow--get-backend-performance-stats)
                   (let* ((stats (gptel-auto-workflow--get-backend-performance-stats backend))
                          (total (plist-get stats :total)))
-                    (cond ((< total 3) 0.15)     ; almost no data → significant boost
-                          ((< total 5) 0.05)     ; some data → small boost
+                    (cond ((< total 3) 0.01)     ; almost no data → minimal boost
+                          ((< total 5) 0.005)    ; some data → tiny boost
                           (t 0.0)))
-                0.15))  ; if stats unavailable, treat as cold-start
+                0.01))  ; if stats unavailable, treat as cold-start
               (quarantined (and (fboundp 'gptel-auto-workflow--backend-quarantined-p)
                                 (gptel-auto-workflow--backend-quarantined-p backend)))
               (rate-limited (and (boundp 'gptel-auto-workflow--rate-limited-backends)
@@ -2712,7 +3009,184 @@ Boost = (keep-rate - avg-axis-rate) × confidence × 0.15."
             0.0))
       0.0)))
 
+;; ─── Research Coordinator (AutoTTS × AutoGo × Ontology) ───
+
+(defun gptel-auto-workflow--research-priorities ()
+  "Query ontology, AutoTTS, and AutoGo for research priorities.
+Returns plist: (:category-priorities (cat . reason) ... :strategy-insights ... :budget-insights ...)."
+  (let* ((results (condition-case nil (gptel-auto-workflow--parse-all-results) (error nil)))
+         (cat-stats (make-hash-table :test 'equal))
+         (priorities nil))
+    ;; 1. Ontology: category health from experiment data
+    (dolist (r results)
+      (let* ((r-target (plist-get r :target))
+             (r-decision (plist-get r :decision))
+             (r-kept (equal r-decision "kept"))
+             (r-strategy (plist-get r :strategy))
+             (cat (and r-target (fboundp 'gptel-auto-workflow--categorize-target)
+                      (gptel-auto-workflow--categorize-target r-target))))
+        (when cat
+          (let ((e (gethash cat cat-stats (list 0 0 (make-hash-table :test 'equal)))))
+            (setf (nth 0 e) (+ (nth 0 e) (if r-kept 1 0)))
+            (setf (nth 1 e) (1+ (nth 1 e)))
+            (when r-strategy
+              (let ((s (gethash r-strategy (nth 2 e) (cons 0 0))))
+                (setf (car s) (+ (car s) (if r-kept 1 0)))
+                (setf (cdr s) (1+ (cdr s)))
+                (puthash r-strategy (nth 2 e) s)))
+            (puthash cat e cat-stats)))))
+    ;; 2. Generate priorities per category
+    (maphash
+     (lambda (cat stats)
+       (let* ((kept (nth 0 stats))
+              (total (nth 1 stats))
+              (rate (if (> total 0) (/ (float kept) total) 0))
+              (strategies (nth 2 stats))
+              (best-strat (let ((best nil) (best-rate 0))
+                            (maphash (lambda (s e)
+                                       (let ((sr (if (> (cdr e) 0) (/ (float (car e)) (cdr e)) 0)))
+                                         (when (> sr best-rate) (setq best s best-rate sr))))
+                                     strategies)
+                            best))
+              (best-strat-rate (if (and best-strat (gethash best-strat strategies))
+                                  (let ((e (gethash best-strat strategies)))
+                                    (if (> (cdr e) 0) (/ (float (car e)) (cdr e)) 0))
+                                0))
+              (concrete-health (and (fboundp 'gptel-ai-behaviors--best-concrete-tasks)
+                                    (gethash cat gptel-ai-behaviors--best-concrete-tasks)))
+              (drift (and (fboundp 'gptel-auto-workflow--detect-category-drift)
+                         (let ((d (gptel-auto-workflow--detect-category-drift)))
+                           (cl-some (lambda (x) (eq (nth 1 x) cat)) d)))))
+         ;; Priority rules:
+         (cond
+          ((and (< rate 0.1) (> total 20))
+           (push (cons cat (format "Critical: %.0f%% keep-rate after %d experiments — needs investigation" (* 100 rate) total)) priorities))
+          (drift
+           (push (cons cat (format "Drift detected — targets behaving differently from category average")) priorities))
+          ((and concrete-health (> (cdr concrete-health) 0.5) (< rate 0.1))
+           (push (cons cat (format "Concrete tasks keep at %.0f%% but experiments fail — simplify experiments" (* 100 (cdr concrete-health)))) priorities))
+          ((and best-strat (< best-strat-rate 0.15) (> total 10))
+           (push (cons cat (format "Best strategy %s at %.0f%% — consider strategy evolution" best-strat (* 100 best-strat-rate))) priorities))
+          ((< total 10)
+           (push (cons cat (format "Insufficient data: %d experiments — more experiments needed" total)) priorities)))))
+     cat-stats)
+    (list :category-priorities (nreverse priorities))))
+
+(defun gptel-auto-workflow--format-research-priorities ()
+  "Format research priorities as a prompt string for the researcher."
+  (let ((priorities (gptel-auto-workflow--research-priorities))
+        (parts nil))
+    (dolist (p (plist-get priorities :category-priorities))
+      (push (format "  [%s] %s" (car p) (cdr p)) parts))
+    (when parts
+      (concat "## Research Priorities (from Ontology × AutoTTS × AutoGo)\n"
+              "Focus research on these categories:\n"
+              (mapconcat #'identity (nreverse parts) "\n")
+              "\n\nProduce category-specific findings — not global recommendations.\n"))))
+
 ;; ─── Verbum Experiment Tracker ───
+
+;; ─── Digital Twin: File Dependency Graph ───
+
+(defvar gptel-auto-workflow--digital-twin-cache nil
+  "Cached digital twin data: (file . plist) with :requires :provides :defuns :defvars.
+Built by `gptel-auto-workflow--build-digital-twin'. Persisted to var/tmp/digital-twin.json.")
+
+(defun gptel-auto-workflow--parse-el-file (file)
+  "Parse FILE for require/provide/defun/defvar declarations.
+Returns plist: (:requires (:provides :defuns :defvars :declare-fns)."
+  (let ((requires nil) (provides nil) (defuns nil)
+        (defvars nil) (declare-fns nil))
+    (when (file-exists-p file)
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        (while (not (eobp))
+          (cond
+           ((looking-at "(require\\s-+'?\\([^ )]+\\)")
+            (push (match-string-no-properties 1) requires))
+           ((looking-at "(provide\\s-+'?\\([^ )]+\\)")
+            (push (match-string-no-properties 1) provides))
+           ((looking-at "(defun\\s-+\\([^ (]+\\)")
+            (push (match-string-no-properties 1) defuns))
+           ((looking-at "(defvar\\s-+\\([^ (]+\\)")
+            (push (match-string-no-properties 1) defvars))
+           ((looking-at "(declare-function\\s-+\\([^ (]+\\)")
+            (push (match-string-no-properties 1) declare-fns)))
+          (forward-line 1))))
+    (list :requires (nreverse requires)
+          :provides (nreverse provides)
+          :defuns (nreverse defuns)
+          :defvars (nreverse defvars)
+          :declare-fns (nreverse declare-fns))))
+
+(defun gptel-auto-workflow--build-digital-twin (&optional force)
+  "Build digital twin dependency graph for all .el files in lisp/modules/.
+Cached unless FORCE is non-nil."
+  (let ((dir (expand-file-name "lisp/modules/" (gptel-auto-workflow--worktree-base-root))))
+    (when (and (or force (null gptel-auto-workflow--digital-twin-cache))
+               (file-directory-p dir))
+      (let ((twin (make-hash-table :test 'equal)))
+        (dolist (file (directory-files dir t "\\.el$"))
+          (let ((parsed (gptel-auto-workflow--parse-el-file file))
+                (rel (file-relative-name file dir)))
+            (when parsed
+              (puthash rel parsed twin))))
+        (setq gptel-auto-workflow--digital-twin-cache twin)
+        (message "[digital-twin] Built: %d files, %d total requires"
+                 (hash-table-count twin)
+                 (cl-reduce #'+ (mapcar #'length
+                                        (mapcar (lambda (k) (plist-get (gethash k twin) :requires))
+                                                (all-completions "" twin)))))
+        ;; Persist
+        (let ((file (expand-file-name "var/tmp/digital-twin.json"
+                                      (gptel-auto-workflow--worktree-base-root))))
+          (make-directory (file-name-directory file) t)
+          (with-temp-file file
+            (insert "{\"version\": 1, \"built\": \""
+                    (format-time-string "%Y-%m-%dT%H:%M:%S")
+                    "\", \"files\": {")
+            (let ((first t))
+              (maphash (lambda (k v)
+                         (unless first (insert ","))
+                         (setq first nil)
+                         (insert (json-encode k) ":"
+                                 (json-encode (list (cons :requires (plist-get v :requires))
+                                                     (cons :provides (plist-get v :provides))
+                                                     (cons :defuns (plist-get v :defuns))
+                                                     (cons :defvars (plist-get v :defvars))))))
+                       twin))
+            (insert "}}"))
+          (message "[digital-twin] Persisted to %s" file)))
+      gptel-auto-workflow--digital-twin-cache)))
+
+(defun gptel-auto-workflow--digital-twin-dependencies (target)
+  "Return list of files that TARGET depends on (via require)."
+  (when target
+    (let* ((basename (file-name-nondirectory target))
+           (file-key (concat "lisp/modules/" basename))
+           (twin (or gptel-auto-workflow--digital-twin-cache
+                     (gptel-auto-workflow--build-digital-twin))))
+      (when twin
+        (let ((entry (gethash file-key twin)))
+          (when entry
+            (plist-get entry :requires)))))))
+
+(defun gptel-auto-workflow--digital-twin-dependents (target)
+  "Return list of files that depend on TARGET."
+  (when target
+    (let* ((basename (file-name-nondirectory target))
+           (provides (and (string-match "\\`\\(.+\\)\\.el\\'" basename)
+                          (match-string 1 basename)))
+           (twin (or gptel-auto-workflow--digital-twin-cache
+                     (gptel-auto-workflow--build-digital-twin)))
+           (dependents nil))
+      (when (and twin provides)
+        (maphash (lambda (file entry)
+                   (when (member provides (plist-get entry :requires))
+                     (push file dependents)))
+                 twin))
+      dependents)))
 
 ;; ─── Category Action Schema ───
 
@@ -2722,26 +3196,30 @@ Boost = (keep-rate - avg-axis-rate) × confidence × 0.15."
      :preconditions ("tool-registry-initialized" "fsm-not-in-error-state")
      :commit-criteria ("tool-dispatch-still-works" "error-handling-intact")
      :verification-commands ("emacs --batch --eval \"(check-parens)\""
-                             "emacs -Q --batch -f batch-byte-compile"))
+                             "emacs -Q --batch -f batch-byte-compile")
+     :instructions "⚠ AGENTIC: changes affect subagent dispatch. Add nil-guards on gethash/assoc in FSM callbacks. Never remove error handlers without replacement.")
     (:programming
      :description "Code refactoring, performance, and bug fixes"
      :preconditions ("file-byte-compiles" "no-syntax-errors")
      :commit-criteria ("all-tests-pass" "no-regressions" "style-integrity")
      :verification-commands ("emacs --batch --eval \"(check-parens)\""
-                             "emacs -Q --batch -f batch-byte-compile"))
+                             "emacs -Q --batch -f batch-byte-compile")
+     :instructions "⚠ PROGRAMMING: byte-compile after EVERY edit. Add nil-guards (ignore-errors, condition-case, hash-table-p). Extract duplicated code. Never reformat.")
     (:tool-calls
      :description "Sandbox execution and file operation tools"
      :preconditions ("tool-argument-schemas-valid" "sandbox-rules-loaded")
      :commit-criteria ("tool-call-still-works" "error-handling-robust")
      :verification-commands ("emacs --batch --eval \"(check-parens)\""
-                             "emacs -Q --batch -f batch-byte-compile"))
+                             "emacs -Q --batch -f batch-byte-compile")
+     :instructions "⚠ TOOL-CALLS: validate tool arguments with schemas. Add boundary checks on file paths. Never bypass sandbox rules for direct operations.")
     (:natural-language
      :description "Prompt templates, text processing, context management"
      :preconditions ("file-byte-compiles")
      :commit-criteria ("prompt-format-preserved" "fallback-handlers-intact")
      :verification-commands ("emacs --batch --eval \"(check-parens)\""
-                             "emacs -Q --batch -f batch-byte-compile")))
-  "Per-category action schema with preconditions, commit criteria, and verification commands.")
+                             "emacs -Q --batch -f batch-byte-compile")
+     :instructions "⚠ NATURAL-LANGUAGE: preserve prompt template structure. Don't remove fallback handlers. Test with sample input after changes."))
+  "Per-category action schema with preconditions, commit criteria, verification commands, and category-specific instructions.")
 
 (defun gptel-auto-workflow--format-schema-guidance (target)
   "Format action schema for TARGET as prompt guidance string."
@@ -2757,6 +3235,16 @@ Boost = (keep-rate - avg-axis-rate) × confidence × 0.15."
                            (plist-get schema :commit-criteria) "\n")
                 (mapconcat (lambda (v) (format "  $ %s" v))
                            (plist-get schema :verification-commands) "\n"))))))
+
+(defun gptel-auto-workflow--category-instructions (target)
+  "Return category-specific agent instructions for TARGET.
+Extracted from the ontology action schema.
+Returns empty string when target category is unknown."
+  (when (and target (fboundp 'gptel-auto-workflow--categorize-target))
+    (let* ((cat (gptel-auto-workflow--categorize-target target))
+           (schema (cdr (assoc cat gptel-auto-workflow--category-action-schemas)))
+           (instructions (plist-get schema :instructions)))
+      (or instructions ""))))
 
 (defun gptel-auto-workflow--check-action-preconditions (target)
   "Check action preconditions for TARGET's category.
@@ -2775,22 +3263,24 @@ before the executor runs, not just listed in the prompt."
             (setq result
                   (pcase pre
                     ("file-byte-compiles"
-                     (when (and target-file
-                                (not (zerop (call-process
-                                            "emacs" nil nil nil
-                                            "--batch" "-Q"
-                                            "-f" "batch-byte-compile"
-                                            target-file))))
-                       (format "Precondition FAILED: %s does not byte-compile" target)))
+                      (when (and target-file
+                                 (not (zerop (call-process
+                                             (expand-file-name "scripts/byte-compile-check.sh"
+                                                               (or (and (boundp 'minimal-emacs-user-directory)
+                                                                        minimal-emacs-user-directory)
+                                                                   user-emacs-directory))
+                                             nil nil nil
+                                             target-file))))
+                        (format "Precondition FAILED: %s does not byte-compile" target)))
                     ("no-syntax-errors"
-                     (when (and target-file
-                                (with-temp-buffer
-                                  (insert-file-contents target-file)
-                                  (not (zerop (call-process
-                                               "emacs" nil nil nil
-                                               "--batch" "--eval"
-                                               (format "(check-parens)"))))))
-                       (format "Precondition FAILED: %s has syntax errors" target)))
+                      (when target-file
+                        (condition-case nil
+                            (with-temp-buffer
+                              (insert-file-contents target-file)
+                              (check-parens)
+                              nil)  ; no error = passes
+                          (error
+                           (format "Precondition FAILED: %s has syntax errors" target)))))
                     ("tool-registry-initialized"
                      (unless (and (boundp 'gptel-agent--agents)
                                   gptel-agent--agents)
@@ -2911,7 +3401,7 @@ Returns alist of suggestions: (target . suggested-category)."
 ;; ─── Digital Twin Persistence ───
 
 (defun gptel-auto-workflow--persist-target-state ()
-  "Save target state cache to disk (survives daemon restart)."
+  "Save target state cache and rejection memory to disk (survives daemon restart)."
   (when (and (bound-and-true-p gptel-auto-experiment--target-state-cache)
              (> (hash-table-count gptel-auto-experiment--target-state-cache) 0))
     (let ((file (expand-file-name "var/tmp/digital-twin.json"
@@ -2922,14 +3412,34 @@ Returns alist of suggestions: (target . suggested-category)."
                                           (cons :syntax-ok (plist-get state :syntax-ok))))
                        data))
                gptel-auto-experiment--target-state-cache)
+      ;; Persist rejection memory alongside digital twin
+      (when (bound-and-true-p gptel-auto-experiment--rejection-memory)
+        (maphash (lambda (target rejections)
+                   (let ((entry (assoc target data)))
+                     (if entry
+                         (setcdr entry (append (cdr entry)
+                                               (list (cons :rejections rejections))))
+                       (push (cons target (list (cons :rejections rejections)))
+                             data))))
+                 gptel-auto-experiment--rejection-memory))
+      ;; Persist success memory alongside digital twin
+      (when (bound-and-true-p gptel-auto-experiment--success-memory)
+        (maphash (lambda (target successes)
+                   (let ((entry (assoc target data)))
+                     (if entry
+                         (setcdr entry (append (cdr entry)
+                                               (list (cons :successes successes))))
+                       (push (cons target (list (cons :successes successes)))
+                             data))))
+                 gptel-auto-experiment--success-memory))
       (make-directory (file-name-directory file) t)
       (with-temp-file file
         (insert (let ((json-encoding-pretty-print t))
                   (json-encode data))))
-      (message "[digital-twin] Persisted %d target states to %s" (length data) file))))
+      (message "[digital-twin] Persisted %d target states + rejection memory to %s" (length data) file))))
 
 (defun gptel-auto-workflow--load-target-state ()
-  "Load target state cache from disk."
+  "Load target state cache and rejection memory from disk."
   (when (boundp 'gptel-auto-experiment--target-state-cache)
     (let ((file (expand-file-name "var/tmp/digital-twin.json"
                                   (gptel-auto-workflow--worktree-base-root))))
@@ -2944,10 +3454,27 @@ Returns alist of suggestions: (target . suggested-category)."
                     (puthash target
                              (list :byte-compiles (cdr (assq 'byte-compiles plist))
                                    :syntax-ok (cdr (assq 'syntax-ok plist)))
-                             gptel-auto-experiment--target-state-cache))))
-              (message "[digital-twin] Loaded %d target states from %s"
+                             gptel-auto-experiment--target-state-cache)
+                    ;; Load rejection memory from digital twin
+                    (let ((rejections (cdr (assq 'rejections plist))))
+                      (when (and rejections
+                                 (bound-and-true-p gptel-auto-experiment--rejection-memory)
+                                 (fboundp 'gptel-auto-experiment--remember-rejection))
+                        (dolist (rej rejections)
+                          (let ((reason (car rej)))
+                            (gptel-auto-experiment--remember-rejection target reason)))))
+                    ;; Load success memory from digital twin
+                    (let ((successes (cdr (assq 'successes plist))))
+                      (when (and successes
+                                 (bound-and-true-p gptel-auto-experiment--success-memory)
+                                 (fboundp 'gptel-auto-experiment--remember-success))
+                        (dolist (succ successes)
+                          (let ((hypothesis (car succ))
+                                (diff (cdr succ)))
+                            (gptel-auto-experiment--remember-success target hypothesis diff)))))))
+              (message "[digital-twin] Loaded %d target states + rejection memory from %s"
                        (hash-table-count gptel-auto-experiment--target-state-cache) file))
-          (error (message "[digital-twin] Failed to load: %s" (error-message-string err))))))))
+          (error (message "[digital-twin] Failed to load: %s" (error-message-string err)))))))))
 
 ;; ─── Ontology Self-Evolution ───
 
@@ -3123,6 +3650,12 @@ Runs during the self-evolution cycle.  Results are stored in
                      total-dispatch (length pairs))
             (dolist (pair (seq-take (sort pairs (lambda (a b) (> (cdr a) (cdr b)))) 5))
               (message "[ontology-evolve]     %s: %d×" (car pair) (cdr pair))))))
+      ;; Log review outcomes per category (ontology-evolved staging gate)
+      (let ((summary (and (bound-and-true-p gptel-auto-workflow--review-outcomes)
+                          (fboundp 'gptel-auto-workflow--summarize-review-outcomes)
+                          (gptel-auto-workflow--summarize-review-outcomes))))
+        (when summary
+          (message "[ontology-evolve] 📋 %s" (replace-regexp-in-string "\n" " " summary))))
       ;; Log category drift + attempt repair
       (condition-case nil
           (let* ((drifts (gptel-auto-workflow--detect-category-drift))
@@ -3224,8 +3757,9 @@ Runs during evolution cycle alongside strategy learning."
       (gptel-auto-workflow--aggregate-category-eight-keys)
     (error (message "[ontology-evolve] Error aggregating eight-key weights: %S" err))))
 
-;; Load persisted digital twin state at startup
+;; Load persisted digital twin state + re-parse grader insights from TSV at startup
 (condition-case nil (gptel-auto-workflow--load-target-state) (error nil))
+(condition-case nil (gptel-auto-experiment--replay-grader-insights-from-tsv) (error nil))
 
 (provide 'gptel-auto-workflow-ontology-router)
 ;;; gptel-auto-workflow-ontology-router.el ends here

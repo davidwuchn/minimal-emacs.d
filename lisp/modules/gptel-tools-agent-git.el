@@ -348,10 +348,23 @@ large-result truncation, and result caching."
                                 (cdr agent-config)))))))
              (syms (cons 'gptel--preset (gptel--preset-syms preset)))
              (vals (mapcar (lambda (sym) (if (boundp sym) (symbol-value sym) nil)) syms)))
-        (cl-progv syms vals
+         (cl-progv syms vals
           (gptel--apply-preset preset)
-          (let* ((request-tools (and gptel-use-tools (copy-sequence gptel-tools)))
-                 (parent-fsm
+           ;; Ensure tools are populated when gptel-use-tools is active
+             (unless (or (and gptel--tool-names gptel-tools) (not gptel-use-tools))
+               (setq-local gptel--tool-names
+                           (cl-loop for (_cat . tools) in gptel--known-tools
+                                    append (mapcar (lambda (entry)
+                                                     (gptel-tool-name
+                                                      (if (consp entry) (cdr entry) entry)))
+                                                   tools)))
+               (setq-local gptel-tools
+                         (cl-loop for name in gptel--tool-names
+                                  for raw = (gptel-get-tool name)
+                                  for tool = (if (gptel-tool-p raw) raw nil)
+                                  if tool collect tool)))
+           (let* ((request-tools (and gptel-use-tools (copy-sequence gptel-tools)))
+                  (parent-fsm
                   (and (boundp 'gptel--fsm-last)
                        (fboundp 'my/gptel--coerce-fsm)
                        (my/gptel--coerce-fsm gptel--fsm-last)))
@@ -381,11 +394,33 @@ large-result truncation, and result caching."
                  (partial (format "%s result for task: %s\n\n"
                                   (capitalize (or agent-type "agent"))
                                   (or description "unknown"))))
-            (my/gptel--register-agent-task-buffer parent-buf)
+             (my/gptel--register-agent-task-buffer parent-buf)
             (gptel--update-status " Calling Agent..." 'font-lock-escape-face)
-            (with-current-buffer parent-buf
-              (setq-local gptel--fsm-last child-fsm))
-            (let ((request-started nil))
+              (with-current-buffer parent-buf
+                ;; gptel-request reads backend/model from the request buffer.
+                ;; Dynamic cl-progv bindings above are not enough when this
+                ;; buffer already has stale local MiniMax values.
+                (gptel--apply-preset
+                 preset
+                 (lambda (sym val)
+                   (set (make-local-variable sym) val)))
+                (setq-local gptel--fsm-last child-fsm)
+                ;; Ensure gptel-tools is buffer-local in parent-buf so
+                ;; gptel--with-buffer-copy-internal picks it up via buffer-local-value.
+                ;; Dynamic bindings from cl-progv are invisible to buffer-local-value.
+               (unless (local-variable-p 'gptel-tools (current-buffer))
+                 (setq-local gptel--tool-names
+                             (cl-loop for (_cat . tools) in gptel--known-tools
+                                      append (mapcar (lambda (entry)
+                                                       (gptel-tool-name
+                                                        (if (consp entry) (cdr entry) entry)))
+                                                     tools)))
+                 (setq-local gptel-tools
+                             (cl-loop for name in gptel--tool-names
+                                      for raw = (gptel-get-tool name)
+                                      for tool = (if (gptel-tool-p raw) raw nil)
+                                      if tool collect tool))))
+             (let ((request-started nil))
               (unwind-protect
                   (progn
                     (gptel-request prompt
@@ -632,8 +667,7 @@ remove it."
 (with-eval-after-load 'gptel-agent
   (advice-add 'gptel-agent-update :around #'my/gptel--around-agent-update)
   ;; GUARD: Prevent eval of merge conflict markers in YAML frontmatter :pre/:post keys.
-  ;; Auto-generated .md agent files can accumulate <<<<<<< markers from staging syncs.
-  ;; When found, return a safe stub result instead of letting eval explode.
+  ;; Auto-generated .md agent files can accumulate   ;; When found, return a safe stub result instead of letting eval explode.
   (defun my/gptel--reject-conflicted-frontmatter (orig file-path &rest args)
     (when (and (stringp file-path) (file-readable-p file-path))
       (with-temp-buffer

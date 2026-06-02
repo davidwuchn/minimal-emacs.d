@@ -1,31 +1,43 @@
 <!--
 Synthesis verification:
-- Confidence: 12%
-- Sources: 11 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'research-research-persisted', Very short content (23 lines)
+- Confidence: 24%
+- Sources: 17 memories
+- Warnings: No code examples or concrete references, Content does not mention topic 'research-research-persisted'
 - Auto-approved: yes (flagged)
 --->
 
 <think>
-The user wants me to generate a complete knowledge page with all the research findings from the external research turns. Let me synthesize all the findings into a comprehensive, structured document.
+The user wants me to synthesize all the research findings from the conversation history into a comprehensive research digest. Let me analyze the constraints:
 
-Let me organize the findings from all the research results:
+- **53% focus on own repos** (davidwuchn/*)
+- **15% external references**
+- **Max 1200 chars**
+- **Must start with their own repos**
 
-1. **Nucleus** - VSM Architecture, Mathematical Attention Magnets, Mode/Boundary System, Skills Structure, EDN statecharts, Lambda notation
-2. **Mementum** - Git-Based Memory Protocol, Fibonacci Recall Depth, Meta-Learning λ(λ), Three-Tier Memory, Storage Criticality Gate
-3. **gptel** - Tool-Use Architecture, MCP Integration, Temperature nil default
-4. **gptel-agent** - Sub-agent delegation via Markdown/YAML frontmatter, Context isolation, Skill directory scanning, @mentions for delegation
+Let me organize the findings from all the research sessions into a coherent digest. I need to extract the most impactful, actionable patterns from:
+
+**Own repos (davidwuchn/*):**
+1. zeroclaw - Provider-agnostic runtime, multi-channel, SOP engine, fallback chains, sandboxing
+2. context-mode - 98% context reduction, sandbox tools, FTS5 session continuity
 
 
-5. **genesis-agent** - Self-Verification Engine, P(success) confidence scoring
-6. **context-mode** - Think-in-Code Context Reduction, Sandbox Tool Pattern, FTS5 session continuity
-7. **efrit** - Circuit Breaker + Checkpoint/Restore, Tool Receipts for Audit Trail, Zero Client Intelligence
-8. **gastown** - Three-Tier Watchdog, Beads Ledger, Worktree Isolation
-9. **gbrain** - Self-Wiring Knowledge Graph, Hybrid Search Fusion
-10. **symphony** - Worktree Isolation
-11. **psi** - Statechart-Driven Architecture
+3. eca - Editor-agnostic protocol, multi-agent/subagent, MCP resources
+4. ai-code-interface.el - Unified multi-provider interface
+5. nullclaw - Minimal infrastructure, ~1MB RAM, <2ms startup
+6. Ori-Mnemos - Local-first memory, RMH, hybrid search
+7. nucleus - VSM architecture, attention magnets, lambda notation, OODA loops
+8. mementum - Git-memory protocol, λ(λ) meta-learning, 3-tier synthesis
+9. genesis-agent - Self-verification with 66 deterministic checks
+10. gbrain - Self-wiring knowledge graph with hybrid search capabilities
 
-I've compiled the full list of knowledge sources and can now synthesize these findings into a cohesive document.
+, zeroEntropy embeddings showing 31.4 P@5 lift
+11. gastown - Three-tier watchdog system with git-worktree persistence and CRITICAL/HIGH/MEDIUM escalation routing
+12. efrit - 35+ tools with circuit breakers and checkpoint/restore capabilities
+13. psi - Statechart-driven architecture using EQL queries
 
-Now I'm looking at the external research patterns—the agent design catalogue with its eighteen architectural variants, the meta-agent self-evolution approach, the Azure orchestration spectrum, trajectory-aware evaluation metrics, error recovery mechanisms, and a comprehensive taxonomy. I'm prioritizing the highest-impact findings to structure this as a comprehensive knowledge page.
+Looking at external sources, I'm seeing several key frameworks: Azure's orchestration patterns spanning direct calls through magentic approaches, MCP/A2A protocols for tool and agent communication, and ArXiv papers covering orchestration layers, agent memory mechanisms, and hyper-agents with three-loop architectures. There's also Microsoft ACON with compression guidelines that could reduce memory usage by 26-54%.
+
+Now examining the remaining external references—the task ledger pattern from magentic systems, maker-checker loops for group interactions, memory taxonomy frameworks, error recovery strategies like circuit breakers with degraded states, DSPy for declarative pipelines, evolutionary prompt optimization, and gptel integration through MCP.el with branching contexts for workflow management. I need to synthesize all these patterns into a comprehensive digest under 1200 characters, starting with the most impactful approaches from our own repositories.
+
+The key differentiators emerging across our systems are the VSM architecture enabling explicit layer separation, Fibonacci recall depth providing memory complexity scaling, lambda notation serving as compressed protocol, and a three-loop meta-learning architecture that combines task execution with evaluation and self-improvement loops. These foundational patterns are what distinguish our approach from external solutions.
 </think>

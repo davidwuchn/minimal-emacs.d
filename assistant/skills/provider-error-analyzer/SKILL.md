@@ -8,7 +8,6 @@ evolve-script: evolve_patterns.py
 metadata:
   category: reliability
   author: auto-workflow
-metadata:
   evolution-stats:
     total-experiments: 870
 

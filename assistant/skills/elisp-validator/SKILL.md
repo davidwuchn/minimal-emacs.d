@@ -9,7 +9,6 @@ metadata:
   category: code-quality
   language: emacs-lisp
   author: auto-workflow
-metadata:
   evolution-stats:
     total-experiments: 870
 

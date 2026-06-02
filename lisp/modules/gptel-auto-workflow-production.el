@@ -4,8 +4,8 @@
 ;; It runs automatically when the auto-workflow daemon is active.
 
 (require 'cl-lib)
-;; ∃ Truth: evolution.el refactored (2026-05-22) — re-enabled
-(require 'gptel-auto-workflow-evolution)
+(declare-function gptel-auto-workflow-evolution-run-cycle "gptel-auto-workflow-evolution")
+(declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
 
 ;; ─── Configuration ───
 
@@ -16,6 +16,11 @@
 
 (defvar gptel-auto-workflow--evolution-timer nil
   "Timer for periodic evolution cycles.")
+
+(defvar gptel-auto-workflow--running nil
+  "Non-nil when a workflow is actively running experiments.")
+(defvar gptel-auto-workflow--cron-job-running nil
+  "Non-nil when a cron job is queued or running.")
 
 (defvar gptel-auto-workflow--gc-timer nil
   "Timer for periodic garbage collection.")
@@ -49,9 +54,12 @@ Runs every 300s (5min) to keep RSS from runaway growth."
 (defun gptel-auto-workflow--maybe-run-evolution ()
   "Run evolution cycle if enabled and not already running.
 Also runs periodic mementum maintenance (index rebuild + synthesis)
-every cycle when there are candidate memories to process."
-  (when (and gptel-auto-workflow-evolution-enabled
-             (fboundp 'gptel-auto-workflow-evolution-run-cycle))
+every cycle when there are candidate memories to process.
+Skips when a workflow or cron job is active to avoid preempting experiments."
+  (when (and (bound-and-true-p gptel-auto-workflow-evolution-enabled)
+             (fboundp 'gptel-auto-workflow-evolution-run-cycle)
+             (not (bound-and-true-p gptel-auto-workflow--running))
+             (not (bound-and-true-p gptel-auto-workflow--cron-job-running)))
     ;; Ensure base functions are available (breaks circular require)
     (unless (fboundp 'gptel-auto-workflow--worktree-base-root)
       (condition-case nil
@@ -196,7 +204,7 @@ Called when research context changes or run completes."
       
       ;; Evolution config
       (insert "Configuration:\n")
-      (insert (format "  Evolution enabled: %s\n" gptel-auto-workflow-evolution-enabled))
+      (insert (format "  Evolution enabled: %s\n" (bound-and-true-p gptel-auto-workflow-evolution-enabled)))
       (insert (format "  Evolution interval: %d seconds\n" gptel-auto-workflow-evolution-interval))
       (insert (format "  Timer active: %s\n\n" 
                       (if gptel-auto-workflow--evolution-timer "YES" "NO")))
@@ -298,31 +306,27 @@ Called when research context changes or run completes."
 
 (defun gptel-auto-workflow-evolution-auto-start ()
   "Auto-start evolution and GC timers if enabled."
-  (when gptel-auto-workflow-evolution-enabled
+  (when (bound-and-true-p gptel-auto-workflow-evolution-enabled)
     (gptel-auto-workflow-start-evolution-timer)
     (gptel-auto-workflow-start-gc-timer)
     ;; Run initial cycle
     (run-with-idle-timer 60 nil #'gptel-auto-workflow--maybe-run-evolution)))
 
 ;; τ Wisdom: start on load when daemon is active and evolution is enabled.
-;; ∃ Truth: removed nil hard-disable — if evolution is broken, fix it, don't hide it.
 (when (and (daemonp)
-           gptel-auto-workflow-evolution-enabled)
+           (bound-and-true-p gptel-auto-workflow-evolution-enabled))
   (gptel-auto-workflow-evolution-auto-start))
 
 ;; ─── Pipeline Verification ───
 
 (defun gptel-auto-workflow--verify-pipeline-integration ()
-  "Verify that research findings feed into directive and auto-workflow.
+  "Verify that research findings feed into auto-workflow.
 Checks:
 1. Research findings file exists and has content
-2. Directive skill exists and references recent findings
-3. Research context is set for next auto-workflow run
+2. Research context is set for next auto-workflow run
 Returns t if all checks pass, nil with warnings otherwise."
   (let* ((findings-file (expand-file-name "var/tmp/research-findings.md"))
-         (directive-file (expand-file-name "assistant/skills/auto-workflow/DIRECTIVE.md"))
          (findings-ok nil)
-         (directive-ok nil)
          (context-ok nil)
          (issues nil))
     
@@ -332,12 +336,7 @@ Returns t if all checks pass, nil with warnings otherwise."
         (setq findings-ok t)
       (push "Research findings file missing or too small" issues))
     
-    ;; Check 2: Directive skill exists (will be updated during auto-workflow)
-    (if (file-exists-p directive-file)
-        (setq directive-ok t)
-      (push "Directive skill file not found" issues))
-    
-    ;; Check 3: Findings are recent (within last 24 hours)
+    ;; Check 2: Findings are recent (within last 24 hours)
     (let ((findings-mtime (when (file-exists-p findings-file)
                             (nth 5 (file-attributes findings-file)))))
       (if (and findings-mtime
@@ -347,9 +346,9 @@ Returns t if all checks pass, nil with warnings otherwise."
         (push "Research findings are stale (>24h old)" issues)))
     
     ;; Report
-    (if (and findings-ok directive-ok context-ok)
+    (if (and findings-ok context-ok)
         (progn
-          (message "[pipeline-verification] ✓ All checks passed: findings→directive integration working")
+          (message "[pipeline-verification] ✓ All checks passed")
           t)
       (let ((issue-str (string-join (reverse issues) "; ")))
         (message "[pipeline-verification] ✗ Issues found: %s" issue-str)

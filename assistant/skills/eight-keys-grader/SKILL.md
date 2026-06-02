@@ -8,7 +8,6 @@ metadata:
   category: quality-assurance
   author: auto-workflow
   license: MIT
-metadata:
   evolution-stats:
     total-experiments: 870
 

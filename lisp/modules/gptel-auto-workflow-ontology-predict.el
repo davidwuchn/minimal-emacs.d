@@ -256,5 +256,12 @@ ARGS: (target experiment-id max-experiments ...)."
                              :skipped t)))))
         nil))))
 
+;; ─── Register preflight advice ───
+(when (and (fboundp 'gptel-auto-experiment-run)
+           (not (bound-and-true-p gptel-auto-workflow--ontology-advice-installed)))
+  (advice-add 'gptel-auto-experiment-run :around
+              #'gptel-auto-workflow--experiment-preflight-advice)
+  (setq gptel-auto-workflow--ontology-advice-installed t))
+
 (provide 'gptel-auto-workflow-ontology-predict)
 ;;; gptel-auto-workflow-ontology-predict.el ends here

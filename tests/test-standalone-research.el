@@ -41,14 +41,27 @@
              (lambda (_prompt) (error "maphash corruption"))))
     (should (equal (slr--build-prompt) "raw researcher prompt"))))
 
-(ert-deftest regression/standalone-research/single-turn-timeout-uses-local-fallback ()
-  "Timeout-sized single-turn output should still produce usable findings."
+(ert-deftest regression/standalone-research/single-turn-empty-result-uses-local-fallback ()
+  "Async empty single-turn output should fall back to local findings."
   (let ((saved nil)
-        (recorded nil)
-        (callback-findings nil))
+         (recorded nil)
+         (callback-findings nil)
+         (defects nil))
     (cl-letf (((symbol-function 'gptel-benchmark-call-subagent)
-               (lambda (_type _description _prompt callback &optional _timeout)
-                 (funcall callback "Error: timed out after 300s")))
+                (lambda (_type _description _prompt callback &optional _timeout)
+                 (funcall callback "")))
+              ((symbol-function 'run-with-timer)
+               (lambda (_secs _repeat function &rest args)
+                 (apply function args)
+                 'test-timer))
+              ((symbol-function 'slr--record-research-defect)
+               (lambda (reason details)
+                 (push (list reason details) defects)
+                 (list reason details "recorded")))
+              ((symbol-function 'slr--local-fallback-findings)
+               (lambda (_reason _details)
+                 (concat "## Local Research Fallback\n\n"
+                         (make-string 200 ?x))))
               ((symbol-function 'slr--record-context)
                (lambda (_prompt findings)
                  (setq recorded findings)))
@@ -58,11 +71,13 @@
       (slr--run-single-turn "research prompt"
                             (lambda (findings)
                               (setq callback-findings findings)))
-      (sleep-for 0.5)  ; let run-with-timer 0 fire in batch mode
+      (sleep-for 0.5)
       (should (slr--usable-findings-p saved))
       (should (equal saved recorded))
       (should (equal saved callback-findings))
-      (should (string-match-p "Local Research Fallback" saved)))))
+      (should (string-match-p "Local Research Fallback" saved))
+      (should (equal (length defects) 1))
+      (should (eq (caar defects) 'empty-response)))))
 
 (provide 'test-standalone-research)
 

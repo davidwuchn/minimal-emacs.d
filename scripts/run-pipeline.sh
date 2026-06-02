@@ -243,6 +243,58 @@ kill_ov5_daemons() {
     fi
 }
 
+pipeline_git_has_unmerged_paths() {
+    git -C "$DIR" diff --name-only --diff-filter=U 2>/dev/null | grep -q .
+}
+
+pipeline_clear_auto_generated_unmerged_paths() {
+    local unmerged
+
+    unmerged="$(git -C "$DIR" diff --name-only --diff-filter=U 2>/dev/null || true)"
+    [ -n "$unmerged" ] || return 0
+
+    if printf '%s\n' "$unmerged" | grep -Ev '^(mementum/knowledge/|assistant/skills/|assistant/strategies/)' >/dev/null; then
+        log "WARNING: non-auto-generated merge conflicts remain; skipping git sync"
+        printf '%s\n' "$unmerged" | sed 's/^/[pipeline conflict] /'
+        return 1
+    fi
+
+    log "Clearing auto-generated merge conflicts before git sync"
+    git -C "$DIR" merge --abort 2>/dev/null || true
+    git -C "$DIR" checkout HEAD -- mementum/knowledge/ assistant/skills/ assistant/strategies/ 2>/dev/null || true
+    git -C "$DIR" clean -fd -- mementum/knowledge/ assistant/skills/ assistant/strategies/ 2>/dev/null || true
+    ! pipeline_git_has_unmerged_paths
+}
+
+pipeline_git_sync_latest() {
+    local label="${1:-git sync}" stash_label="${2:-auto-workflow-sync}"
+    local stash_output stash_made=0
+
+    pipeline_clear_auto_generated_unmerged_paths || return 0
+
+    stash_output="$(git -C "$DIR" stash push -m "${stash_label}-$(date +%s)" 2>&1 || true)"
+    case "$stash_output" in
+        *"No local changes to save"*) stash_made=0 ;;
+        *"Saved working directory"*) stash_made=1 ;;
+        *"Saved working tree"*) stash_made=1 ;;
+        "") stash_made=0 ;;
+        *)
+            log "WARNING: git stash failed during $label; continuing without stash pop"
+            printf '%s\n' "$stash_output" >> "$PIPELINE_LOG"
+            stash_made=0
+            ;;
+    esac
+
+    git -C "$DIR" merge --abort 2>/dev/null || true
+    git -C "$DIR" checkout HEAD -- mementum/knowledge/ assistant/skills/ assistant/strategies/ 2>/dev/null || true
+    git -C "$DIR" clean -fd -- mementum/knowledge/ assistant/skills/ assistant/strategies/ 2>/dev/null || true
+    git -C "$DIR" pull --ff-only 2>&1 || log "WARNING: $label git pull failed"
+
+    if [ "$stash_made" -eq 1 ]; then
+        git -C "$DIR" stash pop 2>/dev/null || log "WARNING: $label stash pop failed"
+    fi
+}
+
 verify_research_feedback_loop() {
     local results_file="$1"
     local data_rows linked_rows
@@ -330,13 +382,11 @@ clean_stale_socket "ov5-researcher"
 
 # ─── Pull latest code so daemon restart picks up fixes ───
 log "Pulling latest code from origin..."
-# Discard all local changes to auto-generated files — they are upstream-dominant
-# and local edits only cause merge conflicts. checkout HEAD ensures a clean slate
-# (unlike --theirs which only resolves conflict markers). clean -fd removes
-# untracked files that could also cause conflicts.
-git -C "$DIR" checkout HEAD -- mementum/knowledge/ assistant/skills/ 2>/dev/null || true
-git -C "$DIR" clean -fd -- mementum/knowledge/ assistant/skills/ 2>/dev/null || true
-git -C "$DIR" pull --ff-only 2>&1 || log "WARNING: git pull failed, continuing with current code"
+# Stash any work-in-progress (experiment results, manual edits) so we don't lose them.
+# Auto-evolved files (DIRECTIVE.md, strategy-guidance.json, comparison reports) are
+# upstream-dominant — discard local versions since they'll be regenerated next cycle.
+# Stale merge conflicts from previous interrupted pulls also block git pull — clear them.
+pipeline_git_sync_latest "pre-workflow" "auto-workflow-pre-pull"
 
 # ─── Stop any existing daemons to ensure fresh code is loaded ───
 log "Stopping any existing daemons to load latest code..."
@@ -532,10 +582,7 @@ if [ "${PIPELINE_SKIP_PRE_EVOLUTION:-no}" != "yes" ]; then
     # Clear workflow status so auto-workflow can start a fresh daemon
     rm -f "$DIR/var/tmp/cron/auto-workflow-status.sexp" 2>/dev/null || true
     # Discard all local changes + untracked files in auto-generated dirs
-    git -C "$DIR" checkout HEAD -- mementum/knowledge/ assistant/skills/ 2>/dev/null || true
-    git -C "$DIR" clean -fd -- mementum/knowledge/ assistant/skills/ 2>/dev/null || true
-    # Pull any commits pushed by evolution cycle
-    git -C "$DIR" pull --ff-only 2>&1 || log "WARNING: post-evolution git pull failed"
+    pipeline_git_sync_latest "post-evolution" "auto-workflow-post-pull"
     sleep 2
 else
     log "=== Step 3: Skipped (PIPELINE_SKIP_PRE_EVOLUTION=yes) ==="
