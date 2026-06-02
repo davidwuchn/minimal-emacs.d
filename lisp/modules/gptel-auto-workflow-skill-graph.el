@@ -112,9 +112,11 @@ Returns the node id (symbol) or nil if invalid."
                                     :last-used nil))))
             (puthash id node ov5-sg--nodes)
             (dolist (atom-id atoms)
-              (ov5-sg--update-edge atom-id id 'dependency nil))
+              (unless (gethash (cons atom-id id) ov5-sg--edges)
+                (ov5-sg--update-edge atom-id id 'dependency nil)))
             (dolist (mol-id molecules)
-              (ov5-sg--update-edge mol-id id 'dependency nil))
+              (unless (gethash (cons mol-id id) ov5-sg--edges)
+                (ov5-sg--update-edge mol-id id 'dependency nil)))
             (when (and atoms
                        (eq (ov5-sg-node-level node) 'molecule))
               (push atoms ov5-sg--molecules))
@@ -331,12 +333,21 @@ Returns plist: :success t|nil, :results list, :context final value."
   "Record skill combination from an experiment.
 SKILLS is list of skill ids used in sequence.
 OUTCOME is t for kept, nil for discarded.
-Updates edge weights between consecutive skills."
+Updates edge weights between consecutive skills.
+Preserves dependency edge type (explicit frontmatter) on updates."
   (when (>= (length skills) 2)
     (let ((prev (car skills))
           (rest (cdr skills)))
       (dolist (next rest)
-        (ov5-sg--update-edge prev next 'sequence outcome)
+        ;; Check if a dependency edge already exists for this pair
+        (let* ((key (cons prev next))
+               (existing (gethash key ov5-sg--edges))
+               (existing-type (and existing (ov5-sg-edge-type existing))))
+          ;; Use dependency if it exists, otherwise sequence
+          (ov5-sg--update-edge prev next
+                               (if (eq existing-type 'dependency)
+                                   'dependency 'sequence)
+                               outcome))
         (setq prev next))))
   ;; Update individual node stats
   (dolist (skill-id skills)
