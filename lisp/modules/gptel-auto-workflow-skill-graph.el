@@ -125,9 +125,13 @@ Returns the node id (symbol) or nil if invalid."
 (defun ov5-sg-load-all-skills (&optional skills-dir)
   "Load all skills from SKILLS-DIR (default: assistant/skills/).
 Returns list of loaded node ids."
-  (let ((dir (or skills-dir
-                 (expand-file-name "assistant/skills" user-emacs-directory)))
-        (loaded nil))
+  (let* ((root (or (and (boundp 'gptel-auto-workflow--project-root)
+                        (fboundp 'gptel-auto-workflow--project-root)
+                        (gptel-auto-workflow--project-root))
+                   user-emacs-directory))
+         (dir (or skills-dir
+                  (expand-file-name "assistant/skills" root)))
+         (loaded nil))
     (clrhash ov5-sg--nodes)
     (dolist (subdir (directory-files dir t "^[^.]"))
       (when (file-directory-p subdir)
@@ -509,8 +513,12 @@ Loads skills and persisted graph state."
 
 ;; Auto-initialize when loaded (safe for daemon — checks directory existence)
 (condition-case err
-    (when (file-directory-p (expand-file-name "assistant/skills" user-emacs-directory))
-      (ov5-sg-init))
+    (let ((root (or (and (boundp 'gptel-auto-workflow--project-root)
+                         (fboundp 'gptel-auto-workflow--project-root)
+                         (gptel-auto-workflow--project-root))
+                    user-emacs-directory)))
+      (when (file-directory-p (expand-file-name "assistant/skills" root))
+        (ov5-sg-init)))
   (error (message "[skill-graph] Init deferred: %s" (error-message-string err))))
 
 (provide 'gptel-auto-workflow-skill-graph)
