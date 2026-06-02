@@ -173,20 +173,21 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
           (experiment-branch (or (gptel-auto-workflow--get-current-branch target)
                                  (gptel-auto-workflow--branch-name target experiment-id)))
           ;; Track target state before experiment (lightweight digital twin)
-          (_target-state
-           (when target
-             (let* ((source (expand-file-name target (or worktree default-directory)))
-                    (byte-compiles (when (file-exists-p source)
-                                    (zerop (call-process "emacs" nil nil nil
-                                                         "--batch" "-Q"
-                                                         "-f" "batch-byte-compile"
-                                                         source))))
-                    (syntax-ok (when (file-exists-p source)
-                                 (with-temp-buffer
-                                   (ignore-errors (insert-file-contents source))
-                                   (zerop (call-process "emacs" nil nil nil
-                                                        "--batch" "--eval"
-                                                        "(check-parens)"))))))
+           (_target-state
+            (when target
+              (let* ((source (expand-file-name target (or worktree default-directory)))
+                     (byte-compile-script (expand-file-name "scripts/byte-compile-check.sh"
+                                                            (gptel-auto-workflow--worktree-base-root)))
+                     (byte-compiles (when (and (file-exists-p source)
+                                               (file-exists-p byte-compile-script))
+                                     (zerop (call-process "bash" nil nil nil
+                                                          byte-compile-script source))))
+                     (syntax-ok (when (file-exists-p source)
+                                  (with-temp-buffer
+                                    (ignore-errors (insert-file-contents source))
+                                    (condition-case nil
+                                        (progn (check-parens) t)
+                                      (error nil))))))
                (puthash target (list :byte-compiles byte-compiles :syntax-ok syntax-ok)
                         gptel-auto-experiment--target-state-cache))))
           ;; CRITICAL: Set default-directory to worktree so all subagents
