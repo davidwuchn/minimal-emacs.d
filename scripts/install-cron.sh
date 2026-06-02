@@ -18,7 +18,15 @@ detect_machine() {
     elif echo "$hostname" | grep -qiE "pi5|raspberrypi|onepi"; then
         echo "pi5"
     elif [ "$os" = "Linux" ]; then
-        echo "linux"
+        # Check for Raspberry Pi hardware (Pi5, Pi4, etc.)
+        if [ -f /proc/device-tree/model ] && grep -qi "raspberry pi" /proc/device-tree/model 2>/dev/null; then
+            echo "pi5"
+        # Check for ARM Linux with limited RAM (typical Pi)
+        elif [ "$(uname -m)" = "aarch64" ] && [ "$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo 2>/dev/null || echo 0)" -lt 8192 ]; then
+            echo "pi5"
+        else
+            echo "linux"
+        fi
     else
         echo "single"
     fi
