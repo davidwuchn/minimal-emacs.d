@@ -7,6 +7,8 @@ metadata:
   evolution-stats:
     total-experiments: 870
 
+level: molecule
+atoms: [researcher-prompt]
 ---
 # Research Digest Prompt
 

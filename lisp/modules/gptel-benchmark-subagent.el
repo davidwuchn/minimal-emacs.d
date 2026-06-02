@@ -397,17 +397,20 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                   description
                   prompt
                   files))
-             (let ((gptel-agent-preset effective-preset)
-                   (gptel--request-params
-                    (if effort-param
-                        (plist-put (copy-sequence gptel--request-params)
-                                   :reasoning_effort effort-param)
-                      gptel--request-params)))
-                (gptel-agent--task
-                 callback
-                 agent-type
-                  description
-                  prompt))))))
+              (let ((gptel-agent-preset effective-preset)
+                    (gptel--request-params
+                     (if effort-param
+                         (plist-put (copy-sequence gptel--request-params)
+                                    :reasoning_effort effort-param)
+                       gptel--request-params))
+                    ;; Auto-hashline: executor reads return content-addressed format
+                    (gptel-tools-read-hashline-default
+                     (when (string= agent-type "executor") t)))
+                 (gptel-agent--task
+                  callback
+                  agent-type
+                   description
+                   prompt))))))
     (funcall callback (format "[MOCK] %s: %s"
                               type
                               (truncate-string-to-width prompt 100 nil nil "...")))))

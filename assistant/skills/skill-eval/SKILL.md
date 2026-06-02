@@ -18,6 +18,8 @@ lambda: skill.validation.experiment
 metadata:
   evolution-stats:
     total-experiments: 0
+level: molecule
+atoms: [elisp-expert, elisp-validator]
 ---
 
 ```

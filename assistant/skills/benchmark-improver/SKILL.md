@@ -7,6 +7,8 @@ metadata:
   evolution-stats:
     total-experiments: 870
 
+level: molecule
+atoms: [eight-keys-grader, elisp-expert, evolution-patterns]
 ---
 # Benchmark Auto-Improver
 

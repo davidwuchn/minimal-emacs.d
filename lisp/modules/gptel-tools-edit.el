@@ -69,6 +69,16 @@ This prevents path traversal via crafted diff headers."
                patch-name expected-name))))
   t)
 
+;;; Edit Mode Tracking
+
+(defvar gptel-tools-edit--mode-used nil
+  "Dynamic variable. Set to the edit mode that succeeded: 'hashline, 'patch, 'string.
+Read by experiment logging to track edit tool effectiveness.")
+
+(defvar gptel-tools-read-hashline-default nil
+  "Dynamic variable. When non-nil, Read tool returns hashline format by default.
+Set by executor when entering edit mode so subsequent reads are content-addressed.")
+
 ;;; Edit Tool Implementation
 
 (defun my/gptel--agent-edit-async (callback file_path &optional old_str new_str diffp)
@@ -82,25 +92,28 @@ to prevent callers from hanging indefinitely."
   (let* ((origin (current-buffer))
          (gen my/gptel--abort-generation)
          (done nil)
-         (finish
-          (lambda (result)
-            (unless done
-              (setq done t)
-              (let ((is-error (and (stringp result) (string-prefix-p "Error" result))))
-                (cond
-                 ;; Always deliver errors
-                 (is-error (funcall callback result))
-                 ;; Normal case: buffer alive and not aborted
-                 ((and (buffer-live-p origin)
-                       (with-current-buffer origin
-                         (= gen my/gptel--abort-generation)))
-                  (funcall callback result))
-                 ;; Buffer dead: still deliver result
-                 ((not (buffer-live-p origin))
-                  (funcall callback result))
-                 ;; Aborted: deliver with error prefix so caller can proceed
-                 (t
-                  (funcall callback (format "Error: Request aborted\n%s" result)))))))))
+          (finish
+           (lambda (result)
+             (unless done
+               (setq done t)
+               (let ((is-error (and (stringp result) (string-prefix-p "Error" result))))
+                 (cond
+                  ;; Always deliver errors
+                  (is-error
+                   (setq gptel-tools-edit--mode-used nil)
+                   (funcall callback result))
+                  ;; Normal case: buffer alive and not aborted
+                  ((and (buffer-live-p origin)
+                        (with-current-buffer origin
+                          (= gen my/gptel--abort-generation)))
+                   (funcall callback result))
+                  ;; Buffer dead: still deliver result
+                  ((not (buffer-live-p origin))
+                   (funcall callback result))
+                  ;; Aborted: deliver with error prefix so caller can proceed
+                  (t
+                   (setq gptel-tools-edit--mode-used nil)
+                   (funcall callback (format "Error: Request aborted\n%s" result)))))))))
     (condition-case err
         (progn
           (let ((patch-mode (and diffp (not (eq diffp :json-false))))
@@ -119,10 +132,12 @@ n                                    (string-match-p "^[0-9]+:[a-f0-9]+" old_str
             (cond
              ;; Hashline mode: stable content-addressed editing
              (hashline-mode
+              (setq gptel-tools-edit--mode-used 'hashline)
               (funcall finish
                        (my/gptel--agent-edit-hashline file_path old_str new_str)))
              ;; Patch mode: unified diff
              (patch-mode
+              (setq gptel-tools-edit--mode-used 'patch)
               (let* ((target (expand-file-name file_path))
                      (patch-text (my/gptel--agent--strip-diff-fences new_str))
                      (patch-text (if (string-suffix-p "\n" patch-text)
@@ -145,6 +160,7 @@ n                                    (string-match-p "^[0-9]+:[a-f0-9]+" old_str
                  "Edit")))
              ;; String replacement mode: exact match
              (t
+              (setq gptel-tools-edit--mode-used 'string)
               (funcall finish
                        (gptel-agent--edit-files file_path old_str new_str diffp))))))))
       (error

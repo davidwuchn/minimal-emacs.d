@@ -10,6 +10,7 @@ lambda: hashline.edit.content-addressed
 metadata:
   evolution-stats:
     total-experiments: 0
+level: atom
 ---
 
 # hashline-edit: Content-Addressed Line Editing

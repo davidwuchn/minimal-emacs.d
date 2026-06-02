@@ -7,6 +7,7 @@ author: David Wu
 license: MIT
 triggers: ["seo", "geo", "keywords", "schema", "json-ld"]
 lambda: audit.analyze.report
+level: atom
 ---
 
 ```

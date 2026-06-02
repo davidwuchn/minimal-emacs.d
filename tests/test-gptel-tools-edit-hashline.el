@@ -129,5 +129,94 @@
       (should (string-match-p "replaced via edit tool" (buffer-string))))
     (test-hashline-cleanup)))
 
+;;; Edge Cases
+
+(ert-deftest hashline-empty-file ()
+  "Test behavior with empty file."
+  (let* ((test-file (expand-file-name "empty.txt" test-hashline-temp-dir)))
+    (with-temp-file test-file)
+    (let ((formatted (gptel-tools-edit-hashline-format-file test-file)))
+      (should (string= formatted "")))
+    (test-hashline-cleanup)))
+
+(ert-deftest hashline-single-line ()
+  "Test behavior with single-line file."
+  (let* ((test-file (expand-file-name "single.txt" test-hashline-temp-dir)))
+    (with-temp-file test-file
+      (insert "only line"))
+    (let* ((formatted (gptel-tools-edit-hashline-format-file test-file))
+           (hash (gptel-tools-edit-hashline--hash "only line"))
+           (tag (format "1:%s" hash))
+           (result (gptel-tools-edit-hashline-replace test-file tag "modified")))
+      (should (string-match-p "1:" formatted))
+      (should (string-match-p "Successfully replaced" result))
+      (with-temp-buffer
+        (insert-file-contents test-file)
+        (should (string= (buffer-string) "modified"))))
+    (test-hashline-cleanup)))
+
+(ert-deftest hashline-unicode-content ()
+  "Test with unicode characters."
+  (let* ((test-file (expand-file-name "unicode.txt" test-hashline-temp-dir)))
+    (with-temp-file test-file
+      (insert "hello 世界\n café résumé\n"))
+    (let* ((formatted (gptel-tools-edit-hashline-format-file test-file))
+           (hash (gptel-tools-edit-hashline--hash "hello 世界"))
+           (tag (format "1:%s" hash))
+           (result (gptel-tools-edit-hashline-replace test-file tag "hola mundo")))
+      (should (string-match-p "hello 世界" formatted))
+      (should (string-match-p "Successfully replaced" result))
+      (with-temp-buffer
+        (insert-file-contents test-file)
+        (should (string-match-p "hola mundo" (buffer-string)))))
+    (test-hashline-cleanup)))
+
+(ert-deftest hashline-very-long-line ()
+  "Test with very long line (>1000 chars)."
+  (let* ((test-file (expand-file-name "long.txt" test-hashline-temp-dir))
+         (long-text (make-string 2000 ?x)))
+    (with-temp-file test-file
+      (insert long-text "\n"))
+    (let* ((formatted (gptel-tools-edit-hashline-format-file test-file))
+           (hash (gptel-tools-edit-hashline--hash long-text))
+           (tag (format "1:%s" hash))
+           (result (gptel-tools-edit-hashline-replace test-file tag "short")))
+      (should (string-match-p "1:" formatted))
+      (should (string-match-p "Successfully replaced" result))
+      (with-temp-buffer
+        (insert-file-contents test-file)
+        (should (string-match-p "short" (buffer-string)))))
+    (test-hashline-cleanup)))
+
+(ert-deftest hashline-no-trailing-newline ()
+  "Test file without trailing newline."
+  (let* ((test-file (expand-file-name "no-nl.txt" test-hashline-temp-dir)))
+    (with-temp-file test-file
+      (insert "line one\nline two")
+      ;; Remove trailing newline
+      (goto-char (point-max))
+      (when (= (char-before) ?\n)
+        (delete-char -1)))
+    (let* ((formatted (gptel-tools-edit-hashline-format-file test-file))
+           (hash (gptel-tools-edit-hashline--hash "line two"))
+           (tag (format "2:%s" hash))
+           (result (gptel-tools-edit-hashline-replace test-file tag "modified")))
+      (should (string-match-p "2:" formatted))
+      (should (string-match-p "Successfully replaced" result)))
+    (test-hashline-cleanup)))
+
+(ert-deftest hashline-hash-collision ()
+  "Test behavior with potential hash collision (same hash, different content)."
+  ;; With 2-char hex, collision probability is low but possible
+  ;; This test verifies the verify function catches mismatches
+  (let* ((test-file (test-hashline-setup))
+         (correct-hash (gptel-tools-edit-hashline--hash "line two"))
+         ;; Create wrong tag with correct line num but wrong hash
+         (wrong-tag (format "2:%s" "00")))
+    ;; Should reject due to hash mismatch
+    (let ((result (gptel-tools-edit-hashline-replace test-file wrong-tag "should fail")))
+      (should (string-match-p "Error: Hash mismatch" result)))
+    (test-hashline-cleanup)))
+
 (provide 'test-gptel-tools-edit-hashline)
 ;;; test-gptel-tools-edit-hashline.el ends here

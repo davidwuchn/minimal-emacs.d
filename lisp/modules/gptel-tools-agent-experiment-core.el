@@ -538,10 +538,12 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                              :grader-quality 0
                                              :grader-reason reason
                                              :comparator-reason "duplicate-hypothesis"
-                                             :analyzer-patterns (format "%s" patterns)
-                                             :agent-output effective-agent-output
-                                             :backend actual-backend
-                           :model actual-model)))
+                                                                        :analyzer-patterns (format "%s" patterns)
+                                                                        :agent-output effective-agent-output
+                                                                        :backend actual-backend
+                                                                       :model actual-model
+                                                                       :edit-mode (or (bound-and-true-p gptel-tools-edit--mode-used) "none")
+                                                                       :skills (or (bound-and-true-p gptel-ai-behaviors--current-hashtags) ""))))
                                  (setq finished t)
                                  (message "[auto-exp] ⏭ Duplicate hypothesis: %s"
                                           (substring hypothesis 0 (min 80 (length hypothesis))))
@@ -922,8 +924,10 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 												          (format "%s" patterns) :agent-output
 												          effective-agent-output
                           :backend actual-backend
-                          :model actual-model
-                          :prompt-chars (length executor-prompt)
+                           :model actual-model
+                           :edit-mode (or (bound-and-true-p gptel-tools-edit--mode-used) "none")
+                           :skills (or (bound-and-true-p gptel-ai-behaviors--current-hashtags) "")
+                           :prompt-chars (length executor-prompt)
                           :prompt-structure (gptel-auto-experiment--prompt-structure-score executor-prompt)
                            :kibcm-axis (gptel-auto-experiment--kibcm-axis hypothesis)
                           :sections-included (or (and (boundp 'gptel-auto-workflow--last-prompt-sections)

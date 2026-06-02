@@ -3,6 +3,8 @@ name: researcher-prompt
 description: Prompt template for external research specialist subagent. Auto-evolves based on experiment outcomes.
 version: 2.0
 evolve-script: evolve_researcher.py
+level: molecule
+atoms: [agent-prompts]
 ---
 metadata:
   evolution-stats:

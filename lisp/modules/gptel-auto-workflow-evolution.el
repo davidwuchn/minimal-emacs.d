@@ -2321,6 +2321,13 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (condition-case nil
       (gptel-auto-workflow--build-inverted-file)
     (error nil))
+  ;; Skill graph evolution: update edges from recent experiment outcomes
+  (when (fboundp 'ov5-sg-evolve-from-experiments)
+    (condition-case err
+        (progn
+          (ov5-sg-evolve-from-experiments)
+          (message "[skill-graph] Evolution complete"))
+      (error (message "[skill-graph] Evolution error: %s" (error-message-string err)))))
   (message "[auto-workflow] Self-evolution cycle complete.")
   ;; Emit machine-parseable RESULT for this cycle (AutoGo protocol)
   (condition-case nil

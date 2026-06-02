@@ -269,11 +269,13 @@ PDF files are extracted using pdftotext if available."
           (and (fboundp 'gptel--file-binary-p) (gptel--file-binary-p path)))
       (format "Error: Binary file detected (%s). Use appropriate tools for binary files."
               (or (file-name-extension path) "unknown type")))
-     (t
-      (let ((result (gptel-agent--read-file-lines path start-line end-line)))
-        (if hashline
-            (gptel-tools-edit-hashline-format-file path)
-          result))))))
+      (t
+       (let ((result (gptel-agent--read-file-lines path start-line end-line))
+             (use-hashline (or hashline
+                               (bound-and-true-p gptel-tools-read-hashline-default))))
+         (if use-hashline
+             (gptel-tools-edit-hashline-format-file path)
+           result))))))
 
 (defun my/gptel--extract-pdf-text (path &optional start-line end-line hashline)
   "Extract text from PDF at PATH using pdftotext.

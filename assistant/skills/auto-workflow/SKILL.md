@@ -3,6 +3,8 @@ name: auto-workflow
 description: Orchestrates automated code improvement through hypothesis-driven experimentation and self-evolution
 version: 1.1
 evolve-script: generate_directive.py
+level: compound
+molecules: [benchmark-improver, evolution-patterns, skill-eval, sandbox-profiles]
 ---
 metadata:
   evolution-stats:

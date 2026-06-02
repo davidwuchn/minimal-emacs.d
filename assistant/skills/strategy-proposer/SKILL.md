@@ -9,6 +9,8 @@ metadata:
   evolution-stats:
     total-experiments: 870
 
+level: molecule
+atoms: [elisp-expert]
 ---
 # Meta-Harness Strategy Proposer
 

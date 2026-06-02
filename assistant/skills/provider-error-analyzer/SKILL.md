@@ -11,6 +11,7 @@ metadata:
   evolution-stats:
     total-experiments: 870
 
+level: atom
 ---
 # Provider Error Analyzer
 

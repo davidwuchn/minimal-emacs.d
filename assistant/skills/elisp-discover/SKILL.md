@@ -18,6 +18,8 @@ lambda: elisp.discover.systematic
 metadata:
   evolution-stats:
     total-experiments: 0
+level: molecule
+atoms: [elisp-expert]
 ---
 
 ```

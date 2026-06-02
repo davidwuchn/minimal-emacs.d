@@ -18,6 +18,8 @@ lambda: elisp.refactor.mechanism_policy
 metadata:
   evolution-stats:
     total-experiments: 0
+level: molecule
+atoms: [elisp-discover, elisp-expert, elisp-validator]
 ---
 
 ```
