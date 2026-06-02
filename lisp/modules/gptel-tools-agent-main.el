@@ -513,6 +513,10 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
     (load-file (expand-file-name "lisp/modules/gptel-benchmark-subagent.el" root))
     (load-file (expand-file-name "lisp/modules/nucleus-prompts.el" root))
     (load-file (expand-file-name "lisp/modules/nucleus-presets.el" root))
+    ;; Context interception: PreToolUse/PostToolUse hooks, auto-indexing, session events
+    (condition-case nil
+        (load-file (expand-file-name "lisp/modules/gptel-nucleus-context-intercept.el" root))
+      (error (message "[nucleus] context-intercept module unavailable, skipping")))
     ;; Ensure gptel-agent--task has FSM position guard for analyzer dispatch
     (load-file (expand-file-name "packages/gptel-agent/gptel-agent-tools.el" root))
     (condition-case err (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root)) (error (message "[reload] strategic.el skipped (load error: %s)" (error-message-string err))))

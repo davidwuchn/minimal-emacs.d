@@ -616,20 +616,29 @@ STRATEGY and TARGET filter the performance data.
              (confidence (if all-total
                              (min 1.0 (/ (float all-total) 50.0))
                            0.0)))
-        (push (list :backend backend :model model
+            (push (list :backend backend :model model
                     :rate all-rate :total all-total
                     :delta delta :trend trend :confidence confidence
                     :healthy healthy
                     :score (if all-rate
                                 (let* ((health-penalty (if (>= (gptel-auto-workflow--backend-health-level backend) 2)
                                                            -100.0   ; DEGRADED or worse = severe penalty
-                                                         0.0)))
+                                                         0.0))
+                                       ;; Context efficiency boost: backends that save more context
+                                       ;; (higher savings ratio) get a 0-15 point bonus.
+                                       ;; Falls back to 0 if context-intercept module not loaded.
+                                       (ctx-boost (if (and (fboundp 'gptel-nucleus-context--backend-context-efficiency)
+                                                           (boundp 'gptel-nucleus-context--backend-efficiency))
+                                                      (let ((eff (gptel-nucleus-context--backend-context-efficiency backend)))
+                                                        (if eff (* eff 15.0) 0.0))
+                                                    0.0)))
                                    (+ (* delta (* delta-weight 100.0))
                                       (* all-rate (* rate-weight 100.0))
                                       (* trend (* trend-weight 100.0))
                                       (* confidence (* confidence-weight 100.0))
                                       (if healthy 0 -50.0)   ; Quota penalty
                                       health-penalty
+                                      ctx-boost
                                       (gptel-auto-workflow--phase-boost backend target)))
                                -1.0))  ; No data = bottom
               scored)))

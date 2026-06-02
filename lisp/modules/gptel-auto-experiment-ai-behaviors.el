@@ -1486,7 +1486,23 @@ Used to allocate experiment budget to high-affinity pairs.")
   "Reorder gptel-auto-workflow-headless-subagent-fallbacks by cost-adjusted keep-rate.
 Backends with higher keeps-per-dollar move to front (preferred).
 Also computes per-category chains stored in gptel-ai-behaviors--category-chains.
-Only runs when >= 2 backends have sufficient data to avoid overfitting."
+Only runs when >= 2 backends have sufficient data to avoid overfitting.
+
+Context-cost integration: backends with high context waste (low savings ratio)
+get a penalty multiplier on their cost. A backend with 90% context savings gets
+a 1.1x cost multiplier; one with 10% savings gets a 1.9x multiplier. This means
+context-efficient backends rank higher even when their dollar cost is similar."
+  ;; ── Helper: context-cost penalty from context-intercept module ──
+  (defun gptel-ai-behaviors--context-efficiency-penalty (backend)
+    "Return a multiplier (>=1.0) for BACKEND based on context savings ratio.
+High savings → low penalty. Low savings → high penalty.
+Falls back to 1.0 if context-intercept module not loaded."
+    (if (and (fboundp 'gptel-nucleus-context--backend-context-efficiency)
+             (boundp 'gptel-nucleus-context--backend-efficiency))
+        (let* ((eff (gptel-nucleus-context--backend-context-efficiency backend))
+               (waste (if eff (- 1.0 eff) 0.5)))
+          (+ 1.0 waste))
+      1.0))
   ;; ── Global chain (all categories combined) ──
   (let ((scores nil))
     (dolist (pair gptel-auto-workflow-headless-subagent-fallbacks)
@@ -1503,13 +1519,14 @@ Only runs when >= 2 backends have sufficient data to avoid overfitting."
              (cl-incf total-cost cost)))
          gptel-ai-behaviors--model-stats)
         (when (and (> total-kept 0) (> total-cost 0))
-          (push (cons backend (/ (float total-kept) total-cost)) scores))))
+          (let ((ctx-penalty (gptel-ai-behaviors--context-efficiency-penalty backend)))
+            (push (cons backend (/ (float total-kept) (* total-cost ctx-penalty))) scores)))))
     (when (>= (length scores) 2)
       (setq scores (sort scores (lambda (a b) (> (cdr a) (cdr b)))))
       (setq gptel-auto-workflow-headless-subagent-fallbacks
             (mapcar (lambda (s) (assoc (car s) gptel-auto-workflow-headless-subagent-fallbacks))
                     scores))
-      (message "[chain-evolve] Global chain by keeps-per-dollar: %s"
+      (message "[chain-evolve] Global chain by keeps-per-dollar+context: %s"
                (mapconcat (lambda (s) (format "%s(%.4f)" (car s) (cdr s)))
                           scores " -> "))))
   ;; ── Per-category chains ──
@@ -1530,7 +1547,8 @@ Only runs when >= 2 backends have sufficient data to avoid overfitting."
                  (cl-incf total-cost cost))))
            gptel-ai-behaviors--model-stats)
           (when (and (> total-kept 0) (> total-cost 0))
-            (push (cons backend (/ (float total-kept) total-cost)) cat-scores))))
+            (let ((ctx-penalty (gptel-ai-behaviors--context-efficiency-penalty backend)))
+              (push (cons backend (/ (float total-kept) (* total-cost ctx-penalty))) cat-scores)))))
       (when (>= (length cat-scores) 2)
         (setq cat-scores (sort cat-scores (lambda (a b) (> (cdr a) (cdr b)))))
         (puthash cat cat-scores gptel-ai-behaviors--category-chains)

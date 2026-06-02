@@ -41,6 +41,11 @@
 (load-file (expand-file-name "../lisp/modules/strategic-daemon-functions.el"
                                (file-name-directory
                                 (or load-file-name buffer-file-name default-directory))))
+(condition-case nil
+    (load-file (expand-file-name "../lisp/modules/gptel-auto-workflow-mementum.el"
+                                 (file-name-directory
+                                  (or load-file-name buffer-file-name default-directory))))
+  (error (message "[test] mementum skipped: %s" (error-message-string err))))
 
 (ert-deftest regression/auto-workflow-evolution/insufficient-data-returns-skip-message ()
   "Pipeline callers should see a textual skip reason, not bare nil."
@@ -3156,6 +3161,138 @@ QV: ensure cache-aware cost model is wired for these backends."
     (let ((chain (gethash :programming gptel-ai-behaviors--category-chains)))
       (should chain)
       (should (string= (caar chain) "MiniMax")))))
+
+;; ─── Mementum Memory Deduplication ───
+
+(ert-deftest tdd/mementum/dedup-hash-function ()
+  "dedup-hash returns 64-char hex string for non-empty content."
+  (when (fboundp 'gptel-auto-workflow--mementum-dedup-hash)
+    (let ((hash (gptel-auto-workflow--mementum-dedup-hash "hello world")))
+      (should (stringp hash))
+      (should (= 64 (length hash))))))
+
+(ert-deftest tdd/mementum/dedup-hash-same-content-same-hash ()
+  "Identical content produces identical hash."
+  (when (fboundp 'gptel-auto-workflow--mementum-dedup-hash)
+    (let ((h1 (gptel-auto-workflow--mementum-dedup-hash "test content"))
+          (h2 (gptel-auto-workflow--mementum-dedup-hash "test content")))
+      (should (string= h1 h2)))))
+
+(ert-deftest tdd/mementum/dedup-hash-different-content ()
+  "Different content produces different hash."
+  (when (fboundp 'gptel-auto-workflow--mementum-dedup-hash)
+    (let ((h1 (gptel-auto-workflow--mementum-dedup-hash "foo"))
+          (h2 (gptel-auto-workflow--mementum-dedup-hash "bar")))
+      (should-not (string= h1 h2)))))
+
+(ert-deftest tdd/mementum/dedup-hash-nil-safe ()
+  "Empty/nil content is safe (returns non-nil hash or nil without crashing)."
+  (when (fboundp 'gptel-auto-workflow--mementum-dedup-hash)
+    ;; Must not crash — empty content is valid SHA-256 input
+    (let ((result (gptel-auto-workflow--mementum-dedup-hash "")))
+      (should (or (null result) (stringp result))))))
+
+(ert-deftest tdd/mementum/dedup-write-returns-file ()
+  "write-memory returns a file path for unique content."
+  (when (and (fboundp 'gptel-auto-workflow--mementum-write-memory)
+             (fboundp 'gptel-auto-workflow--worktree-base-root))
+    (let* ((root (make-temp-file "mementum-dedup" t))
+           (gptel-auto-workflow--mementum-dedup-cache (make-hash-table :test 'equal)))
+      (unwind-protect
+          (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                     (lambda () root)))
+            (let* ((mem-dir (expand-file-name "mementum/memories" root))
+                   (gptel-auto-workflow-mementum-memory-dir mem-dir))
+              (make-directory mem-dir t)
+              (let ((file (gptel-auto-workflow--mementum-write-memory
+                           '✅ "unique-test" "Unique content here.")))
+                (should file)
+                (should (file-exists-p file))))
+        (delete-directory root t)))))
+
+(ert-deftest tdd/mementum/dedup-write-skips-duplicate ()
+  "write-memory returns nil for duplicate content."
+  (when (and (fboundp 'gptel-auto-workflow--mementum-write-memory)
+             (fboundp 'gptel-auto-workflow--worktree-base-root))
+    (let* ((root (make-temp-file "mementum-dedup" t))
+           (gptel-auto-workflow--mementum-dedup-cache (make-hash-table :test 'equal)))
+      (unwind-protect
+          (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                     (lambda () root)))
+            (let* ((mem-dir (expand-file-name "mementum/memories" root))
+                   (gptel-auto-workflow-mementum-memory-dir mem-dir))
+              (make-directory mem-dir t)
+              ;; First write should succeed
+              (let ((file1 (gptel-auto-workflow--mementum-write-memory
+                            '✅ "dup-test" "Duplicate memory content.")))
+                (should file1)
+                (should (file-exists-p file1))
+                ;; Second write with same content should return nil
+                (let ((file2 (gptel-auto-workflow--mementum-write-memory
+                              '💡 "dup-test-2" "Duplicate memory content.")))
+                  (should-not file2)))))
+        (delete-directory root t)))))
+
+(ert-deftest tdd/mementum/dedup-different-content-allowed ()
+  "Different content after a write creates a new file."
+  (when (and (fboundp 'gptel-auto-workflow--mementum-write-memory)
+             (fboundp 'gptel-auto-workflow--worktree-base-root))
+    (let* ((root (make-temp-file "mementum-dedup" t))
+           (gptel-auto-workflow--mementum-dedup-cache (make-hash-table :test 'equal)))
+      (unwind-protect
+          (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                     (lambda () root)))
+            (let* ((mem-dir (expand-file-name "mementum/memories" root))
+                   (gptel-auto-workflow-mementum-memory-dir mem-dir))
+              (make-directory mem-dir t)
+              (let ((file1 (gptel-auto-workflow--mementum-write-memory
+                            '✅ "a" "Content A")))
+                (should file1))
+              (let ((file2 (gptel-auto-workflow--mementum-write-memory
+                            '✅ "b" "Content B")))
+                (should file2)
+                (should-not (string= file1 file2)))))
+        (delete-directory root t)))))
+
+(ert-deftest tdd/mementum/dedup-cache-persists ()
+  "Dedup cache survives across function calls (in-memory persistence)."
+  (when (and (fboundp 'gptel-auto-workflow--mementum-write-memory)
+             (fboundp 'gptel-auto-workflow--worktree-base-root))
+    (let* ((root (make-temp-file "mementum-dedup" t))
+           (cache (make-hash-table :test 'equal))
+           (gptel-auto-workflow--mementum-dedup-cache cache))
+      (unwind-protect
+          (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                     (lambda () root)))
+            (let* ((mem-dir (expand-file-name "mementum/memories" root))
+                   (gptel-auto-workflow-mementum-memory-dir mem-dir))
+              (make-directory mem-dir t)
+              (gptel-auto-workflow--mementum-write-memory '✅ "c1" "content")
+              ;; Cache should have 1 entry now
+              (should (= 1 (hash-table-count cache)))
+              ;; Same content with different slug should still be blocked
+              (should-not (gptel-auto-workflow--mementum-write-memory
+                           '💡 "c2" "content"))
+              ;; Cache should still have 1 entry (no new hash added)
+              (should (= 1 (hash-table-count cache)))))
+        (delete-directory root t)))))
+
+(ert-deftest tdd/mementum/dedup-load-cache ()
+  "load-dedup-cache reads the .dedup-cache file correctly."
+  (when (fboundp 'gptel-auto-workflow--mementum-load-dedup-cache)
+    (let* ((root (make-temp-file "mementum-dedup" t)))
+      (unwind-protect
+          (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                     (lambda () root)))
+            (let* ((mem-dir (expand-file-name "mementum/memories" root))
+                   (cache-file (expand-file-name ".dedup-cache" mem-dir)))
+              (make-directory mem-dir t)
+              (with-temp-file cache-file
+                (insert "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789 dedup-test.md\n"))
+              (let ((cache (gptel-auto-workflow--mementum-load-dedup-cache)))
+                (should (= 1 (hash-table-count cache)))
+                (should (gethash "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789" cache))))))
+        (delete-directory root t)))))
 
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
