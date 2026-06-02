@@ -16,6 +16,7 @@ lambda: elisp.debug.interactive
 metadata:
   evolution-stats:
     total-experiments: 0
+level: atom
 ---
 
 ```

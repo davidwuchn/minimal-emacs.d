@@ -3,13 +3,16 @@
 ;; Author: David Wu
 ;; Version: 1.0.0
 ;;
-;; Async Edit tool implementation with patch mode support.
+;; Async Edit tool implementation with patch mode and hashline support.
+;; Hashline: content-addressed line identifiers for reliable editing.
+;; Inspired by https://blog.can.ac/2026/02/12/the-harness-problem/
 
 (require 'cl-lib)
 (require 'subr-x)
 (require 'gptel-ext-abort)
 (require 'seq)
 (require 'gptel-tools-preview)
+(require 'gptel-tools-edit-hashline)
 
 ;;; Customization
 
@@ -66,6 +69,16 @@ This prevents path traversal via crafted diff headers."
                patch-name expected-name))))
   t)
 
+;;; Edit Mode Tracking
+
+(defvar gptel-tools-edit--mode-used nil
+  "Dynamic variable. Set to the edit mode that succeeded: 'hashline, 'patch, 'string.
+Read by experiment logging to track edit tool effectiveness.")
+
+(defvar gptel-tools-read-hashline-default nil
+  "Dynamic variable. When non-nil, Read tool returns hashline format by default.
+Set by executor when entering edit mode so subsequent reads are content-addressed.")
+
 ;;; Edit Tool Implementation
 
 (defun my/gptel--agent-edit-async (callback file_path &optional old_str new_str diffp)
@@ -79,28 +92,33 @@ to prevent callers from hanging indefinitely."
   (let* ((origin (current-buffer))
          (gen my/gptel--abort-generation)
          (done nil)
-         (finish
-          (lambda (result)
-            (unless done
-              (setq done t)
-              (let ((is-error (and (stringp result) (string-prefix-p "Error" result))))
-                (cond
-                 ;; Always deliver errors
-                 (is-error (funcall callback result))
-                 ;; Normal case: buffer alive and not aborted
-                 ((and (buffer-live-p origin)
-                       (with-current-buffer origin
-                         (= gen my/gptel--abort-generation)))
-                  (funcall callback result))
-                 ;; Buffer dead: still deliver result
-                 ((not (buffer-live-p origin))
-                  (funcall callback result))
-                 ;; Aborted: deliver with error prefix so caller can proceed
-                 (t
-                  (funcall callback (format "Error: Request aborted\n%s" result)))))))))
+          (finish
+           (lambda (result)
+             (unless done
+               (setq done t)
+               (let ((is-error (and (stringp result) (string-prefix-p "Error" result))))
+                 (cond
+                  ;; Always deliver errors
+                  (is-error
+                   (setq gptel-tools-edit--mode-used nil)
+                   (funcall callback result))
+                  ;; Normal case: buffer alive and not aborted
+                  ((and (buffer-live-p origin)
+                        (with-current-buffer origin
+                          (= gen my/gptel--abort-generation)))
+                   (funcall callback result))
+                  ;; Buffer dead: still deliver result
+                  ((not (buffer-live-p origin))
+                   (funcall callback result))
+                  ;; Aborted: deliver with error prefix so caller can proceed
+                  (t
+                   (setq gptel-tools-edit--mode-used nil)
+                   (funcall callback (format "Error: Request aborted\n%s" result)))))))))
     (condition-case err
         (progn
-          (let ((patch-mode (and diffp (not (eq diffp :json-false)))))
+          (let ((patch-mode (and diffp (not (eq diffp :json-false))))
+                (hashline-mode (and old_str
+n                                    (string-match-p "^[0-9]+:[a-f0-9]+" old_str))))
             (when (and patch-mode (not (executable-find "patch")))
               (error "Command \"patch\" not available, cannot apply diffs"))
             (unless (file-exists-p file_path)
@@ -111,9 +129,15 @@ to prevent callers from hanging indefinitely."
               (error "File %s is not readable" file_path))
             (unless new_str
               (error "Required argument `new_str' missing"))
-            (if (not patch-mode)
-                (funcall finish
-                         (gptel-agent--edit-files file_path old_str new_str diffp))
+            (cond
+             ;; Hashline mode: stable content-addressed editing
+             (hashline-mode
+              (setq gptel-tools-edit--mode-used 'hashline)
+              (funcall finish
+                       (my/gptel--agent-edit-hashline file_path old_str new_str)))
+             ;; Patch mode: unified diff
+             (patch-mode
+              (setq gptel-tools-edit--mode-used 'patch)
               (let* ((target (expand-file-name file_path))
                      (patch-text (my/gptel--agent--strip-diff-fences new_str))
                      (patch-text (if (string-suffix-p "\n" patch-text)
@@ -133,9 +157,44 @@ to prevent callers from hanging indefinitely."
                  (lambda (cb) (my/gptel--agent-edit-apply-patch cb target patch-text))
                  (lambda (cb) (funcall cb "Error: Preview aborted by user."))
                  "Edit patch preview — n apply    q abort"
-                 "Edit")))))
+                 "Edit")))
+             ;; String replacement mode: exact match
+             (t
+              (setq gptel-tools-edit--mode-used 'string)
+              (funcall finish
+                       (gptel-agent--edit-files file_path old_str new_str diffp))))))
       (error
        (funcall finish (format "Error: %s" (error-message-string err)))))))
+
+(defun my/gptel--agent-edit-hashline (file_path old_str new_str)
+  "Edit FILE_PATH using hashline mode.
+OLD_STR is hashline tag: \"line-num:hash\" or \"start-hash:end-hash\" for range.
+NEW_STR is replacement text.
+Returns success message or error string."
+  (let ((target (expand-file-name file_path)))
+    (condition-case err
+        (cond
+         ;; Range replacement: start-tag:end-tag format
+         ((and old_str (string-match ":" old_str)
+               (string-match ":" (substring old_str (1+ (match-beginning 0)))))
+          ;; Actually check for two tags separated by something
+          (if (string-match "\\([0-9]+:[a-f0-9]+\\)\\s-*to\\s-*\\([0-9]+:[a-f0-9]+\\)" old_str)
+              (gptel-tools-edit-hashline-replace-range
+               target
+               (match-string 1 old_str)
+               (match-string 2 old_str)
+               new_str)
+            (format "Error: Invalid hashline range format '%s'. Expected: line:hash to line:hash" old_str)))
+         ;; Insert after: tag with + prefix
+         ((and old_str (string-prefix-p "+" old_str))
+          (gptel-tools-edit-hashline-insert-after
+           target
+           (substring old_str 1)
+           new_str))
+         ;; Single line replacement
+         (t
+          (gptel-tools-edit-hashline-replace target old_str new_str)))
+      (error (format "Error: Hashline edit failed: %s" (error-message-string err))))))
 
 (defun my/gptel--agent-edit-apply-patch (callback target patch-text)
   "Apply PATCH-TEXT to TARGET file asynchronously.
@@ -198,23 +257,30 @@ Uses `my/gptel-edit-patch-options' for patch command options."
   (when (fboundp 'gptel-make-tool)
     (gptel-make-tool
      :name "Edit"
-     :description "Replace text or apply a unified diff (async)."
-     :function #'my/gptel--agent-edit-async
-     :async t
-     :args '((:name "file_path"
-                    :type string
-                    :description "Path to the file to edit")
-             (:name "old_str"
-                    :type string
-                    :optional t
-                    :description "Text to replace (omit for patch mode)")
-             (:name "new_str"
-                    :type string
-                    :description "Replacement text or unified diff")
-             (:name "diffp"
-                    :type boolean
-                    :optional t
-                    :description "Set true if new_str is a diff"))
+      :description "Replace text using hashline tags, exact string match, or unified diff (async).
+
+Three modes:
+1. HASHLINE (recommended): old_str = \"line-num:hash\" (e.g. \"42:a3\"). Stable content-addressed editing.
+2. STRING: old_str = exact text to replace. Must reproduce every character.
+3. PATCH: diffp=true, new_str = unified diff.
+
+Hashline format is provided when files are read with hashline tags."
+      :function #'my/gptel--agent-edit-async
+      :async t
+      :args '((:name "file_path"
+                     :type string
+                     :description "Path to the file to edit")
+              (:name "old_str"
+                     :type string
+                     :optional t
+                     :description "Text to replace, or hashline tag like '42:a3' (omit for patch mode)")
+              (:name "new_str"
+                     :type string
+                     :description "Replacement text or unified diff")
+              (:name "diffp"
+                     :type boolean
+                     :optional t
+                     :description "Set true if new_str is a diff"))
      :category "gptel-agent"
      :confirm t
      :include t)))

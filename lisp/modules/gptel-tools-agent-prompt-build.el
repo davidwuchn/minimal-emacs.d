@@ -913,7 +913,11 @@ Reuses gptel-agent's `gptel-agent-read-file' for frontmatter parsing."
         (list :name (or name skill-name)
               :metadata (cl-remove-if (lambda (k) (eq k :system)) plist)
               :body (or (plist-get plist :system) "")
-              :skill-dir skill-dir)))))
+              :skill-dir skill-dir)
+        ;; Track for skill graph evolution
+        (when (and (boundp 'gptel-auto-experiment--loaded-skills)
+                   (listp gptel-auto-experiment--loaded-skills))
+          (push skill-name gptel-auto-experiment--loaded-skills))))))
 
 (defun gptel-auto-workflow--load-skill-metadata (skill-name)
   "Load only metadata for SKILL-NAME (progressive disclosure stage 1).
@@ -1921,7 +1925,7 @@ Captures executor reasoning from the dynamic variable
       (unless (gptel-auto-experiment--drop-replaceable-tsv-rows
                experiment-id target)
         (goto-char (point-max))
-        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
+         (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
                         experiment-id
                         target
                         (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
@@ -1985,11 +1989,14 @@ Captures executor reasoning from the dynamic variable
                              "unknown")
                         (gptel-auto-experiment--tsv-escape
                          (let ((ks (gptel-auto-workflow--plist-get experiment :eight-keys-scores nil)))
-                           (if ks (concat "{" (mapconcat
-                                                (lambda (pair)
-                                                  (format "%s:%.2f" (car pair) (cdr pair)))
-                                                ks ",") "}")
-                             ""))))))
+                            (if ks (concat "{" (mapconcat
+                                                 (lambda (pair)
+                                                   (format "%s:%.2f" (car pair) (cdr pair)))
+                                                 ks ",") "}")
+                              ""))
+                         (gptel-auto-experiment--tsv-escape
+                          (gptel-auto-workflow--plist-get experiment :skills ""))
+                         (gptel-auto-workflow--plist-get experiment :edit-mode "none")))))
 
       (write-region (point-min) (point-max) file))
     ;; Keep strategy metrics independent from the per-run TSV.

@@ -4,6 +4,7 @@ description: Writing/generating Emacs Lisp code with dangerous pattern awareness
 metadata:
   version: "1.0.0"
   λ: edit.byte-compile.verify
+level: atom
 ---
 
 ```

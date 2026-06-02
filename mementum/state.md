@@ -1,7 +1,390 @@
 # Mementum State
 
-> Last session: 2026-05-30 (8 root cause fixes + remote sync)
-> Next pipeline: 23:00 (current: 19:00 running)
+> Last session: 2026-06-02 (molecule executor + validator)
+> Next pipeline: 23:00
+> Status: 20/20 skill graph tests pass — full pipeline active
+
+## Session: Edit-Mode Tracking Integration (2026-06-02)
+
+**What was built:**
+- `gptel-tools-agent-experiment-core.el` — Captures `gptel-tools-edit--mode-used` in experiment result plist
+- `gptel-tools-agent-prompt-build.el` — Logs `:edit-mode` as TSV column (last column)
+- Tracks which edit mode succeeded: `hashline`, `patch`, `string`, or `none`
+
+**Files changed:**
+- `lisp/modules/gptel-tools-agent-experiment-core.el` (modified, 2 locations)
+- `lisp/modules/gptel-tools-agent-prompt-build.el` (modified, format string + field)
+
+**Test results:** Hashline tests 15/15 pass (unchanged)
+
+**Memory created:** `mementum/memories/edit-mode-tracking-integration.md`
+
+---
+
+## Session: Auto-Hashline Read Integration (2026-06-02)
+
+**What was built:**
+- `gptel-tools-edit.el` — Added `gptel-tools-read-hashline-default` dynamic variable
+- `gptel-tools.el` — Read tool checks variable, auto-returns hashline format when set
+- `gptel-benchmark-subagent.el` — Executor subagent sets variable to `t` before running
+- Result: Executor reads files with content-addressed hashline tags automatically
+
+**Files changed:**
+- `lisp/modules/gptel-tools-edit.el` (modified)
+- `lisp/modules/gptel-tools.el` (modified)
+- `lisp/modules/gptel-benchmark-subagent.el` (modified)
+
+**Memory created:** `mementum/memories/auto-hashline-read-integration.md`
+
+---
+
+## Session: Molecule Compilation (2026-06-02)
+
+**What was built:**
+- `gptel-auto-workflow-skill-graph.el` — Implemented `ov5-sg--compile-molecule`:
+  - Greedy algorithm: start with highest-success atom matching goal
+  - Follow highest-weight edges to build molecule chain
+  - Respects `max-atoms` limit (default: 10)
+  - Goal keyword matching boosts starting atom selection
+- Added 4 tests, all passing
+
+**Algorithm:**
+```
+1. Find best start: highest success-rate atom + goal keyword match
+2. Greedily extend: follow highest-weight unvisited edge
+3. Stop: max-atoms reached or no edge > 0.1
+```
+
+**Files changed:**
+- `lisp/modules/gptel-auto-workflow-skill-graph.el` (modified)
+
+**Test results:** 4/4 pass
+
+**Memory created:** `mementum/memories/molecule-compilation.md`
+
+---
+
+## Session: Skill Graph Persistence (2026-06-02)
+
+**What was built:**
+- `gptel-auto-workflow-skill-graph.el` — Implemented persistence:
+  - `ov5-sg-save` — Serializes to Lisp-readable `.eld` file
+  - `ov5-sg-load` — Deserializes from `.eld` file
+  - `ov5-sg--serialize` / `ov5-sg--restore` — Roundtrip-safe format
+  - Switched from JSON to `prin1`/`read` for reliability
+- Persistence path: `var/tmp/skill-graph.eld`
+
+**Files changed:**
+- `lisp/modules/gptel-auto-workflow-skill-graph.el` (modified)
+
+**Test results:** 1/1 pass (roundtrip)
+
+**Memory created:** `mementum/memories/skill-graph-persistence.md`
+
+---
+
+## Session: Molecule Executor + Validator (2026-06-02)
+
+**What was built:**
+- `ov5-sg--validate-molecule` — 4 constraints: ≤10 atoms, known skills, no duplicates, edge weight ≥0.05
+- `ov5-sg--execute-molecule` — Sequential atom execution with FN callback, validation gate, stat tracking
+- Auto-init on module load (26 nodes, 23 edges)
+
+**Files changed:**
+- `lisp/modules/gptel-auto-workflow-skill-graph.el` (modified)
+
+**Test results:** 20/20 pass
+
+---
+
+**What was built:**
+- 13 skills updated with `atoms:` field (molecule → atom dependencies)
+- 2 skills updated with `molecules:` field (compound → molecule dependencies)
+- `ov5-sg--parse-frontmatter` extended to parse list values: `atoms: [a, b, c]`
+- `ov5-sg--load-skill` creates `dependency` edges from explicit relations
+- Molecules with `atoms:` frontmatter auto-registered in `ov5-sg--molecules`
+
+**Files changed:**
+- `lisp/modules/gptel-auto-workflow-skill-graph.el` (modified, rewritten)
+- `assistant/skills/*/SKILL.md` — 13 files modified
+
+**Test results:** 13/13 pass (including relations + molecules-registered tests)
+
+**Memory created:** `mementum/memories/atoms-molecules-frontmatter.md`
+
+---
+
+**What was built:**
+- `gptel-auto-workflow-evolution.el` — Added skill graph evolution step to hourly cron
+- `gptel-auto-workflow-skill-graph.el` — `ov5-sg-evolve-from-experiments` parses experiments, updates edges
+- `gptel-tools-agent-experiment-core.el` — Added `:skills` to experiment plist (from hashtags)
+- `gptel-tools-agent-prompt-build.el` — Added `:skills` as 29th TSV column
+
+**Files changed:**
+- `lisp/modules/gptel-auto-workflow-evolution.el` (modified)
+- `lisp/modules/gptel-auto-workflow-skill-graph.el` (modified)
+- `lisp/modules/gptel-tools-agent-experiment-core.el` (modified)
+- `lisp/modules/gptel-tools-agent-prompt-build.el` (modified)
+
+**Test results:** 11/11 pass
+
+**Memory created:** `mementum/memories/skill-graph-evolution-trigger.md`
+
+---
+
+## Session: Skill Graph Implementation (2026-06-02)
+
+**What was built:**
+- `lisp/modules/gptel-auto-workflow-skill-graph.el` — Full skill graph module:
+  - Data structures: `ov5-sg-node` (skill), `ov5-sg-edge` (co-occurrence)
+  - Load all 26 skills from `assistant/skills/` with `level:` frontmatter
+  - Graph traversal: `ov5-sg-neighbors`, `ov5-sg--edge-weight`
+  - Edge management: `ov5-sg--update-edge` (reinforce +0.05 on success, decay *0.99 on failure)
+  - AutoTTS integration: `ov5-sg--record-experiment-skills`
+  - Molecule compilation stub: `ov5-sg--compile-molecule`
+- `tests/test-gptel-auto-workflow-skill-graph.el` — 6 tests, all passing
+
+**Files changed:**
+- `lisp/modules/gptel-auto-workflow-skill-graph.el` (new, 180 lines)
+- `lisp/modules/gptel-auto-workflow-ontology-router.el` (modified, wired graph dimensions)
+
+**Test results:** 6/6 pass
+
+**Memory created:** `mementum/memories/skill-graph-implementation.md`
+
+---
+
+## Session: Ontology Router Graph Dimensions (2026-06-02)
+
+**What was built:**
+- `gptel-auto-workflow-ontology-router.el` — Added two new scoring dimensions:
+  - **Phase γ: `graph-neighbor-success`** — Boost backends that succeeded on similar targets (skill graph neighbors)
+  - **Phase δ: `graph-edge-strength`** — Boost backends that succeeded with specific skill combinations
+- Both integrated into `gptel-auto-workflow--ranked-subagent-backends` scoring formula
+- Audit trail includes `:graph-neighbor` and `:graph-edge` fields
+
+**Files changed:**
+- `lisp/modules/gptel-auto-workflow-ontology-router.el` (modified)
+
+**Current status:** STUB implementations returning 0.0 — ready for skill graph data integration
+
+**Memory created:** `mementum/memories/ontology-router-graph-dimensions.md`
+
+---
+
+## Session: Skill Level Frontmatter (2026-06-02)
+
+**What was built:**
+- Added `level:` frontmatter to 25 skills using three-layer taxonomy:
+  - **13 atoms** — single focused capabilities (hashline-edit, elisp-expert, clojure-expert, etc.)
+  - **11 molecules** — hardcoded atom sequences (elisp-refactor, benchmark-improver, etc.)
+  - **2 compounds** — human-driven workflows (auto-workflow, ov5)
+
+**Files changed:**
+- `assistant/skills/*/SKILL.md` — 25 files modified
+
+**Memory created:** `mementum/memories/skill-level-frontmatter.md`
+
+---
+
+## Session: Hashline Edit Tool Implementation (2026-06-02)
+
+**What was built:**
+- `lisp/modules/gptel-tools-edit-hashline.el` — Hashline content-addressed editing
+- Modified `lisp/modules/gptel-tools-edit.el` — Added hashline mode to Edit tool
+- `tests/test-gptel-tools-edit-hashline.el` — 9 tests, all passing
+
+**Features:**
+- Content hash per line (2-char MD5)
+- Three edit operations: replace line, replace range, insert after
+- Optimistic locking: hash mismatch detection before edit
+- Three modes in Edit tool: hashline (detected), patch, string fallback
+
+**Test results:** 9/9 pass
+
+**Files changed:**
+- `lisp/modules/gptel-tools-edit-hashline.el` (new)
+- `lisp/modules/gptel-tools-edit.el` (modified)
+- `tests/test-gptel-tools-edit-hashline.el` (new)
+
+**Memory created:** `mementum/memories/hashline-edit-tool-implementation.md`
+
+---
+
+> Previous session: 2026-06-02 (harness problem + complete architecture)
+> Status: Architecture complete — harness problem validates deterministic-first
+
+## Session: The Harness Problem — Edit Tool Matters More Than Model (2026-06-02)
+
+**Source:** https://blog.can.ac/2026/02/12/the-harness-problem/
+
+**Key insight:** A single edit tool change improved 15 LLMs by 5-14 points. The harness matters more than the model.
+
+**Current tools are broken:**
+- Codex `apply_patch`: 50.7% fail on non-OpenAI models
+- Claude `str_replace`: Must reproduce every character perfectly
+- Cursor: Needed a **whole separate 70B model** just for merging edits
+- Aider: Format choice alone swung GPT-4 26%→59%
+
+**Hashline solution:** Content hashes per line (2-3 chars) as stable anchors. Model references hashes instead of reproducing text.
+
+**Results:** Grok Fast 1: 6.7%→68.3% (10×). MiniMax doubled. Gemini +5-14pp.
+
+**Vendor politics:** Anthropic blocked OpenCode. Google banned the author for benchmarking.
+
+**OV5 validation:**
+- Deterministic-first principle (S4) confirmed — hashline is deterministic content addressing
+- Lambda notation = same principle: stable anchors vs reproduction
+- Edit tool is infrastructure we must own, not a commodity
+
+**Memory created:** `mementum/memories/harness-problem-edit-tool-critical.md`
+
+---
+
+## Session: Complete OV5 System Architecture (2026-06-02)
+
+## Session: Complete OV5 System Architecture (2026-06-02)
+
+**Key insight:** OV5 is not a collection of independent modules. It is a **closed-loop system** where every component feeds every other component through shared execution traces.
+
+**The 12 systems:**
+1. **Mementum** — Git-persisted memory (ψ ephemeral; 🐍 remembers)
+2. **Pipeline** — 6-phase execution (research → analyze → experiment → validate → compare → stage)
+3. **AutoTTS** — Trace analysis + controller evolution
+4. **Evolution Cycle** — Hourly cron orchestrating 15+ subsystems
+5. **Ontology** — Experiment classification (effective/promising/underperforming)
+6. **Ontology Router** — 8-dim scoring for backend/skill selection
+7. **AI Behaviors** — Hashtag-based personas (how to act)
+8. **Skill Graph** (FUTURE) — Three-layer taxonomy (what to do)
+9. **Context Management** — Token budget enforcement
+10. **Agent Execution** — gptel-send with composed prompt
+11. **Grading/Benchmark** — Eight Keys + test validation
+12. **AutoGo** — Champion league A/B testing
+
+**Universal currency:** AutoTTS traces feed all systems. Single trace format: `category, hashtags, skill-names, backend, token-usage, outcome`.
+
+**Memory created:** `mementum/memories/ov5-complete-system-architecture.md`
+
+---
+
+## Session: Follow Existing Naming Conventions (2026-06-02)
+
+**Correction:** Do NOT invent `ov5-*` prefixes. The codebase already has established conventions.
+
+**Correct names for skill graph:**
+- `gptel-auto-workflow-skill-graph.el` (data structures + executor)
+- Extend `skill-routing-onto.el` (graph dimensions)
+- Hook into `gptel-auto-workflow-evolution.el` (evolution cycle)
+
+**Memory created:** `mementum/memories/naming-conventions-follow-existing.md`
+
+---
+
+## Session: Ontology × Behaviors × Skill Graph × Context — Four-Way Relationship (2026-06-02)
+
+**Key insight:** Four systems form a decision hierarchy that must co-evolve from the same execution traces.
+
+**The hierarchy:**
+1. Ontology classifies task → :programming
+2. Ontology selects strategy/backend → DeepSeek
+3. Behaviors select persona → #deterministic
+4. Skill graph selects skills → [planning → clojure-expert]
+5. Context checks budget → Task + Behaviors + Skills + Reserve = 7.5k ✓
+6. Execute → Agent runs
+7. Evolve → AutoTTS trace updates all four systems
+
+**Cross-system links:**
+| From | To | Mechanism |
+|------|----|-----------|
+| Ontology | Behaviors | Category selects default hashtags |
+| Ontology | Skill Graph | Router seeds feed graph; graph adds dimensions to ontology scores |
+| Behaviors + Skills | Context | Both consume token pool; skills truncate first on overflow |
+| Context | Skill Graph | Molecule ≤10 atoms = context physics (3k token budget) |
+| Execution Trace | All four | Single AutoTTS trace updates ontology, behaviors, graph, context |
+
+**Constraint:** All four must co-evolve. Optimizing one dimension while ignoring others breaks the stack.
+
+**Memory created:** `mementum/memories/ontology-behaviors-skill-context-relationship.md`
+
+---
+
+## Session: AI Behaviors vs Skill Graph — Orthogonal Systems (2026-06-02)
+
+**Key insight:** AI Behaviors (`ai-behaviors` module) and Skill Graph are **orthogonal** — they solve different problems and stack.
+
+**The split:**
+- **Behaviors** = agent's personality (how to act) — hashtags like #deterministic, #creative
+- **Skill Graph** = agent's playbook (what to do) — atoms → molecules → compounds
+
+**They stack:**
+```
+Compound: "Build this feature"
+  ├─ Behavior: #creative
+  ├─ Molecule: [research → design → implement]
+  │     ├─ Atom: research (behavior: #thorough)
+  │     └─ Atom: implement (behavior: #deterministic)
+```
+
+**Integration:** Skill graph evolution considers behavior performance (did molecule X + #deterministic outperform #creative?). Behavior evolution considers skill level (atoms → deterministic, compounds → creative).
+
+**Memory created:** `mementum/memories/ai-behaviors-vs-skill-graph.md`
+
+---
+
+## Session: Self-Evolving Skill Graph Architecture (2026-06-02)
+
+**Key insight:** OV5 already has all infrastructure. No new systems needed.
+
+**Self-evolution loop:**
+1. Pipeline executes → AutoTTS traces every skill call + outcome
+2. Evolution cycle (hourly cron) analyzes traces
+3. Update node stats (usage-count, success-rate) per skill
+4. Update edge weights: reinforce +0.05 on success, decay *0.99, prune <0.05
+5. Evaluate triggers: insert/merge/split/deprecate/promote
+6. AutoGo A/B tests proposed molecules vs baselines
+7. Champion league crowns winners after >=10 experiments
+8. Commit evolved graph to mementum
+
+**Integration points:**
+| System | Role |
+|--------|------|
+| AutoTTS | Node stats + edge co-occurrence discovery |
+| AutoGo | A/B test proposed molecules |
+| Ontology router | Add `:graph-neighbor-success` + `:graph-edge-strength` dimensions |
+| Evolution cycle | Hourly trigger for `ov5-sg-evolve` |
+| Mementum | Git-persist `skill-graph.json` |
+
+**Decision:** Pure elisp implementation. Graph algorithms (PPR, BFS) run at **design time** to suggest molecule compositions. Runtime uses **hardcoded molecules** — no traversal, no depth fragility.
+
+**Memory created:** `mementum/memories/ov5-skill-graph-self-evolution.md`
+
+---
+
+## Session: Deep Study — Skill Graph Architectures (2026-06-02)
+
+**Sources studied:**
+1. Graph-of-Skills (GitHub: davidliuk/graph-of-skills) — PPR over typed edges, semantic+lexical retrieval
+2. SkillGraph (arXiv:2605.12039v1) — RL co-evolution, progressive unlocking, node/edge-level evolution
+3. Shiv Sakhuja (X thread) — Atoms/Molecules/Compounds taxonomy, design-time compilation
+
+**Key synthesis:**
+Runtime graph traversal (GoS, SkillGraph) causes depth fragility. Shiv's solution: compile graph to hardcoded workflows at design time. Three layers with strict constraints:
+- **Atoms**: Never call skills (~99% reliability)
+- **Molecules**: Hardcoded atom sequences ≤10 atoms (~90%)
+- **Compounds**: Human-driven, ≤10 molecules (~70%)
+
+**OV5 integration path:**
+- Pure elisp (no Python subprocess)
+- Extend SKILL.md frontmatter with `level:` + `atoms:`/`molecules:`
+- Reuse `skill-routing-onto.el` for atom seed selection
+- AutoTTS traces for per-level reliability tracking
+- gptel context mgmt for skill budget enforcement
+
+**Memory created:** `mementum/memories/skill-graph-three-layer-taxonomy.md`
+
+---
+
+> Previous session: 2026-05-30 (8 root cause fixes + remote sync)
 > Status: Pipeline active, workflow running with all fixes loaded
 
 ## Session: 8 Root Cause Fixes + Remote Sync (2026-05-30)

@@ -17,6 +17,7 @@
 ;;; Code:
 
 (require 'gptel-auto-workflow-evolution)
+(require 'gptel-auto-workflow-skill-graph)
 
 (defvar gptel-auto-workflow-executor-rate-limit-fallbacks
   '(("DeepSeek" . "deepseek-v4-flash")
@@ -2439,19 +2440,28 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
                                     (and (consp match) (cddr match)))
                                   0.0)
                             0.0))
-              ;; Phase ω: per-axis boost based on holographic consensus.
-              (axis-boost (gptel-auto-workflow--axis-preference-boost backend axis-rates-cache target-axis-cache))
-              (score (cond
-                      (lambda-degraded -1.0)   ; P(λ) gate: hard exclude
-                      (quarantined -1.0)       ; health gate: hard exclude
-                      (cooldown -1.0)           ; per-run: hard exclude
-                      (rate-limited 0.01)      ; demoted but still available as last resort
-                       (t (+ (* health keep-rate) pref-boost axis-boost cold-start-boost)))))
-        (when (>= score 0.0)
-          (push (cons (cons backend model)
-                      (list :score score :health health :keep-rate keep-rate
-                            :pref-boost pref-boost :axis-boost axis-boost))
-                scored))))
+               ;; Phase ω: per-axis boost based on holographic consensus.
+               (axis-boost (gptel-auto-workflow--axis-preference-boost backend axis-rates-cache target-axis-cache))
+               ;; Phase γ: skill graph neighbor success (future: integrate with graph data)
+                (graph-neighbor-boost (gptel-auto-workflow--graph-neighbor-success
+                                       backend (bound-and-true-p gptel-auto-workflow--current-target)))
+               ;; Phase δ: skill graph edge strength (future: integrate with graph data)
+               (graph-edge-boost (gptel-auto-workflow--graph-edge-strength
+                                  backend (bound-and-true-p gptel-ai-behaviors--current-hashtags)))
+               (score (cond
+                       (lambda-degraded -1.0)   ; P(λ) gate: hard exclude
+                       (quarantined -1.0)       ; health gate: hard exclude
+                       (cooldown -1.0)           ; per-run: hard exclude
+                       (rate-limited 0.01)      ; demoted but still available as last resort
+                        (t (+ (* health keep-rate) pref-boost axis-boost cold-start-boost
+                              graph-neighbor-boost graph-edge-boost)))))
+         (when (>= score 0.0)
+           (push (cons (cons backend model)
+                       (list :score score :health health :keep-rate keep-rate
+                             :pref-boost pref-boost :axis-boost axis-boost
+                             :graph-neighbor graph-neighbor-boost
+                             :graph-edge graph-edge-boost))
+                 scored))))
     (if scored
         (let ((sorted (sort (nreverse scored)
                             (lambda (a b) (> (plist-get (cdr a) :score)
@@ -3756,6 +3766,72 @@ Runs during evolution cycle alongside strategy learning."
   (condition-case err
       (gptel-auto-workflow--aggregate-category-eight-keys)
     (error (message "[ontology-evolve] Error aggregating eight-key weights: %S" err))))
+
+;; Load persisted digital twin state + re-parse grader insights from TSV at startup
+(condition-case nil (gptel-auto-workflow--load-target-state) (error nil))
+(condition-case nil (gptel-auto-experiment--replay-grader-insights-from-tsv) (error nil))
+
+;; ─── Skill Graph Dimensions (Future: integrate with skill graph data) ───
+
+(defun gptel-auto-workflow--graph-neighbor-success (backend target)
+  "Return boost for BACKEND based on success on graph neighbors of TARGET.
+Looks up TARGET's category in the skill graph and checks BACKEND's
+keep-rate on targets in the same category."
+  (if (and (fboundp 'ov5-sg-init)
+           target)
+      (condition-case nil
+          (let* ((category (and (fboundp 'gptel-auto-workflow--categorize-target)
+                                (gptel-auto-workflow--categorize-target target)))
+                 (neighbors nil)
+                 (total-keep 0.0)
+                 (count 0))
+            (when category
+              ;; Find all nodes in the same category
+              (maphash (lambda (id node)
+                         (when (and (eq (ov5-sg-node-level node) category)
+                                    (not (eq id (intern target))))
+                           (push id neighbors)))
+                       ov5-sg--nodes)
+              ;; Average keep-rate for BACKEND on neighbor targets
+              (dolist (n neighbors)
+                (let ((rate (condition-case nil
+                                (gptel-auto-workflow--get-backend-performance-stats
+                                 backend (symbol-name n))
+                              (error nil))))
+                  (when rate
+                    (setq total-keep (+ total-keep (or (plist-get rate :keep-rate) 0.0)))
+                    (setq count (1+ count)))))
+              (if (> count 0)
+                  (* 0.15 (/ total-keep count))  ; max ~0.15 boost
+                0.0)))
+        (error 0.0))
+    0.0))
+
+(defun gptel-auto-workflow--graph-edge-strength (backend active-skills)
+  "Return boost for BACKEND based on strength of skill combination edges.
+Looks up edges between skills in ACTIVE-SKILLS and checks if BACKEND
+succeeded when those skill pairs were used together."
+  (if (and (fboundp 'ov5-sg-init)
+           active-skills)
+      (condition-case nil
+          (let ((total-weight 0.0)
+                (edge-count 0))
+            (when (>= (length active-skills) 2)
+              (let ((skills (if (stringp active-skills)
+                               (mapcar #'intern (split-string active-skills))
+                             active-skills)))
+                (cl-loop for (a b) on skills by #'cdr
+                         while b
+                         do (let* ((key (cons a b))
+                                   (edge (gethash key ov5-sg--edges)))
+                              (when edge
+                                (setq total-weight (+ total-weight (ov5-sg-edge-weight edge)))
+                                (setq edge-count (1+ edge-count)))))))
+            (if (> edge-count 0)
+                (* 0.10 (/ total-weight edge-count))  ; max ~0.10 boost
+              0.0))
+        (error 0.0))
+    0.0))
 
 ;; Load persisted digital twin state + re-parse grader insights from TSV at startup
 (condition-case nil (gptel-auto-workflow--load-target-state) (error nil))

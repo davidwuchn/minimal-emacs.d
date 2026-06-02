@@ -8,6 +8,9 @@ license: MIT
 triggers: ["clojure", "repl", "clj", "cljs"]
 lambda: write.repl.test.save
 depends: mementum/knowledge/clojure-protocol.md
+metadata:
+  evolution-stats:
+    total-experiments: 870
 ---
 
 ```

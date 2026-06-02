@@ -11,6 +11,8 @@ metadata:
   evolution-stats:
     total-experiments: 870
 
+level: molecule
+atoms: [elisp-validator]
 ---
 # Eight Keys Grader
 

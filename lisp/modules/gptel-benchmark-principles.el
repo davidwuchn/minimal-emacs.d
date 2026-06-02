@@ -135,12 +135,63 @@ Returns default weights if SUBSYSTEM not recognized."
 
 (defun gptel-benchmark--load-keys-from-skill ()
   "Load Eight Keys definitions from eight-keys-grader skill.
-Returns list of key definitions or nil if skill not available.
-Currently returns nil to use hardcoded fallback until skill
-parsing is implemented."
-  ;; TODO: Parse eight-keys-grader SKILL.md into proper list structure
-  ;; The skill content is markdown text, not an Elisp data structure
-  nil)
+Returns list of key definitions suitable for use as
+`gptel-benchmark-eight-keys-definitions' (see there), or nil if skill unavailable."
+  (when (and (fboundp 'gptel-auto-workflow--load-skill-content)
+             (fboundp 'gptel-auto-workflow--skill-root))
+    (let* ((skill-root (funcall #'gptel-auto-workflow--skill-root "eight-keys-grader"))
+           (skill-file (and skill-root
+                            (expand-file-name "SKILL.md" skill-root)))
+           (content (or (and skill-file (file-exists-p skill-file)
+                             (with-temp-buffer
+                               (insert-file-contents skill-file)
+                               (buffer-string)))
+                       (funcall #'gptel-auto-workflow--load-skill-content "eight-keys-grader"))))
+      (when content
+        (let (keys)
+          (with-temp-buffer
+            (insert content)
+            (goto-char (point-min))
+            (while (re-search-forward
+                    "^### +\\([^ ]+\\) \\([^ ]+\\) (\\([^)]+\\))"
+                    nil t)
+              (let* ((sym (match-string 1))
+                     (name (match-string 2))
+                     (element (intern (downcase (match-string 3)))))
+                (let (signals anti)
+                  (when (re-search-forward
+                         "\\*\\*Signals.*?(Good):?\\*\\*"
+                         nil t)
+                    (forward-line 1)
+                    (while (looking-at-p "\\s-*[-*] ")
+                      (when (looking-at "\\s-*[-*] \\(.+\\)")
+                        (push (match-string 1) signals))
+                      (forward-line 1)))
+                  (when (re-search-forward
+                         "\\*\\*Anti-Patterns.*?(Bad):?\\*\\*"
+                         nil t)
+                    (forward-line 1)
+                    (while (looking-at-p "\\s-*[-*] ")
+                      (when (looking-at "\\s-*[-*] \\(.+\\)")
+                        (push (match-string 1) anti))
+                      (forward-line 1)))
+                  (let ((weight-str (when (re-search-forward
+                                          "\\*\\*Weight\\*\\*:?\\s-*\\([0-9.]+\\)"
+                                          nil t)
+                                       (string-to-number (match-string 1)))))
+                    (push (list (intern (concat ":" (downcase name)))
+                                :symbol sym
+                                :name name
+                                :element element
+                                :signals (nreverse signals)
+                                :anti-patterns (nreverse anti)
+                                :weight (or weight-str 1.0))
+                          keys))))
+              (goto-char (match-beginning 0))))
+          (when keys
+            (message "[benchmark] Loaded %d keys from eight-keys-grader skill" (length keys))
+            (nreverse keys)))))))
+
 
 (defconst gptel-benchmark-eight-keys-definitions
   (or (gptel-benchmark--load-keys-from-skill)

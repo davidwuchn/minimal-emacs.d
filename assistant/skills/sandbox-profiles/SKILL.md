@@ -11,6 +11,8 @@ metadata:
   evolution-stats:
     total-experiments: 870
 
+level: molecule
+atoms: [tool-prompts, agent-prompts]
 ---
 # Sandbox Tool Profiles
 

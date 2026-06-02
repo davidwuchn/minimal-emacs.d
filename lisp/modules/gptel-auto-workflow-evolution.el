@@ -236,7 +236,9 @@ Caches when MAX-AGE-DAYS is nil for cycle-local reuse."
                                      (research-hash (or (nth (if (<= format-version 20) 20 22) fields) "none"))
                                      (research-quality (or (nth (if (<= format-version 20) 20 23) fields) "none"))
                                      (kibcm-axis (or (nth (if (<= format-version 24) 20 25) fields) "?"))
-                                     (model (or (nth (if (<= format-version 24) 20 26) fields) "unknown")))
+                                     (model (or (nth (if (<= format-version 24) 20 26) fields) "unknown"))
+                                     (skills (or (nth 28 fields) ""))
+                                     (edit-mode (or (nth 29 fields) "none")))
                                 (push (list :target target
                                             :hypothesis hypothesis
                                             :score-before score-before
@@ -252,6 +254,8 @@ Caches when MAX-AGE-DAYS is nil for cycle-local reuse."
                                             :research-quality research-quality
                                             :kibcm-axis kibcm-axis
                                             :model model
+                                            :skills skills
+                                            :edit-mode edit-mode
                                             :run-dir (file-name-nondirectory run-dir))
                                       records))))
                           (forward-line 1))))))))))
@@ -2321,6 +2325,13 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (condition-case nil
       (gptel-auto-workflow--build-inverted-file)
     (error nil))
+  ;; Skill graph evolution: update edges from recent experiment outcomes
+  (when (fboundp 'ov5-sg-evolve-from-experiments)
+    (condition-case err
+        (progn
+          (ov5-sg-evolve-from-experiments)
+          (message "[skill-graph] Evolution complete"))
+      (error (message "[skill-graph] Evolution error: %s" (error-message-string err)))))
   (message "[auto-workflow] Self-evolution cycle complete.")
   ;; Emit machine-parseable RESULT for this cycle (AutoGo protocol)
   (condition-case nil

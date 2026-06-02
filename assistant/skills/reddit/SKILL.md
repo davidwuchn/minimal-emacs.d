@@ -7,6 +7,7 @@ author: David Wu
 license: MIT
 triggers: ["reddit", "praw", "subreddit", "r/"]
 lambda: reddit.api.fetch
+level: atom
 ---
 
 ```
