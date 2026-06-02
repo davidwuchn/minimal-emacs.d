@@ -13,6 +13,7 @@ tools:
   - WebSearch
   - WebFetch
   - Code_Map
+  - Programmatic
   - Code_Inspect
   - Code_Usages
   - Diagnostics
