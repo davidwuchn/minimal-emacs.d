@@ -45,6 +45,7 @@ run_unit_tests() {
     local snapshot_paths_file
     local runtime_dir
     local workflow_server
+    local yaml_dir
     local ert_status=0
 
     # Ensure we're in the project root so find/emacs resolve paths correctly
@@ -76,6 +77,7 @@ run_unit_tests() {
     }
     chmod 700 "$runtime_dir"
     workflow_server="ov5-auto-workflow-test-$(basename "$runtime_dir")"
+    yaml_dir="$(printf '%s\n' "$DIR"/var/elpa/yaml-*/ | sort -V | tail -1)"
     
     local output
     set +e
@@ -92,7 +94,7 @@ run_unit_tests() {
         -L "$DIR/lisp/modules" \
         -L "$DIR/packages/gptel" \
         -L "$DIR/packages/gptel-agent" \
-        -L "$(echo "$DIR/var/elpa"/yaml-* | tr ' ' '\n' | sort -V | tail -1)" \
+        -L "$yaml_dir" \
         -L "$DIR/tests" \
         -l ert \
         --eval "(setq load-prefer-newer t)" \
