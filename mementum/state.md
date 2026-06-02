@@ -1,7 +1,34 @@
 # Mementum State
 
-> Last session: 2026-06-02 (harness problem + complete architecture)
+> Last session: 2026-06-02 (hashline edit tool implemented)
 > Next pipeline: 23:00
+> Status: Hashline edit tool complete — 9/9 tests pass
+
+## Session: Hashline Edit Tool Implementation (2026-06-02)
+
+**What was built:**
+- `lisp/modules/gptel-tools-edit-hashline.el` — Hashline content-addressed editing
+- Modified `lisp/modules/gptel-tools-edit.el` — Added hashline mode to Edit tool
+- `tests/test-gptel-tools-edit-hashline.el` — 9 tests, all passing
+
+**Features:**
+- Content hash per line (2-char MD5)
+- Three edit operations: replace line, replace range, insert after
+- Optimistic locking: hash mismatch detection before edit
+- Three modes in Edit tool: hashline (detected), patch, string fallback
+
+**Test results:** 9/9 pass
+
+**Files changed:**
+- `lisp/modules/gptel-tools-edit-hashline.el` (new)
+- `lisp/modules/gptel-tools-edit.el` (modified)
+- `tests/test-gptel-tools-edit-hashline.el` (new)
+
+**Memory created:** `mementum/memories/hashline-edit-tool-implementation.md`
+
+---
+
+> Previous session: 2026-06-02 (harness problem + complete architecture)
 > Status: Architecture complete — harness problem validates deterministic-first
 
 ## Session: The Harness Problem — Edit Tool Matters More Than Model (2026-06-02)
