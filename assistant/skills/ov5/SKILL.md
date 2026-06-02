@@ -4,6 +4,8 @@ description: Cowork with OV5 (Ouroboros V5) — trigger experiments, review resu
 metadata:
   evolution-stats:
     total-experiments: 870
+molecules: [auto-workflow]
+level: compound
 ---
 
 # OV5 Cowork
