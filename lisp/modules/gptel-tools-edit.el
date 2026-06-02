@@ -118,7 +118,7 @@ to prevent callers from hanging indefinitely."
         (progn
           (let ((patch-mode (and diffp (not (eq diffp :json-false))))
                 (hashline-mode (and old_str
-n                                    (string-match-p "^[0-9]+:[a-f0-9]+" old_str))))
+                                    (string-match-p "^[0-9]+:[a-f0-9]+" old_str))))
             (when (and patch-mode (not (executable-find "patch")))
               (error "Command \"patch\" not available, cannot apply diffs"))
             (unless (file-exists-p file_path)
@@ -162,9 +162,9 @@ n                                    (string-match-p "^[0-9]+:[a-f0-9]+" old_str
              (t
               (setq gptel-tools-edit--mode-used 'string)
               (funcall finish
-                       (gptel-agent--edit-files file_path old_str new_str diffp))))))))
+                        (gptel-agent--edit-files file_path old_str new_str diffp)))))))
       (error
-       (funcall finish (format "Error: %s" (error-message-string err)))))))
+        (funcall finish (format "Error: %s" (error-message-string err))))))
 
 (defun my/gptel--agent-edit-hashline (file_path old_str new_str)
   "Edit FILE_PATH using hashline mode.
