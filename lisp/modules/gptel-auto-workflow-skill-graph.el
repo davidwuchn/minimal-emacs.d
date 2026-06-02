@@ -371,6 +371,59 @@ Preserves dependency edge type (explicit frontmatter) on updates."
                       :total-count new-total
                       :last-used (float-time))))))))
 
+;; ─── Molecule Recommendation ───
+
+(defvar ov5-sg--standard-workflows
+  '((:name "elisp-workflow"
+     :atoms (elisp-discover elisp-expert elisp-validator)
+     :category :programming
+     :patterns ("\\.el\\'")
+     :description "Read→Understand→Write→Validate workflow for Elisp editing")
+    (:name "clojure-workflow"
+     :atoms (clojure-expert)
+     :category :programming
+     :patterns ("\\.clj\\'" "\\.cljs\\'" "\\.cljc\\'")
+     :description "REPL-first workflow for Clojure editing")
+    (:name "debug-workflow"
+     :atoms (elisp-debug elisp-validator)
+     :category :agentic
+     :patterns ()
+     :description "Debug→Validate workflow for fixing errors"))
+  "Pre-compiled workflow molecules.
+Each is a plist with :name, :atoms, :category (matching ontology), :description.
+Used as fallback when graph edges are cold (no experiment data).")
+
+(defun ov5-sg--recommend-molecule (target &optional category)
+  "Recommend a molecule for TARGET based on skill graph and ontology CATEGORY.
+Returns list of atom ids, or nil if no recommendation.
+PRIORITY: 1) compiled from graph edges, 2) standard workflow match, 3) nil."
+  (unless category
+    (setq category (and target
+                        (fboundp 'gptel-auto-workflow--categorize-target)
+                        (gptel-auto-workflow--categorize-target target))))
+  (or
+   ;; 1) Match standard workflow by category (fast, deterministic)
+   (let ((best nil) (best-score 0))
+     (dolist (wf ov5-sg--standard-workflows)
+       (let* ((cat-match (if (and category
+                                  (eq (plist-get wf :category) category))
+                             1.0 0.0))
+              (ext-match (if (and target
+                                  (cl-some (lambda (pat)
+                                             (string-match-p pat target))
+                                           (plist-get wf :patterns)))
+                             1.0 0.0))
+              (score (+ cat-match ext-match)))
+         (when (> score best-score)
+           (setq best (plist-get wf :atoms)
+                 best-score score))))
+     (and best (> best-score 0) best))
+   ;; 2) Compile from graph edges (slower, experiment-learned weights)
+   (condition-case nil
+       (let ((mol (ov5-sg--compile-molecule target)))
+         (and mol (> (length mol) 0) mol))
+     (error nil))))
+
 ;; ─── Persistence ───
 
 (defun ov5-sg--persist-path ()

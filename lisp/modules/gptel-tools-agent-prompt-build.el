@@ -1127,7 +1127,8 @@ Returns a compact lambda-notation string ready for the LLM."
       "\n"
       ;; CONTEXT (what you know about this target — DYNAMIC)
       (if persona (concat "PERSONA: " persona "\n") "")
-      (if skills (concat "SKILLS: " skills "\n") "")
+       (if skills (concat "SKILLS: " skills "\n") "")
+       (if suggested-workflow (concat "WORKFLOW: " suggested-workflow "\n") "")
       (if allium-i (concat "ALLIUM: " allium-i "\n") "")
       (if allium-r (concat "REPAIR: " allium-r "\n") "")
       (if (or topic prev) (concat "PAST: " (or topic "")
@@ -1288,8 +1289,13 @@ Implements section-level A/B testing to identify effective prompt components."
                                worktree-quoted)))
          (patterns (when (proper-list-p analysis) (plist-get analysis :patterns)))
          (suggestions (when (proper-list-p analysis) (plist-get analysis :recommendations)))
-         (skills (cdr (assoc target gptel-auto-workflow--skills)))
-         (scores (gptel-auto-experiment--eight-keys-scores))
+          (skills (cdr (assoc target gptel-auto-workflow--skills)))
+          (suggested-workflow
+           (when (fboundp 'ov5-sg--recommend-molecule)
+             (let ((mol (ov5-sg--recommend-molecule target)))
+               (when mol
+                 (mapconcat #'symbol-name mol " → ")))))
+          (scores (gptel-auto-experiment--eight-keys-scores))
          (weakest-keys (when scores (gptel-auto-workflow--format-weakest-keys scores)))
          (mutation-templates (when skills (gptel-auto-workflow--extract-mutation-templates skills)))
          (suggested-hypothesis (when skills (gptel-auto-workflow-skill-suggest-hypothesis skills)))
