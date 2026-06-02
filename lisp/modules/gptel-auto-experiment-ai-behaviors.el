@@ -1135,7 +1135,8 @@ Returns current count after increment."
 (defconst gptel-ai-behaviors--model-variants
   '((deepseek . (deepseek-v4-flash deepseek-v4-pro))     ; flash=fast, pro=thinking+effort
     (kimi . (kimi-for-coding kimi-k2.6))                  ; coding=fast, k2.6=reasoning(:effort high)
-    (minimax . (MiniMax-M3 minimax-m2.7-highspeed minimax-m2.7)))
+    (minimax . (MiniMax-M3 minimax-m2.7-highspeed minimax-m2.7))
+    (copilot . (gpt-5.4-mini gpt-4o-mini gpt-4o)))
   "Model families and variants ordered by capability (fast→powerful).")
 
 (defconst gptel-ai-behaviors--effort-levels

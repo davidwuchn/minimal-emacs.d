@@ -20,9 +20,11 @@
 (require 'gptel-auto-workflow-skill-graph)
 
 (defvar gptel-auto-workflow-executor-rate-limit-fallbacks
-  '(("DeepSeek" . "deepseek-v4-flash")
-    ("MiniMax" . "MiniMax-M3")
-    ("DashScope" . "qwen3.6-plus"))
+  '(("MiniMax" . "MiniMax-M3")
+    ("DeepSeek" . "deepseek-v4-flash")
+    ("DashScope" . "qwen3.6-plus")
+    ("moonshot" . "kimi-k2.6")
+    ("Copilot" . "gpt-5.4-mini"))
   "Fallback chain for executor when rate-limited.
 First backend is primary, subsequent backends are tried in order.
 Ordered by keep-rate from experiment data.")
