@@ -250,6 +250,18 @@
     (should-not (string= (gptel-auto-workflow--results-cache-key r1)
                          (gptel-auto-workflow--results-cache-key r2)))))
 
+(ert-deftest regression/auto-workflow-evolution/skill-graph-prefers-root-with-skills-dir ()
+  "Skill graph root selection should ignore transient var/ roots."
+  (let ((root (make-temp-file "aw-skill-graph-root" t)))
+    (unwind-protect
+        (let ((user-emacs-directory root)
+              (gptel-auto-workflow--run-project-root (expand-file-name "var" root))
+              (gptel-auto-workflow--current-project (expand-file-name "var" root)))
+          (make-directory (expand-file-name "assistant/skills/example" root) t)
+          (should (equal (file-name-as-directory (expand-file-name root))
+                         (file-name-as-directory (skill-graph--project-root)))))
+      (delete-directory root t))))
+
 (ert-deftest regression/auto-workflow-evolution/elisp-extraction-config-has-required-keys ()
   "Extraction config should have all required pattern keys."
   (dolist (key '(:defun-pattern :defvar-pattern :require-pattern :provide-pattern

@@ -59,6 +59,24 @@ Edges are discovered from AutoTTS traces (skill co-occurrence).")
 Molecules are compiled at design time, not traversed at runtime.
 Example: ('elisp-discover 'elisp-expert 'elisp-validator).")
 
+(defun skill-graph--project-root ()
+  "Return the repo root that owns assistant skills and workflow state.
+Prefer workflow/project roots only when they actually contain the skills dir."
+  (let* ((candidates (delq nil
+                           (list (and (boundp 'gptel-auto-workflow--project-root)
+                                      (fboundp 'gptel-auto-workflow--project-root)
+                                      (ignore-errors (gptel-auto-workflow--project-root)))
+                                 (and (boundp 'gptel-auto-workflow--run-project-root)
+                                      gptel-auto-workflow--run-project-root)
+                                 (and (boundp 'gptel-auto-workflow--current-project)
+                                      gptel-auto-workflow--current-project)
+                                 user-emacs-directory)))
+         (root (seq-find (lambda (dir)
+                           (file-directory-p
+                            (expand-file-name "assistant/skills" dir)))
+                         candidates)))
+    (expand-file-name (or root user-emacs-directory))))
+
 ;; ─── Skill Loading ───
 
 (defun skill-graph--parse-frontmatter (content)
@@ -125,10 +143,7 @@ Returns the node id (symbol) or nil if invalid."
 (defun skill-graph-load-all-skills (&optional skills-dir)
   "Load all skills from SKILLS-DIR (default: assistant/skills/).
 Returns list of loaded node ids."
-  (let* ((root (or (and (boundp 'gptel-auto-workflow--project-root)
-                        (fboundp 'gptel-auto-workflow--project-root)
-                        (gptel-auto-workflow--project-root))
-                   user-emacs-directory))
+  (let* ((root (skill-graph--project-root))
          (dir (or skills-dir
                   (expand-file-name "assistant/skills" root)))
          (loaded nil))
@@ -443,10 +458,7 @@ PRIORITY: 1) compiled from graph edges, 2) standard workflow match, 3) nil."
 
 (defun skill-graph--persist-path ()
   "Return path to skill graph persistence file."
-  (let ((root (or (and (boundp 'gptel-auto-workflow--project-root)
-                       (fboundp 'gptel-auto-workflow--project-root)
-                       (gptel-auto-workflow--project-root))
-                  user-emacs-directory)))
+  (let ((root (skill-graph--project-root)))
     (expand-file-name "var/tmp/skill-graph.eld" root)))
 
 (defun skill-graph--serialize ()
