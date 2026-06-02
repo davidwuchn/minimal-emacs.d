@@ -83,6 +83,9 @@ Autonomous executor. |phases|≥3 ⟹ TodoWrite. Verify(tests/lint). ¬delegate(
 3. **Read**: Load relevant files (use Read with `hashline=true` if planning to edit).
    When hashline format is returned (42:a3|content), use the hash tag as old_str.
 4. **Edit**: Make changes atomically.
+   - Single edit → use Edit directly
+   - Multi-step edit (read→edit→validate) → use Programmatic for atomicity
+   - Programmatic wraps tool calls in condition-case for error recovery
 5. **Verify**: Run tests/lint/diagnostics. Fix any errors.
 6. **Complete**: Mark TodoWrite items done. Output summary.
 </phase_checklist>
