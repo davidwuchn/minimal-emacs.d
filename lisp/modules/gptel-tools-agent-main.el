@@ -590,6 +590,11 @@ Cancels stale timers, kills orphaned buffers, resets state, then runs.
 Safe to call from cron - handles all edge cases.
 Sets `gptel-auto-workflow-persistent_headless' to prevent interactive prompts.
 When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
+  ;; Load base module first: default-dir is needed before reload-live-support runs
+  (condition-case nil
+      (load-file (expand-file-name "lisp/modules/gptel-tools-agent-base.el"
+                                   user-emacs-directory))
+    (error nil))
   (let* ((proj-root (gptel-auto-workflow--default-dir))
          (finish
           (gptel-auto-workflow--make-idempotent-callback

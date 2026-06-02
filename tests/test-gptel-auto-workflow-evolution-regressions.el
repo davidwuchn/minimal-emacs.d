@@ -3317,6 +3317,26 @@ QV: ensure cache-aware cost model is wired for these backends."
   (when (fboundp 'gptel-auto-experiment--tsv-escape)
     (should-not (gptel-auto-experiment--tsv-escape nil))))
 
+;; ─── Cron-Safe Bootstrap ───
+
+(ert-deftest tdd/cron-safe/default-dir-available ()
+  "gptel-auto-workflow--default-dir is fboundp after main.el loads."
+  (should (fboundp 'gptel-auto-workflow--default-dir)))
+
+(ert-deftest tdd/cron-safe/cron-safe-does-not-crash ()
+  "cron-safe should not crash with void-function on bootstrap."
+  (when (fboundp 'gptel-auto-workflow-cron-safe)
+    (should-not
+     (condition-case err
+         (progn
+           ;; Simulate what cron does: call cron-safe without prior module loads
+           (when (boundp 'gptel-auto-workflow--running)
+             (setq gptel-auto-workflow--running t))  ; prevent actual run
+           (gptel-auto-workflow-cron-safe)
+           nil)
+       (void-function t)
+       (error (error-message-string err))))))
+
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here
