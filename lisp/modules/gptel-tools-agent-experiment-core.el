@@ -230,10 +230,15 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
          ;; Capture the experiment timeout lexically because later analyzer
          ;; callbacks run after this outer let frame exits.
          (experiment-timeout gptel-auto-experiment-time-budget)
-         (run-id gptel-auto-workflow--run-id)
-         (workflow-root (gptel-auto-workflow--resolve-run-root))
+          (run-id gptel-auto-workflow--run-id)
+          (workflow-root (gptel-auto-workflow--resolve-run-root))
+          (raw-callback callback)
+          (result-callback-called nil)
+          (callback (lambda (result)
+                      (prog1 (funcall raw-callback result)
+                        (setq result-callback-called t))))
           ;; The subagent timeout wrapper owns executor timeout/abort behavior.
-           (_my/gptel-agent-task-timeout experiment-timeout)
+          (_my/gptel-agent-task-timeout experiment-timeout)
            (start-time (float-time))
            (finished nil)
            (provisional-commit-hash nil)
@@ -719,11 +724,11 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                           ;; Non-teachable or already retrying: let grader decide
                                           ;; Don't set finished=t — grader runs below and can bypass
                                             ;; Record validation error for self-evolution
-                                            (when (and target validation-error
-                                                       (fboundp 'gptel-ai-behaviors--record-validation-error))
-                                             (gptel-ai-behaviors--record-validation-error target validation-error))
+                                             (when (and target validation-error
+                                                        (fboundp 'gptel-ai-behaviors--record-validation-error))
+                                              (gptel-ai-behaviors--record-validation-error target validation-error))
                                             (message "[auto-exp] ⚠ Non-teachable validation: %s — grader will evaluate anyway"
-                                                     validation-error))))
+                                                     validation-error)))))
                                    (unless defer-grading
                                      (let ((gptel-auto-experiment--grading-target target)
                                          (gptel-auto-experiment--grading-worktree experiment-worktree)
@@ -1391,13 +1396,13 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                            ))))))))))))))))
                    (let ((raw-executor-callback executor-callback))
                      (setq executor-callback
-                           (lambda (agent-output)
-                             (condition-case err
-                                 (funcall raw-executor-callback agent-output)
-                               (error
-                                (unless finished
-                                  (setq finished t)
-                                  (let* ((error-message (error-message-string err))
+                            (lambda (agent-output)
+                              (condition-case err
+                                  (funcall raw-executor-callback agent-output)
+                                (error
+                                 (unless result-callback-called
+                                   (setq finished t)
+                                   (let* ((error-message (error-message-string err))
                                          (output (if (stringp agent-output)
                                                      agent-output
                                                    (format "%S" agent-output)))
@@ -1419,7 +1424,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                 :grader-quality 0
                                                 :grader-reason reason
                                                 :comparator-reason "executor-callback-error"
-                                                :analyzer-patterns (format "%s" patterns)
+                                                :analyzer-patterns (format "%s" (and (proper-list-p analysis)
+                                                                                       (plist-get analysis :patterns)))
                                                 :agent-output output
                                                 :error reason
                                                 :backend (or actual-backend experiment-backend)
@@ -1445,7 +1451,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                        (message "[auto-exp] Failed to log executor callback error result: %s"
                                                 (error-message-string log-err))))
                                     (funcall callback exp-result))))))))
-                   (funcall launch-executor)))))))))))
+                   (funcall launch-executor))))))))))
 
 
 
