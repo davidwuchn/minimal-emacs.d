@@ -1,7 +1,63 @@
 # Mementum State
 
-> Last session: 2026-05-30 (8 root cause fixes + remote sync)
-> Next pipeline: 23:00 (current: 19:00 running)
+> Last session: 2026-06-02 (deep study: skill graphs + self-evolution)
+> Next pipeline: 23:00
+> Status: Architecture designed, awaiting implementation
+
+## Session: Self-Evolving Skill Graph Architecture (2026-06-02)
+
+**Key insight:** OV5 already has all infrastructure. No new systems needed.
+
+**Self-evolution loop:**
+1. Pipeline executes → AutoTTS traces every skill call + outcome
+2. Evolution cycle (hourly cron) analyzes traces
+3. Update node stats (usage-count, success-rate) per skill
+4. Update edge weights: reinforce +0.05 on success, decay *0.99, prune <0.05
+5. Evaluate triggers: insert/merge/split/deprecate/promote
+6. AutoGo A/B tests proposed molecules vs baselines
+7. Champion league crowns winners after >=10 experiments
+8. Commit evolved graph to mementum
+
+**Integration points:**
+| System | Role |
+|--------|------|
+| AutoTTS | Node stats + edge co-occurrence discovery |
+| AutoGo | A/B test proposed molecules |
+| Ontology router | Add `:graph-neighbor-success` + `:graph-edge-strength` dimensions |
+| Evolution cycle | Hourly trigger for `ov5-sg-evolve` |
+| Mementum | Git-persist `skill-graph.json` |
+
+**Decision:** Pure elisp implementation. Graph algorithms (PPR, BFS) run at **design time** to suggest molecule compositions. Runtime uses **hardcoded molecules** — no traversal, no depth fragility.
+
+**Memory created:** `mementum/memories/ov5-skill-graph-self-evolution.md`
+
+---
+
+## Session: Deep Study — Skill Graph Architectures (2026-06-02)
+
+**Sources studied:**
+1. Graph-of-Skills (GitHub: davidliuk/graph-of-skills) — PPR over typed edges, semantic+lexical retrieval
+2. SkillGraph (arXiv:2605.12039v1) — RL co-evolution, progressive unlocking, node/edge-level evolution
+3. Shiv Sakhuja (X thread) — Atoms/Molecules/Compounds taxonomy, design-time compilation
+
+**Key synthesis:**
+Runtime graph traversal (GoS, SkillGraph) causes depth fragility. Shiv's solution: compile graph to hardcoded workflows at design time. Three layers with strict constraints:
+- **Atoms**: Never call skills (~99% reliability)
+- **Molecules**: Hardcoded atom sequences ≤10 atoms (~90%)
+- **Compounds**: Human-driven, ≤10 molecules (~70%)
+
+**OV5 integration path:**
+- Pure elisp (no Python subprocess)
+- Extend SKILL.md frontmatter with `level:` + `atoms:`/`molecules:`
+- Reuse `skill-routing-onto.el` for atom seed selection
+- AutoTTS traces for per-level reliability tracking
+- gptel context mgmt for skill budget enforcement
+
+**Memory created:** `mementum/memories/skill-graph-three-layer-taxonomy.md`
+
+---
+
+> Previous session: 2026-05-30 (8 root cause fixes + remote sync)
 > Status: Pipeline active, workflow running with all fixes loaded
 
 ## Session: 8 Root Cause Fixes + Remote Sync (2026-05-30)
