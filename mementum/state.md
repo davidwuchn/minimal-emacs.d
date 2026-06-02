@@ -1,8 +1,37 @@
 # Mementum State
 
-> Last session: 2026-06-02 (complete system architecture)
+> Last session: 2026-06-02 (harness problem + complete architecture)
 > Next pipeline: 23:00
-> Status: Architecture complete — awaiting implementation with correct naming
+> Status: Architecture complete — harness problem validates deterministic-first
+
+## Session: The Harness Problem — Edit Tool Matters More Than Model (2026-06-02)
+
+**Source:** https://blog.can.ac/2026/02/12/the-harness-problem/
+
+**Key insight:** A single edit tool change improved 15 LLMs by 5-14 points. The harness matters more than the model.
+
+**Current tools are broken:**
+- Codex `apply_patch`: 50.7% fail on non-OpenAI models
+- Claude `str_replace`: Must reproduce every character perfectly
+- Cursor: Needed a **whole separate 70B model** just for merging edits
+- Aider: Format choice alone swung GPT-4 26%→59%
+
+**Hashline solution:** Content hashes per line (2-3 chars) as stable anchors. Model references hashes instead of reproducing text.
+
+**Results:** Grok Fast 1: 6.7%→68.3% (10×). MiniMax doubled. Gemini +5-14pp.
+
+**Vendor politics:** Anthropic blocked OpenCode. Google banned the author for benchmarking.
+
+**OV5 validation:**
+- Deterministic-first principle (S4) confirmed — hashline is deterministic content addressing
+- Lambda notation = same principle: stable anchors vs reproduction
+- Edit tool is infrastructure we must own, not a commodity
+
+**Memory created:** `mementum/memories/harness-problem-edit-tool-critical.md`
+
+---
+
+## Session: Complete OV5 System Architecture (2026-06-02)
 
 ## Session: Complete OV5 System Architecture (2026-06-02)
 
