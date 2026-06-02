@@ -273,28 +273,32 @@ delete the request or file buffer that happened to be current when the
 subagent callback fired, and avoids reusing a deleted worktree as
 `default-directory'."
   (cond ((functionp callback)
-         (let* ((safe-buffer (get-buffer-create " *gptel-callback*"))
-                (safe-default-directory
-                 (or (my/gptel--first-existing-directory
-                      default-directory
-                      user-emacs-directory
-                      temporary-file-directory)
-                     temporary-file-directory)))
-            (condition-case err
-                (with-current-buffer safe-buffer
-                  (setq default-directory safe-default-directory)
-                  (if noninteractive
-                      (funcall callback result)
-                    (run-at-time 0 nil callback result)))
-              (error (let* ((err-text (error-message-string err))
-                            (short-err (if (> (length err-text) 300)
-                                           (concat (substring err-text 0 300) "...")
-                                         err-text)))
-                       (message "[nucleus] Callback error ignored after cleanup (%s %s): %s"
-                                (or agent-type "unknown")
-                                (if (symbolp callback) callback (type-of callback))
-                                short-err))
-                     (when (and (boundp 'debug-on-error) debug-on-error) (signal (car err) (cdr err)))))))
+          (let* ((safe-buffer (get-buffer-create " *gptel-callback*"))
+                 (safe-default-directory
+                  (or (my/gptel--first-existing-directory
+                       default-directory
+                       user-emacs-directory
+                       temporary-file-directory)
+                      temporary-file-directory))
+                 (safe-invoke
+                  (lambda ()
+                    (condition-case err
+                        (with-current-buffer safe-buffer
+                          (setq default-directory safe-default-directory)
+                          (funcall callback result))
+                      (error (let* ((err-text (error-message-string err))
+                                    (short-err (if (> (length err-text) 300)
+                                                   (concat (substring err-text 0 300) "...")
+                                                 err-text)))
+                               (message "[nucleus] Callback error ignored after cleanup (%s %s): %s"
+                                        (or agent-type "unknown")
+                                        (if (symbolp callback) callback (type-of callback))
+                                        short-err))
+                             (when (and (boundp 'debug-on-error) debug-on-error)
+                               (signal (car err) (cdr err))))))))
+            (if noninteractive
+                (funcall safe-invoke)
+              (run-at-time 0 nil safe-invoke))))
         (t
          (message "[nucleus] Warning: my/gptel--invoke-callback-safely skipped invalid callback: %S"
                   (type-of callback)))))

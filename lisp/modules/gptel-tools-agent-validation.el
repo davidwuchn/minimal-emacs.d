@@ -6,7 +6,89 @@
 
 (defvar minimal-emacs-user-directory)
 
+(defcustom gptel-auto-experiment-validation-process-timeout 30
+  "Maximum seconds for pre-grade validation subprocesses."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
 (declare-function gptel-auto-workflow--read-file-contents "gptel-tools-agent-base" (filepath))
+
+(defun gptel-auto-experiment--process-timeout-seconds ()
+  "Return the active validation subprocess timeout, or nil when disabled."
+  (when (and (integerp gptel-auto-experiment-validation-process-timeout)
+             (> gptel-auto-experiment-validation-process-timeout 0))
+    gptel-auto-experiment-validation-process-timeout))
+
+(defun gptel-auto-experiment--process-exit-code (process)
+  "Return PROCESS exit code, signal status, or nil while still running."
+  (pcase (process-status process)
+    ('exit (process-exit-status process))
+    ('signal 128)
+    (_ nil)))
+
+(defun gptel-auto-experiment--process-wait-timeboxed (process timeout)
+  "Wait for PROCESS until TIMEOUT seconds elapse.
+Return its exit status, or 124 when killed for timeout."
+  (let ((deadline (+ (float-time) timeout))
+        exit-code)
+    (while (and (not (setq exit-code
+                           (gptel-auto-experiment--process-exit-code process)))
+                (< (float-time) deadline))
+      (accept-process-output process 0.1))
+    (or exit-code
+        (progn
+          (when (process-live-p process)
+            (delete-process process))
+          124))))
+
+(defun gptel-auto-experiment--call-process-native-timeout (program args timeout)
+  "Run PROGRAM with ARGS and kill it after TIMEOUT seconds.
+This helper intentionally captures output in a temporary buffer because current
+validation callers only need the exit code."
+  (let* ((buffer (generate-new-buffer " *gptel-validation-process*"))
+         (process (make-process :name "gptel-validation-process"
+                                :buffer buffer
+                                :command (cons program args)
+                                :connection-type 'pipe
+                                :noquery t)))
+    (unwind-protect
+        (gptel-auto-experiment--process-wait-timeboxed process timeout)
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
+
+(defun gptel-auto-experiment--call-process-timeboxed (program &optional infile destination display &rest args)
+  "Run PROGRAM with ARGS using a native timeout when possible."
+  (if (and (null infile)
+           (null destination)
+           (null display)
+           (gptel-auto-experiment--process-timeout-seconds))
+      (gptel-auto-experiment--call-process-native-timeout
+       program args (gptel-auto-experiment--process-timeout-seconds))
+    (apply #'call-process program infile destination display args)))
+
+(defun gptel-auto-experiment--shell-command-native-timeout (command timeout)
+  "Return shell COMMAND output, killing it after TIMEOUT seconds."
+  (let* ((buffer (generate-new-buffer " *gptel-validation-shell*"))
+         (process (make-process :name "gptel-validation-shell"
+                                :buffer buffer
+                                :command (list shell-file-name
+                                               shell-command-switch
+                                               command)
+                                :connection-type 'pipe
+                                :noquery t)))
+    (unwind-protect
+        (progn
+          (gptel-auto-experiment--process-wait-timeboxed process timeout)
+          (with-current-buffer buffer
+            (buffer-string)))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
+
+(defun gptel-auto-experiment--shell-command-to-string-timeboxed (command)
+  "Return shell COMMAND output with validation timeout protection."
+  (if-let* ((timeout (gptel-auto-experiment--process-timeout-seconds)))
+      (gptel-auto-experiment--shell-command-native-timeout command timeout)
+    (shell-command-to-string command)))
 
 (defun gptel-auto-experiment--invalid-cl-return-target-in-forms (forms &optional blocks)
   "Return the first invalid `cl-return-from' target in FORMS.
@@ -109,7 +191,7 @@ regular file content."
               (root (locate-dominating-file absolute-file ".git")))
     (let ((default-directory root)
           (relative-file (file-relative-name absolute-file root)))
-      (shell-command-to-string
+      (gptel-auto-experiment--shell-command-to-string-timeboxed
        (format "git --no-pager diff --no-ext-diff --unified=0 HEAD -- %s 2>/dev/null"
                (shell-quote-argument relative-file))))))
 
@@ -375,10 +457,11 @@ Returns nil if valid, or error message string if invalid."
                     (byte-compile-ok
                      (and (file-exists-p byte-compile-script)
                           (condition-case nil
-                              (zerop (call-process byte-compile-script
-                                                   nil nil nil
-                                                   (expand-file-name file project-root)))
-                            (error nil)))))
+                               (zerop (gptel-auto-experiment--call-process-timeboxed
+                                       byte-compile-script
+                                       nil nil nil
+                                       (expand-file-name file project-root)))
+                             (error nil)))))
                (or
                 (when (gptel-auto-experiment--invalid-cl-return-target-in-forms
                        parsed-forms)
@@ -400,8 +483,8 @@ vandalism (removal of error handling), and excessively large diffs.
 This runs between syntax validation and the grader API call."
   (when (and worktree (file-directory-p worktree))
     (let ((default-directory worktree)
-          (diff-text (shell-command-to-string
-                       "git --no-pager diff --no-ext-diff --unified=10 HEAD -- . 2>/dev/null")))
+          (diff-text (gptel-auto-experiment--shell-command-to-string-timeboxed
+                      "git --no-pager diff --no-ext-diff --unified=10 HEAD -- . 2>/dev/null")))
       (cond
        ;; No diff at all — executor somehow produced no changes
        ((string-empty-p (string-trim diff-text))

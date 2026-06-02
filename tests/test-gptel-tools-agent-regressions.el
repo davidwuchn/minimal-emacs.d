@@ -738,9 +738,7 @@ experiment phases do not trip the real pre-grade target validator."
                    (lambda (_run-id exp-result)
                      (setq logged-result exp-result)))
                   ((symbol-function 'magit-git-success)
-                   (lambda (&rest _args) t))
-                  ((symbol-function 'message)
-                   (lambda (&rest _args) nil)))
+                   (lambda (&rest _args) t)))
           (with-current-buffer worktree-buf
             (setq default-directory project-root)
             (gptel-auto-experiment-run
@@ -757,6 +755,254 @@ experiment phases do not trip the real pre-grade target validator."
     (should (zerop benchmark-call-count))
     (should (equal (plist-get result :grader-reason) "provider failure surfaced"))
     (should (equal (plist-get result :agent-output) provider-error))))
+
+(ert-deftest regression/auto-experiment/grader-dispatch-error-invokes-callback ()
+  "Synchronous grader dispatch errors should return a failed grade."
+  (let ((gptel-auto-experiment-use-subagents t)
+        (gptel-auto-experiment-grade-timeout 1)
+        (gptel-auto-experiment--grade-state (make-hash-table :test 'eql))
+        (gptel-auto-experiment--grade-counter 0)
+        result)
+    (cl-letf (((symbol-function 'run-with-timer)
+               (lambda (&rest _args) :fake-timer))
+              ((symbol-function 'cancel-timer)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'gptel-benchmark-grade)
+               (lambda (&rest _args)
+                 (error "router failure before grader callback")))
+              ((symbol-function 'my/gptel--invoke-callback-safely)
+               (lambda (callback grade &optional _agent-type)
+                 (funcall callback grade)))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment-grade
+       "HYPOTHESIS: dispatch error should become a result"
+       (lambda (grade)
+         (setq result grade))))
+    (should result)
+    (should (= (plist-get result :score) 0))
+    (should (= (plist-get result :total) 1))
+    (should-not (plist-get result :passed))
+    (should (plist-get result :grader-only-failure))
+    (should (string-match-p "grader dispatch failed"
+                            (plist-get result :details)))
+    (should (string-match-p "router failure before grader callback"
+                            (plist-get result :error-source)))
+    (should (= (hash-table-count gptel-auto-experiment--grade-state) 0))))
+
+(ert-deftest regression/auto-experiment/nonteachable-validation-falls-through-to-grader ()
+  "Non-teachable pre-grade validation failures should still invoke grader."
+  (let* ((project-root (make-temp-file "aw-nonteachable-root" t))
+         (worktree-dir (make-temp-file "aw-nonteachable-worktree" t))
+         (worktree-buf (get-buffer-create "*aw-nonteachable-validation*"))
+         (result nil)
+         (logged-result nil)
+         (runagent-call-count 0)
+         (grade-call-count 0)
+         (gptel-auto-experiment-auto-push nil)
+         (gptel-auto-workflow-use-staging nil)
+         (gptel-auto-workflow--strategy-evolution-enabled nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'gptel-auto-experiment--maybe-failover-main-backend)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'gptel-auto-experiment--check-quota-reset-and-switch-back)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'call-process)
+                   (lambda (&rest _args) 0))
+                  ((symbol-function 'gptel-auto-workflow-create-worktree)
+                   (test-auto-workflow--valid-worktree-stub worktree-dir))
+                  ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
+                   (lambda (_worktree-dir) worktree-buf))
+                  ((symbol-function 'gptel-auto-workflow--get-current-branch)
+                   (lambda (&rest _args) "optimize/test"))
+                  ((symbol-function 'gptel-auto-workflow--branch-name)
+                   (lambda (&rest _args) "optimize/test"))
+                  ((symbol-function 'gptel-auto-experiment--call-in-context)
+                   (lambda (_buffer _directory fn &optional _run-root)
+                     (funcall fn)))
+                  ((symbol-function 'gptel-auto-experiment-analyze)
+                   (lambda (_previous-results cb)
+                     (funcall cb '(:patterns nil))))
+                  ((symbol-function 'gptel-auto-experiment-build-prompt)
+                   (lambda (&rest _args) "prompt"))
+                  ((symbol-function 'gptel-auto-workflow--agent-base-preset)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'gptel-auto-workflow--check-action-preconditions)
+                   (lambda (_target) nil))
+                  ((symbol-function 'my/gptel--run-agent-tool-with-timeout)
+                   (lambda (_timeout cb &rest _args)
+                     (cl-incf runagent-call-count)
+                     (funcall cb "HYPOTHESIS: non-teachable validation should grade")))
+                  ((symbol-function 'gptel-auto-experiment--batch-validate-candidates)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'gptel-auto-experiment--repeated-focus-match)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'gptel-auto-experiment--timeout-salvage-output)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'gptel-auto-experiment--pre-existing-breakage-p)
+                   (lambda (_target) nil))
+                  ((symbol-function 'gptel-auto-experiment--validate-all-modified-files)
+                   (lambda (_worktree) nil))
+                  ((symbol-function 'gptel-auto-experiment--validate-code)
+                   (lambda (_file) nil))
+                  ((symbol-function 'gptel-auto-experiment--validate-diff-content)
+                   (lambda (_worktree)
+                     "Cheap check: diff has only 1 non-comment code lines"))
+                  ((symbol-function 'gptel-auto-experiment--teachable-validation-error-p)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'gptel-auto-experiment--grade-with-retry)
+                   (lambda (_output cb &optional _retry-count)
+                     (cl-incf grade-call-count)
+                     (funcall cb '(:score 0 :total 9 :passed nil :details "grader rejected"))))
+                  ((symbol-function 'gptel-auto-experiment--stale-run-p)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'gptel-auto-experiment--extract-hypothesis)
+                   (lambda (&rest _args) "non-teachable hypothesis"))
+                  ((symbol-function 'magit-git-success)
+                   (lambda (&rest _args) t))
+                  ((symbol-function 'message)
+                   (lambda (&rest _args) nil)))
+          (with-current-buffer worktree-buf
+            (setq default-directory project-root)
+            (gptel-auto-experiment-run
+             "lisp/modules/gptel-tools-agent-error.el" 1 5 0.4 0.5 nil
+             (lambda (exp-result)
+               (setq result exp-result))
+             (lambda (_run-id exp-result)
+               (setq logged-result exp-result)))))
+      (when (buffer-live-p worktree-buf)
+        (kill-buffer worktree-buf))
+      (delete-directory worktree-dir t)
+      (delete-directory project-root t))
+    (should result)
+    (should (equal logged-result result))
+    (should (= runagent-call-count 1))
+    (should (= grade-call-count 1))
+    (should (equal (plist-get result :validation-error) nil))
+    (should (equal (plist-get result :grader-reason) "grader rejected"))
+    (should (equal (plist-get result :comparator-reason) ":ok"))))
+
+(ert-deftest regression/auto-experiment/executor-callback-error-logs-failed-result ()
+  "Synchronous post-executor callback errors should not strand a run."
+  (let* ((project-root (make-temp-file "aw-callback-error-root" t))
+         (worktree-dir (make-temp-file "aw-callback-error-worktree" t))
+         (worktree-buf (get-buffer-create "*aw-callback-error*"))
+         (result nil)
+         (logged-result nil)
+         (runagent-call-count 0)
+         (grade-call-count 0)
+         (gptel-auto-experiment-auto-push nil)
+         (gptel-auto-workflow-use-staging nil)
+         (gptel-auto-workflow--strategy-evolution-enabled nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'gptel-auto-experiment--maybe-failover-main-backend)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'gptel-auto-experiment--check-quota-reset-and-switch-back)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'call-process)
+                   (lambda (&rest _args) 0))
+                  ((symbol-function 'gptel-auto-workflow-create-worktree)
+                   (test-auto-workflow--valid-worktree-stub worktree-dir))
+                  ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
+                   (lambda (_worktree-dir) worktree-buf))
+                  ((symbol-function 'gptel-auto-workflow--get-current-branch)
+                   (lambda (&rest _args) "optimize/test"))
+                  ((symbol-function 'gptel-auto-workflow--branch-name)
+                   (lambda (&rest _args) "optimize/test"))
+                  ((symbol-function 'gptel-auto-experiment--call-in-context)
+                   (lambda (_buffer _directory fn &optional _run-root)
+                     (funcall fn)))
+                  ((symbol-function 'gptel-auto-experiment-analyze)
+                   (lambda (_previous-results cb)
+                     (funcall cb '(:patterns nil))))
+                  ((symbol-function 'gptel-auto-experiment-build-prompt)
+                   (lambda (&rest _args) "prompt"))
+                  ((symbol-function 'gptel-auto-workflow--agent-base-preset)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'gptel-auto-workflow--check-action-preconditions)
+                   (lambda (_target) nil))
+                  ((symbol-function 'my/gptel--run-agent-tool-with-timeout)
+                   (lambda (_timeout cb &rest _args)
+                     (cl-incf runagent-call-count)
+                     (funcall cb "HYPOTHESIS: callback error should be logged")))
+                  ((symbol-function 'gptel-auto-experiment--batch-validate-candidates)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'gptel-auto-experiment--repeated-focus-match)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'gptel-auto-experiment--timeout-salvage-output)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'gptel-auto-experiment--pre-existing-breakage-p)
+                   (lambda (_target) nil))
+                  ((symbol-function 'gptel-auto-experiment--validate-all-modified-files)
+                   (lambda (_worktree) nil))
+                  ((symbol-function 'gptel-auto-experiment--validate-code)
+                   (lambda (_file) nil))
+                  ((symbol-function 'gptel-auto-experiment--validate-diff-content)
+                   (lambda (_worktree)
+                     (error "post-executor validation blew up")))
+                  ((symbol-function 'gptel-auto-experiment--grade-with-retry)
+                   (lambda (&rest _args)
+                     (cl-incf grade-call-count)))
+                  ((symbol-function 'gptel-auto-experiment--stale-run-p)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'gptel-auto-experiment--extract-hypothesis)
+                   (lambda (&rest _args) "callback error hypothesis"))
+                  ((symbol-function 'magit-git-success)
+                   (lambda (&rest _args) t))
+                  ((symbol-function 'message)
+                   (lambda (&rest _args) nil)))
+          (with-current-buffer worktree-buf
+            (setq default-directory project-root)
+            (gptel-auto-experiment-run
+             "lisp/modules/gptel-tools-agent-error.el" 1 5 0.4 0.5 nil
+             (lambda (exp-result)
+               (setq result exp-result))
+             (lambda (_run-id exp-result)
+               (setq logged-result exp-result)))))
+      (when (buffer-live-p worktree-buf)
+        (kill-buffer worktree-buf))
+      (delete-directory worktree-dir t)
+      (delete-directory project-root t))
+    (should result)
+    (should (equal logged-result result))
+    (should (= runagent-call-count 1))
+    (should (= grade-call-count 0))
+    (should (equal (plist-get result :hypothesis) "callback error hypothesis"))
+    (should (equal (plist-get result :comparator-reason) "executor-callback-error"))
+    (should (string-match-p "post-executor validation blew up"
+                            (plist-get result :grader-reason)))
+    (should (string-match-p "post-executor validation blew up"
+                            (plist-get result :error)))))
+
+(ert-deftest regression/auto-experiment/nil-numeric-runtime-state-is-normalized ()
+  "Hot-reloaded experiment-core should tolerate nil numeric runtime state."
+  (let ((gptel-auto-workflow-git-timeout nil)
+        (gptel-auto-experiment--no-improvement-count nil))
+    (should (= (gptel-auto-experiment--git-timeout) 300))
+    (gptel-auto-experiment--increment-no-improvement-count)
+    (should (= gptel-auto-experiment--no-improvement-count 1)))
+  (let ((gptel-auto-workflow-git-timeout 10)
+        (gptel-auto-experiment--no-improvement-count 4))
+    (should (= (gptel-auto-experiment--git-timeout) 300))
+    (gptel-auto-experiment--increment-no-improvement-count)
+    (should (= gptel-auto-experiment--no-improvement-count 5)))
+  (let ((gptel-auto-workflow-git-timeout 900))
+    (should (= (gptel-auto-experiment--git-timeout) 900))))
+
+(ert-deftest regression/auto-experiment/modified-files-uses-timeboxed-diff ()
+  "Modified-file discovery should not bypass validation subprocess timeboxes."
+  (let ((commands nil))
+    (cl-letf (((symbol-function 'gptel-auto-experiment--shell-command-to-string-timeboxed)
+               (lambda (command)
+                 (push command commands)
+                 "lisp/modules/a.el\nlisp/modules/b.el\n")))
+      (should (equal (gptel-auto-experiment--modified-files default-directory)
+                     '("lisp/modules/a.el" "lisp/modules/b.el")))
+      (should (equal commands '("git diff --name-only HEAD 2>/dev/null"))))))
 
 (ert-deftest regression/auto-experiment/grader-retry-failure-keeps-exp-result-scope ()
   "Grader retry failure should log the prebuilt result instead of crashing on scope."
@@ -2183,9 +2429,46 @@ experiment phases do not trip the real pre-grade target validator."
      (should (equal (plist-get result :comparator-reason) "grader-api-rate-limit"))
      (should (equal (gptel-auto-experiment--tsv-decision-label result)
                     "grader-api-rate-limit"))
-     (should (plist-get result :grader-only-failure))
-     (should (gptel-auto-experiment--is-retryable-error-p
-              (plist-get result :error)))))
+      (should (plist-get result :grader-only-failure))
+      (should (gptel-auto-experiment--is-retryable-error-p
+               (plist-get result :error)))))
+
+(ert-deftest regression/auto-experiment/malformed-grader-score-is-normalized ()
+  "Malformed grader score fields should not leak into numeric experiment paths."
+  (let ((grade (gptel-auto-experiment--normalize-grade-result
+                '(:score ":grader-failed" :total ":grader-failed"
+                  :passed t :details :grader-failed))))
+    (should (= (plist-get grade :score) 0))
+    (should (= (plist-get grade :total) 1))
+    (should-not (plist-get grade :passed))
+    (should (plist-get grade :grader-only-failure))
+    (should (stringp (plist-get grade :details)))
+    (should (string-match-p "malformed grader result"
+                            (plist-get grade :error-source)))))
+
+(ert-deftest regression/auto-experiment/grade-with-retry-normalizes-malformed-grade ()
+  "Grade retry wrapper should normalize malformed grade plists before callback."
+  (let (result)
+    (cl-letf (((symbol-function 'gptel-auto-experiment-grade)
+               (lambda (_output cb &rest _args)
+                 (funcall cb '(:score ":grader-failed"
+                               :total ":grader-failed"
+                               :passed t
+                               :details :grader-failed))))
+              ((symbol-function 'gptel-auto-experiment--should-retry-grader-p)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'my/gptel--invoke-callback-safely)
+               (lambda (callback grade &optional _agent-type)
+                 (funcall callback grade))))
+      (gptel-auto-experiment--grade-with-retry
+       "executor produced output"
+       (lambda (grade)
+         (setq result grade))))
+    (should result)
+    (should (= (plist-get result :score) 0))
+    (should (= (plist-get result :total) 1))
+    (should-not (plist-get result :passed))
+    (should (plist-get result :grader-only-failure))))
 
 (ert-deftest regression/auto-experiment/run-labels-final-grader-timeouts-separately ()
   "Final grader-only timeouts should not be logged as executor timeouts."
@@ -7420,6 +7703,56 @@ failure."
                                  "api-rate-limit"))))))
         (delete-directory tmpdir t)))))
 
+(ert-deftest regression/auto-workflow/log-tsv-normalizes-malformed-numeric-fields ()
+  "results.tsv logging should not crash on malformed score fields."
+  (let* ((tmpdir (make-temp-file "gptel-tsv-malformed-numbers" t))
+         (run-id "run-malformed-numbers")
+         (results-file (expand-file-name
+                        (format "var/tmp/experiments/%s/results.tsv" run-id)
+                        tmpdir)))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+               (lambda () tmpdir))
+              ((symbol-function 'gptel-auto-workflow--persist-status)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow--record-strategy-evaluation)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'gptel-auto-workflow--strategy-analyze-results)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'gptel-auto-workflow--update-trace-outcomes)
+               (lambda (&rest _args) nil)))
+      (unwind-protect
+          (progn
+            (gptel-auto-experiment-log-tsv
+             run-id
+             '(:id 1
+                    :target "one"
+                    :hypothesis "h"
+                    :score-before ":grader-failed"
+                    :score-after ":grader-failed"
+                    :code-quality ":grader-failed"
+                    :duration ":grader-failed"
+                    :grader-quality ":grader-failed"
+                    :grader-reason "grader failed"
+                    :comparator-reason "grader-failed"
+                    :agent-output "output"
+                    :output-chars ":grader-failed"
+                    :prompt-chars ":grader-failed"
+                    :candidate-validation (("candidate" :score ":grader-failed" :valid nil))))
+            (with-temp-buffer
+              (insert-file-contents results-file)
+              (forward-line 1)
+              (let ((fields (split-string
+                             (buffer-substring-no-properties
+                              (line-beginning-position)
+                              (line-end-position))
+                             "\t")))
+                (should (equal (nth 3 fields) "0.00"))
+                (should (equal (nth 4 fields) "0.00"))
+                (should (equal (nth 5 fields) "0.50"))
+                (should (equal (nth 6 fields) "+0.00"))
+                (should (equal (nth 7 fields) "grader-failed")))))
+        (delete-directory tmpdir t)))))
+
 (ert-deftest regression/auto-workflow/log-tsv-replaces-staging-pending-row ()
   "Final staging callbacks should replace pending rows in results.tsv."
   (let* ((tmpdir (make-temp-file "gptel-tsv-staging-pending" t))
@@ -10925,26 +11258,76 @@ failure."
          seen-program
          seen-args)
     (unwind-protect
-        (progn
-          (make-directory scripts-dir t)
-          (make-directory (file-name-directory target) t)
-          (with-temp-file script-file
-            (insert "#!/bin/sh\nexit 0\n"))
+          (progn
+            (make-directory scripts-dir t)
+            (make-directory (file-name-directory target) t)
+            (with-temp-file script-file
+              (insert "#!/bin/sh\nexit 0\n"))
           (with-temp-file target
             (insert ";;; target.el -*- lexical-binding: t; -*-\n"
                     "(defun validate-code-target () t)\n"))
-          (cl-letf (((symbol-function 'call-process)
-                     (lambda (program infile destination display &rest args)
-                       (setq seen-program program
-                             seen-args args)
-                       0))
-                    ((symbol-function 'gptel-auto-experiment--diff-against-head)
-                     (lambda (_file) nil)))
-            (should-not (gptel-auto-experiment--validate-code target))
-            (should (equal seen-program script-file))
-            (should (equal (car seen-args) target))))
+          (let ((gptel-auto-experiment-validation-process-timeout nil))
+            (cl-letf (((symbol-function 'call-process)
+                       (lambda (program infile destination display &rest args)
+                         (setq seen-program program
+                               seen-args args)
+                         0))
+                      ((symbol-function 'gptel-auto-experiment--diff-against-head)
+                       (lambda (_file) nil)))
+              (should-not (gptel-auto-experiment--validate-code target))
+              (should (equal seen-program script-file))
+              (should (equal (car seen-args) target)))))
       (delete-directory repo-root t)
       (delete-directory stale-root t))))
+
+(ert-deftest regression/auto-workflow/validation-subprocesses-use-timeboxed-helpers ()
+  "Pre-grade validation should route git diff and byte-compile through timeboxes."
+  (let* ((repo-root (file-name-as-directory (make-temp-file "validate-code-timebox-root" t)))
+         (scripts-dir (expand-file-name "scripts" repo-root))
+         (script-file (expand-file-name "byte-compile-check.sh" scripts-dir))
+         (target (expand-file-name "lisp/modules/target.el" repo-root))
+         (default-directory repo-root)
+         shell-commands
+         process-programs)
+    (unwind-protect
+        (progn
+          (make-directory scripts-dir t)
+          (make-directory (file-name-directory target) t)
+          (make-directory (expand-file-name ".git" repo-root) t)
+          (with-temp-file script-file
+            (insert "#!/bin/sh\nexit 0\n"))
+          (set-file-modes script-file #o755)
+          (with-temp-file target
+            (insert ";;; target.el -*- lexical-binding: t; -*-\n"
+                    "(defun validate-code-target () t)\n"))
+          (cl-letf (((symbol-function 'gptel-auto-experiment--shell-command-to-string-timeboxed)
+                     (lambda (command)
+                       (push command shell-commands)
+                       ""))
+                    ((symbol-function 'gptel-auto-experiment--call-process-timeboxed)
+                     (lambda (program &rest _args)
+                       (push program process-programs)
+                       0)))
+            (should-not (gptel-auto-experiment--validate-code target))
+            (should (seq-some (lambda (command)
+                                (string-match-p "git --no-pager diff" command))
+                              shell-commands))
+            (should (member script-file process-programs))
+            (setq shell-commands nil)
+            (should (equal (gptel-auto-experiment--validate-diff-content repo-root)
+                           "Cheap check: experiment produced no file changes"))
+            (should (seq-some (lambda (command)
+                                (string-match-p "git --no-pager diff" command))
+                              shell-commands))))
+      (delete-directory repo-root t))))
+
+(ert-deftest regression/auto-workflow/validation-shell-command-times-out ()
+  "Validation shell commands should not block the Emacs daemon indefinitely."
+  (let ((gptel-auto-experiment-validation-process-timeout 1)
+        (start (float-time)))
+    (should (stringp (gptel-auto-experiment--shell-command-to-string-timeboxed
+                      "sleep 5; printf late")))
+    (should (< (- (float-time) start) 3))))
 
 (ert-deftest regression/auto-workflow/validate-code-ignores-cl-return-from-in-docs ()
   "Code validation should ignore cl-return-from mentions in comments and strings."

@@ -7,10 +7,12 @@
 (declare-function gptel-auto-workflow--restore-live-target-file "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--run-callback-live-p "gptel-tools-agent-base")
 (declare-function gptel-auto-experiment-grade "gptel-tools-agent-benchmark")
+(declare-function gptel-auto-experiment--normalize-grade-result "gptel-tools-agent-benchmark")
 (declare-function gptel-auto-workflow--project-root "gptel-tools-agent-benchmark")
 (declare-function gptel-auto-experiment-run "gptel-tools-agent-experiment-core")
 (declare-function gptel-auto-experiment--agent-error-p "gptel-tools-agent-experiment-loop")
 (declare-function my/gptel--sanitize-for-logging "gptel-tools-agent-git")
+(declare-function my/gptel--invoke-callback-safely "gptel-tools-agent-subagent")
 (declare-function gptel-auto-experiment--inspection-thrash-result-p "gptel-tools-agent-prompt-analyze")
 (declare-function gptel-auto-experiment--normal-grade-details-p "gptel-tools-agent-prompt-analyze")
 (declare-function gptel-auto-experiment--retry-history "gptel-tools-agent-prompt-analyze")
@@ -514,16 +516,25 @@ RETRY-COUNT tracks local grader retries."
     (gptel-auto-experiment-grade
      output
      (lambda (grade)
-       (let* ((grade-passed (plist-get grade :passed))
-              (grade-details (plist-get grade :details))
-              (grade-error-output
-               (gptel-auto-experiment--grade-failure-error-output
-                grade-details output))
+       (let* ((grade (if (fboundp 'gptel-auto-experiment--normalize-grade-result)
+                         (gptel-auto-experiment--normalize-grade-result grade)
+                       (if (proper-list-p grade)
+                           grade
+                         (list :score 0 :total 1 :percentage 0.0 :passed nil
+                               :details (format "Error: malformed grader result: %S" grade)
+                               :grader-only-failure t))))
+              (grade-passed (eq (plist-get grade :passed) t))
+               (grade-details (plist-get grade :details))
+               (grade-error-output
+                (or (plist-get grade :error-source)
+                    (gptel-auto-experiment--grade-failure-error-output
+                     grade-details output)))
               (error-source (or grade-error-output output))
               (error-info (gptel-auto-experiment--categorize-error error-source))
               (error-category (car error-info))
-              (grader-only-failure
-               (gptel-auto-experiment--grader-only-failure-p output grade-error-output)))
+               (grader-only-failure
+                (or (plist-get grade :grader-only-failure)
+                    (gptel-auto-experiment--grader-only-failure-p output grade-error-output))))
          (if (and (not grade-passed)
                   (gptel-auto-experiment--should-retry-grader-p
                    output grade-error-output error-category retries))
@@ -546,10 +557,12 @@ RETRY-COUNT tracks local grader retries."
                         (when grade-error-output
                           (setq final-grade
                                 (plist-put final-grade :error-source grade-error-output)))
-                        (when grader-only-failure
-                          (setq final-grade
-                                (plist-put final-grade :grader-only-failure t)))
-                        (funcall callback final-grade)))))))
+                         (when grader-only-failure
+                           (setq final-grade
+                                 (plist-put final-grade :grader-only-failure t)))
+                        (if (fboundp 'my/gptel--invoke-callback-safely)
+                            (my/gptel--invoke-callback-safely callback final-grade "grader")
+                          (funcall callback final-grade))))))))
            (when (and (not grade-passed)
                       (memq error-category '(:api-rate-limit :api-error)))
              (gptel-auto-experiment--note-api-pressure
@@ -560,10 +573,12 @@ RETRY-COUNT tracks local grader retries."
              (when grade-error-output
                (setq final-grade
                      (plist-put final-grade :error-source grade-error-output)))
-             (when grader-only-failure
-               (setq final-grade
-                     (plist-put final-grade :grader-only-failure t)))
-             (funcall callback final-grade))))))))
+              (when grader-only-failure
+                (setq final-grade
+                      (plist-put final-grade :grader-only-failure t)))
+              (if (fboundp 'my/gptel--invoke-callback-safely)
+                  (my/gptel--invoke-callback-safely callback final-grade "grader")
+                (funcall callback final-grade)))))))))
 
 (defun gptel-auto-experiment--hard-timeout-p (error-output)
   "Return non-nil when ERROR-OUTPUT reports a hard wall-clock timeout."

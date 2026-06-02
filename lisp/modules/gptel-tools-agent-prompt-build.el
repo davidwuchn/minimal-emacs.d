@@ -1641,6 +1641,10 @@ Uses cache to avoid repeated file reads."
     (let ((s (if (stringp str) str (format "%s" str))))
       (replace-regexp-in-string "[\t\n\r]+" " | " s))))
 
+(defun gptel-auto-experiment--tsv-number (value &optional default)
+  "Return VALUE when numeric, otherwise DEFAULT or 0."
+  (if (numberp value) value (or default 0)))
+
 (defun gptel-auto-experiment--tsv-decision-token (value)
   "Return a normalized TSV decision token extracted from VALUE, or nil."
   (when (stringp value)
@@ -1759,7 +1763,20 @@ Captures executor reasoning from the dynamic variable
          (decision (gptel-auto-experiment--tsv-decision-label experiment))
          (agent-output (gptel-auto-workflow--plist-get experiment :agent-output ""))
          (truncated-output (gptel-auto-experiment--tsv-escape
-                            (truncate-string-to-width agent-output 500 nil nil "..."))))
+                            (truncate-string-to-width agent-output 500 nil nil "...")))
+         (score-before (gptel-auto-experiment--tsv-number
+                        (gptel-auto-workflow--plist-get experiment :score-before 0)))
+         (score-after (gptel-auto-experiment--tsv-number
+                       (gptel-auto-workflow--plist-get experiment :score-after 0)))
+         (code-quality (gptel-auto-experiment--tsv-number
+                        (gptel-auto-workflow--plist-get experiment :code-quality 0.5)
+                        0.5))
+         (duration (gptel-auto-experiment--tsv-number
+                    (gptel-auto-workflow--plist-get experiment :duration 0)))
+         (output-chars (gptel-auto-experiment--tsv-number
+                        (gptel-auto-workflow--plist-get experiment :output-chars 0)))
+         (prompt-chars (gptel-auto-experiment--tsv-number
+                        (gptel-auto-workflow--plist-get experiment :prompt-chars 0))))
     ;; Capture executor reasoning for self-evolution feedback
     (when (and target (bound-and-true-p gptel-auto-experiment--executor-reasoning))
       (let* ((insights (gethash target gptel-auto-experiment--grader-insights))
@@ -1908,22 +1925,20 @@ Captures executor reasoning from the dynamic variable
                         experiment-id
                         target
                         (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
-                        (gptel-auto-workflow--plist-get experiment :score-before 0)
-                        (gptel-auto-workflow--plist-get experiment :score-after 0)
-                        (gptel-auto-workflow--plist-get experiment :code-quality 0.5)
-                        (- (gptel-auto-workflow--plist-get experiment :score-after 0)
-                           (gptel-auto-workflow--plist-get experiment :score-before 0))
+                        score-before
+                        score-after
+                        code-quality
+                        (- score-after score-before)
                         decision
-                        (round (gptel-auto-workflow--plist-get experiment :duration 0))
+                        (round duration)
                         (gptel-auto-workflow--plist-get experiment :grader-quality "?")
                         (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :grader-reason "N/A"))
                         (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A"))
                         (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
                         truncated-output
-                        (round (or (gptel-auto-workflow--plist-get experiment :output-chars 0) 0))
+                        (round output-chars)
                         (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :backend "unknown"))
-                        (round (or (gptel-auto-workflow--plist-get experiment :prompt-chars 0)
-                                   0))
+                        (round prompt-chars)
                         (or (gptel-auto-experiment--tsv-escape
                              (gptel-auto-workflow--plist-get experiment :sections-included "all"))
                             "all")
@@ -1936,7 +1951,9 @@ Captures executor reasoning from the dynamic variable
                                    (mapconcat (lambda (c)
                                                 (format "%s:%.1f:%s"
                                                         (substring (or (car c) "") 0 (min 20 (length (or (car c) ""))))
-                                                        (or (plist-get (cdr c) :score) 0.0)
+                                                         (gptel-auto-experiment--tsv-number
+                                                          (plist-get (cdr c) :score)
+                                                          0.0)
                                                         (if (plist-get (cdr c) :valid) "V" "X")))
                                               candidates ";")
                                  "")))
@@ -1982,7 +1999,7 @@ Captures executor reasoning from the dynamic variable
            (gptel-auto-workflow--plist-get experiment :strategy "template-default")
            target
            experiment-id
-           (gptel-auto-workflow--plist-get experiment :score-after 0)
+            score-after
            (if (equal decision "kept") 'kept 'discarded)
            (gptel-auto-workflow--plist-get experiment :exploration-axis "?"))
         (error
@@ -1994,7 +2011,7 @@ Captures executor reasoning from the dynamic variable
            (gptel-auto-workflow--plist-get experiment :strategy "template-default")
            target
            (list :decision decision
-                 :score-after (gptel-auto-workflow--plist-get experiment :score-after 0)
+                  :score-after score-after
                  :exploration-axis (gptel-auto-workflow--plist-get experiment :exploration-axis "?")
                  :comparator-reason (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A")))
         (error
@@ -3118,8 +3135,8 @@ Deduplicates: if REASON is similar to an existing entry, updates timestamp."
            (new-list (delq nil
                           (mapcar (lambda (entry)
                                     (let ((old-reason (car entry)))
-                                      (if (string-prefix-p (substring normalized 0 (min 30 normalized))
-                                                            (or old-reason ""))
+                                      (if (string-prefix-p (substring normalized 0 (min 30 (length normalized)))
+                                                             (or old-reason ""))
                                           (progn (setq found t)
                                                  (cons normalized now))
                                         entry)))

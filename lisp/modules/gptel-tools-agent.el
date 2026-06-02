@@ -46,24 +46,23 @@ Ensures the module directory exists before constructing the path."
     (error "Feature must be a non-nil symbol: %S" feature))
   (when (string-match-p "[/\\]" (symbol-name feature))
     (error "Feature name contains invalid characters: %S" feature))
-  (unless (featurep feature)
-    (let ((source (gptel-tools-agent--module-path feature)))
-      (if (file-readable-p source)
-          (condition-case err
-              (progn
-                (load source nil 'nomessage)
-                (unless (featurep feature)
-                  (error "Module %s did not provide feature %S" source feature)))
-            (error
-             (let ((err-msg (error-message-string err)))
-               (if (string-match-p "did not provide feature" err-msg)
-                   (error "%s" err-msg)
-                 (condition-case require-err
-                     (require feature)
-                   (error
-                    (error "Failed to load %s: %s (require also failed: %s)"
-                           source err-msg (error-message-string require-err))))))))
-        (require feature)))))
+  (let ((source (gptel-tools-agent--module-path feature)))
+    (if (file-readable-p source)
+        (condition-case err
+            (progn
+              (load source nil 'nomessage)
+              (unless (featurep feature)
+                (error "Module %s did not provide feature %S" source feature)))
+          (error
+           (let ((err-msg (error-message-string err)))
+             (if (string-match-p "did not provide feature" err-msg)
+                 (error "%s" err-msg)
+               (condition-case require-err
+                   (require feature)
+                 (error
+                  (error "Failed to load %s: %s (require also failed: %s)"
+                         source err-msg (error-message-string require-err))))))))
+      (require feature))))
 
 (dolist (feature '(gptel-tools-agent-base
                    gptel-tools-agent-git

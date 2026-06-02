@@ -416,12 +416,25 @@ Adapts max-experiments based on API error rate."
                          (lambda (result)
                            (push result results)
                           (gptel-auto-workflow--update-progress)
-                         (let* ((score-after (gptel-auto-workflow--plist-get result :score-after 0))
-                                (kept (gptel-auto-workflow--plist-get result :kept nil))
-                                (quality-after
-                                 (gptel-auto-workflow--plist-get result :code-quality baseline-code-quality))
-                                (hard-timeout
-                                 (gptel-auto-experiment--result-hard-timeout-p result))
+                          (let* ((raw-score-after (gptel-auto-workflow--plist-get result :score-after 0))
+                                 (score-after
+                                  (cond
+                                   ((numberp raw-score-after) raw-score-after)
+                                   ((and (stringp raw-score-after)
+                                         (string-match-p
+                                          "\\`[[:space:]]*[+-]?[0-9]+\\(?:\\.[0-9]+\\)?[[:space:]]*\\'"
+                                          raw-score-after))
+                                    (string-to-number raw-score-after))
+                                   (t 0)))
+                                 (kept (gptel-auto-workflow--plist-get result :kept nil))
+                                 (raw-quality-after
+                                  (gptel-auto-workflow--plist-get result :code-quality baseline-code-quality))
+                                 (quality-after
+                                  (if (numberp raw-quality-after)
+                                      raw-quality-after
+                                    baseline-code-quality))
+                                 (hard-timeout
+                                  (gptel-auto-experiment--result-hard-timeout-p result))
                                 (grader-only-failure
                                  (plist-get result :grader-only-failure))
                                 (next-exp-id (1+ exp-id)))
@@ -434,10 +447,10 @@ Adapts max-experiments based on API error rate."
                                     baseline-code-quality quality-after
                                     no-improvement-count 0
                                     consecutive-timeouts 0))
-                            (when (and (not kept)
-                                       score-after
-                                       (<= score-after best-score))
-                               (setq no-improvement-count (1+ no-improvement-count)))
+                             (when (and (not kept)
+                                        score-after
+                                        (<= score-after (if (numberp best-score) best-score 0)))
+                                (setq no-improvement-count (1+ no-improvement-count)))
                              (unless hard-timeout
                                (setq consecutive-timeouts 0))
                              (when hard-timeout

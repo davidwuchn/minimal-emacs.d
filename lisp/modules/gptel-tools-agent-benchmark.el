@@ -735,11 +735,60 @@ budget.")
    (lambda (_grade-id state)
      (when (timerp (plist-get state :timer))
        (cancel-timer (plist-get state :timer))))
-   gptel-auto-experiment--grade-state)
+    gptel-auto-experiment--grade-state)
   (clrhash gptel-auto-experiment--grade-state))
 
+(defun gptel-auto-experiment--normalize-grade-result (result)
+  "Return RESULT as a grade plist with numeric score fields."
+  (cl-labels ((number-string-p
+               (value)
+               (and (stringp value)
+                    (string-match-p
+                     "\\`[[:space:]]*[+-]?[0-9]+\\(?:\\.[0-9]+\\)?[[:space:]]*\\'"
+                     value)))
+              (number-or-default
+               (value default)
+               (cond
+                ((numberp value) value)
+                ((number-string-p value) (string-to-number value))
+                (t default))))
+    (let* ((plist-result-p (proper-list-p result))
+           (grade (if plist-result-p
+                      (copy-sequence result)
+                    (list :details (format "Error: malformed grader result: %S" result)
+                          :grader-only-failure t)))
+           (raw-score (plist-get grade :score))
+           (raw-total (plist-get grade :total))
+           (score (number-or-default raw-score 0))
+           (total (max 1 (number-or-default raw-total (max 1 score))))
+           (malformed (or (not plist-result-p)
+                          (and raw-score (not (numberp raw-score))
+                               (not (number-string-p raw-score)))
+                          (and raw-total (not (numberp raw-total))
+                               (not (number-string-p raw-total)))))
+           (percentage
+            (number-or-default (plist-get grade :percentage)
+                               (* 100.0 (/ (float score) total))))
+           (details (plist-get grade :details)))
+      (setq grade (plist-put grade :score score))
+      (setq grade (plist-put grade :total total))
+      (setq grade (plist-put grade :percentage percentage))
+      (setq grade (plist-put grade :passed (and (not malformed)
+                                                (eq (plist-get grade :passed) t))))
+      (unless (stringp details)
+        (setq grade (plist-put grade :details
+                               (format "Error: malformed grader result: %S" result))))
+      (when malformed
+        (setq grade (plist-put grade :grader-only-failure t))
+        (unless (plist-get grade :error-source)
+          (setq grade
+                (plist-put grade :error-source
+                           (format "Error: malformed grader result: score=%S total=%S"
+                                   raw-score raw-total)))))
+      grade)))
+
 (defun gptel-auto-experiment--finish-grade (grade-id callback result
-                                                     &optional cancel-timer)
+                                                      &optional cancel-timer)
   "Finalize GRADE-ID with RESULT, always cleaning grade state.
 CALLBACK receives RESULT.  When CANCEL-TIMER is non-nil, cancel the
 stored timeout timer before invoking CALLBACK."
@@ -750,9 +799,10 @@ stored timeout timer before invoking CALLBACK."
       (when (and cancel-timer
                  (timerp (plist-get state :timer)))
         (cancel-timer (plist-get state :timer)))
-      (unwind-protect
-          (my/gptel--invoke-callback-safely callback result)
-        (remhash grade-id gptel-auto-experiment--grade-state))
+      (let ((result (gptel-auto-experiment--normalize-grade-result result)))
+        (unwind-protect
+            (my/gptel--invoke-callback-safely callback result)
+          (remhash grade-id gptel-auto-experiment--grade-state)))
       t)))
 
 (defun gptel-auto-experiment--build-grading-output (output &optional target worktree)
@@ -928,7 +978,7 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
                 (and (stringp output) (string-empty-p (string-trim output))))
         (message "[auto-exp] Skipping grader: nil or empty executor output")
         (my/gptel--invoke-callback-safely
-         callback (list :score 0 :passed nil
+         callback (list :score 0 :total 1 :percentage 0.0 :passed nil
                         :details "no-executor-output"
                         :grader-only-failure t))
         (cl-return-from gptel-auto-experiment-grade))
@@ -939,17 +989,17 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
                (error-category (car (gptel-auto-experiment--categorize-error output))))
           (message "[auto-exp] Executor error detected: %s" error-snippet)
           (my/gptel--invoke-callback-safely
-           callback (list :score 0 :passed nil
-                          :details (format "Agent error: %s" error-snippet)
-                          :error-category error-category))
+           callback (list :score 0 :total 1 :percentage 0.0 :passed nil
+                           :details (format "Agent error: %s" error-snippet)
+                           :error-category error-category))
           (cl-return-from gptel-auto-experiment-grade)))
       ;; Quota exhausted: skip grading, no backend can respond
       (when (bound-and-true-p gptel-auto-experiment--quota-exhausted)
         (message "[auto-exp] Quota exhausted, skipping grader")
         (my/gptel--invoke-callback-safely
-         callback (list :score 0 :passed nil
-                        :details "quota-exhausted"
-                        :quota-exhausted t))
+          callback (list :score 0 :total 1 :percentage 0.0 :passed nil
+                         :details "quota-exhausted"
+                         :quota-exhausted t))
         (cl-return-from gptel-auto-experiment-grade))
       (puthash grade-id (list :done nil :timer nil)
                gptel-auto-experiment--grade-state)
@@ -969,23 +1019,38 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
                  gptel-auto-experiment--grade-state))
       (if (and gptel-auto-experiment-use-subagents
                (fboundp 'gptel-benchmark-grade))
-          ;; Ensure grader runs in the captured buffer context so overlay appears in right place
-          (with-current-buffer grade-buffer
-            (gptel-benchmark-grade
-             (gptel-auto-experiment--build-grading-output output target worktree)
-               '("change clearly described"
-                "change is minimal and focused"
-                "improves code: fixes bug, improves performance, addresses TODO/FIXME, or enhances clarity/testability"
-                "verification attempted (byte-compile, syntax, load-test, nucleus, or tests — also check VERIFICATION EVIDENCE FROM <think> section and <think> reasoning blocks)")
-             '("large refactor unrelated to stated improvement"
-               "changed security files without review"
-               "no description or unclear purpose"
-               "style-only change without functional impact"
-               "replaces working code without clear improvement")
-             (lambda (result)
-               (gptel-auto-experiment--finish-grade
-                grade-id callback result t))
-             gptel-auto-experiment-grade-timeout))
+          ;; Ensure grader dispatch cannot strand the experiment without a
+          ;; result when routing/prompt construction fails synchronously.
+          (condition-case err
+              (with-current-buffer grade-buffer
+                (gptel-benchmark-grade
+                 (gptel-auto-experiment--build-grading-output output target worktree)
+                 '("change clearly described"
+                   "change is minimal and focused"
+                   "improves code: fixes bug, improves performance, addresses TODO/FIXME, or enhances clarity/testability"
+                   "verification attempted (byte-compile, syntax, load-test, nucleus, or tests — also check VERIFICATION EVIDENCE FROM <think> section and <think> reasoning blocks)")
+                 '("large refactor unrelated to stated improvement"
+                   "changed security files without review"
+                   "no description or unclear purpose"
+                   "style-only change without functional impact"
+                   "replaces working code without clear improvement")
+                 (lambda (result)
+                   (gptel-auto-experiment--finish-grade
+                    grade-id callback result t))
+                 gptel-auto-experiment-grade-timeout))
+            (error
+             (message "[auto-exp] Grader dispatch failed: %s"
+                      (my/gptel--sanitize-for-logging
+                       (error-message-string err) 200))
+             (gptel-auto-experiment--finish-grade
+              grade-id callback
+              (list :score 0 :total 1 :percentage 0.0 :passed nil
+                    :details (format "Error: grader dispatch failed: %s"
+                                     (error-message-string err))
+                    :error-source (format "Error: grader dispatch failed: %s"
+                                          (error-message-string err))
+                    :grader-only-failure t)
+              t)))
         (gptel-auto-experiment--finish-grade
          grade-id callback (list :score 100 :passed t) t)))))
 
