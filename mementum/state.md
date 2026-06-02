@@ -1,24 +1,41 @@
 # Mementum State
 
-> Last session: 2026-06-02 (four-way relationship + naming correction)
+> Last session: 2026-06-02 (complete system architecture)
 > Next pipeline: 23:00
 > Status: Architecture complete — awaiting implementation with correct naming
+
+## Session: Complete OV5 System Architecture (2026-06-02)
+
+**Key insight:** OV5 is not a collection of independent modules. It is a **closed-loop system** where every component feeds every other component through shared execution traces.
+
+**The 12 systems:**
+1. **Mementum** — Git-persisted memory (ψ ephemeral; 🐍 remembers)
+2. **Pipeline** — 6-phase execution (research → analyze → experiment → validate → compare → stage)
+3. **AutoTTS** — Trace analysis + controller evolution
+4. **Evolution Cycle** — Hourly cron orchestrating 15+ subsystems
+5. **Ontology** — Experiment classification (effective/promising/underperforming)
+6. **Ontology Router** — 8-dim scoring for backend/skill selection
+7. **AI Behaviors** — Hashtag-based personas (how to act)
+8. **Skill Graph** (FUTURE) — Three-layer taxonomy (what to do)
+9. **Context Management** — Token budget enforcement
+10. **Agent Execution** — gptel-send with composed prompt
+11. **Grading/Benchmark** — Eight Keys + test validation
+12. **AutoGo** — Champion league A/B testing
+
+**Universal currency:** AutoTTS traces feed all systems. Single trace format: `category, hashtags, skill-names, backend, token-usage, outcome`.
+
+**Memory created:** `mementum/memories/ov5-complete-system-architecture.md`
+
+---
 
 ## Session: Follow Existing Naming Conventions (2026-06-02)
 
 **Correction:** Do NOT invent `ov5-*` prefixes. The codebase already has established conventions.
 
-**Existing patterns:**
-- `gptel-auto-workflow-*.el` — core workflow (evolution, ontology, router)
-- `gptel-tools-agent-*.el` — agent tools (experiment-core, prompt-build)
-- `skill-*.el` — skill-specific (skill-routing-onto)
-- `gptel-benchmark-*.el` — benchmarking
-
 **Correct names for skill graph:**
 - `gptel-auto-workflow-skill-graph.el` (data structures + executor)
 - Extend `skill-routing-onto.el` (graph dimensions)
 - Hook into `gptel-auto-workflow-evolution.el` (evolution cycle)
-- `test-gptel-auto-workflow-skill-graph.el` (tests)
 
 **Memory created:** `mementum/memories/naming-conventions-follow-existing.md`
 
