@@ -1033,7 +1033,8 @@ into staging or main."
 
 (defun gptel-auto-workflow--run-with-targets (targets completion-callback)
   "Run experiments for TARGETS sequentially."
-  (let* ((proj-root (gptel-auto-workflow--default-dir))
+  (cl-block gptel-auto-workflow--run-with-targets
+    (let* ((proj-root (gptel-auto-workflow--default-dir))
          (validated-targets
           (if (fboundp 'gptel-auto-workflow--filter-valid-targets)
               (gptel-auto-workflow--filter-valid-targets
@@ -1078,6 +1079,8 @@ into staging or main."
             gptel-auto-workflow--run-project-root nil)
       (setq gptel-auto-workflow--stats
             (plist-put gptel-auto-workflow--stats :phase "complete"))
+      (message "[auto-workflow] Complete: %d experiments, %d targets improved"
+               0 0)
       (gptel-auto-workflow--persist-status)
       (message "[auto-workflow] No valid targets remain after filtering")
       (when completion-callback
@@ -1207,8 +1210,8 @@ into staging or main."
          (gptel-auto-workflow--persist-status)
          (message "[auto-workflow] Initial target dispatch failed: %s"
                   (error-message-string err))
-         (when completion-callback
-           (funcall completion-callback nil))))))))
+          (when completion-callback
+            (funcall completion-callback nil)))))))))
 
 
 (defun gptel-auto-workflow-run (&optional targets)

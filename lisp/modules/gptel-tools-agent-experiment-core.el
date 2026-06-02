@@ -503,32 +503,53 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                          (when salvaged-agent-output
                           (message "[auto-exp] Executor timed out after partial changes for %s; evaluating actual worktree diff"
                                    target))
-                         (message "[auto-exp] Agent output (first 150 chars): %s"
-                                  (my/gptel--sanitize-for-logging effective-agent-output 150))
-                         ;; Parse reasoning patterns from this output for behavior learning
-                         (let ((category (and target (fboundp 'gptel-auto-workflow--categorize-target)
-                                              (gptel-auto-workflow--categorize-target target))))
-                           (when (and category (fboundp 'gptel-ai-behaviors--parse-reasoning))
-                             (gptel-ai-behaviors--parse-reasoning effective-agent-output category)))
-                         ;; Think-block intelligence: analyze agent reasoning for verdict
-                         (unless (bound-and-true-p gptel-auto-experiment--think-intel)
-                           (let ((intel (when (and effective-agent-output
-                                                    (fboundp 'gptel-auto-experiment--analyze-agent-output))
-                                          (gptel-auto-experiment--analyze-agent-output
-                                           effective-agent-output))))
-                             (setq-local gptel-auto-experiment--think-intel intel)
-                             ;; Feed verdict to ai-behaviors evolution for behavior optimization
-                             (when intel
-                               (let ((verdict (plist-get intel :verdict))
-                                     (score (plist-get intel :score))
-                                     (category (and target (fboundp 'gptel-auto-workflow--categorize-target)
-                                                    (gptel-auto-workflow--categorize-target target))))
-                                 (when (and category verdict)
-                                   (message "[think-intel] %s|%s|%s|acts=%d|expl=%d|score=%.1f"
-                                            (or category "unknown") (or target "unknown") (or verdict "none")
-                                            (or (plist-get intel :acts) 0)
-                                            (or (plist-get intel :explores) 0)
-                                            (or score 0.0))))))))
+                          (message "[auto-exp] Agent output (first 150 chars): %s"
+                                   (my/gptel--sanitize-for-logging effective-agent-output 150))
+                          ;; Parse reasoning patterns from this output for behavior learning
+                          (let ((category
+                                 (condition-case err
+                                     (and target
+                                          (fboundp 'gptel-auto-workflow--categorize-target)
+                                          (gptel-auto-workflow--categorize-target target))
+                                   (error
+                                    (message "[auto-exp] Target categorization skipped after executor callback: %s"
+                                             (my/gptel--sanitize-for-logging
+                                              (error-message-string err) 200))
+                                    nil))))
+                            (when (and category (fboundp 'gptel-ai-behaviors--parse-reasoning))
+                              (condition-case err
+                                  (gptel-ai-behaviors--parse-reasoning
+                                   effective-agent-output category)
+                                (error
+                                 (message "[auto-exp] Reasoning parse skipped after executor callback: %s"
+                                          (my/gptel--sanitize-for-logging
+                                           (error-message-string err) 200))))))
+                          ;; Think-block intelligence: analyze agent reasoning for verdict
+                          (unless (bound-and-true-p gptel-auto-experiment--think-intel)
+                            (let ((intel
+                                   (condition-case err
+                                       (when (and effective-agent-output
+                                                  (fboundp 'gptel-auto-experiment--analyze-agent-output))
+                                         (gptel-auto-experiment--analyze-agent-output
+                                          effective-agent-output))
+                                     (error
+                                      (message "[auto-exp] Think analysis skipped after executor callback: %s"
+                                               (my/gptel--sanitize-for-logging
+                                                (error-message-string err) 200))
+                                      nil))))
+                              (setq-local gptel-auto-experiment--think-intel intel)
+                              ;; Feed verdict to ai-behaviors evolution for behavior optimization
+                              (when intel
+                                (let ((verdict (plist-get intel :verdict))
+                                      (score (plist-get intel :score))
+                                      (category (and target (fboundp 'gptel-auto-workflow--categorize-target)
+                                                     (gptel-auto-workflow--categorize-target target))))
+                                  (when (and category verdict)
+                                    (message "[think-intel] %s|%s|%s|acts=%d|expl=%d|score=%.1f"
+                                             (or category "unknown") (or target "unknown") (or verdict "none")
+                                             (or (plist-get intel :acts) 0)
+                                             (or (plist-get intel :explores) 0)
+                                             (or score 0.0)))))))
                           (unless finished
                            (if duplicate-hypothesis
                                (let* ((hypothesis
@@ -637,15 +658,15 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                  (setq finished t))
                                ;; Validate syntax BEFORE calling grader to avoid wasting API calls
                                ;; Check ALL modified files, not just target — agent may edit dependencies
-                                   (let ((validation-error
-                                          (when target
-                                            (or (gptel-auto-experiment--validate-all-modified-files experiment-worktree)
-                                                (gptel-auto-experiment--validate-code
-                                                 (expand-file-name target experiment-worktree))
-                                                ;; Cheap diff content check — catches trivial/nonsense diffs
-                                                ;; before expensive grader call
-                                                (gptel-auto-experiment--validate-diff-content experiment-worktree))))
-                                         (defer-grading nil))
+                                    (let ((validation-error
+                                           (when target
+                                             (or (gptel-auto-experiment--validate-all-modified-files experiment-worktree)
+                                                 (gptel-auto-experiment--validate-code
+                                                  (expand-file-name target experiment-worktree))
+                                                 ;; Cheap diff content check — catches trivial/nonsense diffs
+                                                 ;; before expensive grader call
+                                                 (gptel-auto-experiment--validate-diff-content experiment-worktree))))
+                                          (defer-grading nil))
                                   (when validation-error
                                     (progn
                                       (message "[auto-exp] ✗ Pre-grade validation failed: %s"
@@ -747,11 +768,11 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                               (gptel-ai-behaviors--record-validation-error target validation-error))
                                             (message "[auto-exp] ⚠ Non-teachable validation: %s — grader will evaluate anyway"
                                                      validation-error)))))
-                                   (unless defer-grading
-                                     (let ((gptel-auto-experiment--grading-target target)
-                                         (gptel-auto-experiment--grading-worktree experiment-worktree)
-                                         (gptel-auto-experiment--grading-hypothesis
-                                          (gptel-auto-experiment--extract-hypothesis effective-agent-output)))
+                                    (unless defer-grading
+                                      (let ((gptel-auto-experiment--grading-target target)
+                                          (gptel-auto-experiment--grading-worktree experiment-worktree)
+                                          (gptel-auto-experiment--grading-hypothesis
+                                           (gptel-auto-experiment--extract-hypothesis effective-agent-output)))
                                     (gptel-auto-experiment--grade-with-retry
                                 effective-agent-output
                                 (lambda (grade)
@@ -1476,7 +1497,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                        (message "[auto-exp] Failed to log executor callback error result: %s"
                                                 (error-message-string log-err))))
                                     (funcall callback exp-result))))))))
-                   (funcall launch-executor))))))))))
+                   (funcall launch-executor)))))))))))
 
 
 
@@ -1519,7 +1540,8 @@ Safe to call multiple times: already-merged branches are skipped."
           (now (float-time))
           (results-dir (expand-file-name "var/tmp/experiments"
                         (gptel-auto-workflow--worktree-base-root))))
-      (dolist (run-dir (directory-files results-dir t "^202[0-9]-"))
+      (when (file-directory-p results-dir)
+        (dolist (run-dir (directory-files results-dir t "^202[0-9]-"))
         (let* ((tsv-file (expand-file-name "results.tsv" run-dir))
                (run-id (file-name-nondirectory run-dir)))
           (when (file-exists-p tsv-file)
@@ -1560,11 +1582,11 @@ Safe to call multiple times: already-merged branches are skipped."
                                     (message "[staging-recovery] Branch %s does not exist, skipping"
                                              branch)
                                     (setq skipped (1+ skipped))))
-                              (error
-                               (message "[staging-recovery] Recovery failed for %s/exp%s: %s"
-                                        target experiment-id
-                                        (error-message-string err)))))))))
-                  (forward-line 1)))))))
+                               (error
+                                (message "[staging-recovery] Recovery failed for %s/exp%s: %s"
+                                         target experiment-id
+                                         (error-message-string err)))))))))
+                  (forward-line 1))))))))
       (when (> recovered 0)
         (message "[staging-recovery] Recovered %d stale staging-pending experiments (skipped %d too old)"
                  recovered skipped))

@@ -6171,8 +6171,52 @@ with next backend. This test evaluates the old (non-retry) path."
       (should (= runs 1))
        (should (plist-get final-result :stale-run))
        (should (equal (plist-get final-result :target)
-                     "lisp/modules/gptel-agent-loop.el"))
-       (should (= (plist-get final-result :id) 1)))))
+                      "lisp/modules/gptel-agent-loop.el"))
+        (should (= (plist-get final-result :id) 1)))))
+
+(ert-deftest regression/auto-experiment/run-with-retry-ignores-duplicate-attempt-callbacks ()
+  "Retry wrapper should schedule only one retry when an attempt callback fires twice."
+  (let ((runs 0)
+        (scheduled-retries 0)
+        (final-result nil)
+        (gptel-auto-experiment-max-retries 1)
+        (gptel-auto-experiment-retry-delay 0)
+        (gptel-auto-workflow--run-id "run-dup")
+        (gptel-auto-workflow--running t))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-run)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
+                 (cl-incf runs)
+                 (if (= runs 1)
+                     (let ((timeout-result
+                            (list :target "lisp/modules/gptel-tools-agent.el"
+                                  :id 1
+                                  :agent-output
+                                  "Error: Task executor could not finish task. Error details: \"Curl failed with exit code 28. See Curl manpage for details.\""
+                                  :comparator-reason :timeout)))
+                       (funcall callback timeout-result)
+                       (funcall callback timeout-result))
+                   (funcall callback
+                            (list :target "lisp/modules/gptel-tools-agent.el"
+                                  :id 1
+                                  :agent-output "Executor result for task: retry success"
+                                  :comparator-reason "ok")))))
+              ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
+               (lambda (&rest _args) t))
+              ((symbol-function 'run-with-timer)
+               (lambda (_secs _repeat fn &rest args)
+                 (cl-incf scheduled-retries)
+                 (apply fn args)
+                 :fake-timer))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--run-with-retry
+       "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+       (lambda (result)
+         (setq final-result result)))
+      (should (= runs 2))
+      (should (= scheduled-retries 1))
+      (should (equal (plist-get final-result :agent-output)
+                     "Executor result for task: retry success")))))
 
 (ert-deftest regression/auto-experiment/run-with-retry-restores-live-target-between-attempts ()
   "Retry wrapper should restore the live target before rerunning an experiment."
@@ -7639,6 +7683,102 @@ failure."
                        "Complete: 0 experiments, 0 targets improved"
                        (buffer-string)))))
         (delete-directory tmpdir t)))))
+
+(ert-deftest regression/auto-workflow/persist-messages-tail-uses-messages-buffer-bounds ()
+  "Persisted message tails should read bounds from `*Messages*', not the caller buffer."
+  (let* ((tmpdir (make-temp-file "gptel-messages-tail" t))
+         (messages-file (expand-file-name "auto-workflow-messages-tail.txt" tmpdir))
+         (gptel-auto-workflow-messages-file messages-file)
+         (gptel-auto-workflow--messages-start-pos nil)
+         (gptel-auto-workflow-messages-chars 200))
+    (unwind-protect
+        (with-current-buffer (get-buffer-create "*Messages*")
+          (let ((inhibit-read-only t))
+            (erase-buffer)
+            (insert "before\n")
+            (setq gptel-auto-workflow--messages-start-pos (point-max))
+            (insert "captured line\n"))
+          (with-temp-buffer
+            (insert "caller buffer text that must not affect bounds")
+            (gptel-auto-workflow--persist-messages-tail))
+          (with-temp-buffer
+            (insert-file-contents messages-file)
+            (should (equal (buffer-string) "captured line\n"))))
+      (delete-directory tmpdir t))))
+
+(ert-deftest regression/auto-experiment/post-executor-analysis-errors-do-not-abort-validation ()
+  "Non-critical post-executor analysis failures should not block validation/grading."
+  (let* ((worktree (make-temp-file "aw-post-exec-analysis" t))
+         (callback-result nil)
+         (logged-results nil)
+         (analysis-called 0)
+         (validation-called 0)
+         (grade-called 0))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                   (test-auto-workflow--valid-worktree-stub worktree))
+                  ((symbol-function 'gptel-auto-workflow--get-current-branch)
+                   (lambda (&rest _) "optimize/test"))
+                  ((symbol-function 'gptel-auto-workflow--branch-name)
+                   (lambda (&rest _) "optimize/test"))
+                  ((symbol-function 'gptel-auto-experiment--call-in-context)
+                   (lambda (_buffer _directory fn &optional _run-root)
+                     (funcall fn)))
+                  ((symbol-function 'gptel-auto-experiment-analyze)
+                   (lambda (_previous-results callback)
+                     (funcall callback '(:patterns nil))))
+                  ((symbol-function 'gptel-auto-experiment-build-prompt)
+                   (lambda (&rest _) "executor prompt"))
+                  ((symbol-function 'my/gptel--run-agent-tool-with-timeout)
+                   (lambda (_timeout callback &rest _)
+                     (funcall callback "Executor result for task: Experiment 1\n<think>Act</think>\nHYPOTHESIS: keep moving")))
+                  ((symbol-function 'gptel-auto-workflow--categorize-target)
+                   (lambda (&rest _) "core"))
+                  ((symbol-function 'gptel-ai-behaviors--parse-reasoning)
+                   (lambda (&rest _)
+                     (cl-incf analysis-called)
+                     (error "parse blew up")))
+                  ((symbol-function 'gptel-auto-experiment--analyze-agent-output)
+                   (lambda (&rest _)
+                     (cl-incf analysis-called)
+                     (error "think blew up")))
+                  ((symbol-function 'gptel-auto-experiment--validate-all-modified-files)
+                   (lambda (&rest _)
+                     (cl-incf validation-called)
+                     nil))
+                  ((symbol-function 'gptel-auto-experiment--validate-code)
+                   (lambda (&rest _) nil))
+                  ((symbol-function 'gptel-auto-experiment--validate-diff-content)
+                   (lambda (&rest _) nil))
+                  ((symbol-function 'gptel-auto-experiment--grade-with-retry)
+                   (lambda (_output callback &optional _retry-count)
+                     (cl-incf grade-called)
+                     (funcall callback '(:score 1 :total 1 :passed nil :details "grade rejected"))))
+                  ((symbol-function 'gptel-auto-experiment-log-tsv)
+                   (lambda (_run-id exp-result)
+                     (push exp-result logged-results)))
+                  ((symbol-function 'gptel-auto-experiment--normal-grade-details-p)
+                   (lambda (&rest _) t))
+                  ((symbol-function 'gptel-auto-workflow--current-run-id)
+                   (lambda () "run-post-analysis"))
+                  ((symbol-function 'magit-git-success)
+                   (lambda (&rest _) t))
+                  ((symbol-function 'message)
+                   (lambda (&rest _) nil)))
+          (test-auto-workflow--write-valid-elisp-target
+           worktree "lisp/modules/gptel-tools-agent.el")
+          (gptel-auto-experiment-run
+           "lisp/modules/gptel-tools-agent.el"
+           1 3 0.4 0.7 nil
+           (lambda (result)
+             (setq callback-result result)))
+          (should (= analysis-called 2))
+          (should (= validation-called 1))
+          (should (= grade-called 1))
+          (should (equal (plist-get callback-result :comparator-reason)
+                         "grader-rejected"))
+          (should (= (length logged-results) 1)))
+      (delete-directory worktree t))))
 
 (ert-deftest regression/auto-workflow/log-tsv-updates-live-kept-count ()
   "Durable kept rows should update live kept status before a target finishes."
