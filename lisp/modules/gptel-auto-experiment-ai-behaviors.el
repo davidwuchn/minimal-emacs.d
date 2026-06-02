@@ -1135,7 +1135,7 @@ Returns current count after increment."
 (defconst gptel-ai-behaviors--model-variants
   '((deepseek . (deepseek-v4-flash deepseek-v4-pro))     ; flash=fast, pro=thinking+effort
     (kimi . (kimi-for-coding kimi-k2.6))                  ; coding=fast, k2.6=reasoning(:effort high)
-    (minimax . (minimax-m2.7 minimax-m2.7-highspeed MiniMax-M3)))
+    (minimax . (MiniMax-M3 minimax-m2.7-highspeed minimax-m2.7)))
   "Model families and variants ordered by capability (fast→powerful).")
 
 (defconst gptel-ai-behaviors--effort-levels
@@ -1246,8 +1246,8 @@ DeepSeek: kept as-is (effort handled via reasoning_effort API param)."
     (let ((down (downcase base-model)))
       (cond ((string-match-p "minimax" down)
              (cond ((equal effort "max") "MiniMax-M3")
-                   ((equal effort "high") "minimax-m2.7-highspeed")
-                   (t "minimax-m2.7")))
+                   ((equal effort "high") "MiniMax-M3")
+                   (t "MiniMax-M3")))
             ((string-match-p "kimi" down)
              "kimi-k2.6")
             (t base-model)))))

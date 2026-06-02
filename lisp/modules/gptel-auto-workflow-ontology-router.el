@@ -21,7 +21,7 @@
 
 (defvar gptel-auto-workflow-executor-rate-limit-fallbacks
   '(("DeepSeek" . "deepseek-v4-flash")
-    ("MiniMax" . "minimax-m2.7-highspeed")
+    ("MiniMax" . "MiniMax-M3")
     ("DashScope" . "qwen3.6-plus"))
   "Fallback chain for executor when rate-limited.
 First backend is primary, subsequent backends are tried in order.
@@ -39,7 +39,7 @@ Ordered by keep-rate from experiment data.")
     ("DeepSeek" . distributed)             ; Backend name
     ("deepseek-v4-flash" . distributed)    ; Model name
     ("MiniMax" . distributed)              ; Backend name
-    ("minimax-m2.7-highspeed" . distributed) ; Model name
+    ("MiniMax-M3" . distributed) ; Model name
     ("CF-Gateway" . distributed)           ; Backend name
     ("@cf/openai/gpt-oss-120b" . distributed)) ; Model name
   "Sieve-type classification per backend/model (verbum crystal spine discovery).
@@ -536,7 +536,7 @@ STRATEGY and TARGET filter the performance data.
                                '(("DashScope" . "qwen3.6-plus")
                                  ("moonshot" . "kimi-k2.6")
                                  ("DeepSeek" . "deepseek-v4-flash")
-                                 ("MiniMax" . "minimax-m2.7-highspeed"))))
+                                 ("MiniMax" . "MiniMax-M3"))))
             (category (when target (gptel-auto-workflow--categorize-target target)))
            (category-override (when category (cdr (assoc category gptel-auto-workflow--category-backend-overrides))))
            ;; verbum data bypass: retrieval tasks (context docs, factual lookups)
@@ -813,7 +813,7 @@ on 2026-05-31 (was previously excluded due to transient quota issue)."
   (when (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
     (setq gptel-auto-workflow-executor-rate-limit-fallbacks
           '(("DeepSeek" . "deepseek-v4-flash")
-            ("MiniMax" . "minimax-m2.7-highspeed")
+            ("MiniMax" . "MiniMax-M3")
             ("DashScope" . "qwen3.6-plus")))
     ;; Clear any stale health strikes for DashScope from health cache
     (when (boundp 'gptel-auto-workflow--backend-lambda-health-cache)
@@ -1178,7 +1178,7 @@ Returns plist with :overall status and per-backend results."
                       '(("DashScope" . "qwen3.6-plus")
                         ("moonshot" . "kimi-k2.6")
                         ("DeepSeek" . "deepseek-v4-flash")
-                        ("MiniMax" . "minimax-m2.7-highspeed"))))
+                        ("MiniMax" . "MiniMax-M3"))))
         (results nil)
         (healthy-count 0)
         (degraded-count 0)
@@ -2370,7 +2370,7 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
         (default-models (or (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
                                 gptel-auto-workflow-executor-rate-limit-fallbacks)
              '(("DeepSeek" . "deepseek-v4-flash")
-               ("MiniMax" . "minimax-m2.7-highspeed")
+               ("MiniMax" . "MiniMax-M3")
                ("DashScope" . "qwen3.6-plus")
                ("moonshot" . "kimi-k2.6"))))
         ;; Pre-compute once for all backends
@@ -2648,7 +2648,7 @@ Returns plist with :total :healthy :degraded :unknown :backends."
                       '(("DashScope" . "qwen3.6-plus")
                         ("moonshot" . "kimi-k2.6")
                         ("DeepSeek" . "deepseek-v4-flash")
-                        ("MiniMax" . "minimax-m2.7-highspeed"))))
+                        ("MiniMax" . "MiniMax-M3"))))
         (healthy-count 0)
         (degraded-count 0)
         (unknown-count 0)
