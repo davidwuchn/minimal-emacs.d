@@ -4,7 +4,6 @@ description: |
   Analyzes LLM provider error messages to determine retry strategy, failover candidates,
   and root cause. Supports multiple providers (OpenAI, Anthropic, Google, local models).
 version: 1.0
-evolve-script: evolve_patterns.py
 metadata:
   category: reliability
   author: auto-workflow

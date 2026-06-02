@@ -5,7 +5,6 @@ description: |
   Each agent has a specialized role and prompt that defines its behavior.
   Prompts live in assistant/agents/ and are loaded by nucleus-prompts.el.
 version: 1.0
-evolve-script: evolve_agent_prompts.py
 metadata:
   evolution-stats:
     total-experiments: 870

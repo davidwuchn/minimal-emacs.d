@@ -2,7 +2,6 @@
 name: benchmark-llm-prompts
 description: LLM prompt templates for benchmark improvement suggestions, results analysis, and knowledge synthesis. Extracted from gptel-benchmark-llm.el.
 version: 1.0
-evolve-script: evolve_llm_prompts.py
 metadata:
   evolution-stats:
     total-experiments: 870

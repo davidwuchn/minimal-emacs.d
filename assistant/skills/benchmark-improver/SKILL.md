@@ -2,7 +2,6 @@
 name: benchmark-improver
 description: Wu Xing-based auto-improvement system for benchmarks. Detects anti-patterns via 相克 and generates improvements via 相生 pathways.
 version: 1.0
-evolve-script: evolve_benchmark.py
 metadata:
   evolution-stats:
     total-experiments: 870

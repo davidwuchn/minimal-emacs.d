@@ -4,7 +4,6 @@ description: |
   Generates new Emacs Lisp prompt-building strategies for the auto-workflow meta-harness.
   Provides the complete prompt template, output format, and constraints for strategy generation.
 version: 1.0
-evolve-script: evolve_strategies.py
 metadata:
   evolution-stats:
     total-experiments: 870

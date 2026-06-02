@@ -5,7 +5,6 @@ description: |
   Each tool has a specific prompt that guides the AI on how to use it correctly.
   Prompts live in assistant/prompts/tools/ and are loaded by nucleus-prompts.el.
 version: 1.0
-evolve-script: evolve_tool_prompts.py
 metadata:
   evolution-stats:
     total-experiments: 870
