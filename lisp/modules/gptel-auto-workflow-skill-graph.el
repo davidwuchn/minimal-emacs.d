@@ -511,15 +511,9 @@ Loads skills and persisted graph state."
            (hash-table-count ov5-sg--nodes)
            (hash-table-count ov5-sg--edges)))
 
-;; Auto-initialize when loaded (safe for daemon — checks directory existence)
-(condition-case err
-    (let ((root (or (and (boundp 'gptel-auto-workflow--project-root)
-                         (fboundp 'gptel-auto-workflow--project-root)
-                         (gptel-auto-workflow--project-root))
-                    user-emacs-directory)))
-      (when (file-directory-p (expand-file-name "assistant/skills" root))
-        (ov5-sg-init)))
-  (error (message "[skill-graph] Init deferred: %s" (error-message-string err))))
+;; Deferred init — called by evolution cycle or live-reload.
+;; Not auto-initialized at load time because project-root may not be available yet.
+;; Use (ov5-sg-init) to explicitly initialize when context is ready.
 
 (provide 'gptel-auto-workflow-skill-graph)
 ;;; gptel-auto-workflow-skill-graph.el ends here

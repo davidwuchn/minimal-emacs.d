@@ -2325,10 +2325,14 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (condition-case nil
       (gptel-auto-workflow--build-inverted-file)
     (error nil))
-  ;; Skill graph evolution: update edges from recent experiment outcomes
+  ;; Skill graph evolution: ensure loaded, then update edges from experiments
   (when (fboundp 'ov5-sg-evolve-from-experiments)
     (condition-case err
         (progn
+          (when (and (boundp 'ov5-sg--nodes)
+                     (= (hash-table-count ov5-sg--nodes) 0)
+                     (fboundp 'ov5-sg-init))
+            (ov5-sg-init))
           (ov5-sg-evolve-from-experiments)
           (message "[skill-graph] Evolution complete"))
       (error (message "[skill-graph] Evolution error: %s" (error-message-string err)))))

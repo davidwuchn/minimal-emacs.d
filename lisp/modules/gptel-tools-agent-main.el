@@ -510,6 +510,10 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
     (load-file (expand-file-name "lisp/modules/gptel-tools-agent-prompt-build.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-ontology-router.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-skill-graph.el" root))
+    (when (fboundp 'ov5-sg-init)
+      (condition-case err
+          (ov5-sg-init)
+        (error (message "[skill-graph] Init failed: %s" (error-message-string err)))))
     (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-tools-agent-error.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-benchmark-subagent.el" root))
