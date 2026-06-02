@@ -31,9 +31,9 @@ render_crontab() {
         awk '/^SHELL=/{exit} {print}' "$CRON_FILE"
         echo "SHELL=/bin/bash"
         if [ "$machine" = "macos" ]; then
-            echo "PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:\$HOME/.emacs.d/bin"
+            echo "PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:\$HOME/.emacs.d/bin:\$HOME/.venv/bin"
         else
-            echo "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:\$HOME/.emacs.d/bin"
+            echo "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:\$HOME/.emacs.d/bin:\$HOME/.venv/bin"
         fi
         if [ "$machine" = "pi5" ] || [ "$machine" = "linux" ]; then
             echo "XDG_RUNTIME_DIR=/run/user/\$(id -u)"
@@ -211,6 +211,22 @@ case "$MODE" in
         fi
 
         echo "Installed auto-workflow cron block with $PLATFORM schedule"
+        echo
+        echo "=== Installing Emacs dependencies ==="
+        echo
+        # Install yaml ELPA package (required for parsing agent .md files with block scalars)
+        if command -v emacs &>/dev/null; then
+            emacs --batch --directory="$DIR/lisp/modules" --directory="$DIR/packages/gptel" \
+                --eval "(setq package-user-dir (expand-file-name \"var/elpa\" \"$DIR\"))" \
+                --eval "(require 'package)" \
+                --eval "(add-to-list 'package-archives '(\"melpa\" . \"https://melpa.org/packages/\") t)" \
+                --eval "(package-initialize)" \
+                --eval "(unless (package-installed-p 'yaml) (package-refresh-contents) (package-install 'yaml))" \
+                --eval "(message \"yaml installed: %S\" (package-installed-p 'yaml))" 2>/dev/null | \
+                grep "yaml installed" || echo "WARNING: Could not install yaml package (agent loading may be limited)"
+        else
+            echo "WARNING: emacs not found in PATH — cannot install yaml ELPA package"
+        fi
         echo
         echo "Active jobs:"
         crontab -l | grep -E '^[0-9*@]' || echo "  (no active jobs)"

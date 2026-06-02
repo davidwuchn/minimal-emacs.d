@@ -22,7 +22,7 @@
 #   is rate-limited. Pipeline auto-switches to fallback providers (moonshot, DashScope).
 
 SHELL=/bin/bash
-PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:$HOME/.emacs.d/bin
+PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:$HOME/.emacs.d/bin:$HOME/.venv/bin
 
 # Platform-specific settings (set by install-cron.sh)
 # LINUX: XDG_RUNTIME_DIR=/run/user/1000
