@@ -4,7 +4,7 @@
 ;; URL: https://github.com/jamescherti/minimal-emacs.d
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: maint
-;; Version: 1.4.2
+;; Version: 1.5.0
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;;; Commentary:
@@ -523,7 +523,7 @@ this stage of initialization."
   '(add-to-list 'compile-angel-excluded-files "/ai-code-behaviors.el"))
 
 ;; Local variables:
-;; byte-compile-warnings: (not free-vars)
+;; byte-compile-warnings: (not obsolete free-vars)
 ;; End:
 
 ;;; early-init.el ends here
