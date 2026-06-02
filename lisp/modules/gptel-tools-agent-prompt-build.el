@@ -1639,8 +1639,9 @@ Uses cache to avoid repeated file reads."
                    topic (length result)))
         result)))));;; TSV Logging (Explainable)
 
-(defun gptel-auto-experiment--tsv-escape (str)
-  "Escape STR for TSV format (replace newlines/tabs with spaces)."
+(defun gptel-auto-experiment--tsv-escape (str &rest _ignored)
+  "Escape STR for TSV format (replace newlines/tabs with spaces).
+Accepts extra arguments (ignored) for resilience against stale byte-compiled callers."
   (when str
     (let ((s (if (stringp str) str (format "%s" str))))
       (replace-regexp-in-string "[\t\n\r]+" " | " s))))
