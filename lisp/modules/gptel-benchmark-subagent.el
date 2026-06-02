@@ -42,6 +42,7 @@
 (defvar gptel--request-params)
 (defvar gptel-ai-behaviors--subagent-failures)
 (defvar gptel-ai-behaviors--current-hashtags)
+(defvar gptel-tools-read-hashline-default)
 (defvar log-model nil
   "Dynamic variable bound in `gptel-benchmark-call-subagent' for the selected model name.
 Used for cost tracking and routing context.")
