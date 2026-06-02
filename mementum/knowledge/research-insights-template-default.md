@@ -4808,9 +4808,45 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
 Now I have the context. The user has a lot of experiment data - hypotheses that are "kept" and some that are "discarded" - across many target files. They want me to "distill" this information. Let me look at the actual files to understand what's being proposed.
@@ -4818,4 +4854,47 @@ Now I have the context. The user has a lot of experiment data - hypotheses that 
 
 ### Check Issues
 
-Now I have a very comprehensive view of the entire Ouroboros V5 system. Let me also look at one last experiment result to understand the format fully, and check the most recent experiments.
+Here is my comprehensive distillation of the entire Ouroboros V5 system and all its experiment data.
+
+---
+
+## OUROBOROS V5 — Complete Distillation
+
+### What It Is
+
+Ouroboros V5 is a **self-evolving Emacs AI agent system** that autonomously researches, executes experiments, verifies outcomes, and propagates improvements across its own codebase. It's your Emacs configuration (`~/.emacs.d`) that has evolved into a full-fledged autonomous development pipeline.
+
+---
+
+### Architecture (The Ouroboros Cycle)
+
+```
+Research(external) ⇄ Execute(experiment) ⇄ Verify(outcome) ⇄ Learn(pattern)
+         ↑                                                         |
+         └───────────── Feed outcome back into appetite ───────────┘
+```
+
+It uses **Three Backends** (DashScope, MiniMax, DeepSeek), **Six Safety Gates**, and **Worktree Isolation** for each experiment. DashScope wins the head-to-head: **26.1% keep-rate** vs MiniMax **0.0%**.
+
+---
+
+### Complete Experiment Data — 75 Experiments Total
+
+**Decision Distribution:**
+
+| Decision | Count | % |
+|----------|-------|----|
+| 🟢 **kept** | **7** | **9.3%** |
+| 🔴 grader-failed | 21 | 28.0% |
+| 🔴 verification-failed | 17 | 22.7% |
+| ⏱️ timeout | 8 | 10.7% |
+| 🔴 validation-failed | 5 | 6.7% |
+| ⏳ staging-pending | 4 | 5.3% |
+| Other failures | 13 | 17.3% |
+| **Total** | **75** | **100%** |
+
+**Target files with most experiments:**
+- `gptel-auto-workflow-projects.el` — 25 experiments (6 kept ✅, rest failures)
+- `gptel-auto-workflow-strategic.el` — 10 experiments (0 kept 
+
+... (truncated)
