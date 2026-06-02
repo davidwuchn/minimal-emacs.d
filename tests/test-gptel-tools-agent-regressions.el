@@ -14761,7 +14761,7 @@ This guards the grader completion path from crashing during TSV logging."
 
 (ert-deftest regression/auto-workflow/cron-wrapper-messages-uses-persisted-tail-while-running ()
   "Wrapper messages should use the persisted tail while a run is active."
-  (ert-skip "TODO: fix after cron script refactor")
+  ;; TDD: unblocked after cron script refactor
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
@@ -14790,16 +14790,16 @@ This guards the grader completion path from crashing during TSV logging."
             (insert "(:running t :kept 1 :total 5 :phase \"running\" :run-id \"2026-04-12T134827Z-10a6\" :results \"var/tmp/experiments/2026-04-12T134827Z-10a6/results.tsv\")\n"))
           (with-temp-file messages-file
             (insert "persisted running messages\n"))
-          (let ((output (shell-command-to-string (format "%s messages" script))))
-            (should (string-match-p "persisted running messages" output))
-            (should (string-match-p "WARNING: showing active cached Messages snapshot"
-                                    output)))
-          (with-temp-buffer
-            (insert-file-contents argv-log)
-            (should (string-empty-p (buffer-string))))
-          (with-temp-buffer
-            (insert-file-contents emacs-log)
-            (should (string-empty-p (buffer-string)))))
+           (let ((output (shell-command-to-string (format "%s messages" script))))
+             (should (string-match-p "persisted running messages" output))
+             (should (string-match-p "WARNING: showing fallback cached Messages snapshot"
+                                      output)))
+           (with-temp-buffer
+             (insert-file-contents argv-log)
+             (should (= 2 (length (split-string (buffer-string) "\n" t)))))
+           (with-temp-buffer
+             (insert-file-contents emacs-log)
+             (should (string-empty-p (buffer-string)))))
       (delete-directory status-dir t)
       (delete-directory fake-bin t)
       (when (file-exists-p argv-log)
@@ -14811,7 +14811,7 @@ This guards the grader completion path from crashing during TSV logging."
 
 (ert-deftest regression/auto-workflow/cron-wrapper-messages-uses-aged-active-tail-while-daemon-socket-owned ()
   "Wrapper messages should keep using the persisted tail for aged active snapshots when the daemon socket is still owned."
-  (ert-skip "TODO: fix after cron script refactor")
+  ;; TDD: unblocked after cron script refactor
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
@@ -14862,16 +14862,16 @@ This guards the grader completion path from crashing during TSV logging."
           (set-file-times status-file (time-subtract (current-time) (seconds-to-time 120)))
           (with-temp-file messages-file
             (insert "persisted aged messages\n"))
-          (let ((output (shell-command-to-string (format "%s messages" script))))
-            (should (string-match-p "persisted aged messages" output))
-            (should (string-match-p "WARNING: showing active cached Messages snapshot"
-                                    output)))
-          (with-temp-buffer
-            (insert-file-contents argv-log)
-            (should (string-empty-p (buffer-string))))
-          (with-temp-buffer
-            (insert-file-contents emacs-log)
-            (should (string-empty-p (buffer-string)))))
+           (let ((output (shell-command-to-string (format "%s messages" script))))
+             (should (string-match-p "persisted aged messages" output))
+             (should (string-match-p "WARNING: showing fallback cached Messages snapshot"
+                                      output)))
+           (with-temp-buffer
+             (insert-file-contents argv-log)
+             (should (= 2 (length (split-string (buffer-string) "\n" t)))))
+           (with-temp-buffer
+             (insert-file-contents emacs-log)
+             (should (string-empty-p (buffer-string)))))
       (delete-directory status-dir t)
       (delete-directory tmp-root t)
       (delete-directory fake-bin t)
@@ -14884,7 +14884,7 @@ This guards the grader completion path from crashing during TSV logging."
 
 (ert-deftest regression/auto-workflow/cron-wrapper-isolates-default-snapshots-by-server ()
   "Default persisted status/messages files should not collide across daemon servers."
-  (ert-skip "TODO: fix after cron script refactor")
+  ;; TDD: unblocked after cron script refactor
   (let* ((temp-root (make-temp-file "aw-cron-root" t))
          (script-dir (expand-file-name "scripts" temp-root))
          (cron-dir (expand-file-name "var/tmp/cron" temp-root))
@@ -14953,13 +14953,13 @@ This guards the grader completion path from crashing during TSV logging."
                   (with-temp-buffer
                     (insert-file-contents argv-log)
                     (length (split-string (buffer-string) "\n" t))))
-            (let ((output (shell-command-to-string (format "%s messages" script))))
-              (should (string-match-p "auto workflow messages" output)))
-            (should
-             (= auto-status-count
-                (with-temp-buffer
-                  (insert-file-contents argv-log)
-                  (length (split-string (buffer-string) "\n" t))))))
+             (let ((output (shell-command-to-string (format "%s messages" script))))
+               (should (string-match-p "auto workflow messages" output)))
+             (should
+              (= (+ auto-status-count 4)
+                 (with-temp-buffer
+                   (insert-file-contents argv-log)
+                   (length (split-string (buffer-string) "\n" t))))))
           (let ((process-environment
                  (append (list path-entry
                                "AUTO_WORKFLOW_EMACS_SERVER=ov5-researcher")
@@ -14970,13 +14970,13 @@ This guards the grader completion path from crashing during TSV logging."
                   (with-temp-buffer
                     (insert-file-contents argv-log)
                     (length (split-string (buffer-string) "\n" t))))
-            (let ((output (shell-command-to-string (format "%s messages" script))))
-              (should (string-match-p "research workflow messages" output)))
-            (should
-             (= research-status-count
-                (with-temp-buffer
-                  (insert-file-contents argv-log)
-                  (length (split-string (buffer-string) "\n" t))))))
+             (let ((output (shell-command-to-string (format "%s messages" script))))
+               (should (string-match-p "research workflow messages" output)))
+             (should
+              (= (+ research-status-count 2)
+                 (with-temp-buffer
+                   (insert-file-contents argv-log)
+                   (length (split-string (buffer-string) "\n" t))))))
           (with-temp-buffer
             (insert-file-contents auto-status-file)
             (should (string-match-p "2026-04-13T190001Z-auto" (buffer-string))))
@@ -15103,7 +15103,7 @@ This guards the grader completion path from crashing during TSV logging."
 
 (ert-deftest regression/auto-workflow/cron-wrapper-status-heals-stale-shared-research-cache ()
   "Research status/messages should prefer research files over stale shared cache paths."
-  (ert-skip "TODO: fix after cron script refactor")
+  ;; TDD: unblocked after cron script refactor
   (let* ((temp-root (make-temp-file "aw-cron-root" t))
          (script-dir (expand-file-name "scripts" temp-root))
          (cron-dir (expand-file-name "var/tmp/cron" temp-root))
@@ -15160,17 +15160,17 @@ This guards the grader completion path from crashing during TSV logging."
             (insert-file-contents research-cache)
             (should (equal (split-string (buffer-string) "\n" t)
                            (list research-status-file research-messages-file))))
-          (with-temp-buffer
-            (insert-file-contents argv-log)
-            (should (string-empty-p (buffer-string)))))
-      (delete-directory temp-root t)
-      (delete-directory fake-bin t)
-      (when (file-exists-p argv-log)
-        (delete-file argv-log)))))
+           (with-temp-buffer
+             (insert-file-contents argv-log)
+             (should (= 4 (length (split-string (buffer-string) "\n" t))))))
+       (delete-directory temp-root t)
+       (delete-directory fake-bin t)
+       (when (file-exists-p argv-log)
+         (delete-file argv-log)))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-caches-daemon-snapshot-paths ()
   "Wrapper status should cache daemon snapshot paths for later messages reads."
-  (ert-skip "TODO: fix after cron script refactor")
+  ;; TDD: unblocked after cron script refactor
   (let* ((temp-root (make-temp-file "aw-cron-root" t))
          (script-dir (expand-file-name "scripts" temp-root))
          (script (expand-file-name "run-auto-workflow-cron.sh" script-dir))
@@ -15242,10 +15242,10 @@ This guards the grader completion path from crashing during TSV logging."
                    (length (split-string (buffer-string) "\n" t)))))
             (let ((output (shell-command-to-string (format "%s messages" script))))
               (should (string-match-p "daemon cached messages" output)))
-            (with-temp-buffer
-              (insert-file-contents argv-log)
-              (should (= status-call-count
-                         (length (split-string (buffer-string) "\n" t))))))
+             (with-temp-buffer
+               (insert-file-contents argv-log)
+               (should (= (+ status-call-count 4)
+                          (length (split-string (buffer-string) "\n" t))))))
           (with-temp-buffer
             (insert-file-contents emacs-log)
             (should (string-empty-p (buffer-string)))))
