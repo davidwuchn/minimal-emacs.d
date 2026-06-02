@@ -205,6 +205,33 @@ def generate_evolved_skill(skill_path, data_dir):
     source_data = load_json_safe(data_dir / 'source-effectiveness.json')
     temporal_data = load_json_safe(data_dir / 'temporal-patterns.json')
     
+    # Preserve frontmatter fields from existing SKILL.md
+    existing_level = "molecule"
+    existing_atoms = "atoms: [agent-prompts]"
+    existing_molecules = ""
+    if skill_path.exists():
+        try:
+            existing = skill_path.read_text(encoding="utf-8")
+            for line in existing.split("\n"):
+                if line.startswith("level:"):
+                    existing_level = line.split(":", 1)[1].strip()
+                elif line.startswith("atoms:"):
+                    existing_atoms = line.strip()
+                elif line.startswith("molecules:"):
+                    existing_molecules = line.strip()
+        except Exception:
+            pass
+    
+    # Build extra frontmatter lines
+    extra_frontmatter = []
+    if existing_level:
+        extra_frontmatter.append(f"level: {existing_level}")
+    if existing_atoms:
+        extra_frontmatter.append(existing_atoms)
+    if existing_molecules:
+        extra_frontmatter.append(existing_molecules)
+    extra_fm = "\n".join(extra_frontmatter)
+    
     # Load static repo list (survives auto-evolution)
     repos_md = ""
     repos_file = skill_path.parent / "REPOS.md"
@@ -227,6 +254,7 @@ name: researcher-prompt
 description: Prompt template for external research specialist subagent. Auto-evolves based on experiment outcomes.
 version: 2.0
 evolve-script: evolve_researcher.py
+{extra_fm}
 ---
 metadata:
   evolution-stats:
