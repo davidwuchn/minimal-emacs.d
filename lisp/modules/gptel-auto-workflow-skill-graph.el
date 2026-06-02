@@ -371,7 +371,11 @@ Preserves dependency edge type (explicit frontmatter) on updates."
 
 (defun ov5-sg--persist-path ()
   "Return path to skill graph persistence file."
-  (expand-file-name "var/tmp/skill-graph.eld" user-emacs-directory))
+  (let ((root (or (and (boundp 'gptel-auto-workflow--project-root)
+                       (fboundp 'gptel-auto-workflow--project-root)
+                       (gptel-auto-workflow--project-root))
+                  user-emacs-directory)))
+    (expand-file-name "var/tmp/skill-graph.eld" root)))
 
 (defun ov5-sg--serialize ()
   "Serialize skill graph to a Lisp-readable form.
