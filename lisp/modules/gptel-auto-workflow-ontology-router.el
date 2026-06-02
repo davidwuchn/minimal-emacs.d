@@ -508,17 +508,18 @@ The boost is proportional to the phase's measured strength."
 ;; ─── Category Overrides (from 1,204 experiments) ───
 
 (defconst gptel-auto-workflow--category-backend-overrides
-  ;; Source: 1,204 experiments analyzed 2026-05-21
-  ;; Category where specific backend outperforms MiniMax baseline (20.5%)
-  '((:programming     . "DeepSeek")   ; FSM 40%, benchmark-memory 33.3%, tests 25%, retry 25%, introspection 20%
-    (:tool-calls      . nil)           ; MiniMax highspeed baseline — CF-Gateway data inconclusive (25% sandbox n=small)
-    (:natural-language . "DeepSeek")  ; context, prompts, streaming — NL reasoning
+  ;; Source: benchmark data 2026-06-02
+  ;; DeepSeek v4-pro with reasoning_effort high takes ~60s vs MiniMax-M3 ~7s
+  ;; Speed advantage of M3 outweighs historical keep-rate difference
+  '((:programming     . nil)           ; MiniMax-M3 default (8x faster, clean elisp)
+    (:tool-calls      . nil)           ; MiniMax highspeed baseline
+    (:natural-language . nil)          ; MiniMax-M3 default (faster for streaming/prompts)
     (:agentic         . nil))          ; MiniMax baseline — no override needed
   "Category→preferred backend mapping.
-Programming → DeepSeek (higher keep rate on code/benchmark targets).
-Tool-calls → nil (use MiniMax highspeed default).
-Natural-language → DeepSeek (strong NL reasoning).
-Agentic → nil (use default ontology ordering, MiniMax is baseline).")
+All categories default to nil — use fallback chain order (MiniMax-M3 first).
+DeepSeek v4-pro is 8.5x slower (60s vs 7s) with reasoning_effort high.
+Historical keep-rate advantage (25% vs 16%) is offset by throughput impact.
+Fallback chain: MiniMax-M3 → moonshot/k2.6 → DeepSeek v4-pro → DashScope → Copilot.")
 
 ;; ─── Fallback Chain Reordering ───
 
