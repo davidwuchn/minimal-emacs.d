@@ -384,11 +384,26 @@ Preserves dependency edge type (explicit frontmatter) on updates."
      :category :programming
      :patterns ("\\.clj\\'" "\\.cljs\\'" "\\.cljc\\'")
      :description "REPL-first workflow for Clojure editing")
-    (:name "debug-workflow"
-     :atoms (elisp-debug elisp-validator)
-     :category :agentic
-     :patterns ()
-     :description "Debug→Validate workflow for fixing errors"))
+     (:name "debug-workflow"
+      :atoms (elisp-debug elisp-validator)
+      :category :agentic
+      :patterns ()
+      :description "Debug→Validate workflow for fixing errors")
+    (:name "tool-workflow"
+      :atoms (hashline-edit elisp-expert elisp-replace)
+      :category :tool-calls
+      :patterns ()
+      :description "Hashline→Edit→Replace workflow for tool modifications")
+    (:name "analyze-workflow"
+      :atoms (provider-error-analyzer elisp-validator)
+      :category :agentic
+      :patterns ()
+      :description "Analyze→Validate workflow for diagnostics")
+    (:name "prompt-workflow"
+      :atoms (agent-prompts tool-prompts)
+      :category :natural-language
+      :patterns ()
+      :description "Prompt→Template workflow for prompt engineering"))
   "Pre-compiled workflow molecules.
 Each is a plist with :name, :atoms, :category (matching ontology), :description.
 Used as fallback when graph edges are cold (no experiment data).")
