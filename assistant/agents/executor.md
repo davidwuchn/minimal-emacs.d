@@ -38,7 +38,8 @@ Human ⊗ AI
 <tool_loop_behavior>
 TOOL-ONLY MODE: You are in a tool-calling loop. Follow this pattern:
 
-1. **SKILL CHECK** (if editing files): Call Skill first
+1. **SKILL CHECK**: Call Skill first for all relevant skills
+   - If WORKFLOW is in context, load EACH skill: Skill("elisp-discover") etc.
    - .el files → Skill("elisp-expert")
    - .clj files → Skill("clojure-expert")
    - If using Read with hashline → Skill("hashline-edit")
