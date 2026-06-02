@@ -3777,7 +3777,7 @@ Runs during evolution cycle alongside strategy learning."
   "Return boost for BACKEND based on success on graph neighbors of TARGET.
 Looks up TARGET's category in the skill graph and checks BACKEND's
 keep-rate on targets in the same category."
-  (if (and (fboundp 'ov5-sg-init)
+  (if (and (fboundp 'skill-graph-init)
            target)
       (condition-case nil
           (let* ((category (and (fboundp 'gptel-auto-workflow--categorize-target)
@@ -3788,10 +3788,10 @@ keep-rate on targets in the same category."
             (when category
               ;; Find all nodes in the same category
               (maphash (lambda (id node)
-                         (when (and (eq (ov5-sg-node-level node) category)
+                         (when (and (eq (skill-graph-node-level node) category)
                                     (not (eq id (intern target))))
                            (push id neighbors)))
-                       ov5-sg--nodes)
+                       skill-graph--nodes)
               ;; Average keep-rate for BACKEND on neighbor targets
               (dolist (n neighbors)
                 (let ((rate (condition-case nil
@@ -3811,7 +3811,7 @@ keep-rate on targets in the same category."
   "Return boost for BACKEND based on strength of skill combination edges.
 Looks up edges between skills in ACTIVE-SKILLS and checks if BACKEND
 succeeded when those skill pairs were used together."
-  (if (and (fboundp 'ov5-sg-init)
+  (if (and (fboundp 'skill-graph-init)
            active-skills)
       (condition-case nil
           (let ((total-weight 0.0)
@@ -3823,9 +3823,9 @@ succeeded when those skill pairs were used together."
                 (cl-loop for (a b) on skills by #'cdr
                          while b
                          do (let* ((key (cons a b))
-                                   (edge (gethash key ov5-sg--edges)))
+                                   (edge (gethash key skill-graph--edges)))
                               (when edge
-                                (setq total-weight (+ total-weight (ov5-sg-edge-weight edge)))
+                                (setq total-weight (+ total-weight (skill-graph-edge-weight edge)))
                                 (setq edge-count (1+ edge-count)))))))
             (if (> edge-count 0)
                 (* 0.10 (/ total-weight edge-count))  ; max ~0.10 boost

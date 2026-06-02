@@ -1291,8 +1291,8 @@ Implements section-level A/B testing to identify effective prompt components."
          (suggestions (when (proper-list-p analysis) (plist-get analysis :recommendations)))
           (skills (cdr (assoc target gptel-auto-workflow--skills)))
           (suggested-workflow
-           (when (fboundp 'ov5-sg--recommend-molecule)
-             (let ((mol (ov5-sg--recommend-molecule target)))
+           (when (fboundp 'skill-graph--recommend-molecule)
+             (let ((mol (skill-graph--recommend-molecule target)))
                (when mol
                  (mapconcat #'symbol-name mol " → ")))))
           (scores (gptel-auto-experiment--eight-keys-scores))
