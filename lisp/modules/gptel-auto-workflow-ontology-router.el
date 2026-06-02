@@ -537,7 +537,7 @@ STRATEGY and TARGET filter the performance data.
                                  gptel-auto-workflow-executor-rate-limit-fallbacks
                                '(("DashScope" . "qwen3.6-plus")
                                  ("moonshot" . "kimi-k2.6")
-                                 ("DeepSeek" . "deepseek-v4-flash")
+    ("DeepSeek" . "deepseek-v4-pro")
                                  ("MiniMax" . "MiniMax-M3"))))
             (category (when target (gptel-auto-workflow--categorize-target target)))
            (category-override (when category (cdr (assoc category gptel-auto-workflow--category-backend-overrides))))
