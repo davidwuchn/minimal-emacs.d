@@ -1,8 +1,28 @@
 # Mementum State
 
-> Last session: 2026-06-02 (four-way relationship: ontology × behaviors × skill graph × context)
+> Last session: 2026-06-02 (four-way relationship + naming correction)
 > Next pipeline: 23:00
-> Status: Architecture complete — awaiting implementation
+> Status: Architecture complete — awaiting implementation with correct naming
+
+## Session: Follow Existing Naming Conventions (2026-06-02)
+
+**Correction:** Do NOT invent `ov5-*` prefixes. The codebase already has established conventions.
+
+**Existing patterns:**
+- `gptel-auto-workflow-*.el` — core workflow (evolution, ontology, router)
+- `gptel-tools-agent-*.el` — agent tools (experiment-core, prompt-build)
+- `skill-*.el` — skill-specific (skill-routing-onto)
+- `gptel-benchmark-*.el` — benchmarking
+
+**Correct names for skill graph:**
+- `gptel-auto-workflow-skill-graph.el` (data structures + executor)
+- Extend `skill-routing-onto.el` (graph dimensions)
+- Hook into `gptel-auto-workflow-evolution.el` (evolution cycle)
+- `test-gptel-auto-workflow-skill-graph.el` (tests)
+
+**Memory created:** `mementum/memories/naming-conventions-follow-existing.md`
+
+---
 
 ## Session: Ontology × Behaviors × Skill Graph × Context — Four-Way Relationship (2026-06-02)
 
