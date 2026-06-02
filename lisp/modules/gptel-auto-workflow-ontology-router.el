@@ -2443,7 +2443,8 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
                ;; Phase ω: per-axis boost based on holographic consensus.
                (axis-boost (gptel-auto-workflow--axis-preference-boost backend axis-rates-cache target-axis-cache))
                ;; Phase γ: skill graph neighbor success (future: integrate with graph data)
-               (graph-neighbor-boost (gptel-auto-workflow--graph-neighbor-success backend target))
+                (graph-neighbor-boost (gptel-auto-workflow--graph-neighbor-success
+                                       backend (bound-and-true-p gptel-auto-workflow--current-target)))
                ;; Phase δ: skill graph edge strength (future: integrate with graph data)
                (graph-edge-boost (gptel-auto-workflow--graph-edge-strength
                                   backend (bound-and-true-p gptel-ai-behaviors--current-hashtags)))
