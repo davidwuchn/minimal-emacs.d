@@ -19,6 +19,7 @@
 
 (require 'cl-lib)
 (require 'json)
+(require 'seq)
 
 ;; ─── Data Structures ───
 
@@ -458,13 +459,17 @@ skill co-occurrence and success/failure."
           (let* ((decision (plist-get r :decision))
                  (kept (equal decision "kept"))
                  (skills-str (plist-get r :skills))
-                 (skills (when (and skills-str (not (string-empty-p skills-str)))
-                           (condition-case nil
-                               (mapcar (lambda (s)
-                                         (intern (replace-regexp-in-string
-                                                  "^#" "" (string-trim s))))
-                                       (split-string skills-str))
-                             (error nil)))))
+                 (skills
+                  (when (and skills-str (not (string-empty-p skills-str)))
+                    ;; Parse space-separated skill names or hashtags
+                    (let ((candidates
+                           (mapcar (lambda (s)
+                                     (intern (replace-regexp-in-string
+                                              "^#" "" (string-trim s))))
+                                   (split-string skills-str))))
+                      ;; Filter to only known skill nodes
+                      (seq-filter (lambda (s) (gethash s ov5-sg--nodes))
+                                  candidates)))))
             (when (and skills (>= (length skills) 2))
               (ov5-sg--record-experiment-skills skills kept)
               (setq updated (1+ updated)))))))

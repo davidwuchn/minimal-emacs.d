@@ -542,8 +542,12 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                         :agent-output effective-agent-output
                                                                         :backend actual-backend
                                                                        :model actual-model
-                                                                       :edit-mode (or (bound-and-true-p gptel-tools-edit--mode-used) "none")
-                                                                       :skills (or (bound-and-true-p gptel-ai-behaviors--current-hashtags) ""))))
+                                                                        :edit-mode (or (bound-and-true-p gptel-tools-edit--mode-used) "none")
+                                                                        :skills (or (and (boundp 'gptel-auto-workflow--skills)
+                                                                                        gptel-auto-workflow--skills
+                                                                                        (cdr (assoc target gptel-auto-workflow--skills)))
+                                                                                    (bound-and-true-p gptel-ai-behaviors--current-hashtags)
+                                                                                    ""))))
                                  (setq finished t)
                                  (message "[auto-exp] ⏭ Duplicate hypothesis: %s"
                                           (substring hypothesis 0 (min 80 (length hypothesis))))
@@ -926,7 +930,11 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                           :backend actual-backend
                            :model actual-model
                            :edit-mode (or (bound-and-true-p gptel-tools-edit--mode-used) "none")
-                           :skills (or (bound-and-true-p gptel-ai-behaviors--current-hashtags) "")
+                           :skills (or (and (boundp 'gptel-auto-workflow--skills)
+                                           gptel-auto-workflow--skills
+                                           (cdr (assoc target gptel-auto-workflow--skills)))
+                                      (bound-and-true-p gptel-ai-behaviors--current-hashtags)
+                                      "")
                            :prompt-chars (length executor-prompt)
                           :prompt-structure (gptel-auto-experiment--prompt-structure-score executor-prompt)
                            :kibcm-axis (gptel-auto-experiment--kibcm-axis hypothesis)
