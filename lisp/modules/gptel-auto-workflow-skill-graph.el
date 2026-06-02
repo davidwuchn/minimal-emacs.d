@@ -231,23 +231,27 @@ Algorithm:
     (when start
       (setq path (list start))
       (puthash start t visited)
-      ;; Greedily extend path
+      ;; Greedily extend path, preferring dependency edges
       (cl-loop repeat (1- max-len)
                do (let* ((current (car path))
                          (best-next nil)
-                         (best-weight 0.0))
+                         (best-score 0.0))
                     (maphash (lambda (key edge)
                                (when (and (eq (car key) current)
                                           (not (gethash (cdr key) visited))
                                           (eq (ov5-sg-node-level
                                                (gethash (cdr key) ov5-sg--nodes))
                                               'atom))
-                                 (let ((w (ov5-sg-edge-weight edge)))
-                                   (when (> w best-weight)
+                                 (let* ((w (ov5-sg-edge-weight edge))
+                                        ;; Boost dependency edges (explicit frontmatter)
+                                        (dep-boost (if (eq (ov5-sg-edge-type edge) 'dependency)
+                                                       0.5 0.0))
+                                        (score (+ w dep-boost)))
+                                   (when (> score best-score)
                                      (setq best-next (cdr key)
-                                           best-weight w)))))
+                                           best-score score)))))
                              ov5-sg--edges)
-                    (if (and best-next (> best-weight 0.1))
+                    (if (and best-next (> best-score 0.1))
                         (progn
                           (push best-next path)
                           (puthash best-next t visited))
