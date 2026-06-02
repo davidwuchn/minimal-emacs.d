@@ -836,7 +836,16 @@ executor's prose summary."
                        (not (string-empty-p status-output)))
                   status-output
                 "No pending git status for target"))
-             (diff-text
+              (compile-output (when (and (gptel-auto-workflow--non-empty-string-p resolved-target)
+                                        (string-suffix-p ".el" resolved-target))
+                               (let* ((target-path (expand-file-name resolved-target))
+                                      (cmd (format "emacs -batch -Q -L . -L lisp/modules -f batch-byte-compile %s 2>&1"
+                                                  (shell-quote-argument target-path)))
+                                      (r (gptel-auto-workflow--git-result cmd 10)))
+                                 (if (= (cdr r) 0)
+                                     "Byte-compile: clean"
+                                   (format "Byte-compile: %s" (string-trim (or (car r) "failed")))))))
+              (diff-text
               (cond
                ((/= (cdr diff-result) 0)
                 (format "git diff failed: %s"
@@ -846,9 +855,10 @@ executor's prose summary."
                ((> (length diff-output) 3000)
                 (concat (substring diff-output 0 3000) "\n...[truncated]"))
                (t diff-output))))
-        (format "%s\n\nWORKTREE EVIDENCE:\n- Target: %s\n- Git status:\n%s\n- Diff excerpt:\n%s%s"
+        (format "%s\n\nWORKTREE EVIDENCE:\n- Target: %s\n- Byte-compile: %s\n- Git status:\n%s\n- Diff excerpt:\n%s%s"
                 base-output
                 resolved-target
+                (or compile-output "skipped")
                 status-text
                 diff-text
                 (if reasoning-evidence
