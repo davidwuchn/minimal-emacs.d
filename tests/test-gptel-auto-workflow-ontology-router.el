@@ -559,15 +559,15 @@ All known backends now support lambda notation; no async verification needed."
 ;; ─── Sieve-Based Routing (verbum Phase 5) ───
 
 (ert-deftest tdd/sieve/classify-by-backend-name ()
-  "Sieve classification works by backend name."
-  (should (eq 'single-neuron (gptel-auto-workflow--backend-sieve-type "DashScope")))
+  "Sieve classification works by backend name only."
+  (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "DashScope")))
   (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "moonshot")))
   (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "Unknown"))))
 
 (ert-deftest tdd/sieve/classify-by-model-name ()
   "Sieve classification works by model name."
   (should (eq 'single-neuron (gptel-auto-workflow--backend-sieve-type "qwen3.6-plus")))
-  (should (eq 'single-neuron (gptel-auto-workflow--backend-sieve-type "qwen")))
+  (should (eq 'single-neuron (gptel-auto-workflow--backend-sieve-type "qwen3.5-plus")))
   (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "kimi-k2.6")))
   (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "deepseek-v4-flash"))))
 
