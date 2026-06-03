@@ -44,7 +44,7 @@ render_crontab() {
             echo "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:\$HOME/.emacs.d/bin:\$HOME/.venv/bin"
         fi
         if [ "$machine" = "pi5" ] || [ "$machine" = "linux" ]; then
-            echo "XDG_RUNTIME_DIR=/run/user/\$(id -u)"
+            echo "XDG_RUNTIME_DIR=/run/user/$(id -u)"
         fi
         echo "MAILTO=\"\""
         echo
