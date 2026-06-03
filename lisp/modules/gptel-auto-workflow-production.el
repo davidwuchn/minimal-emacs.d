@@ -271,7 +271,7 @@ Called when research context changes or run completes."
               (insert (format "  Historical merges: %d\n" 
                               (plist-get facts :historical-merges)))
               (insert (format "  Merge rate: %.1f%%\n\n" 
-                              (* 100 (plist-get facts :active-merge-rate)))))
+                              (* 100 (or (plist-get facts :active-merge-rate) 0.0)))))
           (ignore)))
       
       ;; Benchmark stats
