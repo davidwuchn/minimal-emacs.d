@@ -77,9 +77,18 @@ trap 'rm -f "$LOCK_FILE"' EXIT
 # sockets only when we know the daemon is dead (after killing).
 clean_all_sockets() {
     local name="$1" uid="$2"
-    for base in "${XDG_RUNTIME_DIR:-}" "${TMPDIR:-}" /tmp; do
+    # Clean ALL candidate socket paths, including hardcoded /run/user
+    # (daemons started outside cron may use XDG_RUNTIME_DIR even when
+    # cron unsets it).
+    for base in "${XDG_RUNTIME_DIR:-}" "${TMPDIR:-}" /tmp "/run/user/$uid"; do
         [ -n "$base" ] || continue
-        local socket="$base/emacs$uid/$name"
+        # XDG_RUNTIME_DIR uses "emacs/NAME" instead of "emacs$uid/NAME"
+        local socket
+        if [ "$base" = "${XDG_RUNTIME_DIR:-}" ] || [ "$base" = "/run/user/$uid" ]; then
+            socket="$base/emacs/$name"
+        else
+            socket="$base/emacs$uid/$name"
+        fi
         if [ -e "$socket" ] || [ -L "$socket" ]; then
             rm -f "$socket" 2>/dev/null || true
             echo "[$(date '+%H:%M:%S')] Cleaned socket: $socket" >> "$LOG"
@@ -92,9 +101,13 @@ clean_all_sockets() {
 # Returns 0 with SOCKET_PATH set on success, 1 on failure.
 resolve_live_socket() {
     local name="$1" uid="$2" sock=""
-    for base in "${XDG_RUNTIME_DIR:-}" "${TMPDIR:-}" /tmp; do
+    for base in "${XDG_RUNTIME_DIR:-}" "${TMPDIR:-}" /tmp "/run/user/$uid"; do
         [ -n "$base" ] || continue
-        sock="$base/emacs$uid/$name"
+        if [ "$base" = "${XDG_RUNTIME_DIR:-}" ] || [ "$base" = "/run/user/$uid" ]; then
+            sock="$base/emacs/$name"
+        else
+            sock="$base/emacs$uid/$name"
+        fi
         if [ -S "$sock" ]; then
             SOCKET_PATH="$sock"
             return 0
@@ -119,8 +132,9 @@ def candidate_socket_paths(name, uid_value):
     for base in filter(None, [os.environ.get("XDG_RUNTIME_DIR"),
                               os.environ.get("TMPDIR"),
                               tempfile.gettempdir(),
-                              "/tmp"]):
-        if base == os.environ.get("XDG_RUNTIME_DIR"):
+                              "/tmp",
+                              f"/run/user/{uid_value}"]):
+        if base == os.environ.get("XDG_RUNTIME_DIR") or base == f"/run/user/{uid_value}":
             candidates.append(Path(base) / "emacs" / name)
         else:
             candidates.append(Path(base) / f"emacs{uid_value}" / name)
