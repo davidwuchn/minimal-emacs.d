@@ -1267,7 +1267,35 @@ has no feedback, borrows from adjacent categories."
                       (message "[review-feedback] %s ← %s: cross-category transfer"
                                category adj)))))
               borrowed))
-          ""))))
+           ""))))
+
+(defun gptel-auto-workflow--review-accuracy-feedback (category)
+  "Return formatted accuracy feedback for CATEGORY based on past review outcomes.
+Returns a string to inject into the review prompt, or nil if insufficient data.
+Tells the reviewer its historical bias so it can self-calibrate."
+  (when category
+    (let* ((outcomes (gethash category gptel-auto-workflow--review-outcomes))
+           (approve (and outcomes (plist-get outcomes :approved)))
+           (total (and outcomes (plist-get outcomes :total))))
+      (when (and total (>= total 3))
+        (let* ((blocked (- total approve))
+               (approval-rate (/ (float approve) total))
+               (cat-name (pcase category
+                           (:agentic "agentic")
+                           (:programming "programming")
+                           (:tool-calls "tool-calls")
+                           (:natural-language "NLP")
+                           (_ (format "%s" category))))
+               (calibration (if (> approval-rate 0.7)
+                                "You are historically lenient here. Only block for clear vulnerabilities."
+                              (if (< approval-rate 0.3)
+                                  "You are historically strict here. Consider that tests catch most issues."
+                                "Your calibration is balanced. Continue as-is."))))
+          (concat "ACCURACY FEEDBACK for " cat-name " category:\n"
+                  "  Past " (number-to-string total) " reviews: "
+                  (number-to-string approve) " approved (" (number-to-string blocked) " blocked) — "
+                  (format "%.0f" (* 100 approval-rate)) "% approval rate\n"
+                  "  " calibration "\n"))))))
 
 (provide 'gptel-tools-agent-staging-baseline)
 ;;; gptel-tools-agent-staging-baseline.el ends here
