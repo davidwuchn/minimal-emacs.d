@@ -40,11 +40,16 @@ PMF Mayor (Value Stream Pattern Language)    GTM Mayor (Product Organization Pat
 
 **PMF = Value Stream Pattern Language:** How value flows from customer need → experiment → validated code → deployed feature. Patterns: Sense → Experiment → Validate → Deploy.
 
+**Method (方法):** 快速拉新 (rapid user acquisition), 建构组织 (building the organization)
+
 **GTM = Product Organization Pattern Language:** How the organization structures to discover and deliver value. Patterns: Cross-functional teams, empowered product teams, JTBD alignment.
+
+**Method (方法):** 闪电扩张 (blitzscaling), 解构文化 (deconstructing culture)
 
 ## PMF Mayor (Auto-Workflow)
 
 **Identity:** "I am the Value Stream Pattern Language."
+**Method (方法):** 快速拉新 (rapid user acquisition), 建构组织 (building the organization)
 **Focus:** Internal — how value flows from need to deployed solution
 **Goal:** Optimize the value stream: sense → experiment → validate → deploy
 
@@ -108,6 +113,7 @@ PMF Mayor (Value Stream Pattern Language)    GTM Mayor (Product Organization Pat
 ## GTM Mayor (Researcher)
 
 **Identity:** "I am the Product Organization Pattern Language."
+**Method (方法):** 闪电扩张 (blitzscaling), 解构文化 (deconstructing culture)
 **Focus:** External — how the organization structures to discover and deliver value
 **Goal:** Align organization structure with market needs through JTBD/ODI
 
