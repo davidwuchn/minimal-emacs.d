@@ -20358,6 +20358,42 @@ OUTPUT: line1=\"A\"|\"B\"|\"tie\" line2=reason(1 sentence)"
             (should (string-match-p "7 files" result))))
       (delete-directory workdir t))))
 
+;;; Empty Grader Output Regression
+
+(ert-deftest regression/grader/empty-output-returns-zero-score ()
+  "Empty grader output should produce score 0, not crash."
+  (require 'gptel-benchmark-subagent)
+  (let ((result (gptel-benchmark--parse-grade-response
+                 ""                          ; empty response
+                 '("change clearly described" "change is minimal")
+                 '("large refactor" "style-only"))))
+    (should (= (plist-get result :score) 0))
+    (should (>= (plist-get result :total) 1))
+    (should (not (plist-get result :passed)))
+    (should (stringp (plist-get result :details)))))
+
+(ert-deftest regression/grader/nil-output-returns-zero-score ()
+  "Nil grader output should produce score 0, not crash."
+  (require 'gptel-benchmark-subagent)
+  (let ((result (gptel-benchmark--parse-grade-response
+                 nil                         ; nil response
+                 '("change clearly described")
+                 '("large refactor"))))
+    (should (= (plist-get result :score) 0))
+    (should (not (plist-get result :passed)))))
+
+(ert-deftest regression/grader/whitespace-only-output-parses ()
+  "Whitespace-only grader output should not cause infinite loops."
+  (require 'gptel-benchmark-subagent)
+  (let ((result (gptel-benchmark--parse-grade-response
+                 "   \n\t  "                  ; whitespace only
+                 '("change clearly described" "verification attempted")
+                 '("style-only" "no description"))))
+    (should (= (plist-get result :score) 0))
+    (should (not (plist-get result :passed)))
+    ;; Should not hang or crash — test completes quickly
+    (should (stringp (plist-get result :details)))))
+
 (provide 'test-gptel-tools-agent-regressions)
 
 ;;; test-gptel-tools-agent-regressions.el ends here

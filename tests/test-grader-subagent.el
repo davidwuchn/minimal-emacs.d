@@ -24,6 +24,18 @@
                            (string-trim (match-string 1))))))
     (should grader-model)))
 
+(ert-deftest grader/model-is-current-default ()
+  "Grader should use MiniMax-M3, not deprecated minimax-m2.7."
+  (skip-unless (file-exists-p (expand-file-name "assistant/agents/grader.md" user-emacs-directory)))
+  (let* ((grader-file (expand-file-name "assistant/agents/grader.md" user-emacs-directory))
+         (grader-model (with-temp-buffer
+                         (insert-file-contents grader-file)
+                         (goto-char (point-min))
+                         (when (re-search-forward "^model:\\s-*\\(.+\\)$" nil t)
+                           (string-trim (match-string 1))))))
+    (should (string= grader-model "MiniMax-M3"))
+    (should-not (string= grader-model "minimax-m2.7"))))
+
 (ert-deftest executor/model-is-defined ()
   "Executor should have a model defined."
   (skip-unless (file-exists-p (expand-file-name "assistant/agents/executor.md" user-emacs-directory)))

@@ -1,7 +1,7 @@
 ---
 name: comparator
 backend: MiniMax
-model: minimax-m2.7-highspeed
+model: MiniMax-M3
 max-tokens: 2048
 temperature: 0.1
 description: Perform blind A/B comparison (MiniMax)

@@ -6050,66 +6050,69 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*2 check issues (severity 0.15). EXTRACTED from distill→check pipeline.*
 
 ```allium
 <think>
-The user wants me to distill a set of kept hypotheses into a cleaner, more concise form. Let me analyze what they're asking:
+The user wants me to distill the research strategy output. Let me analyze what's being presented:
 
-1. They have 130 experiments across various targets
-2. They have "kept hypotheses" - some are full, some are just one-liners or fragments
-3. They want me to distill these into something cleaner
+1. **Research strategy**: template-default
+2. **158 experiments** were run across many targets
+3. **Kept hypotheses**: Only 2 listed
+   - "No hypothesis stated"
+   - "improving the function `gptel-auto-workflow-list-project-buffers`"
+4. **Discarded hypotheses**: A list of 6+ specific hypotheses that were rejected
 
-Looking at the kept hypotheses, I can see they're about code refactoring/improvements to a gptel (likely an Emacs LLM integration) project. The hypotheses are quite repetitive and many are fragments. Let me distill these into a clean, consolidated list.
+The user wants me to distill this. The key insight is that out of 158 experiments, only 2 were kept, and the rest were discarded. The "No hypothesis stated" entry is likely a placeholder/no-op.
 
-The themes I can identify:
-1. **Defensive coding / nil guards** - Adding nil/empty checks
-2. **Error handling / recovery** - Wrapping in condition-case, timeout sentinels
-3. **Type validation** - Explicit type checks (symbolp, buffer-live-p)
-4. **Code clarity / refactoring** - Extracting functions, removing redundant code
-5. **Robustness to edge cases** - Empty strings, async lifecycle, etc.
+Let me think about what distillation means here. It means to extract the essential information, summarize it concisely, and identify the key takeaways.
 
-The metrics mentioned:
-- φ Vitality (adaptability/robustness)
-- fractal Clarity (explicit assumptions)
-- Axis A (error handling)
-- Axis D (safety)
+Key takeaways:
+- Very low keep rate (2/158 = ~1.3%)
+- The kept hypotheses are actually minimal — one is a no-op
+- The "real" kept hypothesis is just about improving a single function
+- The discarded hypotheses reveal more actionable insights than the kept ones
+- There's a pattern in the discarded hypotheses around:
+  - Code clarity/idiomatic Emacs Lisp patterns (cl-letf → cl-labels)
+  - Dead code removal
+  - Helper extraction for DRY
+  - Data corruption bugs (copy-tree vs copy-sequence)
+  - Defensive programming (listp guards)
+  - Performance optimization
 
-Let me distill this into clean, deduplicated, well-formed hypotheses. I'll group them by theme and consolidate the fragments.
-
-The user also included a thinking_mode instruction at the end about [what changes & why] - they want me to be thorough about the "what changes & why" for each hypothesis.
-
-Let me produce a distilled version.
+The irony here is that the "template-default" strategy kept very little — most of the substance is in what was discarded. Let me distill this into a clear summary.
 </think>
 ```
 
 ### Check Issues
 
-The distillation plan in the think block is directionally correct, but the raw kept hypotheses from your 130 experiments weren’t included in the message. I can’t deduplicate fragments I can’t see.
+**Research Strategy Distillation**
 
-Below is the **checked and tightened protocol** I’d use, plus the **output format** and **illustrative examples** so you can verify the structure before I run the full list.
+| Metric | Value |
+|--------|-------|
+| Strategy | `template-default` |
+| Experiments | 158 |
+| Kept | 2 (~1.3%) |
+| Discarded | ~156 |
+
+**Kept Hypotheses (2):**
+1. *(no hypothesis stated)* — no-op / placeholder
+2. "improving the function `gptel-auto-workflow-list-project-buffers`"
+
+**Discarded (highlights):**
+- Replace `cl-letf` with `cl-labels` (idiomatic Emacs Lisp)
+- Remove dead code (unused `lexical-binding`, unused variables)
+- Add `listp` guards (defensive programming)
+- Fix `copy-tree` → `copy-sequence` (data corruption)
+- Extract helpers for DRY violations
+- Use `declare` forms for compiler macros
 
 ---
 
-### Refined Consolidation Axes
-
-| Theme | Target Metric | Merge Rule |
-|-------|---------------|------------|
-| **Defensive Contracts** | φ Vitality | Merge all `nil`, `boundp`, `fboundp`, empty-string, and default-value guards into explicit entry-validation hypotheses. |
-| **Error Boundaries** | Axis A | Merge all `condition-case`, `ignore-errors`, timeout sentinels, and malformed-response handlers into failure-isolation hypotheses. |
-| **Runtime Type Contracts** | fractal Clarity | Merge all `symbolp`, `stringp`, `buffer-live-p`, `process-live-p`, struct checks into crash-fast validation hypotheses. |
-| **Structural Deduplication** | fractal Clarity | Merge all “extract helper,” “remove redundant,” “unify path” fragments into single refactoring hypotheses with call-site lists. |
-| **Async Lifecycle Hygiene** | φ Vitality + Axis D | Merge all cancel-in-flight, reset state, cleanup hooks, and teardown logic into state-machine hygiene hypotheses. |
-
----
-
-### Required Output Template
-
-Each distilled hypothesis must be a **single complete sentence** followed by:
-
-```
-[what changes]: <concrete function / variable / c
-
-... (truncated)
+**Key Takeaway:** The `template-default` strategy is *extremely conservative* — it keeps almost nothing. What remains is marginal or a no-op. Meanwhile, the *discarded* experiments contain the actually useful insights (idiomatic patterns, bug fixes, dead code removal).
