@@ -772,14 +772,41 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                  retry-prompt
                                                  nil nil nil
                                                    gptel-auto-experiment-validation-retry-active-grace)))
-                                          ;; Non-teachable or already retrying: let grader decide
-                                          ;; Don't set finished=t — grader runs below and can bypass
-                                            ;; Record validation error for self-evolution
+                                           ;; Non-teachable or already retrying: check if it's a hard block
+                                           ;; CRITICAL / ARCHITECTURAL DESTRUCTION / SCOPE CREEP = fail immediately
+                                           (if (and validation-error
+                                                    (string-match-p "^\\(CRITICAL\\|ARCHITECTURAL DESTRUCTION\\|SCOPE CREEP\\):"
+                                                                    validation-error))
+                                               (progn
+                                                 (message "[auto-exp] ✗ Hard-block validation: %s — failing immediately"
+                                                          validation-error)
+                                                 (setq finished t)
+                                                 (let ((fail-result
+                                                        (list :target target
+                                                              :id experiment-id
+                                                              :hypothesis (gptel-auto-experiment--extract-hypothesis
+                                                                           effective-agent-output)
+                                                              :score-before baseline
+                                                              :score-after 0
+                                                              :code-quality baseline-code-quality
+                                                              :kept nil
+                                                              :duration (- (float-time) start-time)
+                                                              :grader-quality 0
+                                                              :grader-reason validation-error
+                                                              :comparator-reason "validation-hard-block"
+                                                              :analyzer-patterns (format "%s" patterns)
+                                                              :agent-output effective-agent-output
+                                                              :validation-error validation-error
+                                                              :backend actual-backend
+                                                              :model actual-model)))
+                                                   (funcall log-fn run-id fail-result)
+                                                   (funcall callback fail-result)))
+                                             ;; Record validation error for self-evolution
                                              (when (and target validation-error
                                                         (fboundp 'gptel-ai-behaviors--record-validation-error))
-                                              (gptel-ai-behaviors--record-validation-error target validation-error))
-                                            (message "[auto-exp] ⚠ Non-teachable validation: %s — grader will evaluate anyway"
-                                                     validation-error)))))
+                                               (gptel-ai-behaviors--record-validation-error target validation-error))
+                                             (message "[auto-exp] ⚠ Non-teachable validation: %s — grader will evaluate anyway"
+                                                      validation-error))))))
                                     (unless defer-grading
                                       (let ((gptel-auto-experiment--grading-target target)
                                           (gptel-auto-experiment--grading-worktree experiment-worktree)

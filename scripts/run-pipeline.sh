@@ -643,7 +643,48 @@ else
     log "No results file found for today"
 fi
 
-# ─── Step 7: Commit and push auto-generated outcomes to main ───
+# ─── Step 6.5: Merge kept experiment branches to main ───
+log "=== Step 6.5: Merge kept experiments ==="
+kept_count=0
+merged_count=0
+if compgen -G "$RESULTS_PATTERN" >/dev/null; then
+    latest_result=$(ls -t $RESULTS_PATTERN | head -1)
+    # Parse results.tsv for kept experiments
+    # Header: experiment_id target hypothesis score_before score_after code_quality delta decision ...
+    # Decision column is 8th (tab-separated)
+    while IFS=$'\t' read -r exp_id target _ _ _ _ _ decision _; do
+        [ "$exp_id" = "experiment_id" ] && continue
+        case "$decision" in
+            kept|staged|merged|grader-bypass*commit*)
+                kept_count=$((kept_count + 1))
+                # Find corresponding optimize branch for this run
+                result_dir=$(basename "$(dirname "$latest_result")")
+                run_id="${result_dir##*-}"
+                target_base=$(basename "$target" .el)
+                # Try to find matching branch: optimize/{target_base}-*-{run_id}-exp{N}
+                branch_pattern="optimize/${target_base}-*-${run_id}-exp*"
+                branch=$(git -C "$DIR" branch --list "$branch_pattern" | head -1 | sed 's/^[* ]*//')
+                if [ -n "$branch" ]; then
+                    log "  Merging kept experiment: $branch (decision: $decision)"
+                    if git -C "$DIR" merge --no-ff "$branch" -m "⚒ Merge $branch: $decision" 2>/dev/null; then
+                        log "    ✓ Merged $branch"
+                        merged_count=$((merged_count + 1))
+                        # Delete local branch after merge
+                        git -C "$DIR" branch -D "$branch" 2>/dev/null || true
+                    else
+                        log "    ✗ Merge failed for $branch (conflicts?)"
+                        git -C "$DIR" merge --abort 2>/dev/null || true
+                    fi
+                else
+                    log "  ⚠ No branch found for kept experiment: $target (run: $run_id)"
+                fi
+                ;;
+        esac
+    done < "$latest_result"
+fi
+log "Kept experiments: $kept_count, Merged to main: $merged_count"
+
+# ─── Step 7: Commit and push outcomes to main ───
 log "=== Step 7: Publish outcomes to main ==="
 
 # Check for auto-generated changes
