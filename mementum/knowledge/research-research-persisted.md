@@ -1,44 +1,70 @@
 <!--
 Synthesis verification:
-- Confidence: 24%
-- Sources: 17 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'research-research-persisted'
-- Auto-approved: yes (flagged)
+- Confidence: 80%
+- Sources: 19 memories
+- Warnings: No code examples or concrete references
+- Auto-approved: yes (passed)
 --->
 
-The user wants me to synthesize all these research memories into a comprehensive knowledge page. Let me analyze the memories and extract the key patterns, techniques, and insights.
+The user wants me to synthesize the provided memories into a knowledge page about "research-research-persisted". 
 
-Key themes from the memories:
+The memories contain research logs from an auto-workflow system. Key themes:
+1. A persisted-findings research strategy that repeatedly fails (0% kept, local-fallback)
+2. Local codebase analysis showing complexity and bug fix patterns
+3. External research attempts probing various repos (davidwuchn's own repos: zeroclaw, context-mode, eca, nucleus, mementum, gptel, etc.)
+4. Findings about AI agent patterns: VSM architecture, symbolic attention magnets, mementum memory protocol, gptel-agent subagent delegation, circuit breakers, sandboxing, etc.
+5. A chronic issue: "research findings file missing after wait" - the researcher daemon fails to produce output, causing fallback to local analysis
+6. Meta-learning: research quality measured by downstream experiment success
+7. Low research retention rates (0-40% kept)
+8. External sources found: Azure orchestration patterns, arXiv papers on multi-agent systems, MCP integration, ACON context compression, etc.
 
-1. **Module Complexity & Failure Analysis** - Top modules by line count, failure rates, need for nil-safety patterns
-2. **Local Research Fallback Patterns** - Pipeline defects, missing research files, feedback loop preservation
-3. **External Research - Own Repos (davidwuchn/*)**:
-   - nucleus: VSM Architecture, Symbolic Attention Magnets, Lambda Notation
-   - mementum: Git-based memory protocol, Fibonacci recall, meta-learning λ(λ)
-   - gptel: Tool-use architecture, MCP integration, FSM for request lifecycle
-   - efrit: Circuit breaker, checkpoint/restore, tool receipts
-   - context-mode: Think-in-code pattern, 98% context reduction
-   - zeroclaw: Security-first agent runtime, fallback chains
-   - nullclaw: Minimal binary design
-   - gbrain: Self-wiring knowledge graph, hybrid search
-   - gastown: Three-tier watchdog, git-worktree persistence
-   - genesis-agent: Self-verification engine
-   - eca: Editor-agnostic protocol
-   - Ori-Mnemos: Persistent memory system
-   - gptel-agent (karthink): Sub-agent delegation via Markdown/YAML frontmatter
+I need to create a markdown knowledge page with:
+- Minimum 50 lines of actual content
+- Concrete examples (code, tables, commands)
+- Actionable patterns
+- Cross-references
+- Complete inline, not summarized
 
-4. **External Research - Academic & Industry**:
-   - ACON: Context compression via guideline optimization
-   - Azure orchestration patterns: Sequential, concurrent, group chat, handoff, magentic
-   - arXiv: Multi-agent orchestration, state/knowledge separation
-   - Error recovery patterns: Circuit breaker, exponential backoff, fallback chains
-   - MetaAgent: Self-evolving paradigm
-   - NVIDIA evaluation guide: Trajectory-aware metrics
-   - DSPy: Declarative pipeline compilation
-   - MemEvolve: Meta-evolution of memory systems
+Structure:
+- Title: Research Persistence & External Discovery Patterns
+- Frontmatter
+- Sections on the research pipeline, daemon failure modes, patterns discovered, retention problem, actionable fixes, etc.
 
-5. **Pipeline Defects** - Missing researcher daemon, fail-fast patterns
+Let me draft comprehensive sections:
 
-6. **Meta-learning** - Research quality measured by downstream experiment success
+1. ## The Persisted-Findings Pipeline
+   - Description of the workflow
+   - The hash-based tracking
+   - Outcome metrics table
 
-Let me create a comprehensive knowledge page that synthesizes all of this.
+2. ## Chronic Failure Mode: Daemon Dropout
+   - The "missing after wait" pattern
+   - Evidence from logs
+   - Impact on experiment traceability
+
+3. ## Local Fallback Analysis
+   - What the fallback captures (git activity, module complexity)
+   - The self-evolution directive
+   - Module complexity table
+
+4. ## External Discovery Patterns (The Actual Research)
+   - VSM / Nucleus patterns
+   - Mementum memory protocol
+   - gptel-agent delegation
+   - Azure/GCP orchestration
+   - Error recovery patterns
+
+5. ## Research Retention Crisis
+   - The 0% kept problem
+   - Why findings don't stick
+   - The feedback loop requirement
+
+6. ## Actionable Patterns
+   - Structured output requirement
+   - Non-none research hash enforcement
+   - Fail-fast vs timeout waiting
+   - Making evolution observable
+
+7. ## Cross-References
+
+I need to ensure 50+ lines with concrete examples. Let me write it fully.

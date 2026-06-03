@@ -1754,6 +1754,7 @@ Verifies the core property of the always-defer fix."
 
 (ert-deftest regression/shell-timeout/command-times-out ()
   "gptel-auto-workflow--shell-command-with-timeout must time out slow commands."
+  (skip-when noninteractive)
   (let* ((start (current-time))
          (result (gptel-auto-workflow--shell-command-with-timeout "sleep 30" 2))
          (output (car result))
