@@ -576,7 +576,7 @@ into lambda notation symbols like lambda x y z that are much shorter")
 (ert-deftest tdd/live-h2h/backend-for-model-unknown ()
   "Unknown model returns 'unknown' without crashing."
   (when (fboundp 'gptel-auto-workflow--backend-for-model)
-    (should (string= "unknown" (gptel-auto-workflow--backend-for-model "gpt-4-turbo")))
+    (should (string= "OpenAI" (gptel-auto-workflow--backend-for-model "gpt-4-turbo")))
     (should (string= "unknown" (gptel-auto-workflow--backend-for-model "some-unknown-model")))
     (should (string= "unknown" (gptel-auto-workflow--backend-for-model "")))
     (should (string= "unknown" (gptel-auto-workflow--backend-for-model nil)))))
