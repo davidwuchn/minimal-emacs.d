@@ -1,0 +1,1 @@
+When using (1+ (plist-get VAR KEY)), guard against nil plist with (or (plist-get VAR KEY) 0). If VAR is nil or KEY is missing, plist-get returns nil and (1+ nil) signals a runtime error. This pattern commonly appears in convergence stats counters. Fix: wrap with (or ... 0).
