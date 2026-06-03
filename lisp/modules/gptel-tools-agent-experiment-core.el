@@ -1359,15 +1359,15 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 								   nil "false" nil
 								   gptel-auto-experiment-validation-retry-active-grace)))
                                                (let ((default-directory experiment-worktree))
-                                                  (let* ((grader-bypass
-                                                          (and grade-passed
-                                                               grade-score grade-total (> grade-total 0)
-                                                               (>= (/ (float grade-score) grade-total) 0.6)))
-                                                         (reason
-                                                          (if grader-bypass
-                                                              (format "grader-bypass:%s%s"
-                                                                      "benchmark failed but grader passed strongly"
-                                                                      (if validation-error (format " (validation: %s)" validation-error) ""))
+                                                   (let* ((grader-bypass
+                                                           (and grade-passed
+                                                                grade-score grade-total (> grade-total 0)
+                                                                (>= (/ (float grade-score) grade-total) 0.6)
+                                                                (not validation-error)))
+                                                          (reason
+                                                           (if grader-bypass
+                                                               (format "grader-bypass:%s"
+                                                                       "benchmark failed but grader passed strongly")
                                                             (cond (validation-error validation-error)
                                                                   ((not (plist-get bench :nucleus-passed))
                                                                    "nucleus-validation-failed")

@@ -20278,6 +20278,86 @@ OUTPUT: line1=\"A\"|\"B\"|\"tie\" line2=reason(1 sentence)"
     (should (string-match-p "EVIDENCE" prompt))
     (should (string-match-p "VERIFY" prompt))))
 
+;; ─── Grader Bypass Attack Defenses (2026-06-03) ───
+
+(ert-deftest regression/grader-bypass/critical-file-detection ()
+  "validate-diff-content blocks experiments touching critical files."
+  (skip-unless (fboundp 'gptel-auto-experiment--validate-diff-content))
+  (let* ((workdir (make-temp-file "critical-test" t))
+         (git (lambda (cmd) (call-process "git" nil nil nil "-C" workdir cmd))))
+    (unwind-protect
+        (progn
+          ;; Init repo with a critical file
+          (funcall git "init")
+          (funcall git "config user.email 'test@test.com'")
+          (funcall git "config user.name 'Test'")
+          (with-temp-file (expand-file-name "lisp/modules/gptel-auto-workflow-production.el" workdir)
+            (insert "(defun test () 1)\n"))
+          (funcall git "add .")
+          (funcall git "commit -m 'init'")
+          ;; Modify the critical file
+          (with-temp-file (expand-file-name "lisp/modules/gptel-auto-workflow-production.el" workdir)
+            (insert "(defun test () 2)\n"))
+          ;; Should detect critical file
+          (let ((result (gptel-auto-experiment--validate-diff-content workdir)))
+            (should (stringp result))
+            (should (string-match-p "CRITICAL:" result))
+            (should (string-match-p "gptel-auto-workflow-production" result))))
+      (delete-directory workdir t))))
+
+(ert-deftest regression/grader-bypass/mass-deletion-detection ()
+  "validate-diff-content blocks experiments with >50 net deletions."
+  (skip-unless (fboundp 'gptel-auto-experiment--validate-diff-content))
+  (let* ((workdir (make-temp-file "destructive-test" t))
+         (git (lambda (cmd) (call-process "git" nil nil nil "-C" workdir cmd))))
+    (unwind-protect
+        (progn
+          (funcall git "init")
+          (funcall git "config user.email 'test@test.com'")
+          (funcall git "config user.name 'Test'")
+          ;; Create a file with 100 lines
+          (with-temp-file (expand-file-name "test-file.el" workdir)
+            (dotimes (i 100)
+              (insert (format "(defun func-%d () %d)\n" i i))))
+          (funcall git "add .")
+          (funcall git "commit -m 'init'")
+          ;; Delete 60 lines (net deletion >50)
+          (with-temp-file (expand-file-name "test-file.el" workdir)
+            (dotimes (i 40)
+              (insert (format "(defun func-%d () %d)\n" i i))))
+          ;; Should detect architectural destruction
+          (let ((result (gptel-auto-experiment--validate-diff-content workdir)))
+            (should (stringp result))
+            (should (string-match-p "ARCHITECTURAL DESTRUCTION:" result))))
+      (delete-directory workdir t))))
+
+(ert-deftest regression/grader-bypass/scope-creep-detection ()
+  "validate-diff-content blocks experiments touching >5 files."
+  (skip-unless (fboundp 'gptel-auto-experiment--validate-diff-content))
+  (let* ((workdir (make-temp-file "scope-test" t))
+         (git (lambda (cmd) (call-process "git" nil nil nil "-C" workdir cmd))))
+    (unwind-protect
+        (progn
+          (funcall git "init")
+          (funcall git "config user.email 'test@test.com'")
+          (funcall git "config user.name 'Test'")
+          ;; Create 7 files
+          (dotimes (i 7)
+            (with-temp-file (expand-file-name (format "file-%d.el" i) workdir)
+              (insert (format "(defun func-%d () %d)\n" i i))))
+          (funcall git "add .")
+          (funcall git "commit -m 'init'")
+          ;; Modify all 7 files
+          (dotimes (i 7)
+            (with-temp-file (expand-file-name (format "file-%d.el" i) workdir)
+              (insert (format "(defun func-%d () %d)\n" i (+ i 1)))))
+          ;; Should detect scope creep
+          (let ((result (gptel-auto-experiment--validate-diff-content workdir)))
+            (should (stringp result))
+            (should (string-match-p "SCOPE CREEP:" result))
+            (should (string-match-p "7 files" result))))
+      (delete-directory workdir t))))
+
 (provide 'test-gptel-tools-agent-regressions)
 
 ;;; test-gptel-tools-agent-regressions.el ends here
