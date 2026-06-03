@@ -1,7 +1,55 @@
 # Mementum State
 
-> Last session: 2026-06-03 (XDG_RUNTIME_DIR fix + Dual Mayor naming)
-> Next pipeline: running (daemon restarted with fix)
+> Last session: 2026-06-03 (Dual Mayor Phases 5-7 complete)
+> Next pipeline: running
+> Status: 2149 tests pass, 0 unexpected — Dual Mayor fully operational
+
+## Session: Dual Mayor Implementation Complete (2026-06-03)
+
+**Phases 5-7 implemented:**
+
+### Phase 5: Cross-Mayor Communication
+- `lisp/modules/gptel-auto-workflow-beads.el` — Bead protocol (GTM↔PMF communication)
+- `mementum/decisions/` — Human decision gate directory + template
+- `gptel-auto-workflow--pending-decisions-p` — Blocks PMF dispatch when decisions pending (configurable)
+- Auto-file beads from research findings, auto-update from experiment results
+- Bead protocol status + decision gate surfaced in evolution dashboard
+
+### Phase 6: Full Separation
+- `mementum/gtm/strategy-roadmap.md` — Strategy template that GTM writes, PMF reads
+- `gptel-auto-workflow--read-gtm-strategy` / `--write-gtm-strategy` — Strategy I/O functions
+- GTM auto-start runs strategy evolution periodically
+- PMF reads strategy focus at start of each `run-async` call
+- `assistant/commands/pmf-mayor-run.md` — Discrete PMF command reference
+- `assistant/commands/gtm-mayor-research.md` — Discrete GTM command reference
+- Fixed: reverted broken `projects.el` from commit 1407ecf20 (parse error)
+
+### Phase 7: Innovation Metrics
+- `gptel-auto-workflow--pmf-metrics` — experiments/day, keep-rate %, hours/validation
+- `gptel-auto-workflow--gtm-metrics` — findings/day, strategy accuracy %, PMF signal
+- Dashboard templates updated with metric placeholders (`var/tmp/pmf-dashboard.md`, `gtm-dashboard.md`)
+- Auto-update metrics on experiment/research completion
+
+### Critical Fix: MiniMax Model Name (all subagents)
+- **Problem:** All experiments failing with `grader-failed` — `minimax-m2.7-highspeed` model timing out/rate limited
+- **Root cause:** Commit 1407ecf20 only fixed executor; analyzer, grader, researcher, reviewer, comparator still used broken model
+- **Fix:** Updated all subagent presets in:
+  - `lisp/modules/gptel-ext-backend-registry.el` — task-type-model-defaults
+  - `lisp/modules/gptel-tools-agent-prompt-build.el` — per-task-model-map
+- **Result:** All subagents now use `MiniMax-M3` (working model)
+
+### Bug Fixes During Integration
+- **Metrics dashboard `(invalid-function 0)`**: `gptel-auto-workflow--update-dashboard` received numeric values from plists; `replace-regexp-in-string` tried to call them as functions. Fixed by wrapping all numeric values with `(format "%s" ...)`.
+- **Git conflict markers in prompt-build.el**: Resolved leftover `<<<<<<< Updated upstream` / `>>>>>>> Stashed changes` markers from earlier stash operations.
+- **Sieve type generation for DashScope**: Commit `b49c20701` dynamically generated sieve types from `gptel-backend-registry` but only checked backend names for "qwen". DashScope backend name doesn't contain "qwen" (its models do). Fixed to check model names too.
+
+**Tests:** 2149 pass, 0 unexpected, 52 skipped
+
+**All 7 phases of Dual Mayor implementation plan complete + all integration bugs fixed.**
+
+---
+
+> Previous session: 2026-06-03 (XDG_RUNTIME_DIR fix + Dual Mayor naming)
 > Status: 2148 tests pass, 0 unexpected — PMF Mayor active
 
 ## Session: Pipeline Fixes + Dual Mayor Architecture (2026-06-03)

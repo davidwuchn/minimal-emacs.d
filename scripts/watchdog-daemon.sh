@@ -7,7 +7,7 @@
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SERVER_NAME="ov5-auto-workflow"
+SERVER_NAME="pmf-value-stream"
 MY_UID=$(id -u)
 LOG="$DIR/var/tmp/cron/watchdog.log"
 LOCK_FILE="$DIR/var/tmp/cron/watchdog.lock"
@@ -253,7 +253,7 @@ if daemon_responds; then
         fi
     fi
     # Also check researcher daemon memory (persists between pipeline runs)
-    RESEARCHER_PID=$(first_daemon_pid "ov5-researcher")
+    RESEARCHER_PID=$(first_daemon_pid "gtm-product-org")
     if [ -n "$RESEARCHER_PID" ]; then
         RSS_KB=$(ps -p "$RESEARCHER_PID" -o rss= 2>/dev/null | tr -d ' ')
         if [ -n "$RSS_KB" ] && [ "$RSS_KB" -gt 5242880 ]; then

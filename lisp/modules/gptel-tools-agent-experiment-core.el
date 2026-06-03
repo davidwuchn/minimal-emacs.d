@@ -135,6 +135,14 @@ Also fails if NO files were modified (agent made no actual edits)."
           "Agent made no code changes. Use Edit or Write tools to modify files.")
       (catch 'validation-error
         (dolist (file modified-files)
+          ;; WORKTREE BOUNDARY GUARD: ensure file is inside worktree
+          (let ((full-path (expand-file-name file worktree)))
+            (when (and (file-name-absolute-p full-path)
+                       (not (file-in-directory-p full-path worktree)))
+              (message "[auto-exp] ✗ WORKTREE BOUNDARY VIOLATION: %s is outside worktree %s"
+                       full-path worktree)
+              (throw 'validation-error
+                     (format "File %s outside worktree — possible mayor checkout contamination" file))))
           (when (and (string-suffix-p ".el" file)
                      (not (string-suffix-p "-autoloads.el" file)))
             (let ((full-path (expand-file-name file worktree)))

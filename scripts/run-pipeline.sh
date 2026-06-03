@@ -48,14 +48,14 @@ fi
 wait_for_idle() {
     local action="$1"
     local max_wait="${2:-900}"
-    local socket_name="${3:-ov5-auto-workflow}"
+    local socket_name="${3:-pmf-value-stream}"
     local elapsed=0
     local daemon_was_seen=0
     local min_start_wait="${4:-60}"
 
     log "Waiting for $action to complete (max ${max_wait}s)..."
     while [ "$elapsed" -lt "$max_wait" ]; do
-        if [ "$socket_name" = "ov5-auto-workflow" ]; then
+        if [ "$socket_name" = "pmf-value-stream" ]; then
             local status
             status="$($SCRIPT status 2>/dev/null || true)"
             if printf '%s' "$status" | grep -Eq ':phase "(idle|complete|skipped|quota-exhausted)"|:running nil'; then
@@ -71,7 +71,7 @@ wait_for_idle() {
                 fi
             fi
             daemon_was_seen=1
-        elif [ "$socket_name" = "ov5-researcher" ]; then
+        elif [ "$socket_name" = "gtm-product-org" ]; then
             # Researcher daemon is persistent; wait for findings file instead
             if [ -f "$FINDINGS_FILE" ] && [ "$(wc -c < "$FINDINGS_FILE" 2>/dev/null || echo 0)" -gt 100 ]; then
                 if findings_mtime="$(stat -f %m "$FINDINGS_FILE" 2>/dev/null)"; then
@@ -89,7 +89,7 @@ wait_for_idle() {
             # Check if researcher daemon reports phase complete/idle
             if [ "$daemon_was_seen" -eq 1 ]; then
                 local phase
-                phase="$(emacsclient --socket-name="ov5-researcher" \
+                phase="$(emacsclient --socket-name="gtm-product-org" \
                     --eval '(if (and (boundp (quote gptel-auto-workflow--stats)) gptel-auto-workflow--stats) (plist-get gptel-auto-workflow--stats :phase) "unknown")' 2>/dev/null || echo "unknown")"
                 phase="${phase//\"/}"
                 if [ "$phase" = "complete" ] || [ "$phase" = "idle" ]; then
@@ -98,7 +98,7 @@ wait_for_idle() {
                 fi
             fi
             # Actually check if researcher daemon is alive
-            if emacsclient --socket-name="ov5-researcher" --eval 't' >/dev/null 2>&1; then
+            if emacsclient --socket-name="gtm-product-org" --eval 't' >/dev/null 2>&1; then
                 daemon_was_seen=1
             elif [ "$daemon_was_seen" -eq 1 ]; then
                 log "WARNING: $action daemon stopped after ${elapsed}s without findings"
@@ -226,14 +226,14 @@ log_rotate() {
 
 kill_ov5_daemons() {
     local pids label="$1"
-    pids=$(pgrep -f "ov5-(auto-workflow|researcher)" 2>/dev/null || true)
+    pids=$(pgrep -f "(pmf-value-stream|gtm-product-org|ov5-auto-workflow|ov5-researcher)" 2>/dev/null || true)
     if [ -n "$pids" ]; then
         local count=$(echo "$pids" | wc -l | tr -d ' ')
         log "Killing $count daemon(s) by PID${label:+ ($label)}"
         echo "$pids" | xargs kill -9 2>/dev/null || true
         sleep 2
         # Verify all are dead
-        local remaining=$(pgrep -f "ov5-(auto-workflow|researcher)" 2>/dev/null || true)
+        local remaining=$(pgrep -f "(pmf-value-stream|gtm-product-org|ov5-auto-workflow|ov5-researcher)" 2>/dev/null || true)
         if [ -n "$remaining" ]; then
             local still=$(echo "$remaining" | wc -l | tr -d ' ')
             log "WARNING: $still daemon(s) still alive after SIGKILL — retrying"
@@ -323,8 +323,8 @@ verify_research_feedback_loop() {
 
 # ─── Rotate oversized logs to prevent unbounded growth ───
 log_rotate "$PIPELINE_LOG"
-log_rotate "$LOG_DIR/ov5-researcher.log"
-log_rotate "$LOG_DIR/ov5-auto-workflow.log"
+log_rotate "$LOG_DIR/gtm-product-org.log"
+log_rotate "$LOG_DIR/pmf-value-stream.log"
 log_rotate "$LOG_DIR/evolution-backtrace.log" 51200  # Rotate at 50KB (grows fast)
 
 # ─── Clean stale PID/lock files older than 12h ───
@@ -347,7 +347,7 @@ log "Cleared stale .elc + .eln files from lisp/modules/"
 # NOTE: macOS --bg-daemon embeds \012 (newline) in args, so pgrep patterns
 # like "emacs.*ov5" fail because . doesn't match the newline. Instead match
 # on the daemon name suffix which appears after the newline.
-STALE_PIDS=$(pgrep -f "ov5-(auto-workflow|researcher)" 2>/dev/null || true)
+STALE_PIDS=$(pgrep -f "(pmf-value-stream|gtm-product-org|ov5-auto-workflow|ov5-researcher)" 2>/dev/null || true)
 if [ -n "$STALE_PIDS" ]; then
     STALE_COUNT=$(echo "$STALE_PIDS" | wc -l | tr -d ' ')
     log "Killing $STALE_COUNT stale daemon process(es)..."
@@ -377,8 +377,8 @@ clean_stale_socket() {
     done
 }
 clean_stale_socket "server"
-clean_stale_socket "ov5-auto-workflow"
-clean_stale_socket "ov5-researcher"
+clean_stale_socket "pmf-value-stream"
+clean_stale_socket "gtm-product-org"
 
 # ─── Pull latest code so daemon restart picks up fixes ───
 log "Pulling latest code from origin..."
@@ -393,7 +393,7 @@ log "Stopping any existing daemons to load latest code..."
 kill_ov5_daemons "pre-cleanup"
 # Also try socket-based stop as fallback (handles edge cases)
 "$SCRIPT" stop >/dev/null 2>&1 || true
-AUTO_WORKFLOW_EMACS_SERVER=ov5-researcher "$SCRIPT" stop >/dev/null 2>&1 || true
+AUTO_WORKFLOW_EMACS_SERVER=gtm-product-org "$SCRIPT" stop >/dev/null 2>&1 || true
 # Clear stale status so auto-workflow starts fresh daemon
 rm -f "$DIR/var/tmp/cron/auto-workflow-status.sexp" 2>/dev/null || true
 # Force-remove stale staging worktree so auto-workflow recreates from latest main
@@ -420,13 +420,13 @@ log "=== Step 0: Researcher will fetch specific files on demand via gh CLI ==="
 # ─── Step 1: Research ───
 log "=== Step 1: Research ==="
 # The cron script's research action starts daemon, queues job, and returns.
-# The researcher daemon auto-processes the job and then shuts down.
-# We just need to wait for it to complete.
+# The researcher daemon (GTM Mayor) stays alive between pipeline runs.
+# It runs periodic research via internal timer; we just wait for this cycle.
 MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
     "$SCRIPT" research >> "$PIPELINE_LOG" 2>&1 || true
 # Researcher daemon startup can take 90-120s (emacs init + package loading).
 # Use min_start_wait=120 to give it enough time before giving up.
-if ! wait_for_idle "research" "$MAX_WAIT_RESEARCH" "ov5-researcher" 180; then
+if ! wait_for_idle "research" "$MAX_WAIT_RESEARCH" "gtm-product-org" 180; then
     log "Research still in progress after timeout — continuing with partial findings"
     # Do NOT kill the daemon — let it keep working for next cycle
 fi
@@ -439,7 +439,7 @@ if [ -f "$FINDINGS_FILE" ]; then
     if grep -q "https\?://" "$FINDINGS_FILE" 2>/dev/null || \
         grep -q "## .*Technique" "$FINDINGS_FILE" 2>/dev/null; then
         has_external=1
-    elif grep -q "webfetch\|WebFetch\|WebSearch\|Hunting external" "$DIR/var/tmp/cron/ov5-researcher.log" 2>/dev/null; then
+    elif grep -q "webfetch\|WebFetch\|WebSearch\|Hunting external" "$DIR/var/tmp/cron/gtm-product-org.log" 2>/dev/null; then
         has_external=1
     fi
     if [ "$has_external" = "1" ]; then
@@ -570,7 +570,7 @@ if [ "${PIPELINE_SKIP_PRE_EVOLUTION:-no}" != "yes" ]; then
     clean_ov5_sockets() {
         for base in "${TMPDIR:-}" /tmp "${XDG_RUNTIME_DIR:-}"; do
             [ -n "$base" ] || continue
-            for sock_name in ov5-auto-workflow ov5-researcher; do
+            for sock_name in pmf-value-stream gtm-product-org; do
                 local sock_path="$base/emacs$(id -u)/$sock_name"
                 rm -f "$sock_path" 2>/dev/null || true
                 [ "$base" = "${XDG_RUNTIME_DIR:-}" ] && rm -f "$base/emacs/$sock_name" 2>/dev/null || true
@@ -597,7 +597,7 @@ fi
 # Stop researcher daemon so it doesn't hold the cron-job lock
 # Kill by PID first (socket may be orphaned from evolution restart socket cleanup)
 kill_ov5_daemons "pre-workflow"
-AUTO_WORKFLOW_EMACS_SERVER=ov5-researcher "$SCRIPT" stop >/dev/null 2>&1 || true
+AUTO_WORKFLOW_EMACS_SERVER=gtm-product-org "$SCRIPT" stop >/dev/null 2>&1 || true
 sleep 2
 # Queue the workflow job (daemon will be started if not running)
 # Retry if evolution is still running (returns "already-running")
@@ -614,7 +614,7 @@ for retry in 0 1 2 3 4; do
         break
     fi
 done
-wait_for_idle "auto-workflow" "$MAX_WAIT_WORKFLOW" "ov5-auto-workflow" || :
+wait_for_idle "auto-workflow" "$MAX_WAIT_WORKFLOW" "pmf-value-stream" || :
 
 # Verify auto-workflow actually completed (not timed out)
 workflow_status="$($SCRIPT status 2>/dev/null || true)"

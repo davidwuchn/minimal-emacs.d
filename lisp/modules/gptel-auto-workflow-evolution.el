@@ -2534,7 +2534,7 @@ Connects benchmark-principles Eight Keys scoring to operational pipeline."
                   (error nil))
                 (setq cleaned-temp (1+ cleaned-temp)))))
           ;; 5. Truncate daemon log if >10MB
-          (let ((log-file (expand-file-name "var/tmp/cron/ov5-auto-workflow.log" root)))
+          (let ((log-file (expand-file-name "var/tmp/cron/pmf-value-stream.log" root)))
             (when (and (file-exists-p log-file)
                        (> (file-attribute-size (file-attributes log-file)) (* 10 1024 1024)))
               (shell-command (format "tail -n 1000 %s > %s.tmp && mv %s.tmp %s"

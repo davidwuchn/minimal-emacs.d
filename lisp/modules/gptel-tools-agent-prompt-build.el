@@ -2218,7 +2218,30 @@ Returns alist of (AGENT-TYPE BACKEND . MODEL) entries."
     result))
 
 (defcustom gptel-auto-workflow-per-task-model-map
-  (gptel-auto-workflow--generate-task-model-map)
+  '(    ("analyzer"   "MiniMax"    . "MiniMax-M3")
+    ("analyzer"   "DashScope"  . "qwen3.6-plus")
+    ("analyzer"   "moonshot"   . "kimi-k2.6")
+    ("analyzer"   "DeepSeek"   . "deepseek-v4-flash")
+    ("grader"     "MiniMax"    . "MiniMax-M3")
+    ("grader"     "DashScope"  . "qwen3.6-plus")
+    ("grader"     "DeepSeek"   . "deepseek-v4-pro")
+    ("grader"     "moonshot"   . "kimi-k2.6")
+    ("executor"   "DashScope"  . "qwen3.6-plus")
+    ("executor"   "moonshot"   . "kimi-k2.6")
+    ("executor"   "DeepSeek"   . "deepseek-v4-flash")
+    ("executor"   "MiniMax"    . "MiniMax-M3")
+    ("researcher" "MiniMax"    . "MiniMax-M3")
+    ("researcher" "DashScope"  . "qwen3.6-plus")
+    ("researcher" "DeepSeek"   . "deepseek-v4-pro")
+    ("researcher" "moonshot"   . "kimi-k2.6")
+    ("reviewer"   "MiniMax"    . "MiniMax-M3")
+    ("reviewer"   "DashScope"  . "qwen3.6-plus")
+    ("reviewer"   "DeepSeek"   . "deepseek-v4-pro")
+    ("reviewer"   "moonshot"   . "kimi-k2.6")
+    ("comparator" "MiniMax"    . "MiniMax-M3")
+    ("comparator" "DashScope"  . "qwen3.6-plus")
+    ("comparator" "DeepSeek"   . "deepseek-v4-pro")
+    ("comparator" "moonshot"   . "kimi-k2.6"))
   "Per-task-type model selection for each backend.
 Each element is (AGENT-TYPE BACKEND . MODEL).
 When selecting a backend+model pair for AGENT-TYPE, this map takes

@@ -43,7 +43,11 @@ Returns list of (BACKEND-OR-MODEL . sieve-type) entries."
     (dolist (entry gptel-backend-registry)
       (let* ((backend-name (symbol-name (car entry)))
              (models (plist-get (cdr entry) :models))
-             (is-qwen (string-match-p "qwen" (downcase backend-name))))
+             ;; Check if backend name OR any model name contains "qwen"
+             (is-qwen (or (string-match-p "qwen" (downcase backend-name))
+                          (cl-some (lambda (m)
+                                     (string-match-p "qwen" (downcase (symbol-name m))))
+                                   models))))
         ;; Backend entry
         (push (cons backend-name (if is-qwen 'single-neuron 'distributed))
               result)

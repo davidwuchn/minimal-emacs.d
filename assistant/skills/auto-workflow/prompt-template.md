@@ -23,6 +23,14 @@ Working dir: {{worktree-path}}
 {{controller-focus}}
 {{inspection-thrash-contract}}
 
+## WORKTREE SAFETY (CRITICAL)
+- Before EVERY edit, verify: `git -C {{worktree-path}} rev-parse --show-toplevel`
+- NEVER edit files outside this worktree
+- NEVER run: `git stash`, `git checkout`, `git reset`, `git clean`
+- NEVER delete files with rm, unlink, or delete-directory
+- ONLY use Edit, Write, ApplyPatch tools on files within the worktree
+- If a file path looks wrong (e.g., contains '../' or absolute paths), ABORT and report the issue
+
 {{task-hint}}
 
 {{review-feedback}}

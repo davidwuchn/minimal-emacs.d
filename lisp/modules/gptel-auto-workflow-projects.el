@@ -1086,12 +1086,10 @@ Returns nil if PROJECT-ROOT is nil or not found in cache."
                             (if attrs "exists" "none")
                             file-size)
                     status-lines))))
-        (if (null status-lines)
-            (message "No projects configured for research status.")
-          (let ((result (string-join (nreverse status-lines) "\n")))
-            (setq gptel-auto-workflow--research-status-cache
-                  (cons now result))
-            (message "Research cache status:\n%s" result))))))
+        (let ((result (string-join (nreverse status-lines) "\n")))
+          (setq gptel-auto-workflow--research-status-cache
+                (cons now result))
+          (message "Research cache status:\n%s" result))))))
 
 ;;; Weekly Job Runner (shared by mementum and instincts)
 

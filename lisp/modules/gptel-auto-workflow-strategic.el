@@ -2676,10 +2676,31 @@ When COMPLETION-CALLBACK is non-nil, call it after findings are cached."
                                proj-root
                                (format-time-string "%Y-%m-%d %H:%M")
                                findings)))
-             (message "[research] Findings cached for %s (%d chars)"
-                      proj-root (length findings))
-             (when completion-callback
-               (funcall completion-callback findings)))))))))
+              (message "[research] Findings cached for %s (%d chars)"
+                       proj-root (length findings))
+              ;; Update dashboards after research completes
+              (when (fboundp 'gptel-auto-workflow--update-gtm-dashboard)
+                (condition-case err
+                    (gptel-auto-workflow--update-gtm-dashboard findings)
+                  (error (message "[dashboard] GTM update error: %s" err))))
+               ;; Parse findings for innovation ideas
+               (when (fboundp 'gptel-auto-workflow--innovation-queue-parse-findings)
+                 (condition-case err
+                     (let ((new-ideas (gptel-auto-workflow--innovation-queue-parse-findings findings)))
+                       (when new-ideas
+                         (message "[innovation] Queued %d new ideas from research"
+                                  (length new-ideas))))
+                   (error (message "[innovation] Parse error: %s" err))))
+               ;; File beads from research findings (GTM → PMF)
+               (when (fboundp 'gptel-auto-workflow--bead-file-from-research)
+                 (condition-case err
+                     (let ((bead-ids (gptel-auto-workflow--bead-file-from-research findings)))
+                       (when bead-ids
+                         (message "[bead] Filed %d beads from research findings"
+                                  (length bead-ids))))
+                   (error (message "[bead] Filing error: %s" err))))
+               (when completion-callback
+                 (funcall completion-callback findings)))))))))
 
 (defun gptel-auto-workflow-load-research-findings ()
   "Load cached research findings for current project.
@@ -2748,10 +2769,13 @@ Set `gptel-auto-workflow-research-interval' to control frequency."
 (defun gptel-auto-workflow--researcher-daemon-p ()
   "Return non-nil when running inside the dedicated researcher daemon."
   (or (equal (getenv "MINIMAL_EMACS_WORKFLOW_ROLE") "research")
-      (equal (getenv "AUTO_WORKFLOW_EMACS_SERVER") "ov5-researcher")
-      (equal (or (daemonp) "") "ov5-researcher")
+      (equal (getenv "AUTO_WORKFLOW_EMACS_SERVER") "gtm-product-org")
+      (equal (getenv "AUTO_WORKFLOW_EMACS_SERVER") "ov5-researcher")  ; backward compat
+      (equal (or (daemonp) "") "gtm-product-org")
+      (equal (or (daemonp) "") "ov5-researcher")  ; backward compat
       (and (boundp 'server-name)
-           (equal server-name "ov5-researcher"))))
+           (or (equal server-name "gtm-product-org")
+               (equal server-name "ov5-researcher")))))  ; backward compat
 
 (defun gptel-auto-workflow-stop-periodic-research ()
   "Stop periodic researcher runs."

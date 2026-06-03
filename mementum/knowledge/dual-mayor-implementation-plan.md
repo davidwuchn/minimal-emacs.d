@@ -152,10 +152,10 @@ actual-impact: +12% keep-rate
 ```
 
 **Tasks:**
-- [ ] Define bead schema for cross-mayor communication
-- [ ] Create parser in `gptel-auto-workflow-beads.el`
-- [ ] Auto-file beads from research findings
-- [ ] Auto-update beads from experiment results
+- [x] Define bead schema for cross-mayor communication
+- [x] Create parser in `gptel-auto-workflow-beads.el`
+- [x] Auto-file beads from research findings
+- [x] Auto-update beads from experiment results
 
 ### 5.2 Human Decision Gate
 **Between GTM and PMF:**
@@ -164,10 +164,10 @@ actual-impact: +12% keep-rate
 - PMF executes: "Running experiments on X..."
 
 **Tasks:**
-- [ ] Add `mementum/decisions/` directory
-- [ ] Create decision template with options + trade-offs
-- [ ] Surface in both dashboards
-- [ ] Block PMF dispatch until human decides (configurable)
+- [x] Add `mementum/decisions/` directory
+- [x] Create decision template with options + trade-offs
+- [x] Surface in both dashboards
+- [x] Block PMF dispatch until human decides (configurable)
 
 ## Phase 6: Full Separation (Month 3)
 
@@ -175,17 +175,17 @@ actual-impact: +12% keep-rate
 **Current:** Auto-workflow handles ontology evolution
 **Target:** GTM Mayor owns strategy/ontology
 **Tasks:**
-- [ ] Move `gptel-auto-workflow-ontology-router.el` evolution to researcher
-- [ ] Move strategy generation to researcher
-- [ ] PMF Mayor reads strategy from `mementum/gtm/strategy-roadmap.md`
+- [x] Move `gptel-auto-workflow-ontology-router.el` evolution to researcher
+- [x] Move strategy generation to researcher
+- [x] PMF Mayor reads strategy from `mementum/gtm/strategy-roadmap.md`
 
 ### 6.2 Codify Commands
 **Current:** Inline cron loops in `run-pipeline.sh`
 **Target:** Standalone commands like Mayor Method
 **Tasks:**
-- [ ] Create `.claude/commands/pmf-mayor-*.md`
-- [ ] Create `.claude/commands/gtm-mayor-*.md`
-- [ ] Single invocation per loop body
+- [x] Create `assistant/commands/pmf-mayor-*.md`
+- [x] Create `assistant/commands/gtm-mayor-*.md`
+- [x] Single invocation per loop body (via emacsclient)
 
 ## Phase 7: Metrics & Evolution (Ongoing)
 
@@ -198,6 +198,12 @@ actual-impact: +12% keep-rate
 | Market insight velocity | - | findings/day |
 | Strategy accuracy | - | % validated predictions |
 | PMF signal strength | - | correlation: insight → keep |
+
+**Tasks:**
+- [x] `gptel-auto-workflow--pmf-metrics` — experiments/day, keep-rate %, hours/validation
+- [x] `gptel-auto-workflow--gtm-metrics` — findings/day, strategy accuracy %, PMF signal
+- [x] Dashboard templates updated with metric placeholders
+- [x] Auto-update on experiment/research completion
 
 ### 7.2 Self-Evolution
 - PMF Mayor evolves: skill graph, backend routing, experiment prompts
