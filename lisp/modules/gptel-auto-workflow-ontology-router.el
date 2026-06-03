@@ -38,29 +38,33 @@ Ordered by keep-rate from experiment data.")
 
 (defun gptel-auto-workflow--generate-sieve-types ()
   "Generate sieve-type alist from backend registry.
-Returns list of (BACKEND-OR-MODEL . sieve-type) entries."
+Returns list of (BACKEND-OR-MODEL . sieve-type) entries.
+Backend classification uses backend name only.
+Model classification uses model name (or inherits from qwen backend)."
   (let ((result '()))
     (dolist (entry gptel-backend-registry)
       (let* ((backend-name (symbol-name (car entry)))
              (models (plist-get (cdr entry) :models))
-             ;; Check if backend name OR any model name contains "qwen"
-             (is-qwen (or (string-match-p "qwen" (downcase backend-name))
-                          (cl-some (lambda (m)
-                                     (string-match-p "qwen" (downcase (symbol-name m))))
-                                   models))))
-        ;; Backend entry
-        (push (cons backend-name (if is-qwen 'single-neuron 'distributed))
+             ;; Backend classified by its own name only
+             (backend-is-qwen (string-match-p "qwen" (downcase backend-name)))
+             ;; Any model contains qwen (for wildcard entry)
+             (any-model-qwen (cl-some (lambda (m)
+                                        (string-match-p "qwen"
+                                                        (downcase (symbol-name m))))
+                                      models)))
+        ;; Backend entry: classified by backend name only
+        (push (cons backend-name (if backend-is-qwen 'single-neuron 'distributed))
               result)
-        ;; Model entries
+        ;; Model entries: classified by model name
         (dolist (model models)
-          (push (cons (symbol-name model)
-                      (if (or is-qwen
-                              (string-match-p "qwen" (downcase (symbol-name model))))
-                          'single-neuron
-                        'distributed))
-                result))
+          (let ((model-name (symbol-name model))
+                (model-is-qwen (string-match-p "qwen"
+                                               (downcase (symbol-name model)))))
+            (push (cons model-name
+                        (if model-is-qwen 'single-neuron 'distributed))
+                  result)))
         ;; Model family wildcard for Qwen
-        (when is-qwen
+        (when (or backend-is-qwen any-model-qwen)
           (push (cons "qwen" 'single-neuron) result))))
     result))
 
