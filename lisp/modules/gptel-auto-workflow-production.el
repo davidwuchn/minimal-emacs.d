@@ -271,7 +271,7 @@ Called when research context changes or run completes."
               (insert (format "  Historical merges: %d\n" 
                               (plist-get facts :historical-merges)))
               (insert (format "  Merge rate: %.1f%%\n\n" 
-                              (* 100 (plist-get facts :active-merge-rate)))))
+                              (* 100 (or (plist-get facts :active-merge-rate) 0.0)))))
           (ignore)))
       
       ;; Benchmark stats
@@ -449,10 +449,12 @@ Checks mementum/decisions/ for files with status: proposed."
       (when (file-directory-p dir)
         (dolist (file (directory-files dir t "\\.md$"))
           (unless (string-match-p "TEMPLATE" (file-name-nondirectory file))
-            (let* ((content (with-temp-buffer
-                              (insert-file-contents file)
-                              (buffer-string)))
-                   (status (when (string-match "^status:\\s-*\\(.+\\)$" content)
+            (let* ((content (condition-case nil
+                              (with-temp-buffer
+                                (insert-file-contents file)
+                                (buffer-string))
+                            (error nil)))
+                   (status (when (and content (string-match "^status:\\s-*\\(.+\\)$" content))
                              (match-string 1 content))))
               (when (and status (string= (string-trim status) "proposed"))
                 (setq pending t))))))
