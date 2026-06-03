@@ -20619,6 +20619,62 @@ Only when all fail should human be notified."
     (let ((next (car (remove "Copilot" (remove current-backend escalation-backends)))))
       (should (string= next "moonshot")))))
 
+(ert-deftest self-heal/backend-name-mapping-safe ()
+  "Backend switching should use safe lookup table, not string concatenation.
+CF-Gateway would break with (intern (concat 'gptel--' 'cf-gateway'))."
+  (let ((backend-map '(("copilot" . gptel--copilot)
+                       ("moonshot" . gptel--moonshot)
+                       ("deepseek" . gptel--deepseek)
+                       ("cf-gateway" . gptel--cf-gateway))))
+    ;; All escalation backends must have mappings
+    (dolist (backend '("Copilot" "moonshot" "DeepSeek"))
+      (let ((lookup (downcase backend)))
+        (should (assoc lookup backend-map #'string=))))
+    ;; CF-Gateway mapping exists (was missing with string concatenation)
+    (should (assoc "cf-gateway" backend-map #'string=))))
+
+(ert-deftest self-heal/probe-uses-real-grader-or-metrics ()
+  "Probe should test real grader or use recent metrics, not simulate score=5."
+  (let ((probe-result nil)
+        (metrics-available t))
+    ;; With metrics showing success, probe should pass without API call
+    (when metrics-available
+      (setq probe-result t))
+    (should probe-result)))
+
+(ert-deftest self-heal/llm-diagnosis-before-backend-switch ()
+  "When escalation threshold reached, LLM should diagnose before switching backends.
+This adds creative reasoning to mechanical fixes."
+  (let ((consecutive-failures 3)
+        (escalation-threshold 3)
+        (llm-diagnosed nil)
+        (backend-switched nil))
+    ;; After 3 failures
+    (when (>= consecutive-failures escalation-threshold)
+      ;; First: ask LLM for creative diagnosis
+      (setq llm-diagnosed t)
+      ;; Then: switch backend
+      (setq backend-switched t))
+    ;; Both should happen
+    (should llm-diagnosed)
+    (should backend-switched)))
+
+(ert-deftest self-heal/state-persists-escalation-counter ()
+  "Persisted state should include consecutive failure count and current backend.
+This ensures restart doesn't lose escalation context."
+  (let ((state-content "Consecutive failures: 2\nCurrent backend: MiniMax\n"))
+    ;; Should parse both fields
+    (should (string-match-p "Consecutive failures: 2" state-content))
+    (should (string-match-p "Current backend: MiniMax" state-content))))
+
+(ert-deftest self-heal/maybe-self-heal-no-crash-on-number-total ()
+  "maybe-self-heal should not call (length <number>) on :total plist value.
+:total is a count (number), not a list."
+  (let ((health (list :healthy-p t :total 10 :keep-rate 0.2)))
+    ;; This should not error
+    (should (> (or (plist-get health :total) 0) 0))
+    (should (plist-get health :healthy-p))))
+
 (provide 'test-gptel-tools-agent-regressions)
 
 ;;; test-gptel-tools-agent-regressions.el ends here

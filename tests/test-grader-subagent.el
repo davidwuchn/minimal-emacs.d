@@ -556,11 +556,16 @@ Result: Tests pass."))
                (lambda () t))
               ((symbol-function 'gptel-auto-workflow--persist-status)
                (lambda () t))
-              ((symbol-function 'gptel-auto-workflow--restart-watchdog-timer)
-               (lambda () t))
-              ;; Mock dispatch to avoid actual target selection
-              ((symbol-function 'gptel-auto-workflow--dispatch-targets)
-               (lambda (targets _cb) (setq targets-called targets))))
+               ((symbol-function 'gptel-auto-workflow--restart-watchdog-timer)
+                (lambda () t))
+               ;; Mock self-healing probe to avoid blocking test
+               ((symbol-function 'gptel-auto-workflow--probe-before-experiments)
+                (lambda () t))
+               ((symbol-function 'gptel-auto-workflow--load-self-healing-state)
+                (lambda () t))
+               ;; Mock dispatch to avoid actual target selection
+               ((symbol-function 'gptel-auto-workflow--dispatch-targets)
+                (lambda (targets _cb) (setq targets-called targets))))
       (gptel-auto-workflow-run-async)
       (should (= gptel-auto-experiment-time-budget 900))
       ;; Targets should be captured, but we only care about time-budget
