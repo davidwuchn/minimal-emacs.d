@@ -6576,15 +6576,26 @@ Tests still run, but no LLM grading — changes marked for manual review.")
 (defvar gptel-auto-workflow--grader-health-metrics
   (make-hash-table :test 'equal)
   "Hash table tracking grader performance per backend.
-Keys are backend names, values are plists with :count :total-latency :failures.")
+Keys are backend names, values are plists with :count :total-latency :failures :cost.")
+
+(defvar gptel-auto-workflow--backend-cost-estimates
+  '(("MiniMax" . 0.003)
+    ("Copilot" . 0.002)
+    ("moonshot" . 0.005)
+    ("DeepSeek" . 0.001)
+    ("DashScope" . 0.004))
+  "Estimated cost per grader call in USD.
+Used for cost-aware backend selection.")
 
 (defun gptel-auto-workflow--record-grader-metric (backend latency success-p)
   "Record grader metric for BACKEND.
 LATENCY is time in seconds. SUCCESS-P is t if grader returned valid output."
-  (let ((current (gethash backend gptel-auto-workflow--grader-health-metrics
-                          (list :count 0 :total-latency 0 :failures 0))))
+  (let* ((current (gethash backend gptel-auto-workflow--grader-health-metrics
+                           (list :count 0 :total-latency 0 :failures 0 :cost 0.0)))
+         (cost-per-call (or (cdr (assoc backend gptel-auto-workflow--backend-cost-estimates)) 0.003)))
     (plist-put current :count (1+ (plist-get current :count)))
     (plist-put current :total-latency (+ (plist-get current :total-latency) latency))
+    (plist-put current :cost (+ (or (plist-get current :cost) 0.0) cost-per-call))
     (unless success-p
       (plist-put current :failures (1+ (plist-get current :failures))))
     (puthash backend current gptel-auto-workflow--grader-health-metrics)))
@@ -6642,11 +6653,19 @@ Used for safe backend switching without assuming naming conventions.")
 
 (defun gptel-auto-workflow--escalate-to-backend (diagnosis)
   "Escalate broken pipeline to alternative LLM backend.
-Tries next backend in escalation chain instead of asking human."
+Tries next backend in escalation chain, preferring cheaper options.
+Considers cost-per-call when multiple backends are available."
   (let* ((current-backend (when (boundp 'gptel-backend)
                             (gptel-backend-name gptel-backend)))
          (candidates (remove current-backend gptel-auto-workflow--escalation-backends))
-         (next-backend-name (car candidates)))
+         ;; Sort candidates by cost (cheapest first) for cost-aware healing
+         (sorted-candidates
+          (sort candidates
+                (lambda (a b)
+                  (let ((cost-a (or (cdr (assoc a gptel-auto-workflow--backend-cost-estimates)) 0.003))
+                        (cost-b (or (cdr (assoc b gptel-auto-workflow--backend-cost-estimates)) 0.003)))
+                     (< cost-a cost-b)))))
+          (next-backend-name (car sorted-candidates)))
     (if next-backend-name
         (let* ((lookup-key (downcase next-backend-name))
                (backend-symbol (cdr (assoc lookup-key
