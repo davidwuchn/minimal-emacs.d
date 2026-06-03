@@ -29,8 +29,10 @@
 (declare-function gptel-auto-workflow--evolve-research-strategy "gptel-auto-workflow-research-benchmark" ())
 (declare-function gptel-auto-workflow--load-autotts-controller "strategic-daemon-functions" ())
 (declare-function gptel-auto-workflow--load-research-traces "gptel-auto-workflow-research-benchmark" ())
+(declare-function gptel-backend-name "gptel-request" (backend))
 
 (defvar gptel-auto-workflow--champion-keep-rate)
+(defvar gptel-backend)
 
 ;; ─── Semantica AgentMemory: formalize mementum layers ───
 
@@ -6308,9 +6310,8 @@ Returns t if grader healthy, nil if broken."
         (insert ";;; probe-fixture.el --- test fixture -*- lexical-binding: t; -*-\n(defun probe-test ()\n  \"Return 1.\"\n  1)\n"))
       ;; Simulate grader check on trivial change
       ;; If grader returns score=0 on this, grader is broken
-      (let ((simulated-grader-score 5)
-            (simulated-grader-total 5))
-        (setq probe-healthy (>= simulated-grader-score 4)))
+       (let ((simulated-grader-score 5))
+         (setq probe-healthy (>= simulated-grader-score 4)))
       ;; Cleanup
       (delete-directory worktree t)
       ;; Report result
@@ -6374,17 +6375,17 @@ Returns plist with :avg-latency :failure-rate :status."
   "Check all backends for degradation.
 Returns list of (backend . health-plist) for degraded backends."
   (let ((degraded '()))
-    (maphash (lambda (backend metrics)
-               (let ((health (gptel-auto-workflow--get-backend-health backend)))
-                 (when (memq (plist-get health :status) '(critical degraded slow))
-                   (push (cons backend health) degraded))))
-             gptel-auto-workflow--grader-health-metrics)
+     (maphash (lambda (backend _metrics)
+                (let ((health (gptel-auto-workflow--get-backend-health backend)))
+                  (when (memq (plist-get health :status) '(critical degraded slow))
+                    (push (cons backend health) degraded))))
+              gptel-auto-workflow--grader-health-metrics)
     degraded))
 
 ;;; ─── Phase 6: Backend Escalation (LLM-based self-healing) ───
 
 (defvar gptel-auto-workflow--escalation-threshold 3
-  "Number of consecutive failed remediations before escalating to alternative backend.")
+  "Failed remediation count before escalating to alternative backend.")
 
 (defvar gptel-auto-workflow--consecutive-failed-remediations 0
   "Counter for consecutive failed auto-remediation attempts.")
