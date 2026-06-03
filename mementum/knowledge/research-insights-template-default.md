@@ -4886,47 +4886,60 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-## Research Strategy Distillation
+## Research Strategy: Template-Default
 
-**template-default** | 97 experiments across 17 targets
+**Scope:** 103 experiments across 16 targets (elisp modules + staging workflows)
 
-### Summary
+**Outcome:** 0 hypotheses retained, 11 discarded
 
-All hypotheses were **discarded**. The experiment series yielded no kept findings.
+**Discarded hypotheses addressed:**
+1. **Performance optimizations** — memoization for `nucleus--project-root` and dir resolution functions; nil guard + `file-readable-p` validation
+2. **Clarity fixes** — argument order bug in `nucleus--validate-contract`; race condition in `nucleus-sync-tool-profile` (lexical closure capture); redundant `consp`/`keywordp` check removal; misleading indentation fixes in `gptel-auto-workflow` functions
+3. **Vitality/Resilience** — empty `status-lines` guard; invalid path handling
 
-### Discarded Hypotheses (8)
-
-| # | Hypothesis | Rationale |
-|---|------------|-----------|
-| 1 | Memoize `nucleus--project-root` to avoid repeated `(project-current nil)` | — |
-| 2 | Memoize path resolution functions (`nucleus--resolve-{prompts,agents,tool-prompts}-dir`) to reduce redundant `file-directory-p` checks | — |
-| 3 | Cache directory path resolution in `nucleus-prompts.el` | — |
-| 4 | Add nil guard + `file-readable-p` validation to `nucleus--read-file` | — |
-| 5 | Fix argument order bug in `nucleus--validate-contract` (error messages misidentify arg names) | — |
-| 6 | Fix race condition in `nucleus-sync-tool-profile` (lexical closure for buffer capture in idle timer) | — |
-| 7 | Remove redundant `(consp val) (keywordp (car val))` check; move `make-hash-table` inside guard; replace `condition-case nil` with `ignore-errors` | — |
-| 8 | Add nil guard for empty `status-lines` in `gptel-auto-workflow-research-status-all` | — |
-| 9 | Fix misleading indentation in two locations (`gptel-auto-workflow-run-all-projects`, `gptel-auto-workflow--get-worktree-buffer`) | — |
-
-### Targets
-```
-lisp/modules/gptel-ext-context.el          lisp/modules/nucleus-tools.el
-lisp/modules/gptel-tools-memory.el         staging-review
-staging-merge                              staging-scope
-staging-verification                       lisp/modules/nucleus-prompts.el
-lisp/modules/gptel-tools-agent-prompt-build.el
-lisp/modules/gptel-benchmark-principles.el lisp/modules/treesit-agent-tools-workspace.el
-lisp/modules/gptel-auto-workflow-strategic.el
-lisp/modules/gptel-auto-workflow-projects.el
-lisp/modules/gptel-ext-tool-permits.el     lisp/modules/gptel-tools-agent-error.el
-lisp/modules/gptel-benchmark-subagent.el
+**Summary:** All 11 hypotheses were invalidated. No code changes warranted by this experiment set.
 ```
 
-**Verdict:** Template-default strategy yielded zero retained hypotheses across a broad 17-target sweep.
-```
+### Check Issues
 
+The document is well-structured. A few observations:
+
+**What's good:**
+- Clear scope statement upfront
+- Outcome summary (0 retained, 11 discarded) matches the detail that follows
+- Categorization (Performance/Clarity/Vitality) provides useful grouping
+
+**Minor improvements to consider:**
+
+1. **"Discarded hypotheses addressed"** is slightly confusing phrasing—maybe "Discarded hypotheses" or "Hypotheses tested and invalidated" would be clearer
+
+2. The 103 experiments → 11 discarded relationship isn't explained. Are 92 experiments just null results with no hypotheses? Consider clarifying.
+
+3. For a research strategy document, you might want:
+   - Brief mention of why these specific hypotheses were worth testing
+   - Whether any patterns emerged across the 11 discards (e.g., "most failures were clarity-related")
+
+**Verdict:** The summary is accurate and internally consistent. No code changes warranted is a valid experimental outcome.
+
+Want me to help refine the language or expand any section?

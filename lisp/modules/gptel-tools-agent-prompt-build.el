@@ -910,14 +910,15 @@ Reuses gptel-agent's `gptel-agent-read-file' for frontmatter parsing."
              (parsed (gptel-agent-read-file load-file))
              (name (car parsed))
              (plist (cdr parsed)))
-        (list :name (or name skill-name)
-              :metadata (cl-remove-if (lambda (k) (eq k :system)) plist)
-              :body (or (plist-get plist :system) "")
-              :skill-dir skill-dir)
-        ;; Track for skill graph evolution
-        (when (and (boundp 'gptel-auto-experiment--loaded-skills)
-                   (listp gptel-auto-experiment--loaded-skills))
-          (push skill-name gptel-auto-experiment--loaded-skills))))))
+         (prog1
+             (list :name (or name skill-name)
+                   :metadata (cl-remove-if (lambda (k) (eq k :system)) plist)
+                   :body (or (plist-get plist :system) "")
+                   :skill-dir skill-dir)
+           ;; Track for skill graph evolution
+           (when (and (boundp 'gptel-auto-experiment--loaded-skills)
+                      (listp gptel-auto-experiment--loaded-skills))
+             (push skill-name gptel-auto-experiment--loaded-skills)))))))
 
 (defun gptel-auto-workflow--load-skill-metadata (skill-name)
   "Load only metadata for SKILL-NAME (progressive disclosure stage 1).
