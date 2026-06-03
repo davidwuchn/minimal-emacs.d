@@ -9,22 +9,12 @@
 (defconst gptel-backend-registry
   `((MiniMax
      :host "api.minimaxi.com"
-     :models (MiniMax-M3 minimax-m2.7-highspeed minimax-m2.7)
+     :models (MiniMax-M3)
      :default-model MiniMax-M3
      :model-metadata
      ((MiniMax-M3
        :context-window 196608
        :pricing-input 0.60 :pricing-output 2.40 :pricing-cache-hit 0.12
-       :capabilities (code-generation tool-calls)
-       :speed fast)
-      (minimax-m2.7-highspeed
-       :context-window 196608
-       :pricing-input 0.15 :pricing-output 0.60 :pricing-cache-hit 0.03
-       :capabilities (code-generation tool-calls)
-       :speed fastest)
-      (minimax-m2.7
-       :context-window 196608
-       :pricing-input 0.30 :pricing-output 1.20 :pricing-cache-hit 0.06
        :capabilities (code-generation tool-calls)
        :speed fast)))
 
