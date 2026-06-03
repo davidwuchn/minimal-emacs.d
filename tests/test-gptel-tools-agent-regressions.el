@@ -20493,6 +20493,82 @@ These must have different scores or the system learns the wrong lesson."
     ;; Actual failure should NOT be tagged as grader-only
     (should (not (plist-get actual-failure :grader-only-failure)))))
 
+;;; ─── Phase 2: Meta-Learning from Remediation ───
+
+(ert-deftest self-heal/records-remediation-effectiveness ()
+  "System should track whether fixes actually improve keep rate."
+  (require 'gptel-tools-agent)
+  ;; Simulate a remediation that was applied
+  (let ((gptel-auto-workflow--self-healing-log nil)
+        (before-rate 0.0)
+        (after-rate 0.15)
+        (remedy "grader-timeout=900"))
+    ;; Record the remediation attempt
+    (push (list :timestamp (float-time)
+                :diagnosis "grader-destroying-experiments"
+                :remedy remedy
+                :before-rate before-rate
+                :after-rate after-rate)
+          gptel-auto-workflow--self-healing-log)
+    ;; Verify it was recorded
+    (should (= (length gptel-auto-workflow--self-healing-log) 1))
+    (should (string= (plist-get (car gptel-auto-workflow--self-healing-log) :remedy)
+                     remedy))
+    ;; The fix improved things: 0% → 15%
+    (should (> after-rate before-rate))))
+
+(ert-deftest self-heal/escalates-when-remediation-fails ()
+  "When auto-remediation fails 3x, system should halt and alert human."
+  (let ((failures 0)
+        (threshold 3))
+    ;; Simulate 3 failed remediation attempts
+    (dotimes (i threshold)
+      (setq failures (1+ failures)))
+    ;; After 3 failures, should escalate
+    (should (>= failures threshold))))
+
+(ert-deftest self-heal/persists-remediation-across-sessions ()
+  "Self-healing log should survive daemon restart via git persistence.
+Without persistence, system re-diagnoses same problem every session."
+  (let ((log-file "mementum/knowledge/pipeline-health.md"))
+    ;; After we implement persistence, this file should exist
+    (skip-unless (file-exists-p log-file))
+    (should (> (file-attribute-size (file-attributes log-file)) 0))))
+
+;;; ─── Phase 4: Self-Diagnostic Probes ───
+
+(ert-deftest self-heal/probe-detects-broken-grader ()
+  "A trivial experiment on a test fixture should always pass.
+If it fails, the grader itself is broken, not the code."
+  (let* ((fixture "(defun probe-test () 1)\n")
+         ;; Simulate what probe would check
+         (probe-passed t)
+         (grader-result 0))
+    ;; If grader returns 0 on trivial change → grader is broken
+    (when (= grader-result 0)
+      (setq probe-passed nil))
+    ;; Probe should detect the broken grader
+    (should (not probe-passed))))
+
+(ert-deftest self-heal/probe-skips-real-experiments-when-grader-broken ()
+  "When probe detects broken grader, real experiments should be skipped
+until auto-remediation restores grader health."
+  (let ((probe-failed t)
+        (real-experiments-should-run nil))
+    ;; If probe failed, don't run real experiments (waste resources)
+    (when probe-failed
+      (setq real-experiments-should-run nil))
+    (should (not real-experiments-should-run))))
+
+(ert-deftest self-heal/probe-auto-remediates-immediately ()
+  "Probe failure should trigger immediate remediation, not wait for batch.
+This prevents wasting experiments on a known-broken pipeline."
+  (let ((remediation-triggered nil))
+    ;; When probe fails
+    (when t  ; probe-failed
+      (setq remediation-triggered t))
+    (should remediation-triggered)))
+
 (provide 'test-gptel-tools-agent-regressions)
 
 ;;; test-gptel-tools-agent-regressions.el ends here

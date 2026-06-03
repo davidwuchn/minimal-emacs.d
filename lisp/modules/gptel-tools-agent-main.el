@@ -474,6 +474,18 @@ Usage:
     (gptel-auto-workflow--persist-status)
     ;; Start watchdog timer
     (gptel-auto-workflow--restart-watchdog-timer)
+    ;; Phase 2: Restore persisted self-healing state (survives daemon restart)
+    (when (fboundp 'gptel-auto-workflow--load-self-healing-state)
+      (condition-case err
+          (gptel-auto-workflow--load-self-healing-state)
+        (error (message "[self-heal] State restore skipped: %s"
+                        (error-message-string err)))))
+    ;; Phase 4: Self-diagnostic probe — verify grader health before wasting experiments
+    (when (and (fboundp 'gptel-auto-workflow--probe-before-experiments)
+               (not (gptel-auto-workflow--probe-before-experiments)))
+      (message "[auto-workflow] Diagnostic probe failed: grader broken, experiments halted")
+      (setq gptel-auto-workflow--running nil)
+      (cl-return-from gptel-auto-workflow-run-async nil))
     ;; Wrap completion-callback with memory/disk cleanup for 24/7 operation
     (let ((cleanup-callback
            (lambda (results)
