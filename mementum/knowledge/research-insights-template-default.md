@@ -4852,64 +4852,81 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*2 check issues (severity 0.05). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-**Research Distillation: `template-default` (116 experiments)**
+## Research Strategy Distillation
 
-**Kept Hypotheses — Core Themes:**
+**template-default** | 97 experiments across 17 targets
 
-1. **Defensive Boundaries & Input Hardening**
-   - Add explicit nil/empty-string guards on critical inputs (`english-findings`, `allium-spec`, `where`).
-   - Insert `buffer-live-p` and nil checks inside lambdas to handle async buffer lifecycle edge cases.
-   - Add a `(symbolp backend)` type-validation branch to prevent non-keyword symbols from silently falling through to struct handling.
+### Summary
 
-2. **Explicit Error Topology**
-   - Replace ambiguous failure modes with explicit sentinels (e.g., timeout sentinel values in sync subagent calls).
-   - Wrap volatile operations (overlay creation) in `condition-case` to isolate failures and prevent task interruption.
-   - Remove redundant callback/conditional checks that obscure the actual error path.
+All hypotheses were **discarded**. The experiment series yielded no kept findings.
 
-3. **Fractal Clarity via Extraction**
-   - Isolate provider selection logic from `gptel-benchmark-call-subagent` into a dedicated `gptel-benchmark--select-provider` function.
-   - Make selection assumptions explicit, testable, and independently improvable without touching main dispatch logic.
+### Discarded Hypotheses (8)
 
-4. **Simplification by Redundancy Removal**
-   - Remove unnecessary `if apply-lines` checks when `mapconcat` on an empty list already returns `""`.
-   - Strip redundant conditional branching to flatten lambda-prompt extraction logic.
+| # | Hypothesis | Rationale |
+|---|------------|-----------|
+| 1 | Memoize `nucleus--project-root` to avoid repeated `(project-current nil)` | — |
+| 2 | Memoize path resolution functions (`nucleus--resolve-{prompts,agents,tool-prompts}-dir`) to reduce redundant `file-directory-p` checks | — |
+| 3 | Cache directory path resolution in `nucleus-prompts.el` | — |
+| 4 | Add nil guard + `file-readable-p` validation to `nucleus--read-file` | — |
+| 5 | Fix argument order bug in `nucleus--validate-contract` (error messages misidentify arg names) | — |
+| 6 | Fix race condition in `nucleus-sync-tool-profile` (lexical closure for buffer capture in idle timer) | — |
+| 7 | Remove redundant `(consp val) (keywordp (car val))` check; move `make-hash-table` inside guard; replace `condition-case nil` with `ignore-errors` | — |
+| 8 | Add nil guard for empty `status-lines` in `gptel-auto-workflow-research-status-all` | — |
+| 9 | Fix misleading indentation in two locations (`gptel-auto-workflow-run-all-projects`, `gptel-auto-workflow--get-worktree-buffer`) | — |
 
-**Discarded Hypotheses:**
-- Minor formatting fixes (e.g., `format "%s"` → `error-message-string`).
-- Hash-table cleanup/removal operations.
-- Template artifacts and incomplete entries.
-
-**Strategic Direction:**
-A systematic shift from implicit, brittle control flow toward explicit, guarded, and testable boundaries. Prioritizes **φ Vitality** (adaptive robustness to async/stateful edge cases) and **fractal Clarity** (explicit, testable assumptions over nested conditional magic).
+### Targets
+```
+lisp/modules/gptel-ext-context.el          lisp/modules/nucleus-tools.el
+lisp/modules/gptel-tools-memory.el         staging-review
+staging-merge                              staging-scope
+staging-verification                       lisp/modules/nucleus-prompts.el
+lisp/modules/gptel-tools-agent-prompt-build.el
+lisp/modules/gptel-benchmark-principles.el lisp/modules/treesit-agent-tools-workspace.el
+lisp/modules/gptel-auto-workflow-strategic.el
+lisp/modules/gptel-auto-workflow-projects.el
+lisp/modules/gptel-ext-tool-permits.el     lisp/modules/gptel-tools-agent-error.el
+lisp/modules/gptel-benchmark-subagent.el
 ```
 
-### Check Issues
+**Verdict:** Template-default strategy yielded zero retained hypotheses across a broad 17-target sweep.
+```
 
-Here is a structured review of your research distillation. Overall, the strategic direction is coherent, but the synthesis is **under-dense for 116 experiments** and carries a few risks that need qualification.
-
----
-
-### ✅ Validation — What Holds Up
-
-| Theme | Verdict | Note |
-|-------|---------|------|
-| **Defensive Boundaries** | **Sound** | `buffer-live-p` and nil-guards inside async lambdas are high-leverage for Emacs Lisp stateful edge cases. This directly addresses the most common failure mode in `gptel`-style async code (buffer killed before callback fires). |
-| **Error Topology** | **Sound in principle** | Replacing ambiguous failure modes with sentinel values makes sync subagent calls deterministic and testable. |
-| **Extraction** | **Sound** | Isolating provider selection is a classic locality/clarity win. If the selection logic has externalities (API keys, model availability), extracting it makes those assumptions visible. |
-| **Redundancy Removal** | **Sound, if verified** | Relying on `mapconcat`’s empty-list behavior is idiomatic Elisp. Removing unnecessary conditionals flattens cognitive load. |
-
----
-
-### ⚠️ Logical Gaps & Risks to Tighten
-
-#### 1. The `symbolp` Validation Is Under-Specified
-> *"Add a `(symbolp backend)` type-validation branch to prevent non-keyword symbols from silently falling through to struct handling."*
-
-**Issue:** If the valid dispatch is **keyword** → struct → error, then `(symbolp backend)` will also catch **valid keywords** (since keywords 
-
-... (truncated)

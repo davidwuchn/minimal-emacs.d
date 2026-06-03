@@ -2809,20 +2809,30 @@ Returns formatted string listing underexplored targets."
                          "\n")
               "\n\n"))))
 
+(defcustom gptel-auto-experiment-saturation-threshold
+  '(:frontier-size 2 :axes 3 :quality 0.7)
+  "Thresholds for declaring a target's Pareto frontier 'saturated'.
+Plist with :frontier-size (min Pareto-optimal experiments),
+:axes (min unique exploration axes), :quality (min best code-quality).
+Lower values = more aggressive experimentation (less saturation)."
+  :type '(plist :key-type symbol :value-type number)
+  :group 'gptel)
+
 (defun gptel-auto-experiment--frontier-saturated-p (target &optional min-frontier-size min-axes min-quality)
   "Return t if TARGET's frontier is saturated (sufficiently explored).
-MIN-FRONTIER-SIZE: minimum number of Pareto-optimal experiments (default: 3).
-MIN-AXES: minimum number of unique axes covered (default: 6).
-MIN-QUALITY: minimum best quality score (default: 0.8)."
-  (let* ((frontier (gptel-auto-experiment--compute-frontier target))
+MIN-FRONTIER-SIZE: minimum number of Pareto-optimal experiments (default: from `gptel-auto-experiment-saturation-threshold').
+MIN-AXES: minimum number of unique axes covered (default: from threshold).
+MIN-QUALITY: minimum best quality score (default: from threshold)."
+  (let* ((threshold gptel-auto-experiment-saturation-threshold)
+         (frontier (gptel-auto-experiment--compute-frontier target))
          (frontier-size (length frontier))
          (axes (cl-remove-duplicates (mapcar (lambda (e) (plist-get e :axis)) frontier)
                                      :test #'equal))
          (qualities (mapcar (lambda (e) (plist-get e :code-quality)) frontier))
          (best-quality (if qualities (apply #'max qualities) 0)))
-    (and (>= frontier-size (or min-frontier-size 3))
-         (>= (length axes) (or min-axes 4))
-         (>= best-quality (or min-quality 0.8)))))
+    (and (>= frontier-size (or min-frontier-size (plist-get threshold :frontier-size) 3))
+         (>= (length axes) (or min-axes (plist-get threshold :axes) 4))
+         (>= best-quality (or min-quality (plist-get threshold :quality) 0.8)))))
 
 (defun gptel-auto-experiment--frontier-saturation-guidance (target)
   "Format saturation status for TARGET.

@@ -20,7 +20,7 @@ export TMPDIR=${TMPDIR:-/tmp}
 mkdir -p "$(dirname "$LOG")"
 
 start_workflow_daemon() {
-    env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
+    env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY -u XDG_RUNTIME_DIR \
         EMACSNATIVELOADPATH= \
         TMPDIR=/tmp \
         AUTO_WORKFLOW_EMACS_SERVER="$SERVER_NAME" \

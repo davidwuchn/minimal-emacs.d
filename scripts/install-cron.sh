@@ -43,9 +43,10 @@ render_crontab() {
         else
             echo "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:\$HOME/.emacs.d/bin:\$HOME/.venv/bin"
         fi
-        if [ "$machine" = "pi5" ] || [ "$machine" = "linux" ]; then
-            echo "XDG_RUNTIME_DIR=/run/user/$(id -u)"
-        fi
+        # NOTE: Do NOT set XDG_RUNTIME_DIR.  Cron jobs run outside the
+        # systemd user session, so /run/user/$(id -u) may not exist or may
+        # be inaccessible.  Let Emacs fall back to TMPDIR > /tmp/emacs$UID
+        # per AGENTS.md socket_path policy.
         echo "MAILTO=\"\""
         echo
         echo "# Watchdog: restart daemon if unresponsive (every 30min, reaper handles 95%)"
