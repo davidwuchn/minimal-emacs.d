@@ -661,12 +661,10 @@ start <= tracking to avoid corrupting the buffer."
           (set-marker tracking-marker start-marker))))))
 
 (defun my/gptel--format-error-message (error-data http-status)
-  "Format error message from ERROR-DATA and HTTP-STATUS.
-Extracts message from plist/alist when error-data is not a string."
+  "Distilled error message from ERROR-DATA and HTTP-STATUS."
   (or (my/gptel--extract-error-message error-data)
-      (if (and http-status (not (eq http-status t)))
-          (format "HTTP %s" http-status)
-        "Transient API Error")))
+      (and (numberp http-status) (format "HTTP %d" http-status))
+      "API Error"))
 
 (defun my/gptel--headless-auto-workflow-agent-buffer-p (info)
   "Return non-nil when INFO belongs to a headless auto-workflow agent buffer."
@@ -754,10 +752,10 @@ TEST: Verify with network failure simulation — should retry 3 times with
         (let* ((delay (my/gptel--retry-delay retries))
                (error-msg (my/gptel--format-error-message error-data http-status)))
           (if my/gptel-max-retries
-              (message "gptel: API failed with '%s'. Retrying (%d/%d) in %.1fs..."
-                       error-msg (1+ retries) my/gptel-max-retries delay)
-            (message "gptel: API failed with '%s'. Retrying (Attempt %d) in %.1fs..."
-                     error-msg (1+ retries) delay))
+              (message "gptel retry %d/%d: %s (%.1fs)"
+                       (1+ retries) my/gptel-max-retries error-msg delay)
+            (message "gptel retry %d: %s (%.1fs)"
+                     (1+ retries) error-msg delay))
           
           ;; Clean up partial buffer insertions if any.
           (my/gptel--cleanup-partial-insertion info)

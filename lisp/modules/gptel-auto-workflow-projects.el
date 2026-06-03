@@ -413,7 +413,7 @@ finish."
                                         (format "[auto-workflow] - Skipped: %s"
                                                 project-root)))))))
                    (error
-                    (push (cons project-root (format "error: %s" err)) results)
+                    (push (cons project-root (format "error: %s" err-msg)) results)
                     (message "[auto-workflow] ✗ Failed: %s - %s" project-root err)
                     (run-next)))))))
         (run-next)))))
@@ -901,7 +901,7 @@ When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
                             (setq gptel-auto-workflow--current-project nil)
                             (run-next)))))
                    (error
-                    (let ((err-msg (format "%s" err))
+                    (let ((err-msg (error-message-string err))
                           (bt (with-output-to-string (backtrace))))
                       (when (string-match "void-variable total" err-msg)
                         (message "[research] DEBUG void-variable total backtrace:")
@@ -909,8 +909,8 @@ When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
                         (with-temp-file (expand-file-name "var/tmp/research-total-backtrace.txt"
                                                           (gptel-auto-workflow--worktree-base-root))
                           (insert bt))))
-                    (push (cons project-root (format "error: %s" err)) results)
-                    (message "[research] ✗ Failed: %s - %s" project-root err)
+                    (push (cons project-root (format "error: %s" err-msg)) results)
+                    (message "[research] ✗ Failed: %s - %s" project-root err-msg)
                     (setq gptel-auto-workflow--current-project nil)
                     (run-next)))))))
         (run-next)))))
