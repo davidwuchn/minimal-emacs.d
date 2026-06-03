@@ -9,6 +9,17 @@ depends-on: [dual-mayor-architecture]
 
 # Self-Healing Architecture for Ouroboros V5
 
+> **Self-Healing and Self-Evolution are one loop with two feedback signals.**
+>
+> | | Self-Evolution | Self-Healing |
+> |---|---|---|
+> | **Signal** | Success (kept experiments) | Failure (broken grader, 0% keep-rate) |
+> | **Learns** | "What works" → strategy propagation | "What's broken" → fix + prevent |
+> | **Direction** | Forward (improve) | Backward (recover) |
+> | **Metric** | Keep-rate trending up | Pipeline health stable |
+>
+> Both use the same infrastructure: `pipeline-health.md`, `self-healing-log`, `check-pipeline-health`, meta-learning from effectiveness. The only difference is which direction the arrow points.
+
 ## The Blind Spot We Just Discovered
 
 **Problem:** The system only learns from KEPT experiments. When the grader destroys everything (0% keep rate), there's no data to learn from. The system is blind to evaluator failures.

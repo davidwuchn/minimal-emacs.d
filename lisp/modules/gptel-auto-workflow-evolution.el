@@ -6228,16 +6228,135 @@ If not improved after 3 runs, trigger escalation."
        (t
         (message "[self-heal] ✗ Recovery NOT verified: still %.0f%% (was %.0f%%)"
                  (* 100 current-rate) (* 100 before-rate))
-        ;; Increment remediation failure counter
-        (setq gptel-auto-workflow--consecutive-failed-remediations
-              (1+ gptel-auto-workflow--consecutive-failed-remediations)))))))
+         ;; Increment remediation failure counter
+         (setq gptel-auto-workflow--consecutive-failed-remediations
+               (1+ gptel-auto-workflow--consecutive-failed-remediations)))))))
+
+;;; ─── Phase 8: Predictive Health ───
+
+(defvar gptel-auto-workflow--health-history nil
+  "List of recent health snapshots for trend analysis.
+Each entry: (:timestamp :keep-rate :grader-failures :timeouts :backend)
+Used to predict failures before they cause 0% keep-rate.")
+
+(defvar gptel-auto-workflow--predictive-threshold 0.2
+  "Minimum degradation rate to trigger early warning.
+If keep-rate drops >20% per run, predict failure.")
+
+(defun gptel-auto-workflow--record-health-snapshot (health)
+  "Record HEALTH snapshot for trend analysis.
+Keeps last 10 snapshots, discards older ones."
+  (push (list :timestamp (float-time)
+              :keep-rate (or (plist-get health :keep-rate) 0)
+              :grader-failures (or (plist-get health :grader-failures) 0)
+              :timeouts (or (plist-get health :timeouts) 0))
+        gptel-auto-workflow--health-history)
+  (when (> (length gptel-auto-workflow--health-history) 10)
+    (setq gptel-auto-workflow--health-history
+          (butlast gptel-auto-workflow--health-history))))
+
+(defun gptel-auto-workflow--predict-failure ()
+  "Predict if pipeline will fail based on trend analysis.
+Returns (:prediction warning/critical/healthy :confidence 0-1)
+when trend shows degradation, nil otherwise."
+  (when (> (length gptel-auto-workflow--health-history) 3)
+    (let* ((recent (subseq gptel-auto-workflow--health-history 0 3))
+           (keep-rates (mapcar (lambda (h) (plist-get h :keep-rate)) recent))
+           (grader-failures (apply #'+ (mapcar (lambda (h) (plist-get h :grader-failures)) recent)))
+           (avg-keep (/ (apply #'+ keep-rates) (length keep-rates)))
+           (trend (- (car keep-rates) (car (last keep-rates)))))
+      (cond
+       ;; Critical: avg keep-rate below 5% and dropping
+       ((and (< avg-keep 0.05) (< trend 0))
+        (list :prediction 'critical
+              :confidence 0.95
+              :message "keep-rate collapsing"))
+       ;; Warning: keep-rate dropping >20% per run
+       ((< trend (- gptel-auto-workflow--predictive-threshold))
+        (list :prediction 'warning
+              :confidence (min 0.9 (+ 0.5 (* -2.0 trend)))
+              :message (format "keep-rate dropping %.0f%% per run" (* 100 trend))))
+       ;; Healthy: stable or improving
+       (t nil)))))
+
+(defun gptel-auto-workflow--predictive-intervention (prediction)
+  "Act on PREDICTION before failure occurs.
+Pre-emptive remediation: switch backend before grader breaks."
+  (let ((level (plist-get prediction :prediction))
+        (confidence (plist-get prediction :confidence)))
+    (message "[self-heal] ⚠ PREDICTIVE: %s (confidence: %.0f%%)"
+             (plist-get prediction :message) (* 100 confidence))
+    (when (eq level 'critical)
+      ;; Pre-emptive backend switch before grader breaks
+      (message "[self-heal] Pre-emptive backend switch to prevent total failure")
+      (gptel-auto-workflow--escalate-to-backend
+       "predictive-failure-prevention"))))
+
+;;; ─── Phase 9: Cross-Run Meta-Analysis ───
+
+(defun gptel-auto-workflow--analyze-failure-patterns ()
+  "Analyze failure patterns across runs using LLM.
+Looks for: time-of-day patterns, backend-specific issues, model drift.
+Returns list of insights or nil if no patterns found."
+  (when (> (length gptel-auto-workflow--self-healing-log) 3)
+    (let ((patterns nil))
+      ;; Pattern 1: Time-based failures
+      (let ((time-buckets (make-hash-table :test 'equal)))
+        (dolist (entry gptel-auto-workflow--self-healing-log)
+          (let* ((ts (or (plist-get entry :timestamp) 0))
+                 (hour (format-time-string "%H" (seconds-to-time ts)))
+                 (count (gethash hour time-buckets 0)))
+            (puthash hour (1+ count) time-buckets)))
+        (maphash (lambda (hour count)
+                   (when (> count 2)
+                     (push (format "Failures cluster at %s:00 (%d times)" hour count) patterns)))
+                 time-buckets))
+      ;; Pattern 2: Backend-specific failures
+      (let ((backend-failures (make-hash-table :test 'equal)))
+        (dolist (entry gptel-auto-workflow--self-healing-log)
+          (let* ((remedy (or (plist-get entry :remedy) ""))
+                 (backend (when (string-match "backend=\\(.+\\)" remedy)
+                            (match-string 1 remedy)))
+                 (count (gethash backend backend-failures 0)))
+            (when backend
+              (puthash backend (1+ count) backend-failures))))
+        (maphash (lambda (backend count)
+                   (when (> count 2)
+                     (push (format "%s fails repeatedly (%d times)" backend count) patterns)))
+                 backend-failures))
+      patterns)))
+
+(defun gptel-auto-workflow--maybe-analyze-patterns ()
+  "Run cross-run analysis periodically.
+Called every 5th run or when predictive warning triggers."
+  (when (or (> (length gptel-auto-workflow--self-healing-log) 5)
+            (gptel-auto-workflow--predict-failure))
+    (let ((patterns (gptel-auto-workflow--analyze-failure-patterns)))
+      (when patterns
+        (message "[self-heal] Pattern analysis: %s"
+                 (mapconcat #'identity patterns "; "))
+        ;; Log patterns for future LLM analysis
+        (push (list :timestamp (float-time)
+                    :diagnosis "pattern-analysis"
+                    :remedy (mapconcat #'identity patterns "; ")
+                    :before-rate 0.0)
+              gptel-auto-workflow--self-healing-log)))))
 
 (defun gptel-auto-workflow--maybe-self-heal ()
   "Check pipeline health and auto-remediate if broken.
 Call this after each experiment run or batch.
-Phase 6: Escalates to human after 3 failed remediation attempts."
+Phase 8: Predictive health checks + Phase 6: Escalation.
+Records health snapshot, checks predictive warnings, analyzes patterns."
   (when (fboundp 'gptel-auto-workflow--check-pipeline-health)
     (let ((health (gptel-auto-workflow--check-pipeline-health)))
+      ;; Record snapshot for trend analysis
+      (gptel-auto-workflow--record-health-snapshot health)
+      ;; Check for predictive failure (before it happens)
+      (let ((prediction (gptel-auto-workflow--predict-failure)))
+        (when prediction
+          (gptel-auto-workflow--predictive-intervention prediction)))
+      ;; Run cross-run pattern analysis
+      (gptel-auto-workflow--maybe-analyze-patterns)
       (if (plist-get health :healthy-p)
           (progn
              ;; Reset escalation counter on healthy pipeline
