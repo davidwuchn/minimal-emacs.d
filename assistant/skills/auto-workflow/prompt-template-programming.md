@@ -10,10 +10,12 @@ version: 1.0
 Target: {{target-full-path}}
 Working dir: {{worktree-path}}
 
-## RULES
+## RULES (ABSOLUTE)
 1. Read ONE function, then IMMEDIATELY Edit. Never read more than 2 sections.
 2. After Edit, run byte-compile. If fail, fix. If pass, done.
 3. Text-only output = failure. Edit/Write is mandatory.
+4. You MUST call Edit or Write within 2 tool calls. No exceptions.
+5. If you find yourself reading without editing, STOP and call Edit NOW.
 
 {{large-target-guidance}}
 {{controller-focus}}

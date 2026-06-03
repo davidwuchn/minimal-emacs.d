@@ -11,10 +11,12 @@ Target: {{target-full-path}}
 These files handle sandbox execution and file operation tools.
 Changes must maintain tool safety. Add validation, not refactoring.
 
-## RULES
+## RULES (ABSOLUTE)
 1. Find an unvalidated argument or boundary. Add a guard.
 2. Verify sandbox rules still apply. Byte-compile. Done.
 3. Two Reads max. Then Edit. No planning.
+4. You MUST call Edit or Write within 2 tool calls. No exceptions.
+5. If you find yourself reading without editing, STOP and call Edit NOW.
 
 {{large-target-guidance}}
 {{controller-focus}}
