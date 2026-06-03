@@ -6196,8 +6196,41 @@ Returns plist with :healthy-p and :diagnosis."
                        :remedy (format "budget=%d" new-budget)
                        :before-rate (plist-get diagnosis :keep-rate))
                  gptel-auto-workflow--self-healing-log)
-           (setq fixed t)))))
-    fixed))
+            (setq fixed t)))))
+     fixed))
+
+;;; ─── Phase 7: Recovery Verification ───
+
+(defvar gptel-auto-workflow--last-remediation nil
+  "Plist tracking last auto-remediation for verification.
+Keys: :timestamp :diagnosis :remedy :before-rate :verified-p")
+
+(defun gptel-auto-workflow--verify-recovery ()
+  "Verify last remediation worked by checking current keep-rate.
+If keep-rate improved, mark fix as effective.
+If not improved after 3 runs, trigger escalation."
+  (when gptel-auto-workflow--last-remediation
+    (let* ((before-rate (or (plist-get gptel-auto-workflow--last-remediation :before-rate) 0))
+           (current-health (gptel-auto-workflow--check-pipeline-health))
+           (current-rate (or (plist-get current-health :keep-rate) 0)))
+      (cond
+       ;; Fix worked: keep-rate improved
+       ((> current-rate before-rate)
+        (message "[self-heal] ✓ Recovery verified: %.0f%% → %.0f%% (%s)"
+                 (* 100 before-rate) (* 100 current-rate)
+                 (plist-get gptel-auto-workflow--last-remediation :remedy))
+        (plist-put gptel-auto-workflow--last-remediation :verified-p t)
+        (plist-put gptel-auto-workflow--last-remediation :after-rate current-rate)
+        (gptel-auto-workflow--persist-self-healing-state)
+        ;; Reset escalation counter since fix worked
+        (gptel-auto-workflow--reset-escalation-counter))
+       ;; Fix failed: keep-rate not improved
+       (t
+        (message "[self-heal] ✗ Recovery NOT verified: still %.0f%% (was %.0f%%)"
+                 (* 100 current-rate) (* 100 before-rate))
+        ;; Increment remediation failure counter
+        (setq gptel-auto-workflow--consecutive-failed-remediations
+              (1+ gptel-auto-workflow--consecutive-failed-remediations)))))))
 
 (defun gptel-auto-workflow--maybe-self-heal ()
   "Check pipeline health and auto-remediate if broken.
@@ -6386,15 +6419,40 @@ Verification: byte-compiled cleanly, no warnings.\n\nDiff:\n+ \"Return 1.\"\n"))
 
 (defun gptel-auto-workflow--probe-before-experiments ()
   "Run diagnostic probe before real experiments.
-If probe fails, skip experiments and auto-remediate immediately.
-Returns t if safe to proceed, nil if experiments should be skipped."
-  (if (gptel-auto-workflow--run-diagnostic-probe)
-      t
-    (progn
-      (message "[self-heal] Probe failed: skipping experiments until grader fixed")
-      nil)))
+If probe fails, attempt remediation and re-probe.
+Only skip experiments if grader is truly unfixable.
+Returns t if safe to proceed, nil if should skip."
+  (let ((probe-ok (gptel-auto-workflow--run-diagnostic-probe)))
+    (when probe-ok
+      ;; Grader healthy: make sure blind mode is off
+      (when gptel-auto-workflow--blind-mode
+        (message "[self-heal] ✓ Grader recovered — exiting blind mode")
+        (setq gptel-auto-workflow--blind-mode nil)))
+    (if probe-ok
+        t
+      ;; Probe failed: try to fix it first
+      (message "[self-heal] Probe failed — attempting remediation before giving up")
+      (gptel-auto-workflow--auto-remediate
+       (list :diagnosis "grader-destroying-experiments"
+             :confidence 0.99
+             :keep-rate 0.0))
+      ;; Re-probe after remediation
+      (sleep-for 5) ; give backend time to recover
+      (if (gptel-auto-workflow--run-diagnostic-probe)
+          (progn
+            (message "[self-heal] ✓ Grader recovered after remediation")
+            t)
+        ;; Still broken after remediation
+        (message "[self-heal] ⚠ Grader still broken after remediation — entering BLIND MODE")
+        (message "[self-heal] Tests will still run, but no LLM grading")
+        (setq gptel-auto-workflow--blind-mode t)
+        (gptel-auto-workflow--persist-self-healing-state)
+        t))))
 
-;;; ─── Phase 5: Grader Health Dashboard ───
+(defvar gptel-auto-workflow--blind-mode nil
+  "When non-nil, run experiments without grader (blind mode).
+Triggered when grader is broken but we want to keep experimenting.
+Tests still run, but no LLM grading — changes marked for manual review.")
 
 (defvar gptel-auto-workflow--grader-health-metrics
   (make-hash-table :test 'equal)
