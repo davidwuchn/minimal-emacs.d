@@ -4844,57 +4844,99 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-Now I have the context. The user has a lot of experiment data - hypotheses that are "kept" and some that are "discarded" - across many target files. They want me to "distill" this information. Let me look at the actual files to understand what's being proposed.
+The user wants me to distill a large amount of research experiment data into a concise summary. Let me analyze what's provided:
+
+1. **Research strategy**: template-default
+2. **116 experiments** across many targets (files like staging-merge, various lisp modules, etc.)
+3. **Kept hypotheses**: Many blank lines, then a few substantive ones:
+   - Simplify lambda-prompt extraction (remove redundant `if apply-lines`, add nil guard for `english-findings`)
+   - Explicit nil/empty-string guard for `allium-spec`, remove redundant callback check
+   - Explicit `(symbolp backend)` branch before fallback `t` case (type validation, error handling)
+   - Secondary `buffer-live-p` guard and nil check in lambda (async buffer lifecycle)
+   - Extract provider selection logic into `gptel-benchmark--select-provider` (fractal Clarity, φ Vitality)
+   - Adding error recovery and making assumptions explicit
+   - Adding defensive coding
+   - Adding timeout sentinel value in sync subagent call (explicit timeout failures)
+   - Explicit nil guard on `where` parameter and wrap overlay creation in `condition-case`
+   
+4. **Discarded hypotheses**:
+   - Fixing error message formatting (format "%s" err → error-message-string err)
+   - Removing them from the hash table
+   - Many blank lines
+   - "[what changes & why]" instruction
+
+The pattern shows a research process evaluating many hypotheses for improving gptel-related Emacs Lisp code. The kept hypotheses focus on:
+- **Defensive programming**: nil guards, empty string checks, buffer-live-p checks
+- **Error handling**: condition-case wrappers, explicit timeout sentinels, type validation
+- **Refactoring/extraction**: separating provider selection into dedicated function
+- **Simplification**: removing redundant conditionals (if apply-lines, redundant callbacks)
+- **Explicitness**: making implicit assumptions explicit and testable (fractal Clarity)
+
+The discarded ones include:
+- Simple error message formatting fixes
+- Hash table removal
+- A template instruction
+
+I need to distill this into a concise summary that captures:
+- The research strategy and scale
+- The key themes of kept hypotheses
+- The nature of discarded hypotheses
+- The overall direction/pattern
+
+Let me structure this as a concise research digest.
+
+Key themes from kept:
+1. **Defensive coding / Input validation** (nil guards, type checks, buffer state checks)
+2. **Error handling robustness** (sentinel values, condition-case, recovery)
+3. **Code clarity through extraction** (separate functions for selection logic, removing redundancy)
+4. **Explicit assumptions** (fractal Clarity, making implicit paths testable)
+
+Discarded seem to be minor formatting fixes or incomplete ideas.
+
+The distillation should be brief, structured, and capture the signal from the noise.
+
+Let me draft:
+
+**Research Distillation: template-default (116 experiments)**
+
+**Kept Themes (Signal):**
+The retained hypotheses cluster around four architectural improvements:
+1. **Defensive Boundaries**: Adding nil/empty-string guards on inputs (`english-findings`, `allium-spec`, `where`), buffer lifecycle checks (`buffer-live-p`), and type validation (`symbolp` branch) to prevent cascading failures.
+2. **Explicit Error Topology**: Replacing ambiguous failure modes with explicit sentinels (timeout sentinel values), structured recovery (`condition-case` on overlays), and separated error paths rather than silent fallthroughs.
+3. **Fractal Clarity via Extraction**: Isolating provider selection logic into standalone functions (`gptel-benchmark--select-provider`) to make selection assumptions testable and reduce dispatch complexity.
+4. **Simplification through Redundancy Removal**: Eliminating unnecessary conditional branches (e.g., `if apply-lines` when `mapconcat` handles empty lists) and redundant callback checks.
+
+**Discarded Themes (Noise):**
+Minor formatting fixes (error-message-string conversion), hash-table cleanup operations, and template artifacts.
+
+**Strategic Direction:**
+Shift from implicit, brittle control flow to explicit, guarded
+-- ... truncated ...
 ```
 
 ### Check Issues
 
-Here is my comprehensive distillation of the entire Ouroboros V5 system and all its experiment data.
+**Research Distillation: template-default (116 experiments)**
 
----
+**Kept Themes (Signal):**
+The retained hypotheses cluster around four architectural improvements:
 
-## OUROBOROS V5 — Complete Distillation
+1. **Defensive Boundaries** — Add nil/empty-string guards on inputs (`english-findings`, `allium-spec`, `where`), buffer lifecycle checks (`buffer-live-p`), and type validation (`symbolp` branch) to prevent cascading failures.
+2. **Explicit Error Topology** — Replace ambiguous failure modes with explicit sentinels (timeout sentinel values), structured recovery (`condition-case` on overlays), and separated error paths rather than silent fallthroughs.
+3. **Fractal Clarity via Extraction** — Isolate provider selection logic into standalone functions (`gptel-benchmark--select-provider`) to make selection assumptions testable and reduce dispatch complexity.
+4. **Simplification through Redundancy Removal** — Eliminate unnecessary conditional branches (e.g., `if apply-lines` when `mapconcat` handles empty lists) and redundant callback checks.
 
-### What It Is
+**Discarded Themes (Noise):**
+Minor formatting fixes (error-message-string conversion), hash-table cleanup operations, and template artifacts.
 
-Ouroboros V5 is a **self-evolving Emacs AI agent system** that autonomously researches, executes experiments, verifies outcomes, and propagates improvements across its own codebase. It's your Emacs configuration (`~/.emacs.d`) that has evolved into a full-fledged autonomous development pipeline.
-
----
-
-### Architecture (The Ouroboros Cycle)
-
-```
-Research(external) ⇄ Execute(experiment) ⇄ Verify(outcome) ⇄ Learn(pattern)
-         ↑                                                         |
-         └───────────── Feed outcome back into appetite ───────────┘
-```
-
-It uses **Three Backends** (DashScope, MiniMax, DeepSeek), **Six Safety Gates**, and **Worktree Isolation** for each experiment. DashScope wins the head-to-head: **26.1% keep-rate** vs MiniMax **0.0%**.
-
----
-
-### Complete Experiment Data — 75 Experiments Total
-
-**Decision Distribution:**
-
-| Decision | Count | % |
-|----------|-------|----|
-| 🟢 **kept** | **7** | **9.3%** |
-| 🔴 grader-failed | 21 | 28.0% |
-| 🔴 verification-failed | 17 | 22.7% |
-| ⏱️ timeout | 8 | 10.7% |
-| 🔴 validation-failed | 5 | 6.7% |
-| ⏳ staging-pending | 4 | 5.3% |
-| Other failures | 13 | 17.3% |
-| **Total** | **75** | **100%** |
-
-**Target files with most experiments:**
-- `gptel-auto-workflow-projects.el` — 25 experiments (6 kept ✅, rest failures)
-- `gptel-auto-workflow-strategic.el` — 10 experiments (0 kept 
-
-... (truncated)
+**Strategic Direction:**
+Shift from implicit, brittle control flow to explicit, guarded, and testable boundaries. Prioritize φ Vitality (adaptive robustness) and fractal Clarity (explicit, testable assumptions) over superficial error presentation or state cleanup.

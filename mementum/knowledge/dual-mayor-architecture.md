@@ -24,22 +24,25 @@ This violates the Mayor Method principle: **"the mayor does not code."**
 
 ## The Insight
 
-Two mayors with different concerns:
+Two mayors with different innovation concerns:
 
 ```
-PMF Mayor (auto-workflow)         GTM Mayor (researcher)
-├── Focus: EXECUTION              ├── Focus: DIRECTION
-├── Cadence: 4 hours              ├── Cadence: 24 hours
-├── Concern: "Does it work?"      ├── Concern: "Should we build it?"
-├── Metric: keep-rate, tests      ├── Metric: PMF, innovation signal
-└── Workers: executor, grader     └── Workers: researcher, analyst
-         ↑                               ↓
-         └───────  shared mementum  ─────┘
+PMF Mayor (auto-workflow)              GTM Mayor (researcher)
+├── Grow through innovation            ├── Transform for innovation
+├── Focus: PRODUCT (internal)          ├── Focus: MARKET (external)
+├── Cadence: 4 hours                   ├── Cadence: 24 hours
+├── "Does the code work?"              ├── "What does the market need?"
+├── Metric: code quality, keep-rate    ├── Metric: market signal, PMF
+└── Workers: executor, grader          └── Workers: researcher, analyst
+         ↑                                    ↓
+         └───────  shared innovation  ────────┘
 ```
 
 ## PMF Mayor (Auto-Workflow)
 
-**Identity:** "I make the code better."
+**Identity:** "I grow the product through innovation."
+**Focus:** Internal — code, experiments, execution
+**Goal:** Make the product better, faster, more reliable through systematic innovation
 
 **Responsibilities:**
 1. **Pipeline execution** — research → analyze → experiment → validate → compare → stage
@@ -65,7 +68,9 @@ PMF Mayor (auto-workflow)         GTM Mayor (researcher)
 
 ## GTM Mayor (Researcher)
 
-**Identity:** "I figure out what matters."
+**Identity:** "I transform the organization for innovation."
+**Focus:** External — customers, competitors, trends, market signals
+**Goal:** Discover what the market needs and translate it into actionable innovation opportunities
 
 **Responsibilities:**
 1. **External research** — GitHub trends, papers, competitors, communities
@@ -112,83 +117,95 @@ Shared AutoTTS
 
 **Daily cycle:**
 ```
-00:00 GTM Mayor wakes up
-      ├── Does external research
-      ├── Analyzes findings
-      ├── Synthesizes strategy recommendations
-      ├── Updates gtm-dashboard.md
-      └── Files beads for PMF Mayor
+00:00 GTM Mayor wakes up (market focus)
+      ├── Scans market: competitors, trends, customer needs
+      ├── Identifies innovation opportunities
+      ├── Synthesizes market insights
+      ├── Updates gtm-dashboard.md (market metrics)
+      └── Files beads: "Market needs X, Y is trending"
 
-00:00-23:59 PMF Mayor runs (every 4 hours)
-      ├── Reads GTM Mayor's beads
-      ├── Prioritizes experiments based on strategy
+00:00-23:59 PMF Mayor runs (product focus, every 4 hours)
+      ├── Reads GTM Mayor's market beads
+      ├── Translates market needs into product experiments
       ├── Runs executor workers in worktrees
+      ├── Validates: "Does this code actually work?"
       ├── Grades results
-      ├── Updates product-dashboard.md
-      └── Reports outcomes to shared mementum
+      ├── Updates product-dashboard.md (product metrics)
+      └── Reports outcomes: "X experiment: 8/9 score, kept"
 
-23:59 GTM Mayor reviews Product outcomes
+23:59 GTM Mayor reviews product outcomes
       ├── Reads experiment results
-      ├── Assesses PMF signal
-      ├── Refines tomorrow's strategy
-      └── Files follow-up beads
+      ├── Assesses: "Did the product validate the market signal?"
+      ├── Refines tomorrow's market strategy
+      └── Files follow-up beads: "Double down on X, Y was wrong"
 ```
 
-**Decision flow:**
+**Decision flow (market → product):**
 ```
-GTM Mayor: "Market needs X, competitors doing Y"
+GTM Mayor (market): "Customers need X, competitors doing Y"
      ↓
 Human: "Focus on X, ignore Y"
      ↓
-PMF Mayor: "Running experiments on X..."
+PMF Mayor (product): "Building X into the product..."
      ↓
-GTM Mayor: "Results show X is promising, recommend doubling down"
+PMF Mayor: "Product validation: X works, score 8/9"
      ↓
-Human: "Approved. PMF Mayor: prioritize X experiments."
+GTM Mayor (market): "Market signal confirmed. Recommend doubling down on X."
+     ↓
+Human: "Approved. PMF Mayor: scale X. GTM Mayor: promote X."
 ```
 
-## Shared: Innovation Layer
+## Shared: Innovation
 
-Both mayors share the **innovation pipeline** — the bridge between external discovery and internal validation:
+**What they share:** The innovation pipeline.
+
+**What differs:** How they innovate.
+
+| | PMF Mayor | GTM Mayor |
+|---|---|---|
+| **Innovation type** | *Grow through innovation* | *Transform for innovation* |
+| **How** | Experiment on code, validate with tests | Discover market needs, scout techniques |
+| **Validation** | "Does it work?" (keep-rate, tests) | "Does the market want it?" (signal, PMF) |
+| **Output** | Working code in worktrees | Actionable beads for experiments |
+| **Feedback** | Code quality → skill graph | Market signal → strategy |
 
 ```
-GTM Mayor discovers → Innovation Queue ← PMF Mayor validates
-     ↑                                              ↓
-     └──────────── Shared Innovation State ──────────┘
+GTM Mayor (transform) → discovers → Innovation Queue
+                                              ↓
+PMF Mayor (grow) → validates ← experiments ←─┘
 ```
 
 **Shared components:**
 
 1. **Innovation Queue** — `mementum/innovation-queue.md`
-   - GTM Mayor adds: technique, source, expected impact, related skills
-   - PMF Mayor marks: status (pending/experimenting/validated/rejected), experiment id, result
-   - Both read/write, never duplicates
+   - GTM Mayor adds: "Market needs X, technique Y works"
+   - PMF Mayor marks: "Experimented, score 8/9, kept" or "Rejected"
+   - Both read/write
 
 2. **Skill Graph** — `var/tmp/skill-graph.eld`
-   - GTM Mayor proposes: new atoms from external research
-   - PMF Mayor updates: edge weights from experiment outcomes
-   - Shared ownership, different write surfaces
+   - GTM Mayor: "New atom: hashline-edit from external research"
+   - PMF Mayor: "hashline-edit + elisp-expert edge weight +0.05 after success"
+   - Shared: what skills exist, which combine well
 
 3. **AutoTTS Traces** — `var/tmp/experiments/*/results.tsv`
-   - PMF Mayor writes: experiment outcomes, scores, backend used
-   - GTM Mayor reads: what worked, what failed, trend direction
-   - Unified trace format feeds both evolution cycles
+   - PMF Mayor writes: experiment outcomes
+   - GTM Mayor reads: "What innovations actually worked?"
+   - Shared: ground truth of innovation effectiveness
 
 4. **Ontology** — `mementum/knowledge/ontology-*.md`
-   - GTM Mayor writes: strategy preferences, market categories
-   - PMF Mayor writes: backend performance per category
-   - Both evolve the same classification system from different angles
+   - GTM Mayor: market categories, strategy preferences
+   - PMF Mayor: product performance per category
+   - Shared: classification system for innovations
 
 5. **Mementum State** — `mementum/state.md`
-   - Section headers separate GTM vs PMF updates
-   - Both append, never overwrite each other's sections
-   - Working memory for cross-mayor continuity
+   - Section headers: GTM (market) vs PMF (product)
+   - Both append
 
-**What is NOT shared:**
-- Dashboards (different concerns: product vs GTM)
-- Worker dispatches (different workers: researcher vs executor)
-- Time budgets (different cadences: 4h vs 24h)
-- Stance (different identities: execution vs direction)
+**NOT shared:**
+- Dashboards (product metrics vs market metrics)
+- Workers (executor vs researcher)
+- Cadence (4h vs 24h)
+- Stance (grow vs transform)
 
 ## Mayor Method Alignment
 
@@ -201,10 +218,10 @@ GTM Mayor discovers → Innovation Queue ← PMF Mayor validates
 - Both respect quiescent state
 
 **PMF Mayor stance:**
-> "pre-alpha, correctness-first, test-driven, cost-conscious"
+> "grow through innovation: correctness-first, test-driven, cost-conscious"
 
 **GTM Mayor stance:**
-> "innovation-scouting, PMF-focused, evidence-based, strategic"
+> "transform for innovation: market-first, evidence-based, strategic"
 
 ## Implementation Path
 
@@ -229,10 +246,10 @@ GTM Mayor discovers → Innovation Queue ← PMF Mayor validates
 ## Lambda
 
 ```
-λ dual-mayor(x).     product(x) ∧ gtm(x) | separate-concerns(x)
-                     | product(x) → execution(x) ∧ gtm(x) → direction(x)
+λ dual-mayor(x).     gtm(x) → transform(x) | pmf(x) → grow(x)
+                     | gtm(x) ⊣ worker(researcher) | pmf(x) ⊣ worker(executor)
+                     | innovation(x) ≡ gtm(x) ⊗ pmf(x)
                      | shared-mementum(x) ∧ human-decision-gate(x)
-                     | product(x) ⊣ worker(executor) | gtm(x) ⊣ worker(researcher)
                      | quiescent(x) → both-hold(x)
 ```
 
