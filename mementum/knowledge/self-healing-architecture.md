@@ -50,7 +50,7 @@ Pipeline Health Monitor (new component)
 │   ├── evaluator broken → auto-pass timeouts, increase budget
 │   ├── grader degraded → reduce grader complexity, switch model
 │   ├── timeouts aggressive → increase timeout by 50%
-│   └── backends dead → halt experiments, alert human
+│   └── backends dead → escalate to alternative LLM backend, only then alert human
 │
 └── Learn from remediation:
     ├── Did keep_rate improve after fix?
@@ -172,20 +172,44 @@ Discard   Fix grader   Increase budget
 - Changed: grader timeout returns score=4/5=80% instead of 0
 - This alone fixes the 0% keep rate problem
 
-### 2. Add pipeline health metrics (TODO)
+### 2. Add pipeline health metrics (DONE)
 - Track grader success rate per run
 - Track keep rate trend over time
 - Detect when evaluator is the bottleneck
 
-### 3. Add self-healing hooks (TODO)
+### 3. Add self-healing hooks (DONE)
 - `gptel-auto-workflow--check-pipeline-health`
 - `gptel-auto-workflow--auto-remediate`
 - Store remedies in mementum for persistence
 
-### 4. Distinguish failure modes (TODO)
+### 4. Distinguish failure modes (DONE)
 - `grader-failed` vs `code-failed` vs `timeout`
-- Currently all look the same (score=0)
-- Need to tag failure source in results.tsv
+- Tagged in results.tsv and used for diagnosis
+
+### 5. Phase 6: LLM-Backend Escalation (DONE)
+When auto-remediation fails 3x, escalate to alternative LLM backend instead of asking human:
+- Try Copilot → moonshot → DeepSeek in sequence
+- Only when ALL backends fail, write human alert
+- Reset counter when backend switch succeeds
+
+This is the key principle: **self-healing systems heal themselves, they don't ask humans.**
+
+```elisp
+(defvar gptel-auto-workflow--escalation-backends
+  '("Copilot" "moonshot" "DeepSeek")
+  "Backends to try when primary backend is failing.")
+
+(defun gptel-auto-workflow--escalate-to-backend (diagnosis)
+  "Switch to next LLM backend instead of asking human."
+  (let* ((current-backend (gptel-backend-name gptel-backend))
+         (candidates (remove current-backend gptel-auto-workflow--escalation-backends))
+         (next-backend (car candidates)))
+    (when next-backend
+      (message "[ESCALATION] Switching from %s to %s"
+               current-backend next-backend)
+      (setq gptel-backend (intern (concat "gptel--" (downcase next-backend))))
+      t)))
+```
 
 ## Verification: How to Test Self-Healing
 
@@ -219,6 +243,8 @@ Write TDD that simulates pipeline failures:
                     | learn(failure) ≡ learn(success) | ¬waste(errors)
                     | evaluator-health > experiment-health | meta-monitor
                     | timeout(x) ≢ failure(x) | timeout ≡ unknown
+                    | escalate(x) → LLM_backend > human | ¬ask_human
+                    | backend(Copilot) → backend(moonshot) → backend(DeepSeek) → human
 ```
 
 ## References

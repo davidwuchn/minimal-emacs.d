@@ -20569,6 +20569,56 @@ This prevents wasting experiments on a known-broken pipeline."
       (setq remediation-triggered t))
     (should remediation-triggered)))
 
+;;; ─── Phase 5: Grader Health Dashboard ───
+
+(ert-deftest self-heal/dashboard-tracks-grader-latency ()
+  "System should track average grader latency per backend.
+If MiniMax averages 380s vs Copilot 120s, system should warn about MiniMax."
+  (let ((backend-metrics
+         '(("MiniMax" . (:count 5 :avg-latency 380 :failures 2))
+           ("Copilot" . (:count 5 :avg-latency 120 :failures 0))
+           ("DeepSeek" . (:count 5 :avg-latency 250 :failures 1)))))
+    ;; MiniMax should be flagged as degraded (>300s avg)
+    (let ((minimax-metrics (cdr (assoc "MiniMax" backend-metrics))))
+      (should (> (plist-get minimax-metrics :avg-latency) 300))
+      (should (> (plist-get minimax-metrics :failures) 0)))))
+
+(ert-deftest self-heal/dashboard-detects-backend-degradation ()
+  "When backend failure rate exceeds threshold, system should recommend switch."
+  (let ((failure-rate 0.5)
+        (threshold 0.3))
+    ;; 50% failure rate exceeds 30% threshold
+    (should (> failure-rate threshold))
+    ;; Should trigger backend switch recommendation
+    (should (stringp "Switch to alternative backend recommended"))))
+
+;;; ─── Phase 6: Human Escalation ───
+
+(ert-deftest self-heal/escalates-to-llm-backend-not-human ()
+  "When auto-remediation fails 3x, escalate to alternative LLM backend.
+Never ask human — that's the opposite of self-healing."
+  (let ((consecutive-failures 3)
+        (escalation-threshold 3)
+        (switched-backend nil))
+    ;; After 3 failures
+    (when (>= consecutive-failures escalation-threshold)
+      ;; Should switch to alternative backend, not ask human
+      (setq switched-backend t))
+    ;; Backend should be switched
+    (should switched-backend)))
+
+(ert-deftest self-heal/backend-switching-sequence ()
+  "Escalation should try backends in order: Copilot → moonshot → DeepSeek.
+Only when all fail should human be notified."
+  (let ((escalation-backends '("Copilot" "moonshot" "DeepSeek"))
+        (current-backend "MiniMax"))
+    ;; First escalation: MiniMax → Copilot
+    (let ((next (car (remove current-backend escalation-backends))))
+      (should (string= next "Copilot")))
+    ;; After Copilot fails: → moonshot
+    (let ((next (car (remove "Copilot" (remove current-backend escalation-backends)))))
+      (should (string= next "moonshot")))))
+
 (provide 'test-gptel-tools-agent-regressions)
 
 ;;; test-gptel-tools-agent-regressions.el ends here

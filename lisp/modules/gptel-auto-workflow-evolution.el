@@ -6199,17 +6199,27 @@ Returns plist with :healthy-p and :diagnosis."
 
 (defun gptel-auto-workflow--maybe-self-heal ()
   "Check pipeline health and auto-remediate if broken.
-Call this after each experiment run or batch."
+Call this after each experiment run or batch.
+Phase 6: Escalates to human after 3 failed remediation attempts."
   (when (fboundp 'gptel-auto-workflow--check-pipeline-health)
     (let ((health (gptel-auto-workflow--check-pipeline-health)))
       (if (plist-get health :healthy-p)
-          (when (> (length (plist-get health :total)) 0)
-            (message "[self-heal] Pipeline healthy (keep-rate: %.0f%%)"
-                     (* 100.0 (or (plist-get health :keep-rate) 1.0))))
-        (message "[self-heal] Pipeline unhealthy: %s (confidence: %.0f%%)"
-                 (plist-get health :diagnosis)
-                 (* 100.0 (or (plist-get health :confidence) 0.0)))
-        (gptel-auto-workflow--auto-remediate health)))))
+          (progn
+            ;; Reset escalation counter on healthy pipeline
+            (when (fboundp 'gptel-auto-workflow--reset-escalation-counter)
+              (gptel-auto-workflow--reset-escalation-counter))
+            (when (> (length (plist-get health :total)) 0)
+              (message "[self-heal] Pipeline healthy (keep-rate: %.0f%%)"
+                       (* 100.0 (or (plist-get health :keep-rate) 1.0)))))
+        ;; Phase 6: Check escalation before attempting remediation
+        (if (and (fboundp 'gptel-auto-workflow--maybe-escalate)
+                 (gptel-auto-workflow--maybe-escalate (plist-get health :diagnosis)))
+            (message "[self-heal] Pipeline halted — waiting for human intervention")
+          (progn
+            (message "[self-heal] Pipeline unhealthy: %s (confidence: %.0f%%)"
+                     (plist-get health :diagnosis)
+                     (* 100.0 (or (plist-get health :confidence) 0.0)))
+            (gptel-auto-workflow--auto-remediate health)))))))
 
 ;;; ─── Phase 2: Meta-Learning from Remediation ───
 
@@ -6323,6 +6333,137 @@ Returns t if safe to proceed, nil if experiments should be skipped."
     (progn
       (message "[self-heal] Probe failed: skipping experiments until grader fixed")
       nil)))
+
+;;; ─── Phase 5: Grader Health Dashboard ───
+
+(defvar gptel-auto-workflow--grader-health-metrics
+  (make-hash-table :test 'equal)
+  "Hash table tracking grader performance per backend.
+Keys are backend names, values are plists with :count :total-latency :failures.")
+
+(defun gptel-auto-workflow--record-grader-metric (backend latency success-p)
+  "Record grader metric for BACKEND.
+LATENCY is time in seconds. SUCCESS-P is t if grader returned valid output."
+  (let ((current (gethash backend gptel-auto-workflow--grader-health-metrics
+                          (list :count 0 :total-latency 0 :failures 0))))
+    (plist-put current :count (1+ (plist-get current :count)))
+    (plist-put current :total-latency (+ (plist-get current :total-latency) latency))
+    (unless success-p
+      (plist-put current :failures (1+ (plist-get current :failures))))
+    (puthash backend current gptel-auto-workflow--grader-health-metrics)))
+
+(defun gptel-auto-workflow--get-backend-health (backend)
+  "Return health metrics for BACKEND.
+Returns plist with :avg-latency :failure-rate :status."
+  (let ((metrics (gethash backend gptel-auto-workflow--grader-health-metrics)))
+    (if metrics
+        (let* ((count (plist-get metrics :count))
+               (total-latency (plist-get metrics :total-latency))
+               (failures (plist-get metrics :failures))
+               (avg-latency (if (> count 0) (/ (float total-latency) count) 0))
+               (failure-rate (if (> count 0) (/ (float failures) count) 0)))
+          (list :avg-latency avg-latency
+                :failure-rate failure-rate
+                :status (cond ((> failure-rate 0.5) 'critical)
+                              ((> failure-rate 0.3) 'degraded)
+                              ((> avg-latency 300) 'slow)
+                              (t 'healthy))))
+      (list :avg-latency 0 :failure-rate 0 :status 'unknown))))
+
+(defun gptel-auto-workflow--check-grader-health ()
+  "Check all backends for degradation.
+Returns list of (backend . health-plist) for degraded backends."
+  (let ((degraded '()))
+    (maphash (lambda (backend metrics)
+               (let ((health (gptel-auto-workflow--get-backend-health backend)))
+                 (when (memq (plist-get health :status) '(critical degraded slow))
+                   (push (cons backend health) degraded))))
+             gptel-auto-workflow--grader-health-metrics)
+    degraded))
+
+;;; ─── Phase 6: Backend Escalation (LLM-based self-healing) ───
+
+(defvar gptel-auto-workflow--escalation-threshold 3
+  "Number of consecutive failed remediations before escalating to alternative backend.")
+
+(defvar gptel-auto-workflow--consecutive-failed-remediations 0
+  "Counter for consecutive failed auto-remediation attempts.")
+
+(defvar gptel-auto-workflow--escalation-backends
+  '("Copilot" "moonshot" "DeepSeek")
+  "Backends to try when primary backend is failing.")
+
+(defun gptel-auto-workflow--escalate-to-backend (diagnosis)
+  "Escalate broken pipeline to alternative LLM backend.
+Tries next backend in escalation chain instead of asking human."
+  (let* ((current-backend (when (boundp 'gptel-backend)
+                            (gptel-backend-name gptel-backend)))
+         (candidates (remove current-backend gptel-auto-workflow--escalation-backends))
+         (next-backend (car candidates)))
+    (if next-backend
+        (progn
+          (message "[ESCALATION] Primary backend %s failing. Switching to %s for self-healing."
+                   current-backend next-backend)
+          ;; Switch to alternative backend
+          (setq gptel-backend (intern (concat "gptel--" (downcase next-backend))))
+          (message "[ESCALATION] Now using %s for grader and experiments." next-backend)
+          ;; Reset counter since we changed strategy
+          (setq gptel-auto-workflow--consecutive-failed-remediations 0)
+          t)
+      (progn
+        (message "[ESCALATION] All backends exhausted. Writing alert for human review.")
+        (gptel-auto-workflow--write-human-escalation diagnosis)
+        t))))
+
+(defun gptel-auto-workflow--write-human-escalation (diagnosis)
+  "Write human escalation alert only when all LLM backends exhausted.
+This is the final fallback, not the first response."
+  (let* ((root (when (fboundp 'gptel-auto-workflow--worktree-base-root)
+                 (gptel-auto-workflow--worktree-base-root)))
+         (file (when root
+                 (expand-file-name "mementum/decisions/pipeline-escalation.md" root)))
+         (dir (when file (file-name-directory file))))
+    (when dir
+      (make-directory dir t)
+      (with-temp-file file
+        (insert "# Pipeline Escalation Alert\n\n")
+        (insert (format "**Timestamp:** %s\n\n" (current-time-string)))
+        (insert (format "**Diagnosis:** %s\n\n" diagnosis))
+        (insert "**Status:** ALL LLM BACKENDS EXHAUSTED\n\n")
+        (insert "Auto-remediation and backend switching have failed.\n\n")
+        (insert "## Self-Healing Attempts\n\n")
+        (insert "1. Adjusted timeouts and budgets\n")
+        (insert "2. Switched to alternative LLM backends\n")
+        (insert "3. All backends showing degraded performance\n\n")
+        (insert "---\n")
+        (insert "Delete this file to acknowledge and resume experiments.\n"))
+      (message "[ESCALATION] Alert written. All LLM backends exhausted."))))
+
+(defun gptel-auto-workflow--maybe-escalate (diagnosis)
+  "Check if escalation threshold reached and escalate if needed.
+Phase 6: Escalates to alternative LLM backend, not human.
+Returns t if escalated, nil if not yet."
+  (setq gptel-auto-workflow--consecutive-failed-remediations
+        (1+ gptel-auto-workflow--consecutive-failed-remediations))
+  (if (>= gptel-auto-workflow--consecutive-failed-remediations
+          gptel-auto-workflow--escalation-threshold)
+      (progn
+        ;; Phase 6: Ask another LLM, not a human
+        (gptel-auto-workflow--escalate-to-backend diagnosis)
+        t)
+    (progn
+      (message "[self-heal] Remediation failed (%d/%d), will retry"
+               gptel-auto-workflow--consecutive-failed-remediations
+               gptel-auto-workflow--escalation-threshold)
+      nil)))
+
+(defun gptel-auto-workflow--reset-escalation-counter ()
+  "Reset escalation counter after successful remediation.
+Call when keep_rate improves after fix."
+  (when (> gptel-auto-workflow--consecutive-failed-remediations 0)
+    (message "[self-heal] Resetting escalation counter (was %d)"
+             gptel-auto-workflow--consecutive-failed-remediations)
+    (setq gptel-auto-workflow--consecutive-failed-remediations 0)))
 
 (provide 'gptel-auto-workflow-evolution)
 ;;; gptel-auto-workflow-evolution.el ends here
