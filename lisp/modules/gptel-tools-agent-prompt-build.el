@@ -2202,43 +2202,30 @@ CF-Gateway removed — does not support tool calls reliably."
   "Agent types that use the headless fallback chain instead of gptel interaction.
 Set by `gptel-auto-workflow--migrate-legacy-provider-defaults' on startup.")
 
+(require 'gptel-ext-backend-registry)
+
+(defun gptel-auto-workflow--generate-task-model-map ()
+  "Generate per-task model map from `gptel-backend-registry'.
+Returns alist of (AGENT-TYPE BACKEND . MODEL) entries."
+  (let ((result '()))
+    (dolist (task-entry gptel-task-type-model-defaults)
+      (let ((task-type (symbol-name (car task-entry))))
+        (dolist (backend-entry (cdr task-entry))
+          (push (cons task-type
+                      (cons (symbol-name (car backend-entry))
+                            (symbol-name (cdr backend-entry))))
+                result))))
+    result))
+
 (defcustom gptel-auto-workflow-per-task-model-map
-  '(    ("analyzer"   "MiniMax"    . "minimax-m2.7-highspeed")
-    ("analyzer"   "DashScope"  . "qwen3.6-plus")
-    ("analyzer"   "moonshot"   . "kimi-k2.6")
-    ("analyzer"   "DeepSeek"   . "deepseek-v4-flash")
-    ("grader"     "MiniMax"    . "minimax-m2.7-highspeed")
-    ("grader"     "DashScope"  . "qwen3.6-plus")
-    ("grader"     "DeepSeek"   . "deepseek-v4-pro")
-    ("grader"     "moonshot"   . "kimi-k2.6")
-    ("executor"   "DashScope"  . "qwen3.6-plus")
-    ("executor"   "moonshot"   . "kimi-k2.6")
-    ("executor"   "DeepSeek"   . "deepseek-v4-flash")
-    ("executor"   "MiniMax"    . "MiniMax-M3")
-    ("researcher" "MiniMax"    . "minimax-m2.7-highspeed")
-    ("researcher" "DashScope"  . "qwen3.6-plus")
-    ("researcher" "DeepSeek"   . "deepseek-v4-pro")
-    ("researcher" "moonshot"   . "kimi-k2.6")
-    ("reviewer"   "MiniMax"    . "minimax-m2.7-highspeed")
-    ("researcher" "DashScope"  . "qwen3.6-plus")
-    ("researcher" "DeepSeek"   . "deepseek-v4-pro")
-    ("researcher" "moonshot"   . "kimi-k2.6")
-    ("reviewer"   "MiniMax"    . "minimax-m2.7-highspeed")
-    ("reviewer"   "DashScope"  . "qwen3.6-plus")
-    ("reviewer"   "DeepSeek"   . "deepseek-v4-pro")
-    ("reviewer"   "moonshot"   . "kimi-k2.6")
-    ("comparator" "MiniMax"    . "minimax-m2.7-highspeed")
-    ("comparator" "DashScope"  . "qwen3.6-plus")
-    ("comparator" "DeepSeek"   . "deepseek-v4-pro")
-    ("comparator" "moonshot"   . "kimi-k2.6"))
+  (gptel-auto-workflow--generate-task-model-map)
   "Per-task-type model selection for each backend.
 Each element is (AGENT-TYPE BACKEND . MODEL).
 When selecting a backend+model pair for AGENT-TYPE, this map takes
-priority over the static fallback lists — ensuring code-generation
-tasks (executor) use the capable deepseek-v4-pro while analysis tasks
-(analyzer, grader) use the faster deepseek-v4-pro.
-Backend entries not listed here fall back to their default model from
-`gptel-auto-workflow-headless-subagent-fallbacks`."
+priority over the static fallback lists.
+
+AUTO-GENERATED from `gptel-ext-backend-registry' — edit
+`gptel-task-type-model-defaults' in that file instead."
   :type '(repeat (list (string :tag "Agent type")
                        (string :tag "Backend")
                        (string :tag "Model")))

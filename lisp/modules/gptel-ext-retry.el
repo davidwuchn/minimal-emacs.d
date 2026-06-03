@@ -1,5 +1,46 @@
 ;;; gptel-ext-retry.el --- Automatic retry and payload compaction -*- no-byte-compile: t; lexical-binding: t; -*-
 
+(require 'gptel-ext-backend-registry)
+
+;; Dynamically generate context byte limits from registry
+(defun my/gptel-model-context-bytes--from-registry ()
+  "Generate model context byte limits from `gptel-backend-registry'.
+Returns alist of (MODEL-OR-BACKEND-STRING . BYTES-LIMIT)."
+  (let ((result '()))
+    (dolist (backend-entry gptel-backend-registry)
+      (let* ((backend-name (symbol-name (car backend-entry)))
+             (models (plist-get (cdr backend-entry) :models))
+             (context-window (or (plist-get (cdr backend-entry) :context-window)
+                                 128000)))
+        ;; Backend entry (uses default model's context)
+        (push (cons backend-name
+                    (* context-window 3.5)) ; ~3.5 bytes/token
+              result)
+        ;; Model entries
+        (dolist (model models)
+          (push (cons (symbol-name model)
+                      (* context-window 3.5))
+                result))))
+    result))
+
+(defvar my/gptel-model-context-bytes
+  (append
+   '(;; Legacy aliases not in registry
+     ("@cf/openai/gpt-oss-120b" . 350000)
+     ("gpt-oss-120b"       . 350000)
+     ("@cf/moonshotai/kimi-k2.6" . 800000)
+     ("kimi-for-coding"    . 400000)
+     ("qwen3-coder-next"   . 400000)
+     ("qwen3-max-2026-01-23" . 400000)
+     ("deepseek-chat"      . 3000000)
+     ("deepseek-reasoner"  . 3000000)
+     ("kimi-k2.5"          . 800000))   ; legacy alias for k2.6
+   (my/gptel-model-context-bytes--from-registry))
+  "Approximate max JSON byte size per model.
+AUTO-GENERATED from `gptel-backend-registry' with legacy aliases.
+Computed as context window × ~3.5 bytes/token, minus output reservation.
+Used as fallback when `my/gptel-payload-byte-limit' would be too generous")
+
 ;;; Commentary:
 ;; Automatic retry for transient API errors with exponential backoff.
 ;; Pre-send payload compaction to prevent oversized requests.

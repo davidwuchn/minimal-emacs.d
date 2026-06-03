@@ -18,36 +18,54 @@
 
 (require 'gptel-auto-workflow-evolution)
 (require 'gptel-auto-workflow-skill-graph)
+(require 'gptel-ext-backend-registry)
 
 (defvar gptel-auto-workflow-executor-rate-limit-fallbacks
-  '(("MiniMax" . "MiniMax-M3")
-    ("moonshot" . "kimi-k2.6")
-    ("DeepSeek" . "deepseek-v4-pro")
-    ("DashScope" . "qwen3.6-plus")
-    ("Copilot" . "gpt-5.4-mini"))
+  (mapcar (lambda (backend)
+            (cons (symbol-name backend)
+                  (symbol-name (gptel-backend-registry-default-model backend))))
+          (gptel-backend-registry-fallback-chain 'executor))
   "Fallback chain for executor when rate-limited.
+Dynamically generated from `gptel-backend-registry'.
 First backend is primary, subsequent backends are tried in order.
 Ordered by keep-rate from experiment data.")
 (defvar gptel-auto-workflow-headless-subagent-fallbacks)
 
 ;; ─── Sieve-Based Backend Classification (verbum Phase 5) ───
+;; Dynamically generated from `gptel-backend-registry' capabilities metadata.
+;; Qwen3 family (DashScope) → single-neuron (high compression, deterministic).
+;; All others → distributed (lower compression, more redundancy).
+
+(defun gptel-auto-workflow--generate-sieve-types ()
+  "Generate sieve-type alist from backend registry.
+Returns list of (BACKEND-OR-MODEL . sieve-type) entries."
+  (let ((result '()))
+    (dolist (entry gptel-backend-registry)
+      (let* ((backend-name (symbol-name (car entry)))
+             (models (plist-get (cdr entry) :models))
+             (is-qwen (string-match-p "qwen" (downcase backend-name))))
+        ;; Backend entry
+        (push (cons backend-name (if is-qwen 'single-neuron 'distributed))
+              result)
+        ;; Model entries
+        (dolist (model models)
+          (push (cons (symbol-name model)
+                      (if (or is-qwen
+                              (string-match-p "qwen" (downcase (symbol-name model))))
+                          'single-neuron
+                        'distributed))
+                result))
+        ;; Model family wildcard for Qwen
+        (when is-qwen
+          (push (cons "qwen" 'single-neuron) result))))
+    result))
 
 (defvar gptel-auto-workflow--backend-sieve-types
-  '(("DashScope" . single-neuron)          ; Backend name
-    ("qwen3.6-plus" . single-neuron)       ; Model name: Qwen3 family
-    ("qwen" . single-neuron)               ; Model family
-    ("moonshot" . distributed)             ; Backend name
-    ("kimi-k2.6" . distributed)            ; Model name
-    ("DeepSeek" . distributed)             ; Backend name
-    ("deepseek-v4-pro" . distributed)     ; Model name
-    ("deepseek-v4-pro" . distributed)    ; Fast variant
-    ("MiniMax" . distributed)              ; Backend name
-    ("MiniMax-M3" . distributed) ; Model name
-    ("CF-Gateway" . distributed)           ; Backend name
-    ("@cf/openai/gpt-oss-120b" . distributed)) ; Model name
+  (gptel-auto-workflow--generate-sieve-types)
   "Sieve-type classification per backend/model (verbum crystal spine discovery).
 single-neuron: high compression, deterministic at bottleneck (Qwen3 family).
-distributed: lower compression, more redundancy (Mistral, OLMo, etc.).")
+distributed: lower compression, more redundancy (Mistral, OLMo, etc.).
+Dynamically generated from `gptel-backend-registry'.")
 
 (defun gptel-auto-workflow--backend-sieve-type (backend-or-model)
   "Return sieve-type for BACKEND-OR-MODEL: single-neuron or distributed.
