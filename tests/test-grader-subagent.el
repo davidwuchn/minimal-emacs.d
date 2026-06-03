@@ -71,15 +71,12 @@
 ;;; Test 4: Grading with Timeout
 
 (ert-deftest grader/timeout-returns-auto-pass ()
-  "Grading timeout should return auto-pass.
-Fails in batch due to test isolation — the grade-timeout variable is loaded
-from gptel-tools-agent which may have a stale compiled value."
-  :expected-result (if noninteractive :failed :passed)
+  "Grading timeout should return auto-pass."
   (require 'gptel-tools-agent)
   (should (boundp 'gptel-auto-experiment-grade-timeout))
-  ;; Timeout should be reasonable for CF-Gateway grader latency.
+  ;; Timeout matches production value (450s for slow backends like DeepSeek/MiniMax).
   (should (>= gptel-auto-experiment-grade-timeout 30))
-  (should (<= gptel-auto-experiment-grade-timeout 180)))
+  (should (<= gptel-auto-experiment-grade-timeout 600)))
 
 ;;; Test 5: Grading Timeout Wrapper
 

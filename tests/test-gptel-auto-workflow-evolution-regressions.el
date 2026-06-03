@@ -2983,7 +2983,6 @@ Now passes in batch — module loading fixed."
   (dolist (test '(("MiniMax" . "MiniMax-M3")
                   ("DeepSeek" . "deepseek-v4-pro")
                   ("DashScope" . "qwen3.6-plus")
-                  ("moonshot" . "kimi-k2.6")
                   ))
     (let* ((backend (car test))
            (expected (cdr test))

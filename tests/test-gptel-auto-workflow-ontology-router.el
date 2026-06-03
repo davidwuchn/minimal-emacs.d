@@ -198,14 +198,13 @@
 
 (ert-deftest regression/ontology-router/apply-and-reset ()
   "Applying ontology order should modify fallback chain, reset should restore."
-  :expected-result (if noninteractive :failed :passed)
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
          (copy-tree gptel-auto-workflow-headless-subagent-fallbacks))
         (mock-results
          (list
-          (list :backend "moonshot" :decision "kept")
-          (list :backend "moonshot" :decision "kept")
-          (list :backend "moonshot" :decision "kept")))
+          (list :backend "DashScope" :decision "kept")
+          (list :backend "DashScope" :decision "kept")
+          (list :backend "DashScope" :decision "kept")))
         (original-order (copy-tree gptel-auto-workflow-headless-subagent-fallbacks)))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
@@ -213,8 +212,8 @@
                   ((symbol-function 'random) (lambda (_) 999)))
           ;; Apply ontology ordering
           (gptel-auto-workflow--apply-ontology-fallback-order)
-          ;; Should have reordered
-          (should (string= "moonshot" (caar gptel-auto-workflow-executor-rate-limit-fallbacks)))
+          ;; Should have reordered (DashScope has 100% keep rate)
+          (should (string= "DashScope" (caar gptel-auto-workflow-executor-rate-limit-fallbacks)))
           ;; Reset
           (gptel-auto-workflow--reset-fallback-order)
           ;; Should be back to original
@@ -262,7 +261,6 @@ Guards against missing runtime dependencies (worktree-base-root)."
 
 (ert-deftest tdd/ontology-router/reset-restores-static-order ()
   "reset-fallback-order restores the static headless fallback list."
-  :expected-result (if noninteractive :failed :passed)
   (let ((original gptel-auto-workflow-executor-rate-limit-fallbacks))
     (unwind-protect
         (progn

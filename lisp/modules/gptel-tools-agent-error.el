@@ -754,6 +754,7 @@ RETRY-COUNT tracks current retry attempt."
     ("hour allocated quota exceeded" :api-rate-limit "Hourly quota exhausted")
     ("week allocated quota exceeded" :api-rate-limit "Weekly quota exhausted")
     ("overloaded_error\\|cluster overloaded\\|529\\|负载较高" :api-rate-limit "Provider overloaded")
+    ("access_terminated_error\\|usage limit for this billing cycle" :api-rate-limit "Provider usage limit reached")
     ;; Auth errors
     ("authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\""
      :api-error "Provider authorization failed")

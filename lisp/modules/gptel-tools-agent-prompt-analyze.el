@@ -59,9 +59,13 @@ OUTPUT: line1=\"A\"|\"B\"|\"tie\" line2=reason(1 sentence)"
                (let* ((response (if (stringp result) result (format "%S" result)))
                        (reported-winner (or (gptel-auto-experiment--parse-comparator-winner response)
                                             "unparsed"))
-                       (override (not (string= reported-winner expected-winner)))
-                       (winner (if (and override (string= reported-winner "B")) "B" expected-winner))
-                       (keep (string= winner "B")))
+                        (override (not (string= reported-winner expected-winner)))
+                        (gate-rejects-clearly (and gate-note
+                                                   (string-match-p "\\`Rejected:" gate-note)))
+                        (winner (if (and override (string= reported-winner "B") (not gate-rejects-clearly))
+                                    "B"
+                                  expected-winner))
+                        (keep (string= winner "B")))
                  (my/gptel--invoke-callback-safely
                   callback
                   (list :keep keep

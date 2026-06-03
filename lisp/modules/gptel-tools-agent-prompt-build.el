@@ -1058,9 +1058,15 @@ Returns a compact lambda-notation string ready for the LLM."
          (moderator (cdr (assoc 'moderator-lens vars)))
          (git-hist (cdr (assoc 'git-history vars)))
          (axis-g (cdr (assoc 'axis-guidance vars)))
-         (axis-p (cdr (assoc 'axis-performance vars)))
-         (frontier (cdr (assoc 'frontier-guidance vars)))
-         (satur (cdr (assoc 'saturation-status vars)))
+          (axis-p (cdr (assoc 'axis-performance vars)))
+          (frontier (cdr (assoc 'frontier-guidance vars)))
+          (satur (cdr (assoc 'saturation-status vars)))
+          (suggested-workflow
+           (or (bound-and-true-p gptel-auto-experiment--suggested-workflow)
+               (when (fboundp 'skill-graph--recommend-molecule)
+                 (let ((mol (skill-graph--recommend-molecule target)))
+                   (when mol
+                     (mapconcat #'symbol-name mol " → "))))))
           (fail-p (cdr (assoc 'failure-patterns vars)))
           (onto-g (cdr (assoc 'ontology-guidance vars)))
           (act-s (cdr (assoc 'action-schema vars)))
@@ -2183,15 +2189,15 @@ exhaustion.")
   "Maximum seconds between retries for rate-limited API failures.")
 
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
-  '(("MiniMax" . "MiniMax-M3")
-    ("DeepSeek" . "deepseek-v4-pro")
-    ("DashScope" . "qwen3.6-plus")
-    ("moonshot" . "kimi-k2.6"))
+  '(("DeepSeek" . "deepseek-v4-pro")
+    ("MiniMax" . "MiniMax-M3")
+    ("DashScope" . "qwen3.6-plus"))
   "Ordered backend/model fallbacks for headless auto-workflow subagents.
 
-MiniMax first (fast, no thinking mode — ideal for analysis/grader tasks),
-then DeepSeek (deep reasoning for complex tasks), then moonshot (last resort).
-DashScope removed — quota exhausted (HTTP 429) on this account.
+DeepSeek first (deep reasoning for complex tasks),
+then MiniMax (fast, no thinking mode — ideal for analysis/grader tasks),
+then DashScope (qwen3.6-plus — reinstated 2026-05-31 after quota recovery).
+moonshot removed — content_filter blocks code generation.
 CF-Gateway removed — does not support tool calls reliably."
   :type '(repeat (cons (string :tag "Backend")
                        (string :tag "Model")))

@@ -20,7 +20,7 @@
 (defvar gptel-model 'test-model)
 (defvar gptel-backend nil)
 (defvar my/gptel-agent-task-timeout 300)
-(defvar my/gptel-subagent-result-limit 4000)
+(defvar my/gptel-subagent-result-limit 16000)
 (defvar my/gptel-subagent-progress-interval 10)
 (defvar my/gptel-subagent-model nil)
 (defvar my/gptel-subagent-backend nil)

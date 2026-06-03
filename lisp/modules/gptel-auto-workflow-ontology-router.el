@@ -837,22 +837,25 @@ the original fallback list — preventing mutation side effects."
 
 (defun gptel-auto-workflow--reset-fallback-order ()
   "Reset fallback chain to static order from executor config.
-Moonshot removed — content_filter blocks code generation.
-DashScope reinstated as tertiary backend — qwen3.6-plus confirmed working
-on 2026-05-31 (was previously excluded due to transient quota issue)."
-  (when (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+Restores `gptel-auto-workflow-executor-rate-limit-fallbacks' to the
+value of `gptel-auto-workflow-headless-subagent-fallbacks'.
+Clears any stale health strikes for DashScope from health cache."
+  (when (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+             (boundp 'gptel-auto-workflow-headless-subagent-fallbacks))
     (setq gptel-auto-workflow-executor-rate-limit-fallbacks
-          '(("DeepSeek" . "deepseek-v4-pro")
-            ("MiniMax" . "MiniMax-M3")
-            ("DashScope" . "qwen3.6-plus")))
+          (copy-tree gptel-auto-workflow-headless-subagent-fallbacks))
     ;; Clear any stale health strikes for DashScope from health cache
-    (when (boundp 'gptel-auto-workflow--backend-lambda-health-cache)
+    (when (and (boundp 'gptel-auto-workflow--backend-lambda-health-cache)
+               (hash-table-p gptel-auto-workflow--backend-lambda-health-cache))
       (maphash (lambda (k v)
                  (when (and (symbolp k) (string-match-p "DashScope" (symbol-name k)))
                    (puthash k (plist-put v :health :healthy)
                             gptel-auto-workflow--backend-lambda-health-cache)))
                gptel-auto-workflow--backend-lambda-health-cache))
-    (message "[onto-router] Reset to executor static fallback order (DeepSeek + MiniMax + DashScope)")))
+    (message "[onto-router] Reset to executor static fallback order: %s"
+             (mapconcat (lambda (e) (format "%s/%s" (car e) (cdr e)))
+                        gptel-auto-workflow-executor-rate-limit-fallbacks
+                        " → "))))
 
 ;; ─── Semantic Similarity Target Discovery ───
 
