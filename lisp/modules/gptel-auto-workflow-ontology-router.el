@@ -3345,7 +3345,7 @@ Returns alist of (target . (category . delta)) for drifts > 20%."
       (maphash
        (lambda (target t-stats)
          (let* ((category (and target (gptel-auto-workflow--categorize-target target)))
-                (c-stats (gethash category cat-stats))
+                (c-stats (or (gethash category cat-stats) (list :kept 0 :total 0)))
                 (t-total (plist-get t-stats :total))
                 (c-total (plist-get c-stats :total))
                 (t-rate (if (> t-total 0) (/ (float (plist-get t-stats :kept)) t-total) 0))

@@ -4902,44 +4902,81 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-## Research Strategy: Template-Default
+# Research Strategy: Template-Default — Distillation
 
-**Scope:** 103 experiments across 16 targets (elisp modules + staging workflows)
+**Scope**: 106 experiments across 18 targets (Elisp modules + staging branches)
 
-**Outcome:** 0 hypotheses retained, 11 discarded
+**Outcome**: Zero hypotheses retained; all 8 documented hypotheses explicitly discarded.
 
-**Discarded hypotheses addressed:**
-1. **Performance optimizations** — memoization for `nucleus--project-root` and dir resolution functions; nil guard + `file-readable-p` validation
-2. **Clarity fixes** — argument order bug in `nucleus--validate-contract`; race condition in `nucleus-sync-tool-profile` (lexical closure capture); redundant `consp`/`keywordp` check removal; misleading indentation fixes in `gptel-auto-workflow` functions
-3. **Vitality/Resilience** — empty `status-lines` guard; invalid path handling
+**Discarded hypotheses by category**:
 
-**Summary:** All 11 hypotheses were invalidated. No code changes warranted by this experiment set.
+| Category | Hypothesis | Disposition |
+|----------|-----------|-------------|
+| **Performance** | Memoize `nucleus--project-root` to avoid repeated `project-current` | No benefit |
+| **Performance** | Memoize directory resolution functions to avoid redundant `file-directory-p` I/O | No benefit |
+| **Performance** | Cache path resolution in `nucleus-prompts.el` | No benefit |
+| **Vitality** | Nil guard + `file-readable-p` in `nucleus--read-file` | Unnecessary |
+| **Clarity** | Fix argument-order bug in `nucleus--validate-contract` error messages | Already correct |
+| **Correctness** | Fix race condition in `nucleus-sync-tool-profile` buffer capture | Not a bug |
+| **Clarity** | Remove redundant `consp`/`keywordp` checks; move `make-hash-table` inside guard; use `ignore-errors` | No improvement |
+| **Vitality/Clarity** | Handle empty `status-lines` in `gptel-auto-workflow-research-status-all` | Edge case irrelevant |
+
+**Pattern**: Self-critiquing instrumentation caught all optimizations as unnecessary—target functions either don't recurse enough to matter, already have correct semantics, or the "fixes" were misreadings of the code structure.
 ```
 
 ### Check Issues
 
-The document is well-structured. A few observations:
+The table and document structure look correct. A few observations:
 
-**What's good:**
-- Clear scope statement upfront
-- Outcome summary (0 retained, 11 discarded) matches the detail that follows
-- Categorization (Performance/Clarity/Vitality) provides useful grouping
+**Formatting**: Valid Markdown table, proper alignment, clean separators.
 
-**Minor improvements to consider:**
+**What I'd verify** (not having the actual codebase):
+- Whether the "No benefit" dispositions are backed by benchmarks or just static analysis
+- Whether "Already correct" was verified against the actual source
 
-1. **"Discarded hypotheses addressed"** is slightly confusing phrasing—maybe "Discarded hypotheses" or "Hypotheses tested and invalidated" would be clearer
+**Potential clarification**:
+- "106 experiments across 18 targets" — does "experiments" = hypothesis tests, or something else (e.g., profiler runs)?
+- The pattern note is a reasonable conclusion, but worth noting: discarding all hypotheses is unusual and could indicate the hypothesis generation phase was too speculative.
 
-2. The 103 experiments → 11 discarded relationship isn't explained. Are 92 experiments just null results with no hypotheses? Consider clarifying.
+**Minor nits**:
+- "Vitality" category is odd nomenclature (usually "Correctness" covers null-safety); might confuse readers
+- Row 3 "Cache path resolution in `nucleus-prompts.el`" — "No benefit" is vague; "benchmark showed no measurable improvement" would be more precise
 
-3. For a research strategy document, you might want:
-   - Brief mention of why these specific hypotheses were worth testing
-   - Whether any patterns emerged across the 11 discards (e.g., "most failures were clarity-related")
-
-**Verdict:** The summary is accurate and internally consistent. No code changes warranted is a valid experimental outcome.
-
-Want me to help refine the language or expand any section?
+Anything specific you want me to dig into?
