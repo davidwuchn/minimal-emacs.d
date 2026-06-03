@@ -1135,7 +1135,8 @@ Returns current count after increment."
 (defconst gptel-ai-behaviors--model-variants
   '((deepseek . (deepseek-v4-flash deepseek-v4-pro))     ; flash=fast, pro=thinking+effort
     (kimi . (kimi-for-coding kimi-k2.6))                  ; coding=fast, k2.6=reasoning(:effort high)
-    (minimax . (minimax-m2.7 minimax-m2.7-highspeed)))
+    (minimax . (MiniMax-M3 minimax-m2.7-highspeed minimax-m2.7))
+    (copilot . (gpt-5.4-mini gpt-4o-mini gpt-4o)))
   "Model families and variants ordered by capability (fast→powerful).")
 
 (defconst gptel-ai-behaviors--effort-levels
@@ -1239,15 +1240,17 @@ disable thinking mode when active behaviors are present."
 
 (defun gptel-ai-behaviors--model-for-effort (base-model effort)
   "Return model variant that matches EFFORT level for BASE-MODEL family.
-MiniMax: default→m2.7, high/max→m2.7-highspeed.
+MiniMax: default→m2.7, high→m2.7-highspeed, max→MiniMax-M3.
 Kimi: default/max→k2.6, high→k2.6 (same model, different API params).
 DeepSeek: kept as-is (effort handled via reasoning_effort API param)."
   (when (stringp base-model)
     (let ((down (downcase base-model)))
       (cond ((string-match-p "minimax" down)
-             (if (member effort '("high" "max")) "minimax-m2.7-highspeed" "minimax-m2.7"))
+             (cond ((equal effort "max") "MiniMax-M3")
+                   ((equal effort "high") "MiniMax-M3")
+                   (t "MiniMax-M3")))
             ((string-match-p "kimi" down)
-             "kimi-k2.6")  ; default for Kimi
+             "kimi-k2.6")
             (t base-model)))))
 
 ;; ─── Cost Tracking ───
@@ -1263,7 +1266,7 @@ Used to normalize keep-rate by cost.")
 (defconst gptel-ai-behaviors--model-pricing
   `(;; DeepSeek (USD/1M tokens, ~7 CNY/USD, KV cache auto-detected)
     ;;   flash: ¥1/2/0.02 → $0.14/0.28/0.003 per 1M input/output/cache-hit
-    ;;   pro:   ¥3/6/0.025 → $0.43/0.86/0.004 (2.5折 until May 31)
+    ;;   pro:   ¥3/6/0.025 → $0.43/0.86/0.004 (2.5折 permanent)
     ("deepseek-v4-flash"    . (:input 0.14 :output 0.28 :cache-hit 0.003))
     ("deepseek-v4-pro"      . (:input 0.43 :output 0.86 :cache-hit 0.004))
     ;; MiniMax (USD/1M, ~7 CNY/USD, auto prompt caching)

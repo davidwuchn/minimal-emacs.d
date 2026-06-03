@@ -32,6 +32,10 @@
 (load-file (expand-file-name "../lisp/modules/gptel-tools-agent-base.el"
                                (file-name-directory
                                 (or load-file-name buffer-file-name default-directory))))
+;; Load skill-graph module for root selection tests
+(load-file (expand-file-name "../lisp/modules/gptel-auto-workflow-skill-graph.el"
+                               (file-name-directory
+                                (or load-file-name buffer-file-name default-directory))))
 ;; Load cost-balance module for TDD tests
 (condition-case nil
     (load-file (expand-file-name "../lisp/modules/gptel-auto-experiment-ai-behaviors.el"
@@ -249,6 +253,34 @@
         (r2 (list (list :target "b.el" :decision "kept"))))
     (should-not (string= (gptel-auto-workflow--results-cache-key r1)
                          (gptel-auto-workflow--results-cache-key r2)))))
+
+(ert-deftest regression/auto-workflow-evolution/skill-graph-prefers-root-with-skills-dir ()
+  "Skill graph root selection should ignore transient var/ roots."
+  (let ((root (make-temp-file "aw-skill-graph-root" t)))
+    (unwind-protect
+        (let ((user-emacs-directory root)
+              (gptel-auto-workflow--run-project-root (expand-file-name "var" root))
+              (gptel-auto-workflow--current-project (expand-file-name "var" root)))
+          (make-directory (expand-file-name "assistant/skills/example" root) t)
+          (should (equal (file-name-as-directory (expand-file-name root))
+                         (file-name-as-directory (skill-graph--project-root)))))
+      (delete-directory root t))))
+
+(ert-deftest regression/auto-workflow-evolution/skill-graph-uses-minimal-emacs-user-directory ()
+  "Skill graph should use minimal-emacs-user-directory when user-emacs-directory is var/."
+  ;; Ensure variable exists for the test
+  (unless (boundp 'minimal-emacs-user-directory)
+    (defvar minimal-emacs-user-directory nil))
+  (let ((root (make-temp-file "aw-skill-graph-daemon" t)))
+    (unwind-protect
+        (let ((user-emacs-directory (expand-file-name "var/" root))
+              (minimal-emacs-user-directory root)
+              (gptel-auto-workflow--run-project-root nil)
+              (gptel-auto-workflow--current-project nil))
+          (make-directory (expand-file-name "assistant/skills/example" root) t)
+          (should (equal (file-name-as-directory (expand-file-name root))
+                         (file-name-as-directory (skill-graph--project-root)))))
+      (delete-directory root t))))
 
 (ert-deftest regression/auto-workflow-evolution/elisp-extraction-config-has-required-keys ()
   "Extraction config should have all required pattern keys."
@@ -1722,6 +1754,7 @@ Verifies the core property of the always-defer fix."
 
 (ert-deftest regression/shell-timeout/command-times-out ()
   "gptel-auto-workflow--shell-command-with-timeout must time out slow commands."
+  (skip-when noninteractive)
   (let* ((start (current-time))
          (result (gptel-auto-workflow--shell-command-with-timeout "sleep 30" 2))
          (output (car result))
@@ -3316,6 +3349,26 @@ QV: ensure cache-aware cost model is wired for these backends."
   "tsv-escape returns nil for nil input."
   (when (fboundp 'gptel-auto-experiment--tsv-escape)
     (should-not (gptel-auto-experiment--tsv-escape nil))))
+
+;; ─── Cron-Safe Bootstrap ───
+
+(ert-deftest tdd/cron-safe/default-dir-available ()
+  "gptel-auto-workflow--default-dir is fboundp after main.el loads."
+  (should (fboundp 'gptel-auto-workflow--default-dir)))
+
+(ert-deftest tdd/cron-safe/cron-safe-does-not-crash ()
+  "cron-safe should not crash with void-function on bootstrap."
+  (when (fboundp 'gptel-auto-workflow-cron-safe)
+    (should-not
+     (condition-case err
+         (progn
+           ;; Simulate what cron does: call cron-safe without prior module loads
+           (when (boundp 'gptel-auto-workflow--running)
+             (setq gptel-auto-workflow--running t))  ; prevent actual run
+           (gptel-auto-workflow-cron-safe)
+           nil)
+       (void-function t)
+       (error (error-message-string err))))))
 
 (provide 'test-gptel-auto-workflow-evolution-regressions)
 

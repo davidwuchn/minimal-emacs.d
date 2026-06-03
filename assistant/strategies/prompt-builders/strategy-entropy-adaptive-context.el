@@ -9,9 +9,11 @@
   "Build prompt with entropy-based adaptive context."
   (let* ((base-prompt (gptel-auto-experiment-build-prompt
                        target experiment-id max-experiments analysis baseline previous-results))
-         (content (with-temp-buffer
-                    (insert-file-contents target)
-                    (buffer-string)))
+         (content (condition-case nil
+                    (with-temp-buffer
+                      (insert-file-contents target)
+                      (buffer-string))
+                  (error "")))
          (chunks (strategy-chunk-by-symmetry content))
          (entropies (mapcar #'strategy-calc-entropy chunks))
          (high-entropy-sections (cl-loop for e in entropies

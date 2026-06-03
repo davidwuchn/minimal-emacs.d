@@ -910,14 +910,15 @@ Reuses gptel-agent's `gptel-agent-read-file' for frontmatter parsing."
              (parsed (gptel-agent-read-file load-file))
              (name (car parsed))
              (plist (cdr parsed)))
-        (list :name (or name skill-name)
-              :metadata (cl-remove-if (lambda (k) (eq k :system)) plist)
-              :body (or (plist-get plist :system) "")
-              :skill-dir skill-dir)
-        ;; Track for skill graph evolution
-        (when (and (boundp 'gptel-auto-experiment--loaded-skills)
-                   (listp gptel-auto-experiment--loaded-skills))
-          (push skill-name gptel-auto-experiment--loaded-skills))))))
+         (prog1
+             (list :name (or name skill-name)
+                   :metadata (cl-remove-if (lambda (k) (eq k :system)) plist)
+                   :body (or (plist-get plist :system) "")
+                   :skill-dir skill-dir)
+           ;; Track for skill graph evolution
+           (when (and (boundp 'gptel-auto-experiment--loaded-skills)
+                      (listp gptel-auto-experiment--loaded-skills))
+             (push skill-name gptel-auto-experiment--loaded-skills)))))))
 
 (defun gptel-auto-workflow--load-skill-metadata (skill-name)
   "Load only metadata for SKILL-NAME (progressive disclosure stage 1).
@@ -1127,7 +1128,8 @@ Returns a compact lambda-notation string ready for the LLM."
       "\n"
       ;; CONTEXT (what you know about this target — DYNAMIC)
       (if persona (concat "PERSONA: " persona "\n") "")
-      (if skills (concat "SKILLS: " skills "\n") "")
+       (if skills (concat "SKILLS: " skills "\n") "")
+       (if suggested-workflow (concat "WORKFLOW: " suggested-workflow "\n") "")
       (if allium-i (concat "ALLIUM: " allium-i "\n") "")
       (if allium-r (concat "REPAIR: " allium-r "\n") "")
       (if (or topic prev) (concat "PAST: " (or topic "")
@@ -1272,7 +1274,12 @@ Implements section-level A/B testing to identify effective prompt components."
            (setq gptel-ai-behaviors--current-strategy strategy)
            ;; Reset combo tag after use
            (when (boundp 'gptel-ai-behaviors--combo-hashtag)
-             (setq gptel-ai-behaviors--combo-hashtag nil))))))
+              (setq gptel-ai-behaviors--combo-hashtag nil))))))
+  ;; Select workflow molecule from skill graph (matching category → files)
+  (when (and target (fboundp 'skill-graph--recommend-molecule))
+    (setq gptel-auto-experiment--suggested-workflow
+          (let ((mol (skill-graph--recommend-molecule target)))
+            (when mol (mapconcat #'symbol-name mol " → ")))))
   ;; Adapt compression based on token efficiency analysis
   (gptel-auto-workflow--adapt-prompt-compression)
   
@@ -1288,8 +1295,14 @@ Implements section-level A/B testing to identify effective prompt components."
                                worktree-quoted)))
          (patterns (when (proper-list-p analysis) (plist-get analysis :patterns)))
          (suggestions (when (proper-list-p analysis) (plist-get analysis :recommendations)))
-         (skills (cdr (assoc target gptel-auto-workflow--skills)))
-         (scores (gptel-auto-experiment--eight-keys-scores))
+          (skills (cdr (assoc target gptel-auto-workflow--skills)))
+          (suggested-workflow
+           (or (bound-and-true-p gptel-auto-experiment--suggested-workflow)
+               (when (fboundp 'skill-graph--recommend-molecule)
+                 (let ((mol (skill-graph--recommend-molecule target)))
+                   (when mol
+                     (mapconcat #'symbol-name mol " → "))))))
+          (scores (gptel-auto-experiment--eight-keys-scores))
          (weakest-keys (when scores (gptel-auto-workflow--format-weakest-keys scores)))
          (mutation-templates (when skills (gptel-auto-workflow--extract-mutation-templates skills)))
          (suggested-hypothesis (when skills (gptel-auto-workflow-skill-suggest-hypothesis skills)))
@@ -1926,10 +1939,11 @@ Captures executor reasoning from the dynamic variable
       (unless (gptel-auto-experiment--drop-replaceable-tsv-rows
                experiment-id target)
         (goto-char (point-max))
-         (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
+        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
                         experiment-id
                         target
-                        (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
+                        (gptel-auto-experiment--tsv-escape
+                         (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
                         score-before
                         score-after
                         code-quality
@@ -1937,13 +1951,21 @@ Captures executor reasoning from the dynamic variable
                         decision
                         (round duration)
                         (gptel-auto-workflow--plist-get experiment :grader-quality "?")
-                        (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :grader-reason "N/A"))
-                        (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A"))
-                        (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
+                        (gptel-auto-experiment--tsv-escape
+                         (gptel-auto-workflow--plist-get experiment :grader-reason "N/A"))
+                        (gptel-auto-experiment--tsv-escape
+                         (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A"))
+                        (gptel-auto-experiment--tsv-escape
+                         (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
                         truncated-output
                         (round output-chars)
-                        (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :backend "unknown"))
-                        (round prompt-chars)
+                        (gptel-auto-experiment--tsv-escape
+                         (let ((model (gptel-auto-workflow--plist-get experiment :model)))
+                           (if (fboundp 'gptel-auto-workflow--backend-for-model)
+                               (gptel-auto-workflow--backend-for-model model)
+                             (or (gptel-auto-workflow--plist-get experiment :backend "unknown")
+                                 "unknown"))))
+                         (round prompt-chars)
                         (or (gptel-auto-experiment--tsv-escape
                              (gptel-auto-workflow--plist-get experiment :sections-included "all"))
                             "all")
@@ -1956,9 +1978,9 @@ Captures executor reasoning from the dynamic variable
                                    (mapconcat (lambda (c)
                                                 (format "%s:%.1f:%s"
                                                         (substring (or (car c) "") 0 (min 20 (length (or (car c) ""))))
-                                                         (gptel-auto-experiment--tsv-number
-                                                          (plist-get (cdr c) :score)
-                                                          0.0)
+                                                        (gptel-auto-experiment--tsv-number
+                                                         (plist-get (cdr c) :score)
+                                                         0.0)
                                                         (if (plist-get (cdr c) :valid) "V" "X")))
                                               candidates ";")
                                  "")))
@@ -1974,7 +1996,8 @@ Captures executor reasoning from the dynamic variable
                           ;; so feedback loop is always preserved.
                           (when (equal hash "none")
                             (setq hash (sha1 (format "pipeline-defect-%s-%s" target (format-time-string "%s"))))
-                            (message "[auto-workflow] WARNING: TSV-level fallback hash for %s (upstream should have set it)" (or target "unknown")))
+                            (message "[auto-workflow] WARNING: TSV-level fallback hash for %s (upstream should have set it)"
+                                     (or target "unknown")))
                           (gptel-auto-experiment--tsv-escape hash))
                         (or (gptel-auto-experiment--tsv-escape
                              (gptel-auto-workflow--plist-get experiment :research-quality "none"))
@@ -1987,18 +2010,20 @@ Captures executor reasoning from the dynamic variable
                             "?")
                         (or (gptel-auto-experiment--tsv-escape
                              (gptel-auto-workflow--plist-get experiment :model "unknown"))
-                             "unknown")
+                            "unknown")
                         (gptel-auto-experiment--tsv-escape
                          (let ((ks (gptel-auto-workflow--plist-get experiment :eight-keys-scores nil)))
-                            (if ks (concat "{" (mapconcat
-                                                 (lambda (pair)
-                                                   (format "%s:%.2f" (car pair) (cdr pair)))
-                                                 ks ",") "}")
-                              ""))
-                         (gptel-auto-experiment--tsv-escape
-                          (gptel-auto-workflow--plist-get experiment :skills ""))
-                         (gptel-auto-workflow--plist-get experiment :edit-mode "none")))))
-
+                           (if ks
+                               (concat "{" (mapconcat
+                                            (lambda (pair)
+                                              (format "%s:%.2f" (car pair) (cdr pair)))
+                                            ks ",") "}")
+                             "")))
+                        (gptel-auto-experiment--tsv-escape
+                         (gptel-auto-workflow--plist-get experiment :skills ""))
+                        (or (gptel-auto-experiment--tsv-escape
+                             (gptel-auto-workflow--plist-get experiment :edit-mode "none"))
+                            "none"))))
       (write-region (point-min) (point-max) file))
     ;; Keep strategy metrics independent from the per-run TSV.
     (when (fboundp 'gptel-auto-workflow--record-strategy-evaluation)
@@ -2189,7 +2214,7 @@ Set by `gptel-auto-workflow--migrate-legacy-provider-defaults' on startup.")
     ("executor"   "DashScope"  . "qwen3.6-plus")
     ("executor"   "moonshot"   . "kimi-k2.6")
     ("executor"   "DeepSeek"   . "deepseek-v4-flash")
-    ("executor"   "MiniMax"    . "minimax-m2.7-highspeed")
+    ("executor"   "MiniMax"    . "MiniMax-M3")
     ("researcher" "MiniMax"    . "minimax-m2.7-highspeed")
     ("researcher" "DashScope"  . "qwen3.6-plus")
     ("researcher" "DeepSeek"   . "deepseek-v4-pro")
@@ -2333,6 +2358,23 @@ If BACKEND is not found, returns \"unknown\"."
   (and (or (bound-and-true-p gptel-auto-workflow--headless)
            (bound-and-true-p gptel-auto-workflow-persistent-headless))
        (bound-and-true-p gptel-auto-workflow--current-project)))
+
+(defun gptel-auto-workflow--backend-for-model (model)
+  "Derive the backend provider name from a MODEL string.
+Returns a string like \"DeepSeek\", \"MiniMax\", \"moonshot\", \"DashScope\", etc.
+Returns \"unknown\" when model is nil, empty, or unrecognized."
+  (cond
+   ((or (null model) (not (stringp model)) (string= model ""))
+    "unknown")
+   ((string-prefix-p "deepseek" model) "DeepSeek")
+   ((string-prefix-p "minimax" model) "MiniMax")
+   ((string-prefix-p "MiniMax" model) "MiniMax")
+   ((string-prefix-p "kimi" model) "moonshot")
+   ((string-prefix-p "qwen" model) "DashScope")
+   ((string-prefix-p "gpt" model) "OpenAI")
+   ((string-prefix-p "claude" model) "Anthropic")
+   ((string-prefix-p "gemini" model) "Google")
+   (t "unknown")))
 
 (defun gptel-auto-workflow--backend-object (backend-name)
   "Return the backend object for BACKEND-NAME, or nil when unavailable.
@@ -2768,20 +2810,30 @@ Returns formatted string listing underexplored targets."
                          "\n")
               "\n\n"))))
 
+(defcustom gptel-auto-experiment-saturation-threshold
+  '(:frontier-size 2 :axes 3 :quality 0.7)
+  "Thresholds for declaring a target's Pareto frontier 'saturated'.
+Plist with :frontier-size (min Pareto-optimal experiments),
+:axes (min unique exploration axes), :quality (min best code-quality).
+Lower values = more aggressive experimentation (less saturation)."
+  :type '(plist :key-type symbol :value-type number)
+  :group 'gptel)
+
 (defun gptel-auto-experiment--frontier-saturated-p (target &optional min-frontier-size min-axes min-quality)
   "Return t if TARGET's frontier is saturated (sufficiently explored).
-MIN-FRONTIER-SIZE: minimum number of Pareto-optimal experiments (default: 3).
-MIN-AXES: minimum number of unique axes covered (default: 6).
-MIN-QUALITY: minimum best quality score (default: 0.8)."
-  (let* ((frontier (gptel-auto-experiment--compute-frontier target))
+MIN-FRONTIER-SIZE: minimum number of Pareto-optimal experiments (default: from `gptel-auto-experiment-saturation-threshold').
+MIN-AXES: minimum number of unique axes covered (default: from threshold).
+MIN-QUALITY: minimum best quality score (default: from threshold)."
+  (let* ((threshold gptel-auto-experiment-saturation-threshold)
+         (frontier (gptel-auto-experiment--compute-frontier target))
          (frontier-size (length frontier))
          (axes (cl-remove-duplicates (mapcar (lambda (e) (plist-get e :axis)) frontier)
                                      :test #'equal))
          (qualities (mapcar (lambda (e) (plist-get e :code-quality)) frontier))
          (best-quality (if qualities (apply #'max qualities) 0)))
-    (and (>= frontier-size (or min-frontier-size 3))
-         (>= (length axes) (or min-axes 4))
-         (>= best-quality (or min-quality 0.8)))))
+    (and (>= frontier-size (or min-frontier-size (plist-get threshold :frontier-size) 3))
+         (>= (length axes) (or min-axes (plist-get threshold :axes) 4))
+         (>= best-quality (or min-quality (plist-get threshold :quality) 0.8)))))
 
 (defun gptel-auto-experiment--frontier-saturation-guidance (target)
   "Format saturation status for TARGET.

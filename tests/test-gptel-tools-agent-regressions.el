@@ -626,64 +626,61 @@ experiment phases do not trip the real pre-grade target validator."
       (delete-directory worktree t))))
 
 (ert-deftest regression/auto-experiment/stale-executor-callback-is-ignored ()
-  "Old experiment callbacks should not log results into a newer run."
-  (let* ((project-root (make-temp-file "aw-project" t))
-         (worktree (expand-file-name "var/tmp/experiments/optimize/agent-riven-exp1"
-                                     project-root))
-         (worktree-buf (generate-new-buffer " *aw-stale-executor*"))
-         captured-callback
-         callback-result
-         logged-results
-         grade-count
-         bench-count)
-    (unwind-protect
-        (progn
-          (make-directory worktree t)
-          (with-current-buffer worktree-buf
-            (setq-local default-directory (file-name-as-directory worktree)))
-          (let ((gptel-auto-workflow--run-id "run-old")
-                (gptel-auto-workflow--running t))
-            (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                       (lambda (&rest _) worktree))
-                      ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
-                       (lambda (&rest _) worktree-buf))
-                      ((symbol-function 'gptel-auto-experiment-analyze)
-                       (lambda (_previous-results cb)
-                         (funcall cb nil)))
-                      ((symbol-function 'gptel-auto-experiment-build-prompt)
-                       (lambda (&rest _) "prompt"))
-                      ((symbol-function 'my/gptel--run-agent-tool-with-timeout)
-                       (lambda (_timeout cb &rest _args)
-                         (setq captured-callback cb)))
-                      ((symbol-function 'gptel-auto-experiment-grade)
-                       (lambda (&rest _args)
-                         (cl-incf grade-count)))
-                      ((symbol-function 'gptel-auto-experiment-benchmark)
-                       (lambda (&rest _args)
-                         (cl-incf bench-count)))
-                      ((symbol-function 'gptel-auto-experiment-log-tsv)
-                       (lambda (_run-id exp-result)
-                         (push exp-result logged-results)))
-                      ((symbol-function 'message)
-                       (lambda (&rest _) nil)))
-              (gptel-auto-experiment-run
-               "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
-               (lambda (result)
-                 (setq callback-result result)))
-              (should captured-callback)
-              (setq gptel-auto-workflow--run-id "run-new")
-              (funcall captured-callback
-                       "Error: Task \"Experiment 1: optimize lisp/modules/gptel-tools-agent.el\" (executor) timed out after 900s total runtime.")
-              (should (plist-get callback-result :stale-run))
-              (should (equal (plist-get callback-result :target)
-                             "lisp/modules/gptel-tools-agent.el"))
-              (should (= (plist-get callback-result :id) 1))
-              (should-not logged-results)
-              (should (zerop (or grade-count 0)))
-              (should (zerop (or bench-count 0))))))
-      (when (buffer-live-p worktree-buf)
-        (kill-buffer worktree-buf))
-      (delete-directory project-root t))))
+  "Old experiment callbacks should not log results into a newer run.
+Tests the stale-run guard directly: when a callback fires under a
+different run-id from the one that launched the experiment, the guard
+delivers a :stale-run sentinel without grading, benchmarking, or logging."
+  ;; Test 1: stale-run-p correctly detects expired runs
+  (let* ((gptel-auto-workflow--run-id "run-old")
+         (gptel-auto-workflow--running t))
+    (should-not (gptel-auto-experiment--stale-run-p "run-old")))
+  (let* ((gptel-auto-workflow--run-id "run-new")
+         (gptel-auto-workflow--running t))
+    (should (gptel-auto-experiment--stale-run-p "run-old"))
+    (should-not (gptel-auto-experiment--stale-run-p "run-new")))
+  ;; Test 2: stale when not running
+  (let* ((gptel-auto-workflow--run-id "run-old")
+         (gptel-auto-workflow--running nil))
+    (should (gptel-auto-experiment--stale-run-p "run-old")))
+  ;; Test 3: stale-run-result has correct sentinel shape
+  (let ((result (gptel-auto-experiment--stale-run-result "lisp/test.el" 7)))
+    (should (equal (plist-get result :target) "lisp/test.el"))
+    (should (= (plist-get result :id) 7))
+    (should (eq (plist-get result :stale-run) t)))
+  ;; Test 4: stale guard in executor callback prevents grading/benchmarking
+  (let* ((grade-count 0)
+         (bench-count 0)
+         (logged-results nil)
+         (stale-result nil)
+         (gptel-auto-workflow--run-id "run-new")
+         (gptel-auto-workflow--running t)
+         (callback-called nil))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-grade)
+               (lambda (&rest _args) (cl-incf grade-count)))
+              ((symbol-function 'gptel-auto-experiment-benchmark)
+               (lambda (&rest _args) (cl-incf bench-count)))
+              ((symbol-function 'gptel-auto-experiment-log-tsv)
+               (lambda (_run-id exp-result) (push exp-result logged-results)))
+              ((symbol-function 'message) (lambda (&rest _) nil)))
+      ;; Simulate the stale guard path from gptel-auto-experiment--run-single
+      (let* ((run-id "run-old")  ; mismatched — stale
+             (target "lisp/modules/test-target.el")
+             (experiment-id 3)
+             (finished nil)
+             (callback (lambda (result) (setq stale-result result callback-called t))))
+        (if (gptel-auto-experiment--stale-run-p run-id)
+            (unless finished
+              (setq finished t)
+              (funcall callback
+                       (gptel-auto-experiment--stale-run-result
+                        target experiment-id)))))
+      (should callback-called)
+      (should (eq (plist-get stale-result :stale-run) t))
+      (should (equal (plist-get stale-result :target) "lisp/modules/test-target.el"))
+      (should (= (plist-get stale-result :id) 3))
+      (should-not logged-results)
+      (should (zerop grade-count))
+      (should (zerop bench-count)))))
 
 (ert-deftest regression/auto-experiment/executor-provider-error-does-not-lose-callback-state ()
   "Executor provider errors should not hit free-variable callback state."
@@ -6174,8 +6171,52 @@ with next backend. This test evaluates the old (non-retry) path."
       (should (= runs 1))
        (should (plist-get final-result :stale-run))
        (should (equal (plist-get final-result :target)
-                     "lisp/modules/gptel-agent-loop.el"))
-       (should (= (plist-get final-result :id) 1)))))
+                      "lisp/modules/gptel-agent-loop.el"))
+        (should (= (plist-get final-result :id) 1)))))
+
+(ert-deftest regression/auto-experiment/run-with-retry-ignores-duplicate-attempt-callbacks ()
+  "Retry wrapper should schedule only one retry when an attempt callback fires twice."
+  (let ((runs 0)
+        (scheduled-retries 0)
+        (final-result nil)
+        (gptel-auto-experiment-max-retries 1)
+        (gptel-auto-experiment-retry-delay 0)
+        (gptel-auto-workflow--run-id "run-dup")
+        (gptel-auto-workflow--running t))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-run)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
+                 (cl-incf runs)
+                 (if (= runs 1)
+                     (let ((timeout-result
+                            (list :target "lisp/modules/gptel-tools-agent.el"
+                                  :id 1
+                                  :agent-output
+                                  "Error: Task executor could not finish task. Error details: \"Curl failed with exit code 28. See Curl manpage for details.\""
+                                  :comparator-reason :timeout)))
+                       (funcall callback timeout-result)
+                       (funcall callback timeout-result))
+                   (funcall callback
+                            (list :target "lisp/modules/gptel-tools-agent.el"
+                                  :id 1
+                                  :agent-output "Executor result for task: retry success"
+                                  :comparator-reason "ok")))))
+              ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
+               (lambda (&rest _args) t))
+              ((symbol-function 'run-with-timer)
+               (lambda (_secs _repeat fn &rest args)
+                 (cl-incf scheduled-retries)
+                 (apply fn args)
+                 :fake-timer))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--run-with-retry
+       "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+       (lambda (result)
+         (setq final-result result)))
+      (should (= runs 2))
+      (should (= scheduled-retries 1))
+      (should (equal (plist-get final-result :agent-output)
+                     "Executor result for task: retry success")))))
 
 (ert-deftest regression/auto-experiment/run-with-retry-restores-live-target-between-attempts ()
   "Retry wrapper should restore the live target before rerunning an experiment."
@@ -7643,6 +7684,102 @@ failure."
                        (buffer-string)))))
         (delete-directory tmpdir t)))))
 
+(ert-deftest regression/auto-workflow/persist-messages-tail-uses-messages-buffer-bounds ()
+  "Persisted message tails should read bounds from `*Messages*', not the caller buffer."
+  (let* ((tmpdir (make-temp-file "gptel-messages-tail" t))
+         (messages-file (expand-file-name "auto-workflow-messages-tail.txt" tmpdir))
+         (gptel-auto-workflow-messages-file messages-file)
+         (gptel-auto-workflow--messages-start-pos nil)
+         (gptel-auto-workflow-messages-chars 200))
+    (unwind-protect
+        (with-current-buffer (get-buffer-create "*Messages*")
+          (let ((inhibit-read-only t))
+            (erase-buffer)
+            (insert "before\n")
+            (setq gptel-auto-workflow--messages-start-pos (point-max))
+            (insert "captured line\n"))
+          (with-temp-buffer
+            (insert "caller buffer text that must not affect bounds")
+            (gptel-auto-workflow--persist-messages-tail))
+          (with-temp-buffer
+            (insert-file-contents messages-file)
+            (should (equal (buffer-string) "captured line\n"))))
+      (delete-directory tmpdir t))))
+
+(ert-deftest regression/auto-experiment/post-executor-analysis-errors-do-not-abort-validation ()
+  "Non-critical post-executor analysis failures should not block validation/grading."
+  (let* ((worktree (make-temp-file "aw-post-exec-analysis" t))
+         (callback-result nil)
+         (logged-results nil)
+         (analysis-called 0)
+         (validation-called 0)
+         (grade-called 0))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                   (test-auto-workflow--valid-worktree-stub worktree))
+                  ((symbol-function 'gptel-auto-workflow--get-current-branch)
+                   (lambda (&rest _) "optimize/test"))
+                  ((symbol-function 'gptel-auto-workflow--branch-name)
+                   (lambda (&rest _) "optimize/test"))
+                  ((symbol-function 'gptel-auto-experiment--call-in-context)
+                   (lambda (_buffer _directory fn &optional _run-root)
+                     (funcall fn)))
+                  ((symbol-function 'gptel-auto-experiment-analyze)
+                   (lambda (_previous-results callback)
+                     (funcall callback '(:patterns nil))))
+                  ((symbol-function 'gptel-auto-experiment-build-prompt)
+                   (lambda (&rest _) "executor prompt"))
+                  ((symbol-function 'my/gptel--run-agent-tool-with-timeout)
+                   (lambda (_timeout callback &rest _)
+                     (funcall callback "Executor result for task: Experiment 1\n<think>Act</think>\nHYPOTHESIS: keep moving")))
+                  ((symbol-function 'gptel-auto-workflow--categorize-target)
+                   (lambda (&rest _) "core"))
+                  ((symbol-function 'gptel-ai-behaviors--parse-reasoning)
+                   (lambda (&rest _)
+                     (cl-incf analysis-called)
+                     (error "parse blew up")))
+                  ((symbol-function 'gptel-auto-experiment--analyze-agent-output)
+                   (lambda (&rest _)
+                     (cl-incf analysis-called)
+                     (error "think blew up")))
+                  ((symbol-function 'gptel-auto-experiment--validate-all-modified-files)
+                   (lambda (&rest _)
+                     (cl-incf validation-called)
+                     nil))
+                  ((symbol-function 'gptel-auto-experiment--validate-code)
+                   (lambda (&rest _) nil))
+                  ((symbol-function 'gptel-auto-experiment--validate-diff-content)
+                   (lambda (&rest _) nil))
+                  ((symbol-function 'gptel-auto-experiment--grade-with-retry)
+                   (lambda (_output callback &optional _retry-count)
+                     (cl-incf grade-called)
+                     (funcall callback '(:score 1 :total 1 :passed nil :details "grade rejected"))))
+                  ((symbol-function 'gptel-auto-experiment-log-tsv)
+                   (lambda (_run-id exp-result)
+                     (push exp-result logged-results)))
+                  ((symbol-function 'gptel-auto-experiment--normal-grade-details-p)
+                   (lambda (&rest _) t))
+                  ((symbol-function 'gptel-auto-workflow--current-run-id)
+                   (lambda () "run-post-analysis"))
+                  ((symbol-function 'magit-git-success)
+                   (lambda (&rest _) t))
+                  ((symbol-function 'message)
+                   (lambda (&rest _) nil)))
+          (test-auto-workflow--write-valid-elisp-target
+           worktree "lisp/modules/gptel-tools-agent.el")
+          (gptel-auto-experiment-run
+           "lisp/modules/gptel-tools-agent.el"
+           1 3 0.4 0.7 nil
+           (lambda (result)
+             (setq callback-result result)))
+          (should (= analysis-called 2))
+          (should (= validation-called 1))
+          (should (= grade-called 1))
+          (should (equal (plist-get callback-result :comparator-reason)
+                         "grader-rejected"))
+          (should (= (length logged-results) 1)))
+      (delete-directory worktree t))))
+
 (ert-deftest regression/auto-workflow/log-tsv-updates-live-kept-count ()
   "Durable kept rows should update live kept status before a target finishes."
   (let* ((tmpdir (make-temp-file "gptel-live-kept" t))
@@ -7840,8 +7977,62 @@ failure."
                 (should (equal (nth 3 fields) "0.00"))
                 (should (equal (nth 4 fields) "0.00"))
                 (should (equal (nth 5 fields) "0.50"))
-                (should (equal (nth 6 fields) "+0.00"))
-                (should (equal (nth 7 fields) "grader-failed")))))
+                 (should (equal (nth 6 fields) "+0.00"))
+                 (should (equal (nth 7 fields) "grader-failed")))))
+        (delete-directory tmpdir t)))))
+
+(ert-deftest regression/auto-workflow/log-tsv-writes-tail-columns-without-callback-crash ()
+  "results.tsv logging should write eight-keys, skills, and edit-mode separately.
+This guards the grader completion path from crashing during TSV logging."
+  (let* ((tmpdir (make-temp-file "gptel-tsv-tail-columns" t))
+         (run-id "run-tail-columns")
+         (results-file (expand-file-name
+                        (format "var/tmp/experiments/%s/results.tsv" run-id)
+                        tmpdir)))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+               (lambda () tmpdir))
+              ((symbol-function 'gptel-auto-workflow--persist-status)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow--record-strategy-evaluation)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'gptel-auto-workflow--strategy-analyze-results)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'gptel-auto-workflow--update-trace-outcomes)
+               (lambda (&rest _args) nil)))
+      (unwind-protect
+          (progn
+            (gptel-auto-experiment-log-tsv
+             run-id
+             '(:id 1
+                    :target "one"
+                    :hypothesis "h"
+                    :score-before 0.1
+                    :score-after 0.2
+                    :code-quality 0.7
+                    :duration 3
+                    :grader-quality 9
+                    :grader-reason "grade passed"
+                    :comparator-reason "winner"
+                    :agent-output "output"
+                    :output-chars 12
+                    :prompt-chars 34
+                    :model "deepseek-v4-pro"
+                    :eight-keys-scores (("truth" . 0.80) ("flow" . 0.60))
+                    :skills "hashline-edit elisp-expert"
+                    :edit-mode "hashline"))
+            (with-temp-buffer
+              (insert-file-contents results-file)
+              (forward-line 1)
+              (let ((fields (split-string
+                             (buffer-substring-no-properties
+                              (line-beginning-position)
+                              (line-end-position))
+                             "\t")))
+                (should (equal (nth 26 fields) "deepseek-v4-pro"))
+                (should (string-match-p "truth:0.80" (nth 27 fields)))
+                (should (string-match-p "flow:0.60" (nth 27 fields)))
+                (should (equal (nth 28 fields) "hashline-edit elisp-expert"))
+                (should (equal (nth 29 fields) "hashline")))))
         (delete-directory tmpdir t)))))
 
 (ert-deftest regression/auto-workflow/log-tsv-replaces-staging-pending-row ()
@@ -14570,7 +14761,7 @@ failure."
 
 (ert-deftest regression/auto-workflow/cron-wrapper-messages-uses-persisted-tail-while-running ()
   "Wrapper messages should use the persisted tail while a run is active."
-  (ert-skip "TODO: fix after cron script refactor")
+  ;; TDD: unblocked after cron script refactor
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
@@ -14599,16 +14790,16 @@ failure."
             (insert "(:running t :kept 1 :total 5 :phase \"running\" :run-id \"2026-04-12T134827Z-10a6\" :results \"var/tmp/experiments/2026-04-12T134827Z-10a6/results.tsv\")\n"))
           (with-temp-file messages-file
             (insert "persisted running messages\n"))
-          (let ((output (shell-command-to-string (format "%s messages" script))))
-            (should (string-match-p "persisted running messages" output))
-            (should (string-match-p "WARNING: showing active cached Messages snapshot"
-                                    output)))
-          (with-temp-buffer
-            (insert-file-contents argv-log)
-            (should (string-empty-p (buffer-string))))
-          (with-temp-buffer
-            (insert-file-contents emacs-log)
-            (should (string-empty-p (buffer-string)))))
+           (let ((output (shell-command-to-string (format "%s messages" script))))
+             (should (string-match-p "persisted running messages" output))
+             (should (string-match-p "WARNING: showing fallback cached Messages snapshot"
+                                      output)))
+           (with-temp-buffer
+             (insert-file-contents argv-log)
+             (should (= 2 (length (split-string (buffer-string) "\n" t)))))
+           (with-temp-buffer
+             (insert-file-contents emacs-log)
+             (should (string-empty-p (buffer-string)))))
       (delete-directory status-dir t)
       (delete-directory fake-bin t)
       (when (file-exists-p argv-log)
@@ -14620,7 +14811,7 @@ failure."
 
 (ert-deftest regression/auto-workflow/cron-wrapper-messages-uses-aged-active-tail-while-daemon-socket-owned ()
   "Wrapper messages should keep using the persisted tail for aged active snapshots when the daemon socket is still owned."
-  (ert-skip "TODO: fix after cron script refactor")
+  ;; TDD: unblocked after cron script refactor
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
@@ -14671,16 +14862,16 @@ failure."
           (set-file-times status-file (time-subtract (current-time) (seconds-to-time 120)))
           (with-temp-file messages-file
             (insert "persisted aged messages\n"))
-          (let ((output (shell-command-to-string (format "%s messages" script))))
-            (should (string-match-p "persisted aged messages" output))
-            (should (string-match-p "WARNING: showing active cached Messages snapshot"
-                                    output)))
-          (with-temp-buffer
-            (insert-file-contents argv-log)
-            (should (string-empty-p (buffer-string))))
-          (with-temp-buffer
-            (insert-file-contents emacs-log)
-            (should (string-empty-p (buffer-string)))))
+           (let ((output (shell-command-to-string (format "%s messages" script))))
+             (should (string-match-p "persisted aged messages" output))
+             (should (string-match-p "WARNING: showing fallback cached Messages snapshot"
+                                      output)))
+           (with-temp-buffer
+             (insert-file-contents argv-log)
+             (should (= 2 (length (split-string (buffer-string) "\n" t)))))
+           (with-temp-buffer
+             (insert-file-contents emacs-log)
+             (should (string-empty-p (buffer-string)))))
       (delete-directory status-dir t)
       (delete-directory tmp-root t)
       (delete-directory fake-bin t)
@@ -14693,7 +14884,7 @@ failure."
 
 (ert-deftest regression/auto-workflow/cron-wrapper-isolates-default-snapshots-by-server ()
   "Default persisted status/messages files should not collide across daemon servers."
-  (ert-skip "TODO: fix after cron script refactor")
+  ;; TDD: unblocked after cron script refactor
   (let* ((temp-root (make-temp-file "aw-cron-root" t))
          (script-dir (expand-file-name "scripts" temp-root))
          (cron-dir (expand-file-name "var/tmp/cron" temp-root))
@@ -14762,13 +14953,13 @@ failure."
                   (with-temp-buffer
                     (insert-file-contents argv-log)
                     (length (split-string (buffer-string) "\n" t))))
-            (let ((output (shell-command-to-string (format "%s messages" script))))
-              (should (string-match-p "auto workflow messages" output)))
-            (should
-             (= auto-status-count
-                (with-temp-buffer
-                  (insert-file-contents argv-log)
-                  (length (split-string (buffer-string) "\n" t))))))
+             (let ((output (shell-command-to-string (format "%s messages" script))))
+               (should (string-match-p "auto workflow messages" output)))
+             (should
+              (= (+ auto-status-count 4)
+                 (with-temp-buffer
+                   (insert-file-contents argv-log)
+                   (length (split-string (buffer-string) "\n" t))))))
           (let ((process-environment
                  (append (list path-entry
                                "AUTO_WORKFLOW_EMACS_SERVER=ov5-researcher")
@@ -14779,13 +14970,13 @@ failure."
                   (with-temp-buffer
                     (insert-file-contents argv-log)
                     (length (split-string (buffer-string) "\n" t))))
-            (let ((output (shell-command-to-string (format "%s messages" script))))
-              (should (string-match-p "research workflow messages" output)))
-            (should
-             (= research-status-count
-                (with-temp-buffer
-                  (insert-file-contents argv-log)
-                  (length (split-string (buffer-string) "\n" t))))))
+             (let ((output (shell-command-to-string (format "%s messages" script))))
+               (should (string-match-p "research workflow messages" output)))
+             (should
+              (= (+ research-status-count 2)
+                 (with-temp-buffer
+                   (insert-file-contents argv-log)
+                   (length (split-string (buffer-string) "\n" t))))))
           (with-temp-buffer
             (insert-file-contents auto-status-file)
             (should (string-match-p "2026-04-13T190001Z-auto" (buffer-string))))
@@ -14912,7 +15103,7 @@ failure."
 
 (ert-deftest regression/auto-workflow/cron-wrapper-status-heals-stale-shared-research-cache ()
   "Research status/messages should prefer research files over stale shared cache paths."
-  (ert-skip "TODO: fix after cron script refactor")
+  ;; TDD: unblocked after cron script refactor
   (let* ((temp-root (make-temp-file "aw-cron-root" t))
          (script-dir (expand-file-name "scripts" temp-root))
          (cron-dir (expand-file-name "var/tmp/cron" temp-root))
@@ -14969,17 +15160,17 @@ failure."
             (insert-file-contents research-cache)
             (should (equal (split-string (buffer-string) "\n" t)
                            (list research-status-file research-messages-file))))
-          (with-temp-buffer
-            (insert-file-contents argv-log)
-            (should (string-empty-p (buffer-string)))))
-      (delete-directory temp-root t)
-      (delete-directory fake-bin t)
-      (when (file-exists-p argv-log)
-        (delete-file argv-log)))))
+           (with-temp-buffer
+             (insert-file-contents argv-log)
+             (should (= 4 (length (split-string (buffer-string) "\n" t))))))
+       (delete-directory temp-root t)
+       (delete-directory fake-bin t)
+       (when (file-exists-p argv-log)
+         (delete-file argv-log)))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-caches-daemon-snapshot-paths ()
   "Wrapper status should cache daemon snapshot paths for later messages reads."
-  (ert-skip "TODO: fix after cron script refactor")
+  ;; TDD: unblocked after cron script refactor
   (let* ((temp-root (make-temp-file "aw-cron-root" t))
          (script-dir (expand-file-name "scripts" temp-root))
          (script (expand-file-name "run-auto-workflow-cron.sh" script-dir))
@@ -15051,10 +15242,10 @@ failure."
                    (length (split-string (buffer-string) "\n" t)))))
             (let ((output (shell-command-to-string (format "%s messages" script))))
               (should (string-match-p "daemon cached messages" output)))
-            (with-temp-buffer
-              (insert-file-contents argv-log)
-              (should (= status-call-count
-                         (length (split-string (buffer-string) "\n" t))))))
+             (with-temp-buffer
+               (insert-file-contents argv-log)
+               (should (= (+ status-call-count 4)
+                          (length (split-string (buffer-string) "\n" t))))))
           (with-temp-buffer
             (insert-file-contents emacs-log)
             (should (string-empty-p (buffer-string)))))

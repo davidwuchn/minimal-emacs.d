@@ -11,11 +11,12 @@ Target: {{target-full-path}}
 These files are prompt templates and text processors.
 Preserve format structure. Improve clarity or safety.
 
-## RULES
-1. Find one unclear or unsafe prompt section.
-2. Improve wording or add a guard/fallback.
-3. Verify template structure intact. Byte-compile. Done.
-4. Two Reads max. Then Edit. No planning.
+## RULES (ABSOLUTE)
+1. Read ONE section, then IMMEDIATELY Edit. Never read more than 2 sections.
+2. After Edit, run byte-compile. If fail, fix. If pass, done.
+3. Text-only output = failure. Edit/Write is mandatory.
+4. You MUST call Edit or Write within 2 tool calls. No exceptions.
+5. If you find yourself reading without editing, STOP and call Edit NOW.
 
 {{large-target-guidance}}
 {{controller-focus}}

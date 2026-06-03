@@ -16,6 +16,8 @@ Working dir: {{worktree-path}}
 3. NEVER describe changes — MAKE them. Text-only outputs = instant failure.
 4. NEVER reformat, reindent, or add comments.
 5. Make ONE change. Don't refactor the whole file.
+6. You MUST call Edit or Write tool within 2 tool calls. No exceptions.
+7. If you find yourself reading files without editing, STOP and call Edit NOW.
 
 {{large-target-guidance}}
 {{controller-focus}}
@@ -61,4 +63,7 @@ Put results outside <think> in VERIFY section.
 DO NOT read more files. DO NOT explore further. DO NOT plan.
 You have ONE target file and ONE change to make. Read it, edit it, verify it.
 If you don't call Edit or Write within 2 tool calls, the experiment fails.
+
+**CRITICAL:** The grader checks ONLY for actual code changes. No edit = automatic failure.
+Exploration without editing scores 0/9. Make the edit NOW.
 ---

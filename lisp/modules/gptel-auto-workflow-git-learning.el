@@ -15,15 +15,15 @@
 
 ;; ─── Helpers ───
 
-(defvar gptel-auto-workflow--git-learning-repo-root nil
+(defvar gptel-auto-workflow--git-learning-repo-root-cached nil
   "Cached git repository root for git-learning.
 Captured at load time to avoid worktree issues.")
 
 (defun gptel-auto-workflow--git-learning-repo-root ()
   "Return the git repository root for git-learning.
 Uses cached value from load time, or detects from current directory."
-  (or gptel-auto-workflow--git-learning-repo-root
-      (setq gptel-auto-workflow--git-learning-repo-root
+  (or gptel-auto-workflow--git-learning-repo-root-cached
+      (setq gptel-auto-workflow--git-learning-repo-root-cached
             (string-trim
              (shell-command-to-string
               "git rev-parse --show-toplevel 2>/dev/null || echo ''")))))
@@ -307,7 +307,7 @@ Combines target, category, and temporal analysis."
 ;; ─── Init ───
 
 ;; Cache repo root at load time to avoid worktree issues later
-(when (and (null gptel-auto-workflow--git-learning-repo-root)
+(when (and (null gptel-auto-workflow--git-learning-repo-root-cached)
            (fboundp 'gptel-auto-workflow--git-learning-repo-root))
   (gptel-auto-workflow--git-learning-repo-root))
 

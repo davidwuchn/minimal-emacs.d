@@ -643,4 +643,72 @@ else
     log "No results file found for today"
 fi
 
+# ─── Step 7: Commit and push auto-generated outcomes to main ───
+log "=== Step 7: Publish outcomes to main ==="
+
+# Check for auto-generated changes
+AUTO_GEN_DIRS=(
+    "mementum/memories/"
+    "mementum/knowledge/"
+    "assistant/skills/"
+    "assistant/strategies/"
+    "mementum/state.md"
+)
+
+has_auto_gen=0
+for dir in "${AUTO_GEN_DIRS[@]}"; do
+    if git -C "$DIR" status --short | grep -q "^\s*M\|^??.*$dir"; then
+        has_auto_gen=1
+        break
+    fi
+done
+
+if [ "$has_auto_gen" -eq 1 ]; then
+    log "Auto-generated changes detected, publishing to main..."
+    
+    # Stash any non-auto-generated changes
+    stash_output="$(git -C "$DIR" stash push -m "pipeline-auto-sync-$(date +%s)" 2>&1 || true)"
+    stash_made=0
+    case "$stash_output" in
+        *"Saved working directory"*|*"Saved working tree"*) stash_made=1 ;;
+    esac
+    
+    # Pull latest to avoid conflicts
+    git -C "$DIR" pull --ff-only 2>/dev/null || log "WARNING: git pull failed before push"
+    
+    # Stage auto-generated files
+    git -C "$DIR" add mementum/ assistant/skills/ assistant/strategies/ 2>/dev/null || true
+    
+    # Commit if there are staged changes
+    if ! git -C "$DIR" diff --cached --quiet 2>/dev/null; then
+        commit_msg="$(date '+🔄 Auto-evolved outcomes: %Y-%m-%d %H:%M')"
+        if git -C "$DIR" commit -m "$commit_msg" 2>/dev/null; then
+            log "  ✓ Committed auto-generated outcomes"
+            
+            # Push to origin/main
+            remote="$(git -C "$DIR" remote get-url origin 2>/dev/null || true)"
+            if [ -n "$remote" ]; then
+                if git -C "$DIR" push origin main 2>/dev/null; then
+                    log "  ✓ Pushed outcomes to origin/main"
+                else
+                    log "WARNING: git push failed — outcomes committed locally but not pushed"
+                fi
+            else
+                log "WARNING: no origin remote configured — outcomes committed locally"
+            fi
+        else
+            log "WARNING: git commit failed for auto-generated outcomes"
+        fi
+    else
+        log "No staged changes to commit"
+    fi
+    
+    # Restore stashed changes
+    if [ "$stash_made" -eq 1 ]; then
+        git -C "$DIR" stash pop 2>/dev/null || log "WARNING: stash pop failed after auto-publish"
+    fi
+else
+    log "No auto-generated changes to publish"
+fi
+
 exit 0

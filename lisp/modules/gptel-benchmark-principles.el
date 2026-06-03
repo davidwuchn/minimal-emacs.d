@@ -418,10 +418,7 @@ For hypothesis generation targeting weak areas."
     (dolist (item weakest)
       (let* ((key (car item))
              (score (cdr item))
-             (signals-raw (gptel-benchmark-eight-keys-signals key))
-             (signals (if (and (listp signals-raw) (eq (car signals-raw) 'quote))
-                          (cadr signals-raw)
-                        signals-raw)))
+             (signals (gptel-benchmark-eight-keys-signals key)))
         (push (list :key key :score score :signals (seq-take signals 3)) result)))
     (nreverse result)))
 

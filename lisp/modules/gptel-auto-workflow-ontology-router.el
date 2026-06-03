@@ -20,9 +20,11 @@
 (require 'gptel-auto-workflow-skill-graph)
 
 (defvar gptel-auto-workflow-executor-rate-limit-fallbacks
-  '(("DeepSeek" . "deepseek-v4-flash")
-    ("MiniMax" . "minimax-m2.7-highspeed")
-    ("DashScope" . "qwen3.6-plus"))
+  '(("MiniMax" . "MiniMax-M3")
+    ("moonshot" . "kimi-k2.6")
+    ("DeepSeek" . "deepseek-v4-pro")
+    ("DashScope" . "qwen3.6-plus")
+    ("Copilot" . "gpt-5.4-mini"))
   "Fallback chain for executor when rate-limited.
 First backend is primary, subsequent backends are tried in order.
 Ordered by keep-rate from experiment data.")
@@ -37,9 +39,10 @@ Ordered by keep-rate from experiment data.")
     ("moonshot" . distributed)             ; Backend name
     ("kimi-k2.6" . distributed)            ; Model name
     ("DeepSeek" . distributed)             ; Backend name
-    ("deepseek-v4-flash" . distributed)    ; Model name
+    ("deepseek-v4-pro" . distributed)     ; Model name
+    ("deepseek-v4-pro" . distributed)    ; Fast variant
     ("MiniMax" . distributed)              ; Backend name
-    ("minimax-m2.7-highspeed" . distributed) ; Model name
+    ("MiniMax-M3" . distributed) ; Model name
     ("CF-Gateway" . distributed)           ; Backend name
     ("@cf/openai/gpt-oss-120b" . distributed)) ; Model name
   "Sieve-type classification per backend/model (verbum crystal spine discovery).
@@ -505,17 +508,18 @@ The boost is proportional to the phase's measured strength."
 ;; ─── Category Overrides (from 1,204 experiments) ───
 
 (defconst gptel-auto-workflow--category-backend-overrides
-  ;; Source: 1,204 experiments analyzed 2026-05-21
-  ;; Category where specific backend outperforms MiniMax baseline (20.5%)
-  '((:programming     . "DeepSeek")   ; FSM 40%, benchmark-memory 33.3%, tests 25%, retry 25%, introspection 20%
-    (:tool-calls      . nil)           ; MiniMax highspeed baseline — CF-Gateway data inconclusive (25% sandbox n=small)
-    (:natural-language . "DeepSeek")  ; context, prompts, streaming — NL reasoning
+  ;; Source: benchmark data 2026-06-02
+  ;; DeepSeek v4-pro with reasoning_effort high takes ~60s vs MiniMax-M3 ~7s
+  ;; Speed advantage of M3 outweighs historical keep-rate difference
+  '((:programming     . nil)           ; MiniMax-M3 default (8x faster, clean elisp)
+    (:tool-calls      . nil)           ; MiniMax highspeed baseline
+    (:natural-language . nil)          ; MiniMax-M3 default (faster for streaming/prompts)
     (:agentic         . nil))          ; MiniMax baseline — no override needed
   "Category→preferred backend mapping.
-Programming → DeepSeek (higher keep rate on code/benchmark targets).
-Tool-calls → nil (use MiniMax highspeed default).
-Natural-language → DeepSeek (strong NL reasoning).
-Agentic → nil (use default ontology ordering, MiniMax is baseline).")
+All categories default to nil — use fallback chain order (MiniMax-M3 first).
+DeepSeek v4-pro is 8.5x slower (60s vs 7s) with reasoning_effort high.
+Historical keep-rate advantage (25% vs 16%) is offset by throughput impact.
+Fallback chain: MiniMax-M3 → moonshot/k2.6 → DeepSeek v4-pro → DashScope → Copilot.")
 
 ;; ─── Fallback Chain Reordering ───
 
@@ -535,8 +539,8 @@ STRATEGY and TARGET filter the performance data.
                                  gptel-auto-workflow-executor-rate-limit-fallbacks
                                '(("DashScope" . "qwen3.6-plus")
                                  ("moonshot" . "kimi-k2.6")
-                                 ("DeepSeek" . "deepseek-v4-flash")
-                                 ("MiniMax" . "minimax-m2.7-highspeed"))))
+    ("DeepSeek" . "deepseek-v4-pro")
+                                 ("MiniMax" . "MiniMax-M3"))))
             (category (when target (gptel-auto-workflow--categorize-target target)))
            (category-override (when category (cdr (assoc category gptel-auto-workflow--category-backend-overrides))))
            ;; verbum data bypass: retrieval tasks (context docs, factual lookups)
@@ -812,8 +816,8 @@ DashScope reinstated as tertiary backend — qwen3.6-plus confirmed working
 on 2026-05-31 (was previously excluded due to transient quota issue)."
   (when (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
     (setq gptel-auto-workflow-executor-rate-limit-fallbacks
-          '(("DeepSeek" . "deepseek-v4-flash")
-            ("MiniMax" . "minimax-m2.7-highspeed")
+          '(("DeepSeek" . "deepseek-v4-pro")
+            ("MiniMax" . "MiniMax-M3")
             ("DashScope" . "qwen3.6-plus")))
     ;; Clear any stale health strikes for DashScope from health cache
     (when (boundp 'gptel-auto-workflow--backend-lambda-health-cache)
@@ -1177,8 +1181,8 @@ Returns plist with :overall status and per-backend results."
                         gptel-auto-workflow-headless-subagent-fallbacks
                       '(("DashScope" . "qwen3.6-plus")
                         ("moonshot" . "kimi-k2.6")
-                        ("DeepSeek" . "deepseek-v4-flash")
-                        ("MiniMax" . "minimax-m2.7-highspeed"))))
+                        ("DeepSeek" . "deepseek-v4-pro")
+                        ("MiniMax" . "MiniMax-M3"))))
         (results nil)
         (healthy-count 0)
         (degraded-count 0)
@@ -2369,8 +2373,8 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
         ;; reorder-fallbacks-by-ontology) is picked up here too.
         (default-models (or (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
                                 gptel-auto-workflow-executor-rate-limit-fallbacks)
-             '(("DeepSeek" . "deepseek-v4-flash")
-               ("MiniMax" . "minimax-m2.7-highspeed")
+             '(("DeepSeek" . "deepseek-v4-pro")
+               ("MiniMax" . "MiniMax-M3")
                ("DashScope" . "qwen3.6-plus")
                ("moonshot" . "kimi-k2.6"))))
         ;; Pre-compute once for all backends
@@ -2647,8 +2651,8 @@ Returns plist with :total :healthy :degraded :unknown :backends."
                         gptel-auto-workflow-headless-subagent-fallbacks
                       '(("DashScope" . "qwen3.6-plus")
                         ("moonshot" . "kimi-k2.6")
-                        ("DeepSeek" . "deepseek-v4-flash")
-                        ("MiniMax" . "minimax-m2.7-highspeed"))))
+                        ("DeepSeek" . "deepseek-v4-pro")
+                        ("MiniMax" . "MiniMax-M3"))))
         (healthy-count 0)
         (degraded-count 0)
         (unknown-count 0)
@@ -3341,7 +3345,7 @@ Returns alist of (target . (category . delta)) for drifts > 20%."
       (maphash
        (lambda (target t-stats)
          (let* ((category (and target (gptel-auto-workflow--categorize-target target)))
-                (c-stats (gethash category cat-stats))
+                (c-stats (or (gethash category cat-stats) (list :kept 0 :total 0)))
                 (t-total (plist-get t-stats :total))
                 (c-total (plist-get c-stats :total))
                 (t-rate (if (> t-total 0) (/ (float (plist-get t-stats :kept)) t-total) 0))
@@ -3777,7 +3781,7 @@ Runs during evolution cycle alongside strategy learning."
   "Return boost for BACKEND based on success on graph neighbors of TARGET.
 Looks up TARGET's category in the skill graph and checks BACKEND's
 keep-rate on targets in the same category."
-  (if (and (fboundp 'ov5-sg-init)
+  (if (and (fboundp 'skill-graph-init)
            target)
       (condition-case nil
           (let* ((category (and (fboundp 'gptel-auto-workflow--categorize-target)
@@ -3788,10 +3792,10 @@ keep-rate on targets in the same category."
             (when category
               ;; Find all nodes in the same category
               (maphash (lambda (id node)
-                         (when (and (eq (ov5-sg-node-level node) category)
+                         (when (and (eq (skill-graph-node-level node) category)
                                     (not (eq id (intern target))))
                            (push id neighbors)))
-                       ov5-sg--nodes)
+                       skill-graph--nodes)
               ;; Average keep-rate for BACKEND on neighbor targets
               (dolist (n neighbors)
                 (let ((rate (condition-case nil
@@ -3811,7 +3815,7 @@ keep-rate on targets in the same category."
   "Return boost for BACKEND based on strength of skill combination edges.
 Looks up edges between skills in ACTIVE-SKILLS and checks if BACKEND
 succeeded when those skill pairs were used together."
-  (if (and (fboundp 'ov5-sg-init)
+  (if (and (fboundp 'skill-graph-init)
            active-skills)
       (condition-case nil
           (let ((total-weight 0.0)
@@ -3823,9 +3827,9 @@ succeeded when those skill pairs were used together."
                 (cl-loop for (a b) on skills by #'cdr
                          while b
                          do (let* ((key (cons a b))
-                                   (edge (gethash key ov5-sg--edges)))
+                                   (edge (gethash key skill-graph--edges)))
                               (when edge
-                                (setq total-weight (+ total-weight (ov5-sg-edge-weight edge)))
+                                (setq total-weight (+ total-weight (skill-graph-edge-weight edge)))
                                 (setq edge-count (1+ edge-count)))))))
             (if (> edge-count 0)
                 (* 0.10 (/ total-weight edge-count))  ; max ~0.10 boost

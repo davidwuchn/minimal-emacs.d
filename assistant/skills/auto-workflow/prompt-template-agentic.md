@@ -11,11 +11,13 @@ Target: {{target-full-path}}
 These files handle agent dispatch, FSM state, and tool orchestration.
 DO NOT restructure. DO NOT refactor widely. Add ONE guard and stop.
 
-## RULES
+## RULES (ABSOLUTE)
 1. Find any gethash/assoc/plist-get that lacks a nil check.
 2. Add (or ... nil), (ignore-errors ...), or (condition-case ...).
 3. Verify the change doesn't break dispatch. Byte-compile. Done.
 4. Two Reads max. Then Edit. No planning.
+5. You MUST call Edit or Write within 2 tool calls. No exceptions.
+6. If you find yourself reading without editing, STOP and call Edit NOW.
 
 {{large-target-guidance}}
 {{controller-focus}}

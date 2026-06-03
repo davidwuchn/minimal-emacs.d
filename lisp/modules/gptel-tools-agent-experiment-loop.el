@@ -658,17 +658,18 @@ Relative paths are resolved from the project root."
         (error
          (message "[auto-workflow] Failed to create messages directory %s: %s" dir err)
          (setq dir nil))))
-    (and dir (get-buffer-create "*Messages*")
-      (let* ((start-pos (cond
-                         ((integer-or-marker-p gptel-auto-workflow--messages-start-pos)
-                          (max (point-min)
-                               (min (point-max)
-                                    gptel-auto-workflow--messages-start-pos)))
-                         (t (point-min))))
-             (tail-start (max (point-min) (- (point-max) max-chars))))
-        (write-region (max start-pos tail-start)
-                      (point-max)
-                      file nil 'silent)))))
+    (when (and dir (get-buffer "*Messages*"))
+      (with-current-buffer "*Messages*"
+        (let* ((start-pos (cond
+                           ((integer-or-marker-p gptel-auto-workflow--messages-start-pos)
+                            (max (point-min)
+                                 (min (point-max)
+                                      gptel-auto-workflow--messages-start-pos)))
+                           (t (point-min))))
+               (tail-start (max (point-min) (- (point-max) max-chars))))
+          (write-region (max start-pos tail-start)
+                        (point-max)
+                        file nil 'silent))))))
 
 (defun gptel-auto-workflow--status-plist ()
   "Return current workflow status as a plist."

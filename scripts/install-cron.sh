@@ -18,7 +18,15 @@ detect_machine() {
     elif echo "$hostname" | grep -qiE "pi5|raspberrypi|onepi"; then
         echo "pi5"
     elif [ "$os" = "Linux" ]; then
-        echo "linux"
+        # Check for Raspberry Pi hardware (Pi5, Pi4, etc.)
+        if [ -f /proc/device-tree/model ] && grep -qi "raspberry pi" /proc/device-tree/model 2>/dev/null; then
+            echo "pi5"
+        # Check for ARM Linux with limited RAM (typical Pi)
+        elif [ "$(uname -m)" = "aarch64" ] && [ "$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo 2>/dev/null || echo 0)" -lt 8192 ]; then
+            echo "pi5"
+        else
+            echo "linux"
+        fi
     else
         echo "single"
     fi
@@ -31,13 +39,14 @@ render_crontab() {
         awk '/^SHELL=/{exit} {print}' "$CRON_FILE"
         echo "SHELL=/bin/bash"
         if [ "$machine" = "macos" ]; then
-            echo "PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:\$HOME/.emacs.d/bin"
+            echo "PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:\$HOME/.emacs.d/bin:\$HOME/.venv/bin"
         else
-            echo "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:\$HOME/.emacs.d/bin"
+            echo "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:\$HOME/.emacs.d/bin:\$HOME/.venv/bin"
         fi
-        if [ "$machine" = "pi5" ] || [ "$machine" = "linux" ]; then
-            echo "XDG_RUNTIME_DIR=/run/user/\$(id -u)"
-        fi
+        # NOTE: Do NOT set XDG_RUNTIME_DIR.  Cron jobs run outside the
+        # systemd user session, so /run/user/$(id -u) may not exist or may
+        # be inaccessible.  Let Emacs fall back to TMPDIR > /tmp/emacs$UID
+        # per AGENTS.md socket_path policy.
         echo "MAILTO=\"\""
         echo
         echo "# Watchdog: restart daemon if unresponsive (every 30min, reaper handles 95%)"
@@ -211,6 +220,25 @@ case "$MODE" in
         fi
 
         echo "Installed auto-workflow cron block with $PLATFORM schedule"
+        echo
+        echo "=== Installing Emacs dependencies ==="
+        echo
+        # Install yaml ELPA package (required for parsing agent .md files with block scalars)
+        if command -v emacs &>/dev/null; then
+            install_log=$(mktemp)
+            emacs --batch \
+                --eval "(setq package-user-dir (expand-file-name \"var/elpa\" \"$DIR\"))" \
+                --eval "(require 'package)" \
+                --eval "(add-to-list 'package-archives '(\"melpa\" . \"https://melpa.org/packages/\") t)" \
+                --eval "(package-initialize)" \
+                --eval "(unless (package-installed-p 'yaml) (package-refresh-contents) (package-install 'yaml))" \
+                --eval "(when (package-installed-p 'yaml) (message \"yaml installed\") (kill-emacs 0)) (message \"yaml not installed\") (kill-emacs 1)" \
+                > /dev/null 2>&1 && echo "  ✓ yaml ELPA package installed" \
+                || echo "  ⚠ yaml package install skipped (will use built-in YAML parser)"
+            rm -f "$install_log"
+        else
+            echo "  ⚠ emacs not found — yaml ELPA package not installed (agent loading may be limited)"
+        fi
         echo
         echo "Active jobs:"
         crontab -l | grep -E '^[0-9*@]' || echo "  (no active jobs)"

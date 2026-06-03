@@ -510,6 +510,10 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
     (load-file (expand-file-name "lisp/modules/gptel-tools-agent-prompt-build.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-ontology-router.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-skill-graph.el" root))
+    (when (fboundp 'skill-graph-init)
+      (condition-case err
+          (skill-graph-init)
+        (error (message "[skill-graph] Init failed: %s" (error-message-string err)))))
     (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-tools-agent-error.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-benchmark-subagent.el" root))
@@ -586,6 +590,11 @@ Cancels stale timers, kills orphaned buffers, resets state, then runs.
 Safe to call from cron - handles all edge cases.
 Sets `gptel-auto-workflow-persistent_headless' to prevent interactive prompts.
 When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
+  ;; Load base module first: default-dir is needed before reload-live-support runs
+  (condition-case nil
+      (load-file (expand-file-name "lisp/modules/gptel-tools-agent-base.el"
+                                   user-emacs-directory))
+    (error nil))
   (let* ((proj-root (gptel-auto-workflow--default-dir))
          (finish
           (gptel-auto-workflow--make-idempotent-callback
@@ -1024,7 +1033,8 @@ into staging or main."
 
 (defun gptel-auto-workflow--run-with-targets (targets completion-callback)
   "Run experiments for TARGETS sequentially."
-  (let* ((proj-root (gptel-auto-workflow--default-dir))
+  (cl-block gptel-auto-workflow--run-with-targets
+    (let* ((proj-root (gptel-auto-workflow--default-dir))
          (validated-targets
           (if (fboundp 'gptel-auto-workflow--filter-valid-targets)
               (gptel-auto-workflow--filter-valid-targets
@@ -1069,6 +1079,8 @@ into staging or main."
             gptel-auto-workflow--run-project-root nil)
       (setq gptel-auto-workflow--stats
             (plist-put gptel-auto-workflow--stats :phase "complete"))
+      (message "[auto-workflow] Complete: %d experiments, %d targets improved"
+               0 0)
       (gptel-auto-workflow--persist-status)
       (message "[auto-workflow] No valid targets remain after filtering")
       (when completion-callback
@@ -1198,8 +1210,8 @@ into staging or main."
          (gptel-auto-workflow--persist-status)
          (message "[auto-workflow] Initial target dispatch failed: %s"
                   (error-message-string err))
-         (when completion-callback
-           (funcall completion-callback nil))))))))
+          (when completion-callback
+            (funcall completion-callback nil)))))))))
 
 
 (defun gptel-auto-workflow-run (&optional targets)
