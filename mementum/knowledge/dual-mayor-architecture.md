@@ -147,6 +147,49 @@ GTM Mayor: "Results show X is promising, recommend doubling down"
 Human: "Approved. PMF Mayor: prioritize X experiments."
 ```
 
+## Shared: Innovation Layer
+
+Both mayors share the **innovation pipeline** — the bridge between external discovery and internal validation:
+
+```
+GTM Mayor discovers → Innovation Queue ← PMF Mayor validates
+     ↑                                              ↓
+     └──────────── Shared Innovation State ──────────┘
+```
+
+**Shared components:**
+
+1. **Innovation Queue** — `mementum/innovation-queue.md`
+   - GTM Mayor adds: technique, source, expected impact, related skills
+   - PMF Mayor marks: status (pending/experimenting/validated/rejected), experiment id, result
+   - Both read/write, never duplicates
+
+2. **Skill Graph** — `var/tmp/skill-graph.eld`
+   - GTM Mayor proposes: new atoms from external research
+   - PMF Mayor updates: edge weights from experiment outcomes
+   - Shared ownership, different write surfaces
+
+3. **AutoTTS Traces** — `var/tmp/experiments/*/results.tsv`
+   - PMF Mayor writes: experiment outcomes, scores, backend used
+   - GTM Mayor reads: what worked, what failed, trend direction
+   - Unified trace format feeds both evolution cycles
+
+4. **Ontology** — `mementum/knowledge/ontology-*.md`
+   - GTM Mayor writes: strategy preferences, market categories
+   - PMF Mayor writes: backend performance per category
+   - Both evolve the same classification system from different angles
+
+5. **Mementum State** — `mementum/state.md`
+   - Section headers separate GTM vs PMF updates
+   - Both append, never overwrite each other's sections
+   - Working memory for cross-mayor continuity
+
+**What is NOT shared:**
+- Dashboards (different concerns: product vs GTM)
+- Worker dispatches (different workers: researcher vs executor)
+- Time budgets (different cadences: 4h vs 24h)
+- Stance (different identities: execution vs direction)
+
 ## Mayor Method Alignment
 
 **Both mayors follow Mayor Method rules:**
