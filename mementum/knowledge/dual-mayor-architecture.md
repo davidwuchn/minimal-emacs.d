@@ -24,25 +24,39 @@ This violates the Mayor Method principle: **"the mayor does not code."**
 
 ## The Insight
 
-Two mayors with different innovation concerns:
+Two pattern languages, one system:
 
 ```
-PMF Mayor (auto-workflow)              GTM Mayor (researcher)
-├── Grow through innovation            ├── Transform for innovation
-├── Focus: PRODUCT (internal)          ├── Focus: MARKET (external)
-├── Cadence: 4 hours                   ├── Cadence: 24 hours
-├── "Does the code work?"              ├── "What does the market need?"
-├── Metric: code quality, keep-rate    ├── Metric: market signal, PMF
-└── Workers: executor, grader          └── Workers: researcher, analyst
-         ↑                                    ↓
-         └───────  shared innovation  ────────┘
+PMF Mayor (Value Stream Pattern Language)    GTM Mayor (Product Organization Pattern Language)
+├── Grow through innovation                  ├── Transform for innovation
+├── Focus: VALUE FLOW (internal)             ├── Focus: ORGANIZATION (external)
+├── Cadence: 4 hours                         ├── Cadence: 24 hours
+├── "Does value flow?"                       ├── "What does the market need?"
+├── Metric: value delivery speed/quality     ├── Metric: market signal, PMF
+└── Workers: executor, grader                └── Workers: researcher, analyst
+         ↑                                          ↓
+         └───────  shared innovation pipeline  ─────┘
 ```
+
+**PMF = Value Stream Pattern Language:** How value flows from customer need → experiment → validated code → deployed feature. Patterns: Sense → Experiment → Validate → Deploy.
+
+**GTM = Product Organization Pattern Language:** How the organization structures to discover and deliver value. Patterns: Cross-functional teams, empowered product teams, JTBD alignment.
 
 ## PMF Mayor (Auto-Workflow)
 
-**Identity:** "I grow the product through innovation."
-**Focus:** Internal — code, experiments, execution
-**Goal:** Make the product better, faster, more reliable through systematic innovation
+**Identity:** "I am the Value Stream Pattern Language."
+**Focus:** Internal — how value flows from need to deployed solution
+**Goal:** Optimize the value stream: sense → experiment → validate → deploy
+
+**Pattern Language — Value Stream Patterns:**
+
+| Pattern | Description | Measure |
+|---------|-------------|---------|
+| Sense | Detect customer struggle or market signal | Signal clarity |
+| Experiment | Build minimal solution to test hypothesis | Experiment velocity |
+| Validate | Verify solution reduces struggle | Keep-rate, test pass |
+| Deploy | Deliver validated value | Deployment frequency |
+| Refine | Sharpen resolution of core value | Feature usage |
 
 **Product-Led Growth 5-Step Framework:**
 
@@ -93,9 +107,21 @@ PMF Mayor (auto-workflow)              GTM Mayor (researcher)
 
 ## GTM Mayor (Researcher)
 
-**Identity:** "I transform the organization for innovation."
-**Focus:** External — customers, competitors, trends, market signals
-**Goal:** Discover what the market needs and translate it into actionable innovation opportunities
+**Identity:** "I am the Product Organization Pattern Language."
+**Focus:** External — how the organization structures to discover and deliver value
+**Goal:** Align organization structure with market needs through JTBD/ODI
+
+**Pattern Language — Organization Patterns:**
+
+| Pattern | Description | Measure |
+|---------|-------------|---------|
+| Cross-Functional Team | Team has all skills to discover + deliver | Team autonomy |
+| Empowered Product Team | Team owns outcomes, not outputs | Decision speed |
+| JTBD Alignment | Organization aligned around customer jobs | Strategic clarity |
+| Outcome Ownership | Teams own customer outcomes | Accountability |
+| Market Sensing | Org continuously scans market | Insight velocity |
+
+**JTBD/ODI 5-Step Framework:**
 
 **JTBD/ODI 5-Step Framework:**
 
@@ -215,20 +241,26 @@ Human: "Approved. PMF: scale this optimization. GTM: find next unmet outcome."
 
 ## Shared: Innovation
 
-**What they share:** The innovation pipeline.
+**Two pattern languages, one innovation system.**
 
-**What differs:** How they innovate.
+The Value Stream Pattern Language (PMF) and Product Organization Pattern Language (GTM) intersect at the innovation pipeline:
 
-| | PMF Mayor (Product-Led Growth) | GTM Mayor (JTBD/ODI) |
+```
+GTM (Org Patterns) → discovers → Innovation Queue → PMF (Value Stream) validates
+         ↑                                                   ↓
+         └────────────── Shared Patterns ─────────────────────┘
+```
+
+| Dimension | PMF: Value Stream Pattern Language | GTM: Product Organization Pattern Language |
 |---|---|---|
+| **Core pattern** | Sense → Experiment → Validate → Deploy | Cross-functional → Empowered → JTBD-aligned |
 | **Framework** | 5-step PLG | 5-step JTBD/ODI |
 | **Innovation type** | *Grow through innovation* | *Transform for innovation* |
-| **How** | Identify JTBD → Define market → Size market → Find gaps → Deploy strategy | Define market → Uncover outcomes → Quantify gaps → Discover segments → Formulate strategy |
-| **Validation** | "Does the product serve the JTBD?" (keep-rate, tests) | "Does the market want this JTBD served?" (signal, PMF) |
-| **Output** | Working code in worktrees | Market artifacts + actionable beads |
-| **Feedback** | Product metrics → skill graph | Market signal → strategy |
+| **Validation** | "Does value flow?" (keep-rate, tests) | "Does the org align with market?" (signal, PMF) |
+| **Output** | Working code in worktrees | Org design + market artifacts |
+| **Feedback** | Value metrics → skill graph | Market signal → org structure |
 
-**Cross-framework flow:**
+**Cross-pattern flow:**
 ```
 GTM Step 1 (Ideology Mind): Define market around JTBD
          ↓
