@@ -6,7 +6,7 @@
 
 (defun strategy-dynamic-template-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
   "Build prompt using dynamic template selection based on TARGET characteristics."
-  (let* ((char-count (length (with-temp-buffer (insert-file-contents target) (buffer-string))))
+  (let* ((char-count (length (with-temp-buffer (ignore-errors (insert-file-contents target)) (buffer-string))))
          (line-count (with-temp-buffer (insert-file-contents target) (count-lines (point-min) (point-max))))
          (complexity-score (/ char-count (max 1 line-count)))
          (template-variant (cond

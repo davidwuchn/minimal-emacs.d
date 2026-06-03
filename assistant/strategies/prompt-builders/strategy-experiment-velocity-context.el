@@ -40,26 +40,60 @@
      prompt)))
 
 (defun compress-aggressive (prompt)
-  "Apply aggressive compression: summarize previous results, remove low-signal sections."
+  "Apply aggressive compression: keep high-signal sections for early exploration.
+ASSUMPTION: Executor needs concrete directives plus failure context to act.
+BEHAVIOR: Preserves Task, Code, Failure patterns, Guidance, plus
+previous experiment analysis and weakest keys for actionable direction.
+EDGE CASE: If no sections match, returns original prompt with warning.
+TEST: Grep for `Compressed: early-stage` in output; verify kept sections present."
   (let* ((sections (split-string prompt "\n\n"))
-         (keep-sections '("Task" "Code under analysis" "Failure patterns" "Guidance"))
+         ;; ASSUMPTION: These sections provide minimum viable context for executor
+         (keep-sections '("Task" "Code under analysis" "Failure patterns" "Guidance"
+                          "previous experiment" "Weakest Keys" "Suggested Hypothesis"
+                          "RELEVANT PAST" "Moderator Intervention"))
          (compressed (cl-loop for section in sections
-                              when (cl-some (lambda (k) (string-match-p k section)) keep-sections)
+                              when (cl-some (lambda (k) (string-match-p (regexp-quote k) section)) keep-sections)
                               collect section)))
-    (format "%s\n\n;; [Compressed: early-stage focus on core patterns]"
-            (string-join compressed "\n\n"))))
+    ;; EDGE CASE: If compression removed everything, fall back to original
+    (if (and compressed (> (length compressed) 0))
+        (format "%s\n\n;; [Compressed: early-stage focus on core patterns + failure context]"
+                (string-join compressed "\n\n"))
+      prompt)))
 
 (defun compress-moderate (prompt)
-  "Apply moderate compression: summarize older experiments, keep recent patterns."
-  (let ((summarized-patterns (summarize-pattern-history prompt)))
-    (replace-regexp-in-string
-     "\\|\\(# [0-9]+ results?\\)\\|\\(Experiment [0-9]+ details\\)"
-     summarized-patterns
-     prompt)))
+  "Apply moderate compression: summarize older experiments, keep recent patterns.
+ASSUMPTION: Mid-stage needs more context than early but less than late.
+BEHAVIOR: Keeps all sections but truncates verbose experiment details.
+TEST: Output should be shorter than input but retain all section headers."
+  (let* ((sections (split-string prompt "\n\n"))
+         (compressed (cl-loop for section in sections
+                              collect
+                              (cond
+                               ;; Summarize old experiment details
+                               ((string-match-p "\\(Experiment [0-9]+ details\\|#[0-9]+ result\\)" section)
+                                (let ((first-line (car (split-string section "\n"))))
+                                  (concat first-line "\n[Summarized: see full logs for details]")))
+                               ;; Keep everything else intact
+                               (t section)))))
+    (string-join compressed "\n\n")))
 
 (defun summarize-pattern-history (prompt)
-  "Generate summary of pattern history instead of full details."
-  ";; [Pattern summary: N failures across M categories - see detailed logs]")
+  "Extract key failure patterns from PROMPT for summary.
+ASSUMPTION: Pattern headers contain actionable failure categories.
+BEHAVIOR: Scans for failure-related sections and extracts category names.
+TEST: Returns non-empty string when prompt contains failure patterns."
+  (let* ((sections (split-string prompt "\n\n"))
+         (failure-sections (cl-loop for section in sections
+                                    when (string-match-p "\\(Failure\\|failure\\|pattern\\)" section)
+                                    collect section))
+         (summary-lines (cl-loop for section in failure-sections
+                                 for lines = (split-string section "\n")
+                                 for header = (car lines)
+                                 when header
+                                 collect (format "- %s" (substring header 0 (min 80 (length header)))))))
+    (if summary-lines
+        (concat ";; [Pattern summary]\n" (string-join summary-lines "\n"))
+      ";; [Pattern summary: no failure patterns detected]")))
 
 (defun strategy-experiment-velocity-context-get-metadata ()
   "Return metadata for this strategy."

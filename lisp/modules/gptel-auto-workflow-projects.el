@@ -319,16 +319,12 @@ finish."
   (ignore-errors
     (call-process "gpg" nil nil nil "--batch" "--quiet" "--decrypt"
                   (expand-file-name "~/.authinfo.gpg")))
-  ;; Reset per-run quota flag so Moonshot errors don't block DeepSeek experiments
-  (setq gptel-auto-experiment--quota-exhausted nil)
-  ;; Moonshot content_filter blocks code gen. Mark rate-limited so router skips it.
+  ;; Moonshot quota exhausted (access_terminated_error).  Returns errors that
+  ;; make it look responsive to the onto-router.  Mark it as rate-limited so
+  ;; the router skips it dynamically.  When quota resets, the onto-router will
+  ;; re-enable it automatically as responses succeed.
   (when (boundp 'gptel-auto-workflow--rate-limited-backends)
     (cl-pushnew "moonshot" gptel-auto-workflow--rate-limited-backends :test #'string=))
-  (message "[auto-workflow] Fallback chain: %S rate-limited: %S"
-           (if (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
-               gptel-auto-workflow-executor-rate-limit-fallbacks
-             "uninitialized")
-           gptel-auto-workflow--rate-limited-backends)
   ;; Ensure gptel-agent-dirs includes our custom agent directory so
   ;; --update-agents registers all agent types (grader, analyzer, etc.).
   (let ((agents-dir (expand-file-name "assistant/agents"
@@ -417,7 +413,7 @@ finish."
                                         (format "[auto-workflow] - Skipped: %s"
                                                 project-root)))))))
                    (error
-                    (push (cons project-root (format "error: %s" (error-message-string err))) results)
+                    (push (cons project-root (format "error: %s" err-msg)) results)
                     (message "[auto-workflow] ✗ Failed: %s - %s" project-root err)
                     (run-next)))))))
         (run-next)))))
@@ -734,12 +730,16 @@ Also removes old conflicting :override advice if present."
   "Ensure overlay is created in the correct buffer.
 ORIG-FUN is the original function. WHERE is position/marker.
 Gets target buffer from gptel-fsm-info and creates overlay there.
-Guards against nil/bad WHERE that would crash goto-char."
-  (let* ((safe-where (if (number-or-marker-p where) where (point-min)))
-         (fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
+Guard: If WHERE is a marker from a killed buffer, fall back to
+point-marker in target buffer to avoid dead-marker errors."
+  (let* ((fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
          (info (and fsm (fboundp 'gptel-fsm-info) (gptel-fsm-info fsm)))
          (valid-info (and (proper-list-p info) info))
-         (target-buf (and valid-info (plist-get valid-info :buffer))))
+         (target-buf (and valid-info (plist-get valid-info :buffer)))
+         (safe-where (if (and (markerp where) (not (marker-buffer where)))
+                         (and target-buf
+                              (with-current-buffer target-buf (point-marker)))
+                       where)))
     (if (and target-buf (buffer-live-p target-buf))
         (with-current-buffer target-buf
           (funcall orig-fun safe-where agent-type description))
@@ -783,13 +783,10 @@ Without PROJECT-ROOT, clears overlays for all projects."
         (message "[auto-workflow] Cleared executor overlays for %s" project-root))
     (gptel-auto-workflow--iterate-project-buffers
      (lambda (_ buf)
-       ;; DEFENSE-IN-DEPTH: TOCTOU guard against buffer kill between
-       ;; iterator's buffer-live-p check and with-current-buffer use.
-       (when (and buf (buffer-live-p buf))
-         (with-current-buffer buf
-           (dolist (ov (overlays-in (point-min) (point-max)))
-             (when (overlay-get ov 'gptel-agent--task-type)
-               (delete-overlay ov)))))))
+       (with-current-buffer buf
+         (dolist (ov (overlays-in (point-min) (point-max)))
+           (when (overlay-get ov 'gptel-agent--task-type)
+             (delete-overlay ov))))))
     (message "[auto-workflow] Cleared all executor overlays")))
 
 (defun gptel-auto-workflow-list-project-buffers ()
@@ -799,18 +796,13 @@ Without PROJECT-ROOT, clears overlays for all projects."
   (let ((buffers nil))
     (gptel-auto-workflow--iterate-project-buffers
      (lambda (root buf)
-       ;; DEFENSE-IN-DEPTH: Guard against TOCTOU race where buffer is
-       ;; killed between iterator's buffer-live-p check and our use.
-       (when (and buf (buffer-live-p buf))
-         (let ((mode (ignore-errors
-                       (with-current-buffer buf
-                         (format-mode-line mode-name)))))
+       (ignore-errors
+         (let ((mode (with-current-buffer buf
+                       (format-mode-line mode-name))))
            (push (format "%s -> %s [%s]"
                          root
                          (buffer-name buf)
-                         (if (and mode (not (string-empty-p mode)))
-                             mode
-                           "unknown"))
+                         (or mode "unknown"))
                  buffers)))))
     (if buffers
         (let ((sorted (sort buffers #'string<)))
@@ -915,7 +907,7 @@ When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
                             (setq gptel-auto-workflow--current-project nil)
                             (run-next)))))
                    (error
-                    (let ((err-msg (format "%s" err))
+                    (let ((err-msg (error-message-string err))
                           (bt (with-output-to-string (backtrace))))
                       (when (string-match "void-variable total" err-msg)
                         (message "[research] DEBUG void-variable total backtrace:")
@@ -923,8 +915,8 @@ When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
                         (with-temp-file (expand-file-name "var/tmp/research-total-backtrace.txt"
                                                           (gptel-auto-workflow--worktree-base-root))
                           (insert bt))))
-                    (push (cons project-root (format "error: %s" (error-message-string err))) results)
-                    (message "[research] ✗ Failed: %s - %s" project-root err)
+                    (push (cons project-root (format "error: %s" err-msg)) results)
+                    (message "[research] ✗ Failed: %s - %s" project-root err-msg)
                     (setq gptel-auto-workflow--current-project nil)
                     (run-next)))))))
         (run-next)))))
@@ -1062,7 +1054,8 @@ Without PROJECT-ROOT, clears cache for all projects."
 Returns nil if PROJECT-ROOT is nil or not found in cache."
   (when (and project-root
              (stringp project-root)
-             (> (length project-root) 0))
+             (> (length project-root) 0)
+             (hash-table-p gptel-auto-workflow--research-findings-cache))
     (or (gethash project-root gptel-auto-workflow--research-findings-cache)
         (gethash (directory-file-name project-root)
                  gptel-auto-workflow--research-findings-cache)
@@ -1100,10 +1093,12 @@ Returns nil if PROJECT-ROOT is nil or not found in cache."
                             (if attrs "exists" "none")
                             file-size)
                     status-lines))))
-        (let ((result (string-join (nreverse status-lines) "\n")))
-          (setq gptel-auto-workflow--research-status-cache
-                (cons now result))
-          (message "Research cache status:\n%s" result))))))
+        (if (null status-lines)
+            (message "No projects configured for research status.")
+          (let ((result (string-join (nreverse status-lines) "\n")))
+            (setq gptel-auto-workflow--research-status-cache
+                  (cons now result))
+            (message "Research cache status:\n%s" result)))))))
 
 ;;; Weekly Job Runner (shared by mementum and instincts)
 
@@ -1158,7 +1153,7 @@ PER-PROJECT-FN should accept a project root and return t/nil for success."
               (push (cons (directory-file-name project-root) 'success) results)
             (push (cons (directory-file-name project-root) 'error) results))
         (error
-         (push (cons (directory-file-name project-root) (format "error: %s" (error-message-string err))) results)
+         (push (cons (directory-file-name project-root) (error-message-string err)) results)
          (message "[%s] ✗ Failed: %s - %s" log-prefix project-root (error-message-string err)))))
     (message "[%s] All projects processed: %s"
              log-prefix

@@ -231,13 +231,14 @@ Creates a history entry with timestamp and summary."
                          (gptel-benchmark-read-json history-file)
                        (ignore))))
          (run-id (format-time-string "%Y%m%d-%H%M%S"))
-         (summary (gptel-benchmark-summarize-results results))
+         (summary (gptel-benchmark--get-trend-summary results))
          (entry (list :run-id run-id
                       :timestamp (format-time-string "%Y-%m-%dT%H:%M:%S")
                       :summary summary)))
     (gptel-benchmark--ensure-dir dir)
     (let ((history (gptel-benchmark--ensure-list existing)))
       (gptel-benchmark-write-json (cons entry history) history-file)
+      (gptel-benchmark--clear-summary-cache)
       entry)))
 
 (defun gptel-benchmark-load-history (name &optional results-dir)
@@ -382,6 +383,41 @@ Returns 0.0 if TOTAL is zero to avoid division by zero."
   (append (list :total-tests 0 :passed-tests 0)
           (mapcan (lambda (m) (list (cdr m) 0.0))
                   gptel-benchmark--score-type-averages)))
+
+(defvar gptel-benchmark--summary-cache
+  (make-hash-table :test 'eq :weakness nil)
+  "Cache mapping result lists to their computed summaries.
+Each key is a RESULTS list (using `eq' for O(1) identity lookup)
+and each value is the summary plist produced by
+`gptel-benchmark-summarize-results'.  This avoids redundant
+O(n) summarization of the same result set when the trend
+summary is requested multiple times.
+
+Clear this cache with `gptel-benchmark--clear-summary-cache'.")
+
+(defun gptel-benchmark--get-trend-summary (results)
+  "Return summary of RESULTS, using cached value if available.
+Calls `gptel-benchmark-summarize-results' on cache miss and
+stores the result in `gptel-benchmark--summary-cache'.
+Subsequent calls with the same RESULTS object return the
+cached summary in O(1) time instead of re-summarizing in O(n)."
+  (cond
+   ((null results)
+    (gptel-benchmark--empty-summary))
+   ((not (and (listp results) (proper-list-p results))) nil)
+   (t
+    (or (gethash results gptel-benchmark--summary-cache)
+        (let ((summary (gptel-benchmark-summarize-results results)))
+          (puthash results summary gptel-benchmark--summary-cache)
+          summary)))))
+
+(defun gptel-benchmark--clear-summary-cache ()
+  "Clear the benchmark summary cache.
+This forces the next call to `gptel-benchmark--get-trend-summary'
+to recompute the summary from scratch."
+  (interactive)
+  (clrhash gptel-benchmark--summary-cache))
+
 
 (defun gptel-benchmark-summarize-results (results)
   "Create summary of RESULTS.

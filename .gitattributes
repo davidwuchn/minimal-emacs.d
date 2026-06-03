@@ -2,6 +2,8 @@
 assistant/skills/auto-workflow/DIRECTIVE.md merge=theirs
 assistant/skills/researcher-prompt/data/strategy-guidance.json merge=theirs
 assistant/strategies/provider-routing/backend-preference.el merge=theirs
+assistant/strategies/prompt-builders/* merge=theirs
+assistant/strategies/metadata/* merge=theirs
 mementum/knowledge/allium-trends.md merge=theirs
 mementum/knowledge/backend-comparison.md merge=theirs
 mementum/knowledge/model-comparison.md merge=theirs

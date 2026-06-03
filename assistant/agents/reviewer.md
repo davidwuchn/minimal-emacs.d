@@ -1,7 +1,7 @@
 ---
 name: reviewer
 backend: MiniMax
-model: minimax-m2.7
+model: MiniMax-M3
 max-tokens: 8192
 temperature: 0.3
 description: Code reviewer (MiniMax)

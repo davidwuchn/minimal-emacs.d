@@ -11,6 +11,21 @@
   :type 'integer
   :group 'gptel-tools-agent)
 
+;; ─── Critical File Registry (Defense against grader bypass attacks) ───
+
+(defvar gptel-auto-experiment--critical-files
+  '("lisp/modules/gptel-auto-workflow-beads.el"
+    "lisp/modules/gptel-auto-workflow-production.el"
+    "lisp/modules/gptel-auto-workflow-strategic.el"
+    "lisp/modules/gptel-auto-workflow-evolution.el"
+    "lisp/modules/gptel-tools-agent-staging-baseline.el"
+    "lisp/modules/gptel-tools-agent-prompt-build.el"
+    "mementum/gtm/strategy-roadmap.md"
+    "mementum/decisions/")
+  "Files and directories that require explicit human approval to modify.
+Any experiment touching these is blocked regardless of grader score.
+This prevents architectural destruction attacks that fool the grader.")
+
 (declare-function gptel-auto-workflow--read-file-contents "gptel-tools-agent-base" (filepath))
 
 (defun gptel-auto-experiment--process-timeout-seconds ()
@@ -512,7 +527,7 @@ This runs between syntax validation and the grader API call."
            (when (> line-count 80)
              (format "Cheap check: diff too large (%d lines)"
                      (1+ line-count)))))
-        ;; Check for trivial changes: only whitespace or comment additions
+         ;; Check for trivial changes: only whitespace or comment additions
         ((let ((non-trivial-lines 0))
            (dolist (line (split-string diff-text "\n"))
              (when (string-match-p "^\\+[^+ \t;]" line)
@@ -520,6 +535,37 @@ This runs between syntax validation and the grader API call."
            (when (and (> non-trivial-lines 0) (< non-trivial-lines 2))
              (format "Cheap check: diff has only %d non-comment code lines"
                      non-trivial-lines))))
+        ;; CRITICAL FILE CHECK: prevent architectural destruction
+        ((let ((critical-hit nil))
+           (dolist (pattern gptel-auto-experiment--critical-files)
+             (when (and (not critical-hit)
+                        (string-match-p (regexp-quote pattern) diff-text))
+               (setq critical-hit pattern)))
+           (when critical-hit
+             (format "CRITICAL: experiment touches protected file/directory: %s"
+                     critical-hit))))
+        ;; DESTRUCTIVE CHANGE CHECK: mass deletion detection
+        ((let* ((added (with-temp-buffer
+                        (insert diff-text)
+                        (count-matches "^\\+" (point-min) (point-max))))
+                (deleted (with-temp-buffer
+                           (insert diff-text)
+                           (count-matches "^-" (point-min) (point-max))))
+                (net-change (- added deleted)))
+           (when (< net-change -50)
+             (format "ARCHITECTURAL DESTRUCTION: net deletion of %d lines (added %d, deleted %d)"
+                     (- net-change) added deleted))))
+        ;; SCOPE CREEP CHECK: too many files touched
+        ((let* ((files-touched
+                 (delete-dups
+                  (delq nil
+                        (mapcar (lambda (line)
+                                  (when (string-match "^diff --git a/\\(.+?\\) b/" line)
+                                    (match-string 1 line)))
+                                (split-string diff-text "\n"))))))
+           (when (> (length files-touched) 5)
+             (format "SCOPE CREEP: touches %d files (expected <=3)"
+                     (length files-touched)))))
         ;; Looks reasonable
         (t nil)))))
 

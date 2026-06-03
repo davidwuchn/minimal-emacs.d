@@ -222,7 +222,7 @@ during deeply nested subagent setup (FSM, 31 tools, preset, context init)."
                                                 'empty-response details t)))))
              timeout)
          (error
-          (let ((details (format "%s" err)))
+          (let ((details (error-message-string err)))
             (message "[slr] Single-turn subagent error (%s)" err)
             (slr--finish-local-fallback prompt completion-callback
                                         'daemon-disappeared details))))))))

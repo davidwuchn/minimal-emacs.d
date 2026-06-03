@@ -29,8 +29,10 @@
 (declare-function gptel-auto-workflow--evolve-research-strategy "gptel-auto-workflow-research-benchmark" ())
 (declare-function gptel-auto-workflow--load-autotts-controller "strategic-daemon-functions" ())
 (declare-function gptel-auto-workflow--load-research-traces "gptel-auto-workflow-research-benchmark" ())
+(declare-function gptel-backend-name "gptel-request" (backend))
 
 (defvar gptel-auto-workflow--champion-keep-rate)
+(defvar gptel-backend)
 
 ;; ─── Semantica AgentMemory: formalize mementum layers ───
 
@@ -1414,27 +1416,6 @@ Writes to var/tmp/evolution/findings.md."
   (expand-file-name "assistant/skills/auto-workflow/scripts"
                     (gptel-auto-workflow--worktree-base-root)))
 
-(defun gptel-auto-workflow--run-evolution-script (script-name &rest args)
-  "Run SCRIPT-NAME from skill evolution scripts with ARGS.
-Returns output string or nil on failure."
-  (let* ((script-dir (gptel-auto-workflow--skill-evolution-script-dir))
-         (script (expand-file-name script-name script-dir))
-         (root (gptel-auto-workflow--worktree-base-root))
-         (cmd (format "cd %s && python3 %s %s"
-                      (shell-quote-argument root)
-                      (shell-quote-argument script)
-                      (mapconcat #'shell-quote-argument args " "))))
-    (message "[evolution] Running: %s" script-name)
-    (let ((output (shell-command-to-string cmd)))
-      (if (string-match-p "^\\(?:Error\\|Traceback\\|FAILED\\):\\|failed with\\|failed:" output)
-          (progn
-            (message "[evolution] Script %s failed: %s" script-name output)
-            nil)
-        (message "[evolution] %s completed" script-name)
-        output))))
-
-
-
 ;;; ─── Dynamic Content Generators ───
 
 (defun gptel-auto-workflow--generate-source-effectiveness-section ()
@@ -1824,38 +1805,36 @@ with kept experiments, and updates the researcher prompt accordingly."
          (message "[evolution] No research-enabled experiments to analyze yet")))))
 
 (defun gptel-auto-workflow--evolve-all-skills ()
-  "Run self-evolution on ALL skills via Python scripts.
-This is the main entry point for unified skill evolution.
-Uses agentskills.io standard scripts/ directory."
-  (message "[evolution] Running unified skill evolution via scripts...")
-  
-  ;; Single script handles all skill generation
-  (let ((output (gptel-auto-workflow--run-evolution-script
-                 "evolve_skills.py" "--root" ".")))
-    (if output
-        (progn
-          (message "[evolution] Unified skill evolution complete")
-          (message "[evolution] Output:\n%s" output))
-      (message "[evolution] Skill evolution failed - check scripts")))
-  
-  ;; Also run research synthesis (still in Elisp for now)
+  "Run self-evolution on ALL skills via skill graph.
+Skill graph replaces retired Python scripts — handles discovery,
+relationship tracking, and experiment-based edge evolution."
+  (message "[evolution] Running unified skill evolution via skill graph...")
+
+  ;; Step 1: Evolve skill graph from experiment outcomes
+  (when (fboundp 'skill-graph-evolve-from-experiments)
+    (condition-case err
+        (skill-graph-evolve-from-experiments)
+      (error (message "[evolution] Skill graph evolution failed: %s" err))))
+
+  ;; Step 2: Research synthesis (pure Elisp)
   (gptel-auto-workflow--evolution-research-synthesize)
   (gptel-auto-workflow--generate-research-skill)
-  
-  ;; Evolve researcher skill with dynamic content (source effectiveness + controller guidance)
+
+  ;; Step 3: Evolve researcher skill with dynamic content
   (gptel-auto-workflow--evolve-researcher-skill)
 
-  ;; Analyze researcher end-to-end effectiveness
+  ;; Step 4: Analyze researcher end-to-end effectiveness
   (gptel-auto-workflow--evolve-researcher-from-feedback)
 
-  ;; Cross-layer feedback: inject the latest controller config into researcher skill.
-  ;; (Controller evolution runs before this via evolution-run-cycle → run-autotts-evolution)
+  ;; Step 5: Cross-layer feedback — inject controller config into researcher skill
   (when (fboundp 'gptel-auto-workflow--update-skill-with-controller)
     (let ((controller-config
            (when (fboundp 'gptel-auto-workflow--load-autotts-controller)
              (gptel-auto-workflow--load-autotts-controller))))
       (when controller-config
-        (gptel-auto-workflow--update-skill-with-controller controller-config)))))
+        (gptel-auto-workflow--update-skill-with-controller controller-config))))
+
+  (message "[evolution] Unified skill evolution complete"))
 
 (defun gptel-auto-workflow-evolution-run-cycle ()
   "Run one full self-evolution cycle.
@@ -2325,11 +2304,15 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (condition-case nil
       (gptel-auto-workflow--build-inverted-file)
     (error nil))
-  ;; Skill graph evolution: update edges from recent experiment outcomes
-  (when (fboundp 'ov5-sg-evolve-from-experiments)
+  ;; Skill graph evolution: ensure loaded, then update edges from experiments
+  (when (fboundp 'skill-graph-evolve-from-experiments)
     (condition-case err
         (progn
-          (ov5-sg-evolve-from-experiments)
+          (when (and (boundp 'skill-graph--nodes)
+                     (= (hash-table-count skill-graph--nodes) 0)
+                     (fboundp 'skill-graph-init))
+            (skill-graph-init))
+          (skill-graph-evolve-from-experiments)
           (message "[skill-graph] Evolution complete"))
       (error (message "[skill-graph] Evolution error: %s" (error-message-string err)))))
   (message "[auto-workflow] Self-evolution cycle complete.")
@@ -2530,7 +2513,7 @@ Connects benchmark-principles Eight Keys scoring to operational pipeline."
                   (error nil))
                 (setq cleaned-temp (1+ cleaned-temp)))))
           ;; 5. Truncate daemon log if >10MB
-          (let ((log-file (expand-file-name "var/tmp/cron/ov5-auto-workflow.log" root)))
+          (let ((log-file (expand-file-name "var/tmp/cron/pmf-value-stream.log" root)))
             (when (and (file-exists-p log-file)
                        (> (file-attribute-size (file-attributes log-file)) (* 10 1024 1024)))
               (shell-command (format "tail -n 1000 %s > %s.tmp && mv %s.tmp %s"
@@ -6130,6 +6113,666 @@ Signals ert-test-failed if check fails. Use in ERT tests."
         (message "[allium-bdd] Spec distillation failed — check input"))
       (when (eq (car result) :fail)
         (should nil)))))
+
+;;; ─── Self-Healing: Pipeline Health Monitor ───
+;; When the evaluator itself breaks, the system must detect and fix it.
+;; Without this, 0%% keep rate means no data → no learning → death spiral.
+
+(defvar gptel-auto-workflow--self-healing-log nil
+  "List of self-healing actions taken.  Each entry is a plist with
+:timestamp, :diagnosis, :remedy, :before-rate, :after-rate.")
+
+(defun gptel-auto-workflow--check-pipeline-health (&optional results)
+  "Analyze RESULTS for pipeline health issues.
+RESULTS is a list of plists with :kept and :decision keys.
+Returns plist with :healthy-p and :diagnosis."
+  (let* ((recent (or results
+                     (and (fboundp 'gptel-auto-workflow--load-recent-results)
+                          (gptel-auto-workflow--load-recent-results 10))
+                     '()))
+         (total (length recent))
+         (kept-count (cl-count-if (lambda (r) (plist-get r :kept)) recent))
+         (keep-rate (if (> total 0) (/ (float kept-count) total) 1.0))
+         (grader-failures (cl-count-if (lambda (r)
+                                         (eq (plist-get r :decision) 'grader-failed))
+                                       recent))
+         (timeouts (cl-count-if (lambda (r)
+                                  (eq (plist-get r :decision) 'timeout))
+                                recent)))
+    (cond
+     ;; Critical: grader destroying everything (the bug we just fixed)
+     ((and (> total 2) (= kept-count 0) (> grader-failures (/ total 2)))
+      (list :healthy-p nil
+            :diagnosis "grader-destroying-experiments"
+            :confidence 0.95
+            :keep-rate keep-rate
+            :grader-failures grader-failures
+            :remedy "Auto-pass grader timeouts; increase grader timeout to match experiment budget"))
+
+     ;; Warning: high timeout rate
+     ((and (> total 2) (> timeouts (/ total 2)))
+      (list :healthy-p nil
+            :diagnosis "timeouts-too-aggressive"
+            :confidence 0.8
+            :keep-rate keep-rate
+            :timeouts timeouts
+            :remedy "Increase experiment or grader timeout by 50%%"))
+
+     ;; Healthy
+     (t (list :healthy-p t
+              :keep-rate keep-rate
+              :diagnosis nil
+              :total total)))))
+
+(defun gptel-auto-workflow--auto-remediate (diagnosis)
+  "Apply automatic fix for DIAGNOSIS.  Returns t if fix applied."
+  (let ((diagnosis-str (plist-get diagnosis :diagnosis))
+        (fixed nil))
+    (pcase diagnosis-str
+      ("grader-destroying-experiments"
+       ;; Match grader timeout to experiment budget
+       (when (and (boundp 'gptel-auto-experiment-time-budget)
+                  (boundp 'gptel-auto-experiment-grade-timeout))
+         (let ((new-timeout gptel-auto-experiment-time-budget))
+           (setq gptel-auto-experiment-grade-timeout new-timeout)
+           (message "[self-heal] Grader destroying experiments — increased timeout to %ds"
+                    new-timeout)
+           (push (list :timestamp (float-time)
+                       :diagnosis diagnosis-str
+                       :remedy (format "grader-timeout=%d" new-timeout)
+                       :before-rate (plist-get diagnosis :keep-rate))
+                 gptel-auto-workflow--self-healing-log)
+           (setq fixed t))))
+
+      ("timeouts-too-aggressive"
+       ;; Increase experiment budget by 50%
+       (when (boundp 'gptel-auto-experiment-time-budget)
+         (let ((new-budget (floor (* gptel-auto-experiment-time-budget 1.5))))
+           (setq gptel-auto-experiment-time-budget new-budget)
+           (message "[self-heal] Too many timeouts — increased budget to %ds"
+                    new-budget)
+           (push (list :timestamp (float-time)
+                       :diagnosis diagnosis-str
+                       :remedy (format "budget=%d" new-budget)
+                       :before-rate (plist-get diagnosis :keep-rate))
+                 gptel-auto-workflow--self-healing-log)
+            (setq fixed t)))))
+     fixed))
+
+;;; ─── Phase 7: Recovery Verification ───
+
+(defvar gptel-auto-workflow--last-remediation nil
+  "Plist tracking last auto-remediation for verification.
+Keys: :timestamp :diagnosis :remedy :before-rate :verified-p")
+
+(defun gptel-auto-workflow--verify-recovery ()
+  "Verify last remediation worked by checking current keep-rate.
+If keep-rate improved, mark fix as effective.
+If not improved after 3 runs, trigger escalation."
+  (when gptel-auto-workflow--last-remediation
+    (let* ((before-rate (or (plist-get gptel-auto-workflow--last-remediation :before-rate) 0))
+           (current-health (gptel-auto-workflow--check-pipeline-health))
+           (current-rate (or (plist-get current-health :keep-rate) 0)))
+      (cond
+       ;; Fix worked: keep-rate improved
+       ((> current-rate before-rate)
+        (message "[self-heal] ✓ Recovery verified: %.0f%% → %.0f%% (%s)"
+                 (* 100 before-rate) (* 100 current-rate)
+                 (plist-get gptel-auto-workflow--last-remediation :remedy))
+        (plist-put gptel-auto-workflow--last-remediation :verified-p t)
+        (plist-put gptel-auto-workflow--last-remediation :after-rate current-rate)
+        (gptel-auto-workflow--persist-self-healing-state)
+        ;; Reset escalation counter since fix worked
+        (gptel-auto-workflow--reset-escalation-counter))
+       ;; Fix failed: keep-rate not improved
+       (t
+        (message "[self-heal] ✗ Recovery NOT verified: still %.0f%% (was %.0f%%)"
+                 (* 100 current-rate) (* 100 before-rate))
+         ;; Increment remediation failure counter
+         (setq gptel-auto-workflow--consecutive-failed-remediations
+               (1+ gptel-auto-workflow--consecutive-failed-remediations)))))))
+
+;;; ─── Phase 8: Predictive Health ───
+
+(defvar gptel-auto-workflow--health-history nil
+  "List of recent health snapshots for trend analysis.
+Each entry: (:timestamp :keep-rate :grader-failures :timeouts :backend)
+Used to predict failures before they cause 0% keep-rate.")
+
+(defvar gptel-auto-workflow--predictive-threshold 0.2
+  "Minimum degradation rate to trigger early warning.
+If keep-rate drops >20% per run, predict failure.")
+
+(defun gptel-auto-workflow--record-health-snapshot (health)
+  "Record HEALTH snapshot for trend analysis.
+Keeps last 10 snapshots, discards older ones."
+  (push (list :timestamp (float-time)
+              :keep-rate (or (plist-get health :keep-rate) 0)
+              :grader-failures (or (plist-get health :grader-failures) 0)
+              :timeouts (or (plist-get health :timeouts) 0))
+        gptel-auto-workflow--health-history)
+  (when (> (length gptel-auto-workflow--health-history) 10)
+    (setq gptel-auto-workflow--health-history
+          (butlast gptel-auto-workflow--health-history))))
+
+(defun gptel-auto-workflow--predict-failure ()
+  "Predict if pipeline will fail based on trend analysis.
+Returns (:prediction warning/critical/healthy :confidence 0-1)
+when trend shows degradation, nil otherwise."
+  (when (> (length gptel-auto-workflow--health-history) 3)
+    (let* ((recent (subseq gptel-auto-workflow--health-history 0 3))
+           (keep-rates (mapcar (lambda (h) (plist-get h :keep-rate)) recent))
+           (grader-failures (apply #'+ (mapcar (lambda (h) (plist-get h :grader-failures)) recent)))
+           (avg-keep (/ (apply #'+ keep-rates) (length keep-rates)))
+           (trend (- (car keep-rates) (car (last keep-rates)))))
+      (cond
+       ;; Critical: avg keep-rate below 5% and dropping
+       ((and (< avg-keep 0.05) (< trend 0))
+        (list :prediction 'critical
+              :confidence 0.95
+              :message "keep-rate collapsing"))
+       ;; Warning: keep-rate dropping >20% per run
+       ((< trend (- gptel-auto-workflow--predictive-threshold))
+        (list :prediction 'warning
+              :confidence (min 0.9 (+ 0.5 (* -2.0 trend)))
+              :message (format "keep-rate dropping %.0f%% per run" (* 100 trend))))
+       ;; Healthy: stable or improving
+       (t nil)))))
+
+(defun gptel-auto-workflow--predictive-intervention (prediction)
+  "Act on PREDICTION before failure occurs.
+Pre-emptive remediation: switch backend before grader breaks."
+  (let ((level (plist-get prediction :prediction))
+        (confidence (plist-get prediction :confidence)))
+    (message "[self-heal] ⚠ PREDICTIVE: %s (confidence: %.0f%%)"
+             (plist-get prediction :message) (* 100 confidence))
+    (when (eq level 'critical)
+      ;; Pre-emptive backend switch before grader breaks
+      (message "[self-heal] Pre-emptive backend switch to prevent total failure")
+      (gptel-auto-workflow--escalate-to-backend
+       "predictive-failure-prevention"))))
+
+;;; ─── Phase 9: Cross-Run Meta-Analysis ───
+
+(defun gptel-auto-workflow--analyze-failure-patterns ()
+  "Analyze failure patterns across runs using LLM.
+Looks for: time-of-day patterns, backend-specific issues, model drift.
+Returns list of insights or nil if no patterns found."
+  (when (> (length gptel-auto-workflow--self-healing-log) 3)
+    (let ((patterns nil))
+      ;; Pattern 1: Time-based failures
+      (let ((time-buckets (make-hash-table :test 'equal)))
+        (dolist (entry gptel-auto-workflow--self-healing-log)
+          (let* ((ts (or (plist-get entry :timestamp) 0))
+                 (hour (format-time-string "%H" (seconds-to-time ts)))
+                 (count (gethash hour time-buckets 0)))
+            (puthash hour (1+ count) time-buckets)))
+        (maphash (lambda (hour count)
+                   (when (> count 2)
+                     (push (format "Failures cluster at %s:00 (%d times)" hour count) patterns)))
+                 time-buckets))
+      ;; Pattern 2: Backend-specific failures
+      (let ((backend-failures (make-hash-table :test 'equal)))
+        (dolist (entry gptel-auto-workflow--self-healing-log)
+          (let* ((remedy (or (plist-get entry :remedy) ""))
+                 (backend (when (string-match "backend=\\(.+\\)" remedy)
+                            (match-string 1 remedy)))
+                 (count (gethash backend backend-failures 0)))
+            (when backend
+              (puthash backend (1+ count) backend-failures))))
+        (maphash (lambda (backend count)
+                   (when (> count 2)
+                     (push (format "%s fails repeatedly (%d times)" backend count) patterns)))
+                 backend-failures))
+      patterns)))
+
+(defun gptel-auto-workflow--maybe-analyze-patterns ()
+  "Run cross-run analysis periodically.
+Called every 5th run or when predictive warning triggers."
+  (when (or (> (length gptel-auto-workflow--self-healing-log) 5)
+            (gptel-auto-workflow--predict-failure))
+    (let ((patterns (gptel-auto-workflow--analyze-failure-patterns)))
+      (when patterns
+        (message "[self-heal] Pattern analysis: %s"
+                 (mapconcat #'identity patterns "; "))
+        ;; Log patterns for future LLM analysis
+        (push (list :timestamp (float-time)
+                    :diagnosis "pattern-analysis"
+                    :remedy (mapconcat #'identity patterns "; ")
+                    :before-rate 0.0)
+              gptel-auto-workflow--self-healing-log)))))
+
+(defun gptel-auto-workflow--maybe-self-heal ()
+  "Check pipeline health and auto-remediate if broken.
+Call this after each experiment run or batch.
+Phase 8: Predictive health checks + Phase 6: Escalation.
+Records health snapshot, checks predictive warnings, analyzes patterns."
+  (when (fboundp 'gptel-auto-workflow--check-pipeline-health)
+    (let ((health (gptel-auto-workflow--check-pipeline-health)))
+      ;; Record snapshot for trend analysis
+      (gptel-auto-workflow--record-health-snapshot health)
+      ;; Check for predictive failure (before it happens)
+      (let ((prediction (gptel-auto-workflow--predict-failure)))
+        (when prediction
+          (gptel-auto-workflow--predictive-intervention prediction)))
+      ;; Run cross-run pattern analysis
+      (gptel-auto-workflow--maybe-analyze-patterns)
+      (if (plist-get health :healthy-p)
+          (progn
+             ;; Reset escalation counter on healthy pipeline
+             (when (fboundp 'gptel-auto-workflow--reset-escalation-counter)
+               (gptel-auto-workflow--reset-escalation-counter))
+             (when (> (or (plist-get health :total) 0) 0)
+               (message "[self-heal] Pipeline healthy (keep-rate: %.0f%%)"
+                        (* 100.0 (or (plist-get health :keep-rate) 1.0)))))
+        ;; Phase 6: Check escalation before attempting remediation
+        (if (and (fboundp 'gptel-auto-workflow--maybe-escalate)
+                 (gptel-auto-workflow--maybe-escalate (plist-get health :diagnosis)))
+            (message "[self-heal] Pipeline halted — waiting for human intervention")
+          (progn
+            (message "[self-heal] Pipeline unhealthy: %s (confidence: %.0f%%)"
+                     (plist-get health :diagnosis)
+                     (* 100.0 (or (plist-get health :confidence) 0.0)))
+            (gptel-auto-workflow--auto-remediate health)))))))
+
+;;; ─── Phase 2: Meta-Learning from Remediation ───
+
+(defvar gptel-auto-workflow--self-healing-state-file
+  "mementum/knowledge/pipeline-health.md"
+  "File to persist self-healing state across sessions.")
+
+(defun gptel-auto-workflow--persist-self-healing-state ()
+  "Write self-healing log to persistent storage.
+Survives daemon restart so system avoids re-diagnosing same issues."
+  (when (and gptel-auto-workflow--self-healing-log
+             (fboundp 'gptel-auto-workflow--worktree-base-root))
+    (let* ((root (gptel-auto-workflow--worktree-base-root))
+           (file (expand-file-name gptel-auto-workflow--self-healing-state-file root))
+           (dir (file-name-directory file)))
+      (make-directory dir t)
+      (with-temp-file file
+        (insert "# Pipeline Health State\n\n")
+        (insert "Auto-generated by self-healing system.\n\n")
+        (insert (format "Consecutive failures: %d\n"
+                        gptel-auto-workflow--consecutive-failed-remediations))
+        (when (and (boundp 'gptel-backend) gptel-backend)
+          (insert (format "Current backend: %s\n"
+                          (if (fboundp 'gptel-backend-name)
+                              (gptel-backend-name gptel-backend)
+                            "unknown"))))
+        (insert "\nFormat: timestamp | diagnosis | remedy | before | after | effective?\n\n")
+        (dolist (entry gptel-auto-workflow--self-healing-log)
+          (let* ((ts (or (plist-get entry :timestamp) 0))
+                 (diag (or (plist-get entry :diagnosis) "unknown"))
+                 (remedy (or (plist-get entry :remedy) "none"))
+                 (before (or (plist-get entry :before-rate) 0))
+                 (after (or (plist-get entry :after-rate) -1)))
+            (insert (format "- %.0f | %s | %s | %.0f%% → %.0f%% | %s\n"
+                           ts diag remedy
+                           (* 100 before)
+                           (* 100 after)
+                           (if (> after before) "EFFECTIVE" "PENDING")))))))))
+
+(defun gptel-auto-workflow--load-self-healing-state ()
+  "Read persisted self-healing state from markdown file.
+Restores escalation counter and learned thresholds from git-tracked storage."
+  (when (fboundp 'gptel-auto-workflow--worktree-base-root)
+    (let* ((root (gptel-auto-workflow--worktree-base-root))
+           (file (expand-file-name gptel-auto-workflow--self-healing-state-file root)))
+      (when (file-exists-p file)
+        (with-temp-buffer
+          (insert-file-contents file)
+          (goto-char (point-min))
+          ;; Parse "Consecutive failures: N" line
+          (when (re-search-forward "^Consecutive failures: \\([0-9]+\\)" nil t)
+            (setq gptel-auto-workflow--consecutive-failed-remediations
+                  (string-to-number (match-string 1))))
+          ;; Parse "Current backend: NAME" line
+          (when (re-search-forward "^Current backend: \\(.+\\)$" nil t)
+            (let ((saved-backend (match-string 1)))
+              (message "[self-heal] Restored backend preference: %s" saved-backend)))
+          ;; Count effective vs ineffective remedies from history
+          (let ((effective 0) (ineffective 0))
+            (goto-char (point-min))
+            (while (re-search-forward "| EFFECTIVE |" nil t)
+              (cl-incf effective))
+            (goto-char (point-min))
+            (while (re-search-forward "| PENDING |" nil t)
+              (cl-incf ineffective))
+            (message "[self-heal] Restored state: %d effective, %d pending remedies from history"
+                     effective ineffective)))
+        (message "[self-heal] State restored from %s"
+                 gptel-auto-workflow--self-healing-state-file)))))
+
+(defun gptel-auto-workflow--update-remediation-effectiveness (before-rate after-rate)
+  "Record AFTER-RATE for last remediation that had BEFORE-RATE.
+Call after experiment batch completes to learn if fix worked."
+  (when gptel-auto-workflow--self-healing-log
+    ;; Update most recent entry with after-rate
+    (let ((latest (car gptel-auto-workflow--self-healing-log)))
+      (when (and latest (null (plist-get latest :after-rate)))
+        (plist-put latest :after-rate after-rate)
+        (message "[self-heal] Fix effectiveness: %.0f%% → %.0f%% (%s)"
+                 (* 100 before-rate)
+                 (* 100 after-rate)
+                 (if (> after-rate before-rate) "improved" "no improvement"))
+        ;; Persist updated state
+        (gptel-auto-workflow--persist-self-healing-state)))))
+
+;;; ─── Phase 4: Self-Diagnostic Probes ───
+
+(defvar gptel-auto-workflow--probe-target
+  "var/tmp/probe-fixture.el"
+  "Test fixture for self-diagnostic probes.
+Trivial Elisp file that should always pass grader.")
+
+(defun gptel-auto-workflow--run-diagnostic-probe ()
+  "Run a real grader call on trivial output to verify grading works.
+If grader returns score=0 or errors on trivial safe output, the grader is broken.
+Returns t if grader healthy, nil if broken.
+Uses 30s timeout to avoid blocking pipeline on slow backends."
+  (message "[self-heal] Running diagnostic probe (real grader call)...")
+  (let* ((probe-healthy nil)
+         (probe-done nil)
+         (probe-timeout 30)
+         ;; Trivial output that should always score well
+         (trivial-output "Changed: Added docstring to helper function.
+
+Verification: byte-compiled cleanly, no warnings.\n\nDiff:\n+ \"Return 1.\"\n"))
+    ;; First check: do we have recent grader health metrics?
+    (if (and gptel-auto-workflow--grader-health-metrics
+             (> (hash-table-count gptel-auto-workflow--grader-health-metrics) 0))
+        ;; Use recent metrics: if any backend has success, grader is likely ok
+        (let ((any-success nil))
+          (maphash (lambda (backend metrics)
+                     (let ((count (plist-get metrics :count))
+                           (failures (plist-get metrics :failures)))
+                       (when (and (> count 0) (< (/ failures (float count)) 0.5))
+                         (setq any-success t))))
+                   gptel-auto-workflow--grader-health-metrics)
+          (if any-success
+              (progn
+                (message "[self-heal] Probe: recent grader metrics show success")
+                (setq probe-healthy t))
+            (message "[self-heal] Probe: all recent grader calls failed, doing real test")))
+      (message "[self-heal] Probe: no metrics yet, doing real grader test"))
+    ;; If metrics don't show health, do a real grader call
+    (unless probe-healthy
+      (when (fboundp 'gptel-auto-experiment-grade)
+        (let ((probe-timer
+               (run-with-timer probe-timeout nil
+                               (lambda ()
+                                 (setq probe-done t)
+                                 (setq probe-healthy nil)
+                                 (message "[self-heal] Probe: grader timeout (%ds) — grader BROKEN"
+                                          probe-timeout)))))
+          (gptel-auto-experiment-grade
+           trivial-output
+           (lambda (grade)
+             (cancel-timer probe-timer)
+             (setq probe-done t)
+             (let ((score (plist-get grade :score))
+                   (total (plist-get grade :total)))
+               (if (and (numberp score) (> score 0))
+                   (progn
+                     (message "[self-heal] Probe: grader returned %d/%d — healthy"
+                              score (or total 1))
+                     (setq probe-healthy t))
+                 (progn
+                   (message "[self-heal] Probe: grader returned score=0 — BROKEN")
+                   (setq probe-healthy nil))))))
+          ;; Wait synchronously (max probe-timeout seconds)
+          (let ((wait-start (float-time)))
+            (while (and (not probe-done)
+                        (< (- (float-time) wait-start) probe-timeout))
+              (sleep-for 0.1))))))
+    ;; Report result
+    (if probe-healthy
+        (message "[self-heal] Probe passed: grader healthy")
+      (message "[self-heal] Probe FAILED: grader broken → triggering remediation")
+      (gptel-auto-workflow--auto-remediate
+       (list :diagnosis "grader-destroying-experiments"
+             :confidence 0.99
+             :keep-rate 0.0)))
+    probe-healthy))
+
+(defun gptel-auto-workflow--probe-before-experiments ()
+  "Run diagnostic probe before real experiments.
+If probe fails, attempt remediation and re-probe.
+Only skip experiments if grader is truly unfixable.
+Returns t if safe to proceed, nil if should skip."
+  (let ((probe-ok (gptel-auto-workflow--run-diagnostic-probe)))
+    (when probe-ok
+      ;; Grader healthy: make sure blind mode is off
+      (when gptel-auto-workflow--blind-mode
+        (message "[self-heal] ✓ Grader recovered — exiting blind mode")
+        (setq gptel-auto-workflow--blind-mode nil)))
+    (if probe-ok
+        t
+      ;; Probe failed: try to fix it first
+      (message "[self-heal] Probe failed — attempting remediation before giving up")
+      (gptel-auto-workflow--auto-remediate
+       (list :diagnosis "grader-destroying-experiments"
+             :confidence 0.99
+             :keep-rate 0.0))
+      ;; Re-probe after remediation
+      (sleep-for 5) ; give backend time to recover
+      (if (gptel-auto-workflow--run-diagnostic-probe)
+          (progn
+            (message "[self-heal] ✓ Grader recovered after remediation")
+            t)
+        ;; Still broken after remediation
+        (message "[self-heal] ⚠ Grader still broken after remediation — entering BLIND MODE")
+        (message "[self-heal] Tests will still run, but no LLM grading")
+        (setq gptel-auto-workflow--blind-mode t)
+        (gptel-auto-workflow--persist-self-healing-state)
+        t))))
+
+(defvar gptel-auto-workflow--blind-mode nil
+  "When non-nil, run experiments without grader (blind mode).
+Triggered when grader is broken but we want to keep experimenting.
+Tests still run, but no LLM grading — changes marked for manual review.")
+
+(defvar gptel-auto-workflow--grader-health-metrics
+  (make-hash-table :test 'equal)
+  "Hash table tracking grader performance per backend.
+Keys are backend names, values are plists with :count :total-latency :failures.")
+
+(defun gptel-auto-workflow--record-grader-metric (backend latency success-p)
+  "Record grader metric for BACKEND.
+LATENCY is time in seconds. SUCCESS-P is t if grader returned valid output."
+  (let ((current (gethash backend gptel-auto-workflow--grader-health-metrics
+                          (list :count 0 :total-latency 0 :failures 0))))
+    (plist-put current :count (1+ (plist-get current :count)))
+    (plist-put current :total-latency (+ (plist-get current :total-latency) latency))
+    (unless success-p
+      (plist-put current :failures (1+ (plist-get current :failures))))
+    (puthash backend current gptel-auto-workflow--grader-health-metrics)))
+
+(defun gptel-auto-workflow--get-backend-health (backend)
+  "Return health metrics for BACKEND.
+Returns plist with :avg-latency :failure-rate :status."
+  (let ((metrics (gethash backend gptel-auto-workflow--grader-health-metrics)))
+    (if metrics
+        (let* ((count (plist-get metrics :count))
+               (total-latency (plist-get metrics :total-latency))
+               (failures (plist-get metrics :failures))
+               (avg-latency (if (> count 0) (/ (float total-latency) count) 0))
+               (failure-rate (if (> count 0) (/ (float failures) count) 0)))
+          (list :avg-latency avg-latency
+                :failure-rate failure-rate
+                :status (cond ((> failure-rate 0.5) 'critical)
+                              ((> failure-rate 0.3) 'degraded)
+                              ((> avg-latency 300) 'slow)
+                              (t 'healthy))))
+      (list :avg-latency 0 :failure-rate 0 :status 'unknown))))
+
+(defun gptel-auto-workflow--check-grader-health ()
+  "Check all backends for degradation.
+Returns list of (backend . health-plist) for degraded backends."
+  (let ((degraded '()))
+     (maphash (lambda (backend _metrics)
+                (let ((health (gptel-auto-workflow--get-backend-health backend)))
+                  (when (memq (plist-get health :status) '(critical degraded slow))
+                    (push (cons backend health) degraded))))
+              gptel-auto-workflow--grader-health-metrics)
+    degraded))
+
+;;; ─── Phase 6: Backend Escalation (LLM-based self-healing) ───
+
+(defvar gptel-auto-workflow--escalation-threshold 3
+  "Failed remediation count before escalating to alternative backend.")
+
+(defvar gptel-auto-workflow--consecutive-failed-remediations 0
+  "Counter for consecutive failed auto-remediation attempts.")
+
+(defvar gptel-auto-workflow--escalation-backends
+  '("Copilot" "moonshot" "DeepSeek")
+  "Backends to try when primary backend is failing.")
+
+(defvar gptel-auto-workflow--backend-name-to-symbol
+  '(("copilot" . gptel--copilot)
+    ("moonshot" . gptel--moonshot)
+    ("deepseek" . gptel--deepseek)
+    ("minimax" . gptel--minimax)
+    ("dashscope" . gptel--dashscope)
+    ("cf-gateway" . gptel--cf-gateway))
+  "Mapping from lowercase backend names to gptel backend symbols.
+Used for safe backend switching without assuming naming conventions.")
+
+(defun gptel-auto-workflow--escalate-to-backend (diagnosis)
+  "Escalate broken pipeline to alternative LLM backend.
+Tries next backend in escalation chain instead of asking human."
+  (let* ((current-backend (when (boundp 'gptel-backend)
+                            (gptel-backend-name gptel-backend)))
+         (candidates (remove current-backend gptel-auto-workflow--escalation-backends))
+         (next-backend-name (car candidates)))
+    (if next-backend-name
+        (let* ((lookup-key (downcase next-backend-name))
+               (backend-symbol (cdr (assoc lookup-key
+                                          gptel-auto-workflow--backend-name-to-symbol
+                                          #'string=)))
+               (backend-var (when backend-symbol
+                              (and (boundp backend-symbol)
+                                   (symbol-value backend-symbol)))))
+          (if backend-var
+              (progn
+                (message "[ESCALATION] Primary backend %s failing. Switching to %s for self-healing."
+                         current-backend next-backend-name)
+                ;; Switch to alternative backend safely
+                (setq gptel-backend backend-var)
+                (message "[ESCALATION] Now using %s for grader and experiments." next-backend-name)
+                ;; Reset counter since we changed strategy
+                (setq gptel-auto-workflow--consecutive-failed-remediations 0)
+                t)
+            (progn
+              (message "[ESCALATION] Backend %s not configured, skipping to next" next-backend-name)
+              ;; Remove this backend from candidates and try next
+              (setq gptel-auto-workflow--escalation-backends
+                    (remove next-backend-name gptel-auto-workflow--escalation-backends))
+              (gptel-auto-workflow--escalate-to-backend diagnosis))))
+      (progn
+        (message "[ESCALATION] All backends exhausted. Writing alert for human review.")
+        (gptel-auto-workflow--write-human-escalation diagnosis)
+        t))))
+
+(defun gptel-auto-workflow--write-human-escalation (diagnosis)
+  "Write human escalation alert only when all LLM backends exhausted.
+This is the final fallback, not the first response."
+  (let* ((root (when (fboundp 'gptel-auto-workflow--worktree-base-root)
+                 (gptel-auto-workflow--worktree-base-root)))
+         (file (when root
+                 (expand-file-name "mementum/decisions/pipeline-escalation.md" root)))
+         (dir (when file (file-name-directory file))))
+    (when dir
+      (make-directory dir t)
+      (with-temp-file file
+        (insert "# Pipeline Escalation Alert\n\n")
+        (insert (format "**Timestamp:** %s\n\n" (current-time-string)))
+        (insert (format "**Diagnosis:** %s\n\n" diagnosis))
+        (insert "**Status:** ALL LLM BACKENDS EXHAUSTED\n\n")
+        (insert "Auto-remediation and backend switching have failed.\n\n")
+        (insert "## Self-Healing Attempts\n\n")
+        (insert "1. Adjusted timeouts and budgets\n")
+        (insert "2. Switched to alternative LLM backends\n")
+        (insert "3. All backends showing degraded performance\n\n")
+        (insert "---\n")
+        (insert "Delete this file to acknowledge and resume experiments.\n"))
+      (message "[ESCALATION] Alert written. All LLM backends exhausted."))))
+
+(defun gptel-auto-workflow--llm-diagnose-pipeline (diagnosis)
+  "Use LLM to creatively diagnose why mechanical remediation failed.
+DIAGNOSIS is a string like 'grader-destroying-experiments'.
+Returns list of suggested fixes, or nil if LLM unavailable.
+This is the intelligent layer — mechanical fixes are deterministic,
+but when they fail, we need creative reasoning."
+  (condition-case err
+      (when (and (boundp 'gptel-backend) gptel-backend
+                 (fboundp 'gptel-send))
+        (let ((suggestions nil)
+              (prompt (format "λ diagnose(pipeline).\nDiagnosis: %s\nMechanical fixes attempted: timeout adjustment, backend switching.\nQuestion: What else could cause this?\n\nSuggest 3 creative fixes:\n1. " diagnosis)))
+          (message "[self-heal] Asking LLM for creative diagnosis...")
+          ;; Use gptel-send synchronously with short timeout
+          (with-temp-buffer
+            (insert prompt)
+            (let ((gptel-max-tokens 256)
+                  (gptel-temperature 0.7))
+              (gptel-send
+               (lambda (response _info)
+                 (when response
+                   (setq suggestions
+                         (split-string response "\n" t "[0-9]+\. "))))))
+            ;; Brief wait for async response
+            (let ((wait-start (float-time)))
+              (while (and (not suggestions)
+                          (< (- (float-time) wait-start) 15))
+                (sleep-for 0.2))))
+          (when suggestions
+            (message "[self-heal] LLM suggestions: %s"
+                     (mapconcat #'identity suggestions "; ")))
+          suggestions))
+    (error
+     (message "[self-heal] LLM diagnosis failed: %s" (error-message-string err))
+     nil)))
+
+(defun gptel-auto-workflow--maybe-escalate (diagnosis)
+  "Check if escalation threshold reached and escalate if needed.
+Phase 6: Escalates to alternative LLM backend, not human.
+Before switching backends, asks current LLM for creative diagnosis.
+Returns t if escalated, nil if not yet."
+  (setq gptel-auto-workflow--consecutive-failed-remediations
+        (1+ gptel-auto-workflow--consecutive-failed-remediations))
+  (if (>= gptel-auto-workflow--consecutive-failed-remediations
+          gptel-auto-workflow--escalation-threshold)
+      (progn
+        ;; Phase 6: Before switching backends, ask LLM for creative diagnosis
+        (let ((llm-suggestions
+               (gptel-auto-workflow--llm-diagnose-pipeline diagnosis)))
+          (when llm-suggestions
+            (message "[self-heal] LLM suggests: %s"
+                     (mapconcat #'identity llm-suggestions "; "))
+            ;; Try first suggestion as additional remediation
+            (push (list :timestamp (float-time)
+                        :diagnosis (format "llm-suggestion: %s" diagnosis)
+                        :remedy (car llm-suggestions)
+                        :before-rate 0.0)
+                  gptel-auto-workflow--self-healing-log)))
+        ;; Then switch to alternative backend
+        (gptel-auto-workflow--escalate-to-backend diagnosis)
+        t)
+    (progn
+      (message "[self-heal] Remediation failed (%d/%d), will retry"
+               gptel-auto-workflow--consecutive-failed-remediations
+               gptel-auto-workflow--escalation-threshold)
+      nil)))
+
+(defun gptel-auto-workflow--reset-escalation-counter ()
+  "Reset escalation counter after successful remediation.
+Call when keep_rate improves after fix."
+  (when (> gptel-auto-workflow--consecutive-failed-remediations 0)
+    (message "[self-heal] Resetting escalation counter (was %d)"
+             gptel-auto-workflow--consecutive-failed-remediations)
+    (setq gptel-auto-workflow--consecutive-failed-remediations 0)))
 
 (provide 'gptel-auto-workflow-evolution)
 ;;; gptel-auto-workflow-evolution.el ends here

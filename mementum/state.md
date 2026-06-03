@@ -1,7 +1,92 @@
 # Mementum State
 
-> Last session: 2026-06-02 (molecule executor + validator)
-> Next pipeline: 23:00
+> Last session: 2026-06-03 (Dual Mayor Phases 5-7 complete)
+> Next pipeline: running
+> Status: 2149 tests pass, 0 unexpected — Dual Mayor fully operational
+
+## Session: Dual Mayor Implementation Complete (2026-06-03)
+
+**Phases 5-7 implemented:**
+
+### Phase 5: Cross-Mayor Communication
+- `lisp/modules/gptel-auto-workflow-beads.el` — Bead protocol (GTM↔PMF communication)
+- `mementum/decisions/` — Human decision gate directory + template
+- `gptel-auto-workflow--pending-decisions-p` — Blocks PMF dispatch when decisions pending (configurable)
+- Auto-file beads from research findings, auto-update from experiment results
+- Bead protocol status + decision gate surfaced in evolution dashboard
+
+### Phase 6: Full Separation
+- `mementum/gtm/strategy-roadmap.md` — Strategy template that GTM writes, PMF reads
+- `gptel-auto-workflow--read-gtm-strategy` / `--write-gtm-strategy` — Strategy I/O functions
+- GTM auto-start runs strategy evolution periodically
+- PMF reads strategy focus at start of each `run-async` call
+- `assistant/commands/pmf-mayor-run.md` — Discrete PMF command reference
+- `assistant/commands/gtm-mayor-research.md` — Discrete GTM command reference
+- Fixed: reverted broken `projects.el` from commit 1407ecf20 (parse error)
+
+### Phase 7: Innovation Metrics
+- `gptel-auto-workflow--pmf-metrics` — experiments/day, keep-rate %, hours/validation
+- `gptel-auto-workflow--gtm-metrics` — findings/day, strategy accuracy %, PMF signal
+- Dashboard templates updated with metric placeholders (`var/tmp/pmf-dashboard.md`, `gtm-dashboard.md`)
+- Auto-update metrics on experiment/research completion
+
+### Critical Fix: MiniMax Model Name (all subagents)
+- **Problem:** All experiments failing with `grader-failed` — `minimax-m2.7-highspeed` model timing out/rate limited
+- **Root cause:** Commit 1407ecf20 only fixed executor; analyzer, grader, researcher, reviewer, comparator still used broken model
+- **Fix:** Updated all subagent presets in:
+  - `lisp/modules/gptel-ext-backend-registry.el` — task-type-model-defaults
+  - `lisp/modules/gptel-tools-agent-prompt-build.el` — per-task-model-map
+- **Result:** All subagents now use `MiniMax-M3` (working model)
+
+### Bug Fixes During Integration
+- **Metrics dashboard `(invalid-function 0)`**: `gptel-auto-workflow--update-dashboard` received numeric values from plists; `replace-regexp-in-string` tried to call them as functions. Fixed by wrapping all numeric values with `(format "%s" ...)`.
+- **Git conflict markers in prompt-build.el**: Resolved leftover `<<<<<<< Updated upstream` / `>>>>>>> Stashed changes` markers from earlier stash operations.
+- **Sieve type generation for DashScope**: Commit `b49c20701` dynamically generated sieve types from `gptel-backend-registry` but only checked backend names for "qwen". DashScope backend name doesn't contain "qwen" (its models do). Fixed to check model names too.
+
+**Tests:** 2149 pass, 0 unexpected, 52 skipped
+
+**All 7 phases of Dual Mayor implementation plan complete + all integration bugs fixed.**
+
+---
+
+> Previous session: 2026-06-03 (XDG_RUNTIME_DIR fix + Dual Mayor naming)
+> Status: 2148 tests pass, 0 unexpected — PMF Mayor active
+
+## Session: Pipeline Fixes + Dual Mayor Architecture (2026-06-03)
+
+**What was built/fixed:**
+- `scripts/install-cron.sh` — Fixed `\$(id -u)` → `$(id -u)` (numeric UID)
+- `tests/test-install-cron-xdg-uid.sh` — TDD test for install script
+- `tests/test-cron-xdg-runtime.sh` — TDD test for installed crontab
+- `lisp/modules/gptel-auto-workflow-skill-graph.el` — Added `minimal-emacs-user-directory` candidate for daemon context
+- `assistant/skills/researcher-prompt/SKILL.md` — Restored `level: molecule` + `atoms: [agent-prompts]` frontmatter
+- `tests/test-gptel-nucleus-context-intercept.el` — Fixed `gpt-4-turbo` backend expectation (OpenAI, not unknown)
+- `mementum/knowledge/mayor-method-comparison.md` — Full 10-dimension comparison with OV5
+- `mementum/memories/mayor-method-key-insight.md` — 8 gaps in OV5 + synthesis
+
+**Root causes fixed:**
+1. Crontab had literal `$(id -u)` — daemon got Permission denied on `/run/user/$(id -u)`
+2. Skill graph root selection failed in daemon — `user-emacs-directory` redirected to `var/`
+3. researcher-prompt lost `level`/`atoms` frontmatter in commit 86aef0f2c
+
+**Pipeline status:**
+- Daemon restarted with fixed XDG_RUNTIME_DIR=/run/user/1000
+- Previous run: 5 experiments, 0 kept (all timeout — need to investigate model/timeout config)
+- Current run: 2026-06-03T102019Z-d570 (running)
+
+**Tests:** 2148 pass, 0 unexpected, 51 skipped
+
+**Memories created:**
+- `mementum/memories/mayor-method-key-insight.md`
+- `mementum/knowledge/mayor-method-comparison.md`
+- `mementum/knowledge/dual-mayor-architecture.md` — Dual Mayor naming:
+  * **GTM Mayor** = researcher (direction, PMF, innovation)
+  * **PMF Mayor** = auto-workflow (execution, experiments, code quality)
+- `mementum/memories/research-research-none-*.md` (3x)
+
+---
+
+> Previous session: 2026-06-02 (molecule executor + validator)
 > Status: 20/20 skill graph tests pass — full pipeline active
 
 ## Session: Edit-Mode Tracking Integration (2026-06-02)
@@ -925,3 +1010,6 @@ Subagent Dispatch (call-subagent)
 - Retry depth fixes + pipeline verification
 - 2 HIGH plist-put bugs fixed + 18 dead functions removed
 - macOS stat fix + .elc cleanup in pipeline
+
+### Run: skill/test-skill @ 20:33:34
+- Result: completed

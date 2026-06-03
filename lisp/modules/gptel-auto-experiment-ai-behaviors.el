@@ -11,6 +11,8 @@
                         user-emacs-directory))
   "Path to the ai-behaviors behaviors directory.")
 
+(require 'gptel-ext-backend-registry)
+
 (defvar gptel-ai-behaviors--expand-cache (make-hash-table :test 'equal)
   "Cache of hashtag → resolved content. Cleared on repo update.")
 
@@ -1135,7 +1137,8 @@ Returns current count after increment."
 (defconst gptel-ai-behaviors--model-variants
   '((deepseek . (deepseek-v4-flash deepseek-v4-pro))     ; flash=fast, pro=thinking+effort
     (kimi . (kimi-for-coding kimi-k2.6))                  ; coding=fast, k2.6=reasoning(:effort high)
-    (minimax . (minimax-m2.7 minimax-m2.7-highspeed)))
+    (minimax . (MiniMax-M3 minimax-m2.7-highspeed minimax-m2.7))
+    (copilot . (gpt-5.4-mini gpt-4o-mini gpt-4o)))
   "Model families and variants ordered by capability (fast→powerful).")
 
 (defconst gptel-ai-behaviors--effort-levels
@@ -1239,15 +1242,17 @@ disable thinking mode when active behaviors are present."
 
 (defun gptel-ai-behaviors--model-for-effort (base-model effort)
   "Return model variant that matches EFFORT level for BASE-MODEL family.
-MiniMax: default→m2.7, high/max→m2.7-highspeed.
+MiniMax: default→m2.7, high→m2.7-highspeed, max→MiniMax-M3.
 Kimi: default/max→k2.6, high→k2.6 (same model, different API params).
 DeepSeek: kept as-is (effort handled via reasoning_effort API param)."
   (when (stringp base-model)
     (let ((down (downcase base-model)))
       (cond ((string-match-p "minimax" down)
-             (if (member effort '("high" "max")) "minimax-m2.7-highspeed" "minimax-m2.7"))
+             (cond ((equal effort "max") "MiniMax-M3")
+                   ((equal effort "high") "MiniMax-M3")
+                   (t "MiniMax-M3")))
             ((string-match-p "kimi" down)
-             "kimi-k2.6")  ; default for Kimi
+             "kimi-k2.6")
             (t base-model)))))
 
 ;; ─── Cost Tracking ───
@@ -1261,31 +1266,23 @@ Used to normalize keep-rate by cost.")
   (if (string< (format-time-string "%Y%m%d") "20260601") 3 12))
 
 (defconst gptel-ai-behaviors--model-pricing
-  `(;; DeepSeek (USD/1M tokens, ~7 CNY/USD, KV cache auto-detected)
-    ;;   flash: ¥1/2/0.02 → $0.14/0.28/0.003 per 1M input/output/cache-hit
-    ;;   pro:   ¥3/6/0.025 → $0.43/0.86/0.004 (2.5折 until May 31)
-    ("deepseek-v4-flash"    . (:input 0.14 :output 0.28 :cache-hit 0.003))
-    ("deepseek-v4-pro"      . (:input 0.43 :output 0.86 :cache-hit 0.004))
-    ;; MiniMax (USD/1M, ~7 CNY/USD, auto prompt caching)
-    ;;   M3:    ¥4.20/16.80/0.84 → $0.60/2.40/0.12 input/output/cache-hit
-    ;;   m2.7:  ¥2.10/8.40/0.42 → $0.30/1.20/0.06
-    ;;   high:  ¥1.05/4.20/0.21 → $0.15/0.60/0.03
-    ("MiniMax-M3"           . (:input 0.60 :output 2.40 :cache-hit 0.12))
-    ("minimax-m2.7"         . (:input 0.30 :output 1.20 :cache-hit 0.06))
-    ("minimax-m2.7-highspeed" . (:input 0.15 :output 0.60 :cache-hit 0.03))
-    ;; DashScope/Qwen (USD/1M, ~7 CNY/USD, implicit cache 20% via Bailian)
-    ;;   plus: ¥2.00/8.00/0.40 → $0.29/1.14/0.06
-    ("qwen3.6-plus"         . (:input 0.29 :output 1.14 :cache-hit 0.06))
-    ("qwen3.5-plus"         . (:input 0.14 :output 0.57 :cache-hit 0.03))
-    ;; moonshot/Kimi (USD/1M, platform.kimi.ai verified)
-    ;;   k2.6: $0.95/4.00/0.16 → auto context caching, 6x cheaper hits
-    ("kimi-k2.6"            . (:input 0.95 :output 4.00 :cache-hit 0.16))
-    ;; GLM via Zhipu (USD/1M, ~7 CNY/USD, bigmodel.cn verified)
-    ;;   glm-5: ¥4/18/1.0 → $0.57/2.57/0.14 [0-32K], cache storage free
-    ;;   glm-4.7: estimated similar ratio
-    ("glm-5"                . (:input 0.57 :output 2.57 :cache-hit 0.14))
-    ("glm-4.7"              . (:input 0.43 :output 1.71 :cache-hit 0.10)))
+  (let ((pricing '()))
+    (dolist (backend-entry gptel-backend-registry)
+      (let* ((backend (car backend-entry))
+             (models (plist-get (cdr backend-entry) :models))
+             (capabilities (plist-get (cdr backend-entry) :capabilities)))
+        (dolist (model models)
+          (when-let* ((info (gptel-backend-registry-pricing backend model))
+                      (input (plist-get info :input))
+                      (output (plist-get info :output)))
+            (push (cons (symbol-name model)
+                        `(:input ,input :output ,output
+                          ,@(when-let ((cache (plist-get info :cache-hit)))
+                              `(:cache-hit ,cache))))
+                  pricing)))))
+    pricing)
   "Per-model pricing in USD per 1M tokens (:input :output :cache-hit).
+AUTO-GENERATED from `gptel-backend-registry' — edit pricing in that file.
 DeepSeek: api-docs.deepseek.com, MiniMax: platform.minimaxi.com,
 DashScope: help.aliyun.com context-cache docs. Verified 2026-06-01.
 ALL backends through Bailian support implicit cache (auto-enabled).")

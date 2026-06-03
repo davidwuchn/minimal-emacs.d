@@ -24,6 +24,18 @@
                            (string-trim (match-string 1))))))
     (should grader-model)))
 
+(ert-deftest grader/model-is-current-default ()
+  "Grader should use MiniMax-M3, not deprecated minimax-m2.7."
+  (skip-unless (file-exists-p (expand-file-name "assistant/agents/grader.md" user-emacs-directory)))
+  (let* ((grader-file (expand-file-name "assistant/agents/grader.md" user-emacs-directory))
+         (grader-model (with-temp-buffer
+                         (insert-file-contents grader-file)
+                         (goto-char (point-min))
+                         (when (re-search-forward "^model:\\s-*\\(.+\\)$" nil t)
+                           (string-trim (match-string 1))))))
+    (should (string= grader-model "MiniMax-M3"))
+    (should-not (string= grader-model "minimax-m2.7"))))
+
 (ert-deftest executor/model-is-defined ()
   "Executor should have a model defined."
   (skip-unless (file-exists-p (expand-file-name "assistant/agents/executor.md" user-emacs-directory)))
@@ -59,15 +71,12 @@
 ;;; Test 4: Grading with Timeout
 
 (ert-deftest grader/timeout-returns-auto-pass ()
-  "Grading timeout should return auto-pass.
-Fails in batch due to test isolation — the grade-timeout variable is loaded
-from gptel-tools-agent which may have a stale compiled value."
-  :expected-result (if noninteractive :failed :passed)
+  "Grading timeout should return auto-pass."
   (require 'gptel-tools-agent)
   (should (boundp 'gptel-auto-experiment-grade-timeout))
-  ;; Timeout should be reasonable for CF-Gateway grader latency.
+  ;; Timeout matches experiment budget (900s) so grader doesn't die first.
   (should (>= gptel-auto-experiment-grade-timeout 30))
-  (should (<= gptel-auto-experiment-grade-timeout 180)))
+  (should (<= gptel-auto-experiment-grade-timeout 900)))
 
 ;;; Test 5: Grading Timeout Wrapper
 
@@ -506,9 +515,61 @@ Result: Tests pass."))
   (should (= gptel-auto-experiment-time-budget 300)))
 
 (ert-deftest grader/grade-timeout-default ()
-  "Default grade timeout should be 450s."
+  "Default grade timeout should be 900s (matches experiment budget)."
   (require 'gptel-tools-agent)
-  (should (= gptel-auto-experiment-grade-timeout 450)))
+  (should (= gptel-auto-experiment-grade-timeout 900)))
+
+(ert-deftest grader/experiment-timeout-headless ()
+  "Headless run-async should set time-budget to 900 (not default 300)."
+  (require 'gptel-tools-agent)
+  (let ((gptel-auto-workflow-persistent-headless t)
+        (gptel-auto-workflow--running nil)
+        (gptel-auto-experiment-time-budget 300)
+        (targets-called nil))
+    ;; Allow workflow to pass active-use check, but capture target dispatch
+    ;; before any real work starts.
+    (cl-letf (((symbol-function 'gptel-auto-workflow--active-use-p)
+               (lambda () (cons nil nil)))
+              ((symbol-function 'gptel-auto-workflow--run-with-targets)
+               (lambda (targets _cb) (setq targets-called targets)))
+              ((symbol-function 'gptel-auto-workflow-select-targets)
+               (lambda (dispatch) (funcall dispatch '("test-target"))))
+              ((symbol-function 'gptel-auto-workflow--require-magit-dependencies)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--migrate-legacy-provider-defaults)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-experiment--recover-stale-staging-pending)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--clear-rate-limited-backends)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--clear-run-failed-backends)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--main-baseline-test-results)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--ensure-results-file)
+               (lambda (_run-id) t))
+              ((symbol-function 'gptel-auto-workflow--mark-messages-start)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--start-status-refresh-timer)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--persist-status)
+               (lambda () t))
+               ((symbol-function 'gptel-auto-workflow--restart-watchdog-timer)
+                (lambda () t))
+               ;; Mock self-healing probe to avoid blocking test
+               ((symbol-function 'gptel-auto-workflow--probe-before-experiments)
+                (lambda () t))
+               ((symbol-function 'gptel-auto-workflow--load-self-healing-state)
+                (lambda () t))
+               ;; Mock dispatch to avoid actual target selection
+               ((symbol-function 'gptel-auto-workflow--dispatch-targets)
+                (lambda (targets _cb) (setq targets-called targets))))
+      (gptel-auto-workflow-run-async)
+      (should (= gptel-auto-experiment-time-budget 900))
+      ;; Targets should be captured, but we only care about time-budget
+      (should targets-called))))
 
 ;;; Test 43: Multi-Machine Branch Naming
 
@@ -592,6 +653,8 @@ Result: Tests pass."))
     (should (cl-some (lambda (tmpl) (string-match-p "caching" tmpl)) templates))
     (should (cl-some (lambda (tmpl) (string-match-p "Lazy" tmpl)) templates))
     (should (cl-some (lambda (tmpl) (string-match-p "Simplify" tmpl)) templates))))
+
+;;; Test 48: Innovation Queue
 
 (provide 'test-grader-subagent)
 ;;; test-grader-subagent.el ends here

@@ -11,7 +11,7 @@ Each setting in minimal-emacs.d is carefully chosen to answer this question: doe
 
 In just a few minutes of applying what's in this README.md file, you will have a fully functional, high-performance Emacs configuration ready for work. You will bypass hours of configuration and the heavy overhead of frameworks like Doom or Spacemacs, gaining access to optimized garbage collection, sensible defaults, and a fast startup.
 
-If this helps your workflow, please show your support by **⭐ starring minimal-emacs.d on GitHub** to help more Emacs users discover its benefits.
+**If this helps your workflow, please support the project by ⭐ starring minimal-emacs.d on GitHub and sharing it on your website, blog, Mastodon, Reddit, X, LinkedIn, or other social media platforms to help more Emacs users discover its benefits.**
 
 **Ready to start? [Install minimal-emacs.d](#install-minimal-emacsd)**
 
@@ -63,7 +63,7 @@ Startup speed depends on hardware and disk speed. For consistent comparisons, te
 - [Sebagabones on GitHub](https://github.com/jamescherti/minimal-emacs.d/issues/77): "...let me say that I am loving minimal-emacs.d, it has been brilliant so far! :)"
 - [Mlepnos1984 on Reddit](https://www.reddit.com/r/emacs/comments/1lz181i/comment/n2yjj17/): "I give you an A+ on documentation, the readme is great!"
 - [rrajath on Reddit](https://www.reddit.com/r/emacs/comments/1ihn2tv/comment/mb0ja8k/) has been using the minimal-emacs.d config for the past several months and loves it. His previous setup used to take around 4 seconds to load, but with minimal-emacs.d, it now loads in just 1 second.
-- [LionyxML on Reddit](https://www.reddit.com/r/emacs/comments/1ihn2tv/comment/mb35t9y/): "One of the best READMEs I’ve ever seen. Very good."
+- [LionyxML on Reddit](https://www.reddit.com/r/emacs/comments/1ihn2tv/comment/mb35t9y/): "One of the best READMEs I've ever seen. Very good."
 - [cyneox on Reddit](https://www.reddit.com/r/emacs/comments/1ihn2tv/comment/mdnzgqx/): "Still using it and loving it! Thanks for the regular updates."
 - [panchoh on GitHub](https://github.com/jamescherti/minimal-emacs.d/pull/62#issuecomment-2869865979): "...thank you, @jamescherti! Keep up the fantastic work you are doing!"
 - [xzway on Reddit](https://www.reddit.com/r/emacs/comments/1p9y8h4/comment/nrh8dye/): "The minimal-emacs.d configuration is very well-designed and non-intrusive. I'm also using it to refactor my configuration."
@@ -1263,25 +1263,45 @@ To configure **flyspell**, add the following to `~/.emacs.d/post-init.el`:
 (use-package ispell
   :ensure nil
   :commands (ispell ispell-minor-mode)
-  :custom
-  (ispell-quietly t)
+  :init
+  (setq ispell-quietly t)
 
   ;; Set the ispell program name to aspell
-  (ispell-program-name "aspell")
+  (setq ispell-program-name "aspell")
 
   ;; Define the "en_US" spell-check dictionary locally, telling Emacs to use
   ;; UTF-8 encoding, match words using alphabetic characters, allow apostrophes
   ;; inside words, treat non-alphabetic characters as word boundaries, and pass
   ;; -d en_US to the underlying spell-check program.
-  (ispell-local-dictionary-alist
-   '(("en_US" "[[:alpha:]]" "[^[:alpha:]]" "[']" nil ("-d" "en_US") nil utf-8)))
+  (setq ispell-local-dictionary-alist
+        '(("en_US" "[[:alpha:]]" "[^[:alpha:]]" "[']" nil ("-d" "en_US") nil utf-8)))
 
   ;; Configures Aspell's suggestion mode to "ultra", which provides more
   ;; aggressive and detailed suggestions for misspelled words. The language
   ;; is set to "en_US" for US English, which can be replaced with your desired
   ;; language code (e.g., "en_GB" for British English, "de_DE" for German).
-  (ispell-extra-args '(; "--sug-mode=ultra"
-                       "--lang=en_US")))
+  (setq ispell-extra-args '("--sug-mode=ultra"
+                            "--lang=en_US"
+                            ;; The --run-together flag instructs Aspell to accept
+                            ;; words formed by combining two or more valid dictionary
+                            ;; words without spaces, treating the resulting string as
+                            ;; valid.
+                            ;;
+                            ;; This is excellent for source code. Code is heavily
+                            ;; populated with compound variable names and technical
+                            ;; terms (e.g., filepath, buffername, checkbox). This
+                            ;; flag stops the spell checker from highlighting every
+                            ;; combined word as an error, significantly reducing
+                            ;; false positives and visual noise in your programming
+                            ;; buffers.
+                            "--run-together"))
+
+
+  (defun my-ispell-text-mode-setup ()
+    "Remove the --run-together argument from Aspell in text modes."
+    (setq-local ispell-extra-args (remove "--run-together" ispell-extra-args)))
+
+  (add-hook 'text-mode-hook #'my-ispell-text-mode-setup))
 
 ;; The flyspell package is a built-in Emacs minor mode that provides
 ;; on-the-fly spell checking. It highlights misspelled words as you type,
@@ -1290,21 +1310,13 @@ To configure **flyspell**, add the following to `~/.emacs.d/post-init.el`:
   :ensure nil
   :commands flyspell-mode
   :hook
-  (; (prog-mode . flyspell-prog-mode)
+  ((prog-mode . flyspell-prog-mode)
    (text-mode . (lambda()
                   (if (or (derived-mode-p 'yaml-mode)
                           (derived-mode-p 'yaml-ts-mode)
                           (derived-mode-p 'ansible-mode))
                       (flyspell-prog-mode 1)
-                    (flyspell-mode 1)))))
-  :config
-  ;; Remove strings from Flyspell
-  (setq flyspell-prog-text-faces (delq 'font-lock-string-face
-                                       flyspell-prog-text-faces))
-
-  ;; Remove doc from Flyspell
-  (setq flyspell-prog-text-faces (delq 'font-lock-doc-face
-                                       flyspell-prog-text-faces)))
+                    (flyspell-mode 1))))))
 ```
 
 ### Automatic removal of trailing whitespace on save

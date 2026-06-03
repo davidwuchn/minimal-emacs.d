@@ -18,7 +18,15 @@ detect_machine() {
     elif echo "$hostname" | grep -qiE "pi5|raspberrypi|onepi"; then
         echo "pi5"
     elif [ "$os" = "Linux" ]; then
-        echo "linux"
+        # Check for Raspberry Pi hardware (Pi5, Pi4, etc.)
+        if [ -f /proc/device-tree/model ] && grep -qi "raspberry pi" /proc/device-tree/model 2>/dev/null; then
+            echo "pi5"
+        # Check for ARM Linux with limited RAM (typical Pi)
+        elif [ "$(uname -m)" = "aarch64" ] && [ "$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo 2>/dev/null || echo 0)" -lt 8192 ]; then
+            echo "pi5"
+        else
+            echo "linux"
+        fi
     else
         echo "single"
     fi
@@ -35,9 +43,10 @@ render_crontab() {
         else
             echo "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:\$HOME/.emacs.d/bin:\$HOME/.venv/bin"
         fi
-        if [ "$machine" = "pi5" ] || [ "$machine" = "linux" ]; then
-            echo "XDG_RUNTIME_DIR=/run/user/\$(id -u)"
-        fi
+        # NOTE: Do NOT set XDG_RUNTIME_DIR.  Cron jobs run outside the
+        # systemd user session, so /run/user/$(id -u) may not exist or may
+        # be inaccessible.  Let Emacs fall back to TMPDIR > /tmp/emacs$UID
+        # per AGENTS.md socket_path policy.
         echo "MAILTO=\"\""
         echo
         echo "# Watchdog: restart daemon if unresponsive (every 30min, reaper handles 95%)"

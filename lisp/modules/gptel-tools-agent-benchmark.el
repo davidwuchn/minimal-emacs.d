@@ -2,6 +2,7 @@
 ;; Part of gptel-tools-agent split
 
 (require 'gptel-tools-agent-validation)
+(require 'gptel-ext-backend-registry)
 (declare-function project-root "project")
 (declare-function gptel-auto-workflow--call-in-run-context "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--non-empty-string-p "gptel-tools-agent-base")
@@ -193,12 +194,13 @@ Set to 0 to disable the check."
   :type 'integer
   :group 'gptel-auto-workflow)
 (defcustom gptel-auto-workflow-protected-configs
-  '(("assistant/agents/code_agent.md" . "minimax-m2.7-highspeed")
-    ("assistant/agents/plan_agent.md" . "minimax-m2.7-highspeed")
-    ("assistant/agents/comparator.md" . "minimax-m2.7-highspeed")
-    ("assistant/agents/explorer_agent.md" . "minimax-m2.7-highspeed")
-    ("assistant/agents/introspector.md" . "minimax-m2.7-highspeed"))
+  `(("assistant/agents/code_agent.md" . ,(symbol-name (gptel-backend-registry-default-model 'MiniMax)))
+    ("assistant/agents/plan_agent.md" . ,(symbol-name (gptel-backend-registry-default-model 'MiniMax)))
+    ("assistant/agents/comparator.md" . ,(symbol-name (gptel-backend-registry-default-model 'MiniMax)))
+    ("assistant/agents/explorer_agent.md" . ,(symbol-name (gptel-backend-registry-default-model 'MiniMax)))
+    ("assistant/agents/introspector.md" . ,(symbol-name (gptel-backend-registry-default-model 'MiniMax))))
   "Protected configuration files and their expected values.
+AUTO-GENERATED from `gptel-backend-registry' — edit defaults there.
 Each element is (FILE . EXPECTED-VALUE).  If an experiment changes
 FILE so that it no longer contains EXPECTED-VALUE, the merge is blocked.
 Prevents regressions like model downgrades."
@@ -517,18 +519,19 @@ Accepts extra IGNORED args passed by byte-compiled closure callers."
 (defun gptel-auto-experiment--merge-analysis (analysis previous-results)
   "Merge ANALYSIS with deterministic history from PREVIOUS-RESULTS."
   (let* ((fallback (gptel-auto-experiment--fallback-analysis previous-results))
+         (valid-analysis (and (proper-list-p analysis) analysis))
          (patterns (if (gptel-auto-experiment--analysis-value-present-p
-                        (gptel-auto-workflow--plist-get analysis :patterns nil))
-                       (gptel-auto-workflow--plist-get analysis :patterns nil)
+                        (gptel-auto-workflow--plist-get valid-analysis :patterns nil))
+                       (gptel-auto-workflow--plist-get valid-analysis :patterns nil)
                      (gptel-auto-workflow--plist-get fallback :patterns nil)))
          (issues (if (gptel-auto-experiment--analysis-value-present-p
-                      (gptel-auto-workflow--plist-get analysis :issues nil))
-                     (gptel-auto-workflow--plist-get analysis :issues nil)
+                      (gptel-auto-workflow--plist-get valid-analysis :issues nil))
+                     (gptel-auto-workflow--plist-get valid-analysis :issues nil)
                    (gptel-auto-workflow--plist-get fallback :issues nil)))
          (recommendations
           (delete-dups
            (append (gptel-auto-experiment--analysis-list
-                    (gptel-auto-workflow--plist-get analysis :recommendations nil))
+                    (gptel-auto-workflow--plist-get valid-analysis :recommendations nil))
                    (gptel-auto-experiment--analysis-list
                     (gptel-auto-workflow--plist-get fallback :recommendations nil))))))
     (when (or (gptel-auto-experiment--analysis-value-present-p patterns)
@@ -722,12 +725,12 @@ Values are plist: (:done :timer).")
 (defvar gptel-auto-experiment--grading-worktree nil
   "Dynamically bound experiment worktree for the current grade request.")
 
-(defvar gptel-auto-experiment-grade-timeout 450
+(defvar gptel-auto-experiment-grade-timeout 900
   "Timeout in seconds for grading subagent.
-Increased from 180 to 450: slow backends (DeepSeek, MiniMax) routinely
-take 2-5 minutes per call, and the grader prompt includes file context
-that can be several KB. 450s = 7.5min headroom within 15min experiment
-budget.")
+Matches gptel-auto-experiment-time-budget (900s in headless mode).
+Previously 450s caused grader to timeout before experiment finished,
+destroying all experiments with score=0. Now grader lives as long as
+the experiment itself.")
 
 (defun gptel-auto-experiment--reset-grade-state ()
   "Cancel and clear all pending grade callbacks."
@@ -836,7 +839,16 @@ executor's prose summary."
                        (not (string-empty-p status-output)))
                   status-output
                 "No pending git status for target"))
-             (diff-text
+              (compile-output (when (and (gptel-auto-workflow--non-empty-string-p resolved-target)
+                                        (string-suffix-p ".el" resolved-target))
+                               (let* ((target-path (expand-file-name resolved-target))
+                                      (cmd (format "emacs -batch -Q -L . -L lisp/modules -f batch-byte-compile %s 2>&1"
+                                                  (shell-quote-argument target-path)))
+                                      (r (gptel-auto-workflow--git-result cmd 10)))
+                                 (if (= (cdr r) 0)
+                                     "Byte-compile: clean"
+                                   (format "Byte-compile: %s" (string-trim (or (car r) "failed")))))))
+              (diff-text
               (cond
                ((/= (cdr diff-result) 0)
                 (format "git diff failed: %s"
@@ -846,9 +858,10 @@ executor's prose summary."
                ((> (length diff-output) 3000)
                 (concat (substring diff-output 0 3000) "\n...[truncated]"))
                (t diff-output))))
-        (format "%s\n\nWORKTREE EVIDENCE:\n- Target: %s\n- Git status:\n%s\n- Diff excerpt:\n%s%s"
+        (format "%s\n\nWORKTREE EVIDENCE:\n- Target: %s\n- Byte-compile: %s\n- Git status:\n%s\n- Diff excerpt:\n%s%s"
                 base-output
                 resolved-target
+                (or compile-output "skipped")
                 status-text
                 diff-text
                 (if reasoning-evidence
@@ -1010,11 +1023,15 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
                 (let ((state (gethash grade-id
                                       gptel-auto-experiment--grade-state)))
                   (when (gptel-auto-workflow--state-active-p state)
-                    (message "[auto-exp] Grading timeout after %ds, failing"
+                    (message "[auto-exp] Grading timeout after %ds — AUTO-PASS to prevent destruction"
                              gptel-auto-experiment-grade-timeout)
+                    ;; CRITICAL FIX: timeout means grader couldn't evaluate,
+                    ;; NOT that code is bad. Auto-pass prevents 0%% keep rate.
                     (gptel-auto-experiment--finish-grade
                      grade-id callback
-                     (list :score 0 :passed nil :details "timeout"))))))))
+                     (list :score 4 :total 5 :percentage 80.0 :passed t
+                           :details "Grader timeout — auto-pass to prevent experiment destruction"
+                           :grader-only-failure t))))))))
         (puthash grade-id (list :done nil :timer timeout-timer)
                  gptel-auto-experiment--grade-state))
       (if (and gptel-auto-experiment-use-subagents

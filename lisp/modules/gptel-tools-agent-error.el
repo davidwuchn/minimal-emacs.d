@@ -3,6 +3,7 @@
 
 (require 'cl-lib)
 (declare-function gptel-auto-workflow--call-in-run-context "gptel-tools-agent-base")
+(declare-function gptel-auto-workflow--make-idempotent-callback "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--resolve-run-root "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--restore-live-target-file "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--run-callback-live-p "gptel-tools-agent-base")
@@ -626,34 +627,35 @@ RETRY-COUNT tracks current retry attempt."
         (attempt-logs nil))
     (gptel-auto-experiment-run
      target experiment-id max-experiments baseline baseline-code-quality previous-results
-     (lambda (result)
-       (let* ((result (if (proper-list-p result) result
-                        (progn
-                          (message "[auto-experiment] Invalid result structure received, treating as empty plist")
-                          (list :error "Invalid result structure"))))
-              (agent-output (plist-get result :agent-output))
-              (raw-error (or (plist-get result :error)
-                             (and (gptel-auto-experiment--agent-error-p agent-output)
-                                  agent-output)))
-              (grader-only-failure (plist-get result :grader-only-failure))
-              (quota-source raw-error)
-              (retry-delay
-               (gptel-auto-experiment--retry-delay-seconds
-                (or raw-error agent-output)
-                retries))
-              (error-type (plist-get result :comparator-reason))
-              (hard-timeout
-               (gptel-auto-experiment--hard-timeout-p raw-error))
-              (quota-exhausted
-               (or gptel-auto-experiment--quota-exhausted
-                   (gptel-auto-experiment--hard-quota-stops-run-p
-                    "executor" quota-source)))
-              (api-rate-limit-category
-               (memq error-type '(:api-rate-limit)))
-              (timeout-category
-               (memq error-type '(:timeout)))
-              (inspection-thrash-failure
-               (gptel-auto-experiment--inspection-thrash-result-p result))
+     (gptel-auto-workflow--make-idempotent-callback
+      (lambda (result)
+        (let* ((result (if (proper-list-p result) result
+                         (progn
+                           (message "[auto-experiment] Invalid result structure received, treating as empty plist")
+                           (list :error "Invalid result structure"))))
+               (agent-output (plist-get result :agent-output))
+               (raw-error (or (plist-get result :error)
+                              (and (gptel-auto-experiment--agent-error-p agent-output)
+                                   agent-output)))
+               (grader-only-failure (plist-get result :grader-only-failure))
+               (quota-source raw-error)
+               (retry-delay
+                (gptel-auto-experiment--retry-delay-seconds
+                 (or raw-error agent-output)
+                 retries))
+               (error-type (plist-get result :comparator-reason))
+               (hard-timeout
+                (gptel-auto-experiment--hard-timeout-p raw-error))
+               (quota-exhausted
+                (or gptel-auto-experiment--quota-exhausted
+                    (gptel-auto-experiment--hard-quota-stops-run-p
+                     "executor" quota-source)))
+               (api-rate-limit-category
+                (memq error-type '(:api-rate-limit)))
+               (timeout-category
+                (memq error-type '(:timeout)))
+               (inspection-thrash-failure
+                (gptel-auto-experiment--inspection-thrash-result-p result))
                (retryable-category
                 (or api-rate-limit-category
                     timeout-category))
@@ -661,61 +663,61 @@ RETRY-COUNT tracks current retry attempt."
                 (and (not grader-only-failure)
                      (or retryable-category
                          inspection-thrash-failure
-                         hard-timeout  ;; retry hard timeouts with next backend
+                         hard-timeout
                          (and raw-error
                               (not hard-timeout)
                               (gptel-auto-experiment--is-retryable-error-p raw-error)))))
-              (retry-history
-               (gptel-auto-experiment--retry-history previous-results result))
-              (is-pressure (when raw-error
-                             (gptel-auto-experiment--provider-pressure-error-p raw-error)))
+               (retry-history
+                (gptel-auto-experiment--retry-history previous-results result))
+               (is-pressure (when raw-error
+                              (gptel-auto-experiment--provider-pressure-error-p raw-error)))
                (hard-quota (and raw-error
                                 (gptel-auto-experiment--hard-quota-exhausted-p raw-error)))
-                (should-advance (or hard-quota
-                                    timeout-category  ;; curl/timeout: advance immediately
-                                    (and is-pressure
-                                         (>= (1+ prov-attempts)
-                                             gptel-auto-experiment-max-per-provider-attempts)))))
-         (gptel-auto-workflow--restore-live-target-file target workflow-root)
-         (when quota-exhausted
-           (setq gptel-auto-experiment--quota-exhausted t))
-         (if (and (not quota-exhausted)
-                  (< retries gptel-auto-experiment-max-retries)
-                  retryable-failure)
-             (progn
-               (when should-advance
-                 (condition-case nil
-                     (gptel-auto-workflow--maybe-activate-rate-limit-failover
-                      "executor"
-                      (gptel-auto-workflow--agent-base-preset "executor")
-                      raw-error)
-                   (ignore)))
-               (setq attempt-logs nil)
-               (message "[auto-exp] Retrying experiment %d (attempt %d/%d) after %ds delay%s"
-                        experiment-id (1+ retries) gptel-auto-experiment-max-retries
-                        retry-delay (if should-advance " [advanced provider]" ""))
-               (run-with-timer retry-delay nil
-                               (lambda ()
-                                 (if (gptel-auto-workflow--run-callback-live-p run-id)
-                                     (gptel-auto-workflow--call-in-run-context
-                                      workflow-root
-                                      (lambda ()
-                                        (gptel-auto-experiment--run-with-retry
-                                         target experiment-id max-experiments baseline baseline-code-quality
-                                         retry-history callback (1+ retries)
-                                         (if should-advance 0 (1+ prov-attempts))))
-                                      retry-buffer
-                                      workflow-root)
-                                   (progn
-                                     (message "[auto-exp] Skipping stale retry for experiment %d; run %s is no longer active"
-                                              experiment-id run-id)
-                                     (funcall callback
-                                              (list :target target
-                                                    :id experiment-id
-                                                    :stale-run t)))))))
-           (dolist (logged-result (nreverse attempt-logs))
-             (gptel-auto-experiment-log-tsv run-id logged-result))
-           (setq attempt-logs nil)
+               (should-advance (or hard-quota
+                                   timeout-category
+                                   (and is-pressure
+                                        (>= (1+ prov-attempts)
+                                            gptel-auto-experiment-max-per-provider-attempts)))))
+          (gptel-auto-workflow--restore-live-target-file target workflow-root)
+          (when quota-exhausted
+            (setq gptel-auto-experiment--quota-exhausted t))
+          (if (and (not quota-exhausted)
+                   (< retries gptel-auto-experiment-max-retries)
+                   retryable-failure)
+              (progn
+                (when should-advance
+                  (condition-case nil
+                      (gptel-auto-workflow--maybe-activate-rate-limit-failover
+                       "executor"
+                       (gptel-auto-workflow--agent-base-preset "executor")
+                       raw-error)
+                    (ignore)))
+                (setq attempt-logs nil)
+                (message "[auto-exp] Retrying experiment %d (attempt %d/%d) after %ds delay%s"
+                         experiment-id (1+ retries) gptel-auto-experiment-max-retries
+                         retry-delay (if should-advance " [advanced provider]" ""))
+                (run-with-timer retry-delay nil
+                                (lambda ()
+                                  (if (gptel-auto-workflow--run-callback-live-p run-id)
+                                      (gptel-auto-workflow--call-in-run-context
+                                       workflow-root
+                                       (lambda ()
+                                         (gptel-auto-experiment--run-with-retry
+                                          target experiment-id max-experiments baseline baseline-code-quality
+                                          retry-history callback (1+ retries)
+                                          (if should-advance 0 (1+ prov-attempts))))
+                                       retry-buffer
+                                       workflow-root)
+                                    (progn
+                                      (message "[auto-exp] Skipping stale retry for experiment %d; run %s is no longer active"
+                                               experiment-id run-id)
+                                      (funcall callback
+                                               (list :target target
+                                                     :id experiment-id
+                                                     :stale-run t)))))))
+            (dolist (logged-result (nreverse attempt-logs))
+              (gptel-auto-experiment-log-tsv run-id logged-result))
+            (setq attempt-logs nil)
             (when hard-timeout
               (condition-case nil
                   (gptel-auto-workflow--maybe-activate-rate-limit-failover
@@ -738,7 +740,7 @@ RETRY-COUNT tracks current retry attempt."
               (setq gptel-auto-experiment--quota-exhausted t)
               (message "[auto-exp] All backends exhausted after %d retries; marking quota exhausted"
                        (1+ retries)))
-            (funcall callback result))))
+            (funcall callback result)))))
      (lambda (_logged-run-id exp-result)
        (push exp-result attempt-logs)))))
 
@@ -752,6 +754,7 @@ RETRY-COUNT tracks current retry attempt."
     ("hour allocated quota exceeded" :api-rate-limit "Hourly quota exhausted")
     ("week allocated quota exceeded" :api-rate-limit "Weekly quota exhausted")
     ("overloaded_error\\|cluster overloaded\\|529\\|负载较高" :api-rate-limit "Provider overloaded")
+    ("access_terminated_error\\|usage limit for this billing cycle" :api-rate-limit "Provider usage limit reached")
     ;; Auth errors
     ("authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\""
      :api-error "Provider authorization failed")

@@ -1,7 +1,7 @@
 ---
 name: researcher
 backend: MiniMax
-model: minimax-m2.7
+model: MiniMax-M3
 max-tokens: 8192
 temperature: 0.3
 description: Read-only research and synthesis agent (MiniMax)
@@ -13,6 +13,7 @@ tools:
   - WebSearch
   - WebFetch
   - Code_Map
+  - Programmatic
   - Code_Inspect
   - Code_Usages
   - Diagnostics

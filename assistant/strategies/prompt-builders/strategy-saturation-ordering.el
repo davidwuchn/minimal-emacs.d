@@ -68,10 +68,11 @@ Computes section value scores and reorders sections dynamically."
 
 (defun strategy-saturation-ordering--compute-entropy (saturation-scores)
   "Compute entropy of SATURATION-SCORES for reordering decision."
-  (let ((values (mapcar #'cdr saturation-scores))
-        (total (apply #'+ (mapcar #'cdr saturation-scores))))
-    (if (= total 0) 0.5
-      (- 1.0 (/ (abs (- (apply #'max values) (apply #'min values))) (max 1.0 total))))))
+  (ignore-errors
+    (let ((values (mapcar #'cdr saturation-scores))
+          (total (apply #'+ (mapcar #'cdr saturation-scores))))
+      (if (= total 0) 0.5
+        (- 1.0 (/ (abs (- (apply #'max values) (apply #'min values))) (max 1.0 total)))))))
 
 (defun strategy-saturation-ordering--get-priority-order (size-cat)
   "Get section priority order for SIZE-CAT."

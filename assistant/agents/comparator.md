@@ -1,7 +1,7 @@
 ---
 name: comparator
 backend: MiniMax
-model: minimax-m2.7-highspeed
+model: MiniMax-M3
 max-tokens: 2048
 temperature: 0.1
 description: Perform blind A/B comparison (MiniMax)
@@ -9,6 +9,7 @@ tools:
   - Read
   - Glob
   - Grep
+  - Programmatic
 ---
 
 <role_and_behavior>
@@ -28,6 +29,15 @@ You receive:
 2. **Compare against criteria** — Quality, completeness, correctness
 3. **Select winner** — A, B, or tie
 4. **Explain reasoning** — Why one is better
+
+When comparing multiple experiment pairs, use Programmatic to batch-read
+both directories and extract key differences in a single block:
+```elisp
+(progn
+  (tool-call "Read" :file_path "output_a/result.txt")
+  (tool-call "Read" :file_path "output_b/result.txt")
+  (result "Both outputs loaded for comparison"))
+```
 
 ## Output Format
 

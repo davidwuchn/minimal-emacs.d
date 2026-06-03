@@ -33,6 +33,7 @@
     "deepseek-reasoner"
     "deepseek-coder"
     "kimi-k2.6"
+    "MiniMax-M3"
     "minimax-m2.7-highspeed"
     "minimax-m2.7"
     "minimax-m2.5")

@@ -45,6 +45,7 @@ run_unit_tests() {
     local snapshot_paths_file
     local runtime_dir
     local workflow_server
+    local yaml_dir
     local ert_status=0
 
     # Ensure we're in the project root so find/emacs resolve paths correctly
@@ -76,6 +77,7 @@ run_unit_tests() {
     }
     chmod 700 "$runtime_dir"
     workflow_server="ov5-auto-workflow-test-$(basename "$runtime_dir")"
+    yaml_dir="$(printf '%s\n' "$DIR"/var/elpa/yaml-*/ | sort -V | tail -1)"
     
     local output
     set +e
@@ -92,7 +94,7 @@ run_unit_tests() {
         -L "$DIR/lisp/modules" \
         -L "$DIR/packages/gptel" \
         -L "$DIR/packages/gptel-agent" \
-        -L "$(echo "$DIR/var/elpa"/yaml-* | tr ' ' '\n' | sort -V | tail -1)" \
+        -L "$yaml_dir" \
         -L "$DIR/tests" \
         -l ert \
         --eval "(setq load-prefer-newer t)" \
@@ -560,18 +562,25 @@ run_workflow_tests() {
     
     section "Auto-Workflow"
     
-    # Emacs server
+    # Emacs server (named daemon: pmf-value-stream)
     echo "Checking Emacs server..."
-    if emacsclient --eval "t" >/dev/null 2>&1; then
-        pass "Emacs server is running"
+    local server_socket=""
+    for sock in "/run/user/$(id -u)/emacs/pmf-value-stream" "/tmp/emacs$(id -u)/pmf-value-stream"; do
+        if [ -S "$sock" ]; then
+            server_socket="$sock"
+            break
+        fi
+    done
+    if [ -n "$server_socket" ] && emacsclient -s "$server_socket" --eval "t" >/dev/null 2>&1; then
+        pass "Emacs server (pmf-value-stream) is running"
     else
-        fail "Emacs server not running"
+        fail "Emacs server (pmf-value-stream) not running"
         return 1
     fi
     
     # Function exists
     echo "Checking function..."
-    if emacsclient --eval "(fboundp 'gptel-auto-workflow-run-async)" 2>/dev/null | grep -q "t"; then
+    if emacsclient -s "$server_socket" --eval "(fboundp 'gptel-auto-workflow-run-async)" 2>/dev/null | grep -q "t"; then
         pass "gptel-auto-workflow-run-async is defined"
     else
         skip "gptel-auto-workflow-run-async is NOT defined (may not be loaded)"

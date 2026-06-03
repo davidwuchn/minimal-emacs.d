@@ -211,7 +211,7 @@ fixable validation failures that the executor can correct."
                             validation-error)
             (string-match-p "security|injection|eval.*without.*guard"
                             validation-error)
-            (string-match-p "no code changes\\|no file modifications\\|Agent made no"
+            (string-match-p "no code changes\\|no file modifications\\|experiment produced no file changes\\|Agent made no"
                             validation-error))))
 
 (defun gptel-auto-experiment--make-retry-prompt (target validation-error original-prompt)
@@ -247,8 +247,8 @@ If you see a function like \='tool\=' or \='key\=' in the error, it means you wr
 (tool ...) or (key ...) — these are NOT valid Emacs Lisp functions.
 Replace undefined calls with valid Emacs Lisp equivalents or remove them.
 Use function-quote #' for symbols meant as functions, not bare-quote \='.")
-            ;; Agent made no file modifications — it only analyzed, didn't edit
-            ((string-match-p "no code changes\\|no file modifications\\|Agent made no"
+             ;; Agent made no file modifications — it only analyzed, didn't edit
+            ((string-match-p "no code changes\\|no file modifications\\|experiment produced no file changes\\|Agent made no"
                              validation-error)
              "TOOL-CALL-FAILURE")
             ;; Add more skill mappings here as needed
@@ -658,17 +658,18 @@ Relative paths are resolved from the project root."
         (error
          (message "[auto-workflow] Failed to create messages directory %s: %s" dir err)
          (setq dir nil))))
-    (and dir (get-buffer-create "*Messages*")
-      (let* ((start-pos (cond
-                         ((integer-or-marker-p gptel-auto-workflow--messages-start-pos)
-                          (max (point-min)
-                               (min (point-max)
-                                    gptel-auto-workflow--messages-start-pos)))
-                         (t (point-min))))
-             (tail-start (max (point-min) (- (point-max) max-chars))))
-        (write-region (max start-pos tail-start)
-                      (point-max)
-                      file nil 'silent)))))
+    (when (and dir (get-buffer "*Messages*"))
+      (with-current-buffer "*Messages*"
+        (let* ((start-pos (cond
+                           ((integer-or-marker-p gptel-auto-workflow--messages-start-pos)
+                            (max (point-min)
+                                 (min (point-max)
+                                      gptel-auto-workflow--messages-start-pos)))
+                           (t (point-min))))
+               (tail-start (max (point-min) (- (point-max) max-chars))))
+          (write-region (max start-pos tail-start)
+                        (point-max)
+                        file nil 'silent))))))
 
 (defun gptel-auto-workflow--status-plist ()
   "Return current workflow status as a plist."

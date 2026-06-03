@@ -1146,24 +1146,9 @@ Returns t if evolution was triggered, nil otherwise."
        (setq triggered t))
       
       (post-batch
-       ;; Full analysis: run Python scripts
-       (message "[meta-learn] Post-batch: Running full research outcome analysis")
-       (let ((analyze-script (expand-file-name "analyze_research_outcomes.py" script-dir))
-             (evolve-script (expand-file-name "evolve_researcher.py" script-dir)))
-         (when (and (file-exists-p analyze-script) (file-exists-p evolve-script))
-           ;; Run analysis
-           (let ((analyze-cmd (format "cd %s && python3 %s --experiments-dir var/tmp/experiments --memories-dir mementum/memories --output-dir %s --lookback-days 90"
-                                      root analyze-script data-dir)))
-             (message "[meta-learn] Running: %s" analyze-cmd)
-             (let ((output (shell-command-to-string analyze-cmd)))
-               (message "[meta-learn] Analysis output: %s" output)))
-           ;; Evolve skill
-           (let ((evolve-cmd (format "cd %s && python3 %s --data-dir %s --skill %s"
-                                     root evolve-script data-dir skill-file)))
-             (message "[meta-learn] Running: %s" evolve-cmd)
-             (let ((output (shell-command-to-string evolve-cmd)))
-               (message "[meta-learn] Evolution output: %s" output)))
-           (setq triggered t))))
+       ;; Full analysis: RETIRED — Python scripts removed 2026-06-03
+       (message "[meta-learn] Post-batch: Python scripts retired — skipping analysis")
+       (setq triggered t))
       
       (threshold
        ;; Emergency: check if keep rate below threshold
@@ -2676,10 +2661,31 @@ When COMPLETION-CALLBACK is non-nil, call it after findings are cached."
                                proj-root
                                (format-time-string "%Y-%m-%d %H:%M")
                                findings)))
-             (message "[research] Findings cached for %s (%d chars)"
-                      proj-root (length findings))
-             (when completion-callback
-               (funcall completion-callback findings)))))))))
+              (message "[research] Findings cached for %s (%d chars)"
+                       proj-root (length findings))
+              ;; Update dashboards after research completes
+              (when (fboundp 'gptel-auto-workflow--update-gtm-dashboard)
+                (condition-case err
+                    (gptel-auto-workflow--update-gtm-dashboard findings)
+                  (error (message "[dashboard] GTM update error: %s" err))))
+               ;; Parse findings for innovation ideas
+               (when (fboundp 'gptel-auto-workflow--innovation-queue-parse-findings)
+                 (condition-case err
+                     (let ((new-ideas (gptel-auto-workflow--innovation-queue-parse-findings findings)))
+                       (when new-ideas
+                         (message "[innovation] Queued %d new ideas from research"
+                                  (length new-ideas))))
+                   (error (message "[innovation] Parse error: %s" err))))
+               ;; File beads from research findings (GTM → PMF)
+               (when (fboundp 'gptel-auto-workflow--bead-file-from-research)
+                 (condition-case err
+                     (let ((bead-ids (gptel-auto-workflow--bead-file-from-research findings)))
+                       (when bead-ids
+                         (message "[bead] Filed %d beads from research findings"
+                                  (length bead-ids))))
+                   (error (message "[bead] Filing error: %s" err))))
+               (when completion-callback
+                 (funcall completion-callback findings)))))))))
 
 (defun gptel-auto-workflow-load-research-findings ()
   "Load cached research findings for current project.
@@ -2748,10 +2754,13 @@ Set `gptel-auto-workflow-research-interval' to control frequency."
 (defun gptel-auto-workflow--researcher-daemon-p ()
   "Return non-nil when running inside the dedicated researcher daemon."
   (or (equal (getenv "MINIMAL_EMACS_WORKFLOW_ROLE") "research")
-      (equal (getenv "AUTO_WORKFLOW_EMACS_SERVER") "ov5-researcher")
-      (equal (or (daemonp) "") "ov5-researcher")
+      (equal (getenv "AUTO_WORKFLOW_EMACS_SERVER") "gtm-product-org")
+      (equal (getenv "AUTO_WORKFLOW_EMACS_SERVER") "ov5-researcher")  ; backward compat
+      (equal (or (daemonp) "") "gtm-product-org")
+      (equal (or (daemonp) "") "ov5-researcher")  ; backward compat
       (and (boundp 'server-name)
-           (equal server-name "ov5-researcher"))))
+           (or (equal server-name "gtm-product-org")
+               (equal server-name "ov5-researcher")))))  ; backward compat
 
 (defun gptel-auto-workflow-stop-periodic-research ()
   "Stop periodic researcher runs."
@@ -2831,15 +2840,8 @@ Uses gptel-auto-workflow-research-benchmark.el to:
             (message "[evolve] Running benchmark-based strategy evolution...")
             (gptel-auto-workflow--evolve-research-strategy)
             (message "[evolve] Strategy evolution complete"))
-        ;; Fallback to Python script
-        (let* ((root (gptel-auto-workflow--worktree-base-root))
-               (script (expand-file-name "assistant/skills/researcher-prompt/scripts/unified-evolution.py" root)))
-          (when (file-executable-p script)
-            (message "[evolve] Running Python evolution fallback...")
-            (let ((output (shell-command-to-string (format "cd %s && python3 %s"
-                                                           (shell-quote-argument root)
-                                                           (shell-quote-argument script)))))
-              (message "[evolve] %s" output)))))
+         ;; Fallback: Python scripts RETIRED 2026-06-03
+         (message "[evolve] Python fallback retired — pure Elisp only"))
       (message "[evolve] Strategy evolution cycle complete"))))
 
 ;; Keep the AutoTTS-enhanced controller authoritative for interactive loads too.
