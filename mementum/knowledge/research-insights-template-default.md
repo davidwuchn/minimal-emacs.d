@@ -4848,95 +4848,68 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*2 check issues (severity 0.05). EXTRACTED from distill→check pipeline.*
 
 ```allium
-The user wants me to distill a large amount of research experiment data into a concise summary. Let me analyze what's provided:
+**Research Distillation: `template-default` (116 experiments)**
 
-1. **Research strategy**: template-default
-2. **116 experiments** across many targets (files like staging-merge, various lisp modules, etc.)
-3. **Kept hypotheses**: Many blank lines, then a few substantive ones:
-   - Simplify lambda-prompt extraction (remove redundant `if apply-lines`, add nil guard for `english-findings`)
-   - Explicit nil/empty-string guard for `allium-spec`, remove redundant callback check
-   - Explicit `(symbolp backend)` branch before fallback `t` case (type validation, error handling)
-   - Secondary `buffer-live-p` guard and nil check in lambda (async buffer lifecycle)
-   - Extract provider selection logic into `gptel-benchmark--select-provider` (fractal Clarity, φ Vitality)
-   - Adding error recovery and making assumptions explicit
-   - Adding defensive coding
-   - Adding timeout sentinel value in sync subagent call (explicit timeout failures)
-   - Explicit nil guard on `where` parameter and wrap overlay creation in `condition-case`
-   
-4. **Discarded hypotheses**:
-   - Fixing error message formatting (format "%s" err → error-message-string err)
-   - Removing them from the hash table
-   - Many blank lines
-   - "[what changes & why]" instruction
+**Kept Hypotheses — Core Themes:**
 
-The pattern shows a research process evaluating many hypotheses for improving gptel-related Emacs Lisp code. The kept hypotheses focus on:
-- **Defensive programming**: nil guards, empty string checks, buffer-live-p checks
-- **Error handling**: condition-case wrappers, explicit timeout sentinels, type validation
-- **Refactoring/extraction**: separating provider selection into dedicated function
-- **Simplification**: removing redundant conditionals (if apply-lines, redundant callbacks)
-- **Explicitness**: making implicit assumptions explicit and testable (fractal Clarity)
+1. **Defensive Boundaries & Input Hardening**
+   - Add explicit nil/empty-string guards on critical inputs (`english-findings`, `allium-spec`, `where`).
+   - Insert `buffer-live-p` and nil checks inside lambdas to handle async buffer lifecycle edge cases.
+   - Add a `(symbolp backend)` type-validation branch to prevent non-keyword symbols from silently falling through to struct handling.
 
-The discarded ones include:
-- Simple error message formatting fixes
-- Hash table removal
-- A template instruction
+2. **Explicit Error Topology**
+   - Replace ambiguous failure modes with explicit sentinels (e.g., timeout sentinel values in sync subagent calls).
+   - Wrap volatile operations (overlay creation) in `condition-case` to isolate failures and prevent task interruption.
+   - Remove redundant callback/conditional checks that obscure the actual error path.
 
-I need to distill this into a concise summary that captures:
-- The research strategy and scale
-- The key themes of kept hypotheses
-- The nature of discarded hypotheses
-- The overall direction/pattern
+3. **Fractal Clarity via Extraction**
+   - Isolate provider selection logic from `gptel-benchmark-call-subagent` into a dedicated `gptel-benchmark--select-provider` function.
+   - Make selection assumptions explicit, testable, and independently improvable without touching main dispatch logic.
 
-Let me structure this as a concise research digest.
+4. **Simplification by Redundancy Removal**
+   - Remove unnecessary `if apply-lines` checks when `mapconcat` on an empty list already returns `""`.
+   - Strip redundant conditional branching to flatten lambda-prompt extraction logic.
 
-Key themes from kept:
-1. **Defensive coding / Input validation** (nil guards, type checks, buffer state checks)
-2. **Error handling robustness** (sentinel values, condition-case, recovery)
-3. **Code clarity through extraction** (separate functions for selection logic, removing redundancy)
-4. **Explicit assumptions** (fractal Clarity, making implicit paths testable)
-
-Discarded seem to be minor formatting fixes or incomplete ideas.
-
-The distillation should be brief, structured, and capture the signal from the noise.
-
-Let me draft:
-
-**Research Distillation: template-default (116 experiments)**
-
-**Kept Themes (Signal):**
-The retained hypotheses cluster around four architectural improvements:
-1. **Defensive Boundaries**: Adding nil/empty-string guards on inputs (`english-findings`, `allium-spec`, `where`), buffer lifecycle checks (`buffer-live-p`), and type validation (`symbolp` branch) to prevent cascading failures.
-2. **Explicit Error Topology**: Replacing ambiguous failure modes with explicit sentinels (timeout sentinel values), structured recovery (`condition-case` on overlays), and separated error paths rather than silent fallthroughs.
-3. **Fractal Clarity via Extraction**: Isolating provider selection logic into standalone functions (`gptel-benchmark--select-provider`) to make selection assumptions testable and reduce dispatch complexity.
-4. **Simplification through Redundancy Removal**: Eliminating unnecessary conditional branches (e.g., `if apply-lines` when `mapconcat` handles empty lists) and redundant callback checks.
-
-**Discarded Themes (Noise):**
-Minor formatting fixes (error-message-string conversion), hash-table cleanup operations, and template artifacts.
+**Discarded Hypotheses:**
+- Minor formatting fixes (e.g., `format "%s"` → `error-message-string`).
+- Hash-table cleanup/removal operations.
+- Template artifacts and incomplete entries.
 
 **Strategic Direction:**
-Shift from implicit, brittle control flow to explicit, guarded
--- ... truncated ...
+A systematic shift from implicit, brittle control flow toward explicit, guarded, and testable boundaries. Prioritizes **φ Vitality** (adaptive robustness to async/stateful edge cases) and **fractal Clarity** (explicit, testable assumptions over nested conditional magic).
 ```
 
 ### Check Issues
 
-**Research Distillation: template-default (116 experiments)**
+Here is a structured review of your research distillation. Overall, the strategic direction is coherent, but the synthesis is **under-dense for 116 experiments** and carries a few risks that need qualification.
 
-**Kept Themes (Signal):**
-The retained hypotheses cluster around four architectural improvements:
+---
 
-1. **Defensive Boundaries** — Add nil/empty-string guards on inputs (`english-findings`, `allium-spec`, `where`), buffer lifecycle checks (`buffer-live-p`), and type validation (`symbolp` branch) to prevent cascading failures.
-2. **Explicit Error Topology** — Replace ambiguous failure modes with explicit sentinels (timeout sentinel values), structured recovery (`condition-case` on overlays), and separated error paths rather than silent fallthroughs.
-3. **Fractal Clarity via Extraction** — Isolate provider selection logic into standalone functions (`gptel-benchmark--select-provider`) to make selection assumptions testable and reduce dispatch complexity.
-4. **Simplification through Redundancy Removal** — Eliminate unnecessary conditional branches (e.g., `if apply-lines` when `mapconcat` handles empty lists) and redundant callback checks.
+### ✅ Validation — What Holds Up
 
-**Discarded Themes (Noise):**
-Minor formatting fixes (error-message-string conversion), hash-table cleanup operations, and template artifacts.
+| Theme | Verdict | Note |
+|-------|---------|------|
+| **Defensive Boundaries** | **Sound** | `buffer-live-p` and nil-guards inside async lambdas are high-leverage for Emacs Lisp stateful edge cases. This directly addresses the most common failure mode in `gptel`-style async code (buffer killed before callback fires). |
+| **Error Topology** | **Sound in principle** | Replacing ambiguous failure modes with sentinel values makes sync subagent calls deterministic and testable. |
+| **Extraction** | **Sound** | Isolating provider selection is a classic locality/clarity win. If the selection logic has externalities (API keys, model availability), extracting it makes those assumptions visible. |
+| **Redundancy Removal** | **Sound, if verified** | Relying on `mapconcat`’s empty-list behavior is idiomatic Elisp. Removing unnecessary conditionals flattens cognitive load. |
 
-**Strategic Direction:**
-Shift from implicit, brittle control flow to explicit, guarded, and testable boundaries. Prioritize φ Vitality (adaptive robustness) and fractal Clarity (explicit, testable assumptions) over superficial error presentation or state cleanup.
+---
+
+### ⚠️ Logical Gaps & Risks to Tighten
+
+#### 1. The `symbolp` Validation Is Under-Specified
+> *"Add a `(symbolp backend)` type-validation branch to prevent non-keyword symbols from silently falling through to struct handling."*
+
+**Issue:** If the valid dispatch is **keyword** → struct → error, then `(symbolp backend)` will also catch **valid keywords** (since keywords 
+
+... (truncated)

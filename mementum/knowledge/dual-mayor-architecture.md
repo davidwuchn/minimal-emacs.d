@@ -44,26 +44,51 @@ PMF Mayor (auto-workflow)              GTM Mayor (researcher)
 **Focus:** Internal — code, experiments, execution
 **Goal:** Make the product better, faster, more reliable through systematic innovation
 
-**Responsibilities:**
-1. **Pipeline execution** — research → analyze → experiment → validate → compare → stage
-2. **Backend optimization** — route tasks to best LLM based on performance data
-3. **Skill graph evolution** — compose atoms into molecules, update edge weights
-4. **Test discipline** — maintain 2148 tests, 0 unexpected
-5. **Code quality** — Eight Keys grading, structure scoring
-6. **Cost optimization** — per-backend token tracking, cost-adjusted rates
-7. **Worktree safety** — boundary verification, no-stash rule
+**Product-Led Growth 5-Step Framework:**
+
+### Step 1 — Identify Customer's JTBD (Vision Rationale)
+- Understand what "job" customers hire the product to do
+- Vision: where the product must go to serve that job
+- Rationale: why this job matters more than alternatives
+- *Output:* `mementum/pmf/customer-jtbd.md`
+
+### Step 2 — Define Your Market (Rhythm Imaginary)
+- Map the competitive landscape around the JTBD
+- Rhythm: market cadence, release cycles, customer expectations
+- Imaginary: envision the product in its ideal market position
+- *Output:* `mementum/pmf/market-position.md`
+
+### Step 3 — Size Market & Create High-Growth Products (Anticipation Calculation)
+- Calculate addressable market for the JTBD
+- Anticipate: what features will drive 10x growth
+- Build experiments that test high-growth hypotheses
+- *Output:* `mementum/pmf/growth-experiments.md`
+
+### Step 4 — Identify Needs Gaps & Competitor Weakness (Partnering Meaningful)
+- Partner with GTM Mayor to validate: what do customers actually struggle with
+- Identify where competitors fail to serve the JTBD
+- Meaningful differentiation, not feature parity
+- *Output:* `mementum/pmf/competitive-gaps.md`
+
+### Step 5 — Identify Unmet Needs & Deploy Strategy (Simplification Resilient)
+- Formulate winning product strategy based on validated unmet needs
+- Simplify: remove features that don't serve the core JTBD
+- Resilient: build systems that withstand market shifts
+- Deploy with measurable milestones
+- *Output:* `mementum/pmf/product-strategy.md`
 
 **Does NOT:**
-- Decide what features to build
-- Monitor external trends
-- Analyze market fit
-- Set strategic direction
+- Decide what features to build (follows GTM Mayor's market insights)
+- Monitor external trends (receives from GTM Mayor)
+- Analyze market fit (validates GTM Mayor's PMF analysis)
+- Set strategic direction (executes strategy, doesn't set it)
 
 **Dashboard:** `var/tmp/product-dashboard.md`
-- Experiments today/this week
+- Current PLG step (1-5)
+- Experiments this week
 - Keep-rate trend
-- Backend performance
-- Test status
+- Growth metrics
+- Competitive gap closures
 - Cost per experiment
 
 ## GTM Mayor (Researcher)
@@ -72,14 +97,38 @@ PMF Mayor (auto-workflow)              GTM Mayor (researcher)
 **Focus:** External — customers, competitors, trends, market signals
 **Goal:** Discover what the market needs and translate it into actionable innovation opportunities
 
-**Responsibilities:**
-1. **External research** — GitHub trends, papers, competitors, communities
-2. **PMF analysis** — are we building the right thing?
-3. **Innovation scouting** — what techniques could improve OV5?
-4. **Strategy recommendations** — what should PMF Mayor focus on?
-5. **Competitive analysis** — what are others doing better?
-6. **Decision framing** — surface design/policy calls for human
-7. **Knowledge synthesis** — convert findings into actionable beads
+**JTBD/ODI 5-Step Framework:**
+
+### Step 1 — Define the Market (Ideology Mind)
+- Define market around the **job-to-be-done**
+- Infuse innovation mindset that empowers team to lead at innovation
+- Gain agreement on the problem
+- *Output:* `mementum/gtm/market-definition.md`
+
+### Step 2 — Uncover Desired Outcomes (Metaphoric Soul)
+- Establish common language for innovation
+- Collaborate towards a solution
+- Translate customer needs into measurable outcomes
+- *Output:* `mementum/gtm/desired-outcomes.md`
+
+### Step 3 — Quantify Unmet Outcomes (Cogitation Reality)
+- Use right data — insights that inform strategy
+- Ensure solution solves the **core problem**
+- Rank outcomes by importance × satisfaction gap
+- *Output:* `mementum/gtm/opportunity-scorecard.md`
+
+### Step 4 — Discover Hidden Segments (Figurative Power)
+- Align marketing, sales, development, R&D around shared understanding
+- Optimize the overall system
+- Find underserved segments with unmet outcomes
+- *Output:* `mementum/gtm/segment-map.md`
+
+### Step 5 — Formulate Strategy (Conceptual Time/Space)
+- Unlock organization's innovation potential
+- Target 5X return on innovation
+- Be positive influence on the team
+- Deploy winning strategy with measurable milestones
+- *Output:* `mementum/gtm/strategy-roadmap.md`
 
 **Does NOT:**
 - Write code
@@ -88,11 +137,11 @@ PMF Mayor (auto-workflow)              GTM Mayor (researcher)
 - Manage worktrees
 
 **Dashboard:** `var/tmp/gtm-dashboard.md`
-- Research findings this week
-- Innovation opportunities ranked
-- Strategic recommendations
+- Current JTBD step (1-5)
+- Unmet outcomes ranked
+- Segment opportunities
+- Strategy milestones
 - Human decisions needed
-- Market signals
 
 ## Shared Infrastructure
 
@@ -115,44 +164,53 @@ Shared AutoTTS
 
 ## Interaction Model
 
-**Daily cycle:**
+**JTBD Cycle (GTM leads, PMF validates):**
 ```
-00:00 GTM Mayor wakes up (market focus)
-      ├── Scans market: competitors, trends, customer needs
-      ├── Identifies innovation opportunities
-      ├── Synthesizes market insights
-      ├── Updates gtm-dashboard.md (market metrics)
-      └── Files beads: "Market needs X, Y is trending"
+GTM Step 1: Define market (JTBD)
+      ├── "What job are customers hiring us to do?"
+      ├── Files: market-definition.md
+      └── PMF validates: "Can we build for this job?"
 
-00:00-23:59 PMF Mayor runs (product focus, every 4 hours)
-      ├── Reads GTM Mayor's market beads
-      ├── Translates market needs into product experiments
-      ├── Runs executor workers in worktrees
-      ├── Validates: "Does this code actually work?"
-      ├── Grades results
-      ├── Updates product-dashboard.md (product metrics)
-      └── Reports outcomes: "X experiment: 8/9 score, kept"
+GTM Step 2: Uncover desired outcomes
+      ├── "What outcomes matter? How to measure?"
+      ├── Files: desired-outcomes.md
+      └── PMF validates: "Can we measure this in code?"
 
-23:59 GTM Mayor reviews product outcomes
-      ├── Reads experiment results
-      ├── Assesses: "Did the product validate the market signal?"
-      ├── Refines tomorrow's market strategy
-      └── Files follow-up beads: "Double down on X, Y was wrong"
+GTM Step 3: Quantify unmet outcomes
+      ├── "Which outcomes have biggest gap?"
+      ├── Files: opportunity-scorecard.md
+      └── PMF validates: "Can we close this gap?"
+
+GTM Step 4: Discover hidden segments
+      ├── "Who is most underserved?"
+      ├── Files: segment-map.md
+      └── PMF validates: "Can we serve this segment?"
+
+GTM Step 5: Formulate strategy
+      ├── "How do we win? What's the roadmap?"
+      ├── Files: strategy-roadmap.md
+      └── PMF validates: "Can we execute this strategy?"
+
+PMF runs continuously (every 4 hours):
+      ├── Reads GTM's current JTBD artifacts
+      ├── Runs experiments on highest-opportunity items
+      ├── Reports: "Outcome X: gap closed from 0.3 to 0.8"
+      └── Updates product-dashboard.md
 ```
 
-**Decision flow (market → product):**
+**JTBD Decision flow:**
 ```
-GTM Mayor (market): "Customers need X, competitors doing Y"
+GTM Step 3: "Outcome 'fast startup' is unmet (importance 9.2, satisfaction 3.1)"
      ↓
-Human: "Focus on X, ignore Y"
+Human: "Priority: close this gap"
      ↓
-PMF Mayor (product): "Building X into the product..."
+PMF Mayor: "Experiment: optimize startup path..."
      ↓
-PMF Mayor: "Product validation: X works, score 8/9"
+PMF Mayor: "Result: startup time reduced 40%, score 8/9"
      ↓
-GTM Mayor (market): "Market signal confirmed. Recommend doubling down on X."
+GTM Step 5: "Strategy validated. Gap closed from 3.1→7.8. Next: segment expansion."
      ↓
-Human: "Approved. PMF Mayor: scale X. GTM Mayor: promote X."
+Human: "Approved. PMF: scale this optimization. GTM: find next unmet outcome."
 ```
 
 ## Shared: Innovation
@@ -161,19 +219,42 @@ Human: "Approved. PMF Mayor: scale X. GTM Mayor: promote X."
 
 **What differs:** How they innovate.
 
-| | PMF Mayor | GTM Mayor |
+| | PMF Mayor (Product-Led Growth) | GTM Mayor (JTBD/ODI) |
 |---|---|---|
+| **Framework** | 5-step PLG | 5-step JTBD/ODI |
 | **Innovation type** | *Grow through innovation* | *Transform for innovation* |
-| **How** | Experiment on code, validate with tests | Discover market needs, scout techniques |
-| **Validation** | "Does it work?" (keep-rate, tests) | "Does the market want it?" (signal, PMF) |
-| **Output** | Working code in worktrees | Actionable beads for experiments |
-| **Feedback** | Code quality → skill graph | Market signal → strategy |
+| **How** | Identify JTBD → Define market → Size market → Find gaps → Deploy strategy | Define market → Uncover outcomes → Quantify gaps → Discover segments → Formulate strategy |
+| **Validation** | "Does the product serve the JTBD?" (keep-rate, tests) | "Does the market want this JTBD served?" (signal, PMF) |
+| **Output** | Working code in worktrees | Market artifacts + actionable beads |
+| **Feedback** | Product metrics → skill graph | Market signal → strategy |
 
+**Cross-framework flow:**
 ```
-GTM Mayor (transform) → discovers → Innovation Queue
-                                              ↓
-PMF Mayor (grow) → validates ← experiments ←─┘
+GTM Step 1 (Ideology Mind): Define market around JTBD
+         ↓
+PMF Step 1 (Vision Rationale): Identify customer's JTBD
+         ↓
+GTM Step 2 (Metaphoric Soul): Uncover desired outcomes
+         ↓
+PMF Step 2 (Rhythm Imaginary): Define market position
+         ↓
+GTM Step 3 (Cogitation Reality): Quantify unmet outcomes
+         ↓
+PMF Step 3 (Anticipation Calculation): Size market, build high-growth experiments
+         ↓
+GTM Step 4 (Figurative Power): Discover hidden segments
+         ↓
+PMF Step 4 (Partnering Meaningful): Find needs gaps & competitor weakness
+         ↓
+GTM Step 5 (Conceptual Time/Space): Formulate strategy
+         ↓
+PMF Step 5 (Simplification Resilient): Deploy winning product strategy
 ```
+
+**Innovation Principles:**
+
+1. **Resolution Refined** — Innovation is not about adding features; it's about sharpening the resolution of the product's core value. Every experiment should make the JTBD clearer, not blur it with options.
+2. **Struggle Well** — The best innovations come from understanding the customer's struggle, not from celebrating the solution. PMF Mayor validates: "Does this reduce struggle?" GTM Mayor discovers: "Where is the struggle?"
 
 **Shared components:**
 
