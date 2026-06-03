@@ -562,18 +562,19 @@ run_workflow_tests() {
     
     section "Auto-Workflow"
     
-    # Emacs server
+    # Emacs server (named daemon: pmf-value-stream)
     echo "Checking Emacs server..."
-    if emacsclient --eval "t" >/dev/null 2>&1; then
-        pass "Emacs server is running"
+    local server_socket="/tmp/emacs$(id -u)/pmf-value-stream"
+    if [ -S "$server_socket" ] && emacsclient -s "$server_socket" --eval "t" >/dev/null 2>&1; then
+        pass "Emacs server (pmf-value-stream) is running"
     else
-        fail "Emacs server not running"
+        fail "Emacs server (pmf-value-stream) not running"
         return 1
     fi
     
     # Function exists
     echo "Checking function..."
-    if emacsclient --eval "(fboundp 'gptel-auto-workflow-run-async)" 2>/dev/null | grep -q "t"; then
+    if emacsclient -s "$server_socket" --eval "(fboundp 'gptel-auto-workflow-run-async)" 2>/dev/null | grep -q "t"; then
         pass "gptel-auto-workflow-run-async is defined"
     else
         skip "gptel-auto-workflow-run-async is NOT defined (may not be loaded)"
