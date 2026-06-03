@@ -251,10 +251,11 @@ See [docs/promoting.md](docs/promoting.md) for channel-specific messaging (HN, L
 
 ```
 λ engage(emacs).
-  research(external) ⇄ execute(experiment) ⇄ verify(outcome) ⇄ learn(pattern)
+  gtm(research) ⇄ pmf(experiment) ⇄ verify(outcome) ⇄ learn(pattern)
   | ∀change: isolated(worktree) ∧ verified(tests) ∧ reviewed(AI)
   | self_referential: the system audits itself using its own ontologies
   | route(ontology) ≡ categorize(target) → rank(backends) by Δ(decayed-keep-rate − baseline) ⊗ VSM-tuned-weights ⊗ per-axis-KIBC-boost ⊗ recency-decay(14d)
+  | autonomy: human-observes(x) ∧ ¬human-blocks(x) | git-resolves-conflicts(x)
 ```
 
 This is not a code generator. It is a **self-consuming formal system** — it researches techniques from external sources, distills them into specifications, tests them as isolated experiments, and feeds outcomes back into what it researches next. The head eats knowledge; the tail produces results; the body digests both.
@@ -277,9 +278,11 @@ Say "Ouroboros V5" or "OV5" and you mean: the full self-regulating cybernetic ar
 
 ---
 
-## The Two Halves
+## The Two Mayors
 
-The ouroboros has a head and a tail — and they eat each other. The **Researcher** looks outward, consuming external techniques and filing them into the ontology. The **Executor** looks inward, testing those techniques as experiments and feeding outcomes back. Neither works alone: the researcher's appetite is shaped by what the executor digests, and the executor's targets are chosen by what the researcher discovers.
+The ouroboros has two mayors — and they feed each other. The **GTM Mayor** (Wood) looks outward, consuming external techniques and filing them into the ontology. The **PMF Mayor** (Metal) looks inward, testing those techniques as experiments and feeding outcomes back. Neither works alone: the GTM Mayor's appetite is shaped by what the PMF Mayor digests, and the PMF Mayor's targets are chosen by what the GTM Mayor discovers.
+
+**Human role:** Observer, not gate. The system runs autonomously (research + experiments + commits). Human reviews outcomes asynchronously — morning sync, not real-time approval.
 
 ```
         ┌──────────────────────────────────────────────┐
@@ -306,7 +309,7 @@ The ouroboros has a head and a tail — and they eat each other. The **Researche
     these gaps"  └─────────────────────┘
 ```
 
-### The Researcher (Wood 木)
+### The GTM Mayor (Wood 木)
 
 The head of the snake. It consumes, it doesn't hoard.
 
@@ -314,7 +317,7 @@ The head of the snake. It consumes, it doesn't hoard.
 ./scripts/run-pipeline.sh
 ```
 
-The researcher scans 17+ repos via `gh api`, but it doesn't prefetch everything. It reads the ontology for knowledge gaps, fetches only what fills those gaps, and produces Allium v3 behavioral specs. No batch crawl — each fetch is a deliberate bite.
+The GTM Mayor scans 17+ repos via `gh api`, but it doesn't prefetch everything. It reads the ontology for knowledge gaps, fetches only what fills those gaps, and produces Allium v3 behavioral specs. No batch crawl — each fetch is a deliberate bite.
 
 It is **benchmark-driven and self-evolving** — four research strategies compete each cycle, and the winner sets the technique:
 
@@ -325,7 +328,7 @@ It is **benchmark-driven and self-evolving** — four research strategies compet
 | **topic-specific** | Focused — chasing a gap the ontology identified |
 | **quick-own-only** | Conservative — API quota is low, stay local |
 
-**Research quality pipeline** — each finding passes through six gates before reaching the executor:
+**Research quality pipeline** — each finding passes through six gates before reaching the PMF Mayor:
 
 1. **Strategy benchmark** — All 4 compete; best wins per cycle
 2. **Allium coherence check** — Contradictions detected before techniques reach experiments
@@ -334,9 +337,9 @@ It is **benchmark-driven and self-evolving** — four research strategies compet
 5. **Ontology enrichment** — New techniques auto-extracted and merged
 6. **Outcome feedback** — Kept/discarded experiments adjust research priorities per source
 
-The researcher is not a scraper. It is a **self-adjusting appetite**: what it researches next depends on what the executor kept or discarded last cycle.
+The GTM Mayor is not a scraper. It is a **self-adjusting appetite**: what it researches next depends on what the PMF Mayor kept or discarded last cycle.
 
-### The Executor (Metal 金)
+### The PMF Mayor (Metal 金)
 
 The body of the snake. It tests, verifies, and feeds back.
 
@@ -360,26 +363,31 @@ Every experiment is an isolated git worktree. `main` is never touched directly. 
 
 Energy that doesn't pass a gate is not wasted — it returns as learning for the next cycle. A discarded experiment is not a failure; it's the snake's body telling the brain "don't eat that again."
 
-### The Feedback (Water 水)
+### The Innovation Queue (Water 水)
 
-The head and body communicate through water — the flowing knowledge that connects them.
+The two mayors communicate through the Innovation Queue — `mementum/innovation-queue.md`.
 
 ```
-Researcher finds technique T ──→ Executor tests T on target X
-                                         │
-                                    ┌────┴────┐
-                                    ▼         ▼
-                                  kept     discarded
-                                    │         │
-                                    ▼         ▼
-                              π Synthesis  failure pattern
-                              queues X₂,X₃  tells researcher:
-                                    │       "avoid this shape"
-                                    ▼
-                              Researcher: "what else
-                              looks like X that I
-                              haven't studied yet?"
+GTM Mayor discovers technique T ──→ Innovation Queue: "Market needs X"
+                                          │
+                                     ┌────┴────┐
+                                     ▼         ▼
+                              PMF validates   PMF rejects
+                                     │         │
+                                     ▼         ▼
+                               π Synthesis   failure pattern
+                               queues X₂,X₃  tells GTM:
+                                     │       "avoid this shape"
+                                     ▼
+                          GTM: "what else looks like
+                          X that I haven't studied yet?"
 ```
+
+**Autonomy principles:**
+- GTM Mayor adds to queue without human approval
+- PMF Mayor marks entries as validated/rejected
+- Git merge=theirs resolves conflicts (Pi5 authoritative)
+- Human reviews asynchronously — morning sync only
 
 ### Scoring Gate Override: Correctness-Fix Promoter
 
