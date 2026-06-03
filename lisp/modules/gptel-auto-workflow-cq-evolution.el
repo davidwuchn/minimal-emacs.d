@@ -14,7 +14,7 @@
 ;;; Code:
 
 (require 'cl-lib)
-(declare-function gptel-auto-workflow--run-evolution-script "gptel-auto-workflow-evolution" (script-name &rest args))
+(declare-function skill-graph--load-skill "gptel-auto-workflow-skill-graph" (skill-dir))
 
 (defconst gptel-auto-workflow--cq-to-skills
   '(("Which strategies are effective?" . ("strategy-proposer" "strategy-harness"))
@@ -29,7 +29,8 @@
   "Trigger targeted skill evolution for unanswerable competency questions.
 CQ-RESULTS is alist of (question . answerable) from
 `gptel-auto-workflow--check-competency-questions'.
-Returns list of skills triggered for evolution."
+Returns list of skills triggered for evolution.
+Uses skill graph for evolution — Python scripts retired."
   (let ((evolved nil))
     (dolist (r cq-results)
       (unless (cdr r)  ; unanswerable
@@ -39,13 +40,19 @@ Returns list of skills triggered for evolution."
             (dolist (skill skills)
               (message "[cq-evolution] Triggering %s evolution (unanswerable: %s)"
                        skill question)
-              (condition-case err
-                  (progn
-                    (gptel-auto-workflow--run-evolution-script
-                     "evolve_skills.py" "--skills" skill "--root" ".")
-                    (push skill evolved))
-                (error (message "[cq-evolution] Failed to evolve %s: %s"
-                                skill (error-message-string err)))))))))
+              ;; Skill graph handles evolution — no Python needed
+              (when (fboundp 'skill-graph--load-skill)
+                (condition-case err
+                    (let* ((skill-dir (expand-file-name
+                                       (format "assistant/skills/%s" skill)
+                                       (gptel-auto-workflow--worktree-base-root)))
+                           (skill-file (expand-file-name "SKILL.md" skill-dir)))
+                      (when (file-exists-p skill-file)
+                        (skill-graph--load-skill skill-dir)
+                        (push skill evolved)
+                        (message "[cq-evolution] Reloaded %s into skill graph" skill)))
+                  (error (message "[cq-evolution] Failed to evolve %s: %s"
+                                                                     skill (error-message-string err))))))))))
     (delete-dups evolved)))
 
 ;; Wire into evolution cycle via advice

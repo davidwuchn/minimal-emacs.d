@@ -1414,27 +1414,6 @@ Writes to var/tmp/evolution/findings.md."
   (expand-file-name "assistant/skills/auto-workflow/scripts"
                     (gptel-auto-workflow--worktree-base-root)))
 
-(defun gptel-auto-workflow--run-evolution-script (script-name &rest args)
-  "Run SCRIPT-NAME from skill evolution scripts with ARGS.
-Returns output string or nil on failure."
-  (let* ((script-dir (gptel-auto-workflow--skill-evolution-script-dir))
-         (script (expand-file-name script-name script-dir))
-         (root (gptel-auto-workflow--worktree-base-root))
-         (cmd (format "cd %s && python3 %s %s"
-                      (shell-quote-argument root)
-                      (shell-quote-argument script)
-                      (mapconcat #'shell-quote-argument args " "))))
-    (message "[evolution] Running: %s" script-name)
-    (let ((output (shell-command-to-string cmd)))
-      (if (string-match-p "^\\(?:Error\\|Traceback\\|FAILED\\):\\|failed with\\|failed:" output)
-          (progn
-            (message "[evolution] Script %s failed: %s" script-name output)
-            nil)
-        (message "[evolution] %s completed" script-name)
-        output))))
-
-
-
 ;;; ─── Dynamic Content Generators ───
 
 (defun gptel-auto-workflow--generate-source-effectiveness-section ()
@@ -1824,38 +1803,36 @@ with kept experiments, and updates the researcher prompt accordingly."
          (message "[evolution] No research-enabled experiments to analyze yet")))))
 
 (defun gptel-auto-workflow--evolve-all-skills ()
-  "Run self-evolution on ALL skills via Python scripts.
-This is the main entry point for unified skill evolution.
-Uses agentskills.io standard scripts/ directory."
-  (message "[evolution] Running unified skill evolution via scripts...")
-  
-  ;; Single script handles all skill generation
-  (let ((output (gptel-auto-workflow--run-evolution-script
-                 "evolve_skills.py" "--root" ".")))
-    (if output
-        (progn
-          (message "[evolution] Unified skill evolution complete")
-          (message "[evolution] Output:\n%s" output))
-      (message "[evolution] Skill evolution failed - check scripts")))
-  
-  ;; Also run research synthesis (still in Elisp for now)
+  "Run self-evolution on ALL skills via skill graph.
+Skill graph replaces retired Python scripts — handles discovery,
+relationship tracking, and experiment-based edge evolution."
+  (message "[evolution] Running unified skill evolution via skill graph...")
+
+  ;; Step 1: Evolve skill graph from experiment outcomes
+  (when (fboundp 'skill-graph-evolve-from-experiments)
+    (condition-case err
+        (skill-graph-evolve-from-experiments)
+      (error (message "[evolution] Skill graph evolution failed: %s" err))))
+
+  ;; Step 2: Research synthesis (pure Elisp)
   (gptel-auto-workflow--evolution-research-synthesize)
   (gptel-auto-workflow--generate-research-skill)
-  
-  ;; Evolve researcher skill with dynamic content (source effectiveness + controller guidance)
+
+  ;; Step 3: Evolve researcher skill with dynamic content
   (gptel-auto-workflow--evolve-researcher-skill)
 
-  ;; Analyze researcher end-to-end effectiveness
+  ;; Step 4: Analyze researcher end-to-end effectiveness
   (gptel-auto-workflow--evolve-researcher-from-feedback)
 
-  ;; Cross-layer feedback: inject the latest controller config into researcher skill.
-  ;; (Controller evolution runs before this via evolution-run-cycle → run-autotts-evolution)
+  ;; Step 5: Cross-layer feedback — inject controller config into researcher skill
   (when (fboundp 'gptel-auto-workflow--update-skill-with-controller)
     (let ((controller-config
            (when (fboundp 'gptel-auto-workflow--load-autotts-controller)
              (gptel-auto-workflow--load-autotts-controller))))
       (when controller-config
-        (gptel-auto-workflow--update-skill-with-controller controller-config)))))
+        (gptel-auto-workflow--update-skill-with-controller controller-config))))
+
+  (message "[evolution] Unified skill evolution complete"))
 
 (defun gptel-auto-workflow-evolution-run-cycle ()
   "Run one full self-evolution cycle.

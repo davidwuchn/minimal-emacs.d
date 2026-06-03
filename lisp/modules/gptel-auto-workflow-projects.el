@@ -319,10 +319,10 @@ finish."
   (ignore-errors
     (call-process "gpg" nil nil nil "--batch" "--quiet" "--decrypt"
                   (expand-file-name "~/.authinfo.gpg")))
-  ;; Moonshot content_filter (quota exhausted) blocks code generation, returns
-  ;; 400 errors that make it look responsive to the onto-router.  Mark it as
-  ;; rate-limited so the router skips it dynamically.  When quota resets (next
-  ;; week), the onto-router will re-enable it automatically as responses succeed.
+  ;; Moonshot quota exhausted (access_terminated_error).  Returns errors that
+  ;; make it look responsive to the onto-router.  Mark it as rate-limited so
+  ;; the router skips it dynamically.  When quota resets, the onto-router will
+  ;; re-enable it automatically as responses succeed.
   (when (boundp 'gptel-auto-workflow--rate-limited-backends)
     (cl-pushnew "moonshot" gptel-auto-workflow--rate-limited-backends :test #'string=))
   ;; Ensure gptel-agent-dirs includes our custom agent directory so
@@ -729,15 +729,21 @@ Also removes old conflicting :override advice if present."
 (defun gptel-auto-workflow--advice-task-overlay-buffer (orig-fun where &optional agent-type description)
   "Ensure overlay is created in the correct buffer.
 ORIG-FUN is the original function. WHERE is position/marker.
-Gets target buffer from gptel-fsm-info and creates overlay there."
+Gets target buffer from gptel-fsm-info and creates overlay there.
+Guard: If WHERE is a marker from a killed buffer, fall back to
+point-marker in target buffer to avoid dead-marker errors."
   (let* ((fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
          (info (and fsm (fboundp 'gptel-fsm-info) (gptel-fsm-info fsm)))
          (valid-info (and (proper-list-p info) info))
-         (target-buf (and valid-info (plist-get valid-info :buffer))))
+         (target-buf (and valid-info (plist-get valid-info :buffer)))
+         (safe-where (if (and (markerp where) (not (marker-buffer where)))
+                         (and target-buf
+                              (with-current-buffer target-buf (point-marker)))
+                       where)))
     (if (and target-buf (buffer-live-p target-buf))
         (with-current-buffer target-buf
-          (funcall orig-fun where agent-type description))
-      (funcall orig-fun where agent-type description))))
+          (funcall orig-fun safe-where agent-type description))
+      (funcall orig-fun safe-where agent-type description))))
 
 (defun gptel-auto-workflow--enable-overlay-buffer-advice ()
   "Enable advice to route overlays to correct buffer."
@@ -1048,7 +1054,8 @@ Without PROJECT-ROOT, clears cache for all projects."
 Returns nil if PROJECT-ROOT is nil or not found in cache."
   (when (and project-root
              (stringp project-root)
-             (> (length project-root) 0))
+             (> (length project-root) 0)
+             (hash-table-p gptel-auto-workflow--research-findings-cache))
     (or (gethash project-root gptel-auto-workflow--research-findings-cache)
         (gethash (directory-file-name project-root)
                  gptel-auto-workflow--research-findings-cache)

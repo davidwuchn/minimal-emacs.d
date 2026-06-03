@@ -2197,7 +2197,7 @@ exhaustion.")
 DeepSeek first (deep reasoning for complex tasks),
 then MiniMax (fast, no thinking mode — ideal for analysis/grader tasks),
 then DashScope (qwen3.6-plus — reinstated 2026-05-31 after quota recovery).
-moonshot removed — content_filter blocks code generation.
+moonshot removed — quota exhausted (access_terminated_error), billing cycle limit reached.
 CF-Gateway removed — does not support tool calls reliably."
   :type '(repeat (cons (string :tag "Backend")
                        (string :tag "Model")))

@@ -596,7 +596,7 @@ integer position that should be in the parent chat buffer.
 This wrapper ensures the overlay is created in the correct buffer."
   (let* ((target-buf (cond
                       ;; Marker case: use marker's buffer
-                      ((markerp where) (marker-buffer where))
+                      ((and (markerp where) (marker-buffer where)) (marker-buffer where))
                       ;; Integer case: try to get parent buffer from FSM
                       ((integerp where)
                        (let* ((parent-fsm (my/gptel--coerce-fsm gptel--fsm-last))

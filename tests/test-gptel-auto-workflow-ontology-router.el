@@ -80,17 +80,17 @@
          gptel-auto-workflow-headless-subagent-fallbacks)
         (mock-results
          (list
-          (list :backend "moonshot" :decision "kept")
-          (list :backend "moonshot" :decision "kept")
-          (list :backend "moonshot" :decision "kept")
+          (list :backend "DeepSeek" :decision "kept")
+          (list :backend "DeepSeek" :decision "kept")
+          (list :backend "DeepSeek" :decision "kept")
           (list :backend "MiniMax" :decision "discarded")
           (list :backend "MiniMax" :decision "discarded"))))
     (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
                (lambda () mock-results))
               ((symbol-function 'random) (lambda (_) 999)))  ; No exploration
       (let ((reordered (gptel-auto-workflow--reorder-fallbacks-by-ontology)))
-        (should (string= "moonshot" (caar reordered)))
-        (should (string= "kimi-k2.6" (cdar reordered)))))))
+        (should (string= "DeepSeek" (caar reordered)))
+        (should (string= "deepseek-v4-pro" (cdar reordered)))))))
 
 (ert-deftest regression/ontology-router/reorder-keeps-all-backends ()
   "Reordering should preserve all backends from static list."
@@ -129,8 +129,8 @@
          gptel-auto-workflow-headless-subagent-fallbacks)
         (mock-results
          (list
-          (list :backend "moonshot" :decision "kept")
-          (list :backend "moonshot" :decision "kept")
+          (list :backend "DeepSeek" :decision "kept")
+          (list :backend "DeepSeek" :decision "kept")
           (list :backend "MiniMax" :decision "kept")
           (list :backend "MiniMax" :decision "kept"))))
     (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
@@ -140,7 +140,7 @@
       (let ((reordered (gptel-auto-workflow--reorder-fallbacks-by-ontology)))
         ;; With exploration, order might be swapped
         (should (= 2 (length (cl-intersection (mapcar #'car reordered)
-                                               '("moonshot" "MiniMax")
+                                               '("DeepSeek" "MiniMax")
                                                :test #'string=))))))))
 
 ;; ─── Target Categorization Tests ───
@@ -557,7 +557,7 @@ All known backends now support lambda notation; no async verification needed."
 ;; ─── Sieve-Based Routing (verbum Phase 5) ───
 
 (ert-deftest tdd/sieve/classify-by-backend-name ()
-  "Sieve classification works by backend name only."
+  "Sieve classification works by backend name only (not model names)."
   (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "DashScope")))
   (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "moonshot")))
   (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "Unknown"))))
@@ -565,7 +565,7 @@ All known backends now support lambda notation; no async verification needed."
 (ert-deftest tdd/sieve/classify-by-model-name ()
   "Sieve classification works by model name."
   (should (eq 'single-neuron (gptel-auto-workflow--backend-sieve-type "qwen3.6-plus")))
-  (should (eq 'single-neuron (gptel-auto-workflow--backend-sieve-type "qwen3.5-plus")))
+  (should (eq 'single-neuron (gptel-auto-workflow--backend-sieve-type "qwen")))
   (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "kimi-k2.6")))
   (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "deepseek-v4-flash"))))
 
