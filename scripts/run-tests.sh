@@ -564,8 +564,14 @@ run_workflow_tests() {
     
     # Emacs server (named daemon: pmf-value-stream)
     echo "Checking Emacs server..."
-    local server_socket="/tmp/emacs$(id -u)/pmf-value-stream"
-    if [ -S "$server_socket" ] && emacsclient -s "$server_socket" --eval "t" >/dev/null 2>&1; then
+    local server_socket=""
+    for sock in "/run/user/$(id -u)/emacs/pmf-value-stream" "/tmp/emacs$(id -u)/pmf-value-stream"; do
+        if [ -S "$sock" ]; then
+            server_socket="$sock"
+            break
+        fi
+    done
+    if [ -n "$server_socket" ] && emacsclient -s "$server_socket" --eval "t" >/dev/null 2>&1; then
         pass "Emacs server (pmf-value-stream) is running"
     else
         fail "Emacs server (pmf-value-stream) not running"
