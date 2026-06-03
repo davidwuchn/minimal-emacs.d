@@ -1,7 +1,41 @@
 # Mementum State
 
-> Last session: 2026-06-02 (molecule executor + validator)
-> Next pipeline: 23:00
+> Last session: 2026-06-03 (XDG_RUNTIME_DIR fix + Mayor Method study)
+> Next pipeline: running (daemon restarted with fix)
+> Status: 2148 tests pass, 0 unexpected — auto-workflow active
+
+## Session: Pipeline Fixes + Mayor Method Study (2026-06-03)
+
+**What was built/fixed:**
+- `scripts/install-cron.sh` — Fixed `\$(id -u)` → `$(id -u)` (numeric UID)
+- `tests/test-install-cron-xdg-uid.sh` — TDD test for install script
+- `tests/test-cron-xdg-runtime.sh` — TDD test for installed crontab
+- `lisp/modules/gptel-auto-workflow-skill-graph.el` — Added `minimal-emacs-user-directory` candidate for daemon context
+- `assistant/skills/researcher-prompt/SKILL.md` — Restored `level: molecule` + `atoms: [agent-prompts]` frontmatter
+- `tests/test-gptel-nucleus-context-intercept.el` — Fixed `gpt-4-turbo` backend expectation (OpenAI, not unknown)
+- `mementum/knowledge/mayor-method-comparison.md` — Full 10-dimension comparison with OV5
+- `mementum/memories/mayor-method-key-insight.md` — 8 gaps in OV5 + synthesis
+
+**Root causes fixed:**
+1. Crontab had literal `$(id -u)` — daemon got Permission denied on `/run/user/$(id -u)`
+2. Skill graph root selection failed in daemon — `user-emacs-directory` redirected to `var/`
+3. researcher-prompt lost `level`/`atoms` frontmatter in commit 86aef0f2c
+
+**Pipeline status:**
+- Daemon restarted with fixed XDG_RUNTIME_DIR=/run/user/1000
+- Previous run: 5 experiments, 0 kept (all timeout — need to investigate model/timeout config)
+- Current run: 2026-06-03T102019Z-d570 (running)
+
+**Tests:** 2148 pass, 0 unexpected, 51 skipped
+
+**Memories created:**
+- `mementum/memories/mayor-method-key-insight.md`
+- `mementum/knowledge/mayor-method-comparison.md`
+- `mementum/memories/research-research-none-*.md` (3x)
+
+---
+
+> Previous session: 2026-06-02 (molecule executor + validator)
 > Status: 20/20 skill graph tests pass — full pipeline active
 
 ## Session: Edit-Mode Tracking Integration (2026-06-02)
