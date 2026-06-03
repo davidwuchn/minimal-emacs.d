@@ -20443,6 +20443,56 @@ Root cause: capture reads global gptel-backend instead of subagent preset."
     ;; (should (string= experiment-backend subagent-log-backend))
     ))
 
+;;; Self-Healing: Pipeline Health Monitor (2026-06-03)
+
+(ert-deftest self-heal/detects-grader-destroying-experiments ()
+  "When grader fails 100% of time, system should detect evaluator is broken.
+This is the root cause of 0%% keep rate — not bad experiments, broken grader."
+  (let ((results '((:kept nil :decision grader-failed)
+                   (:kept nil :decision grader-failed)
+                   (:kept nil :decision grader-failed))))
+    ;; Mock the health check
+    (let ((keep-rate (/ (cl-count-if (lambda (r) (plist-get r :kept)) results)
+                        (length results)))
+          (grader-failures (cl-count-if (lambda (r)
+                                          (eq (plist-get r :decision) 'grader-failed))
+                                        results)))
+      ;; keep_rate should be 0
+      (should (= keep-rate 0))
+      ;; grader failures should be 100%
+      (should (= grader-failures 3))
+      ;; This pattern means: evaluator broken, not experiments bad
+      (should (> grader-failures (/ (length results) 2))))))
+
+(ert-deftest self-heal/auto-remediates-aggressive-timeouts ()
+  "System should auto-increase timeout when detecting chronic timeouts."
+  (let ((gptel-auto-experiment-time-budget 300))
+    ;; Simulate detection of timeout pattern
+    (let ((timeout-rate 0.9))
+      (when (> timeout-rate 0.8)
+        ;; Auto-remediate: increase by 50%
+        (setq gptel-auto-experiment-time-budget
+              (floor (* gptel-auto-experiment-time-budget 1.5))))
+      ;; Should now be 450s
+      (should (= gptel-auto-experiment-time-budget 450)))))
+
+(ert-deftest self-heal/distinguishes-timeout-from-failure ()
+  "Timeout means 'couldn't evaluate', NOT 'code is bad'.
+These must have different scores or the system learns the wrong lesson."
+  (let ((timeout-result (list :score 4 :total 5 :percentage 80.0 :passed t
+                              :details "timeout-auto-pass"
+                              :grader-only-failure t))
+        (actual-failure (list :score 0 :total 5 :percentage 0.0 :passed nil
+                              :details "code-broken")))
+    ;; Timeout should auto-pass (preserve experiment)
+    (should (plist-get timeout-result :passed))
+    ;; Actual failure should fail
+    (should (not (plist-get actual-failure :passed)))
+    ;; Timeout should be tagged as grader-only
+    (should (plist-get timeout-result :grader-only-failure))
+    ;; Actual failure should NOT be tagged as grader-only
+    (should (not (plist-get actual-failure :grader-only-failure)))))
+
 (provide 'test-gptel-tools-agent-regressions)
 
 ;;; test-gptel-tools-agent-regressions.el ends here

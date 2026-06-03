@@ -477,6 +477,12 @@ Usage:
     ;; Wrap completion-callback with memory/disk cleanup for 24/7 operation
     (let ((cleanup-callback
            (lambda (results)
+             ;; Self-healing: check if pipeline itself is broken (0% keep rate, etc.)
+             (when (fboundp 'gptel-auto-workflow--maybe-self-heal)
+               (condition-case err
+                   (gptel-auto-workflow--maybe-self-heal)
+                 (error (message "[self-heal] Error during self-healing: %s"
+                                 (error-message-string err)))))
              ;; Garbage collect to reclaim memory from LLM API calls
              (garbage-collect)
              ;; Prune stale git worktrees to prevent disk accumulation

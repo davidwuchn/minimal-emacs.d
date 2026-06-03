@@ -6112,5 +6112,104 @@ Signals ert-test-failed if check fails. Use in ERT tests."
       (when (eq (car result) :fail)
         (should nil)))))
 
+;;; ─── Self-Healing: Pipeline Health Monitor ───
+;; When the evaluator itself breaks, the system must detect and fix it.
+;; Without this, 0%% keep rate means no data → no learning → death spiral.
+
+(defvar gptel-auto-workflow--self-healing-log nil
+  "List of self-healing actions taken.  Each entry is a plist with
+:timestamp, :diagnosis, :remedy, :before-rate, :after-rate.")
+
+(defun gptel-auto-workflow--check-pipeline-health (&optional results)
+  "Analyze RESULTS for pipeline health issues.
+RESULTS is a list of plists with :kept and :decision keys.
+Returns plist with :healthy-p and :diagnosis."
+  (let* ((recent (or results
+                     (and (fboundp 'gptel-auto-workflow--load-recent-results)
+                          (gptel-auto-workflow--load-recent-results 10))
+                     '()))
+         (total (length recent))
+         (kept-count (cl-count-if (lambda (r) (plist-get r :kept)) recent))
+         (keep-rate (if (> total 0) (/ (float kept-count) total) 1.0))
+         (grader-failures (cl-count-if (lambda (r)
+                                         (eq (plist-get r :decision) 'grader-failed))
+                                       recent))
+         (timeouts (cl-count-if (lambda (r)
+                                  (eq (plist-get r :decision) 'timeout))
+                                recent)))
+    (cond
+     ;; Critical: grader destroying everything (the bug we just fixed)
+     ((and (> total 2) (= kept-count 0) (> grader-failures (/ total 2)))
+      (list :healthy-p nil
+            :diagnosis "grader-destroying-experiments"
+            :confidence 0.95
+            :keep-rate keep-rate
+            :grader-failures grader-failures
+            :remedy "Auto-pass grader timeouts; increase grader timeout to match experiment budget"))
+
+     ;; Warning: high timeout rate
+     ((and (> total 2) (> timeouts (/ total 2)))
+      (list :healthy-p nil
+            :diagnosis "timeouts-too-aggressive"
+            :confidence 0.8
+            :keep-rate keep-rate
+            :timeouts timeouts
+            :remedy "Increase experiment or grader timeout by 50%%"))
+
+     ;; Healthy
+     (t (list :healthy-p t
+              :keep-rate keep-rate
+              :diagnosis nil
+              :total total)))))
+
+(defun gptel-auto-workflow--auto-remediate (diagnosis)
+  "Apply automatic fix for DIAGNOSIS.  Returns t if fix applied."
+  (let ((diagnosis-str (plist-get diagnosis :diagnosis))
+        (fixed nil))
+    (pcase diagnosis-str
+      ("grader-destroying-experiments"
+       ;; Match grader timeout to experiment budget
+       (when (and (boundp 'gptel-auto-experiment-time-budget)
+                  (boundp 'gptel-auto-experiment-grade-timeout))
+         (let ((new-timeout gptel-auto-experiment-time-budget))
+           (setq gptel-auto-experiment-grade-timeout new-timeout)
+           (message "[self-heal] Grader destroying experiments — increased timeout to %ds"
+                    new-timeout)
+           (push (list :timestamp (float-time)
+                       :diagnosis diagnosis-str
+                       :remedy (format "grader-timeout=%d" new-timeout)
+                       :before-rate (plist-get diagnosis :keep-rate))
+                 gptel-auto-workflow--self-healing-log)
+           (setq fixed t))))
+
+      ("timeouts-too-aggressive"
+       ;; Increase experiment budget by 50%
+       (when (boundp 'gptel-auto-experiment-time-budget)
+         (let ((new-budget (floor (* gptel-auto-experiment-time-budget 1.5))))
+           (setq gptel-auto-experiment-time-budget new-budget)
+           (message "[self-heal] Too many timeouts — increased budget to %ds"
+                    new-budget)
+           (push (list :timestamp (float-time)
+                       :diagnosis diagnosis-str
+                       :remedy (format "budget=%d" new-budget)
+                       :before-rate (plist-get diagnosis :keep-rate))
+                 gptel-auto-workflow--self-healing-log)
+           (setq fixed t)))))
+    fixed))
+
+(defun gptel-auto-workflow--maybe-self-heal ()
+  "Check pipeline health and auto-remediate if broken.
+Call this after each experiment run or batch."
+  (when (fboundp 'gptel-auto-workflow--check-pipeline-health)
+    (let ((health (gptel-auto-workflow--check-pipeline-health)))
+      (if (plist-get health :healthy-p)
+          (when (> (length (plist-get health :total)) 0)
+            (message "[self-heal] Pipeline healthy (keep-rate: %.0f%%)"
+                     (* 100.0 (or (plist-get health :keep-rate) 1.0))))
+        (message "[self-heal] Pipeline unhealthy: %s (confidence: %.0f%%)"
+                 (plist-get health :diagnosis)
+                 (* 100.0 (or (plist-get health :confidence) 0.0)))
+        (gptel-auto-workflow--auto-remediate health)))))
+
 (provide 'gptel-auto-workflow-evolution)
 ;;; gptel-auto-workflow-evolution.el ends here
