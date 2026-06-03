@@ -510,6 +510,49 @@ Result: Tests pass."))
   (require 'gptel-tools-agent)
   (should (= gptel-auto-experiment-grade-timeout 450)))
 
+(ert-deftest grader/experiment-timeout-headless ()
+  "Headless run-async should set time-budget to 900 (not default 300)."
+  (require 'gptel-tools-agent)
+  (let ((gptel-auto-workflow-persistent-headless t)
+        (gptel-auto-workflow--running nil)
+        (gptel-auto-experiment-time-budget 300)
+        (targets-called nil))
+    ;; Allow workflow to pass active-use check, but capture target dispatch
+    ;; before any real work starts.
+    (cl-letf (((symbol-function 'gptel-auto-workflow--active-use-p)
+               (lambda () (cons nil nil)))
+              ((symbol-function 'gptel-auto-workflow--run-with-targets)
+               (lambda (targets _cb) (setq targets-called targets)))
+              ((symbol-function 'gptel-auto-workflow-select-targets)
+               (lambda (dispatch) (funcall dispatch '("test-target"))))
+              ((symbol-function 'gptel-auto-workflow--require-magit-dependencies)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--migrate-legacy-provider-defaults)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-experiment--recover-stale-staging-pending)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--clear-rate-limited-backends)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--clear-run-failed-backends)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--main-baseline-test-results)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--ensure-results-file)
+               (lambda (_run-id) t))
+              ((symbol-function 'gptel-auto-workflow--mark-messages-start)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--start-status-refresh-timer)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--persist-status)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--restart-watchdog-timer)
+               (lambda () t)))
+      (gptel-auto-workflow-run-async)
+      (should (= gptel-auto-experiment-time-budget 900))
+      (should (equal targets-called '("test-target"))))))
+
 ;;; Test 43: Multi-Machine Branch Naming
 
 (ert-deftest grader/branch-name-includes-hostname ()
@@ -592,6 +635,8 @@ Result: Tests pass."))
     (should (cl-some (lambda (tmpl) (string-match-p "caching" tmpl)) templates))
     (should (cl-some (lambda (tmpl) (string-match-p "Lazy" tmpl)) templates))
     (should (cl-some (lambda (tmpl) (string-match-p "Simplify" tmpl)) templates))))
+
+;;; Test 48: Innovation Queue
 
 (provide 'test-grader-subagent)
 ;;; test-grader-subagent.el ends here

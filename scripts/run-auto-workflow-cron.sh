@@ -20,15 +20,15 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ACTION="${1:-auto-workflow}"
 shift || true
 case "$ACTION" in
-    auto-workflow|stop) SERVER_NAME="${AUTO_WORKFLOW_EMACS_SERVER:-ov5-auto-workflow}" ;;
-    research) SERVER_NAME="${AUTO_WORKFLOW_EMACS_SERVER:-ov5-researcher}" ;;
-    *) SERVER_NAME="${AUTO_WORKFLOW_EMACS_SERVER:-ov5-auto-workflow}" ;;
+    auto-workflow|stop) SERVER_NAME="${AUTO_WORKFLOW_EMACS_SERVER:-pmf-value-stream}" ;;
+    research) SERVER_NAME="${AUTO_WORKFLOW_EMACS_SERVER:-gtm-product-org}" ;;
+    *) SERVER_NAME="${AUTO_WORKFLOW_EMACS_SERVER:-pmf-value-stream}" ;;
 esac
 case "$ACTION" in
     mementum|instincts|evolution) SNAPSHOT_NAME="$ACTION" ;;
     *)
         case "$SERVER_NAME" in
-            ov5-auto-workflow) SNAPSHOT_NAME="auto-workflow" ;;
+            pmf-value-stream) SNAPSHOT_NAME="auto-workflow" ;;
             *) SNAPSHOT_NAME="$SERVER_NAME" ;;
         esac
         ;;
@@ -947,7 +947,7 @@ wrap_emacs_eval() {
         env_elisp="$env_elisp (setenv \"GIT_SSH_COMMAND\" \"$(lisp_escape "$git_ssh_command")\")"
     fi
 
-    printf '(with-current-buffer (get-buffer-create "*ov5-auto-workflow-eval*")%s %s)' \
+    printf '(with-current-buffer (get-buffer-create "*pmf-value-stream-eval*")%s %s)' \
            "$env_elisp" "$body"
 }
 

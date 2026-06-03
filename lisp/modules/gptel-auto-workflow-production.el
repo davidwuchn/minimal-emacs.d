@@ -6,6 +6,9 @@
 (require 'cl-lib)
 (declare-function gptel-auto-workflow-evolution-run-cycle "gptel-auto-workflow-evolution")
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
+(declare-function gptel-auto-workflow--bead-update-from-experiment "gptel-auto-workflow-beads")
+(declare-function gptel-auto-workflow--bead-file-from-research "gptel-auto-workflow-beads")
+(declare-function gptel-auto-workflow--bead-list "gptel-auto-workflow-beads")
 
 ;; ─── Configuration ───
 
@@ -152,6 +155,18 @@ Records to mementum and triggers evolution if needed."
         (gptel-auto-workflow--record-holographic-experiment experiment)
       (error (message "[auto-workflow] Holographic recording error: %s" err))))
   
+  ;; File bead to PMF→GTM channel
+  (when (fboundp 'gptel-auto-workflow--bead-update-from-experiment)
+    (condition-case err
+        (gptel-auto-workflow--bead-update-from-experiment experiment)
+      (error (message "[bead] Experiment bead error: %s" err))))
+  
+  ;; Update PMF dashboard metrics (Phase 7)
+  (when (fboundp 'gptel-auto-workflow--update-pmf-dashboard-metrics)
+    (condition-case err
+        (gptel-auto-workflow--update-pmf-dashboard-metrics)
+      (error (message "[metrics] PMF dashboard update error: %s" err))))
+  
   ;; Run evolution every N experiments
   (let ((exp-id (or (plist-get experiment :id) 0)))
     (when (and (> exp-id 0)
@@ -189,8 +204,29 @@ Called when research context changes or run completes."
                                 "")))
          (error
           (message "[auto-workflow] Research recording error: %s" err))))
-  ;; Reset batch
-  (setq gptel-auto-workflow--research-batch-results nil))
+   
+   ;; File beads from research findings (GTM → PMF)
+   (when (fboundp 'gptel-auto-workflow--bead-file-from-research)
+     (condition-case err
+         (let* ((first-result (car gptel-auto-workflow--research-batch-results))
+                (findings (or (and (boundp 'gptel-auto-workflow--current-research-context)
+                                   (plist-get gptel-auto-workflow--current-research-context :findings))
+                              "")))
+           (when (and findings (not (string-empty-p findings)))
+             (let ((bead-ids (gptel-auto-workflow--bead-file-from-research findings)))
+               (when bead-ids
+                 (message "[bead] Filed %d beads from research findings"
+                          (length bead-ids))))))
+       (error (message "[bead] Research bead error: %s" err))))
+   
+   ;; Update GTM dashboard metrics (Phase 7)
+   (when (fboundp 'gptel-auto-workflow--update-gtm-dashboard-metrics)
+     (condition-case err
+         (gptel-auto-workflow--update-gtm-dashboard-metrics)
+       (error (message "[metrics] GTM dashboard update error: %s" err))))
+   
+   ;; Reset batch
+   (setq gptel-auto-workflow--research-batch-results nil))
 
 ;; ─── Status Dashboard ───
 
@@ -295,6 +331,25 @@ Called when research context changes or run completes."
               (dolist (entry (plist-get report :backends))
                 (insert (format "  %s: %s\n" (car entry) (cdr entry)))))
           (ignore)))
+      ;; Bead protocol status
+      (when (fboundp 'gptel-auto-workflow--bead-list)
+        (condition-case nil
+            (let ((gtm-to-pmf (gptel-auto-workflow--bead-list 'gtm-to-pmf))
+                  (pmf-to-gtm (gptel-auto-workflow--bead-list 'pmf-to-gtm)))
+              (insert "\nBead Protocol:\n")
+              (insert (format "  GTM → PMF: %d beads\n" (length gtm-to-pmf)))
+              (insert (format "  PMF → GTM: %d beads\n" (length pmf-to-gtm))))
+          (ignore)))
+      
+      ;; Human decision gate
+      (when (and gptel-auto-workflow-human-decision-gate
+                 (fboundp 'gptel-auto-workflow--pending-decisions-p))
+        (condition-case nil
+            (let ((pending (gptel-auto-workflow--pending-decisions-p)))
+              (insert "\nDecision Gate:\n")
+              (insert (format "  Status: %s\n" (if pending "BLOCKED (pending decisions)" "clear"))))
+          (ignore)))
+      
       (insert "\n")
       
       (insert "\nPress q to quit\n")
@@ -305,16 +360,31 @@ Called when research context changes or run completes."
 ;; ─── Auto-start ───
 
 (defun gptel-auto-workflow-evolution-auto-start ()
-  "Auto-start evolution and GC timers if enabled."
-  (when (bound-and-true-p gptel-auto-workflow-evolution-enabled)
+  "Auto-start evolution and GC timers if enabled.
+Researcher daemons get periodic research instead of evolution."
+  (cond
+   ;; Researcher daemon: start periodic research + strategy evolution
+   ((and (fboundp 'gptel-auto-workflow--researcher-daemon-p)
+         (gptel-auto-workflow--researcher-daemon-p))
+    (gptel-auto-workflow-start-gc-timer)
+    (when (fboundp 'gptel-auto-workflow-start-periodic-research)
+      (gptel-auto-workflow-start-periodic-research))
+    ;; Phase 6: GTM owns strategy evolution
+    (when (fboundp 'gptel-auto-workflow--maybe-run-gtm-strategy-evolution)
+      (run-with-idle-timer 120 nil #'gptel-auto-workflow--maybe-run-gtm-strategy-evolution))
+    (message "[research] GTM Mayor auto-start: GC + research + strategy evolution timers"))
+   ;; PMF Mayor (auto-workflow): start evolution + GC timers
+   ((bound-and-true-p gptel-auto-workflow-evolution-enabled)
     (gptel-auto-workflow-start-evolution-timer)
     (gptel-auto-workflow-start-gc-timer)
     ;; Run initial cycle
-    (run-with-idle-timer 60 nil #'gptel-auto-workflow--maybe-run-evolution)))
+    (run-with-idle-timer 60 nil #'gptel-auto-workflow--maybe-run-evolution))
+   ;; Evolution disabled: just GC
+   (t
+    (gptel-auto-workflow-start-gc-timer))))
 
-;; τ Wisdom: start on load when daemon is active and evolution is enabled.
-(when (and (daemonp)
-           (bound-and-true-p gptel-auto-workflow-evolution-enabled))
+;; τ Wisdom: start on load when daemon is active.
+(when (daemonp)
   (gptel-auto-workflow-evolution-auto-start))
 
 ;; ─── Pipeline Verification ───
@@ -354,6 +424,521 @@ Returns t if all checks pass, nil with warnings otherwise."
         (message "[pipeline-verification] ✗ Issues found: %s" issue-str)
         (princ (format "ISSUES: %s\n" issue-str))
         nil))))
+
+;;; ─── Human Decision Gate ───
+
+(defcustom gptel-auto-workflow-human-decision-gate nil
+  "When non-nil, block PMF experiment dispatch until human approves.
+Requires a decision file in mementum/decisions/ with status: approved."
+  :type 'boolean
+  :group 'gptel-tools-agent)
+
+(defun gptel-auto-workflow--decisions-dir ()
+  "Return path to decisions directory."
+  (expand-file-name "mementum/decisions/"
+                    (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                             (gptel-auto-workflow--worktree-base-root))
+                        default-directory)))
+
+(defun gptel-auto-workflow--pending-decisions-p ()
+  "Return non-nil if there are pending human decisions blocking PMF.
+Checks mementum/decisions/ for files with status: proposed."
+  (when gptel-auto-workflow-human-decision-gate
+    (let ((dir (gptel-auto-workflow--decisions-dir))
+          (pending nil))
+      (when (file-directory-p dir)
+        (dolist (file (directory-files dir t "\\.md$"))
+          (unless (string-match-p "TEMPLATE" (file-name-nondirectory file))
+            (let* ((content (with-temp-buffer
+                              (insert-file-contents file)
+                              (buffer-string)))
+                   (status (when (string-match "^status:\\s-*\\(.+\\)$" content)
+                             (match-string 1 content))))
+              (when (and status (string= (string-trim status) "proposed"))
+                (setq pending t))))))
+      pending)))
+
+(defun gptel-auto-workflow--decision-create (title options gtm-rec pmf-fea)
+  "Create a human decision file.
+TITLE: decision title
+OPTIONS: list of (description pros cons risk)
+GTM-REC: GTM mayor recommendation string
+PMF-FEA: PMF mayor feasibility string."
+  (let* ((dir (gptel-auto-workflow--decisions-dir))
+         (id (format-time-string "%Y%m%d-%H%M%S"))
+         (file (expand-file-name (format "DECISION-%s.md" id) dir)))
+    (make-directory dir t)
+    (with-temp-file file
+      (insert "---\n")
+      (insert (format "id: DECISION-%s\n" id))
+      (insert "type: cross-mayor\n")
+      (insert "status: proposed\n")
+      (insert "proposed-by: gtm-mayor\n")
+      (insert "decided-by: human\n")
+      (insert "---\n\n")
+      (insert (format "# Decision: %s\n\n" title))
+      (insert "## Context\n")
+      (insert "GTM Mayor detected market signal requiring human judgment.\n\n")
+      (insert "## Options\n")
+      (cl-loop for (desc pros cons risk) in options
+               for opt from ?A
+               do (insert (format "### Option %c: %s\n- **Pros:** %s\n- **Cons:** %s\n- **Risk:** %s\n\n"
+                                  opt desc pros cons risk)))
+      (insert "## GTM Mayor Recommendation\n")
+      (insert (format "%s\n\n" gtm-rec))
+      (insert "## PMF Mayor Feasibility\n")
+      (insert (format "%s\n\n" pmf-fea))
+      (insert "## Decision\n\n")
+      (insert "- **Chosen:** Option _\n")
+      (insert "- **Rationale:** ...\n")
+      (insert "- **Trigger condition:** ...\n\n")
+      (insert "## Execution Log\n")
+      (insert "- [ ] PMF Mayor dispatched\n")
+      (insert "- [ ] Experiment complete\n")
+      (insert "- [ ] Bead filed to pmf-to-gtm/\n"))
+    (message "[decision] Created %s" file)
+    file))
+
+;;; ─── Dashboards ───
+
+(defun gptel-auto-workflow--update-dashboard (file &rest replacements)
+  "Update dashboard FILE by replacing placeholders with values.
+REPLACEMENTS is a plist of :placeholder value pairs.
+Example: (:UPDATED \"2026-06-03\" :PLG_STEP \"3\" ...)"
+  (when (file-writable-p file)
+    (let ((content (with-temp-buffer
+                     (insert-file-contents file)
+                     (buffer-string))))
+      (cl-loop for (placeholder value) on replacements by #'cddr
+               do (setq content
+                        (replace-regexp-in-string
+                         (format "<!-- %s -->" (substring (symbol-name placeholder) 1))
+                         (or value "—")
+                         content)))
+      (with-temp-file file
+        (insert content)))))
+
+(defun gptel-auto-workflow--update-pmf-dashboard (&optional stats)
+  "Update PMF dashboard with current experiment STATS.
+Called after each experiment batch completes."
+  (let* ((root (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                        (gptel-auto-workflow--worktree-base-root))
+                   default-directory))
+         (dash-file (expand-file-name "var/tmp/pmf-dashboard.md" root))
+         (results-file (expand-file-name
+                        (or (plist-get gptel-auto-workflow--stats :results)
+                            (format "var/tmp/experiments/%s/results.tsv"
+                                    (format-time-string "%Y-%m-%d")))
+                        root))
+         (today (format-time-string "%Y-%m-%d %H:%M")))
+    (when (file-exists-p dash-file)
+      (gptel-auto-workflow--update-dashboard
+       dash-file
+       :UPDATED today
+       :PLG_STEP "3"
+       :EXP_TODAY (or (plist-get stats :total) "0")
+       :EXP_WEEK "—"
+       :KEEP_RATE (or (plist-get stats :kept) "0")
+       :EXP_STATUS (if (bound-and-true-p gptel-auto-workflow--running)
+                       "running" "idle")
+       :VAL_STATUS "—"
+       :DEP_STATUS "—"
+       :REORIENT (format "PMF Value Stream: %s experiments, %s kept @ %s"
+                         (or (plist-get stats :total) 0)
+                         (or (plist-get stats :kept) 0)
+                         today)))))
+
+(defun gptel-auto-workflow--update-jtbd-dashboard (&optional findings)
+  "Update JTBD dashboard with current research FINDINGS.
+Called after research cycle completes."
+  (let* ((root (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                        (gptel-auto-workflow--worktree-base-root))
+                   default-directory))
+         (dash-file (expand-file-name "var/tmp/jtbd-dashboard.md" root))
+         (findings-file (expand-file-name "var/tmp/research-findings.md" root))
+         (today (format-time-string "%Y-%m-%d %H:%M"))
+         (findings-size (if (file-exists-p findings-file)
+                            (nth 7 (file-attributes findings-file))
+                          0)))
+    (when (file-exists-p dash-file)
+      (gptel-auto-workflow--update-dashboard
+       dash-file
+       :UPDATED today
+       :RESEARCH_FRESH (if (> findings-size 100) "fresh" "stale")
+       :FINDINGS_VOL (number-to-string findings-size)
+       :EXT_SOURCES (if (and findings (stringp findings)
+                             (string-match-p "https?://" findings))
+                        "yes" "no")
+       :CONFIDENCE "—"))))
+
+(defun gptel-auto-workflow--update-gtm-dashboard (&optional findings)
+  "Update GTM dashboard, referencing JTBD dashboard.
+Called after research cycle completes."
+  (let* ((root (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                        (gptel-auto-workflow--worktree-base-root))
+                   default-directory))
+         (dash-file (expand-file-name "var/tmp/gtm-dashboard.md" root))
+         (findings-file (expand-file-name "var/tmp/research-findings.md" root))
+         (today (format-time-string "%Y-%m-%d %H:%M"))
+         (findings-size (if (file-exists-p findings-file)
+                            (nth 7 (file-attributes findings-file))
+                          0)))
+    (when (file-exists-p dash-file)
+      ;; First update JTBD dashboard (dependency)
+      (gptel-auto-workflow--update-jtbd-dashboard findings)
+      ;; Then update GTM dashboard
+      (gptel-auto-workflow--update-dashboard
+       dash-file
+       :UPDATED today
+       :JTBD_STEP "3"
+       :RES_TODAY "1"
+       :FIND_QUAL (if (> findings-size 1000) "high"
+                     (if (> findings-size 100) "medium" "low"))
+       :CF_STATUS (if (> findings-size 100) "active" "waiting")
+       :TOP_SEG "—"
+       :TOP_OUTCOME "—"
+       :TOP_THREAT "—"
+       :REORIENT (format "GTM Product Org: %d bytes findings @ %s"
+                         findings-size today)))))
+
+;;; ─── Innovation Queue ───
+
+(defun gptel-auto-workflow--innovation-queue-file ()
+  "Return the innovation queue file path."
+  (expand-file-name "mementum/innovation-queue.md"
+                    (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                             (gptel-auto-workflow--worktree-base-root))
+                        default-directory)))
+
+(defun gptel-auto-workflow--innovation-queue-add (source technique expected-impact)
+  "Add an innovation idea to the queue.
+SOURCE: where the idea came from (e.g., 'GitHub trends', 'arXiv paper')
+TECHNIQUE: what to try (e.g., 'Hashline editing')
+EXPECTED-IMPACT: predicted outcome (e.g., '+15% keep-rate')
+Returns the new item ID."
+  (let* ((queue-file (gptel-auto-workflow--innovation-queue-file))
+         (id (format "innov-%s-%d"
+                     (format-time-string "%Y%m%d")
+                     (random 10000)))
+         (timestamp (format-time-string "%Y-%m-%d %H:%M"))
+         (entry (format "| %s | %s | %s | %s | pending | - | - |\n"
+                        id source technique expected-impact)))
+    (when (file-exists-p queue-file)
+      (let ((content (with-temp-buffer
+                       (insert-file-contents queue-file)
+                       (buffer-string))))
+        ;; Insert after the header row
+        (setq content
+              (replace-regexp-in-string
+               "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n|----|--------|-----------|-----------------|--------|---------------|---------------|\n"
+               (concat "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n"
+                       "|----|--------|-----------|-----------------|--------|---------------|---------------|\n"
+                       entry)
+               content))
+        ;; Update timestamp
+        (setq content (replace-regexp-in-string
+                       "<!-- UPDATED -->"
+                       timestamp
+                       content))
+        (with-temp-file queue-file
+          (insert content))))
+    (message "[innovation] Queued: %s (%s → %s)" id technique expected-impact)
+    id))
+
+(defun gptel-auto-workflow--innovation-queue-update (id status &optional experiment-id actual-impact)
+  "Update an innovation queue item's STATUS.
+ID: the innovation item ID
+STATUS: new status (pending|running|validated|discarded|deployed)
+EXPERIMENT-ID: optional experiment that tested this idea
+ACTUAL-IMPACT: measured outcome after experiments"
+  (let* ((queue-file (gptel-auto-workflow--innovation-queue-file))
+         (timestamp (format-time-string "%Y-%m-%d %H:%M")))
+    (when (file-exists-p queue-file)
+      (let ((content (with-temp-buffer
+                       (insert-file-contents queue-file)
+                       (buffer-string))))
+        ;; Update the matching row
+        (setq content
+              (replace-regexp-in-string
+               (format "| %s | \\([^|]+\\) | \\([^|]+\\) | \\([^|]+\\) | \\([^|]+\\) | \\([^|]+\\) | \\([^|]+\\) |"
+                       (regexp-quote id))
+               (lambda (match)
+                 (let* ((parts (split-string match " | "))
+                        (cols (mapcar (lambda (s) (string-trim s)) parts)))
+                   (format "| %s | %s | %s | %s | %s | %s | %s |"
+                           id
+                           (nth 1 cols)
+                           (nth 2 cols)
+                           (nth 3 cols)
+                           status
+                           (or experiment-id (nth 5 cols))
+                           (or actual-impact (nth 6 cols)))))
+               content))
+        ;; Update timestamp
+        (setq content (replace-regexp-in-string
+                       "<!-- UPDATED -->"
+                       timestamp
+                       content))
+        (with-temp-file queue-file
+          (insert content))))
+    (message "[innovation] Updated %s → %s" id status)))
+
+(defun gptel-auto-workflow--innovation-queue-list (&optional status-filter)
+  "Return list of innovation queue items.
+Optional STATUS-FILTER limits to items with that status."
+  (let* ((queue-file (gptel-auto-workflow--innovation-queue-file))
+         items)
+    (when (file-exists-p queue-file)
+      (with-temp-buffer
+        (insert-file-contents queue-file)
+        (goto-char (point-min))
+        ;; Skip to queue table
+        (while (and (not (eobp))
+                    (not (looking-at "| ID |")))
+          (forward-line 1))
+        ;; Skip header and separator
+        (forward-line 2)
+        ;; Parse rows
+        (while (and (not (eobp))
+                    (looking-at "|"))
+          (let* ((line (buffer-substring (line-beginning-position) (line-end-position)))
+                 (parts (split-string line " | "))
+                 (cols (mapcar #'string-trim parts)))
+            (when (>= (length cols) 7)
+              (let ((item (list :id (nth 0 cols)
+                               :source (nth 1 cols)
+                               :technique (nth 2 cols)
+                               :expected-impact (nth 3 cols)
+                               :status (nth 4 cols)
+                               :experiment-id (nth 5 cols)
+                               :actual-impact (nth 6 cols))))
+                (when (or (null status-filter)
+                          (string= (plist-get item :status) status-filter))
+                  (push item items)))))
+          (forward-line 1))))
+    (nreverse items)))
+
+(defun gptel-auto-workflow--innovation-queue-parse-findings (findings)
+  "Parse research FINDINGS for innovation ideas and queue them.
+Returns list of queued idea IDs."
+  (let ((ids nil))
+    ;; Look for innovation signals in findings
+    ;; Pattern: "Try [technique] to [expected-impact]"
+    (when (stringp findings)
+      (with-temp-buffer
+        (insert findings)
+        (goto-char (point-min))
+        (while (re-search-forward
+                "Try \\([^\n]+\\) to \\([^\n]+\\)"
+                nil t)
+          (let ((technique (match-string 1))
+                (impact (match-string 2)))
+            (push (gptel-auto-workflow--innovation-queue-add
+                   "research findings" technique impact)
+                  ids)))))
+    ids))
+
+;;; ─── Strategy Roadmap (Phase 6: GTM owns strategy) ───
+
+(defun gptel-auto-workflow--gtm-strategy-file ()
+  "Return path to GTM strategy roadmap file."
+  (expand-file-name "mementum/gtm/strategy-roadmap.md"
+                    (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                             (gptel-auto-workflow--worktree-base-root))
+                        default-directory)))
+
+(defun gptel-auto-workflow--read-gtm-strategy (&optional section)
+  "Read GTM strategy roadmap. If SECTION is provided, return that section's content.
+Sections: current-focus, research-strategy, backend-prefs, target-rules,
+experiment-strategy, market-insights, pmf-checklist, next-review."
+  (let ((file (gptel-auto-workflow--gtm-strategy-file)))
+    (when (file-exists-p file)
+      (with-temp-buffer
+        (insert-file-contents file)
+        (if (null section)
+            (buffer-string)
+          (let* ((start-marker (format "<!-- %s -->" (upcase (symbol-name section))))
+                 (end-marker (format "<!-- END_%s -->" (upcase (symbol-name section))))
+                 (start (save-excursion
+                          (goto-char (point-min))
+                          (when (search-forward start-marker nil t)
+                            (line-beginning-position 2))))
+                 (end (save-excursion
+                        (goto-char (point-min))
+                        (when (search-forward end-marker nil t)
+                          (line-beginning-position)))))
+            (when (and start end (> end start))
+              (string-trim (buffer-substring start end)))))))))
+
+(defun gptel-auto-workflow--write-gtm-strategy (section content)
+  "Write CONTENT to SECTION in GTM strategy roadmap.
+Creates file if it doesn't exist."
+  (let ((file (gptel-auto-workflow--gtm-strategy-file)))
+    (make-directory (file-name-directory file) t)
+    (if (not (file-exists-p file))
+        ;; Create template if missing
+        (gptel-auto-workflow--ensure-gtm-strategy-template file))
+    (let* ((marker-start (format "<!-- %s -->" (upcase (symbol-name section))))
+           (marker-end (format "<!-- END_%s -->" (upcase (symbol-name section))))
+           (existing (with-temp-buffer
+                       (insert-file-contents file)
+                       (buffer-string))))
+      (setq existing
+            (replace-regexp-in-string
+             (format "%s\\(.*\\)?%s"
+                     (regexp-quote marker-start)
+                     (regexp-quote marker-end))
+             (format "%s\n%s\n%s"
+                     marker-start
+                     content
+                     marker-end)
+             existing t t))
+      (with-temp-file file
+        (insert existing))
+      (message "[gtm] Updated strategy section: %s" section))))
+
+(defun gptel-auto-workflow--ensure-gtm-strategy-template (file)
+  "Create strategy roadmap template at FILE."
+  (make-directory (file-name-directory file) t)
+  (with-temp-file file
+    (insert "---\n")
+    (insert "version: 1.0\n")
+    (insert "generated-by: gtm-mayor\n")
+    (insert (format "updated: %s\n" (format-time-string "%Y-%m-%d")))
+    (insert "status: active\n")
+    (insert "---\n\n")
+    (insert "# Strategy Roadmap\n\n")
+    (dolist (section '((current-focus . "JTBD Step 1: Market Definition")
+                       (research-strategy . "- Pattern: research-research-none\n- Sources: GitHub, Reddit, HackerNews\n- Depth: 3 turns max")
+                       (backend-prefs . "- Executor: moonshot → MiniMax → DeepSeek\n- Researcher: DeepSeek → moonshot → DashScope\n- Validator: DashScope → DeepSeek")
+                       (target-rules . "1. Prioritize files with TODOs/FIXMEs\n2. Skip files modified in last 24h\n3. Focus on modules with < 60% keep-rate")
+                       (experiment-strategy . "- Max experiments per run: 5\n- Timeout: 900s per experiment\n- Staging: enabled\n- Auto-merge: disabled")
+                       (market-insights . "- None yet")
+                       (pmf-checklist . "- [ ] Can measure outcomes in code\n- [ ] Can close gaps with experiments\n- [ ] Can serve identified segments\n- [ ] Strategy has measurable milestones")
+                       (next-review . "See GTM dashboard")))
+      (let ((name (car section))
+            (content (cdr section)))
+        (insert (format "## %s\n" (capitalize (symbol-name name))))
+        (insert (format "<!-- %s -->\n" (upcase (symbol-name name))))
+        (insert (if (stringp content) content (eval content)))
+        (insert (format "\n<!-- END_%s -->\n\n" (upcase (symbol-name name))))))))
+
+(defun gptel-auto-workflow--maybe-run-gtm-strategy-evolution ()
+  "Run strategy evolution if this is the GTM Mayor (researcher daemon).
+Writes updated strategy to mementum/gtm/strategy-roadmap.md."
+  (when (and (fboundp 'gptel-auto-workflow--researcher-daemon-p)
+             (gptel-auto-workflow--researcher-daemon-p)
+             (fboundp 'gptel-auto-workflow--run-strategy-evolution))
+    (message "[gtm] Running strategy evolution...")
+    (condition-case err
+        (progn
+          (gptel-auto-workflow--run-strategy-evolution)
+          ;; Update strategy roadmap with latest
+          (gptel-auto-workflow--write-gtm-strategy
+           'updated
+           (format-time-string "%Y-%m-%d %H:%M"))
+          (message "[gtm] Strategy evolution complete"))
+       (error
+        (message "[gtm] Strategy evolution error: %s" err)))))
+
+;;; ─── Phase 7: Innovation Metrics ───
+
+(defun gptel-auto-workflow--pmf-metrics ()
+  "Calculate PMF Mayor metrics from experiment history.
+Returns plist with :experiments-today :keep-rate :hours-per-experiment."
+  (let* ((results-file (expand-file-name
+                        (format "var/tmp/experiments/%s/results.tsv"
+                                (format-time-string "%Y-%m-%d"))
+                        (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                                 (gptel-auto-workflow--worktree-base-root))
+                            default-directory)))
+         (records (when (file-exists-p results-file)
+                    (with-temp-buffer
+                      (insert-file-contents results-file)
+                      (split-string (buffer-string) "\n" t))))
+         (total (length records))
+         (kept (cl-count-if (lambda (r) (string-match-p "kept" r)) records))
+         (keep-rate (if (> total 0) (/ (float kept) total) 0.0))
+         ;; Estimate hours per experiment from timestamps if available
+         (hours-per-exp (if (> total 0)
+                            (/ 24.0 (max total 1))  ; assume 24h window
+                          0.0)))
+    (list :experiments-today total
+          :keep-rate (format "%.1f%%" (* 100 keep-rate))
+          :hours-per-experiment (format "%.1f" hours-per-exp))))
+
+(defun gptel-auto-workflow--gtm-metrics ()
+  "Calculate GTM Mayor metrics from research history.
+Returns plist with :findings-today :strategy-accuracy :pmf-signal."
+  (let* ((findings-file (expand-file-name "var/tmp/research-findings.md"
+                                          (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                                                   (gptel-auto-workflow--worktree-base-root))
+                                              default-directory)))
+         (findings-size (if (file-exists-p findings-file)
+                            (nth 7 (file-attributes findings-file))
+                          0))
+         ;; Count beads filed today as proxy for findings velocity
+         (beads (when (fboundp 'gptel-auto-workflow--bead-list)
+                  (gptel-auto-workflow--bead-list 'gtm-to-pmf)))
+         (findings-today (length beads))
+         ;; Strategy accuracy: % of beads that led to kept experiments
+         (validated (cl-count-if (lambda (b)
+                                   (string= (plist-get b :status) "validated"))
+                                 beads))
+         (strategy-accuracy (if (> findings-today 0)
+                                (/ (float validated) findings-today)
+                              0.0))
+         ;; PMF signal: correlation between research findings and experiment keep-rate
+         (pmf-metrics (gptel-auto-workflow--pmf-metrics))
+         (pmf-keep-rate (string-to-number
+                         (replace-regexp-in-string "%" ""
+                                                   (or (plist-get pmf-metrics :keep-rate) "0"))))
+         (pmf-signal (if (> findings-today 0)
+                         (* pmf-keep-rate (/ 100.0 (max findings-today 1)))
+                       0.0)))
+    (list :findings-today findings-today
+          :strategy-accuracy (format "%.1f%%" (* 100 strategy-accuracy))
+          :pmf-signal (format "%.2f" pmf-signal))))
+
+(defun gptel-auto-workflow--update-pmf-dashboard-metrics ()
+  "Update PMF dashboard with Phase 7 metrics."
+  (let* ((root (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                        (gptel-auto-workflow--worktree-base-root))
+                   default-directory))
+         (dash-file (expand-file-name "var/tmp/pmf-dashboard.md" root))
+         (metrics (gptel-auto-workflow--pmf-metrics))
+         (today (format-time-string "%Y-%m-%d %H:%M")))
+     (when (file-exists-p dash-file)
+       (gptel-auto-workflow--update-dashboard
+        dash-file
+        :UPDATED today
+        :EXP_VELOCITY (format "%s" (or (plist-get metrics :experiments-today) "0"))
+        :KEEP_PCT (format "%s" (or (plist-get metrics :keep-rate) "0%"))
+        :VALIDATE_HOURS (format "%s" (or (plist-get metrics :hours-per-experiment) "0"))
+        :REORIENT (format "PMF Metrics: %s exp, %s kept, %s hrs/val"
+                          (or (plist-get metrics :experiments-today) 0)
+                          (or (plist-get metrics :keep-rate) "0%")
+                          (or (plist-get metrics :hours-per-experiment) "0"))))))
+
+(defun gptel-auto-workflow--update-gtm-dashboard-metrics ()
+  "Update GTM dashboard with Phase 7 metrics."
+  (let* ((root (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                        (gptel-auto-workflow--worktree-base-root))
+                   default-directory))
+         (dash-file (expand-file-name "var/tmp/gtm-dashboard.md" root))
+         (metrics (gptel-auto-workflow--gtm-metrics))
+         (today (format-time-string "%Y-%m-%d %H:%M")))
+     (when (file-exists-p dash-file)
+       (gptel-auto-workflow--update-dashboard
+        dash-file
+        :UPDATED today
+        :FIND_VELOCITY (format "%s" (or (plist-get metrics :findings-today) "0"))
+        :STRAT_ACC (format "%s" (or (plist-get metrics :strategy-accuracy) "0%"))
+        :PMF_SIGNAL (format "%s" (or (plist-get metrics :pmf-signal) "0"))
+        :REORIENT (format "GTM Metrics: %s findings, %s accuracy, signal %s"
+                          (or (plist-get metrics :findings-today) 0)
+                          (or (plist-get metrics :strategy-accuracy) "0%")
+                          (or (plist-get metrics :pmf-signal) "0"))))))
 
 (provide 'gptel-auto-workflow-production)
 ;;; gptel-auto-workflow-production.el ends here

@@ -18,36 +18,62 @@
 
 (require 'gptel-auto-workflow-evolution)
 (require 'gptel-auto-workflow-skill-graph)
+(require 'gptel-ext-backend-registry)
 
 (defvar gptel-auto-workflow-executor-rate-limit-fallbacks
-  '(("MiniMax" . "MiniMax-M3")
-    ("moonshot" . "kimi-k2.6")
-    ("DeepSeek" . "deepseek-v4-pro")
-    ("DashScope" . "qwen3.6-plus")
-    ("Copilot" . "gpt-5.4-mini"))
+  (mapcar (lambda (backend)
+            (cons (symbol-name backend)
+                  (symbol-name (gptel-backend-registry-default-model backend))))
+          (gptel-backend-registry-fallback-chain 'executor))
   "Fallback chain for executor when rate-limited.
+Dynamically generated from `gptel-backend-registry'.
 First backend is primary, subsequent backends are tried in order.
 Ordered by keep-rate from experiment data.")
 (defvar gptel-auto-workflow-headless-subagent-fallbacks)
 
 ;; ─── Sieve-Based Backend Classification (verbum Phase 5) ───
+;; Dynamically generated from `gptel-backend-registry' capabilities metadata.
+;; Qwen3 family (DashScope) → single-neuron (high compression, deterministic).
+;; All others → distributed (lower compression, more redundancy).
+
+(defun gptel-auto-workflow--generate-sieve-types ()
+  "Generate sieve-type alist from backend registry.
+Returns list of (BACKEND-OR-MODEL . sieve-type) entries.
+Backend classification uses backend name only.
+Model classification uses model name (or inherits from qwen backend)."
+  (let ((result '()))
+    (dolist (entry gptel-backend-registry)
+      (let* ((backend-name (symbol-name (car entry)))
+             (models (plist-get (cdr entry) :models))
+             ;; Backend classified by its own name only
+             (backend-is-qwen (string-match-p "qwen" (downcase backend-name)))
+             ;; Any model contains qwen (for wildcard entry)
+             (any-model-qwen (cl-some (lambda (m)
+                                        (string-match-p "qwen"
+                                                        (downcase (symbol-name m))))
+                                      models)))
+        ;; Backend entry: classified by backend name only
+        (push (cons backend-name (if backend-is-qwen 'single-neuron 'distributed))
+              result)
+        ;; Model entries: classified by model name
+        (dolist (model models)
+          (let ((model-name (symbol-name model))
+                (model-is-qwen (string-match-p "qwen"
+                                               (downcase (symbol-name model)))))
+            (push (cons model-name
+                        (if model-is-qwen 'single-neuron 'distributed))
+                  result)))
+        ;; Model family wildcard for Qwen
+        (when (or backend-is-qwen any-model-qwen)
+          (push (cons "qwen" 'single-neuron) result))))
+    result))
 
 (defvar gptel-auto-workflow--backend-sieve-types
-  '(("DashScope" . single-neuron)          ; Backend name
-    ("qwen3.6-plus" . single-neuron)       ; Model name: Qwen3 family
-    ("qwen" . single-neuron)               ; Model family
-    ("moonshot" . distributed)             ; Backend name
-    ("kimi-k2.6" . distributed)            ; Model name
-    ("DeepSeek" . distributed)             ; Backend name
-    ("deepseek-v4-pro" . distributed)     ; Model name
-    ("deepseek-v4-pro" . distributed)    ; Fast variant
-    ("MiniMax" . distributed)              ; Backend name
-    ("MiniMax-M3" . distributed) ; Model name
-    ("CF-Gateway" . distributed)           ; Backend name
-    ("@cf/openai/gpt-oss-120b" . distributed)) ; Model name
+  (gptel-auto-workflow--generate-sieve-types)
   "Sieve-type classification per backend/model (verbum crystal spine discovery).
 single-neuron: high compression, deterministic at bottleneck (Qwen3 family).
-distributed: lower compression, more redundancy (Mistral, OLMo, etc.).")
+distributed: lower compression, more redundancy (Mistral, OLMo, etc.).
+Dynamically generated from `gptel-backend-registry'.")
 
 (defun gptel-auto-workflow--backend-sieve-type (backend-or-model)
   "Return sieve-type for BACKEND-OR-MODEL: single-neuron or distributed.

@@ -345,6 +345,14 @@ Usage:
         (gptel-auto-workflow--persist-status)
         (message "[auto-workflow] Skipping: %s" (string-join (car active) ", "))
         (cl-return-from gptel-auto-workflow-run-async nil)))
+    ;; Human decision gate: block if pending decisions exist
+    (when (and (fboundp 'gptel-auto-workflow--pending-decisions-p)
+               (gptel-auto-workflow--pending-decisions-p))
+      (setq gptel-auto-workflow--stats
+            (list :phase "blocked" :total 0 :kept 0))
+      (gptel-auto-workflow--persist-status)
+      (message "[auto-workflow] BLOCKED: Pending human decision in mementum/decisions/")
+      (cl-return-from gptel-auto-workflow-run-async nil))
     (gptel-auto-workflow--require-magit-dependencies)
     (gptel-auto-workflow--migrate-legacy-provider-defaults)
     ;; Load git-tracked backend preference before any experiment runs.
@@ -382,6 +390,13 @@ Usage:
       ;; MiniMax that was snapshotted during daemon startup.
       (when (fboundp 'nucleus--override-gptel-agent-presets)
         (nucleus--override-gptel-agent-presets)))
+    ;; Set generous timeout for headless daemon experiments.
+    ;; gptel-auto-workflow-cron-safe sets this to 900, but evolution timer
+    ;; calls run-async directly which uses the default 300. Without this,
+    ;; executor hits 480s hard timeout (300+180 grace) before completing.
+    (when (and (boundp 'gptel-auto-workflow-persistent-headless)
+               gptel-auto-workflow-persistent-headless)
+      (setq gptel-auto-experiment-time-budget 900))
     ;; Restore research context from findings file.  Survives daemon restart
     ;; between pipeline Steps 3 and 4 — loads the findings saved by the
     ;; researcher so experiment metadata links back to the research trace.
@@ -418,6 +433,22 @@ Usage:
             (setq-default gptel-auto-workflow-targets discovered)
             (message "[auto-workflow] Auto-discovered %d targets"
                      (length discovered))))))
+    ;; Check innovation queue for pending ideas from GTM Mayor
+    (when (fboundp 'gptel-auto-workflow--innovation-queue-list)
+      (condition-case err
+          (let ((pending (gptel-auto-workflow--innovation-queue-list "pending")))
+            (when pending
+              (message "[innovation] %d queued ideas awaiting experiments"
+                       (length pending))))
+        (error (message "[innovation] Queue check error: %s" err))))
+    ;; Phase 6: Read GTM strategy roadmap
+    (when (fboundp 'gptel-auto-workflow--read-gtm-strategy)
+      (condition-case err
+          (let ((focus (gptel-auto-workflow--read-gtm-strategy 'current-focus)))
+            (when focus
+              (message "[pmf] Following GTM strategy: %s"
+                       (car (split-string focus "\n")))))
+        (error (message "[pmf] Strategy read error: %s" err))))
     ;; Pre-warm baseline cache so first experiment doesn't fail
     ;; while the full test suite runs (~21 min) to create it.
     (when (and (fboundp 'gptel-auto-workflow--main-baseline-test-results)

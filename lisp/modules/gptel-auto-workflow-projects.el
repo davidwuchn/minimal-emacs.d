@@ -1091,7 +1091,7 @@ Returns nil if PROJECT-ROOT is nil or not found in cache."
           (let ((result (string-join (nreverse status-lines) "\n")))
             (setq gptel-auto-workflow--research-status-cache
                   (cons now result))
-            (message "Research cache status:\n%s" result))))))
+            (message "Research cache status:\n%s" result)))))))
 
 ;;; Weekly Job Runner (shared by mementum and instincts)
 

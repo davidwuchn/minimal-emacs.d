@@ -611,7 +611,7 @@ In headless mode, respects `gptel-mementum-headless-auto-approve'."
                 (when (y-or-n-p (format "Create knowledge page for '%s'? (%d lines) " topic line-count))
                   (gptel-mementum--save-knowledge-page topic files extracted)))))))
     (error
-     (message "[mementum] Error handling synthesis for '%s': %s" topic err))))
+     (message "[mementum] Error handling synthesis for '%s': %s" topic (error-message-string err)))))
 
 (defun gptel-mementum--build-synthesis-prompt (topic memories)
   "Build prompt for LLM to synthesize MEMORIES into knowledge page for TOPIC."

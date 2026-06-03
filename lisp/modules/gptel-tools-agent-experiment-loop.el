@@ -211,7 +211,7 @@ fixable validation failures that the executor can correct."
                             validation-error)
             (string-match-p "security|injection|eval.*without.*guard"
                             validation-error)
-            (string-match-p "no code changes\\|no file modifications\\|Agent made no"
+            (string-match-p "no code changes\\|no file modifications\\|experiment produced no file changes\\|Agent made no"
                             validation-error))))
 
 (defun gptel-auto-experiment--make-retry-prompt (target validation-error original-prompt)
@@ -247,8 +247,8 @@ If you see a function like \='tool\=' or \='key\=' in the error, it means you wr
 (tool ...) or (key ...) — these are NOT valid Emacs Lisp functions.
 Replace undefined calls with valid Emacs Lisp equivalents or remove them.
 Use function-quote #' for symbols meant as functions, not bare-quote \='.")
-            ;; Agent made no file modifications — it only analyzed, didn't edit
-            ((string-match-p "no code changes\\|no file modifications\\|Agent made no"
+             ;; Agent made no file modifications — it only analyzed, didn't edit
+            ((string-match-p "no code changes\\|no file modifications\\|experiment produced no file changes\\|Agent made no"
                              validation-error)
              "TOOL-CALL-FAILURE")
             ;; Add more skill mappings here as needed

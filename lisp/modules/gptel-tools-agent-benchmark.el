@@ -2,6 +2,7 @@
 ;; Part of gptel-tools-agent split
 
 (require 'gptel-tools-agent-validation)
+(require 'gptel-ext-backend-registry)
 (declare-function project-root "project")
 (declare-function gptel-auto-workflow--call-in-run-context "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--non-empty-string-p "gptel-tools-agent-base")
@@ -193,12 +194,13 @@ Set to 0 to disable the check."
   :type 'integer
   :group 'gptel-auto-workflow)
 (defcustom gptel-auto-workflow-protected-configs
-  '(("assistant/agents/code_agent.md" . "minimax-m2.7-highspeed")
-    ("assistant/agents/plan_agent.md" . "minimax-m2.7-highspeed")
-    ("assistant/agents/comparator.md" . "minimax-m2.7-highspeed")
-    ("assistant/agents/explorer_agent.md" . "minimax-m2.7-highspeed")
-    ("assistant/agents/introspector.md" . "minimax-m2.7-highspeed"))
+  `(("assistant/agents/code_agent.md" . ,(symbol-name (gptel-backend-registry-default-model 'MiniMax)))
+    ("assistant/agents/plan_agent.md" . ,(symbol-name (gptel-backend-registry-default-model 'MiniMax)))
+    ("assistant/agents/comparator.md" . ,(symbol-name (gptel-backend-registry-default-model 'MiniMax)))
+    ("assistant/agents/explorer_agent.md" . ,(symbol-name (gptel-backend-registry-default-model 'MiniMax)))
+    ("assistant/agents/introspector.md" . ,(symbol-name (gptel-backend-registry-default-model 'MiniMax))))
   "Protected configuration files and their expected values.
+AUTO-GENERATED from `gptel-backend-registry' — edit defaults there.
 Each element is (FILE . EXPECTED-VALUE).  If an experiment changes
 FILE so that it no longer contains EXPECTED-VALUE, the merge is blocked.
 Prevents regressions like model downgrades."
