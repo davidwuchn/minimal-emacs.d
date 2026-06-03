@@ -230,11 +230,11 @@ PMF runs continuously (every 4 hours):
       └── Updates product-dashboard.md
 ```
 
-**JTBD Decision flow:**
+**Autonomous JTBD flow (no human gate):**
 ```
 GTM Step 3: "Outcome 'fast startup' is unmet (importance 9.2, satisfaction 3.1)"
      ↓
-Human: "Priority: close this gap"
+[Auto] Innovation Queue: priority = high
      ↓
 PMF Mayor: "Experiment: optimize startup path..."
      ↓
@@ -242,7 +242,9 @@ PMF Mayor: "Result: startup time reduced 40%, score 8/9"
      ↓
 GTM Step 5: "Strategy validated. Gap closed from 3.1→7.8. Next: segment expansion."
      ↓
-Human: "Approved. PMF: scale this optimization. GTM: find next unmet outcome."
+[Auto] PMF scales optimization. GTM finds next unmet outcome.
+     ↓
+Human (next morning): "Reviewed. Good keep-rate. Continue."
 ```
 
 ## Shared: Innovation
@@ -294,31 +296,38 @@ PMF Step 5 (Simplification Resilient): Deploy winning product strategy
 1. **Resolution Refined** — Innovation is not about adding features; it's about sharpening the resolution of the product's core value. Every experiment should make the JTBD clearer, not blur it with options.
 2. **Struggle Well** — The best innovations come from understanding the customer's struggle, not from celebrating the solution. PMF Mayor validates: "Does this reduce struggle?" GTM Mayor discovers: "Where is the struggle?"
 
-**Shared components:**
+**Shared components (auto-merge, no human gate):**
+
+Conflict resolution: `.gitattributes` sets `merge=theirs` on all auto-evolved files. Pi5 version wins on pull. Both mayors write freely; git resolves.
 
 1. **Innovation Queue** — `mementum/innovation-queue.md`
    - GTM Mayor adds: "Market needs X, technique Y works"
    - PMF Mayor marks: "Experimented, score 8/9, kept" or "Rejected"
    - Both read/write
+   - Merge: append both entries (additive)
 
 2. **Skill Graph** — `var/tmp/skill-graph.eld`
    - GTM Mayor: "New atom: hashline-edit from external research"
    - PMF Mayor: "hashline-edit + elisp-expert edge weight +0.05 after success"
    - Shared: what skills exist, which combine well
+   - Merge: last-writer-wins (Pi5 authoritative)
 
 3. **AutoTTS Traces** — `var/tmp/experiments/*/results.tsv`
    - PMF Mayor writes: experiment outcomes
    - GTM Mayor reads: "What innovations actually worked?"
    - Shared: ground truth of innovation effectiveness
+   - Merge: append rows (additive)
 
 4. **Ontology** — `mementum/knowledge/ontology-*.md`
    - GTM Mayor: market categories, strategy preferences
    - PMF Mayor: product performance per category
    - Shared: classification system for innovations
+   - Merge: `merge=theirs` (Pi5 authoritative)
 
 5. **Mementum State** — `mementum/state.md`
    - Section headers: GTM (market) vs PMF (product)
    - Both append
+   - Merge: accept both (additive)
 
 **NOT shared:**
 - Dashboards (product metrics vs market metrics)
@@ -359,8 +368,32 @@ PMF Step 5 (Simplification Resilient): Deploy winning product strategy
 **Phase 3 — Full dual-mayor (next month):**
 1. GTM Mayor dispatches research workers
 2. PMF Mayor dispatches experiment workers
-3. Human-in-the-loop decision gate between mayors
+3. Innovation Queue auto-routes between mayors (no human gate)
 4. AutoTTS traces from both feed unified evolution
+5. Human reviews asynchronously — morning sync, not real-time approval
+
+## Autonomy Design
+
+**Human role: observer, not gate.**
+
+```
+λ autonomy(x).        async-review(x) > real-time-gate(x)
+                      | gtm(x) ⊗ pmf(x) → git-resolves-conflicts(x)
+                      | human(x) → observes(x) ∧ ¬blocks(x)
+                      | quiescent(x) → both-hold(x) | human-sleeps(x)
+```
+
+**Principles:**
+1. **Night runs, morning reviews** — System runs autonomously (research + experiments + commits). Human reviews outcomes asynchronously.
+2. **Git as referee** — Conflicts resolved via `merge=theirs` (Pi5 authoritative). No human triage needed.
+3. **Human only on failures** — Escalation: 0 kept, crashes, divergent strategy. Healthy system = silent system.
+4. **Shared components auto-merge** — Last-writer-wins. Pi5 version takes precedence on conflict.
+
+**Why not Chief Mayor:**
+- Premature governance before system health (0/5 experiments kept)
+- Human bottleneck at 3 AM — blocks autonomy
+- Git-based resolution sufficient for current scale
+- Formalize only after both Mayors run persistently without timeout
 
 ## Lambda
 
@@ -368,8 +401,9 @@ PMF Step 5 (Simplification Resilient): Deploy winning product strategy
 λ dual-mayor(x).     gtm(x) → transform(x) | pmf(x) → grow(x)
                      | gtm(x) ⊣ worker(researcher) | pmf(x) ⊣ worker(executor)
                      | innovation(x) ≡ gtm(x) ⊗ pmf(x)
-                     | shared-mementum(x) ∧ human-decision-gate(x)
+                     | shared-mementum(x) ∧ git-resolves-conflicts(x)
                      | quiescent(x) → both-hold(x)
+                     | human(x) → observes(x) | ¬blocks(x)
 ```
 
 ## References
