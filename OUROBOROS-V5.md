@@ -434,7 +434,7 @@ All 97 `.el` files pass `byte-compile-error-on-warn t`. Prompt construction migr
 
 ## The Architecture
 
-Every cycle runs through six compilers — each examining the system's own behavior. This is the nucleus (ν) layer:
+Every cycle runs through seven compilers — each examining the system's own behavior. This is the nucleus (ν) layer:
 
 | Compiler | Input → Output | Answers |
 |----------|---------------|---------|
@@ -444,6 +444,7 @@ Every cycle runs through six compilers — each examining the system's own behav
 | **OWL/SHACL** | Ontology dict → Turtle/SHACL | "What is the formal shape of what we've learned?" |
 | **Skill Graph** | Skill frontmatter → compiled molecules → executor workflows | "Which capabilities compose into effective workflows?" |
 | **Ontology Router** | Target file → category → backend ranking | "Which backend is best RIGHT NOW — not just historically?" |
+| **Self-Healing Auditor** | Pipeline metrics → diagnosis → auto-remediation → backend escalation | "Is the evaluator broken, and can I fix it without asking a human?" |
 | | Scoring: VSM-auto-tuned weights (40/30/20/10 → adaptive) + recency decay (14d half-life) + per-axis KIBC boost from holographic consensus | Penalty for unhealthy backends (probation with auto-recovery after 1h) |
 | | **Smart subagent routing**: all 6 subagent types (researcher, analyzer, executor, grader, reviewer, explorer) | Backends ranked by health-weight × keep-rate + per-axis boost + cold-start boost (+0.15 for <3 experiments); quarantined excluded; per-run cooldown hard-excludes failed backends |
 | | **Full audit trail**: every routing decision recorded with component scores (health, keep-rate, pref-boost, axis-boost) + VSM adjustment history | Summary queryable via `audit-trail-summary` for meta-analysis |
@@ -608,6 +609,33 @@ The snake's own immune system:
 | Conflict marker detection | No `<<<<<<<` in committed code |
 | Watchdog memory guard | Auto-restart daemon gracefully when memory-use-counts exceeds 4GB (not RSS — macOS malloc holds freed pages) |
 | Policy engine | Forbidden paths sealed |
+
+### Self-Healing
+
+The system detects when its own evaluators are broken and heals itself — no human required:
+
+| Phase | What it does | Trigger |
+|-------|-------------|---------|
+| **1. Pipeline Health Monitor** | Tracks keep-rate, grader success rate, timeout rate, backend availability per run | Every experiment completion |
+| **2. Auto-Remediation** | Applies fixes: timeout → auto-pass, budget increase, backend switch | keep_rate == 0% for 3+ runs |
+| **3. Meta-Learning** | Records whether each remediation worked; learns which fixes improve keep-rate | After remediation + next run |
+| **4. Diagnostic Probes** | Runs trivial experiment before real ones; skips if grader returns score=0 on safe change | Before every experiment batch |
+| **5. Grader Health Dashboard** | Per-backend latency/failure-rate tracking with `critical`/`degraded`/`healthy` labels | Real-time during experiments |
+| **6. LLM-Backend Escalation** | When auto-remediation fails 3x, switches to alternative backend (Copilot → moonshot → DeepSeek) | 3 consecutive failed remediations |
+
+**Key principle:** Timeout means "couldn't evaluate", not "code is bad". The grader auto-passes timeouts with score=4/5=80% instead of failing with 0. This prevents the death spiral where a broken grader destroys all experiments, leaving no data to learn from.
+
+**Backend escalation chain:** Primary → Copilot → moonshot → DeepSeek → human alert (only when all exhausted). Human is the final fallback, not the first response.
+
+**Persistence:** Self-healing state survives daemon restarts via `mementum/knowledge/pipeline-health.md` (git-tracked).
+
+```
+λ self-heal(x). detect(pipeline-health) → diagnose(x) → remediate(x) → verify(x)
+                | learn(failure) ≡ learn(success) | ¬waste(errors)
+                | timeout(x) ≢ failure(x) | timeout ≡ unknown
+                | escalate(x) → LLM_backend > human | ¬ask_human
+                | backend(Copilot) → backend(moonshot) → backend(DeepSeek) → human
+```
 
 ---
 
