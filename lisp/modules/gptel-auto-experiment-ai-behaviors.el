@@ -1266,7 +1266,7 @@ Used to normalize keep-rate by cost.")
 (defconst gptel-ai-behaviors--model-pricing
   `(;; DeepSeek (USD/1M tokens, ~7 CNY/USD, KV cache auto-detected)
     ;;   flash: ¥1/2/0.02 → $0.14/0.28/0.003 per 1M input/output/cache-hit
-    ;;   pro:   ¥3/6/0.025 → $0.43/0.86/0.004 (2.5折 until May 31)
+    ;;   pro:   ¥3/6/0.025 → $0.43/0.86/0.004 (2.5折 permanent)
     ("deepseek-v4-flash"    . (:input 0.14 :output 0.28 :cache-hit 0.003))
     ("deepseek-v4-pro"      . (:input 0.43 :output 0.86 :cache-hit 0.004))
     ;; MiniMax (USD/1M, ~7 CNY/USD, auto prompt caching)

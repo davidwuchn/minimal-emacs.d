@@ -1959,8 +1959,12 @@ Captures executor reasoning from the dynamic variable
                         truncated-output
                         (round output-chars)
                         (gptel-auto-experiment--tsv-escape
-                         (gptel-auto-workflow--plist-get experiment :backend "unknown"))
-                        (round prompt-chars)
+                         (let ((model (gptel-auto-workflow--plist-get experiment :model)))
+                           (if (fboundp 'gptel-auto-workflow--backend-for-model)
+                               (gptel-auto-workflow--backend-for-model model)
+                             (or (gptel-auto-workflow--plist-get experiment :backend "unknown")
+                                 "unknown"))))
+                         (round prompt-chars)
                         (or (gptel-auto-experiment--tsv-escape
                              (gptel-auto-workflow--plist-get experiment :sections-included "all"))
                             "all")
@@ -2353,6 +2357,23 @@ If BACKEND is not found, returns \"unknown\"."
   (and (or (bound-and-true-p gptel-auto-workflow--headless)
            (bound-and-true-p gptel-auto-workflow-persistent-headless))
        (bound-and-true-p gptel-auto-workflow--current-project)))
+
+(defun gptel-auto-workflow--backend-for-model (model)
+  "Derive the backend provider name from a MODEL string.
+Returns a string like \"DeepSeek\", \"MiniMax\", \"moonshot\", \"DashScope\", etc.
+Returns \"unknown\" when model is nil, empty, or unrecognized."
+  (cond
+   ((or (null model) (not (stringp model)) (string= model ""))
+    "unknown")
+   ((string-prefix-p "deepseek" model) "DeepSeek")
+   ((string-prefix-p "minimax" model) "MiniMax")
+   ((string-prefix-p "MiniMax" model) "MiniMax")
+   ((string-prefix-p "kimi" model) "moonshot")
+   ((string-prefix-p "qwen" model) "DashScope")
+   ((string-prefix-p "gpt" model) "OpenAI")
+   ((string-prefix-p "claude" model) "Anthropic")
+   ((string-prefix-p "gemini" model) "Google")
+   (t "unknown")))
 
 (defun gptel-auto-workflow--backend-object (backend-name)
   "Return the backend object for BACKEND-NAME, or nil when unavailable.

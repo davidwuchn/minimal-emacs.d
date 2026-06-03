@@ -545,5 +545,41 @@ into lambda notation symbols like lambda x y z that are much shorter")
               (when kept (setcar (cdr entry) (1+ (cadr entry))))))))
       (should (hash-table-p by-backend)))))
 
+;; ─── Backend Identification from Model Name ───
+
+(ert-deftest tdd/live-h2h/backend-for-model-deepseek ()
+  "Backend identified as DeepSeek for deepseek-* models."
+  (when (fboundp 'gptel-auto-workflow--backend-for-model)
+    (should (string= "DeepSeek" (gptel-auto-workflow--backend-for-model "deepseek-v4-flash")))))
+
+(ert-deftest tdd/live-h2h/backend-for-model-minimax ()
+  "Backend identified as MiniMax for minimax-* models."
+  (when (fboundp 'gptel-auto-workflow--backend-for-model)
+    (should (string= "MiniMax" (gptel-auto-workflow--backend-for-model "minimax-m2.7-highspeed")))))
+
+(ert-deftest tdd/live-h2h/backend-for-model-kimi ()
+  "Backend identified as moonshot (Kimi) for kimi-* models."
+  (when (fboundp 'gptel-auto-workflow--backend-for-model)
+    (should (string= "moonshot" (gptel-auto-workflow--backend-for-model "kimi-k2.6")))))
+
+(ert-deftest tdd/live-h2h/backend-for-model-qwen ()
+  "Backend identified as DashScope for qwen* models."
+  (when (fboundp 'gptel-auto-workflow--backend-for-model)
+    (should (string= "DashScope" (gptel-auto-workflow--backend-for-model "qwen3.6-plus")))))
+
+(ert-deftest tdd/live-h2h/backend-for-model-minimax-m3 ()
+  "Backend identified as MiniMax for MiniMax-M3 model."
+  (when (fboundp 'gptel-auto-workflow--backend-for-model)
+    (should (string= "MiniMax" (gptel-auto-workflow--backend-for-model "MiniMax-M3")))))
+
+
+(ert-deftest tdd/live-h2h/backend-for-model-unknown ()
+  "Unknown model returns 'unknown' without crashing."
+  (when (fboundp 'gptel-auto-workflow--backend-for-model)
+    (should (string= "unknown" (gptel-auto-workflow--backend-for-model "gpt-4-turbo")))
+    (should (string= "unknown" (gptel-auto-workflow--backend-for-model "some-unknown-model")))
+    (should (string= "unknown" (gptel-auto-workflow--backend-for-model "")))
+    (should (string= "unknown" (gptel-auto-workflow--backend-for-model nil)))))
+
 (provide 'test-gptel-nucleus-context-intercept)
 ;;; test-gptel-nucleus-context-intercept.el ends here
