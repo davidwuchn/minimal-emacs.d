@@ -517,18 +517,19 @@ Accepts extra IGNORED args passed by byte-compiled closure callers."
 (defun gptel-auto-experiment--merge-analysis (analysis previous-results)
   "Merge ANALYSIS with deterministic history from PREVIOUS-RESULTS."
   (let* ((fallback (gptel-auto-experiment--fallback-analysis previous-results))
+         (valid-analysis (and (proper-list-p analysis) analysis))
          (patterns (if (gptel-auto-experiment--analysis-value-present-p
-                        (gptel-auto-workflow--plist-get analysis :patterns nil))
-                       (gptel-auto-workflow--plist-get analysis :patterns nil)
+                        (gptel-auto-workflow--plist-get valid-analysis :patterns nil))
+                       (gptel-auto-workflow--plist-get valid-analysis :patterns nil)
                      (gptel-auto-workflow--plist-get fallback :patterns nil)))
          (issues (if (gptel-auto-experiment--analysis-value-present-p
-                      (gptel-auto-workflow--plist-get analysis :issues nil))
-                     (gptel-auto-workflow--plist-get analysis :issues nil)
+                      (gptel-auto-workflow--plist-get valid-analysis :issues nil))
+                     (gptel-auto-workflow--plist-get valid-analysis :issues nil)
                    (gptel-auto-workflow--plist-get fallback :issues nil)))
          (recommendations
           (delete-dups
            (append (gptel-auto-experiment--analysis-list
-                    (gptel-auto-workflow--plist-get analysis :recommendations nil))
+                    (gptel-auto-workflow--plist-get valid-analysis :recommendations nil))
                    (gptel-auto-experiment--analysis-list
                     (gptel-auto-workflow--plist-get fallback :recommendations nil))))))
     (when (or (gptel-auto-experiment--analysis-value-present-p patterns)
