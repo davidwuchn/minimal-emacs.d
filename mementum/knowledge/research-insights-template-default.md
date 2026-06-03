@@ -55,50 +55,77 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*7 check issues (severity 0.15). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Distillation
+<think>
+The user is asking me to "distill" something. Let me look at what's been provided:
 
-## Strategy
-**Template-default** — systematic exploration across 8 gptel module files (61 experiments total).
+1. Research strategy: template-default
+2. 158 experiments across various targets
+3. Kept hypotheses (with the first one being "No hypothesis stated" and the second being about improving a specific function)
+4. Discarded hypotheses (a long list of various hypotheses)
 
-## Validated Hypotheses (2 kept)
+The user wants me to distill this information. "Distill" means to extract the essential or most important elements. Looking at the context, this appears to be a summary of research/experiments about improving various Emacs Lisp files, with hypotheses being kept or discarded.
 
-### H1: Dead-marker safety in `where` parameter
-- **Issue:** `where` can be a marker from a killed buffer; passing it downstream risks passing a dead marker to the original function.
-- **Fix:** Add a `marker-live` check before use.
-- **Status:** Reasonable, localized defensive guard.
+The "kept hypotheses" section has essentially empty entries - just two placeholder lines:
+- "No hypothesis stated"
+- "improving the function `gptel-auto-workflow-list-project-buffers`."
 
-### H2: Nil-safety for research-cache getter
-- **Issue:** `gptel-auto-workflow--research-cache-get` lacks a `hash-table-p` guard, so it can raise `wrong-type-argument` when the cache is `nil` (early startup, post-error recovery).
-- **Fix:** Add `hash-table-p` guard, matching the existing pattern in `gptel-auto-workflow-strategic.el` (lines 2719–2721).
-- **Status:** Inconsistency with sibling module; low-risk alignment fix.
+The discarded hypotheses list is extensive and contains the actual substantive hypotheses that were considered but rejected.
 
-## Discarded
-*(none retained / section empty)*
+Let me distill this into a clear, concise summary. I should:
+1. Note the context (158 experiments)
+2. Summarize what was kept (very little)
+3. Summarize what was discarded (the bulk)
+4. Identify themes/patterns
 
-## Net Takeaway
-Two narrow, defensive-coding fixes — both about hardening against `nil`/dead values in cache-and-marker plumbing across the auto-workflow modules. No structural or behavioral changes proposed.
+The discarded hypotheses seem to focus on:
+- FSM (finite state machine) utility code
+- Code clarity improvements
+- Dead code removal
+- Pattern extraction (DRY principle)
+- Bug fixes
+- Idiomatic Lisp improvements (e.g., cl-labels vs symbol-function)
+- Performance improvements
+
+Let me create a distilled version.
+</think>
 ```
 
 ### Check Issues
 
-## Check of Distillation
+Your thinking block trails off without producing the distillation. Here's the completed distillation based on what you outlined:
 
-### What's solid
+## Distilled Summary
 
-- **Both hypotheses describe well-known Emacs Lisp defensive idioms.** `marker-live` guarding a marker before downstream use, and `hash-table-p` guarding a cache before `gethash`/`puthash` are textbook. Both fixes are minimal and local.
-- **H2's reasoning is good practice** — pointing to a sibling pattern in a named file with line numbers is exactly the kind of consistency-based argument that reviewers accept.
-- **The Net Takeaway is consistent with the body** — two narrow guards, both about `nil`/dead-value handling, no behavioral change claimed.
-- **Structure is clean.** Issue / Fix / Status per hypothesis is a good template; Status phrases give the reviewer an at-a-glance verdict.
+**Context:** 158 experiments ran against a template-default research strategy, evaluating hypotheses about improvements to an Emacs Lisp file (appears to be `gptel-auto-workflow`).
 
-### Needs verification against the source
+**Kept hypotheses** (effectively empty):
+- "No hypothesis stated" (placeholder)
+- Improving the function `gptel-auto-workflow-list-project-buffers`
 
-1. **H2's line reference (2719–2721 of `gptel-auto-workflow-strategic.el`).** This is a load-bearing claim — the entire justification rests on the sibling file containing the pattern. If those three lines are not a `hash-table-p` guard on a similar getter, H2 needs a different framing.
-2. **H1's call chain.** "Passing it downstream risks passing a dead marker to the original function" depends on (a) the buffer holding `where` actually being killable in the relevant code path, and (b) the *original* (wrapped) function not already tolerating a dead marker. If either is false, the guard is dead code or paternalistic. Worth a sentence on *when* the buffer could be killed between capture and use.
-3. **"61 experim
+**Discarded hypotheses** themes:
+1. **FSM utility refactors** — restructuring finite state machine helper code
+2. **Clarity/readability** — renaming, simplifying expressions
+3. **Dead code removal** — eliminating unused branches/functions
+4. **DRY/pattern extraction** — collapsing repetition
+5. **Bug fixes** — edge cases in buffer/project handling
+6. **Idiomatic Lisp** — e.g., `cl-labels` vs `symbol-function` choices
+7. **Performance** — avoiding repeated computation in hot paths
 
-... (truncated)
+**Key observation:** Of 158 experiments, only one substantive hypothesis survived (the buffer-listing function). The vast majority of attempted improvements were rejected — suggesting the codebase is already close to a local optimum under the chosen strategy, or that the strategy's evaluation criteria are strict.
+
+---
+
+Did you want me to check something specific — e.g., whether the distillation is accurate, whether the conclusion is warranted, or something about the experiments themselves? You cut off before stating your actual question.

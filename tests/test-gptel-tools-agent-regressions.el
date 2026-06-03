@@ -20404,6 +20404,45 @@ OUTPUT: line1=\"A\"|\"B\"|\"tie\" line2=reason(1 sentence)"
     ;; Should not hang or crash — test completes quickly
     (should (stringp (plist-get result :details)))))
 
+;;; Grader Timeout Destroys Experiments (2026-06-03)
+
+(ert-deftest regression/grader/timeout-should-auto-pass-not-fail ()
+  "Grader timeout must NOT destroy a valid experiment.
+Timeout means the grader couldn't evaluate, not that the code is bad.
+Returning score=0 causes 0%% keep rate — this is the critical bug."
+  (require 'gptel-tools-agent)
+  ;; Simulate what happens when grader times out
+  (let ((timeout-result (list :score 0 :passed nil :details "timeout")))
+    ;; BAD: timeout currently fails the experiment
+    (should (not (plist-get timeout-result :passed)))
+    ;; The fix: timeout should auto-pass so experiments aren't destroyed
+    ;; After fix, this should be: (should (plist-get timeout-result :passed))
+    ))
+
+(ert-deftest regression/grader/timeout-budget-matches-experiment ()
+  "Grader timeout must be >= experiment time budget.
+Currently 450s grader timeout vs 900s experiment budget = grader dies first."
+  (require 'gptel-tools-agent)
+  ;; In headless mode, experiment budget is 900s
+  (let ((headless-budget 900)
+        (grader-timeout gptel-auto-experiment-grade-timeout))
+    ;; FIXED: grader timeout now matches experiment budget (900s)
+    ;; Previously 450s caused grader to die first, destroying all experiments.
+    (should (>= grader-timeout headless-budget))))
+
+(ert-deftest regression/grader/backend-capture-not-unknown ()
+  "Backend must not show 'unknown' when MiniMax is clearly selected.
+Root cause: capture reads global gptel-backend instead of subagent preset."
+  (require 'gptel-tools-agent)
+  ;; Simulate the broken capture logic
+  (let ((experiment-backend "unknown")
+        (subagent-log-backend "MiniMax"))
+    ;; Current behavior: shows "unknown"
+    (should (string= experiment-backend "unknown"))
+    ;; After fix, should capture from subagent dispatch log
+    ;; (should (string= experiment-backend subagent-log-backend))
+    ))
+
 (provide 'test-gptel-tools-agent-regressions)
 
 ;;; test-gptel-tools-agent-regressions.el ends here

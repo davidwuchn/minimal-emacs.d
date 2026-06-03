@@ -49,6 +49,10 @@ Used for cost tracking and routing context.")
 (defvar log-backend nil
   "Dynamic variable bound in `gptel-benchmark-call-subagent' for the selected backend name.
 Used for logging and routing context.")
+(defvar gptel-auto-experiment--last-subagent-backend nil
+  "Last backend used by subagent dispatch.  Set by `gptel-benchmark-call-subagent'.")
+(defvar gptel-auto-experiment--last-subagent-model nil
+  "Last model used by subagent dispatch.  Set by `gptel-benchmark-call-subagent'.")
 (defvar bumped-model nil
   "Dynamic variable bound in `gptel-benchmark-call-subagent' for model bump escalation.
 Set by bump-model when consecutive failures exceed thresholds.")
@@ -325,11 +329,14 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                         (cond ((stringp model) model)
                               ((symbolp model) (symbol-name model))
                               (model (format "%s" model))))))))
-         (when log-backend
-           (message "[subagent] %s using fallback provider: %s (model: %s)"
-                    agent-type
-                    log-backend
-                    (or log-model "unknown")))
+          (when log-backend
+            (message "[subagent] %s using fallback provider: %s (model: %s)"
+                     agent-type
+                     log-backend
+                     (or log-model "unknown"))
+            ;; Store for experiment-core to read actual backend/model
+            (setq gptel-auto-experiment--last-subagent-backend log-backend
+                  gptel-auto-experiment--last-subagent-model log-model))
          ;; Prepend accurate routing context at dispatch time when we know
          ;; the actual selected backend/model (not the configured defaults).
          (let* ((routing-note

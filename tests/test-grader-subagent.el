@@ -74,9 +74,9 @@
   "Grading timeout should return auto-pass."
   (require 'gptel-tools-agent)
   (should (boundp 'gptel-auto-experiment-grade-timeout))
-  ;; Timeout matches production value (450s for slow backends like DeepSeek/MiniMax).
+  ;; Timeout matches experiment budget (900s) so grader doesn't die first.
   (should (>= gptel-auto-experiment-grade-timeout 30))
-  (should (<= gptel-auto-experiment-grade-timeout 600)))
+  (should (<= gptel-auto-experiment-grade-timeout 900)))
 
 ;;; Test 5: Grading Timeout Wrapper
 
@@ -515,9 +515,9 @@ Result: Tests pass."))
   (should (= gptel-auto-experiment-time-budget 300)))
 
 (ert-deftest grader/grade-timeout-default ()
-  "Default grade timeout should be 450s."
+  "Default grade timeout should be 900s (matches experiment budget)."
   (require 'gptel-tools-agent)
-  (should (= gptel-auto-experiment-grade-timeout 450)))
+  (should (= gptel-auto-experiment-grade-timeout 900)))
 
 (ert-deftest grader/experiment-timeout-headless ()
   "Headless run-async should set time-budget to 900 (not default 300)."

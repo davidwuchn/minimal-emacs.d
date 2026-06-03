@@ -469,20 +469,24 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                               ;; restored. Fall back to the pre-computed
                               ;; experiment-backend when gptel-backend is MiniMax
                               ;; (the interactive default, not the routed one).
-                              actual-backend
-                              (let* ((post-backend (and (boundp 'gptel-backend) gptel-backend
-                                                       (fboundp 'gptel-backend-name)
-                                                       (gptel-auto-workflow--safe-backend-name gptel-backend)))
-                                     (pre-backend (and (stringp experiment-backend)
-                                                       experiment-backend))
-                                     (global-default "MiniMax"))
-                                (if (and (stringp post-backend)
-                                         (not (string= post-backend global-default)))
-                                    post-backend
-                                  (or pre-backend post-backend global-default)))
-                              actual-model
-                              (or (and (boundp 'gptel-model) gptel-model)
-                                  experiment-model)
+                               actual-backend
+                               (or (and (boundp 'gptel-auto-experiment--last-subagent-backend)
+                                        gptel-auto-experiment--last-subagent-backend)
+                                   (let* ((post-backend (and (boundp 'gptel-backend) gptel-backend
+                                                            (fboundp 'gptel-backend-name)
+                                                            (gptel-auto-workflow--safe-backend-name gptel-backend)))
+                                          (pre-backend (and (stringp experiment-backend)
+                                                            experiment-backend))
+                                          (global-default "MiniMax"))
+                                     (if (and (stringp post-backend)
+                                              (not (string= post-backend global-default)))
+                                         post-backend
+                                       (or pre-backend post-backend global-default))))
+                               actual-model
+                               (or (and (boundp 'gptel-auto-experiment--last-subagent-model)
+                                        gptel-auto-experiment--last-subagent-model)
+                                   (and (boundp 'gptel-model) gptel-model)
+                                   experiment-model)
                               candidate-validation
                               (when (fboundp 'gptel-auto-experiment--batch-validate-candidates)
                                 (condition-case err

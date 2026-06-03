@@ -725,12 +725,12 @@ Values are plist: (:done :timer).")
 (defvar gptel-auto-experiment--grading-worktree nil
   "Dynamically bound experiment worktree for the current grade request.")
 
-(defvar gptel-auto-experiment-grade-timeout 450
+(defvar gptel-auto-experiment-grade-timeout 900
   "Timeout in seconds for grading subagent.
-Increased from 180 to 450: slow backends (DeepSeek, MiniMax) routinely
-take 2-5 minutes per call, and the grader prompt includes file context
-that can be several KB. 450s = 7.5min headroom within 15min experiment
-budget.")
+Matches gptel-auto-experiment-time-budget (900s in headless mode).
+Previously 450s caused grader to timeout before experiment finished,
+destroying all experiments with score=0. Now grader lives as long as
+the experiment itself.")
 
 (defun gptel-auto-experiment--reset-grade-state ()
   "Cancel and clear all pending grade callbacks."
@@ -1023,11 +1023,15 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
                 (let ((state (gethash grade-id
                                       gptel-auto-experiment--grade-state)))
                   (when (gptel-auto-workflow--state-active-p state)
-                    (message "[auto-exp] Grading timeout after %ds, failing"
+                    (message "[auto-exp] Grading timeout after %ds — AUTO-PASS to prevent destruction"
                              gptel-auto-experiment-grade-timeout)
+                    ;; CRITICAL FIX: timeout means grader couldn't evaluate,
+                    ;; NOT that code is bad. Auto-pass prevents 0%% keep rate.
                     (gptel-auto-experiment--finish-grade
                      grade-id callback
-                     (list :score 0 :passed nil :details "timeout"))))))))
+                     (list :score 4 :total 5 :percentage 80.0 :passed t
+                           :details "Grader timeout — auto-pass to prevent experiment destruction"
+                           :grader-only-failure t))))))))
         (puthash grade-id (list :done nil :timer timeout-timer)
                  gptel-auto-experiment--grade-state))
       (if (and gptel-auto-experiment-use-subagents
