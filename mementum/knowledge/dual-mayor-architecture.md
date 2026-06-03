@@ -2,7 +2,7 @@
 title: "Dual Mayor Architecture for OV5"
 status: designing
 category: architecture
-tags: [mayor-method, dual-mayor, product-mayor, gtm-mayor, PMF, strategy]
+tags: [mayor-method, dual-mayor, gtm-mayor, pmf-mayor, researcher, auto-workflow]
 related: [mayor-method-comparison, ov5-complete-system-architecture]
 depends-on: [mayor-method-comparison]
 ---
@@ -27,7 +27,7 @@ This violates the Mayor Method principle: **"the mayor does not code."**
 Two mayors with different concerns:
 
 ```
-Product Mayor (auto-workflow)     GTM Mayor (researcher)
+PMF Mayor (auto-workflow)         GTM Mayor (researcher)
 ├── Focus: EXECUTION              ├── Focus: DIRECTION
 ├── Cadence: 4 hours              ├── Cadence: 24 hours
 ├── Concern: "Does it work?"      ├── Concern: "Should we build it?"
@@ -37,7 +37,7 @@ Product Mayor (auto-workflow)     GTM Mayor (researcher)
          └───────  shared mementum  ─────┘
 ```
 
-## Product Mayor (Auto-Workflow)
+## PMF Mayor (Auto-Workflow)
 
 **Identity:** "I make the code better."
 
@@ -71,7 +71,7 @@ Product Mayor (auto-workflow)     GTM Mayor (researcher)
 1. **External research** — GitHub trends, papers, competitors, communities
 2. **PMF analysis** — are we building the right thing?
 3. **Innovation scouting** — what techniques could improve OV5?
-4. **Strategy recommendations** — what should Product Mayor focus on?
+4. **Strategy recommendations** — what should PMF Mayor focus on?
 5. **Competitive analysis** — what are others doing better?
 6. **Decision framing** — surface design/policy calls for human
 7. **Knowledge synthesis** — convert findings into actionable beads
@@ -96,7 +96,7 @@ Shared Mementum
 ├── mementum/state.md — both update, different sections
 ├── mementum/memories/ — atomic insights from both mayors
 ├── mementum/knowledge/ — synthesized pages
-└── experiments/results.tsv — Product Mayor writes, GTM Mayor reads
+└── experiments/results.tsv — PMF Mayor writes, GTM Mayor reads
 
 Shared Ontology
 ├── Category classification (effective/promising/underperforming)
@@ -117,9 +117,9 @@ Shared AutoTTS
       ├── Analyzes findings
       ├── Synthesizes strategy recommendations
       ├── Updates gtm-dashboard.md
-      └── Files beads for Product Mayor
+      └── Files beads for PMF Mayor
 
-00:00-23:59 Product Mayor runs (every 4 hours)
+00:00-23:59 PMF Mayor runs (every 4 hours)
       ├── Reads GTM Mayor's beads
       ├── Prioritizes experiments based on strategy
       ├── Runs executor workers in worktrees
@@ -140,11 +140,11 @@ GTM Mayor: "Market needs X, competitors doing Y"
      ↓
 Human: "Focus on X, ignore Y"
      ↓
-Product Mayor: "Running experiments on X..."
+PMF Mayor: "Running experiments on X..."
      ↓
 GTM Mayor: "Results show X is promising, recommend doubling down"
      ↓
-Human: "Approved. Product Mayor: prioritize X experiments."
+Human: "Approved. PMF Mayor: prioritize X experiments."
 ```
 
 ## Mayor Method Alignment
@@ -157,7 +157,7 @@ Human: "Approved. Product Mayor: prioritize X experiments."
 - Both inject stance into every dispatch
 - Both respect quiescent state
 
-**Product Mayor stance:**
+**PMF Mayor stance:**
 > "pre-alpha, correctness-first, test-driven, cost-conscious"
 
 **GTM Mayor stance:**
@@ -173,13 +173,13 @@ Human: "Approved. Product Mayor: prioritize X experiments."
 
 **Phase 2 — Clean separation (next week):**
 1. Move strategy/ontology evolution to GTM Mayor
-2. Product Mayor focuses on execution only
+2. PMF Mayor focuses on execution only
 3. Shared mementum with section headers
 4. Cross-mayor communication protocol
 
 **Phase 3 — Full dual-mayor (next month):**
 1. GTM Mayor dispatches research workers
-2. Product Mayor dispatches experiment workers
+2. PMF Mayor dispatches experiment workers
 3. Human-in-the-loop decision gate between mayors
 4. AutoTTS traces from both feed unified evolution
 

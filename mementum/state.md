@@ -1,10 +1,10 @@
 # Mementum State
 
-> Last session: 2026-06-03 (XDG_RUNTIME_DIR fix + Mayor Method study)
+> Last session: 2026-06-03 (XDG_RUNTIME_DIR fix + Dual Mayor naming)
 > Next pipeline: running (daemon restarted with fix)
-> Status: 2148 tests pass, 0 unexpected — auto-workflow active
+> Status: 2148 tests pass, 0 unexpected — PMF Mayor active
 
-## Session: Pipeline Fixes + Mayor Method Study (2026-06-03)
+## Session: Pipeline Fixes + Dual Mayor Architecture (2026-06-03)
 
 **What was built/fixed:**
 - `scripts/install-cron.sh` — Fixed `\$(id -u)` → `$(id -u)` (numeric UID)
@@ -31,6 +31,9 @@
 **Memories created:**
 - `mementum/memories/mayor-method-key-insight.md`
 - `mementum/knowledge/mayor-method-comparison.md`
+- `mementum/knowledge/dual-mayor-architecture.md` — Dual Mayor naming:
+  * **GTM Mayor** = researcher (direction, PMF, innovation)
+  * **PMF Mayor** = auto-workflow (execution, experiments, code quality)
 - `mementum/memories/research-research-none-*.md` (3x)
 
 ---
