@@ -31,7 +31,8 @@
 
 (ert-deftest test-production/research-batch-nil-initially ()
   "Research batch results should be nil initially."
-  (should-not gptel-auto-workflow--research-batch-results))
+  (let ((gptel-auto-workflow--research-batch-results nil))
+    (should-not gptel-auto-workflow--research-batch-results)))
 
 ;;; Status tests
 
