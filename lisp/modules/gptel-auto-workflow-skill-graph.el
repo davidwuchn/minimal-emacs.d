@@ -70,12 +70,16 @@ Prefer workflow/project roots only when they actually contain the skills dir."
                                       gptel-auto-workflow--run-project-root)
                                  (and (boundp 'gptel-auto-workflow--current-project)
                                       gptel-auto-workflow--current-project)
+                                 ;; minimal-emacs-user-directory is the original repo root
+                                 ;; before pre-early-init.el redirected user-emacs-directory to var/
+                                 (and (boundp 'minimal-emacs-user-directory)
+                                      minimal-emacs-user-directory)
                                  user-emacs-directory)))
          (root (seq-find (lambda (dir)
                            (file-directory-p
                             (expand-file-name "assistant/skills" dir)))
                          candidates)))
-    (expand-file-name (or root user-emacs-directory))))
+    (expand-file-name (or root minimal-emacs-user-directory user-emacs-directory))))
 
 ;; ─── Skill Loading ───
 

@@ -32,6 +32,10 @@
 (load-file (expand-file-name "../lisp/modules/gptel-tools-agent-base.el"
                                (file-name-directory
                                 (or load-file-name buffer-file-name default-directory))))
+;; Load skill-graph module for root selection tests
+(load-file (expand-file-name "../lisp/modules/gptel-auto-workflow-skill-graph.el"
+                               (file-name-directory
+                                (or load-file-name buffer-file-name default-directory))))
 ;; Load cost-balance module for TDD tests
 (condition-case nil
     (load-file (expand-file-name "../lisp/modules/gptel-auto-experiment-ai-behaviors.el"
@@ -257,6 +261,22 @@
         (let ((user-emacs-directory root)
               (gptel-auto-workflow--run-project-root (expand-file-name "var" root))
               (gptel-auto-workflow--current-project (expand-file-name "var" root)))
+          (make-directory (expand-file-name "assistant/skills/example" root) t)
+          (should (equal (file-name-as-directory (expand-file-name root))
+                         (file-name-as-directory (skill-graph--project-root)))))
+      (delete-directory root t))))
+
+(ert-deftest regression/auto-workflow-evolution/skill-graph-uses-minimal-emacs-user-directory ()
+  "Skill graph should use minimal-emacs-user-directory when user-emacs-directory is var/."
+  ;; Ensure variable exists for the test
+  (unless (boundp 'minimal-emacs-user-directory)
+    (defvar minimal-emacs-user-directory nil))
+  (let ((root (make-temp-file "aw-skill-graph-daemon" t)))
+    (unwind-protect
+        (let ((user-emacs-directory (expand-file-name "var/" root))
+              (minimal-emacs-user-directory root)
+              (gptel-auto-workflow--run-project-root nil)
+              (gptel-auto-workflow--current-project nil))
           (make-directory (expand-file-name "assistant/skills/example" root) t)
           (should (equal (file-name-as-directory (expand-file-name root))
                          (file-name-as-directory (skill-graph--project-root)))))
