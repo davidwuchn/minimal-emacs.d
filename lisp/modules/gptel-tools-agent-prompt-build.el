@@ -2191,14 +2191,17 @@ exhaustion.")
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
   '(("DeepSeek" . "deepseek-v4-pro")
     ("MiniMax" . "MiniMax-M3")
-    ("DashScope" . "qwen3.6-plus"))
+    ("DashScope" . "qwen3.6-plus")
+    ("moonshot" . "kimi-k2.6"))
   "Ordered backend/model fallbacks for headless auto-workflow subagents.
 
 DeepSeek first (deep reasoning for complex tasks),
 then MiniMax (fast, no thinking mode — ideal for analysis/grader tasks),
-then DashScope (qwen3.6-plus — reinstated 2026-05-31 after quota recovery).
-moonshot removed — quota exhausted (access_terminated_error), billing cycle limit reached.
-CF-Gateway removed — does not support tool calls reliably."
+then DashScope (qwen3.6-plus — reinstated 2026-05-31 after quota recovery),
+then moonshot (kimi-k2.6 — temporarily rate-limited due to quota exhaustion).
+CF-Gateway removed — does not support tool calls reliably.
+
+Note: moonshot is still dynamically skipped when quota is exhausted (access_terminated_error)."
   :type '(repeat (cons (string :tag "Backend")
                        (string :tag "Model")))
   :group 'gptel-tools-agent)
