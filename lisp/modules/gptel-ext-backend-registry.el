@@ -62,6 +62,23 @@
        :capabilities (code-generation)
        :speed fast)))
 
+    (Z-AI
+     :host "open.bigmodel.cn"
+     :models (glm-5.1 glm-5 glm-4.7)
+     :default-model glm-5.1
+     :model-metadata
+     ((glm-5.1
+       :context-window 200000
+       :pricing-input 0.50 :pricing-output 1.50
+       :capabilities (code-generation tool-calls reasoning)
+       :speed medium
+       :max-output 128000)
+      (glm-5
+       :context-window 131072
+       :pricing-input 0.50 :pricing-output 1.50
+       :capabilities (code-generation)
+       :speed medium)))
+
     (Copilot
      :host "api.github.com"
      :models (gpt-5.4-mini gpt-5.4)
@@ -90,7 +107,8 @@ When adding/updating models, ONLY edit this structure.")
                    (DashScope . qwen3.6-plus)
                    (DeepSeek . deepseek-v4-pro)
                    (moonshot . kimi-k2.6)))
-    (executor   . ((DeepSeek . deepseek-v4-flash)
+    (executor   . ((Z-AI . glm-5.1)
+                    (DeepSeek . deepseek-v4-flash)
                     (DashScope . qwen3.6-plus)
                     (moonshot . kimi-k2.6)))
     (researcher . ((MiniMax . MiniMax-M3)
@@ -111,7 +129,7 @@ Derived from `gptel-backend-registry` — update the registry, then regenerate t
 ;;; Fallback Chains
 
 (defconst gptel-fallback-chains
-  '((executor . (DeepSeek moonshot DashScope Copilot))
+  '((executor . (Z-AI DeepSeek moonshot DashScope Copilot))
     (analyzer . (Copilot MiniMax moonshot DeepSeek DashScope))
     (grader   . (Copilot MiniMax moonshot DeepSeek DashScope))
     (default  . (Copilot MiniMax moonshot DeepSeek DashScope)))

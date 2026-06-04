@@ -163,6 +163,7 @@ Avoids repeated filtering of the same symbol list.")
     ("kimi-k2.5" . 262144)  ; legacy alias
     ("kimi-for-coding" . 131072)
     ;; GLM (Zhipu AI)
+    ("glm-5.1" . 200000)
     ("glm-5" . 131072)
     ("glm-4.7" . 131072)
     ;; Meta Llama
