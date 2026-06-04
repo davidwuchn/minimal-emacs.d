@@ -114,6 +114,14 @@
 
 ;;; Test 7: Grader Uses Subagent When Available
 
+(defvar gptel-agent-preset nil)
+(defvar gptel--request-params nil)
+(defvar gptel-ai-behaviors--subagent-failures nil)
+(defvar gptel-ai-behaviors--current-hashtags nil)
+(defvar gptel-auto-experiment--last-subagent-backend nil)
+(defvar gptel-auto-experiment--last-subagent-model nil)
+(defvar bumped-model nil)
+
 (ert-deftest grader/uses-subagent-when-available ()
   "Grader should call subagent when gptel-agent--task is available.
 Now passes in batch — state corruption fixed."
@@ -121,11 +129,16 @@ Now passes in batch — state corruption fixed."
   (require 'gptel-benchmark-subagent)
   (let* ((call-count 0)
          (gptel-benchmark-use-subagents t)
-         ;; Mock gptel-agent--task
+         ;; Mock gptel-agent--task and required variables
+         (gptel-agent-preset nil)
+         (gptel--request-params nil)
          (gptel-agent--task-mock (lambda (cb type desc prompt)
                                    (cl-incf call-count)
                                    (funcall cb "SCORE: 4/6\nSUMMARY: passed"))))
-    (cl-letf (((symbol-function 'gptel-agent--task) gptel-agent--task-mock))
+    (cl-letf (((symbol-function 'gptel-agent--task) gptel-agent--task-mock)
+              ;; Mock backend lookup to avoid test state corruption
+              ((symbol-function 'gptel-auto-workflow--backend-object) (lambda (_) nil))
+              ((symbol-function 'gptel-auto-workflow--backend-model-symbol) (lambda (_ _ ) nil)))
       (let ((result nil))
         (gptel-benchmark-grade
          "Test output"
