@@ -1209,14 +1209,16 @@ decisions against test results when available."
 
 (defvar gptel-auto-workflow--review-feedback (make-hash-table :test 'equal)
   "Hash table: category → latest review block reason.
-Ontology-aware: feedback from one target teaches all targets in the same category.
+Ontology-aware: feedback from one target teaches all targets
+in the same category.
 Populated by staging review when experiments are blocked.
-Read by prompt builder to inject guidance into all experiments in that category.")
+Read by prompt builder to inject guidance into all experiments
+in that category.")
 
 (defun gptel-auto-workflow--record-review-feedback (branch category response)
   "Extract block reason from REVIEW RESPONSE and store per CATEGORY.
 Ontology bridge: review failures on one target teach all targets in the same
-category. This enables cross-target learning (e.g. 'missing require' on
+category. This enables cross-target learning (e.g. \='missing require\=' on
 projects.el teaches all :agentic experiments)."
   (let* ((block-reason (when (and (stringp response)
                                   (string-match "BLOCKED:\\s-*\\(.+?\\)\\(?:$\\|[\n\r]\\)" response))

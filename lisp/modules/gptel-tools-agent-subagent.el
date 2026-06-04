@@ -3,7 +3,6 @@
 
 (require 'cl-lib)
 (require 'subr-x)
-(require 'gptel-tools-agent-git nil t)
 
 ;; Forward declarations for dynamic variables from gptel-agent package
 (defvar my/gptel--current-agent-task-id)
@@ -19,9 +18,9 @@
 (defvar gptel-auto-workflow--subagent-process-environment)
 (defvar gptel-auto-experiment--subagent-dispatch-log (make-hash-table :test 'equal)
   "Hash table tracking subagent dispatch counts per
-(agent-type, category).
-Populated by `my/gptel--run-agent-tool-with-timeout', consumed by
-evolution cycle.")
+\(agent-type, category\).
+Populated by `my/gptel--run-agent-tool-with-timeout',
+consumed by evolution cycle.")
 (defvar gptel-agent--agents)
 (defvar my/gptel-subagent-include-history-default)
 (defvar gptel-auto-experiment-active-grace)
@@ -53,6 +52,7 @@ evolution cycle.")
 (declare-function my/gptel--sanitize-for-logging "gptel-tools-agent-git")
 (declare-function my/gptel--seed-fsm-tools "gptel-tools-agent-git")
 (declare-function my/gptel--string-to-bool "gptel-tools-agent-git")
+(declare-function gptel-auto-workflow--safe-backend-name "gptel-tools-agent-prompt-build")
 (declare-function gptel-auto-workflow--experiment-suffix "gptel-tools-agent-main")
 (declare-function gptel-auto-workflow--shared-remote "gptel-tools-agent-worktree")
 
@@ -110,16 +110,16 @@ Corrupted entries are handled gracefully."
     (let (done-ids stale-ids in-flight-count)
       ;; Phase 1: classify all task IDs
       (maphash
-       (lambda (task-id state)
-         (when (plistp state)
-           (my/gptel--cancel-agent-task-timers state)
-           (let ((done (plist-get state :done)))
-             (cond (done
-                    (push task-id done-ids))
-                   ((my/gptel--agent-task-request-buffer state)
-                    (cl-incf in-flight-count))
-                   (t
-                    (push task-id stale-ids))))))
+      (lambda (task-id state)
+            (when (plistp state)
+              (my/gptel--cancel-agent-task-timers state)
+              (let ((done (plist-get state :done)))
+                (cond (done
+                       (push task-id done-ids))
+                      ((my/gptel--agent-task-request-buffer state)
+                       (cl-incf in-flight-count))
+                      (t
+                       (push task-id stale-ids))))))
        my/gptel--agent-task-state)
       ;; Phase 2: remove done and stale entries (not in-flight)
       (dolist (tid (append done-ids stale-ids))
@@ -155,12 +155,12 @@ new analyzer/executor/grader launch on that same buffer or worktree."
   "Cancel timers for overlapping subagent tasks.
 Does NOT call `gptel-abort' or remove hash-table entries — the caller's
 stale-run-id check prevents callback interference, and aborting the
-session buffer mid-flight causes 'Selecting deleted buffer' errors."
+session buffer mid-flight causes \='Selecting deleted buffer\=' errors."
   (let ((normalized-dir (my/gptel--normalize-agent-activity-dir activity-dir))
         (overlap-count 0))
-    (maphash
-     (lambda (task-id state)
-       (when (my/gptel--agent-task-overlaps-p state origin-buf normalized-dir)
+     (maphash
+      (lambda (_task-id state)
+        (when (my/gptel--agent-task-overlaps-p state origin-buf normalized-dir)
          (my/gptel--cancel-agent-task-timers state)
          (cl-incf overlap-count)))
      my/gptel--agent-task-state)
@@ -230,11 +230,12 @@ agent types (analyzer/executor/grader/comparator)."
 (defun my/gptel--disable-auto-retry-for-fsm (fsm)
   "Mark FSM so global auto-retry advice will not reschedule it."
   (require 'gptel-request)
-  (when (and fsm (fboundp 'gptel-fsm-info))
+   (when (and fsm (fboundp 'gptel-fsm-info))
     (let ((info (ignore-errors (gptel-fsm-info fsm))))
       (when (listp info)
-        (setf (gptel-fsm-info fsm)
-              (plist-put info :disable-auto-retry t)))
+        (with-no-warnings
+          (setf (gptel-fsm-info fsm)
+                (plist-put info :disable-auto-retry t))))
       t)))
 
 (defun my/gptel--disable-auto-retry-transform (fsm)
@@ -582,11 +583,12 @@ Uses hash table keyed by task-id to support parallel execution."
 (cl-defun my/gptel--run-agent-tool (callback &optional agent-name description prompt files include-history include-diff)
   "Run a gptel-agent agent by name.
 Injects ai-behaviors pipeline mode context into PROMPT when
-the agent type matches a known pipeline mode (analyzer/executor/grader/comparator).
+the agent type matches a known pipeline mode
+\(analyzer/executor/grader/comparator\).
 
-AGENT-NAME must exist in `gptel-agent--agents`.
+AGENT-NAME must exist in `gptel-agent--agents'.
 
-  INCLUDE-HISTORY defaults to
+INCLUDE-HISTORY defaults to
 `my/gptel-subagent-include-history-default' when nil."
   (cl-block my/gptel--run-agent-tool
     (unless (and (require 'gptel nil t) (require 'gptel-agent nil t))
@@ -667,6 +669,7 @@ Logs subagent dispatch to ontology for self-evolution tracking."
          (previous-timeout my/gptel-agent-task-timeout)
          (previous-hard-timeout my/gptel-agent-task-hard-timeout)
          (grace (or active-grace gptel-auto-experiment-active-grace)))
+    (ignore adjusted-timeout my/gptel-subagent-result-limit progress-time)
     ;; Log subagent dispatch to ontology tracking (for self-evolution)
     (when (and (boundp 'gptel-auto-workflow--current-target)
                gptel-auto-workflow--current-target

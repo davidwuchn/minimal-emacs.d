@@ -1,5 +1,22 @@
 ; -*- lexical-binding: t; -*-
 (require 'cl-lib)
+(eval-when-compile
+  (require 'gptel-tools-agent-base nil t)
+  (require 'gptel-tools-agent-prompt-build nil t)
+  (require 'gptel-tools-agent-benchmark nil t)
+  (require 'gptel-tools-agent-experiment-loop nil t)
+  (require 'gptel-tools-agent-error nil t)
+  (require 'gptel-tools-agent-validation nil t))
+(declare-function gptel-auto-workflow--current-head-hash "gptel-tools-agent-experiment-loop")
+(declare-function gptel-auto-experiment--kibcm-axis "gptel-tools-agent-prompt-build")
+(declare-function gptel-auto-experiment--prompt-structure-score "gptel-tools-agent-prompt-build")
+(declare-function gptel-auto-experiment--agent-error-p "gptel-tools-agent-experiment-loop")
+(declare-function gptel-auto-experiment--count-consecutive-strategy "gptel-tools-agent-experiment-loop")
+(declare-function gptel-auto-experiment--executor-timeout-p "gptel-tools-agent-benchmark")
+(declare-function gptel-auto-experiment--target-keep-rate "gptel-tools-agent-experiment-loop")
+(declare-function gptel-auto-experiment--validate-diff-content "gptel-tools-agent-validation")
+(declare-function gptel-auto-workflow--safe-backend-name "gptel-tools-agent-prompt-build")
+(declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
 (declare-function gptel-auto-experiment--promote-correctness-fix-decision "gptel-tools-agent-prompt-analyze")
 (declare-function magit-git-success "magit-git")
 (declare-function gptel-auto-experiment--extract-axis "gptel-tools-agent-base")
@@ -8,6 +25,7 @@
 (declare-function gptel-auto-workflow--hash-get-bound "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--resolve-run-root "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--track-commit "gptel-tools-agent-base")
+(declare-function gptel-auto-workflow--truncate-hash "gptel-tools-agent-base")
 (declare-function gptel-auto-experiment--call-in-context "gptel-tools-agent-benchmark")
 (declare-function gptel-auto-experiment--code-quality-score "gptel-tools-agent-benchmark")
 (declare-function gptel-auto-experiment--repeated-focus-match "gptel-tools-agent-benchmark")
@@ -820,8 +838,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                     (unless defer-grading
                                       (let ((gptel-auto-experiment--grading-target target)
                                           (gptel-auto-experiment--grading-worktree experiment-worktree)
-                                          (gptel-auto-experiment--grading-hypothesis
-                                           (gptel-auto-experiment--extract-hypothesis effective-agent-output)))
+                                           (_gptel-auto-experiment--grading-hypothesis
+                                            (gptel-auto-experiment--extract-hypothesis effective-agent-output)))
                                     (gptel-auto-experiment--grade-with-retry
                                 effective-agent-output
                                 (lambda (grade)
@@ -1599,7 +1617,7 @@ Safe to call multiple times: already-merged branches are skipped."
              (fboundp 'gptel-auto-workflow--parse-all-results))
     (let ((recovered 0)
           (skipped 0)
-          (gptel-auto-workflow--recovering-stale-staging t)
+           (_gptel-auto-workflow--recovering-stale-staging t)
           (now (float-time))
           (results-dir (expand-file-name "var/tmp/experiments"
                         (gptel-auto-workflow--worktree-base-root))))
@@ -1660,9 +1678,9 @@ Safe to call multiple times: already-merged branches are skipped."
 ;; ─── Generate→Validate→Refine Cycle ───
 
 (defun gptel-auto-experiment--refine (target validation-error grade-details
-                                       executor-prompt experiment-worktree
+                                       _executor-prompt experiment-worktree
                                        baseline patterns actual-backend actual-model
-                                       strategy-name run-id log-fn provisional-commit-hash
+                                       strategy-name _run-id _log-fn provisional-commit-hash
                                        experiment-branch experiment-id start-time callback)
   "Run a refine cycle on the current worktree changes.
 Called when the grader passed but the benchmark/validation failed."
@@ -1771,7 +1789,7 @@ Called when the grader passed but the benchmark/validation failed."
       (bound-and-true-p gptel-auto-experiment-active-grace))))
 
 (defun gptel-auto-experiment--grader-bypass-commit-and-push
-    (target hypothesis grade-score grade-total baseline
+    (target hypothesis grade-score grade-total _baseline
      experiment-id experiment-worktree experiment-branch
      provisional-commit-hash run-id exp-result log-fn callback)
   "Commit+push a grader-bypassed experiment. Handles its own callbacks."

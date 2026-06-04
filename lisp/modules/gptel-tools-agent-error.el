@@ -748,10 +748,6 @@ RETRY-COUNT tracks current retry attempt."
        (push exp-result attempt-logs)))))
 
 (defconst gptel-auto-experiment--error-categories
-  ;; Each entry: (PATTERN CATEGORY DETAIL)
-  ;; PATTERN is a regexp matched case-insensitively against agent-output.
-  ;; CATEGORY is the error category keyword.
-  ;; DETAIL is either a string or a function (agent-output) -> string.
   `(
     ;; Rate limit sub-categories (checked after rate-limit-error-p)
     ("hour allocated quota exceeded" :api-rate-limit "Hourly quota exhausted")
@@ -789,9 +785,11 @@ RETRY-COUNT tracks current retry attempt."
                                                 (message "[auto-experiment] Unknown error snippet: %s"
                                                          (my/gptel--sanitize-for-logging snip))
                                                 (format "Error pattern: %s" snip)))))
-  "Data-driven error category patterns for `gptel-auto-experiment--categorize-error'.
-Each entry is (PATTERN CATEGORY DETAIL) where PATTERN is a case-insensitive
-regexp, CATEGORY is the error keyword, and DETAIL is a string or function.")
+  "Data-driven error category patterns
+for `gptel-auto-experiment--categorize-error'.
+Each entry is (PATTERN CATEGORY DETAIL) where PATTERN is a
+case-insensitive regexp, CATEGORY is the error keyword, and
+DETAIL is a string or function.")
 
 (defun gptel-auto-experiment--categorize-error (agent-output)
   "Categorize error from AGENT-OUTPUT and return (CATEGORY . DETAILS).
