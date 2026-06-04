@@ -3115,7 +3115,6 @@ QV: ensure cache-aware cost model is wired for these backends."
 
 (ert-deftest tdd/unified/build-unified-stats-aggregates-correctly ()
   "build-unified-stats aggregates model-stats + cost-stats into unified table."
-  :expected-result (if noninteractive :failed :passed)
   (skip-unless (fboundp 'gptel-ai-behaviors--build-unified-stats))
   (let ((gptel-ai-behaviors--model-stats (make-hash-table :test 'equal))
         (gptel-ai-behaviors--cost-stats (make-hash-table :test 'equal))
@@ -3133,7 +3132,6 @@ QV: ensure cache-aware cost model is wired for these backends."
 
 (ert-deftest tdd/unified/build-unified-stats-empty-on-no-data ()
   "build-unified-stats produces empty table when model-stats is empty."
-  :expected-result (if noninteractive :failed :passed)
   (skip-unless (fboundp 'gptel-ai-behaviors--build-unified-stats))
   (let ((gptel-ai-behaviors--model-stats (make-hash-table :test 'equal))
         (gptel-ai-behaviors--cost-stats (make-hash-table :test 'equal))
@@ -3143,7 +3141,6 @@ QV: ensure cache-aware cost model is wired for these backends."
 
 (ert-deftest tdd/unified/strategy-affinity-sorts-by-cost-rate ()
   "compute-strategy-affinities sorts subagents by cost-adjusted rate per category."
-  :expected-result (if noninteractive :failed :passed)
   (skip-unless (fboundp 'gptel-ai-behaviors--compute-strategy-affinities))
   (let ((gptel-ai-behaviors--unified-stats (make-hash-table :test 'equal))
         (gptel-ai-behaviors--strategy-affinities nil))
@@ -3159,7 +3156,6 @@ QV: ensure cache-aware cost model is wired for these backends."
 
 (ert-deftest tdd/unified/strategy-affinity-requires-min-samples ()
   "compute-strategy-affinities excludes entries with <= 2 total experiments."
-  :expected-result (if noninteractive :failed :passed)
   (skip-unless (fboundp 'gptel-ai-behaviors--compute-strategy-affinities))
   (let ((gptel-ai-behaviors--unified-stats (make-hash-table :test 'equal))
         (gptel-ai-behaviors--strategy-affinities nil))
