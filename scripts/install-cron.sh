@@ -92,58 +92,50 @@ merge_crontab() {
         return
     fi
 
-    local existing_file
+    local existing_file temp_file temp2
     existing_file=$(mktemp)
+    temp_file=$(mktemp)
+    temp2=$(mktemp)
     crontab -l > "$existing_file" 2>/dev/null || true
-    python3 - "$existing_file" "$rendered_file" "$output_file" \
-             "$MANAGED_BLOCK_BEGIN" "$MANAGED_BLOCK_END" <<'PY'
-from pathlib import Path
-import re
-import sys
 
-existing_path, rendered_path, output_path, begin_marker, end_marker = sys.argv[1:]
-existing = Path(existing_path).read_text(encoding="utf-8")
-rendered = Path(rendered_path).read_text(encoding="utf-8").rstrip() + "\n"
+    # Step 1: Remove managed block from existing
+    awk -v begin="$MANAGED_BLOCK_BEGIN" -v end="$MANAGED_BLOCK_END" '
+        $0 == begin { in_block = 1; next }
+        $0 == end   { in_block = 0; next }
+        !in_block   { print }
+    ' "$existing_file" > "$temp_file"
 
-managed_pattern = re.compile(
-    rf"(?ms)^[ \t]*{re.escape(begin_marker)}\n.*?^[ \t]*{re.escape(end_marker)}\n?"
-)
-
-# If a managed block already exists, replace it with rendered content
-if managed_pattern.search(existing):
-    merged = managed_pattern.sub(rendered, existing, count=1)
-else:
-    # No managed block: cleanup old cron lines from previous installs
-    # that use the same scripts (run-pipeline.sh or run-auto-workflow-cron.sh)
-    cleaned_lines = []
-    active_cron_re = re.compile(r"^\s*(?:\d+[,\d*\-\/]+\s+)+")
-    for line in existing.split("\n"):
-        stripped = line.strip()
-        # Skip empty lines and comments
-        if not stripped or stripped.startswith("#"):
-            cleaned_lines.append(line)
+    # Step 2: Remove old cron lines using our scripts
+    while IFS= read -r line; do
+        local stripped
+        stripped="${line#"${line%%[![:space:]]*}"}"
+        if [[ -z "$stripped" || "$stripped" == \#* ]]; then
+            printf '%s\n' "$line"
             continue
-        # Check if this is an active cron line using our scripts
-        if active_cron_re.match(stripped) and (
-            "run-pipeline.sh" in stripped or
-            "run-auto-workflow-cron.sh" in stripped or
-            "watchdog-daemon.sh" in stripped
-        ):
-            continue  # Skip old lines — will be replaced by rendered
-        cleaned_lines.append(line)
+        fi
+        if [[ "$stripped" =~ ^[0-9] && \
+              ("$stripped" == *"run-pipeline.sh"* || \
+               "$stripped" == *"run-auto-workflow-cron.sh"* || \
+               "$stripped" == *"watchdog-daemon.sh"*) ]]; then
+            continue
+        fi
+        printf '%s\n' "$line"
+    done < "$temp_file" > "$temp2"
 
-    existing = "\n".join(cleaned_lines).strip()
-    if existing:
-        merged = existing + "\n\n" + rendered
-    else:
-        merged = rendered
+    # Step 3: Combine cleaned existing + rendered
+    if [ -s "$temp2" ]; then
+        # Trim trailing blank lines
+        sed -e :a -e '/^\n*$/{$d;N;};/\n$/ba' "$temp2" > "$output_file"
+        printf '\n' >> "$output_file"
+    else
+        : > "$output_file"
+    fi
+    cat "$rendered_file" >> "$output_file"
 
-if not merged.endswith("\n"):
-    merged += "\n"
+    # Ensure trailing newline
+    [ -n "$(tail -c1 "$output_file")" ] && printf '\n' >> "$output_file"
 
-Path(output_path).write_text(merged, encoding="utf-8")
-PY
-    rm -f "$existing_file"
+    rm -f "$existing_file" "$temp_file" "$temp2"
 }
 
 MACHINE=$(detect_machine)
@@ -185,13 +177,6 @@ case "$MODE" in
         exit 0
         ;;
     install)
-        # Verify python3 is available (required for merge logic)
-        if ! command -v python3 &>/dev/null; then
-            echo "ERROR: python3 is required but not found." >&2
-            echo "Install it: sudo apt-get install python3" >&2
-            exit 1
-        fi
-
         # Verify pipeline script exists and is executable
         PIPELINE_SCRIPT="$DIR/scripts/run-pipeline.sh"
         if [ ! -x "$PIPELINE_SCRIPT" ]; then
@@ -276,25 +261,11 @@ case "$MODE" in
         fi
         cleaned=$(mktemp)
         trap 'rm -f "$cleaned"' EXIT
-        crontab -l | python3 - "$cleaned" "$MANAGED_BLOCK_BEGIN" "$MANAGED_BLOCK_END" <<'PY'
-from pathlib import Path
-import re
-import sys
-
-output_path, begin_marker, end_marker = sys.argv[1:]
-text = sys.stdin.read()
-
-managed_pattern = re.compile(
-    rf"(?m)^[ \t]*{re.escape(begin_marker)}\n.*?^[ \t]*{re.escape(end_marker)}\n?"
-)
-
-cleaned = managed_pattern.sub("", text, count=1)
-# Collapse multiple blank lines left by removal
-cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
-cleaned = cleaned.strip() + "\n" if cleaned.strip() else ""
-
-Path(output_path).write_text(cleaned, encoding="utf-8")
-PY
+        crontab -l | awk -v begin="$MANAGED_BLOCK_BEGIN" -v end="$MANAGED_BLOCK_END" '
+            $0 == begin { in_block = 1; next }
+            $0 == end   { in_block = 0; next }
+            !in_block   { print }
+        ' > "$cleaned"
         if [ -s "$cleaned" ]; then
             crontab "$cleaned"
             echo "Auto-workflow cron block removed."

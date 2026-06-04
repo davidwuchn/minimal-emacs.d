@@ -1417,7 +1417,7 @@ runtime errors when frontier-select-targets returns a malformed value."
            (lambda (research-findings)
              (gptel-auto-workflow--ask-analyzer-with-findings research-findings callback)))
         (gptel-auto-workflow--ask-analyzer-with-findings
-         (gptel-auto-workflow-load-research-findings) callback)))))
+         (ignore-errors (gptel-auto-workflow-load-research-findings)) callback)))))
 
 (defun gptel-auto-workflow--build-analyzer-prompt (context research-findings max-targets)
   "Build prompt for analyzer LLM target selection.
@@ -1635,7 +1635,7 @@ Returns updated targets list."
       (if (and (file-exists-p abs-path)
                (string-prefix-p root-prefix abs-path)
                (gptel-auto-workflow--target-in-root-repo-p abs-path proj-root))
-          (let ((rel-path (file-relative-name abs-path proj-root)))
+          (let ((rel-path (ignore-errors (file-relative-name abs-path proj-root))))
             (if (gptel-auto-workflow--skip-headless-target-p rel-path)
                 (progn
                   (message "[auto-workflow] Skipping self-hosting target in headless run: %s"
@@ -2350,8 +2350,10 @@ Call during or after research to build step-level timeline."
   "Extract inferred research steps from researcher OUTPUT.
 Parses output for evidence of tool calls (WebSearch queries, WebFetch URLs).
 Returns list of step plists.
-Since we can't instrument subagent internals, we reconstruct from output."
-  (let ((steps nil)
+Since we can't instrument subagent internals, we reconstruct from output.
+EDGE CASE: nil or non-string OUTPUT returns nil safely."
+  (when (stringp output)
+    (let ((steps nil)
         (step-idx 0))
     ;; Extract WebSearch queries (look for search patterns)
     (save-match-data
@@ -2423,7 +2425,7 @@ Since we can't instrument subagent internals, we reconstruct from output."
                         steps))
               (ignore))))))
     ;; If we found explicit steps, prefer those over parsed ones
-    (reverse steps)))
+    (reverse steps))))
 
 (defun gptel-auto-workflow--merge-steps-with-session (steps)
   "Merge parsed STEPS into the session step accumulator.
@@ -2658,7 +2660,7 @@ When COMPLETION-CALLBACK is non-nil, call it after findings are cached."
           (message "[research] τ Wisdom: skipping — findings still fresh (<1h)")
           (when completion-callback
             (let ((cached (or (gethash cache-key gptel-auto-workflow--research-findings-cache)
-                              (gptel-auto-workflow-load-research-findings))))
+                              (ignore-errors (gptel-auto-workflow-load-research-findings)))))
               (funcall completion-callback cached))))
       (progn
         (message "[research] Starting periodic research for %s..." proj-root)

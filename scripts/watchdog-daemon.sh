@@ -117,56 +117,31 @@ resolve_live_socket() {
 }
 
 socket_accepts_connections() {
-    python3 - "$SERVER_NAME" "$MY_UID" <<'PY'
-from pathlib import Path
-import os
-import socket
-import sys
-import tempfile
-
-server_name = sys.argv[1]
-uid = sys.argv[2]
-
-def candidate_socket_paths(name, uid_value):
-    candidates = []
-    for base in filter(None, [os.environ.get("XDG_RUNTIME_DIR"),
-                              os.environ.get("TMPDIR"),
-                              tempfile.gettempdir(),
-                              "/tmp",
-                              f"/run/user/{uid_value}"]):
-        if base == os.environ.get("XDG_RUNTIME_DIR") or base == f"/run/user/{uid_value}":
-            candidates.append(Path(base) / "emacs" / name)
-        else:
-            candidates.append(Path(base) / f"emacs{uid_value}" / name)
-    deduped = []
-    seen = set()
-    for path in candidates:
-        key = str(path)
-        if key not in seen:
-            deduped.append(path)
-            seen.add(key)
-    return deduped
-
-for socket_path in candidate_socket_paths(server_name, uid):
-    if not socket_path.exists():
-        continue
-    probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    probe.settimeout(1)
-    try:
-        probe.connect(str(socket_path))
-        raise SystemExit(0)
-    except ConnectionRefusedError:
-        raise SystemExit(1)
-    except socket.timeout:
-        # Timeout means socket exists but server not responding — treat as broken
-        raise SystemExit(1)
-    except OSError:
-        continue
-    finally:
-        probe.close()
-
-raise SystemExit(1)
-PY
+    local socket_path
+    local runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$MY_UID}"
+    local tmpdir="${TMPDIR:-/tmp}"
+    local candidates=(
+        "$runtime_dir/emacs/$SERVER_NAME"
+        "$tmpdir/emacs$MY_UID/$SERVER_NAME"
+        "/tmp/emacs$MY_UID/$SERVER_NAME"
+        "/run/user/$MY_UID/emacs/$SERVER_NAME"
+    )
+    local seen=""
+    for socket_path in "${candidates[@]}"; do
+        case "$seen" in
+            *"|$socket_path|"*) continue ;;
+        esac
+        seen="${seen}|$socket_path|"
+        [ -S "$socket_path" ] || continue
+        # If lsof is available, verify a process owns the socket
+        if command -v lsof >/dev/null 2>&1; then
+            lsof "$socket_path" >/dev/null 2>&1 && return 0
+            return 1
+        fi
+        # Without lsof, assume socket is good if file exists
+        return 0
+    done
+    return 1
 }
 
 # Check if daemon is reachable via emacsclient.
