@@ -1147,19 +1147,27 @@ Returns improvement/regression analysis."
                    (plist-get report :name-b)
                    (* 100 (or (plist-get report :score-b) 0))))
     (let ((comparison (plist-get report :comparison)))
-      (princ (format "Winner: %s\n" (or (plist-get comparison :winner) "undetermined")))
-      (when-let ((rec (plist-get comparison :recommendation)))
-        (princ (format "\nRecommendation: %s\n" rec)))
-      (when-let ((analysis (plist-get comparison :analysis)))
-        (princ "\n--- Analysis ---\n")
-        (when-let ((sa (alist-get 'strengths_a analysis)))
-          (princ (format "A strengths: %s\n" sa)))
-        (when-let ((sb (alist-get 'strengths_b analysis)))
-          (princ (format "B strengths: %s\n" sb)))))
+      (if comparison
+          (progn
+            (princ (format "Winner: %s\n" (or (plist-get comparison :winner) "undetermined")))
+            (when-let ((rec (plist-get comparison :recommendation)))
+              (princ (format "\nRecommendation: %s\n" rec)))
+            (when-let ((analysis (plist-get comparison :analysis)))
+              (princ "\n--- Analysis ---\n")
+              (when-let ((sa (alist-get 'strengths_a analysis)))
+                (princ (format "A strengths: %s\n" sa)))
+              (when-let ((sb (alist-get 'strengths_b analysis)))
+                (princ (format "B strengths: %s\n" sb)))))
+        (princ "Winner: undetermined (no comparison data)\n")))
     (let ((stats (plist-get report :statistical)))
-      (princ "\n--- Statistical ---\n")
-      (princ (format "Difference: %.1f%%\n" (* 100 (or (plist-get stats :difference) 0))))
-      (princ (format "Confidence: %s\n" (or (plist-get stats :confidence) "unknown"))))))
+      (if stats
+          (progn
+            (princ "\n--- Statistical ---\n")
+            (princ (format "Difference: %.1f%%\n" (* 100 (or (plist-get stats :difference) 0))))
+            (princ (format "Confidence: %s\n" (or (plist-get stats :confidence) "unknown"))))
+        (princ "\n--- Statistical ---\n")
+        (princ "Difference: N/A (no statistical data)\n")
+        (princ "Confidence: unknown\n")))))
 
 ;;; Agent Registration
 
