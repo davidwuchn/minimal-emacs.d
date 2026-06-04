@@ -21,17 +21,7 @@ SUBCOMMAND="${1:-all}"
 touch_minutes_ago() {
     local minutes="$1"
     local path="$2"
-
-    python3 - "$minutes" "$path" <<'PY'
-import os
-import sys
-import time
-
-minutes = float(sys.argv[1])
-path = sys.argv[2]
-stamp = time.time() - (minutes * 60.0)
-os.utime(path, (stamp, stamp))
-PY
+    touch -d "-${minutes} minutes" "$path"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════

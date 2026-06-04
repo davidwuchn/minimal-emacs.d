@@ -52,8 +52,9 @@
     (let ((dir (file-name-directory target)))
       (when dir
         (make-directory dir t)))
-    (ignore-errors (make-symbolic-link source target t))
-    t)))
+    (ignore-errors
+      (make-symbolic-link source target t)
+      t))))
 
 (defun gptel-auto-workflow--seed-worktree-runtime-var (worktree)
   "Seed ignored runtime `var' assets into workflow-owned WORKTREE.

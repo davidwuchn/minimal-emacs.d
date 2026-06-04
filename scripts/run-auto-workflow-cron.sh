@@ -5,16 +5,34 @@ set -euo pipefail
 # Prevent C stack overflow in deeply nested subagent calls
 ulimit -s 65532 2>/dev/null || true
 
-# Required: python3 + lsof for socket ownership, staleness checks, emacsclient timeout
-if ! command -v python3 &>/dev/null; then
-    echo "ERROR: python3 is required but not found." >&2
-    echo "Install: sudo apt-get install python3" >&2
-    exit 1
-fi
+# Optional: lsof for socket ownership checks
 if ! command -v lsof &>/dev/null; then
     echo "WARNING: lsof not found. Orphaned daemon sockets won't be cleaned." >&2
     echo "Install: sudo apt-get install lsof" >&2
 fi
+
+# Helper: find Emacs server socket path
+find_server_socket() {
+    local name="${1:-$SERVER_NAME}"
+    local uid="${2:-$(id -u)}"
+    local runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$uid}"
+    local tmpdir="${TMPDIR:-/tmp}"
+    local candidates=(
+        "$runtime_dir/emacs/$name"
+        "$tmpdir/emacs$uid/$name"
+        "/tmp/emacs$uid/$name"
+        "/run/user/$uid/emacs/$name"
+    )
+    local seen=""
+    for path in "${candidates[@]}"; do
+        case "$seen" in
+            *"|$path|"*) continue ;;
+        esac
+        seen="${seen}|$path|"
+        [ -S "$path" ] && { echo "$path"; return 0; }
+    done
+    return 1
+}
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ACTION="${1:-auto-workflow}"
@@ -270,20 +288,10 @@ snapshot_file_fresh() {
     local path="$1"
     local ttl="${2:-${AUTO_WORKFLOW_ACTIVE_SNAPSHOT_TTL:-45}}"
     [ -r "$path" ] || return 1
-    python3 - "$path" "$ttl" <<'PY'
-from pathlib import Path
-import sys
-import time
-
-path = Path(sys.argv[1])
-ttl = float(sys.argv[2])
-
-if not path.exists():
-    raise SystemExit(1)
-
-age = time.time() - path.stat().st_mtime
-raise SystemExit(0 if age <= ttl else 1)
-PY
+    local mtime age
+    mtime=$(stat -c %Y "$path" 2>/dev/null) || return 1
+    age=$(($(date +%s) - mtime))
+    [ "$age" -le "$ttl" ]
 }
 
 status_snapshot_fresh() {
@@ -433,112 +441,21 @@ ensure_single_researcher_daemon() {
 }
 
 daemon_socket_has_owner() {
-    python3 - "$SERVER_NAME" <<'PY'
-from pathlib import Path
-import os
-import shutil
-import subprocess
-import sys
-import tempfile
-
-server_name = sys.argv[1]
-
-def candidate_socket_paths(name):
-    uid = os.getuid()
-    candidates = []
-    runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
-    if runtime_dir:
-        candidates.append(Path(runtime_dir) / "emacs" / name)
-    for base in filter(None, [os.environ.get("TMPDIR"), tempfile.gettempdir(), "/tmp"]):
-        candidates.append(Path(base) / f"emacs{uid}" / name)
-    deduped = []
-    seen = set()
-    for path in candidates:
-        key = str(path)
-        if key not in seen:
-            deduped.append(path)
-            seen.add(key)
-    return deduped
-
-socket_path = next((path for path in candidate_socket_paths(server_name) if path.exists()), None)
-if socket_path is None:
-    raise SystemExit(1)
-
-lsof = shutil.which("lsof")
-if not lsof:
-    raise SystemExit(0)
-
-try:
-    probe = subprocess.run(
-        [lsof, str(socket_path)],
-        capture_output=True,
-        text=True,
-        timeout=2,
-        check=False,
-    )
-except subprocess.TimeoutExpired:
-    raise SystemExit(0)
-
-raise SystemExit(0 if probe.returncode == 0 else 1)
-PY
+    local socket_path
+    socket_path=$(find_server_socket "$SERVER_NAME") || return 1
+    [ -S "$socket_path" ] || return 1
+    command -v lsof >/dev/null 2>&1 || return 0
+    lsof "$socket_path" >/dev/null 2>&1
 }
 
 daemon_socket_owned_by_worker_daemon() {
-    local daemon_pid
-
+    local daemon_pid socket_path
     daemon_pid="$(worker_daemon_pid || true)"
     [ -n "$daemon_pid" ] || return 1
-
-    python3 - "$SERVER_NAME" "$daemon_pid" <<'PY'
-from pathlib import Path
-import os
-import shutil
-import subprocess
-import sys
-import tempfile
-
-server_name = sys.argv[1]
-daemon_pid = sys.argv[2]
-
-def candidate_socket_paths(name):
-    uid = os.getuid()
-    candidates = []
-    runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
-    if runtime_dir:
-        candidates.append(Path(runtime_dir) / "emacs" / name)
-    for base in filter(None, [os.environ.get("TMPDIR"), tempfile.gettempdir(), "/tmp"]):
-        candidates.append(Path(base) / f"emacs{uid}" / name)
-    deduped = []
-    seen = set()
-    for path in candidates:
-        key = str(path)
-        if key not in seen:
-            deduped.append(path)
-            seen.add(key)
-    return deduped
-
-socket_path = next((path for path in candidate_socket_paths(server_name) if path.exists()), None)
-if socket_path is None:
-    raise SystemExit(1)
-
-lsof = shutil.which("lsof")
-if not lsof:
-    raise SystemExit(1)
-
-try:
-    probe = subprocess.run(
-        [lsof, "-t", str(socket_path)],
-        capture_output=True,
-        text=True,
-        timeout=2,
-        check=False,
-    )
-except subprocess.TimeoutExpired:
-    raise SystemExit(1)
-
-owners = {line.strip() for line in probe.stdout.splitlines() if line.strip()}
-raise SystemExit(0 if daemon_pid in owners else 1)
-PY
+    socket_path=$(find_server_socket "$SERVER_NAME") || return 1
+    [ -S "$socket_path" ] || return 1
+    command -v lsof >/dev/null 2>&1 || return 1
+    lsof -t "$socket_path" 2>/dev/null | grep -qx "$daemon_pid"
 }
 
 status_can_use_persisted_active_snapshot() {
@@ -661,166 +578,48 @@ rewrite_status_idle() {
         return 0
     fi
 
-    python3 - "$STATUS_FILE" <<'PY'
-from pathlib import Path
-import re
-import sys
-
-path = Path(sys.argv[1])
-text = path.read_text(encoding="utf-8")
-text = re.sub(r':running\s+t', ':running nil', text, count=1)
-text = re.sub(r':phase\s+"[^"]*"', ':phase "idle"', text, count=1)
-if not text.endswith("\n"):
-    text += "\n"
-path.write_text(text, encoding="utf-8")
-PY
+    sed -i 's/:running[[:space:]]\+t/:running nil/' "$STATUS_FILE"
+    sed -i 's/:phase "[^"]*"/:phase "idle"/' "$STATUS_FILE"
+    # Ensure trailing newline
+    [ -n "$(tail -c1 "$STATUS_FILE")" ] && echo >> "$STATUS_FILE"
 }
 
 run_emacsclient_eval() {
     local elisp="$1"
     local timeout="${2:-10}"
-    python3 - "$EMACSCLIENT" "$SERVER_NAME" "$elisp" "$timeout" <<'PY'
-import subprocess
-import os
-import shutil
-import socket
-import sys
-import tempfile
-from pathlib import Path
+    local output rc
 
-emacsclient, server_name, elisp, timeout = sys.argv[1], sys.argv[2], sys.argv[3], float(sys.argv[4])
+    rc=0
+    output=$(timeout "$timeout" "$EMACSCLIENT" -a "false" -s "$SERVER_NAME" --eval "$elisp" 2>&1) || rc=$?
 
-def server_socket_path():
-    uid = os.getuid()
-    candidates = []
-    runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
-    if runtime_dir:
-        candidates.append(Path(runtime_dir) / "emacs" / server_name)
-    for base in filter(None, [os.environ.get("TMPDIR"), tempfile.gettempdir(), "/tmp"]):
-        candidates.append(Path(base) / f"emacs{uid}" / server_name)
-    deduped = []
-    seen = set()
-    for path in candidates:
-        key = str(path)
-        if key in seen:
-            continue
-        deduped.append(path)
-        seen.add(key)
-    for path in deduped:
-        if path.exists():
-            return path
-    return deduped[0]
+    # timeout(1) exits 124 on timeout
+    if [ "$rc" -eq 124 ]; then
+        printf '%s\n' "$output" >&2
+        return 124
+    fi
 
-def socket_accepts_connections():
-    socket_path = server_socket_path()
-    if not socket_path.exists():
-        return False
-    probe_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    probe_socket.settimeout(1)
-    try:
-        probe_socket.connect(str(socket_path))
-        return True
-    except ConnectionRefusedError:
-        return False
-    except socket.timeout:
-        return True
-    except OSError:
-        pass
-    finally:
-        probe_socket.close()
-    lsof = shutil.which("lsof")
-    if not lsof:
-        return True
-    try:
-        probe = subprocess.run(
-            [lsof, str(socket_path)],
-            capture_output=True,
-            text=True,
-            timeout=2,
-            check=False,
-        )
-    except subprocess.TimeoutExpired:
-        return True
-    return probe.returncode == 0
+    # Busy markers: server is alive but not responding
+    if [ "$rc" -ne 0 ]; then
+        case "$output" in
+            *"Server not responding"*|*"server did not reply"*)
+                printf '%s\n' "$output" >&2
+                return 124
+                ;;
+        esac
+    fi
 
-try:
-    proc = subprocess.Popen(
-        [emacsclient, "-a", "false", "-s", server_name, "--eval", elisp],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-except OSError as err:
-    sys.stderr.write(f"{err}\n")
-    raise SystemExit(1)
+    # Connection refused but socket exists: daemon may be starting/stopping
+    if [ "$rc" -ne 0 ] && [[ "$output" == *"Connection refused"* ]]; then
+        local socket_path
+        socket_path=$(find_server_socket "$SERVER_NAME" 2>/dev/null) || true
+        if [ -n "$socket_path" ] && [ -S "$socket_path" ]; then
+            printf '%s\n' "$output" >&2
+            return 124
+        fi
+    fi
 
-try:
-    stdout_text, stderr_text = proc.communicate(timeout=timeout)
-except subprocess.TimeoutExpired as err:
-    # Leave the client alive so the server can finish the request cleanly
-    # instead of logging a broken server connection when the wrapper gives up.
-    # The child must keep draining its stdout/stderr pipes after this wrapper
-    # exits, otherwise the server sees a remote peer disconnect mid-request.
-    if err.stdout:
-        sys.stdout.write(err.stdout if isinstance(err.stdout, str) else err.stdout.decode())
-    if err.stderr:
-        sys.stderr.write(err.stderr if isinstance(err.stderr, str) else err.stderr.decode())
-    if proc.poll() is None and hasattr(os, "fork"):
-        try:
-            reaper_pid = os.fork()
-        except OSError:
-            reaper_pid = -1
-        if reaper_pid == 0:
-            try:
-                try:
-                    os.setsid()
-                except OSError:
-                    pass
-                devnull_fd = os.open(os.devnull, os.O_RDWR)
-                try:
-                    os.dup2(devnull_fd, 0)
-                    os.dup2(devnull_fd, 1)
-                    os.dup2(devnull_fd, 2)
-                finally:
-                    if devnull_fd > 2:
-                        os.close(devnull_fd)
-                try:
-                    proc.communicate()
-                except Exception:
-                    pass
-            finally:
-                os._exit(0)
-    raise SystemExit(124)
-
-proc_stdout = stdout_text or ""
-proc_stderr = stderr_text or ""
-proc_returncode = proc.returncode
-
-busy_markers = (
-    "Server not responding; use Ctrl+C to break",
-    "server did not reply",
-)
-stderr_text = proc_stderr
-if proc_returncode != 0 and any(marker in stderr_text for marker in busy_markers):
-    if proc_stdout:
-        sys.stdout.write(proc_stdout)
-    if proc_stderr:
-        sys.stderr.write(proc_stderr)
-    raise SystemExit(124)
-
-if (proc_returncode != 0
-        and "Connection refused" in stderr_text
-        and socket_accepts_connections()):
-    if proc_stdout:
-        sys.stdout.write(proc_stdout)
-    if proc_stderr:
-        sys.stderr.write(proc_stderr)
-    raise SystemExit(124)
-
-sys.stdout.write(proc_stdout)
-sys.stderr.write(proc_stderr)
-raise SystemExit(proc_returncode)
-PY
+    printf '%s\n' "$output"
+    return "$rc"
 }
 
 check_worker_daemon() {

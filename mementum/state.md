@@ -1,7 +1,49 @@
 # Mementum State
 
-> Last session: 2026-06-03 (Dual Mayor Phases 5-7 complete)
+> Last session: 2026-06-04 (Pipeline hardening: python3 elimination + grader fix)
 > Next pipeline: running
+> Status: 2150 tests pass, 0 unexpected
+
+## Session: Pipeline Hardening — Python3 Elimination + Grader Fix (2026-06-04)
+
+### ⚒ Eliminate python3 dependency from all pipeline scripts
+**4 scripts, 8 python3 invocations replaced with pure bash:**
+
+| Script | Replacements |
+|--------|-------------|
+| `run-auto-workflow-cron.sh` | 5: file-age→stat+date, socket→lsof+bash, status→sed, emacsclient→timeout(1) |
+| `watchdog-daemon.sh` | 1: socket probe→bash path loop + lsof fallback |
+| `install-cron.sh` | 1: crontab merge/remove→awk |
+| `run-tests.sh` | 1: touch backdate→GNU touch -d |
+
+**New helper:** `find_server_socket()` — deduped candidate paths (XDG_RUNTIME_DIR, TMPDIR, /tmp)
+
+**Net change:** -265 lines, removes python3 as runtime dependency entirely
+
+### ⚒ Fix "Unknown agent type: grader" — root cause of grader-failed experiments
+**Problem:** Benchmark subagent types (grader/analyzer/reviewer/explorer) not registered in `gptel-agent--agents`
+**Fix:** `gptel-benchmark--register-subagent-types()` auto-registers on load + `with-eval-after-load 'gptel-agent`
+
+### ⚒ Commit-recovery fix (previous session continuation)
+`experiment-core.el`: When commit step reports failure but HEAD changed (submodule restage race), detect via hash comparison and treat as success instead of `grader-bypass-commit-failed`.
+
+### ⚒ Hashline collision reduction
+`hashline.el`: hash length 2→4 chars (1/256 → 1/65536 collision probability)
+
+### Pipeline audit findings
+- **CRITICAL:** python3 PATH broken in cron → research got zero external findings every run
+- **CRITICAL:** "Unknown agent type: grader" → experiments scored 0 → grader-failed
+- **HIGH:** Researcher daemon dead since Jun 3, only PMF running → stale research
+- **FIXED:** All 3 critical issues addressed in this session
+
+### Commits
+- `f5162f4b` ⚒ Fix grader-bypass-commit-false-negative + hashline collision rate
+- `0c16f041` ⚒ Eliminate python3 dependency from all pipeline scripts
+- `68130dd2` ⚒ Register benchmark subagent types in gptel-agent--agents
+
+---
+
+> Previous session: 2026-06-03 (Dual Mayor Phases 5-7 complete)
 > Status: 2149 tests pass, 0 unexpected — Dual Mayor fully operational
 
 ## Session: Dual Mayor Implementation Complete (2026-06-03)

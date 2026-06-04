@@ -228,8 +228,8 @@ of the regression if blocked."
                        (shell-quote-argument file))
                30)))
         (when (and (stringp expected)
-                   (= 0 (cdr staging-content))
-                   (= 0 (cdr experiment-content)))
+                   (consp staging-content) (= 0 (cdr staging-content))
+                   (consp experiment-content) (= 0 (cdr experiment-content)))
           (let* ((staging-str (car staging-content))
                  (experiment-str (car experiment-content))
                  (staging-has-it (and (stringp staging-str)
@@ -558,7 +558,8 @@ short-circuiting repeats."
         (goto-char (point-min))
         (while (re-search-forward "`\\([^`\n]+\\)`" nil t)
           (let ((candidate (match-string 1)))
-            (when (and (stringp candidate)
+            (when (and candidate
+                       (< (length candidate) 200)
                        (string-match-p "--\\|::" candidate))
               (push candidate symbols))))))
     (nreverse (cl-remove-duplicates symbols :test #'string=))))
@@ -569,31 +570,33 @@ Only counts prior non-kept results and triggers once a symbol appears in at
 least `gptel-auto-experiment-repeat-focus-threshold' previous attempts.
 When TARGET-FILE is non-nil, also counts per-target-file discards so
 repeatedly failing files get deprioritized across symbol changes."
-  (let ((current-symbols (gptel-auto-experiment--extract-focus-symbols output)))
-    (when target-file
-      (push target-file current-symbols))
-    (when current-symbols
-      (let ((counts (make-hash-table :test 'equal))
-            matches)
-        (dolist (result previous-results)
-          (when (and (proper-list-p result) (not (gptel-auto-workflow--plist-get result :kept nil)))
-            (let ((prev-symbols (gptel-auto-experiment--extract-focus-symbols
-                                 (gptel-auto-workflow--plist-get result :agent-output ""))))
-              (when (and (stringp target-file)
-                         (equal target-file (gptel-auto-workflow--plist-get result :target "")))
-                (push target-file prev-symbols))
-              (dolist (symbol prev-symbols)
-                (puthash symbol (1+ (gethash symbol counts 0)) counts)))))
-        (dolist (symbol current-symbols)
-          (let ((count (gethash symbol counts 0)))
-            (when (>= count gptel-auto-experiment-repeat-focus-threshold)
-              (push (cons symbol count) matches))))
-        (when matches
-          (let* ((sorted (sort matches (lambda (a b) (> (cdr a) (cdr b)))))
-                 (best (car sorted)))
-            (list :symbol (car best)
-                  :count (cdr best)
-                  :matches (nreverse sorted))))))))
+  ;; BOUNDARY: guard against malformed previous-results
+  (when (proper-list-p previous-results)
+    (let ((current-symbols (gptel-auto-experiment--extract-focus-symbols output)))
+      (when target-file
+        (push target-file current-symbols))
+      (when current-symbols
+        (let ((counts (make-hash-table :test 'equal))
+              matches)
+          (dolist (result previous-results)
+            (when (and (proper-list-p result) (not (gptel-auto-workflow--plist-get result :kept nil)))
+              (let ((prev-symbols (gptel-auto-experiment--extract-focus-symbols
+                                   (gptel-auto-workflow--plist-get result :agent-output ""))))
+                (when (and (stringp target-file)
+                           (equal target-file (gptel-auto-workflow--plist-get result :target "")))
+                  (push target-file prev-symbols))
+                (dolist (symbol prev-symbols)
+                  (puthash symbol (1+ (gethash symbol counts 0)) counts)))))
+          (dolist (symbol current-symbols)
+            (let ((count (gethash symbol counts 0)))
+              (when (>= count gptel-auto-experiment-repeat-focus-threshold)
+                (push (cons symbol count) matches))))
+          (when matches
+            (let* ((sorted (sort matches (lambda (a b) (> (cdr a) (cdr b)))))
+                   (best (car sorted)))
+              (list :symbol (car best)
+                    :count (cdr best)
+                    :matches (nreverse sorted)))))))))
 
 (defun gptel-auto-experiment--subagent-raw-result (result)
   "Return raw transient error text from RESULT, or nil when unavailable."

@@ -3,21 +3,21 @@ title: Research Insights - template-default
 status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
-insight-quality: 0.3/10
-allium-issues: 0
-allium-severity: 0.00
-allium-status: coherent
+insight-quality: 0.2/10
+allium-issues: 3
+allium-severity: 0.05
+allium-status: ok
 ---
 
 # Research Strategy: template-default
 
-*Consolidated from 61 experiments (3% keep rate).*
+*Consolidated from 99 experiments (2% keep rate).*
 
-**Performance:** 2 kept / 0 discarded / 25 failed (EXTRACTED — from TSV)
+**Performance:** 2 kept / 0 discarded / 42 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
-- `lisp/modules/gptel-auto-workflow-projects.el` (2 kept / 3 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (2 kept / 4 failed)
 
 ### Structure (deterministic scan)
 
@@ -27,8 +27,8 @@ defvars: gptel-auto-workflow--async, gptel-auto-workflow--process, gptel-auto-wo
 requires: cl-lib, gptel-tools-agent
 provides: gptel-auto-workflow-projects
 declares: gptel-auto-workflow--project-root, gptel-auto-workflow--get-worktree-dir, gptel-auto-workflow--mark-messages-start, gptel-auto-workflow--persist-status, gptel-auto-workflow-cron-safe, gptel-auto-workflow-run-async--guarded, gptel-auto-workflow-run-research, gptel-fsm-info, gptel-mementum-weekly-job, gptel-benchmark-instincts-weekly-job, gptel-auto-workflow--run-autotts-evolution, gptel-auto-workflow--reorder-fallbacks-by-ontology, gptel-auto-workflow--run-research-champion-league, gptel-auto-workflow--run-strategy-evolution
-errors: error, error, error, error, error, error, error, user-error, error, error, error, error, error, signal
-handlers: err, err, err, err, nil, nil, err, err, nil, nil, err, err, err, err, err, err, err
+errors: error, error, error, error, error, error, error, user-error, error, error, error, error, error, error, signal
+handlers: err, err, err, err, nil, nil, err, err, err, nil, nil, err, err, err, err, err, err, err
 advised: gptel-agent--task, gptel-agent--task-overlay
 ```
 
@@ -36,11 +36,17 @@ advised: gptel-agent--task, gptel-agent--task-overlay
 
 These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-auto-workflow-projects.el` (2 kept / 3 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (2 kept / 4 failed)
 - `lisp/modules/gptel-benchmark-subagent.el` (3 failed)
 - `lisp/modules/gptel-tools-agent-error.el` (3 failed)
 - `lisp/modules/gptel-tools-agent-prompt-build.el` (3 failed)
-- `lisp/modules/gptel-auto-workflow-strategic.el` (3 failed)
+- `lisp/modules/gptel-auto-workflow-strategic.el` (10 failed)
+
+## Allium Behavioral Coherence
+
+*3 behavioral issues (severity 0.05). EXTRACTED from Allium v3 pipeline.*
+
+
 
 ## Meta-Learning Recommendations (INFERRED — from pattern analysis)
 
@@ -63,69 +69,134 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*7 check issues (severity 0.15). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-<think>
-The user is asking me to "distill" something. Let me look at what's been provided:
+# Distillation
 
-1. Research strategy: template-default
-2. 158 experiments across various targets
-3. Kept hypotheses (with the first one being "No hypothesis stated" and the second being about improving a specific function)
-4. Discarded hypotheses (a long list of various hypotheses)
+## Scope
+99 experiments across 12 targets in the gptel/auto-workflow codebase, using a template-default research strategy.
 
-The user wants me to distill this information. "Distill" means to extract the essential or most important elements. Looking at the context, this appears to be a summary of research/experiments about improving various Emacs Lisp files, with hypotheses being kept or discarded.
+## Distilled Hypotheses (2 kept, 0 discarded)
 
-The "kept hypotheses" section has essentially empty entries - just two placeholder lines:
-- "No hypothesis stated"
-- "improving the function `gptel-auto-workflow-list-project-buffers`."
+Both surviving hypotheses target **defensive nil/lifecycle safety** in Emacs Lisp functions, suggesting a pattern of crashes or `wrong-type-argument` errors occurring during startup or post-error recovery states.
 
-The discarded hypotheses list is extensive and contains the actual substantive hypotheses that were considered but rejected.
+### H1: Dead-marker handling for `where` parameter
+- **Defect class:** Stale/lifecycle argument validation
+- **Fix shape:** Wrap `where` usage with `marker-live` (or equivalent) check before passing to the underlying function
+- **Failure mode avoided:** Passing a marker from a killed buffer to the original function
 
-Let me distill this into a clear, concise summary. I should:
-1. Note the context (158 experiments)
-2. Summarize what was kept (very little)
-3. Summarize what was discarded (the bulk)
-4. Identify themes/patterns
+### H2: Nil-safety in research cache accessor
+- **Target:** `gptel-auto-workflow--research-cache-get`
+- **Defect class:** Missing nil/hash-table guard
+- **Fix shape:** Prepend `hash-table-p` check before table operations
+- **Failure mode avoided:** `wrong-type-argument` error when the research findings cache is nil
+- **Internal precedent:** `strategic.el` (lines 2719–2721) already implements this pattern — H2 closes a consistency gap
 
-The discarded hypotheses seem to focus on:
-- FSM (finite state machine) utility code
-- Code clarity improvements
-- Dead code removal
-- Pattern extraction (DRY principle)
-- Bug fixes
-- Idiomatic Lisp improvements (e.g., cl-labels vs symbol-function)
-- Performance improvements
+## Pattern Signal
+Both kept hypotheses point at the same root concern: **input/state validation in helper functions during fragile lifecycle windows** (early startup, post-error recovery). No other defect classes (logic, performance, API misuse, etc.) survived the 99-experiment filter — strongly suggesting the actual bug surface is narrow and lifecycle-bound.
 
-Let me create a distilled version.
-</think>
+## Discarded
+None recorded.
 ```
 
 ### Check Issues
 
-Your thinking block trails off without producing the distillation. Here's the completed distillation based on what you outlined:
+I can't access the filesystem to verify the specific code claims (the `strategic.el` precedent, the function `gptel-auto-workflow--research-cache-get`, or the `where` parameter usage). So here's a check based on the document's own internal consistency and the framing.
 
-## Distilled Summary
+## Issues worth flagging
 
-**Context:** 158 experiments ran against a template-default research strategy, evaluating hypotheses about improvements to an Emacs Lisp file (appears to be `gptel-auto-workflow`).
+**1. "Discarded: None recorded" is suspicious given 99 experiments.**
+99 experiments across 12 targets with only 2 survivors and zero rejections is an unusual result. Either:
+- The filter is too permissive (keeping weak hypotheses), or
+- The filter is too narrow (only looking for one defect class and discarding misclassified-but-valid ones elsewhere), or
+- "None recorded" means the logging was skipped, which is itself a process bug.
 
-**Kept hypotheses** (effectively empty):
-- "No hypothesis stated" (placeholder)
-- Improving the function `gptel-auto-workflow-list-project-buffers`
+This claim deserves scrutiny before acting on it.
 
-**Discarded hypotheses** themes:
-1. **FSM utility refactors** — restructuring finite state machine helper code
-2. **Clarity/readability** — renaming, simplifying expressions
-3. **Dead code removal** — eliminating unused branches/functions
-4. **DRY/pattern extraction** — collapsing repetition
-5. **Bug fixes** — edge cases in buffer/project handling
-6. **Idiomatic Lisp** — e.g., `cl-labels` vs `symbol-function` choices
-7. **Performance** — avoiding repeated computation in hot paths
+**2. The `strategic.el` precedent claim is the load-bearing piece of evidence and it's unverifiable from the distillation alone.**
+H2's strength rests entirely on "lines 2719–2721 already implement this pattern." If that precedent is:
+- A coincidental `hash-table-p` check in an unrelated function, H2 is weaker
+- A `null`/empty-table check that doesn't actually fix the same failure mode, the "consistency gap" framing is wrong
+- Misread (e.g., the check guards a different code path), H2 collapses
 
-**Key observation:** Of 158 experiments, only one substantive hypothesis survived (the buffer-listing function). The vast majority of attempted improvements were rejected — suggesting the codebase is already close to a local optimum under the chosen strategy, or that the strategy's evaluation criteria are strict.
+**3. The pattern signal overgeneralizes from n=2.**
+"Both kept hypotheses point at the same root concern" — yes, trivially, when the filter kept only ones that did. From two survivors you cannot claim "the actual bug s
 
----
-
-Did you want me to check something specific — e.g., whether the distillation is accurate, whether the conclusion is warranted, or something about the experiments themselves? You cut off before stating your actual question.
+... (truncated)

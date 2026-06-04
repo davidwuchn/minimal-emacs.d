@@ -1435,11 +1435,25 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                            run-id exp-result log-fn callback)))
                                                            (message "[auto-experiment] ✓ grader-bypass committing changes for %s"
                                                                     target)
-                                                           (gptel-auto-workflow--assert-main-untouched)
-                                                           (if (and (gptel-auto-workflow--stage-worktree-changes "Stage grader-bypass" 60)
-                                                                    (gptel-auto-workflow--promote-provisional-commit
-                                                                      msg "Commit grader-bypass" provisional-commit-hash
-                                                                      (gptel-auto-experiment--git-timeout)))
+                                                            (gptel-auto-workflow--assert-main-untouched)
+                                                            (if (let ((commit-ok
+                                                                       (and (gptel-auto-workflow--stage-worktree-changes "Stage grader-bypass" 60)
+                                                                            (gptel-auto-workflow--promote-provisional-commit
+                                                                              msg "Commit grader-bypass" provisional-commit-hash
+                                                                              (gptel-auto-experiment--git-timeout)))))
+                                                                  ;; Recovery: if commit step reports failure but a commit
+                                                                  ;; actually exists (e.g., submodule restage raced with
+                                                                  ;; commit), treat as success to avoid false negatives.
+                                                                  (when (and (not commit-ok)
+                                                                             provisional-commit-hash
+                                                                             (not (equal (ignore-errors
+                                                                                           (gptel-auto-workflow--current-head-hash))
+                                                                                         provisional-commit-hash)))
+                                                                    (message "[auto-experiment] ⚠ Commit step reported failure but HEAD changed (%s → %s), treating as success"
+                                                                             (gptel-auto-workflow--truncate-hash provisional-commit-hash)
+                                                                             (gptel-auto-workflow--truncate-hash (gptel-auto-workflow--current-head-hash)))
+                                                                    (setq commit-ok t))
+                                                                  commit-ok)
                                                                (progn
                                                                  (setq provisional-commit-hash nil)
                                                                  (gptel-auto-workflow--track-commit experiment-id target experiment-worktree)
