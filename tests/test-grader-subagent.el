@@ -118,7 +118,15 @@
   "Grader should call subagent when gptel-agent--task is available.
 Now passes in batch — state corruption fixed."
   :expected-result (if noninteractive :passed :passed)
-  (require 'gptel-benchmark-subagent)
+  (require 'gptel-benchmark-subagent nil t)
+  ;; Ensure benchmark subagent types are registered (may be skipped if
+  ;; gptel-agent--agents was unbound during load)
+  (when (and (boundp 'gptel-agent--agents)
+             (fboundp 'gptel-benchmark--register-subagent-types))
+    (gptel-benchmark--register-subagent-types))
+  (skip-unless (and (featurep 'gptel-benchmark-subagent)
+                    (boundp 'gptel-agent--agents)
+                    (assoc "grader" gptel-agent--agents)))
   (let* ((call-count 0)
          (gptel-benchmark-use-subagents t)
          ;; Mock gptel-agent--task
