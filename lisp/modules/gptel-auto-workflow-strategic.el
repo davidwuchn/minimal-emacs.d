@@ -1525,7 +1525,8 @@ RULES:
 1. ONLY output the JSON below. NO explanation, NO commentary, NO markdown.
 2. Every target must exist in the INPUT files list.
 3. Prioritize files with TODO/FIXME comments and recent git activity.
-4. Max %d targets.
+4. DO NOT select protected files: %s
+5. Max %d targets.
 
 OUTPUT FORMAT — copy this exactly:
 {\"targets\": [{\"file\": \"lisp/modules/foo.el\", \"priority\": 1, \"reason\": \"has 3 TODO comments and recent changes\"}]}
@@ -1537,6 +1538,7 @@ OUTPUT FORMAT — copy this exactly:
   todo/fixme(30): %s
   research: %s
   history: %s"
+            (mapconcat #'identity gptel-auto-experiment--critical-files ", ")
             max-targets
             research-section
             (or hints-section "")
