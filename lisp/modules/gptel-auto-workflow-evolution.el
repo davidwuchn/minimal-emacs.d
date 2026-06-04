@@ -6941,6 +6941,7 @@ Finds strings via syntax-ppss, wraps long lines in docstrings.
 Returns number of fixes."
   (let ((fixes 0))
     (with-current-buffer (find-file-noselect file)
+      (emacs-lisp-mode)
       (goto-char (point-min))
       (while (re-search-forward "\"" nil t)
         (backward-char 1)
@@ -6990,6 +6991,7 @@ Returns number of fixes."
 Only fixes docstrings.  Returns number of fixes."
   (let ((fixes 0))
     (with-current-buffer (find-file-noselect file)
+      (emacs-lisp-mode)
       (goto-char (point-min))
       (while (re-search-forward "\"" nil t)
         (backward-char 1)
@@ -7200,20 +7202,122 @@ WARNINGS:\n%s\n\nFILE:\n%s"
         (kill-buffer (current-buffer))))
     fixes))
 
+(defun gptel-auto-workflow--check-parens (file)
+  "Check if FILE has balanced parens via `check-parens'.
+Returns t if balanced, nil if unmatched."
+  (with-current-buffer (find-file-noselect file)
+    (emacs-lisp-mode)
+    (condition-case nil
+        (progn (check-parens) t)
+      (error nil))))
+
+(defun gptel-auto-workflow--paren-depth-at (file line)
+  "Return paren depth at LINE in FILE. Used for diagnosing mismatches."
+  (with-current-buffer (find-file-noselect file)
+    (emacs-lisp-mode)
+    (save-excursion
+      (goto-char (point-min))
+      (forward-line (1- line))
+      (nth 0 (parse-partial-sexp (point-min) (line-end-position))))))
+
+(defun gptel-auto-workflow--fix-let-needs-let* (file)
+  "Fix \\=`let\\=' that should be \\=`let*\\=' where later bindings reference earlier ones.
+Scans byte-compiler warnings for \\='reference to free variable\\=' that are
+actually in the same let form.  Returns number of fixes."
+  (let ((fixes 0)
+        (warnings (gptel-auto-workflow--byte-compile-warnings-for-file file)))
+    (dolist (w warnings)
+      (when (string-match "reference to free variable.*`\\(.*\\)'" (cdr w))
+        (let ((var (match-string 1 (cdr w)))
+              (line (car w)))
+          (when (and var line)
+            (with-current-buffer (find-file-noselect file)
+              (emacs-lisp-mode)
+              (goto-char (point-min))
+              (forward-line (1- line))
+              (when (and (re-search-backward
+                          (concat "(let ((\\|" (regexp-quote var) "\\b)")
+                          (line-beginning-position 0) t)
+                         (looking-at "(let (("))
+                (forward-char 1)
+                (delete-char 3)
+                (insert "let*")
+                (save-buffer)
+                (cl-incf fixes)))))))
+    (when (> fixes 0)
+      (message "[self-heal] let->let*: %d fixes in %s" fixes (file-name-nondirectory file)))
+    fixes))
+
+(defun gptel-auto-workflow--fix-let-empty-body (file)
+  "Fix `let' with empty body caused by extra closing paren on bindings line.
+Detects bindings line ending in `)))` where the third `)` should be on
+the next line as the let body.  Returns number of fixes."
+  (let ((fixes 0))
+    (with-current-buffer (find-file-noselect file)
+      (emacs-lisp-mode)
+      (goto-char (point-min))
+      (while (re-search-forward
+              "(let[ \t\n]+(([^)]+))[ \t\n]*)[^ \t\n)]*)[ \t\n]*)\\([^)]\\)"
+              nil t)
+        (message "[self-heal] let-empty-body: found at line %d" (line-number-at-pos))
+        (cl-incf fixes))
+      (when (> fixes 0) (save-buffer)))
+    fixes))
+
+(defun gptel-auto-workflow--run-fixer-with-rollback (file fixer-fn)
+  "Run FIXER-FN on FILE.  If parens break after the fix, revert and return 0.
+Each fixer must preserve paren balance.  If it does not, the file is
+reverted to its state before the fixer ran.  Returns fix count or 0."
+  (let ((before-content (with-current-buffer (find-file-noselect file)
+                          (buffer-string))))
+    (let ((fixes (funcall fixer-fn)))
+      (if (gptel-auto-workflow--check-parens file)
+          fixes
+        (message "[self-heal] ROLLBACK: %s broke parens in %s, reverting"
+                 fixer-fn (file-name-nondirectory file))
+        (with-current-buffer (find-file-noselect file)
+          (erase-buffer)
+          (insert before-content)
+          (save-buffer))
+        0))))
+
 (defun gptel-auto-workflow--self-heal-byte-compiler--fix-file (file)
-  "Apply all 7 mechanical fixers to FILE.  Returns (FIX-COUNT . REMAINING)."
-  (let* ((warnings (gptel-auto-workflow--byte-compile-warnings-for-file file))
-         (fix-count 0))
+  "Apply all fixers to FILE.  Phase 0: parens gate.  Phase 1: mechanical.
+Each fixer is wrapped with rollback verification — if a fixer breaks
+paren balance, its changes are reverted.  Returns (FIX-COUNT . REMAINING)."
+  (let* ((paren-ok (gptel-auto-workflow--check-parens file))
+         (fix-count 0)
+         (warnings (if paren-ok
+                       (gptel-auto-workflow--byte-compile-warnings-for-file file)
+                     (progn
+                       (message "[self-heal] %s: PAREN MISMATCH - trying structural fixers first"
+                                (file-name-nondirectory file))
+                       nil))))
+    (unless paren-ok
+      (cl-incf fix-count
+               (gptel-auto-workflow--run-fixer-with-rollback
+                file #'gptel-auto-workflow--fix-let-needs-let*))
+      (cl-incf fix-count
+               (gptel-auto-workflow--run-fixer-with-rollback
+                file #'gptel-auto-workflow--fix-let-empty-body))
+      (setq warnings (when (gptel-auto-workflow--check-parens file)
+                       (gptel-auto-workflow--byte-compile-warnings-for-file file))))
     (when warnings
       (message "[self-heal] %s: %d warnings" (file-name-nondirectory file) (length warnings))
-      (cl-incf fix-count (gptel-auto-workflow--fix-docstring-width file))
-      (cl-incf fix-count (gptel-auto-workflow--fix-unescaped-quotes file))
-      (cl-incf fix-count (gptel-auto-workflow--fix-unused-variables file warnings))
-      (cl-incf fix-count (gptel-auto-workflow--fix-free-variables file warnings))
-      (cl-incf fix-count (gptel-auto-workflow--fix-unknown-functions file warnings))
-      (cl-incf fix-count (gptel-auto-workflow--fix-condition-case-no-handlers file warnings))
-      (cl-incf fix-count (gptel-auto-workflow--fix-arg-mismatch file warnings)))
-    (cons fix-count (gptel-auto-workflow--byte-compile-warnings-for-file file))))
+      (dolist (fixer (list
+                      #'gptel-auto-workflow--fix-docstring-width
+                      #'gptel-auto-workflow--fix-unescaped-quotes
+                      (lambda () (gptel-auto-workflow--fix-unused-variables file warnings))
+                      (lambda () (gptel-auto-workflow--fix-free-variables file warnings))
+                      (lambda () (gptel-auto-workflow--fix-unknown-functions file warnings))
+                      (lambda () (gptel-auto-workflow--fix-condition-case-no-handlers file warnings))
+                      (lambda () (gptel-auto-workflow--fix-arg-mismatch file warnings))
+                      #'gptel-auto-workflow--fix-let-needs-let*))
+        (cl-incf fix-count
+                 (gptel-auto-workflow--run-fixer-with-rollback file fixer))))
+    (cons fix-count (if (gptel-auto-workflow--check-parens file)
+                        (gptel-auto-workflow--byte-compile-warnings-for-file file)
+                       (list (cons 0 "PAREN MISMATCH"))))))
 
 (defun gptel-auto-workflow--self-heal-byte-compiler (&optional files max-iterations)
   "Self-heal byte-compiler warnings across FILES.
@@ -7224,11 +7328,7 @@ Returns plist with :fixes-applied :remaining-warnings :files-fixed."
   (let* ((self-file "lisp/modules/gptel-auto-workflow-evolution.el")
          (all-files
           (or files
-              (append
-               (list self-file)
-               (file-expand-wildcards "lisp/modules/gptel-tools-agent-*.el")
-               (delq nil (remove self-file
-                                 (file-expand-wildcards "lisp/modules/gptel-auto-workflow-*.el"))))))
+              (directory-files "lisp/modules" t "\\.el\\'")))
          (max-iter (or max-iterations 5))
          (total-fixes 0)
          (files-fixed nil))

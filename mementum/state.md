@@ -1,8 +1,56 @@
 # Mementum State
 
-> Last session: 2026-06-04 (Pipeline hardening + Fix OOM kills + staging-pending loss + deprecated models)
+> Last session: 2026-06-04 (Byte-compiler self-healing Phase 10 + zero-warning agent modules)
 > Next pipeline: running
 > Status: 2150 tests pass, 0 unexpected
+
+## Session: Byte-Compiler Self-Healing Phase 10 (2026-06-04)
+
+### ⚒ Phase 10: Self-Healing Byte-Compiler Warnings
+**Key insight:** Instead of manually fixing 80+ byte-compiler warnings one-by-one
+(whack-a-mole), created `gptel-auto-workflow--self-heal-byte-compiler` that
+iteratively auto-fixes 5 warning types:
+
+| Fixer | Warning Pattern | Auto-Fix |
+|-------|----------------|----------|
+| `--fix-docstring-width` | "docstring wider than 80 characters" | Word-wrap at 78 chars |
+| `--fix-unescaped-quotes` | "unescaped single quotes" | `'word'` → `\='word\='` |
+| `--fix-unused-variables` | "Unused lexical variable/argument" | Prefix with `_` |
+| `--fix-free-variables` | "reference/assignment to free variable" | Insert `(defvar sym)` |
+| `--fix-unknown-functions` | "function not known to be defined" | Insert `(declare-function sym "source")` via `find-lisp-object-file-name` |
+
+**Architecture:** The function iterates up to N rounds, each round:
+1. Collect warnings per file via `byte-compile-from-buffer`
+2. Apply all 5 fixers
+3. Re-check remaining warnings
+4. Stop when clean or max iterations reached
+
+**Dog-food principle:** The self-heal function should eat its own dog food —
+run it on the files that still have warnings instead of manual fixes.
+
+### ⚒ Zero-Warning Agent Modules
+All `gptel-tools-agent-*.el` files compile with `byte-compile-error-on-warn t`.
+Fixed via:
+- 46 `declare-function` + 18 `defvar` forward declarations
+- Circular dependency resolution (removed `eval-when-compile` requires
+  that created cycles: main↔git, subagent↔git)
+- `(with-no-warnings)` for `setf` struct accessors (`gptel-fsm-info`,
+  `gptel-backend-models`) — byte-compiler can't see `gv-define-setter`
+- `byte-compile-file` replaces `emacs-lisp-byte-compile-and-load` (wrong arity)
+- Dead code removal (`in-think` tracking, `model-sym`)
+- Soft require for `gptel-ext-backend-registry` (not on batch load path)
+- `(require 'json)` at runtime (not just eval-when-compile) for `json-read-from-string`
+
+### ⚒ Auto-Workflow Module Fixes (partial)
+~30 warnings fixed manually in auto-workflow modules. Remaining ~35
+(docstring width, free variables, unknown functions) are candidates
+for the self-heal function to fix automatically.
+
+### Commits
+- `4844f6649` ⊘ fix: Eliminate all byte-compiler warnings in agent modules
+- `6ba538578` ⚒ Phase 10: Self-healing byte-compiler warnings
+
+---
 
 ## Session: Pipeline Hardening — Python3 Elimination + Grader Fix (2026-06-04)
 

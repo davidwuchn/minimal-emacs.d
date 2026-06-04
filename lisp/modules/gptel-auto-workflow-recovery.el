@@ -234,7 +234,7 @@ Returns count of cleaned worktrees."
                       (error
                        (message "[recovery] Failed to clean worktree %s: %s"
                                 (file-name-nondirectory dir)
-                                (error-message-string err)))))))))))
+                                 (error-message-string err))))))))))))
     (when (> cleaned 0)
       (message "[recovery] Cleaned %d stale worktree(s)" cleaned))
     cleaned))
@@ -315,7 +315,7 @@ Returns plist:
     (let ((open (gptel-recovery--open-circuits)))
       (message "[recovery] WARNING: Open circuits detected: %s" open)
       (message "[recovery] These components will be unavailable until circuits close")
-      (message "[recovery] Manual intervention: M-x gptel-circuit-reset COMPONENT"))
+       (message "[recovery] Manual intervention: M-x gptel-circuit-reset COMPONENT")))
   ;; Attempt recovery
   (let* ((recovery-ctx (gptel-recovery--attempt-recovery)))
     (if recovery-ctx

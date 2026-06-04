@@ -127,7 +127,8 @@ When adding/updating models, ONLY edit this structure.")
                    (DeepSeek . deepseek-v4-pro)
                    (moonshot . kimi-k2.6))))
   "Per-task-type model defaults per backend.
-Derived from `gptel-backend-registry` — update the registry, then regenerate this.")
+Derived from `gptel-backend-registry` — update the registry, then regenerate
+this.")
 
 ;;; Fallback Chains
 

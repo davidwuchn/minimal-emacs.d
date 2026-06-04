@@ -12,7 +12,8 @@
 
 (defvar gptel-nucleus-context--pre-tool-hooks nil
   "List of PreToolUse hook functions.
-Each function receives (AGENT-NAME PROMPT DESCRIPTION) and must return a plist:
+Each function receives (AGENT-NAME PROMPT DESCRIPTION) and must return a
+plist:
   (:continue)             → proceed normally
   (:deny)                 → skip tool call entirely
   (:continue :modified-prompt NEW-PROMPT) → use modified prompt
@@ -23,7 +24,8 @@ Hook errors are trapped — they never crash the tool call.")
 
 (defvar gptel-nucleus-context--post-tool-hooks nil
   "List of PostToolUse hook functions.
-Each function receives (AGENT-NAME RESULT-STRING DURATION-SECS ORIGINAL-PROMPT).
+Each function receives (AGENT-NAME RESULT-STRING DURATION-SECS
+ORIGINAL-PROMPT).
 Return value is ignored. Hook errors are trapped and logged.")
 
 (defvar gptel-nucleus-context--last-pre-result nil
@@ -37,7 +39,8 @@ Return value is ignored. Hook errors are trapped and logged.")
 
 (cl-defun gptel-nucleus-context--run-pre-tool-hooks (agent-name prompt description _dispatch-fn)
   "Run all PreToolUse hooks for a tool call.
-Returns a plist: (:action :continue|:deny|:redirect :modified-prompt STR :redirect-agent STR)."
+Returns a plist: (:action :continue|:deny|:redirect :modified-prompt STR
+:redirect-agent STR)."
   (let ((result :continue)
         (modified-prompt prompt)
         (redirect-agent nil))
@@ -80,8 +83,10 @@ Errors in hooks are trapped — they never propagate to the caller."
   (let ((ht (make-hash-table :test 'equal)))
     ht)
   "Hash table mapping tool names to (ALTERNATE-TOOL . REASON) pairs.
-Inspired by context-mode's route redirection (Read→ctx_execute_file, curl→ctx_fetch_and_index).
-When a tool should be redirected to a more context-efficient alternative, PreToolUse hooks
+Inspired by context-mode's route redirection (Read→ctx_execute_file,
+curl→ctx_fetch_and_index).
+When a tool should be redirected to a more context-efficient alternative,
+PreToolUse hooks
 consult this table.")
 
 (cl-defun gptel-nucleus-context--add-routing-rule (tool-name alternate-tool reason)
@@ -118,7 +123,8 @@ Purely informational — does NOT dictate prose style or brevity.")
 ;; ─── Context Bytes Accounting ───
 
 (defvar gptel-nucleus-context--bytes-saved-this-session 0
-  "Total bytes kept out of context during this session (lifetime of daemon process).")
+  "Total bytes kept out of context during this session (lifetime of daemon
+process).")
 
 (defvar gptel-nucleus-context--bytes-returned-this-session 0
   "Total bytes returned to the model during this session.")
@@ -221,7 +227,8 @@ Returns nil if no data exists for this backend."
 
 (defvar gptel-nucleus-context--auto-index-threshold 10000
   "Minimum bytes before a tool output is auto-indexed instead of returned raw.
-Inspired by context-mode's threshold: output > 10 KB → auto-index, return pointer.")
+Inspired by context-mode's threshold: output > 10 KB → auto-index, return
+pointer.")
 
 (defvar gptel-nucleus-context--index-store
   (let ((ht (make-hash-table :test 'equal)))
@@ -245,7 +252,8 @@ For production use, this can be upgraded to Emacs's built-in sqlite3 module
        (> byte-count gptel-nucleus-context--auto-index-threshold)))
 
 (cl-defun gptel-nucleus-context--auto-index-truncate (full-output max-chars agent-name index-key)
-  "Truncate FULL-OUTPUT to MAX-CHARS, auto-index the rest, and return truncated version.
+  "Truncate FULL-OUTPUT to MAX-CHARS, auto-index the rest, and return truncated
+version.
 Returns a string containing:
   1. The truncated output (first MAX-CHARS chars)
   2. A pointer block with the index key for retrieval
@@ -302,7 +310,8 @@ FIFO eviction: oldest entries removed when max-index-entries exceeded."
 
 (cl-defun gptel-nucleus-context--index-search (key query &optional max-results)
   "Search indexed content at KEY for QUERY using simple substring matching.
-Returns a list of matching lines with line numbers, sorted by relevance (length
+Returns a list of matching lines with line numbers, sorted by relevance
+(length
 of match, occurrence count). MAX-RESULTS defaults to 20.
 
 This is the Emacs Lisp equivalent of context-mode's FTS5 search with
@@ -346,7 +355,8 @@ can add trigram and Levenshtein fallback."
   "Throttle limits: ACTION → (NORMAL-THRESHOLD . MAX-THRESHOLD).
 Between NORMAL and MAX: reduced mode (warn but allow).
 Above MAX: blocked.
-Inspired by context-mode's progressive throttling: 1-3 normal, 4-8 reduced, 9+ blocked.")
+Inspired by context-mode's progressive throttling: 1-3 normal, 4-8 reduced, 9+
+blocked.")
 
 (defun gptel-nucleus-context--throttle-allow-p (action-name)
   "Return t if ACTION-NAME is below its throttle limit for the current window.
@@ -609,9 +619,9 @@ Matches context-mode's SessionDB limit.")
                         (when (member qt line-trigrams)
                           (cl-incf intersection)))
                       (when (> intersection 0)
-                        (let ((union (+ (length query-trigrams) (length line-trigrams)
+                        (let* ((union (+ (length query-trigrams) (length line-trigrams)
                                         (- intersection)))
-                              (jaccard (/ (float intersection) (max 1 union))))
+                               (jaccard (/ (float intersection) (max 1 union))))
                           (push (list jaccard (1+ i) line) scored)))))
         (let ((sorted (sort scored (lambda (a b) (> (car a) (car b))))))
           (seq-take sorted (min max-n (length sorted))))))))
@@ -761,13 +771,18 @@ Returns a float representing the dollar cost (or 0.0 if pricing unknown)."
   "Compute keep-rate adjusted for BOTH dollar cost AND context efficiency.
 KEPT and TOTAL are integers from the backend's experiment stats.
 MODEL-NAME is a string (e.g. \"deepseek-v4-flash\").
-CONTEXT-SAVINGS-RATIO is a float 0.0-1.0 representing bytes saved/(saved+returned).
+CONTEXT-SAVINGS-RATIO is a float 0.0-1.0 representing bytes
+saved/(saved+returned).
 
-Formula: cost-adjusted-rate = (kept/total) / (dollar-cost-per-experiment * (1 + padding-factor))
-where padding-factor = (1.0 - context-savings-ratio) adds context waste to the cost denominator.
+Formula: cost-adjusted-rate = (kept/total) / (dollar-cost-per-experiment * (1
++ padding-factor))
+where padding-factor = (1.0 - context-savings-ratio) adds context waste to the
+cost denominator.
 
-This means: a model with 90% context savings has a padding factor of 0.1 (small adjustment),
-while a model with 10% context savings has a padding factor of 0.9 (large adjustment).
+This means: a model with 90% context savings has a padding factor of 0.1
+(small adjustment),
+while a model with 10% context savings has a padding factor of 0.9 (large
+adjustment).
 Context-wasteful models are penalized in the keep-rate model."
   (if (= total 0)
       0.0
@@ -858,10 +873,10 @@ Safe to call multiple times (idempotent — removes old advice first)."
                    'gptel-nucleus-context--advice-experiment-run))
   (message "[context-intercept] Disabled"))
 
-(defun gptel-nucleus-context--advice-agent-tool-timeout (&rest _args)
+(defun gptel-nucleus-context--advice-agent-tool-timeout (&rest args)
   "Post-tool-dispatch advice: record session event and track bytes."
   (ignore-errors
-    (let ((agent-name (car _args)))  ; args: (timeout callback agent-name description prompt ...)
+    (let ((agent-name (car args)))  ; args: (timeout callback agent-name description prompt ...)
       (when (stringp agent-name)
         (gptel-nucleus-context--record-session-event
          :subagent-start agent-name "Tool dispatch")))))
@@ -880,7 +895,8 @@ and track experiment-level events."
 ;; ─── Default Hook: Think-in-Code Enforcement ───
 
 (defun gptel-nucleus-context--default-pre-hook (agent-name prompt _description)
-  "Default PreToolUse hook: inject think-in-code directive for code-facing agents.
+  "Default PreToolUse hook: inject think-in-code directive for code-facing
+agents.
 Only injects for agents that produce code (executor, researcher).
 Does NOT inject for graders/comparators (those only consume, not produce)."
   (condition-case nil
@@ -900,7 +916,7 @@ Does NOT inject for graders/comparators (those only consume, not produce)."
 
 ;; ─── Default Hook: Auto-Index Large Results ───
 
-(defun gptel-nucleus-context--default-post-hook (agent-name result duration prompt)
+(defun gptel-nucleus-context--default-post-hook (agent-name result _duration _prompt)
   "Default PostToolUse hook: auto-index large results.
 When a tool returns > threshold bytes, auto-index the content so it doesn't
 pollute the context window on subsequent reads."

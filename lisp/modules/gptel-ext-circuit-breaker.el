@@ -54,7 +54,7 @@
   (expand-file-name "var/tmp/circuit-breaker-state.json"
                     (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
                              (ignore-errors (gptel-auto-workflow--worktree-base-root)))
-                      user-emacs-directory))))))
+                      user-emacs-directory)))
 
 (defun gptel-circuit--state-to-plist (cb)
   "Serialize CB circuit-breaker struct to plist for JSON."
@@ -66,7 +66,7 @@
         :last-failure-msg (or (gptel-circuit-breaker-last-failure-msg cb) "")
         :total-failures (gptel-circuit-breaker-total-failures cb)
         :total-successes (gptel-circuit-breaker-total-successes cb)
-        :opened-at (or (gptel-circuit-breaker-opened-at cb) 0.0))
+         :opened-at (or (gptel-circuit-breaker-opened-at cb) 0.0)))
 
 (defun gptel-circuit--plist-to-state (plist)
   "Deserialize PLIST to a circuit-breaker struct."
@@ -79,7 +79,7 @@
    :last-failure-msg (plist-get plist :last-failure-msg)
    :total-failures (or (plist-get plist :total-failures) 0)
    :total-successes (or (plist-get plist :total-successes) 0)
-   :opened-at (plist-get plist :opened-at))
+   :opened-at (plist-get plist :opened-at)))
 
 (defun gptel-circuit--load-persistent ()
   "Load all circuit-breaker states from disk.
@@ -104,7 +104,7 @@ Returns hash table: name symbol → circuit-breaker struct."
                                circuits))))))
         (error
          (message "[circuit-breaker] Failed to load state: %s" err))))
-    circuits))
+    circuits)))
 
 (defun gptel-circuit--save-persistent (circuits)
   "Persist CIRCUITS hash table to disk.

@@ -1,4 +1,4 @@
-;;; gptel-auto-experiment-ai-behaviors.el --- ai-behaviors hashtag resolver for OV5
+;;; gptel-auto-experiment-ai-behaviors.el --- ai-behaviors hashtag resolver for OV5 -*- lexical-binding: t -*-
 
 ;; Resolves #hashtags from the ai-behaviors submodule at
 ;; packages/ai-behaviors/behaviors/<name>/{compose,prompt.md}.
@@ -11,7 +11,18 @@
                         user-emacs-directory))
   "Path to the ai-behaviors behaviors directory.")
 
+(require 'cl-lib)
 (require 'gptel-ext-backend-registry)
+
+(declare-function map-nested-elt "map")
+(declare-function gptel-ai-behaviors--context-efficiency-penalty
+  "gptel-auto-experiment-ai-behaviors")
+(declare-function gptel-auto-workflow--parse-all-results
+  "gptel-auto-workflow-evolution")
+(declare-function gptel-auto-experiment--extract-think-blocks
+  "gptel-auto-experiment-core")
+
+(defvar gptel-auto-workflow--current-target nil)
 
 (defvar gptel-ai-behaviors--expand-cache (make-hash-table :test 'equal)
   "Cache of hashtag → resolved content. Cleared on repo update.")
@@ -83,7 +94,8 @@ Read by experiment logging to record which behaviors were active.")
 
 (defvar gptel-ai-behaviors--current-strategy nil
   "Dynamic variable. Set by prompt builder to the strategy name used.
-Read by experiment logging for three-way (category × strategy × hashtags) tracking.")
+Read by experiment logging for three-way (category × strategy × hashtags)
+tracking.")
 
 (defvar gptel-ai-behaviors--category-performance (make-hash-table :test 'equal)
   "Hash table: (category . hashtag) → (kept . total).
@@ -96,7 +108,8 @@ Falls back to hardcoded defaults when no data exists.")
 (defun gptel-ai-behaviors--record-experiment (category hashtags kept &optional strategy backend)
   "Record HASHTAGS for CATEGORY as kept or not.
 When STRATEGY is provided, tracks three-way (category × strategy × hashtags).
-When BACKEND is provided, tracks (category × backend × hashtag) for backend-aware behavior selection."
+When BACKEND is provided, tracks (category × backend × hashtag) for
+backend-aware behavior selection."
   (when category
     (dolist (tag (split-string hashtags))
       ;; Two-way: (category × hashtags)
@@ -204,7 +217,8 @@ All hashtags reference real behavior directories in packages/ai-behaviors/."
         (_ "#=code #legible #concise #=act"))))
 
 (defvar gptel-ai-behaviors--impact-tracking (make-hash-table :test 'equal)
-  "Hash table: (category . hashtag) → (kept-with . total-with) for behavior impact analysis.")
+  "Hash table: (category . hashtag) → (kept-with . total-with) for behavior
+impact analysis.")
 
 (defun gptel-ai-behaviors--record-behavior-impact (category hashtags kept)
   "Record which behaviors were active for KEPT or DISCARDED experiment."
@@ -217,20 +231,20 @@ All hashtags reference real behavior directories in packages/ai-behaviors/."
         (puthash key entry gptel-ai-behaviors--impact-tracking)))))
 
 (defun gptel-ai-behaviors--low-impact-behaviors (category)
-  "Return list of hashtags for CATEGORY that never affect outcomes (skip threshold > 5 experiments)."
+  "Return list of hashtags for CATEGORY that never affect outcomes (skip
+threshold > 5 experiments)."
   (let ((result nil))
     (maphash
      (lambda (key entry)
-       (when (and (eq (car key) category)
-                  (>= (cdr entry) 5)  ; enough data
-                  (let* ((kept-with (car entry))
-                         (total-with (cdr entry))
-                         (kept-without (- total-with kept-with)))
-                    ;; If keep-rate WITH behavior ≈ keep-rate WITHOUT, it's low-impact
-                    (< (abs (- (if (> kept-with 0) (/ (float kept-with) total-with) 0)
-                                (if (> kept-without 0) (/ (float (- total-with kept-with)) total-with) 0)))
-                       0.1))))
-       (push (cdr key) result))
+        (when (and (eq (car key) category)
+                   (>= (cdr entry) 5)
+                   (let* ((kept-with (car entry))
+                          (total-with (cdr entry))
+                          (kept-without (- total-with kept-with)))
+                     (< (abs (- (if (> kept-with 0) (/ (float kept-with) total-with) 0)
+                                 (if (> kept-without 0) (/ (float (- total-with kept-with)) total-with) 0)))
+                        0.1)))
+          (push (cdr key) result)))
      gptel-ai-behaviors--impact-tracking)
     result))
 
@@ -263,7 +277,8 @@ Skips behaviors that have been identified as low-impact for this category."
                             content))
                   "<framework>
 HARD CONSTRAINTs define what the current mode IS — they are not overridable.
-When a behavior modifier causes you to make a point you would not otherwise make,
+When a behavior modifier causes you to make a point you would not otherwise
+make,
 mark it: (#name) after the sentence.
 </framework>\n"))))))
 
@@ -312,7 +327,8 @@ Each mode has HARD CONSTRAINTS (what the subagent IS) and a ⊣ transition
 (what should run next).")
 
 (defun gptel-ai-behaviors--mode-for-subagent (agent-type)
-  "Return the operating mode plist for AGENT-TYPE (analyzer/executor/grader/comparator)."
+  "Return the operating mode plist for AGENT-TYPE
+(analyzer/executor/grader/comparator)."
   (cdr (assq agent-type gptel-ai-behaviors--pipeline-modes)))
 
 (defun gptel-ai-behaviors--mode-hashtags (agent-type)
@@ -416,8 +432,8 @@ Returns string of space-separated hashtags, or empty string."
 
 (defun gptel-ai-behaviors--check-mode-violation (agent-type output)
   "Check if OUTPUT contains out-of-mode signals for AGENT-TYPE.
-Returns violation string or nil. Detects transitions and mode-crossing
-language ('I recommend', 'we should research', etc.)."
+Returns violation string or nil.  Detects transitions and mode-crossing
+language (\\='I recommend\\=', \\='we should research\\=', etc.)."
   (when (and (stringp output) (assq agent-type gptel-ai-behaviors--pipeline-modes))
     (let ((violations nil)
           (mode-name (plist-get (gptel-ai-behaviors--mode-for-subagent agent-type) :mode)))
@@ -489,11 +505,11 @@ when available from empirical data."
 ;; Every OV5 subsystem can query its optimal behavior hashtags.
 ;; Defaults are learned from experiment data per (subsystem × category).
 
-(defvar subsystem nil
+(defvar gptel-ai-behaviors--subsystem nil
   "Top-level sentinel to prevent void-variable on arm64 Emacs 30.1.
 Native-comp deferred compilation leaks `subsystem' as a free variable
 in byte-compiled closure chains (advice lambdas, timer callbacks).
-Without this defvar, cascading 'Error running timer' failures occur.")
+Without this defvar, cascading \\='Error running timer\\=' failures occur.")
 
 (defvar cat-triggers (make-hash-table :test 'equal)
   "Top-level sentinel for native-comp closure capture on arm64 Emacs 30.1.
@@ -545,8 +561,8 @@ Injects operating mode + behavior modifiers into subsystem prompts."
 HARD CONSTRAINTs define what the current mode IS — they are not overridable.
 </framework>\n"))))
 
-(defun gptel-ai-behaviors--resolve-subagent-category (subsystem default-modifiers)
-  "Resolve modifiers for SUBSYSTEM. Uses learned defaults if available."
+(defun gptel-ai-behaviors--resolve-subagent-category (_subsystem default-modifiers)
+  "Resolve modifiers for SUBSYSTEM.  Uses learned defaults if available."
   (when (and (fboundp 'gptel-auto-workflow--categorize-target)
              (bound-and-true-p gptel-auto-workflow--current-target))
     (let* ((target gptel-auto-workflow--current-target)
@@ -661,7 +677,8 @@ When NO-PROMPT is non-nil, just logs the context (for non-LLM subsystems)."
                (fboundp 'gptel-ai-behaviors--validate-research))
       (let ((validation (gptel-ai-behaviors--validate-research findings)))
         (when (and validation (< (plist-get validation :pct) 0.67))
-          (message "[researcher-allium] ⚠ Findings validation weak (%d/%d) — consider refining research approach"
+          (message "[researcher-allium] ⚠ Findings validation weak (%d/%d) — consider refining
+research approach"
                    (plist-get validation :passed) (plist-get validation :total)))))
     findings))
 
@@ -689,7 +706,8 @@ When NO-PROMPT is non-nil, just logs the context (for non-LLM subsystems)."
   "Hash table: (category . task-type) → (total . kept).")
 
 (defvar gptel-ai-behaviors--concrete-trigger-counts (make-hash-table :test 'equal)
-  "Hash table: category → (triggered . total). How often concrete task fallback activates.")
+  "Hash table: category → (triggered . total). How often concrete task fallback
+activates.")
 
 (defun gptel-ai-behaviors--record-concrete-task (category task-type)
   "Record that TASK-TYPE was dispatched for CATEGORY."
@@ -704,15 +722,17 @@ When NO-PROMPT is non-nil, just logs the context (for non-LLM subsystems)."
          (entry (gethash key gptel-ai-behaviors--concrete-task-performance (cons 0 0))))
     (when kept
       (setf (cdr entry) (1+ (cdr entry))))
-    (puthash key entry gptel-ai-behaviors--concrete-task-performance)))
+     (puthash key entry gptel-ai-behaviors--concrete-task-performance)))
+
+(defvar gptel-ai-behaviors--best-concrete-tasks (make-hash-table :test 'equal)
+  "Hash table: category to (task-type . keep-rate). Updated each evolution cycle.")
 
 (defun gptel-ai-behaviors--evolve-concrete-tasks ()
   "Log best task-type per category and diagnose category health.
 Compares concrete task keep-rate vs overall experiment keep-rate.
 If concrete tasks succeed but regular experiments fail, the category
 may need simpler experiments (concrete-task-default mode)."
-  (let ((best-per-cat (make-hash-table :test 'equal))
-        (results (condition-case nil (gptel-auto-workflow--parse-all-results) (error nil))))
+  (let ((best-per-cat (make-hash-table :test 'equal)))
     (maphash
      (lambda (key entry)
        (let* ((category (car key))
@@ -728,7 +748,7 @@ may need simpler experiments (concrete-task-default mode)."
                (puthash category (cons task-type rate) best-per-cat))))))
      gptel-ai-behaviors--concrete-task-performance)
     ;; Diagnose category health: concrete task vs overall keep-rate
-    (when results
+    (when-let ((results (condition-case nil (gptel-auto-workflow--parse-all-results) (error nil))))
       (let ((cat-totals (make-hash-table :test 'equal)))
         (dolist (r results)
           (let* ((r-target (plist-get r :target))
@@ -764,9 +784,8 @@ may need simpler experiments (concrete-task-default mode)."
     (setq gptel-ai-behaviors--best-concrete-tasks best-per-cat)
     ;; Track concrete task trigger rate: how often does each category need
     ;; the deterministic fallback (0 kept, >3 failures)?
-    (let ((cat-triggers (make-hash-table :test 'equal))
-          (results (condition-case nil (gptel-auto-workflow--parse-all-results) (error nil)))))
-      (dolist (r (or results (condition-case nil (gptel-auto-workflow--parse-all-results) (error nil))))
+    (let ((cat-triggers (make-hash-table :test 'equal)))
+      (dolist (r (condition-case nil (gptel-auto-workflow--parse-all-results) (error nil)))
         (let* ((r-target (plist-get r :target))
                (r-decision (plist-get r :decision))
                (r-kept (equal r-decision "kept"))
@@ -798,11 +817,8 @@ may need simpler experiments (concrete-task-default mode)."
                         cat (* 100 trigger-rate)))
               (t
                (message "[concrete-trigger] %s: %.0f%% fail rate (max %d consecutive)"
-                        cat (* 100 trigger-rate) max-consecutive))))))
-        cat-triggers)))
-
-(defvar gptel-ai-behaviors--best-concrete-tasks (make-hash-table :test 'equal)
-  "Hash table: category → (task-type . keep-rate). Updated each evolution cycle.")
+                         cat (* 100 trigger-rate) max-consecutive))))))
+        cat-triggers))))
 
 (defun gptel-ai-behaviors--best-task-for-category (category)
   "Return the best task type symbol for CATEGORY, or nil.
@@ -831,7 +847,8 @@ When CATEGORY has no data, transfers from adjacent categories
 ;; ─── Research Priorities Injection ───
 
 (defun gptel-ai-behaviors--inject-research-priorities (orig-fn &rest args)
-  "Inject research priorities from ontology/AutoTTS/AutoGo before loading findings."
+  "Inject research priorities from ontology/AutoTTS/AutoGo before loading
+findings."
   (let ((priorities (when (fboundp 'gptel-auto-workflow--format-research-priorities)
                      (gptel-auto-workflow--format-research-priorities))))
     (if priorities
@@ -883,7 +900,7 @@ Learned from validation failures, injected as anti-patterns into prompts.")
 
 (defun gptel-ai-behaviors--record-validation-error (target error-msg)
   "Record a validation ERROR-MSG for TARGET's category.
-Extracts the error pattern (e.g., 'unbalanced parentheses', 'cl-return-from')
+Extracts the error pattern (e.g., \\='unbalanced parentheses\\=', \\='cl-return-from\\=')
 and increments the counter for (category × pattern)."
   (when (and target (stringp error-msg) (fboundp 'gptel-auto-workflow--categorize-target))
     (let* ((category (gptel-auto-workflow--categorize-target target))
@@ -973,7 +990,8 @@ Returns parsed entries for evolution analysis."
 
 (defvar gptel-ai-behaviors--kept-patterns (make-hash-table :test 'equal)
   "Hash table (category . hashtag) → (pattern count) for kept experiment diffs.
-Populated by `gptel-ai-behaviors--record-kept-pattern' when experiments are kept.
+Populated by `gptel-ai-behaviors--record-kept-pattern' when experiments are
+kept.
 Read by `gptel-ai-behaviors--format-kept-patterns' for prompt injection.")
 
 (defun gptel-ai-behaviors--record-kept-pattern (category hashtag diff-snippet)
@@ -1041,7 +1059,7 @@ Returns first relevant code addition line, or nil."
   (let ((best nil) (best-rate 0))
     (maphash (lambda (key entry)
                (when (eq (car key) category)
-                 (let ((kept (car entry)) (total (cdr entry))
+                 (let* ((kept (car entry)) (total (cdr entry))
                        (rate (if (> total 0) (/ (float kept) total) 0)))
                    (when (and (>= total 2) (> rate best-rate))
                      (setq best (cdr key)) (setq best-rate rate)))))
@@ -1052,7 +1070,8 @@ Returns first relevant code addition line, or nil."
 (defvar gptel-ai-behaviors--current-archetype nil
   "Dynamic variable: archetype selected for current subagent dispatch.")
 (defvar gptel-ai-behaviors--combo-hashtag nil
-  "Dynamic variable: hashtag from best combo, used to influence behavior selection.")
+  "Dynamic variable: hashtag from best combo, used to influence behavior
+selection.")
 
 ;; Tracks kept-rate per (category × persona-archetype) for self-evolution.
 (defvar gptel-ai-behaviors--persona-stats (make-hash-table :test 'equal)
@@ -1062,9 +1081,10 @@ Returns first relevant code addition line, or nil."
 Exploration experiments are weighted 50% less in persona-stats to avoid
 polluting the learning signal with random trials.")
 
-(defun gptel-ai-behaviors--record-persona (category archetype kept &optional subagent)
+(defun gptel-ai-behaviors--record-persona (category archetype kept &optional _subagent)
   "Record experiment outcome for (CATEGORY × ARCHETYPE) for SUBAGENT.
-SUBAGENT defaults to \"executor\". Exploration experiments (gptel-ai-behaviors--exploration-tag)
+SUBAGENT defaults to \"executor\". Exploration experiments
+(gptel-ai-behaviors--exploration-tag)
 are weighted 50% less to avoid polluting the learning signal."
   (when (and category archetype)
     (let* ((key (cons category archetype))
@@ -1095,7 +1115,7 @@ HASHTAGS is a space-separated string of hashtags."
   (let ((best nil) (best-rate 0))
     (maphash (lambda (key entry)
                (when (eq (nth 0 key) category)
-                 (let ((kept (car entry)) (total (cdr entry))
+                 (let* ((kept (car entry)) (total (cdr entry))
                        (rate (if (> total 0) (/ (float kept) total) 0)))
                    (when (and (>= total 2) (> rate best-rate))
                      (setq best (cons (nth 1 key) (nth 2 key)))
@@ -1161,7 +1181,8 @@ EFFORT defaults to \"default\" when not provided."
       (puthash key entry gptel-ai-behaviors--model-stats))))
 
 (defun gptel-ai-behaviors--best-model (category subagent &optional min-samples)
-  "Return best (MODEL . EFFORT) for CATEGORY+SUBAGENT (min MIN-SAMPLES, default 2).
+  "Return best (MODEL . EFFORT) for CATEGORY+SUBAGENT (min MIN-SAMPLES, default
+2).
 Uses cost-adjusted keep-rate so cheaper models with similar performance win."
   (let ((best nil) (best-rate 0) (best-cost-rate 0))
     (maphash
@@ -1194,8 +1215,6 @@ Returns (NEW-MODEL . NEW-EFFORT) or nil if no bump needed."
                      (dolist (fentry gptel-ai-behaviors--model-variants nil)
                        (when (memq current-model (cdr fentry))
                          (throw 'found (car fentry))))))
-           (effort-idx (when (stringp current-effort)
-                         (cl-position current-effort gptel-ai-behaviors--effort-levels :test 'string=)))
            (target-effort-idx (cond
                                ((>= consecutive-failures 10) 4)  ;; max
                                ((>= consecutive-failures 7)  3)  ;; xhigh
@@ -1270,7 +1289,7 @@ Used to normalize keep-rate by cost.")
     (dolist (backend-entry gptel-backend-registry)
       (let* ((backend (car backend-entry))
              (models (plist-get (cdr backend-entry) :models))
-             (capabilities (plist-get (cdr backend-entry) :capabilities)))
+             (_capabilities (plist-get (cdr backend-entry) :capabilities)))
         (dolist (model models)
           (when-let* ((info (gptel-backend-registry-pricing backend model))
                       (input (plist-get info :input))
@@ -1373,7 +1392,7 @@ A model that keeps 50% at cost 1 is better than 60% at cost 3."
              gptel-ai-behaviors--persona-stats)
     ;; Log operator effectiveness per category
     (maphash (lambda (key entry)
-               (let ((cat (car key)) (op (cdr key))
+               (let* ((cat (car key)) (op (cdr key))
                      (kept (car entry)) (total (cdr entry))
                      (rate (if (> total 0) (/ (float kept) total) 0)))
                  (push (format "%s/%s: %d/%d(%.0f%%)" cat op kept total (* 100 rate))
@@ -1381,7 +1400,7 @@ A model that keeps 50% at cost 1 is better than 60% at cost 3."
              gptel-ai-behaviors--operator-stats)
     ;; Log three-way combo effectiveness
     (maphash (lambda (key entry)
-               (let ((cat (nth 0 key)) (arch (nth 1 key)) (tag (nth 2 key))
+               (let* ((cat (nth 0 key)) (arch (nth 1 key)) (tag (nth 2 key))
                      (kept (car entry)) (total (cdr entry))
                      (rate (if (> total 0) (/ (float kept) total) 0)))
                  (push (format "%s/%s/%s: %d/%d(%.0f%%)" cat arch tag kept total (* 100 rate))
@@ -1437,6 +1456,11 @@ Aggregates across subagents and models for each (category strategy backend)."
   ;; Compute strategy-category affinities from unified stats
   (gptel-ai-behaviors--compute-strategy-affinities))
 
+(defvar gptel-ai-behaviors--strategy-affinities nil
+  "List of (category . ((strategy . cost-adjusted-rate) ...)).")
+(defvar gptel-auto-workflow-headless-subagent-fallbacks nil)
+(defvar gptel-ai-behaviors--category-chains (make-hash-table :test 'equal))
+
 (defun gptel-ai-behaviors--compute-strategy-affinities ()
   "Compute which strategies work best for each category.
 Stores results in gptel-ai-behaviors--strategy-affinities as
@@ -1455,11 +1479,11 @@ for high-affinity strategy-category pairs."
               (rate (if (and (> total 0) (> cost 0))
                         (/ (float kept) total cost)
                       0.0)))
-         (when (and category strategy (> total 2))
-           (let ((cat-strategies (gethash category by-cat nil)))
-             (push (cons strategy rate) cat-strategies)
-              (puthash category cat-strategies by-cat))))))
-      gptel-ai-behaviors--unified-stats)
+          (when (and category strategy (> total 2))
+            (let ((cat-strategies (gethash category by-cat nil)))
+              (push (cons strategy rate) cat-strategies)
+              (puthash category cat-strategies by-cat)))))
+     gptel-ai-behaviors--unified-stats)
     (maphash
      (lambda (cat strats)
        (when strats
@@ -1472,7 +1496,8 @@ for high-affinity strategy-category pairs."
                (mapconcat
                 (lambda (a)
                    (format "%s->%s(%.2f)" (car a) (caadr a) (cdadr a)))
-                (seq-take affinities 3) " | "))))
+                 (seq-take affinities 3) " | ")))))
+
 
 (defvar gptel-ai-behaviors--strategy-affinities nil
   "List of (category . ((strategy . cost-adjusted-rate) ...)).
@@ -1480,15 +1505,18 @@ Computed by gptel-ai-behaviors--compute-strategy-affinities.
 Used to allocate experiment budget to high-affinity pairs.")
 
 (defun gptel-ai-behaviors--evolve-fallback-chain ()
-  "Reorder gptel-auto-workflow-headless-subagent-fallbacks by cost-adjusted keep-rate.
-Backends with higher keeps-per-dollar move to front (preferred).
-Also computes per-category chains stored in gptel-ai-behaviors--category-chains.
-Only runs when >= 2 backends have sufficient data to avoid overfitting.
+  "Reorder gptel-auto-workflow-headless-subagent-fallbacks by
+cost-adjusted keep-rate.  Backends with higher keeps-per-dollar
+move to front (preferred).  Also computes per-category chains
+stored in gptel-ai-behaviors--category-chains.  Only runs when
+>= 2 backends have sufficient data to avoid overfitting.
 
-Context-cost integration: backends with high context waste (low savings ratio)
-get a penalty multiplier on their cost. A backend with 90% context savings gets
-a 1.1x cost multiplier; one with 10% savings gets a 1.9x multiplier. This means
-context-efficient backends rank higher even when their dollar cost is similar."
+Context-cost integration: backends with high context waste
+\(low savings ratio) get a penalty multiplier on their cost.
+A backend with 90% context savings gets a 1.1x cost multiplier;
+one with 10% savings gets a 1.9x multiplier.  This means
+context-efficient backends rank higher even when their dollar
+cost is similar."
   ;; ── Helper: context-cost penalty from context-intercept module ──
   (defun gptel-ai-behaviors--context-efficiency-penalty (backend)
     "Return a multiplier (>=1.0) for BACKEND based on context savings ratio.
@@ -1569,7 +1597,8 @@ Used to compute an exponential moving average of cache hit rate.")
 (defun gptel-ai-behaviors--record-cache-hit (hit-tokens total-tokens)
   "Record KV cache hit observation from API response.
 HIT-TOKENS and TOTAL-TOKENS come from usage.prompt_cache_hit_tokens
-and usage.prompt_tokens (or prompt_cache_hit_tokens + prompt_cache_miss_tokens).
+and usage.prompt_tokens (or prompt_cache_hit_tokens +
+prompt_cache_miss_tokens).
 Updates gptel-ai-behaviors--cache-hit-rate via EMA."
   (when (and (numberp hit-tokens) (numberp total-tokens) (> total-tokens 0))
     (let* ((rate (/ (float hit-tokens) total-tokens))
@@ -1591,7 +1620,7 @@ Updates gptel-ai-behaviors--cache-hit-rate via EMA."
 ;; (cache_read_input_tokens via Anthropic compat, cached_tokens via OpenAI compat).
 (with-eval-after-load 'gptel-openai
   (advice-add 'gptel--openai--accumulate-token-usage :after
-              (lambda (usage info)
+              (lambda (usage _info)
                 (when (and (boundp 'gptel-auto-workflow--running)
                            gptel-auto-workflow--running)
                   (let* ((hit (or (plist-get usage :prompt_cache_hit_tokens)     ; DeepSeek
