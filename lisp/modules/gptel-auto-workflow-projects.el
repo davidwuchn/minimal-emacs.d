@@ -413,8 +413,8 @@ finish."
                                         (format "[auto-workflow] - Skipped: %s"
                                                 project-root)))))))
                    (error
-                    (push (cons project-root (format "error: %s" err-msg)) results)
-                    (message "[auto-workflow] ✗ Failed: %s - %s" project-root err)
+                    (push (cons project-root (format "error: %s" (error-message-string err))) results)
+                    (message "[auto-workflow] ✗ Failed: %s - %s" project-root (error-message-string err))
                     (run-next)))))))
         (run-next)))))
 
@@ -733,12 +733,18 @@ Gets target buffer from gptel-fsm-info and creates overlay there.
 Guard: If WHERE is a marker from a killed buffer, fall back to
 point-marker in target buffer to avoid dead-marker errors."
   (let* ((fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
-         (info (and fsm (fboundp 'gptel-fsm-info) (ignore-errors (gptel-fsm-info fsm))))
+         (info (and fsm (fboundp 'gptel-fsm-info)
+           (condition-case err
+               (gptel-fsm-info fsm)
+             (error
+              (message "[auto-workflow] FSM info error in overlay advice: %s" (error-message-string err))
+              nil))))
          (valid-info (and (proper-list-p info) info))
          (target-buf (and valid-info (plist-get valid-info :buffer)))
          (safe-where (if (and (markerp where) (not (marker-buffer where)))
-                         (and target-buf
-                              (with-current-buffer target-buf (point-marker)))
+                         (or (and target-buf
+                                  (with-current-buffer target-buf (point-marker)))
+                             (point-marker))
                        where)))
     (if (and target-buf (buffer-live-p target-buf))
         (with-current-buffer target-buf
