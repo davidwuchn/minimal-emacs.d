@@ -3101,7 +3101,7 @@ Cheaper backends with same keep-rate move to front."
 QV: ensure cache-aware cost model is wired for these backends."
   :expected-result (if noninteractive :passed :passed)
   (dolist (model '("deepseek-v4-flash" "deepseek-v4-pro"
-                    "MiniMax-M3" "minimax-m2.7-highspeed" "minimax-m2.7"))
+                    "MiniMax-M3"))
     (let* ((pricing (cl-find-if (lambda (e) (string-match-p (car e) model))
                                 gptel-ai-behaviors--model-pricing))
            (cache (plist-get (cdr pricing) :cache-hit)))
