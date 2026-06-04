@@ -580,8 +580,10 @@ rewrite_status_idle() {
 
     sed -i 's/:running[[:space:]]\+t/:running nil/' "$STATUS_FILE"
     sed -i 's/:phase "[^"]*"/:phase "idle"/' "$STATUS_FILE"
-    # Ensure trailing newline
-    [ -n "$(tail -c1 "$STATUS_FILE")" ] && echo >> "$STATUS_FILE"
+    # Ensure trailing newline (use if/else to survive set -e)
+    if [ -n "$(tail -c1 "$STATUS_FILE")" ]; then
+        echo >> "$STATUS_FILE"
+    fi
 }
 
 run_emacsclient_eval() {
