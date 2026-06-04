@@ -1,10 +1,38 @@
 # Mementum State
 
-> Last session: 2026-06-05 (MemGraphRAG P0-P3 implementation)
+> Last session: 2026-06-05 (Grader score parsing fix + byte-compile warnings)
 > Next pipeline: running
-> Status: Memory schema extraction, temporal versioning, bidirectional links, graph retrieval, 2229 tests pass
+> Status: 2231 tests, 0 unexpected, 0 byte-compile warnings
 
-## Session: MemGraphRAG-Inspired Memory Schema (2026-06-05)
+## Session: Grader Score Parsing + Pipeline Fixes (2026-06-05)
+
+### ⊘ Fix: Grader score parsing uses caller total, not grader self-reported total
+**Root cause:** Grader outputs `SCORE:3/9` (its own 9-point scale) but we specified
+4 expected + 1 forbidden = 5 criteria. Parser used 9 as total → 3/9=33% < 60%
+threshold → `grader-failed` decision despite 3/5 PASS.
+**Fix:** `criteria-total` from expected+forbidden is authoritative. All 3 parse
+paths (SCORE:X/Y, JSON, text PASS) now cap score to `criteria-total` and ignore
+grader self-reported totals.
+**Impact:** This was causing nearly all experiments to be marked `grader-failed`
+even when the grader text said PASS. The pipeline was repeatedly attempting
+the same nil-guard fixes (3+ times on `ontology-strategy.el`) because the
+grader kept rejecting valid changes.
+
+### ⊘ Fix: Nil-guard in ontology-strategy.el
+`(cdr best)` → `(or (cdr best) 0)` in `gptel-auto-workflow--category-eight-key-weight`.
+Pipeline had tried to fix this 3+ times but grader always rejected.
+
+### ⊘ Fix: 16 byte-compile warnings → 0
+- `gptel-auto-workflow-projects.el`: 4 `defvar`, 4 `declare-function` added
+- `gptel-benchmark-subagent.el`: shortened 4 docstrings, prefixed unused
+  variable, added 2 `declare-function`
+
+### Commits
+- `50c313530` ⊘ fix: 16 byte-compile warnings in projects.el and benchmark-subagent.el
+- `785bdbe97` ⊘ fix: grader score parsing uses caller total, not grader self-reported total
+- `37214d488` ⊘ fix: remove unused last-total variable from grade parser
+
+---
 
 ### ⚒ P0: Schema Extraction + Frequency-Based Promotion
 **New module:** `lisp/modules/gptel-auto-workflow-memory-schema.el`
