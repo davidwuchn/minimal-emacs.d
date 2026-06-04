@@ -105,12 +105,16 @@ When nil, falls back to local evaluation."
 
 (defun gptel-benchmark--plist-delete-all (plist prop)
   "Return PLIST without any entries for PROP."
-  (let (result)
+  (let (result tail)
     (while plist
       (let ((key (pop plist))
             (val (pop plist)))
         (unless (eq key prop)
-          (setq result (append result (list key val))))))
+          (let ((cell (list key val)))
+            (if tail
+                (setcdr (cdr tail) cell)
+              (setq result cell))
+            (setq tail cell)))))
     result))
 
 (defvar gptel-benchmark--subagent-files nil

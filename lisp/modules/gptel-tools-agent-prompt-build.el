@@ -2547,12 +2547,16 @@ Call at the start of a new workflow run."
 
 (defun gptel-auto-workflow--prompt-plist-delete-all (plist prop)
   "Return PLIST without any entries for PROP."
-  (let (result)
+  (let (result tail)
     (while plist
       (let ((key (pop plist))
             (val (pop plist)))
         (unless (eq key prop)
-          (setq result (append result (list key val))))))
+          (let ((cell (list key val)))
+            (if tail
+                (setcdr (cdr tail) cell)
+              (setq result cell))
+            (setq tail cell)))))
     result))
 
 (defun gptel-auto-workflow--rate-limit-failover-candidates (agent-type)
