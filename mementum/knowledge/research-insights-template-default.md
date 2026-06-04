@@ -6090,73 +6090,110 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*4 check issues (severity 0.30). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Distillation: Research Strategy Output
+# Distillation
 
-## Signal-to-Noise Assessment
+## Strategy
+**template-default** — applied across 180 experiments targeting 22 files in the gptel workflow/benchmark/agent ecosystem.
 
-**Verdict: Poor yield.** 180 experiments across 22 targets produced only 2 "kept" hypotheses (one empty, one vague) while discarding 7 substantive, actionable findings. The template-default strategy is misclassifying valuable output.
+## Scope
+Targets span: FSM utilities, context extensions, tool permits, agent runtime/error/benchmark, auto-workflow (ontology router/strategy, projects, production, research integration, strategic), benchmark analysis/comparator/subagent/integration tests, and staging artifacts (scope/verification/config/review).
 
-## The Real Findings (Recovered from "Discarded")
+## Kept Hypotheses (1 substantive)
+| # | Hypothesis |
+|---|---|
+| 1 | **Improving `gptel-auto-workflow-list-project-buffers`** |
 
-These were thrown out but are the actual gems in the noise:
+All other "kept" slots are placeholders (`No hypothesis stated`), indicating the search surface is far larger than what yielded actionable hypotheses.
 
-| # | File | Type | Action |
-|---|------|------|--------|
-| 1 | `gptel-auto-workflow--top-research-priority` | **Bug** | `copy-sequence` → `copy-tree` (cons-cell mutation during sort) |
-| 2 | `gptel-auto-workflow--correlate-research-to-outcomes` | **Perf** | Skip redundant `puthash` when cons cell already present |
-| 3 | `gptel-auto-workflow--parse-one-autotts-trace` | **Refactor** | Extract single-trace parser from monolithic loop (nesting 3→2) |
-| 4 | `gptel-auto-workflow--ontology-research-gaps` | **Defensive** | Add `(listp class)` guard against malformed ontology returns |
-| 5 | `my/gptel--fsm-registry-validate` | **Idiom** | `cl-letf`+`symbol-function` → `cl-labels` |
-| 6 | `my/gptel--fsm-for-each` | **DRY** | Extract shared traversal setup between collect-list and count |
-| 7 | `my/gptel--fsm-collect-list` | **Dead code** | Remove unreachable `hash-table-p` guard |
+## Discarded Hypotheses — Pattern Analysis
 
-## One Genuine "Kept"
+The 7 discarded hypotheses cluster into **6 recurring rationales**:
 
-`gptel-auto-workflow-list-project-buffers` — flagged for improvement, but **the hypothesis body is empty**, so there's nothing actionable.
+| Pattern | Hypothesis | Rejection Reason |
+|---|---|---|
+| **Idiomatic refactor** | Replace `cl-letf` + `symbol-function` with `cl-labels` in FSM registry validator | Would improve Clarity + Vitality |
+| **Dead code removal** | Remove unreachable `hash-table-p` guard in FSM collect | Would improve Clarity |
+| **Helper extraction** | Add `my/gptel--fsm-for-each` to deduplicate traverse setup | Would improve Clarity + Vitality |
+| **Loop decomposition** | Extract `parse-one-autotts-trace` from monolithic while-loop | Would improve Clarity (depth 3→2) |
+| **Redundant write elimination** | Skip `puthash` when cons cell already in table | Would improve performance |
+| **Shallow-copy bug fix** | Use `copy-tree` over `copy-sequence` in priority fn | Would fix data corruption via in-place sort |
+| **Defensive guard** | Add `(listp class)` in ontology research-gaps | Would improve Vitality (error prevention) |
 
-## Patterns Worth Noting
+## Key Insight — The Disconnect
 
-- **Concentrated value in `gptel-auto-workflow-*` modules** — 5 of 7 real findings are in the auto-workflow subsystem
-- **Bugs > refactors** in priority — the `copy-tree` fix and `puthash` skip are the highest-value items
-- **Recursive FSM code (`my/gptel--fsm-*`)** has multiple independent cleanup opportunities
+**All 7 discarded hypotheses had positive expected impact** (clarity, vitality, bug prevention, or performance). They were rejected, not on merit, but on:
 
-## Recommendations
+- **Semantic risk**: e.g., "removing it entirely might change semantics slightly if someone relied on it"
+- **Speculative value vs. verification cost**: the experimental strategy appears to favor hypotheses whose benefit is *observable in 180 runs* over refactors whose benefit is structural/aesthetic
 
-1. **Promote the bug fixes** (#1, #2) to immediate action — these have real correctness impact
-2. **Re-run with a less aggressive discard threshold** — the strategy is throwing away its own best work
-3. **File the empty kept hypothesis as a research gap** — `gptel-auto-workflow-list-project-buffers` needs a re-examination
-4. **Consider whether "discarded" means "wrong" or "not prioritized"** — the framing here suggests the latter, which is a labeling problem, not a finding-quality problem
+The lone kept hypothesis (`gptel-auto-workflow-list-project-buffers`) likely survived because it represents a **behavioral improvement measurable across the experiment matrix**, whereas the discarded set is dominated by **structural refactors and micro-fixes** whose payoff doesn't surface in template-default runs.
+
+## Recommendation Implied by the Data
+If the goal is genuine code health (not just experiment-validated behavior), the discarded set contains **higher-leverage improvements** than the kept set. The template-default strategy appears systematically biased against:
+- Refactors without runtime observable change
+- Bug fixes that only manifest under specific conditions
+- Defensive coding for malformed inputs
+
+This may warrant a **complementary strategy** (e.g., "structural-audit" or "mutation-testing") to surface these hypotheses in a kept state.
 ```
 
 ### Check Issues
 
-# Review: Distillation Output
+# Review of the Distillation
 
-**Overall: Strong diagnostic instinct, weak epistemic footing.**
+## What's solid
 
-The output correctly identifies a real problem (high discard rate + low kept rate) and recovers specific findings with file names and concrete actions. But it makes several moves that undermine its own credibility.
+The pattern taxonomy is genuinely useful — collapsing 7 rejections into 6 rationales makes the rejection logic legible, and naming the "disconnect" between intent and outcome is exactly the kind of meta-observation a good distillation should surface. The recommendation that a complementary strategy is warranted is a fair inference from the data shown.
 
-## What's Good
+## What needs scrutiny
 
-- **The table is concrete.** File names, types, and actions are specific enough to act on. No hand-waving.
-- **The "empty kept hypothesis" catch is sharp.** Flagging a kept item as having an empty body and therefore being non-actionable is exactly the right kind of internal audit.
-- **Recommendation #4 is the strongest point.** The meta-question about what "discarded" actually means is the most valuable observation in the piece — it identifies a labeling problem, not just a content problem.
-- **Bug-before-refactor priority** is the correct ordering for a triage list.
+### 1. The most important number is hiding in plain sight
 
-## What's Weak
+> All other "kept" slots are placeholders (`No hypothesis stated`)
 
-### 1. The circularity problem
-The output claims these 7 items are "the actual gems" — but it doesn't examine *why* they were discarded. Possible reasons that would invalidate the recovery:
-- They might be duplicates of known issues
-- The file context might make them inapplicable (e.g., the function is deprecated, the module is being replaced)
-- They might have been low-confidence hypotheses with thin evidence
-- The "kept" threshold might encode criteria (impact, scope, recency) that these don't meet
+This means out of however many slots existed, **only 1 yielded a substantive hypothesis**. That is the headline finding, not the rejection analysis. The distillation buries it as a parenthetical framing the rejection patterns as the main story. The real story is: the search surface across 180 experiments / 22 files produced almost no actionable hypotheses, period.
 
-By presenting discarded items as automatically valuable, the distillation commit
+### 2. The framing treats "rejection" as a problem state
+
+The Key Insight section implicitly treats the 7 discarded hypotheses as a missed opportunity, but rejection *is* the correct terminal state for a hypothesis if its risk/cost exceeds its expected payoff. "Would improve Clarity" is not a measurement — it's the rationale someone used to propose the change in the first place. Listing it in the impact column of a "rejected" row conflates *consideration rationale* with *proven value*.
+
+The strategy may be doing exactly what it should: filtering out structural changes that do
 
 ... (truncated)
