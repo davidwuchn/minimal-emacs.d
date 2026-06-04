@@ -2581,7 +2581,7 @@ Returns topic model plist, or nil if not found."
   "Get keep rate for TOPIC from self-evolution experiment data.
 Returns float 0-1, or nil if no data."
   (when (fboundp 'gptel-auto-workflow--parse-all-results)
-    (let* ((results (gptel-auto-workflow--parse-all-results))
+    (let* ((results (ignore-errors (gptel-auto-workflow--parse-all-results)))
            (topic-results (cl-remove-if-not
                            (lambda (r)
                              (and (equal (plist-get r :decision) "kept")

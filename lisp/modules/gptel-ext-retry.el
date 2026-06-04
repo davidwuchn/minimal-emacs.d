@@ -901,6 +901,7 @@ EDGE CASE: TRIM-FN may return nil or 0 — handled gracefully."
     ("qwen3-coder-next"   . 400000)
     ("qwen3-coder-plus"   . 3000000)  ; 1M tokens ≈ 3.5MB, leave room for output
     ("qwen3-max-2026-01-23" . 400000)
+    ("glm-5.1"            . 700000)   ; 200K tokens
     ("glm-5"              . 350000)   ; 128K tokens
     ("glm-4.7"            . 350000)
     ("minimax"            . 350000)   ; minimax-m2.7-highspeed, MiniMax-M2.5, etc.
