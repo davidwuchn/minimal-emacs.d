@@ -188,9 +188,11 @@ Does nothing when BACKEND-NAME is not in the chain."
     (let* ((entry (assoc backend-name
                          gptel-auto-workflow-executor-rate-limit-fallbacks
                          #'string=))
-           (rest (cl-remove (car entry)
-                            gptel-auto-workflow-executor-rate-limit-fallbacks
-                            :key #'car :test #'string=)))
+           (rest (if entry
+                      (cl-remove (car entry)
+                                 gptel-auto-workflow-executor-rate-limit-fallbacks
+                                 :key #'car :test #'string=)
+                    nil)))
       (when entry
         (setq gptel-auto-workflow-executor-rate-limit-fallbacks
               (append rest (list entry)))))))
