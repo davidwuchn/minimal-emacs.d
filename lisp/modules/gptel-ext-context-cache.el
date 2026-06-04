@@ -263,7 +263,7 @@ Sources:
     ;; MiniMax
     ("minimax-m2.7-highspeed"
      :context-window 196608
-     :pricing-input 0.60 :pricing-output 2.40
+      :pricing-input 0.30 :pricing-output 1.20
      :max-output 131072
      :description "MiniMax M2.7 Highspeed - 196k context, lower-latency agent workflows")
     ("minimax-m2.7"

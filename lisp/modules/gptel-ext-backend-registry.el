@@ -12,9 +12,9 @@
      :models (MiniMax-M3)
      :default-model MiniMax-M3
      :model-metadata
-     ((MiniMax-M3
+      ((MiniMax-M3
        :context-window 196608
-       :pricing-input 0.60 :pricing-output 2.40 :pricing-cache-hit 0.12
+       :pricing-input 0.30 :pricing-output 1.20 :pricing-cache-hit 0.06
        :capabilities (code-generation tool-calls)
        :speed fast)))
 
