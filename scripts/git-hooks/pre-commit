@@ -28,7 +28,7 @@ if [[ -n "$staged_el_files" ]]; then
             if compile_out=$(emacs -Q --batch \
                 -L "$repo_root" -L "$repo_root/lisp" -L "$repo_root/lisp/modules" \
                 "${pkg_load_args[@]}" \
-                --eval "(setq byte-compile-error-on-warn nil)" \
+                --eval "(setq byte-compile-error-on-warn t)" \
                 -f batch-byte-compile "$repo_root/$file" 2>&1); then
                 compile_exit=0
             else
