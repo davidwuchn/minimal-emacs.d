@@ -158,7 +158,9 @@ Also fails if NO files were modified (agent made no actual edits)."
           ;; WORKTREE BOUNDARY GUARD: ensure file is inside worktree
           (let ((full-path (expand-file-name file worktree)))
             (when (and (file-name-absolute-p full-path)
-                       (not (file-in-directory-p full-path worktree)))
+                       (not (condition-case nil
+                                (file-in-directory-p full-path worktree)
+                              (error nil))))
               (message "[auto-exp] ✗ WORKTREE BOUNDARY VIOLATION: %s is outside worktree %s"
                        full-path worktree)
               (throw 'validation-error
