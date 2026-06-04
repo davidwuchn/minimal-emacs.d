@@ -230,7 +230,7 @@ Shows each tool call with arguments, offering inspect (i) and permit (p) actions
      tool-calls '("tool call" "tool calls" "run")
      `((?i ,(lambda (_) (save-window-excursion
                           (with-selected-window
-                              (gptel--inspect-fsm (my/gptel--current-fsm))
+                              (ignore-errors (gptel--inspect-fsm (my/gptel--current-fsm)))
                             (goto-char (point-min))
                             (when (search-forward-regexp "^:tool-use" nil t)
                               (forward-line 0) (hl-line-highlight))
