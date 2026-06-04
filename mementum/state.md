@@ -1,8 +1,41 @@
 # Mementum State
 
-> Last session: 2026-06-05 (Self-heal ERT test hardening — all 36 pass)
+> Last session: 2026-06-05 (OV5 pipeline audit + GTM daemon fix + rate-limit detection)
 > Next pipeline: running
-> Status: 2189 tests pass, 0 unexpected
+> Status: GTM daemon restarted, watchdog monitoring both daemons, 2189 tests pass, 0 unexpected
+
+## Session: OV5 Pipeline Hardening — GTM Daemon + Rate-Limit Detection (2026-06-05)
+
+### ⚒ GTM Daemon Auto-Restart (watchdog-daemon.sh)
+**Problem:** GTM daemon (`gtm-product-org`) was dead for 2+ days — no research, stale findings
+**Root cause:** Watchdog only monitored PMF daemon (`pmf-value-stream`); GTM daemon was killed on memory but never restarted
+**Fix:**
+- Added `start_gtm_daemon()` function to watchdog
+- When PMF daemon is healthy, watchdog now checks if GTM daemon exists
+- If GTM missing → starts it
+- If GTM memory >2.5GB → kills + restarts it
+- GTM daemon now running (PID 434201)
+
+### ⚒ Rate-Limit Detection for Chinese Backends
+**Problem:** Error code 1302 + "您的账户已达到速率限制" not recognized as rate-limit → experiments failed with `tool-error`
+**Fix:** Added to `gptel-tools-agent-error.el`:
+- Pattern: `您的账户已达到速率限制` (MiniMax account rate limit)
+- Pattern: `1302` (error code)
+- Both `rate-limit-error-p` and `hard-quota-error-p` functions updated
+
+### Pipeline Audit Results
+| Issue | Count | Status |
+|-------|-------|--------|
+| Rate-limit errors (24h) | 24+ | Detection improved |
+| GTM daemon dead | 1 | Fixed |
+| Analyzer timeouts | Multiple | Under investigation |
+| Staging verification failed | Multiple | Pending |
+| Grader bypass commit failed | Multiple | Pending |
+
+### Commits
+- `40ede3a0` ⚒ watchdog: auto-restart GTM daemon + rate-limit detection
+
+---
 
 ## Session: Self-Heal ERT Test Hardening (2026-06-05)
 
