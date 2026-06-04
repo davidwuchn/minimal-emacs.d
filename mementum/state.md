@@ -1,10 +1,51 @@
 # Mementum State
 
-> Last session: 2026-06-05 (OV5 pipeline audit + GTM daemon fix + rate-limit detection)
+> Last session: 2026-06-05 (MemGraphRAG P0-P3 implementation)
 > Next pipeline: running
-> Status: GTM daemon restarted, watchdog monitoring both daemons, 2189 tests pass, 0 unexpected
+> Status: Memory schema extraction, temporal versioning, bidirectional links, graph retrieval, 2229 tests pass
 
-## Session: OV5 Pipeline Hardening — GTM Daemon + Rate-Limit Detection (2026-06-05)
+## Session: MemGraphRAG-Inspired Memory Schema (2026-06-05)
+
+### ⚒ P0: Schema Extraction + Frequency-Based Promotion
+**New module:** `lisp/modules/gptel-auto-workflow-memory-schema.el`
+- Hash-table-based schema index at `mementum/.ov5-memory-index.json`
+- Heuristic triple extraction from memory text (verb+preposition patterns)
+- Schema inference with frequency tracking
+- τ=3 threshold: schemas need ≥3 observations before ontology router uses them
+- Category lookup via entity matching (fallback for `categorize-target`)
+- Conflict detection: entity overlap across multiple sources
+
+**Integration:**
+- `gptel-auto-workflow-mementum.el`: calls `extract-from-file` after `write-memory` and `synthesize-knowledge`
+- `gptel-auto-workflow-ontology-router.el`: `categorize-target` checks schema index before defaulting to `:programming`
+
+### ⚒ P1: Temporal Versioning
+- New memories get `valid-from` frontmatter (YAML)
+- `supersede-memory`: adds `valid-until` + `superseded-by` to old memory
+- `read-valid-memories`: filters out superseded memories
+- `find-superseded`: finds existing memories matching a slug for auto-supersession
+- Auto-supersede wired into `write-memory`: existing memories with same slug are superseded
+
+### ⚒ P1: Bidirectional Memory-Code Links
+- `@memory:slug-name` references in code files scanned into reverse index
+- `memories-for-file`: given code file, return referenced memory slugs
+- `files-for-memory`: given memory slug, return code files referencing it
+
+### ⚒ P2: Graph Retrieval (PPR-lite)
+- Triple store for graph traversal (entity→schema→entity neighbor walk)
+- `entity-neighbors`: find entities connected via shared schemas
+- `retrieve`: multi-hop graph walk with score aggregation
+
+### ⚒ P3: Hub Suppression (IDF Weighting)
+- `entity-idf`: score = count * 1/log(deg+1) — penalizes generic entities, boosts rare
+- `rank-entities`: IDF-weighted entity ranking
+- `category-for-target` now uses IDF weighting instead of raw count
+
+### Tests
+- `tests/test-memory-schema.el`: 40 ERT tests covering all features
+- 2229 total tests, 0 unexpected
+
+---
 
 ### ⚒ GTM Daemon Auto-Restart (watchdog-daemon.sh)
 **Problem:** GTM daemon (`gtm-product-org`) was dead for 2+ days — no research, stale findings

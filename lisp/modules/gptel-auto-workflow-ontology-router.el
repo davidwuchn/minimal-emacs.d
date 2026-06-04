@@ -30,6 +30,7 @@
 (require 'gptel-auto-workflow-evolution)
 (require 'gptel-auto-workflow-skill-graph)
 (require 'gptel-ext-backend-registry)
+(declare-function gptel-auto-workflow--memory-schema-category-for-target "gptel-auto-workflow-memory-schema")
 
 (defvar gptel-auto-workflow-executor-rate-limit-fallbacks
   (mapcar (lambda (backend)
@@ -400,7 +401,10 @@ Categories based on module purpose from historical experiment analysis."
             (string-match-p "standalone" basename))
         :natural-language)
        ;; Default to :programming for unrecognized .el files (conservative)
-       (t :programming)))))
+       ;; But check schema index first for data-driven category
+       (t (or (when (fboundp 'gptel-auto-workflow--memory-schema-category-for-target)
+                 (gptel-auto-workflow--memory-schema-category-for-target target))
+               :programming))))))
 
 ;; ─── Category-Level Performance Aggregation ───
 
