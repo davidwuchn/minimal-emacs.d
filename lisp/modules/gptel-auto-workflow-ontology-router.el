@@ -1,5 +1,9 @@
 ;;; gptel-auto-workflow-ontology-router.el --- Ontology-aware backend fallback reordering -*- lexical-binding: t -*-
 
+(defvar gptel-auto-workflow--routing-audit-log)
+(defvar gptel-auto-workflow--run-failed-backends)
+(defvar gptel-auto-workflow--rate-limited-backends)
+
 ;; Copyright (C) 2024-2026  Self-Evolving Emacs Project
 
 ;; Author: Self-Evolving System
@@ -88,8 +92,10 @@ Based on verbum crystal spine research (sessions 109-112)."
       'distributed))  ; Default to distributed for unknown backends
 
 (defun gptel-auto-workflow--target-deterministic-p (target)
-  "Return t if TARGET is a deterministic task (suitable for single-neuron backends).
-Deterministic tasks: rule validation, type checking, test execution, λ parsing."
+  "Return t if TARGET is a deterministic task
+\(suitable for single-neuron backends\).
+Deterministic tasks: rule validation, type checking,
+test execution, lambda parsing."
   (when target
     (let ((basename (file-name-nondirectory target)))
       (or
@@ -422,9 +428,12 @@ Recent keep-rate compared against all-time to detect improvement/decline."
   :group 'gptel-auto-workflow)
 
 (defun gptel-auto-workflow--get-recent-performance-stats (backend category &optional strategy)
-  "Get BACKEND's RECENT performance stats on CATEGORY targets.
-Only considers the last `gptel-auto-workflow--ontology-recent-window' experiments.
-Returns plist with :kept :total :keep-rate, or nil if no recent data."
+  "Get BACKEND's RECENT performance stats on CATEGORY
+targets.
+Only considers the last
+`gptel-auto-workflow--ontology-recent-window' experiments.
+Returns plist with :kept :total :keep-rate,
+or nil if no recent data."
   (let* ((all (gptel-auto-workflow--parse-all-results))
          (recent (seq-take all (min (length all) gptel-auto-workflow--ontology-recent-window)))
          (kept 0)
@@ -535,17 +544,23 @@ The boost is proportional to the phase's measured strength."
 
 (defconst gptel-auto-workflow--category-backend-overrides
   ;; Source: benchmark data 2026-06-02
-  ;; DeepSeek v4-pro with reasoning_effort high takes ~60s vs MiniMax-M3 ~7s
-  ;; Speed advantage of M3 outweighs historical keep-rate difference
+  ;; DeepSeek v4-pro with reasoning_effort high takes
+  ;; ~60s vs MiniMax-M3 ~7s
+  ;; Speed advantage of M3 outweighs historical keep-rate
+  ;; difference
   '((:programming     . nil)           ; MiniMax-M3 default (8x faster, clean elisp)
     (:tool-calls      . nil)           ; MiniMax highspeed baseline
     (:natural-language . nil)          ; MiniMax-M3 default (faster for streaming/prompts)
     (:agentic         . nil))          ; MiniMax baseline — no override needed
-  "Category→preferred backend mapping.
-All categories default to nil — use fallback chain order (MiniMax-M3 first).
-DeepSeek v4-pro is 8.5x slower (60s vs 7s) with reasoning_effort high.
-Historical keep-rate advantage (25% vs 16%) is offset by throughput impact.
-Fallback chain: MiniMax-M3 → moonshot/k2.6 → DeepSeek v4-pro → DashScope → Copilot.")
+  "Category->preferred backend mapping.
+All categories default to nil — use fallback chain
+order \(MiniMax-M3 first\).
+DeepSeek v4-pro is 8.5x slower \(60s vs 7s\) with
+reasoning_effort high.
+Historical keep-rate advantage \(25% vs 16%\) is offset
+by throughput impact.
+Fallback chain: MiniMax-M3 -> moonshot/k2.6 ->
+DeepSeek v4-pro -> DashScope -> Copilot.")
 
 ;; ─── Fallback Chain Reordering ───
 
@@ -1074,9 +1089,9 @@ in unrelated test files are not affected by side effects."
 ;; ─── π Synthesis: Semantic Clustering + Strategy Inheritance ───
 
 (defun gptel-auto-workflow--winning-strategy-for-target (target)
-  "Find the strategy that produced a 'kept result for TARGET.
-First tries exact target match, then falls back to category-level
-recommendation (ontology→researcher bridge).
+  "Find the strategy that produced a `kept' result for TARGET.
+First tries exact target match, then falls back to
+category-level recommendation \(ontology->researcher bridge\).
 Returns strategy name string or nil."
   (when (fboundp 'gptel-auto-workflow--parse-all-results)
     (let ((results (gptel-auto-workflow--parse-all-results))
@@ -1184,7 +1199,8 @@ longer sent via API — retained only for backward compatibility.")
 
 (defvar gptel-auto-workflow--backend-lambda-health-cache nil
   "Cache of backend lambda verification results.
-Format: ((backend . timestamp) . status) where status is :healthy/:degraded/:unknown.")
+Format: \(\(backend . timestamp\) . status\) where
+status is :healthy/:degraded/:unknown.")
 
 (defun gptel-auto-workflow--verify-backend-lambda (backend)
   "Check if BACKEND exhibits lambda compiler (verbum Phase 2).
@@ -3718,7 +3734,7 @@ Runs during the self-evolution cycle.  Results are stored in
 
 ;; ─── Per-Category Eight-Key Aggregation ───
 
-(defvar gptel-auto-workflow--category-eight-key-weights nil
+ (defvar gptel-auto-workflow--category-eight-key-weights nil
   "Alist of (category (key . weight) ...) learned from experiment history.
 Each category maps to per-key average score improvement deltas.
 Populated by `gptel-auto-workflow--aggregate-category-eight-keys' during evolution.

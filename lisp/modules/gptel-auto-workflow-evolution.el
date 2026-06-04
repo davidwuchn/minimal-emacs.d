@@ -3081,8 +3081,10 @@ Handles old format (CATEGORY . INTEGER) and new (CATEGORY . (INTEGER . CYCLE))."
         (assq-delete-all category gptel-auto-workflow--category-strike-counts)))
 
 (defun gptel-auto-workflow--decay-category-strikes ()
-  "Reduce all category strikes by 1 per cycle. Removes entries when strikes hit 0.
-Handles both old format (CATEGORY . INTEGER) and new format (CATEGORY . (INTEGER . CYCLE))."
+  "Reduce all category strikes by 1 per cycle.
+Removes entries when strikes hit 0.
+Handles both old format \(CATEGORY . INTEGER\) and new
+format \(CATEGORY . \(INTEGER . CYCLE\)\)."
   (let ((new nil))
     (dolist (entry gptel-auto-workflow--category-strike-counts)
       (let* ((cat (car entry))
@@ -3097,8 +3099,8 @@ Handles both old format (CATEGORY . INTEGER) and new format (CATEGORY . (INTEGER
   (cl-incf gptel-auto-workflow--evolution-cycle-counter))
 
 (defun gptel-auto-workflow--apply-category-vigilance (target decision)
-  "Apply ∀ Vigilance strikes based on TARGET and DECISION.
-DECISION is 'kept, 'discarded, or 'validation-failed.
+  "Apply Vigilance strikes based on TARGET and DECISION.
+DECISION is `kept', `discarded', or `validation-failed'.
 Records strike on failure, resets on success."
   (when (fboundp 'gptel-auto-workflow--categorize-experiment-target)
     (let ((category (gptel-auto-workflow--categorize-experiment-target target)))
@@ -3781,9 +3783,12 @@ Guards: skips enrichment when EMA confidence < 0.3 (untrusted research signal)."
                      (lambda (_ok) nil))))))))))))
 
 (defun gptel-auto-workflow--queue-research-pair-probes ()
-  "Parse [pair-probe] HA/HB blocks from research findings and auto-queue as experiments.
-Each pair-probe block contains an optimization hypothesis with Elisp code.
-Queues under :research-probes key in hints for the experiment loop to consume."
+  "Parse [pair-probe] HA/HB blocks from research
+findings and auto-queue as experiments.
+Each pair-probe block contains an optimization hypothesis
+with Elisp code.
+Queues under :research-probes key in hints for the
+experiment loop to consume."
   (let* ((root (gptel-auto-workflow--worktree-base-root))
          (findings-file (expand-file-name "var/tmp/research-findings.md" root))
          (probes nil))
@@ -4535,8 +4540,10 @@ Returns string suitable for mementum or prompt injection."
           (error nil))))))
 
 (defun gptel-auto-workflow--allium-build-repair-target (strategy-name)
-  "Generate a repair guidance prompt for STRATEGY-NAME with critical Allium issues.
-Returns a string suitable for injection into the next experiment targeting this strategy's research area."
+  "Generate a repair guidance prompt for STRATEGY-NAME
+with critical Allium issues.
+Returns a string suitable for injection into the next
+experiment targeting this strategy's research area."
   (let* ((root (gptel-auto-workflow--worktree-base-root))
          (issue-file (and root (expand-file-name
                                 (format "%s.md" strategy-name)
@@ -4571,9 +4578,10 @@ Address them to improve future experiment success rates.
       "")))
 
 (defun gptel-auto-workflow--allium-load-issues-for-target (target)
-  "Load Allium issues relevant to TARGET for experiment prompt injection.
-Returns markdown string with issues from strategies that have experimented on TARGET,
-or empty string if none found."
+  "Load Allium issues relevant to TARGET for experiment
+prompt injection.
+Returns markdown string with issues from strategies that
+have experimented on TARGET, or empty string if none found."
   (let* ((results (gptel-auto-workflow--parse-all-results))
          (relevant-strategies (make-hash-table :test 'equal))
          (root (gptel-auto-workflow--worktree-base-root))
@@ -4613,9 +4621,12 @@ or empty string if none found."
 ;; ─── Semantica Ontology: experiment → class/instance structure ───
 
 (defun gptel-auto-workflow--generate-experiment-ontology ()
-  "Generate an ontology from experiment results (Semantica pattern).
+  "Generate an ontology from experiment results
+\(Semantica pattern\).
 Returns ontology plist with class and instance counts.
-Uses recency weights when `gptel-auto-workflow--recency-weighted-ontology' is available."
+Uses recency weights when
+`gptel-auto-workflow--recency-weighted-ontology' is
+available."
   (if (fboundp 'gptel-auto-workflow--recency-weighted-ontology)
       (gptel-auto-workflow--recency-weighted-ontology)
   (let* ((results (gptel-auto-workflow--parse-all-results))
@@ -5768,10 +5779,13 @@ Returns a formatted string suitable for mementum/skill guidance."
                  (max 0 (1- pairs)))))))
 
 (defun gptel-auto-workflow--evolution-persist-semantic-relationships ()
-  "Persist semantic file similarity relationships to mementum knowledge.
-Reads git-embed similarity edges from the ontology router, formats as
-markdown table, and writes to mementum/knowledge/semantic-relationships.md.
-ε Purpose: enriches ontology with structural similarity for file-target discovery."
+  "Persist semantic file similarity relationships to
+mementum knowledge.
+Reads git-embed similarity edges from the ontology
+router, formats as markdown table, and writes to
+mementum/knowledge/semantic-relationships.md.
+Purpose: enriches ontology with structural similarity
+for file-target discovery."
   (when (fboundp 'gptel-auto-workflow--semantic-similarity-edges)
     (let* ((root (gptel-auto-workflow--worktree-base-root))
            (file (expand-file-name "mementum/knowledge/semantic-relationships.md" root))
@@ -5844,9 +5858,12 @@ Like promptfoo's model-specific comparison: which exact model performs best."
 
 (defun gptel-auto-workflow--model-head-to-head-stats (model-a model-b)
   "Compare MODEL-A vs MODEL-B on shared targets.
-MODEL-A and MODEL-B are \"Backend/model\" strings (e.g. \"MiniMax/minimax-m2.7-highspeed\").
-Only considers targets where BOTH models have >=3 experiments.
-Returns plist with :winner, :a-rate, :b-rate, :shared-targets, :a-wins, :b-wins."
+MODEL-A and MODEL-B are \"Backend/model\" strings
+\(e.g. \"MiniMax/minimax-m2.7-highspeed\"\).
+Only considers targets where BOTH models have >=3
+experiments.
+Returns plist with :winner, :a-rate, :b-rate,
+:shared-targets, :a-wins, :b-wins."
   (let* ((by-both (make-hash-table :test 'equal))
          (results (gptel-auto-workflow--parse-all-results)))
     (dolist (r results)
@@ -5896,8 +5913,10 @@ Returns plist with :winner, :a-rate, :b-rate, :shared-targets, :a-wins, :b-wins.
               :a-name model-a :b-name model-b)))))
 
 (defun gptel-auto-workflow--evolution-model-comparison-report ()
-  "Generate head-to-head report for all model pairs with sufficient data.
-Compares specific models (e.g. DeepSeek/deepseek-v4-pro vs DeepSeek/deepseek-v4-flash)."
+  "Generate head-to-head report for all model pairs
+with sufficient data.
+Compares specific models \(e.g. DeepSeek/deepseek-v4-pro
+vs DeepSeek/deepseek-v4-flash\)."
   (let* ((stats (gptel-auto-workflow--evolution-model-stats))
          (models (mapcar #'car stats))
          (pairs nil) (lines nil))
@@ -6806,7 +6825,216 @@ Call when keep_rate improves after fix."
   (when (> gptel-auto-workflow--consecutive-failed-remediations 0)
     (message "[self-heal] Resetting escalation counter (was %d)"
              gptel-auto-workflow--consecutive-failed-remediations)
-    (setq gptel-auto-workflow--consecutive-failed-remediations 0)))
+     (setq gptel-auto-workflow--consecutive-failed-remediations 0)))
+
+;;; ─── Phase 10: Self-Healing Byte-Compiler Warnings ───
+
+(defun gptel-auto-workflow--fix-docstring-width (file)
+  "Auto-fix docstrings wider than 80 chars in FILE.
+Wraps long lines and re-opens the file.  Returns number of fixes."
+  (let ((fixes 0))
+    (with-current-buffer (find-file-noselect file)
+      (goto-char (point-min))
+      (while (re-search-forward
+              (rx (group "\"")
+                  (group (+? (not (any "\"\n"))))
+                  (group "\""))
+              nil t)
+        (let* ((start (match-beginning 2))
+               (end (match-end 2))
+               (text (buffer-substring-no-properties start end)))
+          (when (> (length text) 78)
+            (let* ((lines (split-string text "\n"))
+                   (wrapped
+                    (mapconcat
+                     (lambda (line)
+                       (if (> (length line) 78)
+                           (let ((words (split-string line))
+                                 (result nil)
+                                 (current ""))
+                             (dolist (w words)
+                               (let ((proposed (if (string= current "") w
+                                                 (concat current " " w))))
+                                 (if (> (length proposed) 78)
+                                     (progn (push current result)
+                                            (setq current w))
+                                   (setq current proposed))))
+                             (when (> (length current) 0) (push current result))
+                             (mapconcat #'identity (nreverse result) "\n"))
+                         line))
+                     lines "\n")))
+              (goto-char start)
+              (delete-region start end)
+              (insert wrapped)
+              (setq fixes (1+ fixes))))))
+      (when (> fixes 0) (save-buffer))
+      (kill-buffer (current-buffer)))
+    fixes))
+
+(defun gptel-auto-workflow--fix-unescaped-quotes (file)
+  "Auto-fix unescaped single quotes in docstrings in FILE.
+Replaces 'word' patterns with \\='word\\=' inside docstrings.
+Returns number of fixes."
+  (let ((fixes 0))
+    (with-current-buffer (find-file-noselect file)
+      (goto-char (point-min))
+      (while (re-search-forward "\"\\([^\"\\]*\\)\"" nil t)
+        (let* ((start (match-beginning 1))
+               (end (match-end 1))
+               (text (buffer-substring-no-properties start end))
+               (fixed (replace-regexp-in-string
+                       "'\\(\\sw[^'\"\\)]*\\)'"
+                       "\\\\='\\1\\\\='" text)))
+          (unless (string= text fixed)
+            (goto-char start)
+            (delete-region start end)
+            (insert fixed)
+            (setq fixes (1+ fixes)))))
+      (when (> fixes 0) (save-buffer))
+      (kill-buffer (current-buffer)))
+    fixes))
+
+(defun gptel-auto-workflow--fix-unused-variables (file warnings)
+  "Auto-fix unused lexical variables in FILE by prefixing with _.
+WARNINGS is the list of byte-compile warning strings.
+Returns number of fixes."
+  (let ((fixes 0))
+    (with-current-buffer (find-file-noselect file)
+      (dolist (w warnings)
+        (when (string-match "Unused lexical \\(?:argument\\|variable\\) '\\([^']+\\)'" w)
+          (let* ((var (match-string 1 w))
+                 (pattern (concat "(" (regexp-quote var) " ")))
+            (goto-char (point-min))
+            (when (re-search-forward pattern nil t)
+              (goto-char (match-beginning 0))
+              (forward-char 1)
+              (insert "_")
+              (setq fixes (1+ fixes))))))
+      (when (> fixes 0) (save-buffer))
+      (kill-buffer (current-buffer)))
+    fixes))
+
+(defun gptel-auto-workflow--fix-free-variables (file warnings)
+  "Auto-fix free variable references in FILE by adding defvar.
+WARNINGS is the list of byte-compile warning strings.
+Returns number of fixes."
+  (let ((fixes 0)
+        (defvars nil))
+    (dolist (w warnings)
+      (when (string-match "reference to free variable '\\([^']+\\)'" w)
+        (push (match-string 1 w) defvars))
+      (when (string-match "assignment to free variable '\\([^']+\\)'" w)
+        (push (match-string 1 w) defvars)))
+    (setq defvars (delete-dups defvars))
+    (when defvars
+      (with-current-buffer (find-file-noselect file)
+        (goto-char (point-min))
+        (let ((insert-point
+               (save-excursion
+                 (if (re-search-forward "^(defvar\\|^(require" nil t)
+                     (match-beginning 0)
+                   (point-min)))))
+          (goto-char insert-point)
+          (dolist (v (sort defvars #'string<))
+            (insert (format "(defvar %s)\n" v))
+            (setq fixes (1+ fixes))))
+        (save-buffer)
+        (kill-buffer (current-buffer))))
+      fixes))
+
+(defun gptel-auto-workflow--fix-unknown-functions (file warnings)
+  "Auto-fix unknown function warnings in FILE by adding declare-function.
+Looks up function source via find-lisp-object-file-name.
+WARNINGS is the list of byte-compile warning strings.
+Returns number of fixes."
+  (let ((fixes 0)
+        (declares nil))
+    (dolist (w warnings)
+      (when (string-match "the function '\\([^']+\\)' is not known" w)
+        (let* ((fn-sym (match-string 1 w))
+               (fn (intern-soft fn-sym)))
+          (when fn
+            (let ((src (ignore-errors
+                         (file-name-sans-extension
+                          (file-name-nondirectory
+                           (or (find-lisp-object-file-name fn (symbol-function fn))
+                               (when (boundp fn)
+                                 (find-lisp-object-file-name fn (symbol-value fn)))))))))
+              (when src
+                (push (cons fn-sym src) declares)))))))
+    (setq declares (delete-dups declares))
+    (when declares
+      (with-current-buffer (find-file-noselect file)
+        (goto-char (point-min))
+        (let ((insert-point
+               (save-excursion
+                 (if (re-search-forward "^(declare-function\\|^(defvar\\|^(require" nil t)
+                     (match-beginning 0)
+                   (point-min)))))
+          (goto-char insert-point)
+          (dolist (d (sort declares (lambda (a b) (string< (car a) (car b)))))
+            (insert (format "(declare-function %s \"%s\")\n" (car d) (cdr d)))
+            (setq fixes (1+ fixes))))
+        (save-buffer)
+        (kill-buffer (current-buffer))))
+      fixes))
+
+(defun gptel-auto-workflow--byte-compile-warnings-for-file (file)
+  "Collect byte-compile warnings for FILE.  Returns list of warning strings."
+  (let ((byte-compile-error-on-warn nil)
+        (byte-compile-warnings t)
+        (result nil))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (byte-compile-from-buffer (current-buffer)))
+    (dolist (w byte-compile--warnings)
+      (push (cadr w) result))
+    (nreverse result)))
+
+(defun gptel-auto-workflow--self-heal-byte-compiler (&optional files max-iterations)
+  "Self-heal byte-compiler warnings across FILES.
+Iteratively applies fixes until clean or MAX-ITERATIONS reached.
+FILES defaults to all agent + auto-workflow .el files.
+Returns plist with :fixes-applied :remaining-warnings :files-fixed."
+  (interactive)
+  (let* ((all-files
+          (or files
+              (append
+               (file-expand-wildcards "lisp/modules/gptel-tools-agent-*.el")
+               (file-expand-wildcards "lisp/modules/gptel-auto-workflow-*.el"))))
+         (iterations 0)
+         (max-iter (or max-iterations 5))
+         (total-fixes 0)
+         (files-fixed nil))
+    (while (and (< iterations max-iter) all-files)
+      (setq iterations (1+ iterations))
+      (message "[self-heal] Byte-compiler iteration %d/%d" iterations max-iter)
+      (let ((still-unclean nil))
+        (dolist (f all-files)
+          (let* ((warnings (gptel-auto-workflow--byte-compile-warnings-for-file f))
+                 (fix-count 0))
+            (when warnings
+              (message "[self-heal] %s: %d warnings" (file-name-nondirectory f) (length warnings))
+              (cl-incf fix-count (gptel-auto-workflow--fix-docstring-width f))
+              (cl-incf fix-count (gptel-auto-workflow--fix-unescaped-quotes f))
+              (cl-incf fix-count (gptel-auto-workflow--fix-unused-variables f warnings))
+              (cl-incf fix-count (gptel-auto-workflow--fix-free-variables f warnings))
+              (cl-incf fix-count (gptel-auto-workflow--fix-unknown-functions f warnings))
+              (cl-incf total-fixes fix-count)
+              (when (> fix-count 0)
+                (push (file-name-nondirectory f) files-fixed))
+              (let ((remaining (gptel-auto-workflow--byte-compile-warnings-for-file f)))
+                (when remaining
+                  (push f still-unclean))))))
+        (setq all-files (nreverse still-unclean))))
+    (let ((remaining (apply #'append
+                            (mapcar #'gptel-auto-workflow--byte-compile-warnings-for-file
+                                    all-files))))
+      (message "[self-heal] Done: %d fixes, %d remaining warnings, %d files fixed"
+               total-fixes (length remaining) (length (delete-dups files-fixed)))
+      (list :fixes-applied total-fixes
+            :remaining-warnings (length remaining)
+            :files-fixed (delete-dups files-fixed)))))
 
 (provide 'gptel-auto-workflow-evolution)
 ;;; gptel-auto-workflow-evolution.el ends here

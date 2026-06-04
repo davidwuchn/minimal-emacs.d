@@ -46,18 +46,21 @@
 ;; ─── Global State ───
 
 (defvar skill-graph--nodes (make-hash-table :test 'eq)
-  "Hash table: skill-id → skill-graph-node.
-Nodes are loaded from assistant/skills/*/SKILL.md frontmatter.
-Keys are symbols (e.g., 'hashline-edit).")
+  "Hash table: skill-id -> skill-graph-node.
+Nodes are loaded from assistant/skills/*/SKILL.md
+frontmatter.  Keys are symbols \(e.g., `hashline-edit'\).")
 
 (defvar skill-graph--edges (make-hash-table :test 'equal)
   "Hash table: (from-id . to-id) → skill-graph-edge.
 Edges are discovered from AutoTTS traces (skill co-occurrence).")
 
 (defvar skill-graph--molecules nil
-  "List of known molecules: each is a list of node ids in sequence.
-Molecules are compiled at design time, not traversed at runtime.
-Example: ('elisp-discover 'elisp-expert 'elisp-validator).")
+  "List of known molecules: each is a list of node ids
+in sequence.
+Molecules are compiled at design time, not traversed
+at runtime.
+Example: \(`elisp-discover' `elisp-expert'
+`elisp-validator'\).")
 
 (defun skill-graph--project-root ()
   "Return the repo root that owns assistant skills and workflow state.
@@ -79,6 +82,7 @@ Prefer workflow/project roots only when they actually contain the skills dir."
                            (file-directory-p
                             (expand-file-name "assistant/skills" dir)))
                          candidates)))
+(defvar minimal-emacs-user-directory)
     (expand-file-name (or root minimal-emacs-user-directory user-emacs-directory))))
 
 ;; ─── Skill Loading ───

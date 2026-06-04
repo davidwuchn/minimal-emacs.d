@@ -107,9 +107,12 @@ Loaded from .dedup-cache in memory directory on first use.")
       (secure-hash 'sha256 content))))
 
 (defun gptel-auto-workflow--mementum-write-memory (symbol slug content)
-  "Write a memory file with SYMBOL prefix and SLUG. CONTENT is the body text.
-Returns the file path, or nil if the content is a duplicate of an existing memory.
-Deduplication uses SHA-256 content hashing (inspired by context-mode's EventDedup)."
+  "Write a memory file with SYMBOL prefix and SLUG.
+CONTENT is the body text.
+Returns the file path, or nil if the content is a
+duplicate of an existing memory.
+Deduplication uses SHA-256 content hashing
+\(inspired by context-mode's EventDedup\)."
   ;; ── Lazy-init dedup cache ──
   (when (= 0 (hash-table-count gptel-auto-workflow--mementum-dedup-cache))
     (setq gptel-auto-workflow--mementum-dedup-cache

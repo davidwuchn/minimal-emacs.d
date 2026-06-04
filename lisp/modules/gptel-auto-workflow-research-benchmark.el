@@ -431,9 +431,9 @@ TRACES is list of trace plists."
 CONTROLLER-CONFIG is a plist with controller parameters.
 Reads existing file first and merges, so champion keys from
 update-controller-from-champion-changes survive the save."
-  (let ((controller-file (expand-file-name "var/tmp/researcher-controller.json"
+   (let* ((controller-file (expand-file-name "var/tmp/researcher-controller.json"
                                            (gptel-auto-workflow--worktree-base-root)))
-        (existing (condition-case nil
+         (existing (condition-case nil
                       (when (file-readable-p controller-file)
                         (with-temp-buffer
                           (insert-file-contents controller-file)
@@ -506,10 +506,13 @@ Returns list of evolution records."
     (message "[autotts] Saved evolution history: %d generations" (length history))))
 
 (defun gptel-auto-workflow--count-actionable-patterns (findings)
-  "Count actionable pattern concepts in FINDINGS text, per ontology category.
-ε Purpose: measures how many concrete, named techniques the researcher extracted.
-Returns an alist of (CATEGORY . COUNT) keyed by :programming, :tool-calls,
-:agentic, :natural-language, plus :total."
+  "Count actionable pattern concepts in FINDINGS text,
+per ontology category.
+Purpose: measures how many concrete, named techniques
+the researcher extracted.
+Returns an alist of \(CATEGORY . COUNT\) keyed by
+:programming, :tool-calls, :agentic, :natural-language,
+plus :total."
   (if (or (not (stringp findings)) (string-empty-p findings))
       '((:total . 0))
     (let ((cats '((:programming . 0) (:tool-calls . 0)
@@ -567,7 +570,7 @@ falling back to output quality heuristics for traces without outcomes."
         (pi-cats (make-hash-table :test 'eq))          ; π Synthesis: category coverage
         (epsilon-patterns 0)                            ; ε Purpose: total actionable patterns
         (all-trace-count 0)
-        (converged-p t))                                ; τ Wisdom: convergence tracked externally
+        (_converged-p t))                                ; τ Wisdom: convergence tracked externally
     (dolist (trace traces)
       (let ((source (gptel-auto-workflow--trace-source trace))
             (output-length (or (plist-get trace :output-length) 0))
@@ -1415,9 +1418,12 @@ Faster than `benchmark-all-research-strategies` which calls LLMs."
 
 (defun gptel-auto-workflow--update-trace-outcomes (experiment)
   "Update trace files with experiment outcome.
-EXPERIMENT is a plist with :research-hash and :kept fields.
-Called from experiment logging to link research → experiment results.
-ε Purpose: records pattern actionability — did research produce concrete, named patterns?"
+EXPERIMENT is a plist with :research-hash and :kept
+fields.
+Called from experiment logging to link research to
+experiment results.
+Purpose: records pattern actionability — did research
+produce concrete, named patterns?"
   (let* ((research-hash (plist-get experiment :research-hash))
          (kept (gptel-auto-workflow--experiment-kept-p experiment))
          (target (plist-get experiment :target))
@@ -1455,15 +1461,15 @@ Called from experiment logging to link research → experiment results.
                         (setq trace (plist-put trace :outcomes
                                                (append outcomes
                                                        (list new-outcome))))
+                        (message "[autotts] Linked trace %s -> %s (%s patterns=%d cat:%s)"
+                                 research-hash target (if kept "kept" "discarded")
+                                 (cdr (assq :total pattern-counts))
+                                 (mapconcat (lambda (c) (format "%s:%d" (car c) (cdr c)))
+                                            (cl-remove-if (lambda (p) (eq (car p) :total)) pattern-counts)
+                                            " "))
                         (erase-buffer)
                         (insert (json-encode trace))
                         (write-region (point-min) (point-max) file))
-                       (message "[autotts] Linked trace %s → %s (%s patterns=%d cat:%s)"
-                                research-hash target (if kept "kept" "discarded")
-                                (cdr (assq :total pattern-counts))
-                                (mapconcat (lambda (c) (format "%s:%d" (car c) (cdr c)))
-                                           (cl-remove-if (lambda (p) (eq (car p) :total)) pattern-counts)
-                                           " "))
                        (setq updated t)
                        ;; Schedule trace synthesis + maybe controller evolution
                        (run-with-idle-timer 10 nil
@@ -1600,10 +1606,10 @@ Returns plist with :metric :value :delta :status, or nil."
   "Check RESULT-PLIST against running best. Implements keep/revert.
 AutoGo autoresearch pattern: if improved → commit. If regressed → revert.
 TARGET-FILE is the file that was changed. DESCRIPTION is for the commit message.
-Returns 'keep, 'discard, or 'first."
+Returns `keep', `discard', or `first'."
   (let* ((metric (plist-get result-plist :metric))
          (value (plist-get result-plist :value))
-         (status (plist-get result-plist :status))
+         (_status (plist-get result-plist :status))
          (delta (plist-get result-plist :delta))
          (direction (if (string-match-p "keep.rate\\|acc\\|win" (or metric "")) 'higher 'lower)))
     (cond

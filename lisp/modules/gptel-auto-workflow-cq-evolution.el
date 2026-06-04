@@ -1,8 +1,10 @@
-;;; gptel-auto-workflow-cq-evolution.el --- CQ-to-skill evolution wiring -*- lexical-binding: t -*-
+;;; gptel-auto-workflow-cq-evolution.el --- CQ-to-skill evolution wiring -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2024-2026  Self-Evolving Emacs Project
 
 ;; Author: Self-Evolving System
+
+(declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
 ;; Keywords: ontology, competency-questions, skill-evolution
 
 ;;; Commentary:

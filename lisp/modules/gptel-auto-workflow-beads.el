@@ -44,7 +44,8 @@ Returns plist with :id :source :technique etc."
 
 (defun gptel-auto-workflow--bead-create (direction &rest properties)
   "Create a bead for DIRECTION with PROPERTIES plist.
-Example: (bead-create 'gtm-to-pmf :source 'github :technique 'hashline)"
+Example: \(bead-create \='gtm-to-pmf :source \='github
+:technique \='hashline\)"
   (let* ((timestamp (format-time-string "%Y%m%d-%H%M%S"))
          (id (format "%s-%s-%d"
                      (symbol-name direction)

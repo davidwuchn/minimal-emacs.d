@@ -94,10 +94,11 @@ Skips when a workflow or cron job is active to avoid preempting experiments."
     ;; Enable auto-approve in headless so synthesis actually writes files.
     (condition-case nil
         (when (fboundp 'gptel-mementum-build-index)
-          (let ((gptel-mementum-headless-auto-approve t))
-            (gptel-mementum-build-index)
-            (when (fboundp 'gptel-mementum-synthesize-all-candidates)
-              (gptel-mementum-synthesize-all-candidates nil t))))
+          (with-no-warnings
+            (let ((gptel-mementum-headless-auto-approve t))
+              (gptel-mementum-build-index)
+              (when (fboundp 'gptel-mementum-synthesize-all-candidates)
+                (gptel-mementum-synthesize-all-candidates nil t)))))
       (error
        (message "[mementum] Maintenance error in evolution cycle")))))
 
@@ -126,6 +127,9 @@ Skips when a workflow or cron job is active to avoid preempting experiments."
   "Accumulator for research batch tracking.
 List of experiment results sharing the same research context.
 Reset when research context changes.")
+
+(defvar gptel-auto-workflow--stats)
+(defvar gptel-auto-workflow-human-decision-gate)
 
 (defun gptel-auto-workflow--experiment-complete-hook (experiment)
   "Hook called when EXPERIMENT completes.
@@ -208,7 +212,7 @@ Called when research context changes or run completes."
    ;; File beads from research findings (GTM → PMF)
    (when (fboundp 'gptel-auto-workflow--bead-file-from-research)
      (condition-case err
-         (let* ((first-result (car gptel-auto-workflow--research-batch-results))
+          (let* ((_first-result (car gptel-auto-workflow--research-batch-results))
                 (findings (or (and (boundp 'gptel-auto-workflow--current-research-context)
                                    (plist-get gptel-auto-workflow--current-research-context :findings))
                               "")))
@@ -300,7 +304,7 @@ Called when research context changes or run completes."
                             (gptel-auto-workflow--read-review-decisions)))
                (approved 0) (dropped 0) (pending conflicted))
           (when decisions
-            (maphash (lambda (target dec)
+            (maphash (lambda (_target dec)
                        (pcase (plist-get dec :decision)
                          ('approved (cl-incf approved) (cl-decf pending))
                          ('dropped (cl-incf dropped) (cl-decf pending))))
@@ -527,7 +531,7 @@ Called after each experiment batch completes."
                         (gptel-auto-workflow--worktree-base-root))
                    default-directory))
          (dash-file (expand-file-name "var/tmp/pmf-dashboard.md" root))
-         (results-file (expand-file-name
+         (_results-file (expand-file-name
                         (or (plist-get gptel-auto-workflow--stats :results)
                             (format "var/tmp/experiments/%s/results.tsv"
                                     (format-time-string "%Y-%m-%d")))
@@ -614,9 +618,10 @@ Called after research cycle completes."
 
 (defun gptel-auto-workflow--innovation-queue-add (source technique expected-impact)
   "Add an innovation idea to the queue.
-SOURCE: where the idea came from (e.g., 'GitHub trends', 'arXiv paper')
-TECHNIQUE: what to try (e.g., 'Hashline editing')
-EXPECTED-IMPACT: predicted outcome (e.g., '+15% keep-rate')
+SOURCE: where the idea came from \(e.g., `GitHub trends',
+`arXiv paper'\)
+TECHNIQUE: what to try \(e.g., `Hashline editing'\)
+EXPECTED-IMPACT: predicted outcome \(e.g., `+15% keep-rate'\)
 Returns the new item ID."
   (let* ((queue-file (gptel-auto-workflow--innovation-queue-file))
          (id (format "innov-%s-%d"
@@ -750,9 +755,11 @@ Returns list of queued idea IDs."
                         default-directory)))
 
 (defun gptel-auto-workflow--read-gtm-strategy (&optional section)
-  "Read GTM strategy roadmap. If SECTION is provided, return that section's content.
-Sections: current-focus, research-strategy, backend-prefs, target-rules,
-experiment-strategy, market-insights, pmf-checklist, next-review."
+  "Read GTM strategy roadmap.  If SECTION is provided,
+return that section's content.
+Sections: current-focus, research-strategy, backend-prefs,
+target-rules, experiment-strategy, market-insights,
+pmf-checklist, next-review."
   (let ((file (gptel-auto-workflow--gtm-strategy-file)))
     (when (file-exists-p file)
       (with-temp-buffer
@@ -876,7 +883,7 @@ Returns plist with :findings-today :strategy-accuracy :pmf-signal."
                                           (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
                                                    (gptel-auto-workflow--worktree-base-root))
                                               default-directory)))
-         (findings-size (if (file-exists-p findings-file)
+         (_findings-size (if (file-exists-p findings-file)
                             (nth 7 (file-attributes findings-file))
                           0))
          ;; Count beads filed today as proxy for findings velocity

@@ -6082,74 +6082,81 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*4 check issues (severity 0.30). EXTRACTED from distill→check pipeline.*
 
 ```allium
-<think>
-The user wants me to distill a research strategy output. Let me analyze what's being presented:
+# Distillation: Research Strategy Output
 
-1. **Research strategy**: template-default
-2. **Experiments**: 180 across many target files
-3. **Kept hypotheses**: 2 items (one is empty "No hypothesis stated", one is about improving `gptel-auto-workflow-list-project-buffers`)
-4. **Discarded hypotheses**: 8 items - various refactoring/improvement suggestions for different functions
+## Signal-to-Noise Assessment
 
-The task seems to be to "distill" this — meaning to summarize, extract the essence, or provide a concise takeaway from this research output.
+**Verdict: Poor yield.** 180 experiments across 22 targets produced only 2 "kept" hypotheses (one empty, one vague) while discarding 7 substantive, actionable findings. The template-default strategy is misclassifying valuable output.
 
-Let me look at the content more carefully:
+## The Real Findings (Recovered from "Discarded")
 
-- The kept hypotheses are minimal (2 items, one is empty)
-- The discarded hypotheses contain the actual substance — all the concrete improvement ideas
-- This seems ironic/inverted — all the meaningful hypotheses were discarded, and only trivial/empty ones were kept
+These were thrown out but are the actual gems in the noise:
 
-The actual research value seems to be in:
-- 180 experiments run
-- Various refactoring ideas explored and discarded
-- Only one kept: improving `gptel-auto-workflow-list-project-buffers`
-- All other substantive hypotheses (about cl-labels, hash-table guards, traversal extraction, parse extraction, puthash redundancy, copy-tree bug fix, listp guard) were discarded
+| # | File | Type | Action |
+|---|------|------|--------|
+| 1 | `gptel-auto-workflow--top-research-priority` | **Bug** | `copy-sequence` → `copy-tree` (cons-cell mutation during sort) |
+| 2 | `gptel-auto-workflow--correlate-research-to-outcomes` | **Perf** | Skip redundant `puthash` when cons cell already present |
+| 3 | `gptel-auto-workflow--parse-one-autotts-trace` | **Refactor** | Extract single-trace parser from monolithic loop (nesting 3→2) |
+| 4 | `gptel-auto-workflow--ontology-research-gaps` | **Defensive** | Add `(listp class)` guard against malformed ontology returns |
+| 5 | `my/gptel--fsm-registry-validate` | **Idiom** | `cl-letf`+`symbol-function` → `cl-labels` |
+| 6 | `my/gptel--fsm-for-each` | **DRY** | Extract shared traversal setup between collect-list and count |
+| 7 | `my/gptel--fsm-collect-list` | **Dead code** | Remove unreachable `hash-table-p` guard |
 
-The "No hypothesis stated" entry in kept hypotheses is concerning — it suggests an empty/no-op experiment was kept.
+## One Genuine "Kept"
 
-Let me provide a clear distillation:
+`gptel-auto-workflow-list-project-buffers` — flagged for improvement, but **the hypothesis body is empty**, so there's nothing actionable.
 
-1. The research ran 180 experiments across many module files
-2. Only 1 substantive hypothesis was kept (about `gptel-auto-workflow-list-project-buffers`)
-3. 7 substantive hypotheses were discarded across various files
-4. The discarded hypotheses cover:
-   - FSM registry validation (cl-labels pattern)
-   - FSM collect-list (hash-table guard removal)
-   - FSM traversal helper extraction
-   - Autotts trace parsing extraction
-   - Research-to-outcomes correlation (redundant puthash)
-   - Top-research-priority data corruption (copy-tree fix)
-   - Ontology research gaps (listp guard)
-5. One discard reason mentions semantic concern about removal
+## Patterns Worth Noting
 
-The key insight is that most of the proposed improvements were deemed not worth pursuing, suggesting the codebase is already in reasonable shape or the changes weren't deemed significant enough. The lone kept hypothesis is about a specific function improvement.
+- **Concentrated value in `gptel-auto-workflow-*` modules** — 5 of 7 real findings are in the auto-workflow subsystem
+- **Bugs > refactors** in priority — the `copy-tree` fix and `puthash` skip are the highest-value items
+- **Recursive FSM code (`my/gptel--fsm-*`)** has multiple independent cleanup opportunities
 
-Let me write a concise distillation.
-</think>
+## Recommendations
+
+1. **Promote the bug fixes** (#1, #2) to immediate action — these have real correctness impact
+2. **Re-run with a less aggressive discard threshold** — the strategy is throwing away its own best work
+3. **File the empty kept hypothesis as a research gap** — `gptel-auto-workflow-list-project-buffers` needs a re-examination
+4. **Consider whether "discarded" means "wrong" or "not prioritized"** — the framing here suggests the latter, which is a labeling problem, not a finding-quality problem
 ```
 
 ### Check Issues
 
-What would you like me to check, and against what? You've pasted what looks like the *thinking block* of a distillation, not the distillation itself, and not the source material (the 180 experiments, the kept/discarded hypotheses, the code being analyzed).
+# Review: Distillation Output
 
-Here's what I can and can't assess:
+**Overall: Strong diagnostic instinct, weak epistemic footing.**
 
-**What I can evaluate** — the structure of the thinking block:
-- It correctly identifies the inversion (most substantive hypotheses discarded, only trivial/empty ones kept)
-- The categorization of discarded hypotheses by target module (FSM, autotts, research-to-outcomes, top-research-priority, ontology) is useful
-- 7 discarded + 1 kept (substantive) + 1 empty "kept" is a plausible summary
+The output correctly identifies a real problem (high discard rate + low kept rate) and recovers specific findings with file names and concrete actions. But it makes several moves that undermine its own credibility.
 
-**What I cannot verify**:
-- Whether the distillation's *content* matches the actual hypotheses — I have no source to compare against
-- Whether the technical claims about `gptel-auto-workflow-list-project-buffers` or the discarded changes (cl-labels refactor, hash-table guard removal, copy-tree bug) are accurate
-- Whether the discard reasons (e.g., "semantic concern about removal") were correctly attributed
+## What's Good
 
-**Suspicious signals worth flagging**:
-- `gptel-auto-workflow-list-project-buffers` and the named modules (autotts, top-research-priority, ontology, research-to-outcomes) don't correspond to any well-known Emacs packages I can verify. If this is a real codebase, it's likely a private/AI-generated one.
-- An empty "No hypothesis stated" entry in the *kept* list is a real anomaly — it suggests either a
+- **The table is concrete.** File names, types, and actions are specific enough to act on. No hand-waving.
+- **The "empty kept hypothesis" catch is sharp.** Flagging a kept item as having an empty body and therefore being non-actionable is exactly the right kind of internal audit.
+- **Recommendation #4 is the strongest point.** The meta-question about what "discarded" actually means is the most valuable observation in the piece — it identifies a labeling problem, not just a content problem.
+- **Bug-before-refactor priority** is the correct ordering for a triage list.
+
+## What's Weak
+
+### 1. The circularity problem
+The output claims these 7 items are "the actual gems" — but it doesn't examine *why* they were discarded. Possible reasons that would invalidate the recovery:
+- They might be duplicates of known issues
+- The file context might make them inapplicable (e.g., the function is deprecated, the module is being replaced)
+- They might have been low-confidence hypotheses with thin evidence
+- The "kept" threshold might encode criteria (impact, scope, recency) that these don't meet
+
+By presenting discarded items as automatically valuable, the distillation commit
 
 ... (truncated)

@@ -17,8 +17,10 @@
 
 (defun gptel-auto-workflow--parse-research-autotts-traces (output)
   "Parse ===RESULT=== JSON blocks from research OUTPUT.
-Returns list of trace plists with :phase, :confidence, :tokens, :decision.
-AutoTTS: research sessions emit structured trace blocks for token-optimal stopping."
+Returns list of trace plists with :phase, :confidence,
+:tokens, :decision.
+AutoTTS: research sessions emit structured trace blocks
+for token-optimal stopping."
   ;; ASSUMPTION: output is a string; nil/empty means no traces to parse
   ;; EDGE CASE: nil or empty string returns empty list immediately
   (if (string-empty-p (or output ""))
@@ -77,8 +79,10 @@ Returns :programming, :agentic, :tool-calls, or :natural-language."
     :natural-language))
 
 (defun gptel-auto-workflow--update-research-strategy-champion (topic strategy keep-rate)
-  "AutoGo: crown research STRATEGY as champion for TOPIC category if it beats baseline.
-KEEP-RATE is fraction of experiments kept that used this research strategy."
+  "Crown research STRATEGY as champion for TOPIC
+category if it beats baseline.
+KEEP-RATE is fraction of experiments kept that used
+this research strategy."
   (let* ((cat (gptel-auto-workflow--research-category-for-topic topic))
          (baseline 0.15)
          (current (cdr (assq cat gptel-auto-workflow--research-strategy-champions)))
@@ -95,8 +99,10 @@ KEEP-RATE is fraction of experiments kept that used this research strategy."
 
 (defun gptel-auto-workflow--ontology-research-gaps ()
   "Analyze experiment ontology for research gaps.
-Returns plist with :gaps (list of gap descriptions) and :priorities (alist topic→priority).
-Ontology classes with <3 instances or missing properties become research priorities."
+Returns plist with :gaps \(list of gap descriptions\) and
+:priorities \(alist topic->priority\).
+Ontology classes with <3 instances or missing properties
+become research priorities."
   (let ((gaps nil)
         (priorities nil))
     (when (fboundp 'gptel-auto-workflow--generate-experiment-ontology)
@@ -132,10 +138,14 @@ Uses ontology gap analysis to drive what the researcher should explore next."
 ;; ─── Self-Evolve: Correlate Research Hashes to Experiment Outcomes ───
 
 (defun gptel-auto-workflow--correlate-research-to-outcomes ()
-  "Wire self-evolve: compute per-research-source keep-rate from TSV.
-Returns alist of (source-name . keep-rate) sorted by performance.
-ε Purpose: research scored on downstream experiment success, not volume.
-∀ Vigilance: pipeline-defect hashes indicate missing research traces — treat as defect signal."
+  "Wire self-evolve: compute per-research-source
+keep-rate from TSV.
+Returns alist of \(source-name . keep-rate\) sorted
+by performance.
+Purpose: research scored on downstream experiment
+success, not volume.
+Vigilance: pipeline-defect hashes indicate missing
+research traces — treat as defect signal."
   (when (fboundp 'gptel-auto-workflow--parse-all-results)
     (let ((by-source (make-hash-table :test 'equal))
           (stats nil)
@@ -169,7 +179,8 @@ Returns alist of (source-name . keep-rate) sorted by performance.
 
 (defun gptel-auto-workflow--research-source-effectiveness-report ()
   "Generate markdown report of research source effectiveness.
-Feeds into researcher skill evolution — tells researcher which sources produce kept experiments."
+Feeds into researcher skill evolution — tells researcher
+which sources produce kept experiments."
   (let ((stats (gptel-auto-workflow--correlate-research-to-outcomes))
         (lines (list "## Research Source Effectiveness\n")))
     (if stats
