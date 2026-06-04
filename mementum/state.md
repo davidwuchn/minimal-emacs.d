@@ -83,6 +83,11 @@
   1. Added protected file filter after category health check in `select-targets`
   2. Added protected files list to analyzer prompt as explicit exclusion rule
 
+### Fix 8: TDD test failure — backend-object with struct input (committed e8f126e1)
+- **Problem:** `grader/uses-subagent-when-available` test failed in full suite with `wrong-type-argument stringp` — a `gptel-backend` struct was passed where a string was expected
+- **Root cause:** Mock tests create backend structs; `gptel-auto-workflow--backend-object` only handled strings/symbols/keywords
+- **Fix:** Added cond clause to return backend object as-is when input is already a struct
+
 ---
 
 > Previous session: 2026-06-03 (Dual Mayor Phases 5-7 complete)
