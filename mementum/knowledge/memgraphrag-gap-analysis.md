@@ -41,14 +41,14 @@ MemGraphRAG solves the **recall-relevance tradeoff** in GraphRAG. Isolated local
 
 ## Actionable Improvements
 
-| Priority | Improvement | Path |
-|----------|------------|------|
-| P0 | Schema extraction at memory commit | LLM triple extraction in pre-commit; store in `mementum/.ov5-memory-index.json` |
-| P0 | Frequency-based schema stability | τ threshold for ontology-router: ≥3 observations before routing uses new patterns |
-| P1 | Conflict detection daemon | Weekly vector similarity scan + LLM classification; report to `mementum/knowledge/conflicts.md` |
-| P1 | Bidirectional memory-code links | `@memory:` annotations in commits; reverse index code→memories |
-| P1 | Temporal versioning for memories | `valid-from`/`valid-until` frontmatter; supersede mechanism |
-| P2 | Personalized PageRank for recall | Build entity graph from triples; PPR retrieval as alternative to git-grep |
-| P2 | Entity-level synonymy edges | Embed entities; similarity >0.85 → synonymy edge |
-| P3 | Multi-agent shared memory per experiment | `ov5-experiment-memory` struct; inject into subagent prompts |
-| P3 | Hub suppression for memory ranking | Penalize generic memories (1/log(deg+1)); boost rare (IDF) |
+| Priority | Improvement | Status | Implementation |
+|----------|------------|--------|----------------|
+| P0 | Schema extraction at memory commit | **Done** | Heuristic triple extraction in `gptel-auto-workflow-memory-schema.el`; JSON index |
+| P0 | Frequency-based schema stability | **Done** | τ=3 threshold in `stable-p`; ontology-router fallback |
+| P1 | Conflict detection | **Done** | Entity overlap scan in `detect-conflicts` |
+| P1 | Bidirectional memory-code links | **Done** | `@memory:` scan + `files-for-memory`/`memories-for-file` |
+| P1 | Temporal versioning for memories | **Done** | `valid-from`/`valid-until` frontmatter; auto-supersede on write |
+| P2 | Graph retrieval for recall | **Done** | PPR-lite neighbor walk in `entity-neighbors`/`retrieve` |
+| P2 | Entity-level synonymy edges | Skipped | Requires embedding backend; not available in batch Emacs |
+| P3 | Multi-agent shared memory per experiment | **Done** | `experiment-context` builds scoped memory for subagent prompts |
+| P3 | Hub suppression for memory ranking | **Done** | IDF weighting `1/log(deg+1)` in `entity-idf`/`rank-entities` |
