@@ -12,9 +12,9 @@
      :models (MiniMax-M3)
      :default-model MiniMax-M3
      :model-metadata
-     ((MiniMax-M3
+      ((MiniMax-M3
        :context-window 196608
-       :pricing-input 0.60 :pricing-output 2.40 :pricing-cache-hit 0.12
+       :pricing-input 0.30 :pricing-output 1.20 :pricing-cache-hit 0.06
        :capabilities (code-generation tool-calls)
        :speed fast)))
 
@@ -62,6 +62,23 @@
        :capabilities (code-generation)
        :speed fast)))
 
+    (Z-AI
+     :host "open.bigmodel.cn"
+     :models (glm-5.1 glm-5 glm-4.7)
+     :default-model glm-5.1
+     :model-metadata
+     ((glm-5.1
+       :context-window 200000
+       :pricing-input 0.50 :pricing-output 1.50
+       :capabilities (code-generation tool-calls reasoning)
+       :speed medium
+       :max-output 128000)
+      (glm-5
+       :context-window 131072
+       :pricing-input 0.50 :pricing-output 1.50
+       :capabilities (code-generation)
+       :speed medium)))
+
     (Copilot
      :host "api.github.com"
      :models (gpt-5.4-mini gpt-5.4)
@@ -86,22 +103,26 @@ When adding/updating models, ONLY edit this structure.")
                    (DashScope . qwen3.6-plus)
                    (moonshot . kimi-k2.6)
                    (DeepSeek . deepseek-v4-flash)))
-    (grader     . ((MiniMax . MiniMax-M3)
+    (grader     . ((Z-AI . glm-5.1)
+                   (MiniMax . MiniMax-M3)
                    (DashScope . qwen3.6-plus)
                    (DeepSeek . deepseek-v4-pro)
                    (moonshot . kimi-k2.6)))
-    (executor   . ((DeepSeek . deepseek-v4-flash)
+    (executor   . ((Z-AI . glm-5.1)
+                    (DeepSeek . deepseek-v4-flash)
                     (DashScope . qwen3.6-plus)
                     (moonshot . kimi-k2.6)))
     (researcher . ((MiniMax . MiniMax-M3)
                    (DashScope . qwen3.6-plus)
                    (DeepSeek . deepseek-v4-pro)
                    (moonshot . kimi-k2.6)))
-    (reviewer   . ((MiniMax . MiniMax-M3)
+    (reviewer   . ((Z-AI . glm-5.1)
+                   (MiniMax . MiniMax-M3)
                    (DashScope . qwen3.6-plus)
                    (DeepSeek . deepseek-v4-pro)
                    (moonshot . kimi-k2.6)))
-    (comparator . ((MiniMax . MiniMax-M3)
+    (comparator . ((Z-AI . glm-5.1)
+                   (MiniMax . MiniMax-M3)
                    (DashScope . qwen3.6-plus)
                    (DeepSeek . deepseek-v4-pro)
                    (moonshot . kimi-k2.6))))
@@ -111,10 +132,10 @@ Derived from `gptel-backend-registry` — update the registry, then regenerate t
 ;;; Fallback Chains
 
 (defconst gptel-fallback-chains
-  '((executor . (DeepSeek moonshot DashScope Copilot))
-    (analyzer . (Copilot MiniMax moonshot DeepSeek DashScope))
-    (grader   . (Copilot MiniMax moonshot DeepSeek DashScope))
-    (default  . (Copilot MiniMax moonshot DeepSeek DashScope)))
+  '((executor . (Z-AI DeepSeek moonshot DashScope Copilot))
+    (analyzer . (Copilot Z-AI MiniMax moonshot DeepSeek DashScope))
+    (grader   . (Copilot Z-AI MiniMax moonshot DeepSeek DashScope))
+    (default  . (Copilot Z-AI MiniMax moonshot DeepSeek DashScope)))
   "Fallback chain ordering per task type.
 Backends are tried in this order when rate-limited or failing.
 DeepSeek first for executor (proven to make edits), Copilot first for others.")
