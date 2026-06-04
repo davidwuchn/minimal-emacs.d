@@ -444,7 +444,7 @@ Every cycle runs through seven compilers — each examining the system's own beh
 | **OWL/SHACL** | Ontology dict → Turtle/SHACL | "What is the formal shape of what we've learned?" |
 | **Skill Graph** | Skill frontmatter → compiled molecules → executor workflows | "Which capabilities compose into effective workflows?" |
 | **Ontology Router** | Target file → category → backend ranking | "Which backend is best RIGHT NOW — not just historically?" |
-| **Self-Healing Auditor** | Pipeline metrics → diagnosis → auto-remediation → backend escalation | "Is the evaluator broken, and can I fix it without asking a human?" |
+| **Self-Healing Auditor** | Pipeline metrics → diagnosis → auto-remediation → backend escalation; byte-compiler warnings → paren gate → mechanical fixers → rollback verification | "Is the evaluator broken, and can I fix it without asking a human? Does the code compile clean?" |
 | | Scoring: VSM-auto-tuned weights (40/30/20/10 → adaptive) + recency decay (14d half-life) + per-axis KIBC boost from holographic consensus | Penalty for unhealthy backends (probation with auto-recovery after 1h) |
 | | **Smart subagent routing**: all 6 subagent types (researcher, analyzer, executor, grader, reviewer, explorer) | Backends ranked by health-weight × keep-rate + per-axis boost + cold-start boost (+0.15 for <3 experiments); quarantined excluded; per-run cooldown hard-excludes failed backends |
 | | **Full audit trail**: every routing decision recorded with component scores (health, keep-rate, pref-boost, axis-boost) + VSM adjustment history | Summary queryable via `audit-trail-summary` for meta-analysis |
@@ -614,6 +614,8 @@ The snake's own immune system:
 
 The system detects when its own evaluators are broken and heals itself — no human required:
 
+**Runtime self-heal** (pipeline health):
+
 | Phase | What it does | Trigger |
 |-------|-------------|---------|
 | **1. Pipeline Health Monitor** | Tracks keep-rate, grader success rate, timeout rate, backend availability per run | Every experiment completion |
@@ -622,6 +624,18 @@ The system detects when its own evaluators are broken and heals itself — no hu
 | **4. Diagnostic Probes** | Runs trivial experiment before real ones; skips if grader returns score=0 on safe change | Before every experiment batch |
 | **5. Grader Health Dashboard** | Per-backend latency/failure-rate tracking with `critical`/`degraded`/`healthy` labels | Real-time during experiments |
 | **6. LLM-Backend Escalation** | When auto-remediation fails 3x, switches to alternative backend (Copilot → moonshot → DeepSeek) | 3 consecutive failed remediations |
+
+**Compilation-time self-heal** (byte-compiler, Phase 10):
+
+| Phase | What it does | Enforcement |
+|-------|-------------|-------------|
+| **0. Paren-balance gate** | `check-parens` before any fixer runs; broken parens make all other fixers unreliable | Blocks Phase 1+ if depth≠0 |
+| **1. Mechanical fixers** | Docstring width, unescaped quotes, unused vars, free vars, unknown functions, condition-case handlers, arg mismatch, let→let* | Each fixer wrapped with rollback verification |
+| **2. Rollback verification** | Each fixer saves buffer content before running; if parens break after fix, reverts automatically | Prevents silent paren corruption |
+| **3. Dog-food principle** | Self-heal must fix its own warnings first (`gptel-auto-workflow-evolution.el`) before touching other files | Self-reference ensures fixers are tested on themselves |
+| **4. Pre-commit enforcement** | `byte-compile-error-on-warn t` — zero warnings allowed; hook compiles all staged `.el` files | Commit rejected if any warning |
+
+117/117 elisp files compile with 0 warnings. 103/103 have balanced parens. The system heals its own code before touching yours.
 
 **Key principle:** Timeout means "couldn't evaluate", not "code is bad". The grader auto-passes timeouts with score=4/5=80% instead of failing with 0. This prevents the death spiral where a broken grader destroys all experiments, leaving no data to learn from.
 
@@ -635,6 +649,9 @@ The system detects when its own evaluators are broken and heals itself — no hu
                 | timeout(x) ≢ failure(x) | timeout ≡ unknown
                 | escalate(x) → LLM_backend > human | ¬ask_human
                 | backend(Copilot) → backend(moonshot) → backend(DeepSeek) → human
+                | paren(x) → gate(Phase 0) | ¬fix_before_check
+                | rollback(fixer) ≡ verify(parens_after) ∧ revert_on_break
+                | dogfood(self) ≡ fix_own_warnings_first
 ```
 
 ---
