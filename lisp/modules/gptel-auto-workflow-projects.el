@@ -733,7 +733,7 @@ Gets target buffer from gptel-fsm-info and creates overlay there.
 Guard: If WHERE is a marker from a killed buffer, fall back to
 point-marker in target buffer to avoid dead-marker errors."
   (let* ((fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
-         (info (and fsm (fboundp 'gptel-fsm-info) (gptel-fsm-info fsm)))
+         (info (and fsm (fboundp 'gptel-fsm-info) (ignore-errors (gptel-fsm-info fsm))))
          (valid-info (and (proper-list-p info) info))
          (target-buf (and valid-info (plist-get valid-info :buffer)))
          (safe-where (if (and (markerp where) (not (marker-buffer where)))
