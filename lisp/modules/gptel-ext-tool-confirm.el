@@ -293,7 +293,7 @@ START-MARKER and TRACKING-MARKER delimit the response region."
         (pcase-dolist (`(,tool-spec ,arg-values ,_) tool-calls)
           ;; Call tool-specific confirmation prompt
           (if-let* ((funcs (and (not programmaticp)
-                                (cdr (assoc (gptel-tool-name tool-spec)
+                                (cdr (assoc (ignore-errors (gptel-tool-name tool-spec))
                                             gptel--tool-preview-alist))))
                     ((functionp (car-safe funcs))))
               ;;preview-teardown func   preview-handle overlay/buffer
