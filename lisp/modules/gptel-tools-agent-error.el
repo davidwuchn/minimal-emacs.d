@@ -71,7 +71,7 @@ This is a convenience wrapper that sets case-fold-search around string-match-p."
 Usage-limit errors are excluded because they are retryable rate limits until
 the configured fallback chain is exhausted.")
 
-(defconst gptel-auto-experiment--shared-retryable-error-patterns
+(defvar gptel-auto-workflow--runtime-subagent-provider-overrides)(defconst gptel-auto-experiment--shared-retryable-error-patterns
   (list :general
         (regexp-opt '("timeout" "timed out" "temporary" "server_error" "WebClientRequestException" "curl failed with exit code 28" "curl failed with exit code 35" "curl failed with exit code 56" "operation timed out" "authorized_error" "token is unusable" "invalid_api_key" "invalid api key" "unauthorized" "http_code \"401\"" "Malformed JSON") t)
         :transient

@@ -1,5 +1,5 @@
 ; -*- lexical-binding: t; -*-
-(declare-function gptel-auto-experiment--promote-correctness-fix-decision "gptel-tools-agent-prompt-analyze")
+(require 'cl-lib)(declare-function gptel-auto-experiment--promote-correctness-fix-decision "gptel-tools-agent-prompt-analyze")
 (declare-function magit-git-success "magit-git")
 (declare-function gptel-auto-experiment--extract-axis "gptel-tools-agent-base")
 (declare-function gptel-auto-experiment--stale-run-p "gptel-tools-agent-base")
@@ -252,7 +252,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
          ;; callbacks run after this outer let frame exits.
          (experiment-timeout gptel-auto-experiment-time-budget)
           (run-id gptel-auto-workflow--run-id)
-          (workflow-root (gptel-auto-workflow--resolve-run-root))
+          (_workflow-root (gptel-auto-workflow--resolve-run-root))
           (raw-callback callback)
           (result-callback-called nil)
           (callback (lambda (result)

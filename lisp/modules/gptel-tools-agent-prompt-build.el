@@ -377,7 +377,7 @@ when a backend is explicitly marked :degraded or has failed a local check."
              (not (eq lambda-healthy :degraded))
            (not (eq verified :failed))))))
 
-(defun gptel-auto-experiment--lambda-compress-prompt (english-text &optional notes)
+(defun gptel-auto-experiment--lambda-compress-prompt (english-text &optional _notes)
   "Return ENGLISH-TEXT compressed to lambda notation.
 Strips filler words, converts numbered lists to quantification,
 replaces verbose section headers with terse labels.

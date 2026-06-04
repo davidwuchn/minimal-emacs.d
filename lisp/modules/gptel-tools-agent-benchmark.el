@@ -2,6 +2,7 @@
 ;; Part of gptel-tools-agent split
 
 (require 'cl-lib)
+(declare-function magit-git-success "magit-git")
 (declare-function gptel-auto-experiment--validate-code "gptel-tools-agent-validation")
 (declare-function gptel-backend-registry-default-model "gptel-ext-backend-registry" (backend))
 (declare-function project-root "project")

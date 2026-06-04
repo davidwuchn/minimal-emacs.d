@@ -10,7 +10,7 @@
 (declare-function gptel-auto-workflow--non-empty-string-p "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--optimize-branch-integrated-p "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--run-callback-live-p "gptel-tools-agent-base")
-(declare-function gptel-auto-experiment--check-scope "gptel-tools-agent-benchmark")
+(declare-function gptel-auto-workflow--run-behavioral-tests "gptel-auto-workflow-behavioral-tests" (changed-files))(declare-function gptel-auto-experiment--check-scope "gptel-tools-agent-benchmark")
 (declare-function gptel-auto-workflow--check-protected-configs "gptel-tools-agent-benchmark")
 (declare-function gptel-auto-workflow--project-root "gptel-tools-agent-benchmark")
 (declare-function gptel-auto-experiment--categorize-error "gptel-tools-agent-error")
