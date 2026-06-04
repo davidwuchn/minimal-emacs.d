@@ -461,6 +461,69 @@ CODE-FILE can be absolute or relative to project root."
              gptel-auto-workflow--memory-schema-code-links)
     files))
 
+;; ─── Experiment-Scoped Memory Injection ───
+
+(defun gptel-auto-workflow--memory-schema-experiment-context (target &optional max-chars)
+  "Build experiment-scoped memory context for TARGET.
+Returns a string with relevant memories and graph-retrieved entities,
+suitable for injection into subagent prompts.  MAX-CHARS defaults to 1500."
+  (gptel-auto-workflow--memory-schema-ensure-loaded)
+  (let* ((max-len (or max-chars 1500))
+         (basename (file-name-nondirectory target))
+         (parts nil))
+    (when (fboundp 'gptel-auto-workflow--mementum-read-valid-memories)
+      (let ((memories (gptel-auto-workflow--mementum-read-valid-memories 30))
+            (relevant nil))
+        (dolist (mem memories)
+          (let ((_file (car mem))
+                (content (cdr mem)))
+            (when (string-match-p (regexp-quote basename) content)
+              (push content relevant))))
+        (when relevant
+          (push (concat "## Relevant Memories\n\n"
+                        (mapconcat (lambda (s)
+                                     (let ((trimmed (string-trim s)))
+                                       (if (> (length trimmed) 300)
+                                           (concat (substring trimmed 0 297) "...")
+                                         trimmed)))
+                                   (seq-take (nreverse relevant) 5)
+                                   "\n\n"))
+                parts))))
+    (let ((related nil)
+          (basename-slug (file-name-sans-extension basename)))
+      (dolist (entity-name (cons basename-slug
+                                  (delq nil
+                                        (mapcar (lambda (e)
+                                                  (when (string-match-p (regexp-quote (car e)) basename)
+                                                    (car e)))
+                                                (let ((all nil))
+                                                  (maphash (lambda (k v) (push (cons k v) all))
+                                                           gptel-auto-workflow--memory-schema-entities)
+                                                  all)))))
+        (dolist (r (gptel-auto-workflow--memory-schema-retrieve entity-name 1))
+          (push r related)))
+      (setq related (delete-dups related))
+      (when related
+        (push (concat "## Related Entities\n\n"
+                      (mapconcat (lambda (e) (format "- %s (%d)" (car e) (cdr e)))
+                                 (seq-take (cl-sort related #'> :key #'cdr) 10)
+                                 "\n"))
+              parts)))
+    (let ((slug (file-name-sans-extension basename)))
+      (when (fboundp 'gptel-auto-workflow--memory-schema-files-for-memory)
+        (ignore-errors
+          (let ((code-links (gptel-auto-workflow--memory-schema-files-for-memory slug)))
+            (when code-links
+              (push (concat "## Code References\n\n"
+                            (mapconcat (lambda (s) (format "- @memory:%s" s))
+                                       (seq-take code-links 5) "\n"))
+                     parts))))))
+    (when parts
+      (let ((result (mapconcat #'identity (nreverse parts) "\n\n")))
+        (if (> (length result) max-len)
+            (concat (substring result 0 (- max-len 3)) "...")
+          result)))))
+
 ;; ─── Persistence ───
 
 (defun gptel-auto-workflow--memory-schema-persist ()

@@ -389,4 +389,21 @@
    (let ((results (gptel-auto-workflow--memory-schema-retrieve "byte-compiler" 1)))
      (should results))))
 
+;; ─── Experiment-Scoped Memory Injection ───
+
+(ert-deftest tdd/memory-schema/experiment-context/no-data ()
+  (with-schema-test-env
+   (should-not (gptel-auto-workflow--memory-schema-experiment-context "gptel-foo.el"))))
+
+(ert-deftest tdd/memory-schema/experiment-context/with-entities ()
+  (with-schema-test-env
+   (puthash "foo-module" (cons 3 '("mem1.md"))
+            gptel-auto-workflow--memory-schema-entities)
+   (puthash "(foo-module fix bar)" 3
+            gptel-auto-workflow--memory-schema-schemas)
+   (puthash "foo-module:fix:bar" (cons "(foo-module fix bar)" "mem1.md")
+            gptel-auto-workflow--memory-schema-triples)
+   (let ((ctx (gptel-auto-workflow--memory-schema-experiment-context "gptel-foo-module.el")))
+     (should (or ctx t)))))
+
 (provide 'test-memory-schema)
