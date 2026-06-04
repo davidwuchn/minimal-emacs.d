@@ -2339,8 +2339,10 @@ Call during or after research to build step-level timeline."
   "Extract inferred research steps from researcher OUTPUT.
 Parses output for evidence of tool calls (WebSearch queries, WebFetch URLs).
 Returns list of step plists.
-Since we can't instrument subagent internals, we reconstruct from output."
-  (let ((steps nil)
+Since we can't instrument subagent internals, we reconstruct from output.
+EDGE CASE: nil or non-string OUTPUT returns nil safely."
+  (when (stringp output)
+    (let ((steps nil)
         (step-idx 0))
     ;; Extract WebSearch queries (look for search patterns)
     (save-match-data
@@ -2412,7 +2414,7 @@ Since we can't instrument subagent internals, we reconstruct from output."
                         steps))
               (ignore))))))
     ;; If we found explicit steps, prefer those over parsed ones
-    (reverse steps)))
+    (reverse steps))))
 
 (defun gptel-auto-workflow--merge-steps-with-session (steps)
   "Merge parsed STEPS into the session step accumulator.
