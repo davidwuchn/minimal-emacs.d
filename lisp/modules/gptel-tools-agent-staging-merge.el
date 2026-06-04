@@ -214,12 +214,18 @@ Uses the staging worktree instead of switching branches in the root repo."
                                          (rx (repeat 40 (any "0-9a-f")))
                                          commit-hash-raw)
                                         (string-trim commit-hash-raw)))
-                      (cherry-result
-                       (when commit-hash
-                         (gptel-auto-workflow--git-result
-                          (format "git cherry-pick --no-commit %s"
-                                  (shell-quote-argument commit-hash))
-                          180)))
+                       (is-merge-commit
+                        (when commit-hash
+                          (= 0 (cdr (gptel-auto-workflow--git-result
+                                     (format "git rev-parse --verify %s^2" (shell-quote-argument commit-hash))
+                                     60)))))
+                       (cherry-result
+                        (when commit-hash
+                          (gptel-auto-workflow--git-result
+                           (format "git cherry-pick --no-commit %s %s"
+                                   (if is-merge-commit "-m 1" "")
+                                   (shell-quote-argument commit-hash))
+                           180)))
                       (cherry-output (or (car-safe cherry-result) "")))
                  (cond
                   ((null cherry-result)
