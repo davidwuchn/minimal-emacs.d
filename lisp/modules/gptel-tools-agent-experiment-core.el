@@ -104,7 +104,7 @@ List of atom symbol names, e.g. (elisp-discover elisp-expert elisp-validator).")
 Uses the cached target state to detect pre-existing breakage.
 This helps avoid wasted retry attempts on files that were already invalid."
   (when (and (stringp target) (not (string-empty-p target)))
-    (let ((state (gethash target gptel-auto-experiment--target-state-cache)))
+    (let ((state (ignore-errors (gethash target gptel-auto-experiment--target-state-cache))))
       (when state
         ;; If either byte-compiles or syntax-ok was already nil before experiment,
         ;; the file was pre-existing broken and retry won't help.
