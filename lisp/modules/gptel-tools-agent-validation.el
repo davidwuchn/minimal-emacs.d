@@ -502,7 +502,7 @@ This runs between syntax validation and the grader API call."
                       "git --no-pager diff --no-ext-diff --unified=10 HEAD -- . 2>/dev/null")))
       (cond
        ;; No diff at all — executor somehow produced no changes
-       ((string-empty-p (string-trim diff-text))
+       ((string-empty-p (string-trim (or diff-text "")))
         "Cheap check: experiment produced no file changes")
        ;; Check for LLM/markdown artifacts in the diff
        ((string-match-p
