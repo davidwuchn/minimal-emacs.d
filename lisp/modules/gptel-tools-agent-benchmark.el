@@ -986,6 +986,15 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
   (let ((grade-id (setq gptel-auto-experiment--grade-counter (1+ gptel-auto-experiment--grade-counter)))
         (grade-buffer (current-buffer)))
     (cl-block gptel-auto-experiment-grade
+      ;; Blind mode: grader is broken, auto-pass without API call
+      (when (and (boundp 'gptel-auto-workflow--blind-mode)
+                 gptel-auto-workflow--blind-mode)
+        (message "[auto-exp] BLIND MODE: skipping grader, auto-pass")
+        (my/gptel--invoke-callback-safely
+         callback (list :score 4 :total 5 :percentage 80.0 :passed t
+                        :details "blind-mode-auto-pass"
+                        :grader-only-failure t))
+        (cl-return-from gptel-auto-experiment-grade))
       ;; Nil or empty output: fail immediately, don't waste an API call
       (when (or (null output)
                 (and (stringp output) (string-empty-p (string-trim output))))

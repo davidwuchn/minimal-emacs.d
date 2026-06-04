@@ -7,9 +7,6 @@ Current backend: moonshot
 
 Format: timestamp | diagnosis | remedy | before | after | effective?
 
-- 1780515618 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780515583 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780515583 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780514103 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780514077 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780514077 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
+- 1780509313 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
+- 1780508369 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
+- 1780508369 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING

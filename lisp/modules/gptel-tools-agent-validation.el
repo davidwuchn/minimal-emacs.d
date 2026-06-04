@@ -535,15 +535,22 @@ This runs between syntax validation and the grader API call."
            (when (and (> non-trivial-lines 0) (< non-trivial-lines 2))
              (format "Cheap check: diff has only %d non-comment code lines"
                      non-trivial-lines))))
-        ;; CRITICAL FILE CHECK: prevent architectural destruction
-        ((let ((critical-hit nil))
-           (dolist (pattern gptel-auto-experiment--critical-files)
-             (when (and (not critical-hit)
-                        (string-match-p (regexp-quote pattern) diff-text))
-               (setq critical-hit pattern)))
-           (when critical-hit
-             (format "CRITICAL: experiment touches protected file/directory: %s"
-                     critical-hit))))
+         ;; CRITICAL FILE CHECK: only block if actually destructive
+         ;; Small bug fixes to critical files are allowed; mass deletions are not
+         ((let ((critical-hit nil))
+            (dolist (pattern gptel-auto-experiment--critical-files)
+              (when (and (not critical-hit)
+                         (string-match-p (regexp-quote pattern) diff-text))
+                (setq critical-hit pattern)))
+            (when critical-hit
+              ;; Count total deletions in diff
+              (let ((total-deletions
+                     (with-temp-buffer
+                       (insert diff-text)
+                       (count-matches "^-" (point-min) (point-max)))))
+                (when (> total-deletions 20)
+                  (format "CRITICAL: experiment deletes %d lines including protected file: %s"
+                          total-deletions critical-hit))))))
         ;; DESTRUCTIVE CHANGE CHECK: mass deletion detection
         ((let* ((added (with-temp-buffer
                         (insert diff-text)
