@@ -1,0 +1,1 @@
+In `gptel-auto-experiment--extract-focus-symbols`, added `ignore-errors` guard around the regex-match while-loop body. This protects against unexpected errors from `match-string` or `string-match-p` on malformed input, allowing the function to gracefully return whatever symbols were collected before the error rather than aborting entirely.
