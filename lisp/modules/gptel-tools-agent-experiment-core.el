@@ -1703,7 +1703,7 @@ Called when the grader passed but the benchmark/validation failed."
                               (1+ (plist-get gptel-auto-experiment--refine-convergence-stats :total))))
              (setq gptel-auto-experiment--refine-convergence-stats
                    (plist-put gptel-auto-experiment--refine-convergence-stats :failure
-                              (1+ (plist-get gptel-auto-experiment--refine-convergence-stats :failure))))
+                              (1+ (or (plist-get gptel-auto-experiment--refine-convergence-stats :failure) 0))))
              (message "[auto-experiment] ✗ Refine agent error")
              (let ((default-directory experiment-worktree))
                (magit-git-success "checkout" "--" "."))
@@ -1715,10 +1715,10 @@ Called when the grader passed but the benchmark/validation failed."
                 (progn
                   (setq gptel-auto-experiment--refine-convergence-stats
                         (plist-put gptel-auto-experiment--refine-convergence-stats :total
-                                   (1+ (plist-get gptel-auto-experiment--refine-convergence-stats :total))))
+                                   (1+ (or (plist-get gptel-auto-experiment--refine-convergence-stats :total) 0))))
                   (setq gptel-auto-experiment--refine-convergence-stats
                         (plist-put gptel-auto-experiment--refine-convergence-stats :failure
-                                   (1+ (plist-get gptel-auto-experiment--refine-convergence-stats :failure))))
+                                   (1+ (or (plist-get gptel-auto-experiment--refine-convergence-stats :failure) 0))))
                   (message "[auto-experiment] ✗ Refine grade failed")
                   (let ((default-directory experiment-worktree))
                     (magit-git-success "checkout" "--" "."))
@@ -1729,10 +1729,10 @@ Called when the grader passed but the benchmark/validation failed."
                     (progn
                       (setq gptel-auto-experiment--refine-convergence-stats
                             (plist-put gptel-auto-experiment--refine-convergence-stats :total
-                                       (1+ (plist-get gptel-auto-experiment--refine-convergence-stats :total))))
+                                       (1+ (or (plist-get gptel-auto-experiment--refine-convergence-stats :total) 0))))
                       (setq gptel-auto-experiment--refine-convergence-stats
                             (plist-put gptel-auto-experiment--refine-convergence-stats :failure
-                                       (1+ (plist-get gptel-auto-experiment--refine-convergence-stats :failure))))
+                                       (1+ (or (plist-get gptel-auto-experiment--refine-convergence-stats :failure) 0))))
                       (message "[auto-experiment] ✗ Refine benchmark still failed")
                       (let ((default-directory experiment-worktree))
                         (magit-git-success "checkout" "--" "."))
@@ -1761,10 +1761,10 @@ Called when the grader passed but the benchmark/validation failed."
                                 :strategy strategy-name)))
                     (setq gptel-auto-experiment--refine-convergence-stats
                           (plist-put gptel-auto-experiment--refine-convergence-stats :total
-                                     (1+ (plist-get gptel-auto-experiment--refine-convergence-stats :total))))
+                                     (1+ (or (plist-get gptel-auto-experiment--refine-convergence-stats :total) 0))))
                    (setq gptel-auto-experiment--refine-convergence-stats
                          (plist-put gptel-auto-experiment--refine-convergence-stats :success
-                                    (1+ (plist-get gptel-auto-experiment--refine-convergence-stats :success))))
+                                    (1+ (or (plist-get gptel-auto-experiment--refine-convergence-stats :success) 0))))
                     ;; Postcondition check: verify commit criteria from action schema
                     (when (and target (fboundp 'gptel-auto-workflow--schema-for-target))
                       (let* ((schema (gptel-auto-workflow--schema-for-target target))
