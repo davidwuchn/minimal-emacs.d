@@ -53,6 +53,7 @@
 
 (declare-function gptel-auto-workflow--evolution-get-knowledge "gptel-auto-workflow-evolution" ())
 (declare-function gptel-auto-workflow--filter-frontier-saturated-targets "gptel-tools-agent-prompt-build" (targets))
+(defvar gptel-auto-experiment--critical-files)
 (declare-function gptel-auto-experiment--quota-exhausted-p "gptel-tools-agent-error" (agent-output))
 (declare-function gptel-auto-experiment--is-retryable-error-p "gptel-tools-agent-error" (response))
 (declare-function gptel-auto-workflow--project-root "gptel-tools-agent-benchmark" ())
@@ -1395,21 +1396,33 @@ runtime errors when frontier-select-targets returns a malformed value."
         (let* ((ranked (seq-take frontier-ranked
                                  (* 2 gptel-auto-workflow-max-targets-per-run)))
                ;; Ontology scheduler: filter by category health
-               (healthy (seq-filter
-                         (lambda (pair)
-                           (let* ((target (car pair))
-                                  (cat (and (fboundp 'gptel-auto-workflow--categorize-target)
-                                            (gptel-auto-workflow--categorize-target target)))
-                                  (frozen (and cat (fboundp 'gptel-auto-workflow--category-frozen-p)
-                                               (gptel-auto-workflow--category-frozen-p cat))))
-                             (if frozen
-                                 (progn (message "[scheduler] ⏭ %s — category %s FROZEN" target cat) nil)
-                               t)))
-                         ranked))
-               (targets (mapcar #'car (seq-take healthy gptel-auto-workflow-max-targets-per-run))))
-          (message "[auto-workflow] Frontier: %d ranked → %d healthy (skipped %d frozen)"
-                   (length frontier-ranked) (length targets)
-                   (- (length ranked) (length healthy)))
+                (healthy (seq-filter
+                          (lambda (pair)
+                            (let* ((target (car pair))
+                                   (cat (and (fboundp 'gptel-auto-workflow--categorize-target)
+                                             (gptel-auto-workflow--categorize-target target)))
+                                   (frozen (and cat (fboundp 'gptel-auto-workflow--category-frozen-p)
+                                                (gptel-auto-workflow--category-frozen-p cat))))
+                              (if frozen
+                                  (progn (message "[scheduler] ⏭ %s — category %s FROZEN" target cat) nil)
+                                t)))
+                          ranked))
+                ;; Filter out protected files that require human approval
+                (unprotected (seq-filter
+                             (lambda (pair)
+                               (let ((target (car pair))
+                                     (protected nil))
+                                 (dolist (pattern gptel-auto-experiment--critical-files)
+                                   (when (string-match-p (regexp-quote pattern) target)
+                                     (setq protected t)
+                                     (message "[scheduler] ⏭ %s — PROTECTED file" target)))
+                                 (not protected)))
+                             healthy))
+                (targets (mapcar #'car (seq-take unprotected gptel-auto-workflow-max-targets-per-run))))
+           (message "[auto-workflow] Frontier: %d ranked → %d healthy → %d unprotected (skipped %d frozen, %d protected)"
+                    (length frontier-ranked) (length healthy) (length targets)
+                    (- (length ranked) (length healthy))
+                    (- (length healthy) (length unprotected)))
           (funcall callback targets))
       ;; Slow path: no frontier data — call AI analyzer with the full prompt.
       (if gptel-auto-workflow-research-targets
@@ -1512,7 +1525,8 @@ RULES:
 1. ONLY output the JSON below. NO explanation, NO commentary, NO markdown.
 2. Every target must exist in the INPUT files list.
 3. Prioritize files with TODO/FIXME comments and recent git activity.
-4. Max %d targets.
+4. DO NOT select protected files: %s
+5. Max %d targets.
 
 OUTPUT FORMAT — copy this exactly:
 {\"targets\": [{\"file\": \"lisp/modules/foo.el\", \"priority\": 1, \"reason\": \"has 3 TODO comments and recent changes\"}]}
@@ -1524,6 +1538,7 @@ OUTPUT FORMAT — copy this exactly:
   todo/fixme(30): %s
   research: %s
   history: %s"
+            (mapconcat #'identity gptel-auto-experiment--critical-files ", ")
             max-targets
             research-section
             (or hints-section "")

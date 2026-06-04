@@ -9,22 +9,12 @@
 (defconst gptel-backend-registry
   `((MiniMax
      :host "api.minimaxi.com"
-     :models (MiniMax-M3 minimax-m2.7-highspeed minimax-m2.7)
+     :models (MiniMax-M3)
      :default-model MiniMax-M3
      :model-metadata
      ((MiniMax-M3
        :context-window 196608
        :pricing-input 0.60 :pricing-output 2.40 :pricing-cache-hit 0.12
-       :capabilities (code-generation tool-calls)
-       :speed fast)
-      (minimax-m2.7-highspeed
-       :context-window 196608
-       :pricing-input 0.15 :pricing-output 0.60 :pricing-cache-hit 0.03
-       :capabilities (code-generation tool-calls)
-       :speed fastest)
-      (minimax-m2.7
-       :context-window 196608
-       :pricing-input 0.30 :pricing-output 1.20 :pricing-cache-hit 0.06
        :capabilities (code-generation tool-calls)
        :speed fast)))
 
@@ -100,10 +90,9 @@ When adding/updating models, ONLY edit this structure.")
                    (DashScope . qwen3.6-plus)
                    (DeepSeek . deepseek-v4-pro)
                    (moonshot . kimi-k2.6)))
-    (executor   . ((MiniMax . MiniMax-M3)
-                   (DashScope . qwen3.6-plus)
-                   (moonshot . kimi-k2.6)
-                   (DeepSeek . deepseek-v4-flash)))
+    (executor   . ((DeepSeek . deepseek-v4-flash)
+                    (DashScope . qwen3.6-plus)
+                    (moonshot . kimi-k2.6)))
     (researcher . ((MiniMax . MiniMax-M3)
                    (DashScope . qwen3.6-plus)
                    (DeepSeek . deepseek-v4-pro)
@@ -122,13 +111,13 @@ Derived from `gptel-backend-registry` — update the registry, then regenerate t
 ;;; Fallback Chains
 
 (defconst gptel-fallback-chains
-  '((executor . (Copilot MiniMax moonshot DeepSeek DashScope))
+  '((executor . (DeepSeek moonshot DashScope Copilot))
     (analyzer . (Copilot MiniMax moonshot DeepSeek DashScope))
     (grader   . (Copilot MiniMax moonshot DeepSeek DashScope))
     (default  . (Copilot MiniMax moonshot DeepSeek DashScope)))
   "Fallback chain ordering per task type.
 Backends are tried in this order when rate-limited or failing.
-Copilot first for executor (faster, less timeout) to improve experiment completion rate.")
+DeepSeek first for executor (proven to make edits), Copilot first for others.")
 
 ;;; Accessor Functions
 

@@ -2398,16 +2398,30 @@ Returns \"unknown\" when model is nil, empty, or unrecognized."
 (defun gptel-auto-workflow--backend-object (backend-name)
   "Return the backend object for BACKEND-NAME, or nil when unavailable.
 BACKEND-NAME may be a string (\"DashScope\"), a keyword (:DashScope),
-or a symbol (DashScope).  Keywords and symbols are converted to
-strings for lookup."
-  (when (keywordp backend-name)
-    (setq backend-name (substring (symbol-name backend-name) 1)))
-  (when (symbolp backend-name)
-    (setq backend-name (symbol-name backend-name)))
-  (when-let* ((var (alist-get backend-name gptel-auto-workflow--backend-object-vars
-                              nil nil #'string=))
-              ((boundp var)))
-    (symbol-value var)))
+a symbol (DashScope), or already a backend object.  Keywords and
+symbols are converted to strings for lookup."
+  (cond
+   ;; Already a backend object — return as-is
+   ((and backend-name (not (stringp backend-name))
+         (not (symbolp backend-name)) (not (keywordp backend-name)))
+    backend-name)
+   ((keywordp backend-name)
+    (setq backend-name (substring (symbol-name backend-name) 1))
+    (when-let* ((var (alist-get backend-name gptel-auto-workflow--backend-object-vars
+                                 nil nil #'string=))
+                ((boundp var)))
+      (symbol-value var)))
+   ((symbolp backend-name)
+    (setq backend-name (symbol-name backend-name))
+    (when-let* ((var (alist-get backend-name gptel-auto-workflow--backend-object-vars
+                                 nil nil #'string=))
+                ((boundp var)))
+      (symbol-value var)))
+   (t
+    (when-let* ((var (alist-get backend-name gptel-auto-workflow--backend-object-vars
+                                 nil nil #'string=))
+                ((boundp var)))
+      (symbol-value var)))))
 
 (defun gptel-auto-workflow--custom-var-user-customized-p (symbol)
   "Return non-nil when SYMBOL has an explicit Customize override."

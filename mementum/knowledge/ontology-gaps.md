@@ -67,6 +67,7 @@ depends-on: [gptel-auto-workflow-ontology-router.el, gptel-auto-experiment-ai-be
 4. **Full digital twin**: AST parsing, dependency graph, import resolution. Needs tree-sitter integration.
 5. **Formal convergence proof**: model checking / TLA+ for the G-V-R loop. Outside Emacs Lisp capability.
 6. **Runtime enforcement for all subagents**: currently executor-only. Analyzer/grader/comparator bypass.
+7. **Three-layer memory architecture** (Schema→Fact→Passage): inspired by MemGraphRAG (KDD 2026). Currently flat files with no hierarchical abstraction, conflict detection, or multi-agent shared memory. See `mementum/knowledge/memgraphrag-ov5-improvements.md`.
 
 ### Won't Fix (correct behavior)
 7. **Pre-existing test isolation failures**: batch-mode only, pass individually. Marked `:expected-result`.

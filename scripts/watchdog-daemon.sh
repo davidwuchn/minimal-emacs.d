@@ -217,7 +217,7 @@ if daemon_responds; then
     DAEMON_RSS_PID=$(timeout 5 emacsclient -s "$SERVER_NAME" --eval '(emacs-pid)' 2>/dev/null | tr -d '"' | tr -d '\n')
     if [ -n "$DAEMON_RSS_PID" ] && [ "$DAEMON_RSS_PID" -gt 0 ] 2>/dev/null; then
         RSS_KB=$(ps -p "$DAEMON_RSS_PID" -o rss= 2>/dev/null | tr -d ' ')
-        if [ -n "$RSS_KB" ] && [ "$RSS_KB" -gt 5242880 ]; then  # > 5GB
+        if [ -n "$RSS_KB" ] && [ "$RSS_KB" -gt 2621440 ]; then  # > 2.5GB
             echo "[$(date '+%H:%M:%S')] High memory (${RSS_KB}KB) — graceful restart" >> "$LOG"
             timeout 30 emacsclient -s "$SERVER_NAME" --eval '(kill-emacs)' >/dev/null 2>&1 || true
             sleep 5
@@ -231,7 +231,7 @@ if daemon_responds; then
     RESEARCHER_PID=$(first_daemon_pid "gtm-product-org")
     if [ -n "$RESEARCHER_PID" ]; then
         RSS_KB=$(ps -p "$RESEARCHER_PID" -o rss= 2>/dev/null | tr -d ' ')
-        if [ -n "$RSS_KB" ] && [ "$RSS_KB" -gt 5242880 ]; then
+        if [ -n "$RSS_KB" ] && [ "$RSS_KB" -gt 2621440 ]; then
             echo "[$(date '+%H:%M:%S')] High researcher memory (${RSS_KB}KB) — killing" >> "$LOG"
             kill -9 "$RESEARCHER_PID" 2>/dev/null || true
             echo "$(date +%s)" > "$LAST_RESTART_FILE"
