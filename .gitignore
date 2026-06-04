@@ -75,6 +75,7 @@ mementum/knowledge/*REJECTED*
 !packages/**
  assistant/strategies/evaluations.jsonl
  mementum/knowledge/token-efficiency.md
+ mementum/knowledge/pipeline-health.md
 __pycache__/
 *.pyc
 *.elc
