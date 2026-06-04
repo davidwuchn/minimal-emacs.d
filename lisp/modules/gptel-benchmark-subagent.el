@@ -44,17 +44,17 @@
 (defvar gptel-ai-behaviors--current-hashtags)
 (defvar gptel-tools-read-hashline-default)
 (defvar log-model nil
-  "Dynamic variable bound in `gptel-benchmark-call-subagent' for the selected model name.
+  "Model name bound in `gptel-benchmark-call-subagent'.
 Used for cost tracking and routing context.")
 (defvar log-backend nil
-  "Dynamic variable bound in `gptel-benchmark-call-subagent' for the selected backend name.
+  "Backend name bound in `gptel-benchmark-call-subagent'.
 Used for logging and routing context.")
 (defvar gptel-auto-experiment--last-subagent-backend nil
   "Last backend used by subagent dispatch.  Set by `gptel-benchmark-call-subagent'.")
 (defvar gptel-auto-experiment--last-subagent-model nil
   "Last model used by subagent dispatch.  Set by `gptel-benchmark-call-subagent'.")
 (defvar bumped-model nil
-  "Dynamic variable bound in `gptel-benchmark-call-subagent' for model bump escalation.
+  "Model bump escalation bound in `gptel-benchmark-call-subagent'.
 Set by bump-model when consecutive failures exceed thresholds.")
 (defvar gptel-auto-workflow--analyzer-failed-backends nil
   "Analyzer backend names skipped during target-selection retry.")
@@ -75,6 +75,8 @@ Set by bump-model when consecutive failures exceed thresholds.")
                   (backend))
 (declare-function gptel-auto-workflow--rate-limit-failover-candidates "gptel-tools-agent-prompt-build"
                   (agent-type))
+(declare-function gptel-auto-workflow--subagent-persona "gptel-auto-workflow-ontology-router")
+(declare-function my/gptel--sanitize-for-logging "gptel-tools-agent")
 
 ;;; Customization
 
@@ -385,7 +387,7 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                                               (length prompt)   ; prompt chars
                                               (/ (length prompt) 2)))  ; ~50% est
             ;; Inject dynamic reasoning_effort: bump → category → subagent default
-            (let ((effective-effort (or bumped-effort selected-effort))
+            (let ((_effective-effort (or bumped-effort selected-effort))
                   (effort-param
                    (and log-model
                         (fboundp 'gptel-ai-behaviors--effort-for-api)
@@ -497,9 +499,9 @@ into the grading prompt so the grader can evaluate hypothesis fit.")
 
 (defun gptel-benchmark--make-grading-prompt (output expected forbidden)
   "Create grading prompt for OUTPUT against EXPECTED and FORBIDDEN.
-Includes #=test phase: actively try to break the code first, then evaluate.
-When `gptel-auto-experiment--grading-hypothesis' is set, adds hypothesis-aware
-criteria so the grader evaluates whether the output satisfied the experiment goal."
+Includes #=test phase: actively try to break the code first.
+When `gptel-auto-experiment--grading-hypothesis' is set, adds
+hypothesis-aware criteria for experiment goal evaluation."
   (let ((hypothesis gptel-auto-experiment--grading-hypothesis)
         (total (+ (length expected) (length forbidden))))
     (concat

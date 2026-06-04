@@ -41,6 +41,14 @@
 (declare-function gptel-auto-workflow--reorder-fallbacks-by-ontology "gptel-auto-workflow-ontology-router")
 (declare-function gptel-auto-workflow--run-research-champion-league "gptel-auto-workflow-research-integration")
 (declare-function gptel-auto-workflow--run-strategy-evolution "gptel-auto-workflow-strategic")
+(defvar gptel-auto-experiment--quota-exhausted nil)
+(defvar gptel-auto-workflow--run-id nil)
+(defvar gptel-auto-workflow--status-run-id nil)
+(defvar gptel-auto-workflow-persistent-headless nil)
+(declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
+(declare-function gptel-auto-workflow--make-idempotent-callback "gptel-tools-agent")
+(declare-function gptel-agent--update-agents "gptel-agent")
+(declare-function my/gptel-agent--task-override "gptel-tools-agent")
 
 (defvar gptel-auto-workflow-projects
   (list (expand-file-name
