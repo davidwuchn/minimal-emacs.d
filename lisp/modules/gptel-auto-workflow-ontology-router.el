@@ -2836,7 +2836,7 @@ experiment's code-quality delta so larger improvements count more.
 EXPERIMENT is a plist with :target, :kibcm-axis, :decision, :delta."
   (when (and experiment
              (equal (plist-get experiment :decision) "kept"))
-    (let* ((target (plist-get experiment :target))
+    (let* ((target (or (plist-get experiment :target) ""))
            (axis (or (plist-get experiment :kibcm-axis) "?"))
             (delta-val (plist-get experiment :delta))
             (delta (cond ((numberp delta-val) delta-val)
