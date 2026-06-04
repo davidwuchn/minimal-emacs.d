@@ -90,10 +90,10 @@ When adding/updating models, ONLY edit this structure.")
                    (DashScope . qwen3.6-plus)
                    (DeepSeek . deepseek-v4-pro)
                    (moonshot . kimi-k2.6)))
-    (executor   . ((MiniMax . MiniMax-M3)
-                   (DashScope . qwen3.6-plus)
-                   (moonshot . kimi-k2.6)
-                   (DeepSeek . deepseek-v4-flash)))
+    (executor   . ((DeepSeek . deepseek-v4-flash)
+                    (MiniMax . MiniMax-M3)
+                    (DashScope . qwen3.6-plus)
+                    (moonshot . kimi-k2.6)))
     (researcher . ((MiniMax . MiniMax-M3)
                    (DashScope . qwen3.6-plus)
                    (DeepSeek . deepseek-v4-pro)
@@ -112,13 +112,13 @@ Derived from `gptel-backend-registry` — update the registry, then regenerate t
 ;;; Fallback Chains
 
 (defconst gptel-fallback-chains
-  '((executor . (Copilot MiniMax moonshot DeepSeek DashScope))
+  '((executor . (DeepSeek moonshot DashScope Copilot))
     (analyzer . (Copilot MiniMax moonshot DeepSeek DashScope))
     (grader   . (Copilot MiniMax moonshot DeepSeek DashScope))
     (default  . (Copilot MiniMax moonshot DeepSeek DashScope)))
   "Fallback chain ordering per task type.
 Backends are tried in this order when rate-limited or failing.
-Copilot first for executor (faster, less timeout) to improve experiment completion rate.")
+DeepSeek first for executor (proven to make edits), Copilot first for others.")
 
 ;;; Accessor Functions
 
