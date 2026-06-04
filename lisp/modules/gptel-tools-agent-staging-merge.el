@@ -1105,11 +1105,15 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                  (finish-publish
                   (lambda (&optional retried)
                     (gptel-auto-workflow--delete-staging-worktree)
-                    (if (not (gptel-auto-workflow--run-callback-live-p run-id))
-                        (progn
-                          (message "[auto-workflow] Skipping stale staging publish for %s; run %s is no longer active"
-                                   optimize-branch run-id)
-                          (funcall finish nil "stale-staging-publish"))
+                    ;; Staging completion should always execute, even if the
+                    ;; workflow run has already finished.  The experiment
+                    ;; passed grading; it deserves to be either kept or
+                    ;; explicitly downgraded, not silently lost because the
+                    ;; run ended before async staging completed.
+                    (progn
+                      (when (not (gptel-auto-workflow--run-callback-live-p run-id))
+                        (message "[auto-workflow] Staging publish for %s completing after run %s finished"
+                                 optimize-branch run-id))
                       (if already-integrated-p
                           (progn
                             (message
