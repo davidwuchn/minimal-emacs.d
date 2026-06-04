@@ -1,11 +1,8 @@
 ### Allium Issue Trends
 **Recurring patterns** across all strategies:
 
-- **Before applying anything:**: 1 occurrence(s)
-- **For the cache issue:**: 1 occurrence(s)
-- **For the marker issue:**: 1 occurrence(s)
-
-**Regression warnings** (1 strategies with increased issues):
-
-- `template-default`: 2 → 3 issues (worse)
+- **No reproducibility pointer.**: 1 occurrence(s)
+- **H1 is under-specified.**: 1 occurrence(s)
+- **Staging items are unaccounted for.**: 1 occurrence(s)
+- **`Discarded: None recorded` is the red flag.**: 1 occurrence(s)
 

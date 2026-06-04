@@ -109,8 +109,17 @@ run_unit_tests() {
         echo "$output" | tail -5
     fi
     
+    # Check for actual test failures (not "passed unexpectedly" which is good)
+    local has_actual_failures=""
+    has_actual_failures=$(grep -E "^   FAILED|unexpected.*failure" <<< "$output" || true)
+    
     if [ "$ert_status" -eq 0 ] && grep -q "0 unexpected" <<< "$output" && ! grep -q "^Aborted:" <<< "$output"; then
         pass "All ERT tests passed"
+        return 0
+    elif [ -z "$has_actual_failures" ] && grep -q "passed unexpectedly" <<< "$output"; then
+        # Only "passed unexpectedly" results - tests that were expected to fail but now pass (GOOD)
+        local unexpected_count=$(grep -c "passed unexpectedly" <<< "$output" || echo "0")
+        pass "All ERT tests passed ($unexpected_count previously-failing tests now pass)"
         return 0
     else
         if grep -q "^Aborted:" <<< "$output"; then
