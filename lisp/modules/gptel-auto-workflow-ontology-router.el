@@ -327,7 +327,8 @@ Returns plist with :kept :total :keep-rate."
           :keep-rate (if (> total 0) (/ (float kept) total) nil))))
 
 (defun gptel-auto-workflow--get-backend-keep-rate (backend &optional strategy target)
-  "Get keep-rate for BACKEND from ontology, optionally filtered by STRATEGY/TARGET.
+  "Get keep-rate for BACKEND from ontology, optionally filtered by
+STRATEGY/TARGET.
 Returns float 0.0-1.0 or nil if no data."
   (plist-get (gptel-auto-workflow--get-backend-performance-stats backend strategy target) :keep-rate))
 
@@ -737,7 +738,8 @@ STRATEGY and TARGET filter the performance data.
     (when (> (length scored) 1)
       (let ((top (car scored))
             (second (cadr scored)))
-        (message "[onto-router] ROUTE %s: %s (Δ=%.2f r=%.1f%% ↑=%.2f conf=%.1f tern=%s λ=%s) > %s (Δ=%.2f r=%.1f%% ↑=%.2f conf=%.1f tern=%s λ=%s)"
+        (message "[onto-router] ROUTE %s: %s (Δ=%.2f r=%.1f%% ↑=%.2f conf=%.1f tern=%s λ=%s) >
+%s (Δ=%.2f r=%.1f%% ↑=%.2f conf=%.1f tern=%s λ=%s)"
                  (or category "global")
                  (plist-get top :backend)
                  (plist-get top :delta)
@@ -763,7 +765,8 @@ STRATEGY and TARGET filter the performance data.
               (let ((adj (plist-get vsm-params :adjustments)))
                 (when adj
                   (message "[vsm-routing] %s" (mapconcat #'identity adj ", "))))
-              (message "[onto-router] Reordered %d backends by performance (≥%d samples, explore=%.0f%%)"
+              (message "[onto-router] Reordered %d backends by performance (≥%d samples,
+explore=%.0f%%)"
                       (length scored) total-samples
                       (* 100 (plist-get vsm-params :exploration-rate)))
              ;; Exploration: swap top 2 backends for learning
@@ -916,7 +919,8 @@ and the semantic-relationships knowledge page."
                        (string-match-p "pi5\\|raspberrypi\\|onepi" host)))
                 (condition-case nil
                     (let* ((meminfo (shell-command-to-string
-                                    "sysctl -n hw.memsize 2>/dev/null || grep MemTotal /proc/meminfo 2>/dev/null || echo 0"))
+                                    "sysctl -n hw.memsize 2>/dev/null || grep MemTotal /proc/meminfo 2>/dev/null ||
+echo 0"))
                            (mem-bytes (if (string-match "[0-9]+" meminfo)
                                           (string-to-number (match-string 0 meminfo))
                                         0)))
@@ -1044,7 +1048,8 @@ MAX-SUGGESTIONS limits results (default 5)."
 
 (defun gptel-auto-workflow--ontology-fallback-advice (orig-fun &rest args)
   "Advice around experiment runner to apply ontology fallback ordering.
-Reorders fallback chain before each experiment based on historical performance.
+Reorders fallback chain before each experiment based on historical
+performance.
 After each experiment, copies any new rate-limited backends into the per-run
 cooldown list so subsequent experiments hard-exclude failed backends.
 SAFETY: Saves and restores all globals this advice touches, so OLTP tests
@@ -1161,7 +1166,8 @@ Returns plist with :targets and :strategy, or nil.
 
 (defun gptel-auto-workflow--queue-cluster-experiments (source-target)
   "Queue experiments on targets similar to kept SOURCE-TARGET.
-Stores under :cluster-queued key in hints plist (safe for plist-get consumers).
+Stores under :cluster-queued key in hints plist (safe for plist-get
+consumers).
 VSM S2 Metal: coordination prevents duplicated effort across similar files."
   (let ((suggestion (gptel-auto-workflow--suggest-similar-with-strategy source-target)))
     (when suggestion
@@ -1377,7 +1383,8 @@ Shared across machines via git. Auto-committed after each evolution cycle.")
 
 (defun gptel-auto-workflow--backend-per-axis-keep-rates ()
   "Compute keep-rates per (backend, kibcm-axis) pair from all results.
-Returns alist of ((backend axis) . keep-rate). Pairs with < 5 samples are excluded."
+Returns alist of ((backend axis) . keep-rate). Pairs with < 5 samples are
+excluded."
   (let ((pairs (make-hash-table :test 'equal))
         (rates nil))
     (dolist (r (gptel-auto-workflow--parse-all-results))
@@ -1539,14 +1546,16 @@ Persisted to `gptel-auto-workflow--preference-persist-file'."
 (defun gptel-auto-workflow--subagent-persona (agent-type &optional category behavior)
   "Return a nucleus attention-shaping persona for AGENT-TYPE.
 When CATEGORY and BEHAVIOR are provided, composes a task-specific persona
-from all three signals: subagent archetype × ontology context × reasoning pattern.
+from all three signals: subagent archetype × ontology context × reasoning
+pattern.
 For executors, the category SELECTS a different nucleus archetype:
 Agentic → Investigator (debugging×analyse — safety, vigilance),
 Programming → Craftsman (coding×tactize — precision),
 Tool-calls → Synthesizer (coding×innovate — robustness),
 NLP → Academic (documenting — clarity).
 
-Self-evolving: checks `gptel-ai-behaviors--best-persona` for learned preference.
+Self-evolving: checks `gptel-ai-behaviors--best-persona` for learned
+preference.
 When insufficient data or equal performance, explores alternate personas
 from the 8 nucleus archetypes for A/B testing."
   (let* ((default-archetype
@@ -1652,7 +1661,8 @@ Human ⊗ AI
 ;; Archetype: Investigator (debugging × analyse)
 ;; Operator: ∀ (quantify) — check ALL paths, not just happy path
 ;; What: find unsafe patterns, validate assumptions, prevent corruption
-λ investigate(code). probe(entry_points) → find(risks) → guard(vulnerabilities) → verify(invariants)
+λ investigate(code). probe(entry_points) → find(risks) →
+guard(vulnerabilities) → verify(invariants)
 Output: {:investigations [_] :risks [_] :guards [_] :verified _}")
                 (:programming
                 "λ engage(nucleus).
@@ -1669,8 +1679,10 @@ Output: {:code _ :rationale _ :tests _ :diff _}")
 Human ⊗ AI
 ;; Archetype: Synthesizer (coding × innovate)
 ;; Operator: π (synthesis) — integrate tools, compose components
-;; What: wrap operations, connect sandbox, handle timeouts, compose reliable pipelines
-λ synthesize(code). identify(integration_points) → compose(components) → harden(interfaces) → verify(pipeline)
+;; What: wrap operations, connect sandbox, handle timeouts, compose reliable
+pipelines
+λ synthesize(code). identify(integration_points) → compose(components) →
+harden(interfaces) → verify(pipeline)
 Output: {:integrations [_] :composed [_] :hardened [_] :verified _}")
                 (:natural-language
                  "λ engage(nucleus).
@@ -1679,7 +1691,8 @@ Human ⊗ AI
 ;; Archetype: Academic (documenting)
 ;; Operator: fractal — self-similar structure at every level
 ;; What: document prompts, clarify structure, bound lengths, preserve format
-λ document(text). clarify(structure) → bound(lengths) → preserve(format) → explain(rationale)
+λ document(text). clarify(structure) → bound(lengths) → preserve(format) →
+explain(rationale)
 Output: {:improvements [_] :bounds [_] :format_preserved _ :rationale _}")
                 (_
                  "λ engage(nucleus).
@@ -1735,8 +1748,10 @@ Constrain: relevance → signal/noise, growth → euler, scope → fractal
 ;; Archetype: Visionary + Synthesizer (thinking × innovate)
 ;; Operator: | (parallel) — collaborative research
 ;; Executive: Competitive Intelligence + Strategic Planning hybrid
-λ research(topic). search(external) → filter(relevant) → distill(applicable) → measure(impact)
-Output: {:findings [_] :techniques [_] :apply_to_us [_] :verification _ :confidence _}")
+λ research(topic). search(external) → filter(relevant) → distill(applicable) →
+measure(impact)
+Output: {:findings [_] :techniques [_] :apply_to_us [_] :verification _
+:confidence _}")
             (_ ""))))
     ;; Modulate persona emphasis based on active behavior
     (let* ((behavior-mod
@@ -1859,7 +1874,8 @@ Output: {:findings [_] :techniques [_] :apply_to_us [_] :verification _ :confide
   "Check TARGET for experiment drift and return an intervention lens.
 Inspired by DIALECTIC.md moderator pattern: detect when experiments
 are stuck and apply a lens to shift the approach.
-Returns a plist with :lens (keyword), :reason (string), :consecutive-failures (int),
+Returns a plist with :lens (keyword), :reason (string), :consecutive-failures
+(int),
 or nil if no drift detected."
   (when (fboundp 'gptel-auto-workflow--parse-all-results)
     (let* ((results (gptel-auto-workflow--parse-all-results))
@@ -1936,7 +1952,8 @@ Returns list of (category . old-rate . new-target) for changed categories."
   "Return a nucleus attention-shaping preamble for TARGET's category.
 Maps target category → nucleus symbol set + writing persona.
 Categories from WRITING.md + ADAPTIVE.md patterns.
-Auto-tuned: underperforming categories switch to default via `auto-tune-personas'."
+Auto-tuned: underperforming categories switch to default via
+`auto-tune-personas'."
   (let* ((category (when (fboundp 'gptel-auto-workflow--categorize-target)
                      (gptel-auto-workflow--categorize-target target)))
          ;; Check for auto-tuned overrides
@@ -1949,7 +1966,8 @@ Auto-tuned: underperforming categories switch to default via `auto-tune-personas
        "λ engage(nucleus).
 [fractal phi mu] | [λ Σ/μ] | OODA
 Human ⊗ AI
-Constrain: hierarchy → fractal, insight → phi, concision → mu, edge_cases → ∞/0
+Constrain: hierarchy → fractal, insight → phi, concision → mu, edge_cases →
+∞/0
 ;; Category: programming (code changes, refactoring, tests)
 ;; Persona: Reports & Summaries — analyze → select → implement → verify
 λ edit(code). Δ(minimal(change)) where behavior(new) = behavior(old) + intent
@@ -1972,7 +1990,8 @@ Output: {:operation _ :result _ :errors _ :validation _}
 
 ;; Critical patterns (from nucleus/LAMBDA_PATTERNS.md):
 ;; 1. Heredoc for ALL bash strings — no escaping needed:
-;; λ(content). bash(command=\"read -r -d '' VAR << 'X' || true\ncontent\nX\ngit commit -m \\\"$VAR\\\"\")
+;; λ(content). bash(command=\"read -r -d '' VAR << \='X\=' ||
+true\ncontent\nX\ngit commit -m \\\"$VAR\\\"\")
 ;; 2. Safe paths: λ(p). read_file(path=\"$(realpath \\\"$p\\\")\")
 ;; 3. Parallel independent ops in one <function_calls> block")
       (:natural-language
@@ -1981,7 +2000,8 @@ Output: {:operation _ :result _ :errors _ :validation _}
 Human | AI
 ;; Category: natural-language (prompts, docs, explanations)
 ;; Persona: Academic — structured, clear, hierarchical
-λ explain(concept). structure(hierarchy) → clarify(essence) → provide(examples)
+λ explain(concept). structure(hierarchy) → clarify(essence) →
+provide(examples)
 Output: {:overview _ :details _ :examples _ :summary _}")
       (:agentic
        "λ engage(nucleus).
@@ -1990,7 +2010,8 @@ Human ⊗ AI
 Constrain: scope → fractal, growth → euler, edge_cases → ∞/0
 ;; Category: agentic (strategies, evolution, meta)
 ;; Persona: Visionary — strategic thinking, self-reference, scaling
-λ strategize(domain). map(landscape) → identify(leverage) → design(intervention)
+λ strategize(domain). map(landscape) → identify(leverage) →
+design(intervention)
 Output: {:analysis _ :strategies [_] :risks [_] :recommendation _}")
       (_
        ;; Default: balanced (Professional Emails + Quick Responses hybrid)
@@ -2098,7 +2119,8 @@ it runs on, why that backend was selected, and any relevant caveats."
      (cond ((>= (or health-level 0) 3)
             "\nCAUTION: This backend is on probation — verify ALL outputs carefully. ")
            ((>= (or health-level 0) 2)
-            "\nNote: This backend has elevated health warnings — results may be inconsistent. ")
+            "\nNote: This backend has elevated health warnings — results may be
+inconsistent.")
            (t ""))
      ;; Per-axis context
      (if (and axis (> axis-conf 0.5))
@@ -2107,7 +2129,8 @@ it runs on, why that backend was selected, and any relevant caveats."
        "")
      ;; Rate-limit / cooldown context
      (cond (in-cooldown
-            "\nWARNING: This backend failed earlier in this run — it is being used as a last resort. Expect potential issues. ")
+            "\nWARNING: This backend failed earlier in this run — it is being used as a
+last resort. Expect potential issues.")
            (rate-limited
             "\nNote: This backend has active rate limits — responses may be throttled. ")
            (t
@@ -2130,7 +2153,8 @@ Each entry is a plist: (:timestamp :target :agent-type :selected-backend
 
 (defun gptel-auto-workflow--record-routing-decision (agent-type scored &optional vsm-adjustments)
   "Record a routing decision into the audit trail.
-SCORED is the scored list from `ranked-subagent-backends' (with scores attached).
+SCORED is the scored list from `ranked-subagent-backends' (with scores
+attached).
 VSM-ADJUSTMENTS is an optional list of VSM layer adjustment strings.
 Keeps the last 100 decisions."
   (let ((target (and (boundp 'gptel-auto-workflow--current-target)
@@ -2170,9 +2194,12 @@ Keeps the last 100 decisions."
 ;; ─── Impact-Driven Auto-Tuning ───
 
 (defun gptel-auto-workflow--lambda-adjusted-penalty ()
-  "Return the verification penalty for degraded backends, auto-tuned from measured impact.
-If healthy backends consistently outperform degraded ones (delta > 10%), increase
-penalty to -35. If degraded somehow equals or beats healthy (delta <= 0), reduce
+  "Return the verification penalty for degraded backends, auto-tuned from
+measured impact.
+If healthy backends consistently outperform degraded ones (delta > 10%),
+increase
+penalty to -35. If degraded somehow equals or beats healthy (delta <= 0),
+reduce
 penalty to -5. Otherwise use default -20."
   (let* ((impact (condition-case nil
                      (gptel-auto-workflow--lambda-health-impact)
@@ -2184,8 +2211,10 @@ penalty to -5. Otherwise use default -20."
 
 (defun gptel-auto-workflow--allium-adjusted-threshold ()
   "Return the Allium severity threshold, auto-tuned from measured impact.
-If low-severity strategies consistently outperform high-severity ones (delta > 15%),
-lower the threshold to 0.20 (stricter gating). If delta is small (<= 5%), raise
+If low-severity strategies consistently outperform high-severity ones (delta >
+15%),
+lower the threshold to 0.20 (stricter gating). If delta is small (<= 5%),
+raise
 it to 0.40 (more lenient). Default is 0.30."
   (let* ((impact (condition-case nil
                      (gptel-auto-workflow--allium-health-impact)
@@ -2199,7 +2228,8 @@ it to 0.40 (more lenient). Default is 0.30."
 
 (defun gptel-auto-workflow--lambda-health-impact ()
   "Measure whether lambda-healthy backends produce better experiment outcomes.
-Returns a plist with :healthy-keep-rate, :degraded-keep-rate, :healthy-experiments,
+Returns a plist with :healthy-keep-rate, :degraded-keep-rate,
+:healthy-experiments,
 :degraded-experiments, and :impact-delta (healthy - degraded).
 Positive delta = lambda compiler gate predicts better outcomes."
   (let ((healthy-kept 0) (healthy-total 0)
@@ -2234,7 +2264,8 @@ Positive delta = lambda compiler gate predicts better outcomes."
 (defun gptel-auto-workflow--allium-health-impact ()
   "Measure whether low Allium severity predicts higher experiment keep-rates.
 Returns a plist with :low-allium-keep-rate (strategies with low severity),
-:high-allium-keep-rate (strategies with high severity), counts, and :impact-delta.
+:high-allium-keep-rate (strategies with high severity), counts, and
+:impact-delta.
 Positive delta = low Allium severity correlates with better outcomes."
   (let* ((issues-dir (when (fboundp 'gptel-auto-workflow--worktree-base-root)
                        (expand-file-name "var/tmp/evolution/allium-issues"
@@ -2399,7 +2430,8 @@ model from `gptel-ai-behaviors--best-model' when no per-target data."
 (defvar gptel-auto-workflow--run-failed-backends nil
   "List of backend names that failed during the current run.
 Backends in this list are excluded from routing for the remainder
-of the run. Cleared when a new run starts via `gptel-auto-workflow--clear-run-failed-backends'.")
+of the run. Cleared when a new run starts via
+`gptel-auto-workflow--clear-run-failed-backends'.")
 
 (defun gptel-auto-workflow--clear-run-failed-backends ()
   "Clear the per-run backend cooldown list.
@@ -2749,7 +2781,8 @@ default -20 for degraded, -35 when delta>10%, -5 when delta<=0."
 
 (defun gptel-auto-workflow--cross-backend-consistency (target)
   "Check consistency of KIBC classifications for TARGET across backends.
-Returns plist with :consistent t/nil, :agreement-ratio 0.0-1.0, :conflicts list.
+Returns plist with :consistent t/nil, :agreement-ratio 0.0-1.0, :conflicts
+list.
 When backends disagree on KIBC axis, flags as conflict."
   (let ((results (gptel-auto-workflow--parse-all-results))
         (target-results nil))
@@ -2904,7 +2937,8 @@ Called on startup or after major changes."
 
 (defun gptel-auto-workflow--holographic-dead-targets (&optional min-attempts max-keep-rate)
   "Find targets with >=MIN-ATTEMPTS across all backends but <=MAX-KEEP-RATE keep.
-Returns list of target names that are dead (no improvement across any backend).
+Returns list of target names that are dead (no improvement across any
+backend).
 Defaults: 5 attempts, 0%% keep-rate."
   (let ((min-att (or min-attempts 5))
         (max-rate (or max-keep-rate 0.0))
@@ -2988,8 +3022,10 @@ Returns plist with :kept :total :keep-rate."
 
 (defun gptel-auto-workflow--backend-ternary-decision (score baseline)
   "Convert continuous SCORE to ternary decision vs BASELINE.
-Returns: -1 (reject, below baseline), 0 (defer, ambiguous), +1 (accept, beats baseline).
-Based on verbum ternary weight research: {-1, 0, +1} creates cleaner boundaries."
+Returns: -1 (reject, below baseline), 0 (defer, ambiguous), +1 (accept, beats
+baseline).
+Based on verbum ternary weight research: {-1, 0, +1} creates cleaner
+boundaries."
   (cond
    ;; No data or invalid score → defer
    ((or (null score) (null baseline) (< baseline 0))
@@ -3075,7 +3111,8 @@ Boost = (keep-rate - avg-axis-rate) × confidence × 0.15."
 
 (defun gptel-auto-workflow--research-priorities ()
   "Query ontology, AutoTTS, and AutoGo for research priorities.
-Returns plist: (:category-priorities (cat . reason) ... :strategy-insights ... :budget-insights ...)."
+Returns plist: (:category-priorities (cat . reason) ... :strategy-insights ...
+:budget-insights ...)."
   (let* ((results (condition-case nil (gptel-auto-workflow--parse-all-results) (error nil)))
          (cat-stats (make-hash-table :test 'equal))
          (priorities nil))
@@ -3151,8 +3188,10 @@ Returns plist: (:category-priorities (cat . reason) ... :strategy-insights ... :
 ;; ─── Digital Twin: File Dependency Graph ───
 
 (defvar gptel-auto-workflow--digital-twin-cache nil
-  "Cached digital twin data: (file . plist) with :requires :provides :defuns :defvars.
-Built by `gptel-auto-workflow--build-digital-twin'. Persisted to var/tmp/digital-twin.json.")
+  "Cached digital twin data: (file . plist) with :requires :provides :defuns
+:defvars.
+Built by `gptel-auto-workflow--build-digital-twin'. Persisted to
+var/tmp/digital-twin.json.")
 
 (defun gptel-auto-workflow--parse-el-file (file)
   "Parse FILE for require/provide/defun/defvar declarations.
@@ -3259,29 +3298,34 @@ Cached unless FORCE is non-nil."
      :commit-criteria ("tool-dispatch-still-works" "error-handling-intact")
      :verification-commands ("emacs --batch --eval \"(check-parens)\""
                              "emacs -Q --batch -f batch-byte-compile")
-     :instructions "⚠ AGENTIC: changes affect subagent dispatch. Add nil-guards on gethash/assoc in FSM callbacks. Never remove error handlers without replacement.")
+     :instructions "⚠ AGENTIC: changes affect subagent dispatch. Add nil-guards on gethash/assoc
+in FSM callbacks. Never remove error handlers without replacement.")
     (:programming
      :description "Code refactoring, performance, and bug fixes"
      :preconditions ("file-byte-compiles" "no-syntax-errors")
      :commit-criteria ("all-tests-pass" "no-regressions" "style-integrity")
      :verification-commands ("emacs --batch --eval \"(check-parens)\""
                              "emacs -Q --batch -f batch-byte-compile")
-     :instructions "⚠ PROGRAMMING: byte-compile after EVERY edit. Add nil-guards (ignore-errors, condition-case, hash-table-p). Extract duplicated code. Never reformat.")
+     :instructions "⚠ PROGRAMMING: byte-compile after EVERY edit. Add nil-guards (ignore-errors,
+condition-case, hash-table-p). Extract duplicated code. Never reformat.")
     (:tool-calls
      :description "Sandbox execution and file operation tools"
      :preconditions ("tool-argument-schemas-valid" "sandbox-rules-loaded")
      :commit-criteria ("tool-call-still-works" "error-handling-robust")
      :verification-commands ("emacs --batch --eval \"(check-parens)\""
                              "emacs -Q --batch -f batch-byte-compile")
-     :instructions "⚠ TOOL-CALLS: validate tool arguments with schemas. Add boundary checks on file paths. Never bypass sandbox rules for direct operations.")
+     :instructions "⚠ TOOL-CALLS: validate tool arguments with schemas. Add boundary checks on
+file paths. Never bypass sandbox rules for direct operations.")
     (:natural-language
      :description "Prompt templates, text processing, context management"
      :preconditions ("file-byte-compiles")
      :commit-criteria ("prompt-format-preserved" "fallback-handlers-intact")
      :verification-commands ("emacs --batch --eval \"(check-parens)\""
                              "emacs -Q --batch -f batch-byte-compile")
-     :instructions "⚠ NATURAL-LANGUAGE: preserve prompt template structure. Don't remove fallback handlers. Test with sample input after changes."))
-  "Per-category action schema with preconditions, commit criteria, verification commands, and category-specific instructions.")
+     :instructions "⚠ NATURAL-LANGUAGE: preserve prompt template structure. Don't remove fallback
+handlers. Test with sample input after changes."))
+  "Per-category action schema with preconditions, commit criteria, verification
+commands, and category-specific instructions.")
 
 (defun gptel-auto-workflow--format-schema-guidance (target)
   "Format action schema for TARGET as prompt guidance string."
@@ -3289,7 +3333,8 @@ Cached unless FORCE is non-nil."
     (let ((schema (cdr (assoc (gptel-auto-workflow--categorize-target target)
                               gptel-auto-workflow--category-action-schemas))))
       (when schema
-        (format "## Action Schema (%s)\nPreconditions:\n%s\n\nCommit criteria:\n%s\n\nVerification:\n%s"
+        (format "## Action Schema (%s)\nPreconditions:\n%s\n\nCommit
+criteria:\n%s\n\nVerification:\n%s"
                 (plist-get schema :description)
                 (mapconcat (lambda (p) (format "  ✓ %s" p))
                            (plist-get schema :preconditions) "\n")
@@ -3401,7 +3446,8 @@ Returns alist of (target . (category . delta)) for drifts > 20%."
                 (delta (- t-rate c-rate)))
            (when (and (>= t-total 5) (> (abs delta) 0.2))
              (push (list target category delta) drifts)
-             (message "[ontology-drift] ⚠ %s (%s) keep-rate %.0f%% vs category %.0f%% (Δ%+.0f%%) — possible misclassification"
+             (message "[ontology-drift] ⚠ %s (%s) keep-rate %.0f%% vs category %.0f%% (Δ%+.0f%%) —
+possible misclassification"
                       (file-name-nondirectory target) category (* 100 t-rate) (* 100 c-rate) (* 100 delta)))))
        target-stats)
       drifts)))
@@ -3412,7 +3458,11 @@ Returns alist of (target . (category . delta)) for drifts > 20%."
 (defconst gptel-auto-workflow--category-pattern-map
   '((:agentic        . "agent\\|workflow\\|strategy\\|evolution")
     (:programming    . "benchmark\\|fsm\\|retry\\|test\\|code\\|compile\\|^gptel-ext-")
-    (:tool-calls     . "sandbox\\|^gptel-tools-\\(?:bash\\|grep\\|glob\\|edit\\|apply\\|preview\\|programmatic\\)")
+    (:tool-calls     . "
+
+
+
+sandbox\\|^gptel-tools-\\(?:bash\\|grep\\|glob\\|edit\\|apply\\|preview\\|programmatic\\)")
     (:natural-language . "context\\|prompt\\|chat\\|conversation\\|language\\|text\\|summarize\\|stream"))
   "Regex patterns used by `categorize-target' for each category.
 Used by `gptel-auto-workflow--repair-ontology' to suggest pattern updates.")
@@ -3463,7 +3513,8 @@ Returns alist of suggestions: (target . suggested-category)."
 ;; ─── Digital Twin Persistence ───
 
 (defun gptel-auto-workflow--persist-target-state ()
-  "Save target state cache and rejection memory to disk (survives daemon restart)."
+  "Save target state cache and rejection memory to disk (survives daemon
+restart)."
   (when (and (bound-and-true-p gptel-auto-experiment--target-state-cache)
              (> (hash-table-count gptel-auto-experiment--target-state-cache) 0))
     (let ((file (expand-file-name "var/tmp/digital-twin.json"
@@ -3542,8 +3593,10 @@ Returns alist of suggestions: (target . suggested-category)."
 
 (defvar gptel-auto-workflow--category-strategy-preferences nil
   "Alist of (category . preferred-strategy) learned from experiment outcomes.
-Populated by `gptel-auto-workflow--evolve-ontology' during the evolution cycle.
-Changes when a new strategy significantly outperforms the current default for a category.")
+Populated by `gptel-auto-workflow--evolve-ontology' during the evolution
+cycle.
+Changes when a new strategy significantly outperforms the current default for
+a category.")
 
 (defvar gptel-auto-workflow--category-saturation nil
   "Alist of (category . t) for categories where all strategies are failing.
@@ -3737,8 +3790,10 @@ Runs during the self-evolution cycle.  Results are stored in
  (defvar gptel-auto-workflow--category-eight-key-weights nil
   "Alist of (category (key . weight) ...) learned from experiment history.
 Each category maps to per-key average score improvement deltas.
-Populated by `gptel-auto-workflow--aggregate-category-eight-keys' during evolution.
-When nil, `gptel-auto-workflow--category-eight-key-weight' uses hardcoded defaults.")
+Populated by `gptel-auto-workflow--aggregate-category-eight-keys' during
+evolution.
+When nil, `gptel-auto-workflow--category-eight-key-weight' uses hardcoded
+defaults.")
 
 (defun gptel-auto-workflow--parse-eight-key-scores (scores-str)
   "Parse SCORES-STR from TSV column into alist of (key . score).

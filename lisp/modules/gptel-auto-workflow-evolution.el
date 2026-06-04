@@ -474,7 +474,8 @@ Writes runtime evolution data under var/tmp/evolution/."
       (with-temp-file token-skill-file
         (insert "---\n")
         (insert "name: token-efficiency\n")
-        (insert "description: Controls prompt compression and section inclusion based on experiment results\n")
+        (insert "description: Controls prompt compression and section inclusion based on
+experiment results\n")
         (insert "version: 1.0\n")
         (insert "---\n\n")
 
@@ -491,7 +492,8 @@ Writes runtime evolution data under var/tmp/evolution/."
                (kept-results (cl-remove-if-not (lambda (r) (equal (plist-get r :decision) "kept")) with-prompt-data))
                (discarded-results (cl-remove-if-not (lambda (r) (equal (plist-get r :decision) "discarded")) with-prompt-data)))
           (if (or (null with-prompt-data) (null kept-results))
-              (insert "*Insufficient data for token efficiency analysis (need kept experiments with prompt_chars).*\n")
+              (insert "*Insufficient data for token efficiency analysis (need kept experiments with
+prompt_chars).*\n")
             (let* ((avg-kept-prompt (/ (apply #'+ (mapcar (lambda (r) (plist-get r :prompt-chars)) kept-results))
                                        (max 1 (length kept-results))))
                    (avg-discarded-prompt (/ (apply #'+ (mapcar (lambda (r) (plist-get r :prompt-chars)) discarded-results))
@@ -536,7 +538,8 @@ Writes runtime evolution data under var/tmp/evolution/."
                    (insert (format "- Avg output (kept): %d chars (%.1fx prompt)\n" (round avg-kept-out) ratio-kept))
                    (insert (format "- Avg output (discarded): %d chars (%.1fx kept output)\n" (round avg-discarded-out) ratio-discarded))
                    (when inflation
-                     (insert "- ⚠ INFLATION DETECTED: output >2x prompt size with <5 kept experiments — LLM may be over-explaining\n"))
+                     (insert "- ⚠ INFLATION DETECTED: output >2x prompt size with <5 kept experiments — LLM
+may be over-explaining\n"))
                    (insert (format "- %s\n"
                                    (if (> avg-discarded-out avg-kept-out)
                                        "Discarded experiments produce longer output — verbosity ≠ quality"
@@ -581,7 +584,8 @@ Writes runtime evolution data under var/tmp/evolution/."
         (insert "Which change types work best for each target file:\n\n")
         (let ((target-analysis (gptel-auto-workflow--target-pattern-analysis)))
           (if (null target-analysis)
-              (insert "*Insufficient data for per-target analysis (need ≥3 experiments per target).*\n")
+              (insert "*Insufficient data for per-target analysis (need ≥3 experiments per
+target).*\n")
             (dolist (target-data target-analysis)
               (let ((target (car target-data))
                     (patterns (cdr target-data)))
@@ -694,7 +698,8 @@ Uses cache to avoid repeated file reads."
 (defun gptel-auto-workflow--evolution-consolidate-insights ()
   "Consolidate individual mementum/memories insight files into knowledge pages.
 Groups insights by target module, synthesizes patterns, archives old files.
-Prevents the linear growth of one-insight-per-file over hundreds of experiments."
+Prevents the linear growth of one-insight-per-file over hundreds of
+experiments."
   (interactive)
   (cl-block gptel-auto-workflow--evolution-consolidate-insights
   (let* ((repo-root (or (gptel-auto-workflow--evolution-repo-root)
@@ -903,7 +908,8 @@ Returns hash table mapping strategy name to list of results."
 Replaces characters unsafe in filenames (brackets, quotes, spaces, colons,
 semicolons, pipes) with hyphens, collapses multiple hyphens, strips
 leading/trailing hyphens, and caps at 200 chars.
-Returns \"none\" when NAME is nil, empty, or contains diagnostic/rejected text."
+Returns \"none\" when NAME is nil, empty, or contains diagnostic/rejected
+text."
   (let ((s (replace-regexp-in-string "[][{}()'\" \t:;|<>/*?\\%!#&]" "-" (or name "none"))))
     (setq s (replace-regexp-in-string "-+" "-" s))
     (setq s (replace-regexp-in-string "^-\\|-$" "" s))
@@ -1188,7 +1194,8 @@ Returns t if page created."
           (let ((failed-targets (targets-for-decision "validation-failed")))
             (when failed-targets
               (insert "## Targets with Validation Failures\n\n")
-              (insert "These targets may need different research patterns or the research findings were misleading.\n\n")
+              (insert "These targets may need different research patterns or the research findings
+were misleading.\n\n")
               (dolist (targ (seq-take failed-targets 5))
                 (insert (format-target-with-counts targ)))
               (insert "\n"))))
@@ -1209,7 +1216,8 @@ Returns t if page created."
           (insert "- Consider expanding the grep patterns to find similar issues.\n"))
          ((>= keep-rate 0.3)
           (insert "- **This strategy shows promise.** Refine the research prompt.\n")
-          (insert "- Focus on more specific code patterns (e.g., specific functions rather than broad categories).\n"))
+          (insert "- Focus on more specific code patterns (e.g., specific functions rather than
+broad categories).\n"))
          ((> total 5)
           (insert "- **This strategy underperforms.** Consider evolving a new approach.\n")
           (insert "- The findings may be too generic or targeting the wrong files.\n")
@@ -1345,11 +1353,13 @@ Writes to var/tmp/evolution/findings.md."
     (with-temp-file skill-file
       (insert "---\n")
       (insert "name: research-strategies\n")
-      (insert "description: External research insights digested by LLM. Feeds into directive hypotheses.\n")
+      (insert "description: External research insights digested by LLM. Feeds into directive
+hypotheses.\n")
       (insert "version: 2.0\n")
       (insert "---\n\n")
       (insert "# External Research Insights\n\n")
-      (insert "*Digested by LLM from internet sources. Avoid re-researching these topics.*\n\n")
+      (insert "*Digested by LLM from internet sources. Avoid re-researching these
+topics.*\n\n")
       
       ;; Include recent external insights
       (if recent-insights
@@ -1363,7 +1373,8 @@ Writes to var/tmp/evolution/findings.md."
       
       ;; Include internal strategy performance
       (insert "## Internal Research Strategy Performance\n\n")
-      (insert "*These are our own code-analysis strategies, ranked by experiment success.*\n\n")
+      (insert "*These are our own code-analysis strategies, ranked by experiment
+success.*\n\n")
       (if best-strategy
           (progn
             (insert (format "**Best strategy:** %.1f%% keep rate\n\n" best-rate))
@@ -1380,7 +1391,8 @@ Writes to var/tmp/evolution/findings.md."
                   (insert (buffer-substring start (point)))))
               (buffer-string))
             (insert "\n"))
-        (insert "*Insufficient internal data. Run more experiments with research-enabled target selection.*\n\n"))
+        (insert "*Insufficient internal data. Run more experiments with research-enabled target
+selection.*\n\n"))
       ;; Include all strategy summaries
       (when knowledge-files
         (insert "## All Strategies\n\n")
@@ -1520,7 +1532,8 @@ Returns string with source strategy and controller awareness."
 
 (defun gptel-auto-workflow--evolve-researcher-skill ()
   "Update RESEARCHER.md skill based on research effectiveness.
-Analyzes which research topics and sources produce the best downstream results."
+Analyzes which research topics and sources produce the best downstream
+results."
   (message "[evolution] Evolving researcher skill...")
   (let* ((results (gptel-auto-workflow--parse-all-results))
          (research-results (cl-remove-if-not
@@ -1557,14 +1570,17 @@ Analyzes which research topics and sources produce the best downstream results."
     (with-temp-file skill-file
       (insert "---\n")
       (insert "name: auto-workflow-researcher\n")
-      (insert "description: External idea hunter for auto-workflow. Searches internet for novel AI agent techniques and digests them for directive skill evolution.\n")
+      (insert "description: External idea hunter for auto-workflow. Searches internet for
+novel AI agent techniques and digests them for directive skill evolution.\n")
       (insert (format "version: %s\n" (format-time-string "%Y.%m.%d")))
       (insert (format "research-effectiveness: %.1f%%\n" (* 100 research-keep-rate)))
       (insert (format "total-research-experiments: %d\n" total-research))
       (insert "---\n\n")
       (insert "# Auto-Workflow Researcher\n\n")
-      (insert "You are an **external research specialist** for an Emacs-based AI agent system.\n")
-      (insert "Your job: hunt the internet for novel ideas that could improve our project.\n\n")
+      (insert "You are an **external research specialist** for an Emacs-based AI agent
+system.\n")
+      (insert "Your job: hunt the internet for novel ideas that could improve our
+project.\n\n")
       
       ;; Dynamic topics based on performance
       (insert "## Current Research Performance\n\n")
@@ -1618,53 +1634,88 @@ Analyzes which research topics and sources produce the best downstream results."
       (insert "- **ml-intern** — ML-powered coding assistant techniques\n\n")
       (insert "### davidwuchn Repos (Upstream Improvements to Cherry-Pick)\n\n")
       (insert "**Core AI/LLM Infrastructure:**\n")
-      (insert "- **https://github.com/davidwuchn/gptel** — LLM client for Emacs; watch for new backends, tool APIs, context management\n")
-      (insert "- **https://github.com/davidwuchn/gptel-agent** — Agent mode for gptel; watch for subagent improvements, preset system changes\n")
-      (insert "- **https://github.com/davidwuchn/nucleus** — AI prompting framework; watch for benchmark, evaluation, or agent loop changes\n")
-      (insert "- **https://github.com/davidwuchn/mementum** — Git as AI Memory; watch for knowledge synthesis improvements\n")
+      (insert "- **https://github.com/davidwuchn/gptel** — LLM client for Emacs; watch for
+new backends, tool APIs, context management\n")
+      (insert "- **https://github.com/davidwuchn/gptel-agent** — Agent mode for gptel; watch
+for subagent improvements, preset system changes\n")
+      (insert "- **https://github.com/davidwuchn/nucleus** — AI prompting framework; watch
+for benchmark, evaluation, or agent loop changes\n")
+      (insert "- **https://github.com/davidwuchn/mementum** — Git as AI Memory; watch for
+knowledge synthesis improvements\n")
       (insert "- **https://github.com/davidwuchn/ai-behaviors** — Behavior system for LLMs\n")
-      (insert "- **https://github.com/davidwuchn/ai-code-interface.el** — Unified Emacs interface for OpenAI Codex, GitHub Copilot CLI, Claude Code, Gemini CLI, Opencode\n\n")
+      (insert "- **https://github.com/davidwuchn/ai-code-interface.el** — Unified Emacs
+interface for OpenAI Codex, GitHub Copilot CLI, Claude Code, Gemini CLI,
+Opencode\n\n")
       (insert "**Agent Frameworks:**\n")
       (insert "- **https://github.com/davidwuchn/gastown** — Multi-agent workspace manager\n")
-      (insert "- **https://github.com/davidwuchn/gbrain** — Garry's Opinionated OpenClaw/Hermes Agent Brain\n")
-      (insert "- **https://github.com/davidwuchn/nullclaw** — Fastest, smallest, fully autonomous AI assistant infrastructure (Zig)\n")
-      (insert "- **https://github.com/davidwuchn/zeroclaw** — Fast, small, fully autonomous AI personal assistant (Rust, cross-platform)\n")
-      (insert "- **https://github.com/davidwuchn/genesis-agent** — Self-aware cognitive AI agent that reads, modifies \u0026 verifies its own code\n")
-      (insert "- **https://github.com/davidwuchn/efrit** — Native elisp coding agent running in Emacs\n")
-      (insert "- **https://github.com/davidwuchn/symphony** — Turns project work into isolated, autonomous implementation runs\n")
-      (insert "- **https://github.com/davidwuchn/agency-agents** — Complete AI agency with specialized expert agents\n")
-      (insert "- **https://github.com/davidwuchn/sem-assistant-el** — Vibecoded Personal Autonomous Assistant\n\n")
+      (insert "- **https://github.com/davidwuchn/gbrain** — Garry's Opinionated
+OpenClaw/Hermes Agent Brain\n")
+      (insert "- **https://github.com/davidwuchn/nullclaw** — Fastest, smallest, fully
+autonomous AI assistant infrastructure (Zig)\n")
+      (insert "- **https://github.com/davidwuchn/zeroclaw** — Fast, small, fully autonomous
+AI personal assistant (Rust, cross-platform)\n")
+      (insert "- **https://github.com/davidwuchn/genesis-agent** — Self-aware cognitive AI
+agent that reads, modifies \u0026 verifies its own code\n")
+      (insert "- **https://github.com/davidwuchn/efrit** — Native elisp coding agent running
+in Emacs\n")
+      (insert "- **https://github.com/davidwuchn/symphony** — Turns project work into
+isolated, autonomous implementation runs\n")
+      (insert "- **https://github.com/davidwuchn/agency-agents** — Complete AI agency with
+specialized expert agents\n")
+      (insert "- **https://github.com/davidwuchn/sem-assistant-el** — Vibecoded Personal
+Autonomous Assistant\n\n")
       (insert "**Context \u0026 Memory:**\n")
-      (insert "- **https://github.com/davidwuchn/context-mode** — Context window optimization, sandboxes tool output, 98% reduction, 14 platforms\n")
-      (insert "- **https://github.com/davidwuchn/Ori-Mnemos** — Local-first persistent agentic memory with Recursive Memory Harness\n")
-      (insert "- **https://github.com/davidwuchn/verbum** — LLM attention and model architecture exploration\n\n")
+      (insert "- **https://github.com/davidwuchn/context-mode** — Context window
+optimization, sandboxes tool output, 98% reduction, 14 platforms\n")
+      (insert "- **https://github.com/davidwuchn/Ori-Mnemos** — Local-first persistent
+agentic memory with Recursive Memory Harness\n")
+      (insert "- **https://github.com/davidwuchn/verbum** — LLM attention and model
+architecture exploration\n\n")
       (insert "**Testing \u0026 Evaluation:**\n")
-      (insert "- **https://github.com/davidwuchn/promptfoo** — Test prompts, agents, RAGs; AI red teaming and pentesting\n")
-      (insert "- **https://github.com/davidwuchn/baml** — AI framework adding engineering to prompt engineering\n")
-      (insert "- **https://github.com/davidwuchn/ATLAS** — Adaptive Test-time Learning and Autonomous Specialization\n\n")
+      (insert "- **https://github.com/davidwuchn/promptfoo** — Test prompts, agents, RAGs; AI
+red teaming and pentesting\n")
+      (insert "- **https://github.com/davidwuchn/baml** — AI framework adding engineering to
+prompt engineering\n")
+      (insert "- **https://github.com/davidwuchn/ATLAS** — Adaptive Test-time Learning and
+Autonomous Specialization\n\n")
       (insert "**Browser \u0026 Tool Integration:**\n")
-      (insert "- **https://github.com/davidwuchn/browser** — Lightpanda headless browser for AI/automation\n")
-      (insert "- **https://github.com/davidwuchn/browser-harness** — Self-healing harness enabling LLMs to complete any task\n\n")
+      (insert "- **https://github.com/davidwuchn/browser** — Lightpanda headless browser for
+AI/automation\n")
+      (insert "- **https://github.com/davidwuchn/browser-harness** — Self-healing harness
+enabling LLMs to complete any task\n\n")
       (insert "**Code Intelligence:**\n")
-      (insert "- **https://github.com/davidwuchn/GitNexus** — Zero-Server Code Intelligence Engine, client-side knowledge graph\n")
-      (insert "- **https://github.com/davidwuchn/graphify** — Turn any folder into a queryable knowledge graph\n")
-      (insert "- **https://github.com/davidwuchn/LLMLingua** — Compress prompt and KV-Cache up to 20x\n\n")
+      (insert "- **https://github.com/davidwuchn/GitNexus** — Zero-Server Code Intelligence
+Engine, client-side knowledge graph\n")
+      (insert "- **https://github.com/davidwuchn/graphify** — Turn any folder into a
+queryable knowledge graph\n")
+      (insert "- **https://github.com/davidwuchn/LLMLingua** — Compress prompt and KV-Cache
+up to 20x\n\n")
       (insert "**Emacs \u0026 Lisp:**\n")
-      (insert "- **https://github.com/davidwuchn/minimal-emacs.d** — Better Emacs defaults and optimized startup\n")
-      (insert "- **https://github.com/davidwuchn/nelisp** — Emacs Lisp VM in pure Elisp + Rust syscall stub\n")
+      (insert "- **https://github.com/davidwuchn/minimal-emacs.d** — Better Emacs defaults
+and optimized startup\n")
+      (insert "- **https://github.com/davidwuchn/nelisp** — Emacs Lisp VM in pure Elisp +
+Rust syscall stub\n")
       (insert "- **https://github.com/davidwuchn/anvil.el** — (description TBD)\n")
-      (insert "- **https://github.com/davidwuchn/skewed-emacs** — Setup for GNU Emacs, Gendl, and AI\n\n")
+      (insert "- **https://github.com/davidwuchn/skewed-emacs** — Setup for GNU Emacs, Gendl,
+and AI\n\n")
       (insert "**Other Languages \u0026 Platforms:**\n")
       (insert "- **https://github.com/davidwuchn/psi** — Extensible AI Agent in Clojure\n")
-      (insert "- **https://github.com/davidwuchn/mycelium** — Maestro state machines + Malli contracts for AI graph workflows\n")
-      (insert "- **https://github.com/davidwuchn/Aether** — Artificial Ecology For Thought and Emergent Reasoning\n")
+      (insert "- **https://github.com/davidwuchn/mycelium** — Maestro state machines + Malli
+contracts for AI graph workflows\n")
+      (insert "- **https://github.com/davidwuchn/Aether** — Artificial Ecology For Thought
+and Emergent Reasoning\n")
       (insert "- **https://github.com/davidwuchn/tinygrad** — Deep learning framework\n")
-      (insert "- **https://github.com/davidwuchn/electrobun** — Ultra fast, tiny, cross-platform desktop apps with TypeScript\n")
+      (insert "- **https://github.com/davidwuchn/electrobun** — Ultra fast, tiny,
+cross-platform desktop apps with TypeScript\n")
       (insert "- **https://github.com/davidwuchn/mmllm** — hey-china-hold-my-beer-llm\n")
-      (insert "- **https://github.com/davidwuchn/clojure-skills** — Skills and Prompts for Clojure\n")
-      (insert "- **https://github.com/davidwuchn/defold** — Free game engine (watch for agent-config patterns)\n")
-      (insert "- **https://github.com/davidwuchn/defold-agent-config** — AI-assisted game dev with AGENTS.md and skills\n\n")
-      (insert "Check their: recent commits, open issues, closed PRs, architecture decisions\n\n")
+      (insert "- **https://github.com/davidwuchn/clojure-skills** — Skills and Prompts for
+Clojure\n")
+      (insert "- **https://github.com/davidwuchn/defold** — Free game engine (watch for
+agent-config patterns)\n")
+      (insert "- **https://github.com/davidwuchn/defold-agent-config** — AI-assisted game dev
+with AGENTS.md and skills\n\n")
+      (insert "Check their: recent commits, open issues, closed PRs, architecture
+decisions\n\n")
       
       ;; Sources
       (insert "## Sources\n\n")
@@ -1675,7 +1726,8 @@ Analyzes which research topics and sources produce the best downstream results."
       (insert "- **HuggingFace**: New models, datasets, or spaces for code agents\n")
       (insert "- **Reddit**: r/emacs, r/LocalLLaMA, r/MachineLearning discussions\n\n")
       (insert "## Output Format\n\n")
-      (insert "Return a compact structured digest. End with JSON metadata so AutoTTS can replay decisions offline:\n\n")
+      (insert "Return a compact structured digest. End with JSON metadata so AutoTTS can
+replay decisions offline:\n\n")
       (insert "```json\n")
       (insert "{\n")
       (insert "  \"strategy_used\": \"own-repos-first\",\n")
@@ -1693,12 +1745,16 @@ Analyzes which research topics and sources produce the best downstream results."
       (insert "2. Use WebFetch tool to read promising pages/videos (max 3 fetches)\n")
       (insert "3. Focus on NOVEL ideas we haven't implemented (check git history first)\n")
       (insert "4. Extract specific, actionable techniques - not vague trends\n")
-      (insert "5. For each insight, provide: source URL, key technique, how it applies to us\n")
+      (insert "5. For each insight, provide: source URL, key technique, how it applies to
+us\n")
       (insert "6. Max 1200 chars. Prioritize depth over breadth.\n")
       (insert "7. **MONITOR SPECIFIC PROJECTS**:\n")
       (insert "   - Check hermes-agent, zeroclaw, ml-intern for novel AI agent patterns\n")
-      (insert "   - Check ALL https://github.com/davidwuchn repos for upstream improvements we should cherry-pick\n")
-      (insert "   - Prioritize: gptel, gptel-agent, nucleus, mementum, ai-behaviors, ai-code-interface.el, context-mode, gastown, gbrain, nullclaw, genesis-agent, promptfoo, GitNexus, LLMLingua\n")
+      (insert "- Check ALL https://github.com/davidwuchn repos for upstream improvements we
+should cherry-pick\n")
+      (insert "- Prioritize: gptel, gptel-agent, nucleus, mementum, ai-behaviors,
+ai-code-interface.el, context-mode, gastown, gbrain, nullclaw, genesis-agent,
+promptfoo, GitNexus, LLMLingua\n")
       (insert "   Look at: recent commits, open issues, closed PRs, architecture decisions\n")
       (insert "   Focus on: patterns we can adapt to our Emacs AI agent system\n\n")
       
@@ -2609,7 +2665,8 @@ Returns insights string or nil."
 
 (defun gptel-auto-workflow--knowledge-page-signature (file-path)
   "Compute a structural signature of a knowledge page.
-Returns plist with :name, :sections (list of heading names), :frontmatter-keys."
+Returns plist with :name, :sections (list of heading names),
+:frontmatter-keys."
   (let ((name (file-name-nondirectory file-path))
         (sections nil) (fm-keys nil))
     (condition-case nil
@@ -2883,7 +2940,8 @@ Pattern from Semantica PolicyEngine.check_compliance()."
      :explain ((cause . "backend produces poor outputs")
                (action . "deprioritize-backend")
                (confidence . 0.8))))
-  "Abduction rules: (:observe ((field op value) ...) :explain ((key . value) ...)).")
+  "Abduction rules: (:observe ((field op value) ...) :explain ((key . value)
+...)).")
 
 (defun gptel-auto-workflow--abduce (facts)
   "Find best explanations for FACTS using abductive rules.
@@ -3057,7 +3115,8 @@ CYCLE-FROZEN records which evolution cycle the freeze started.")
 (defun gptel-auto-workflow--category-frozen-p (category)
   "Return non-nil if CATEGORY is frozen (≥3 strikes).
 Auto-thaws if frozen for > 5 evolution cycles (strike decay).
-Handles old format (CATEGORY . INTEGER) and new (CATEGORY . (INTEGER . CYCLE))."
+Handles old format (CATEGORY . INTEGER) and new (CATEGORY . (INTEGER .
+CYCLE))."
   (let* ((entry (assq category gptel-auto-workflow--category-strike-counts))
          (rest (if entry (cdr entry) nil))
          (strikes (if (consp rest) (car rest) (or rest 0)))
@@ -3166,7 +3225,8 @@ Prevents over-optimizing one category at the expense of others.")
 
 (defun gptel-auto-workflow--next-category-target (current-category)
   "ε Purpose: suggest next category to experiment on, enforcing quotas.
-If CURRENT-CATEGORY has exceeded quota, rotate to the least-optimized category.
+If CURRENT-CATEGORY has exceeded quota, rotate to the least-optimized
+category.
 Returns a category keyword."
   (let* ((counts gptel-auto-workflow--category-experiment-counts)
          (cur-count (or (cdr (assq current-category counts)) 0))
@@ -3424,11 +3484,13 @@ Combines keep rate, score delta, quality gain, and efficiency.")
     (nreverse gaps)))
 
 (defun gptel-auto-workflow--crown-champion (strategy-name keep-rate &optional composite category)
-  "Crown STRATEGY-NAME as champion for CATEGORY with KEEP-RATE and COMPOSITE score.
+  "Crown STRATEGY-NAME as champion for CATEGORY with KEEP-RATE and COMPOSITE
+score.
 If CATEGORY is nil, crowns the legacy global champion (backward compat).
 Gateway: crowns only if KEEP-RATE exceeds current category champion's rate.
 The first champion (when none exists) must beat the category baseline.
-COMPOSITE is logged for diagnostics but keep-rate remains the gating threshold."
+COMPOSITE is logged for diagnostics but keep-rate remains the gating
+threshold."
   (when (and strategy-name keep-rate)
     (let* ((cat (or category :natural-language))
            (champion-entry (gptel-auto-workflow--get-category-champion cat))
@@ -3565,7 +3627,8 @@ EXTRA is an optional plist of additional fields."
     result))
 
 (defun gptel-auto-workflow--detect-overfitting ()
-  "Detect if train improves but holdout doesn't. Returns overfit/improving/stable.
+  "Detect if train improves but holdout doesn't. Returns
+overfit/improving/stable.
 AutoGo holdout pattern: crosses train vs holdout trends."
   (let* ((h (gptel-auto-workflow--evaluate-holdout))
          (ht (plist-get h :trend))
@@ -3723,15 +3786,18 @@ Consumed by researcher daemon to focus on high-value repos."
         (insert "\n"))
       (insert "## Guidance\n\n")
       (insert "- Focus on high-value sources — their techniques produced kept experiments.\n")
-      (insert "- For low-value sources: either research deeper files or skip until strategy changes.\n")
-      (insert "- Prefer sources that produced BREAKING or POTENTIAL impact (safe = low signal).\n"))
+      (insert "- For low-value sources: either research deeper files or skip until strategy
+changes.\n")
+      (insert "- Prefer sources that produced BREAKING or POTENTIAL impact (safe = low
+signal).\n"))
     (message "[research-priorities] Wrote %d sources to %s" (length sources) file)))
 
 (defun gptel-auto-workflow--enrich-ontology-from-research ()
   "Extract new techniques from researcher's Allium spec and merge into ontology.
 Researcher now outputs Allium v3 behavioral specs — parse Technique entities.
 Semantica pattern: continuous ontology enrichment by the research agent.
-Guards: skips enrichment when EMA confidence < 0.3 (untrusted research signal)."
+Guards: skips enrichment when EMA confidence < 0.3 (untrusted research
+signal)."
   (cl-block gptel-auto-workflow--enrich-ontology-from-research
   (let* ((root (gptel-auto-workflow--worktree-base-root))
          (findings-file (expand-file-name "var/tmp/research-findings.md" root))
@@ -4092,12 +4158,16 @@ Systematic fix per SYSTEM_DESIGN.md §13 divergence taxonomy."
          (cond
           ((< element-count 3)
            ";; TIGHTEN: :invisible — strategy too abstract, no statechart elements
-;; Fix: add `where` block with concrete example (P1: example > rule > negation)
-;; Add at least one with-temp-buffer or let* binding showing the full call chain")
+;; Fix: add `where` block with concrete example (P1: example > rule >
+negation)
+;; Add at least one with-temp-buffer or let* binding showing the full call
+chain")
           ((< score 0.15)
            ";; TIGHTEN: :wrong-generation — prompt doesn't compile to statechart
-;; Fix: add canonical code example from codebase (P8: examples must come from codebase)
-;; Show (let ((result (some-function arg1 arg2))) ...) with real function names")
+;; Fix: add canonical code example from codebase (P8: examples must come from
+codebase)
+;; Show (let ((result (some-function arg1 arg2))) ...) with real function
+names")
           ((< score 0.25)
            ";; TIGHTEN: :boundary-blur — output shape not constrained
 ;; Fix: add where(input ≡ prose, output ≡ EDN) constraint
@@ -4615,7 +4685,8 @@ have experimented on TARGET, or empty string if none found."
     (if result
         (concat "## Previous Research Quality Issues (Allium audit)\n\n"
                 (mapconcat #'identity (nreverse result) "\n---\n")
-                "\n> Improve research strategy coherence to achieve better experiment outcomes.\n")
+                "\n> Improve research strategy coherence to achieve better experiment
+outcomes.\n")
       "")))
 
 ;; ─── Semantica Ontology: experiment → class/instance structure ───
@@ -5365,7 +5436,8 @@ Returns list of conflict plists."
     conflicts))
 
 (defun gptel-auto-workflow--opposing-hypotheses-p (h1 h2)
-  "Return non-nil if H1 and H2 are opposing claims (add vs remove, nil vs non-nil).
+  "Return non-nil if H1 and H2 are opposing claims (add vs remove, nil vs
+non-nil).
 Simple keyword-based opposition detection."
   (let ((opposition-pairs
          '(("add" . "remove") ("add" . "delete") ("adding" . "removing")
@@ -5671,7 +5743,8 @@ Moves better-performing backends to the front of the fallback chain."
 (defun gptel-auto-workflow--backend-head-to-head-stats (backend-a backend-b)
   "Compare BACKEND-A vs BACKEND-B on shared targets.
 Only considers targets where BOTH backends have >=3 experiments.
-Returns plist with :winner, :a-rate, :b-rate, :shared-targets, :a-wins, :b-wins."
+Returns plist with :winner, :a-rate, :b-rate, :shared-targets, :a-wins,
+:b-wins."
   (let* ((by-both (make-hash-table :test 'equal))
          (results (gptel-auto-workflow--parse-all-results)))
     (dolist (r results)
@@ -5828,7 +5901,8 @@ Model names may contain / (e.g. CF-Gateway/@cf/openai/gpt-oss-120b)."
 
 (defun gptel-auto-workflow--evolution-model-stats ()
   "Analyze model (backend+model) performance from all experiment results.
-Returns alist of (\"Backend/model\" . keep-rate) sorted by performance descending.
+Returns alist of (\"Backend/model\" . keep-rate) sorted by performance
+descending.
 Like promptfoo's model-specific comparison: which exact model performs best."
   (let ((by-model (make-hash-table :test 'equal))
         (stats nil))
@@ -6050,7 +6124,8 @@ should trigger π Synthesis (semantic cluster → inherit strategy → auto-queu
 similar targets), VSM health should generate Wu Xing repair actions, and
 cross-subsystem state should persist to disk for daemon-restart survival.
 Regressed targets from knowledge-page diffs should appear in the analyzer
-prompt, and category champions should gate new strategies with keep-rate evidence."))
+prompt, and category champions should gate new strategies with keep-rate
+evidence."))
       (gptel-auto-workflow--allium-bdd-check
        behavior-description
        (lambda (result)
@@ -6066,7 +6141,8 @@ prompt, and category champions should gate new strategies with keep-rate evidenc
                                      :score (plist-get details :score))))))
           (if (eq (car result) :pass)
              (message "[allium-bdd] Ouroboros behavioral spec: PASS")
-           (message "[allium-bdd] Ouroboros behavioral spec: %s (issues=%s severity=%.2f score=%.2f)"
+           (message "[allium-bdd] Ouroboros behavioral spec: %s (issues=%s severity=%.2f
+score=%.2f)"
                     (car result)
                     (plist-get (cdr result) :issues)
                     (plist-get (cdr result) :severity)
@@ -6084,7 +6160,8 @@ prompt, and category champions should gate new strategies with keep-rate evidenc
 
 (defun gptel-auto-workflow--allium-bdd-check (behavior-description &optional callback)
   "BDD check: distill BEHAVIOR-DESCRIPTION to Allium spec and verify coherence.
-Returns nil when Allium is unavailable. Silent no-op when gptel not functional.
+Returns nil when Allium is unavailable. Silent no-op when gptel not
+functional.
 Use for TDD-style behavioral verification."
   (cl-block gptel-auto-workflow--allium-bdd-check
   (condition-case _err
@@ -6502,7 +6579,8 @@ Trivial Elisp file that should always pass grader.")
 
 (defun gptel-auto-workflow--run-diagnostic-probe ()
   "Run a real grader call on trivial output to verify grading works.
-If grader returns score=0 or errors on trivial safe output, the grader is broken.
+If grader returns score=0 or errors on trivial safe output, the grader is
+broken.
 Returns t if grader healthy, nil if broken.
 Uses 30s timeout to avoid blocking pipeline on slow backends."
   (message "[self-heal] Running diagnostic probe (real grader call)...")
@@ -6610,7 +6688,8 @@ Tests still run, but no LLM grading — changes marked for manual review.")
 (defvar gptel-auto-workflow--grader-health-metrics
   (make-hash-table :test 'equal)
   "Hash table tracking grader performance per backend.
-Keys are backend names, values are plists with :count :total-latency :failures :cost.")
+Keys are backend names, values are plists with :count :total-latency :failures
+:cost.")
 
 (defvar gptel-auto-workflow--backend-cost-estimates
   '(("MiniMax" . 0.003)
@@ -6755,7 +6834,7 @@ This is the final fallback, not the first response."
 
 (defun gptel-auto-workflow--llm-diagnose-pipeline (diagnosis)
   "Use LLM to creatively diagnose why mechanical remediation failed.
-DIAGNOSIS is a string like 'grader-destroying-experiments'.
+DIAGNOSIS is a string like \='grader-destroying-experiments\='.
 Returns list of suggested fixes, or nil if LLM unavailable.
 This is the intelligent layer — mechanical fixes are deterministic,
 but when they fail, we need creative reasoning."
@@ -6829,102 +6908,163 @@ Call when keep_rate improves after fix."
 
 ;;; ─── Phase 10: Self-Healing Byte-Compiler Warnings ───
 
+(defvar gptel-auto-workflow--self-heal-internal-vars
+  '("line-start" "line-text" "old-var" "new-var" "fixes" "result"
+    "captured" "defvars" "declares" "renames" "fn-sym" "fn" "src"
+    "insert-point" "form-start" "form-text" "str-start" "str-end"
+    "open-pos" "text" "fixed" "wrapped" "lines" "words" "current"
+    "proposed" "pattern" "var" "w" "fc" "remaining" "target-line"
+    "has-free-err" "arglist" "arglist-start" "def-args" "min-args"
+    "ls" "lt" "ov" "nv" "self-iter" "self-clean" "cur-count"
+    "prev-count" "still-unclean" "unclean" "all-files")
+  "Variables internal to self-heal fixers.  Never rename these.")
+
+(defun gptel-auto-workflow--byte-compile-warnings-for-file (file)
+  "Collect byte-compile warnings for FILE.  Returns alist of (LINE . TEXT)."
+  (let ((byte-compile-error-on-warn nil)
+        (byte-compile-warnings t)
+        (captured nil))
+    (cl-letf (((symbol-function 'byte-compile-log-warning)
+               (lambda (string _fill &optional _level)
+                 (let ((line nil))
+                   (when (string-match ":\\([0-9]+\\):" string)
+                     (setq line (string-to-number (match-string 1 string))))
+                   (push (cons line string) captured)))))
+      (with-temp-buffer
+        (insert-file-contents file)
+        (byte-compile-from-buffer (current-buffer))))
+    (nreverse captured)))
+
 (defun gptel-auto-workflow--fix-docstring-width (file)
   "Auto-fix docstrings wider than 80 chars in FILE.
-Wraps long lines and re-opens the file.  Returns number of fixes."
+Finds strings via syntax-ppss, wraps long lines in docstrings.
+Returns number of fixes."
   (let ((fixes 0))
     (with-current-buffer (find-file-noselect file)
       (goto-char (point-min))
-      (while (re-search-forward
-              (rx (group "\"")
-                  (group (+? (not (any "\"\n"))))
-                  (group "\""))
-              nil t)
-        (let* ((start (match-beginning 2))
-               (end (match-end 2))
-               (text (buffer-substring-no-properties start end)))
-          (when (> (length text) 78)
-            (let* ((lines (split-string text "\n"))
-                   (wrapped
-                    (mapconcat
-                     (lambda (line)
-                       (if (> (length line) 78)
-                           (let ((words (split-string line))
-                                 (result nil)
-                                 (current ""))
-                             (dolist (w words)
-                               (let ((proposed (if (string= current "") w
-                                                 (concat current " " w))))
-                                 (if (> (length proposed) 78)
-                                     (progn (push current result)
-                                            (setq current w))
-                                   (setq current proposed))))
-                             (when (> (length current) 0) (push current result))
-                             (mapconcat #'identity (nreverse result) "\n"))
-                         line))
-                     lines "\n")))
-              (goto-char start)
-              (delete-region start end)
-              (insert wrapped)
-              (setq fixes (1+ fixes))))))
+      (while (re-search-forward "\"" nil t)
+        (backward-char 1)
+        (let ((pps (syntax-ppss)))
+          (when (nth 3 pps)
+            (let* ((open-pos (nth 8 pps))
+                   (str-start (1+ open-pos))
+                   (str-end (progn (goto-char open-pos)
+                                   (forward-sexp 1)
+                                   (1- (point))))
+                   (text (buffer-substring-no-properties str-start str-end)))
+              (when (and (> (length text) 78)
+                         (save-excursion
+                           (goto-char (1+ str-end))
+                           (skip-chars-forward " \t\n")
+                           (memq (char-after) '(41 40))))
+                (let* ((lines (split-string text "\n"))
+                       (wrapped
+                        (mapconcat
+                         (lambda (line)
+                           (if (> (length line) 78)
+                               (let ((words (split-string line))
+                                     (result nil)
+                                     (current ""))
+                                 (dolist (w words)
+                                   (let ((proposed (if (string= current "") w
+                                                     (concat current " " w))))
+                                     (if (> (length proposed) 78)
+                                         (progn (push current result)
+                                                (setq current w))
+                                       (setq current proposed))))
+                                 (when (> (length current) 0) (push current result))
+                                 (mapconcat #'identity (nreverse result) "\n"))
+                             line))
+                         lines "\n")))
+                  (goto-char str-start)
+                  (delete-region str-start str-end)
+                  (insert wrapped)
+                  (setq fixes (1+ fixes)))))))
+        (forward-char 1))
       (when (> fixes 0) (save-buffer))
       (kill-buffer (current-buffer)))
     fixes))
 
 (defun gptel-auto-workflow--fix-unescaped-quotes (file)
   "Auto-fix unescaped single quotes in docstrings in FILE.
-Replaces 'word' patterns with \\='word\\=' inside docstrings.
-Returns number of fixes."
+Only fixes docstrings.  Returns number of fixes."
   (let ((fixes 0))
     (with-current-buffer (find-file-noselect file)
       (goto-char (point-min))
-      (while (re-search-forward "\"\\([^\"\\]*\\)\"" nil t)
-        (let* ((start (match-beginning 1))
-               (end (match-end 1))
-               (text (buffer-substring-no-properties start end))
-               (fixed (replace-regexp-in-string
-                       "'\\(\\sw[^'\"\\)]*\\)'"
-                       "\\\\='\\1\\\\='" text)))
-          (unless (string= text fixed)
-            (goto-char start)
-            (delete-region start end)
-            (insert fixed)
-            (setq fixes (1+ fixes)))))
+      (while (re-search-forward "\"" nil t)
+        (backward-char 1)
+        (let ((pps (syntax-ppss)))
+          (when (nth 3 pps)
+            (let* ((open-pos (nth 8 pps))
+                   (str-start (1+ open-pos))
+                   (str-end (progn (goto-char open-pos)
+                                   (forward-sexp 1)
+                                   (1- (point))))
+                   (text (buffer-substring-no-properties str-start str-end))
+                   (fixed (replace-regexp-in-string
+                           "'\\(\\sw+\\)'"
+                           "\\\\='\\1\\\\='" text)))
+              (when (and (not (string= text fixed))
+                         (save-excursion
+                           (goto-char (1+ str-end))
+                           (skip-chars-forward " \t\n")
+                           (memq (char-after) '(41 40))))
+                (goto-char str-start)
+                (delete-region str-start str-end)
+                (insert fixed)
+                (setq fixes (1+ fixes))
+                (goto-char str-end)))))
+        (forward-char 1))
       (when (> fixes 0) (save-buffer))
       (kill-buffer (current-buffer)))
     fixes))
 
 (defun gptel-auto-workflow--fix-unused-variables (file warnings)
-  "Auto-fix unused lexical variables in FILE by prefixing with _.
-WARNINGS is the list of byte-compile warning strings.
-Returns number of fixes."
-  (let ((fixes 0))
+  "Auto-fix unused lexical variables/arguments in FILE by prefixing with _.
+Only renames binding sites.  Skips self-heal internal vars.
+WARNINGS is alist of (LINE . TEXT).  Returns number of fixes."
+  (let ((fixes 0)
+        (renames nil))
     (with-current-buffer (find-file-noselect file)
       (dolist (w warnings)
-        (when (string-match "Unused lexical \\(?:argument\\|variable\\) '\\([^']+\\)'" w)
-          (let* ((var (match-string 1 w))
-                 (pattern (concat "(" (regexp-quote var) " ")))
-            (goto-char (point-min))
-            (when (re-search-forward pattern nil t)
-              (goto-char (match-beginning 0))
-              (forward-char 1)
-              (insert "_")
-              (setq fixes (1+ fixes))))))
+        (when (string-match "Unused lexical \\(?:argument\\|variable\\) [`']\\([^']+\\)['`]" (cdr w))
+          (let* ((var (match-string 1 (cdr w)))
+                 (new-var (concat "_" var)))
+            (when (and (not (string-prefix-p "_" var))
+                       (not (member var gptel-auto-workflow--self-heal-internal-vars)))
+              (push (cons var new-var) renames)))))
+      (dolist (rename (delete-dups renames))
+        (let* ((ov (car rename))
+               (nv (cdr rename)))
+          (goto-char (point-min))
+          (while (re-search-forward (concat "(\\<" (regexp-quote ov) "\\>") nil t)
+            (with-no-warnings
+              (let* ((ls (line-beginning-position))
+                     (lt (buffer-substring-no-properties ls (line-end-position))))
+                (when (or (string-match-p "\\<let\\*?\\>" lt)
+                          (string-match-p "\\<defun\\|\\<cl-defun\\|\\<defmacro\\|\\<lambda\\>" lt))
+                  (replace-match (concat "(" nv) t t)
+                  (setq fixes (1+ fixes))))))))
       (when (> fixes 0) (save-buffer))
       (kill-buffer (current-buffer)))
     fixes))
 
 (defun gptel-auto-workflow--fix-free-variables (file warnings)
   "Auto-fix free variable references in FILE by adding defvar.
-WARNINGS is the list of byte-compile warning strings.
+Skips common locals.  WARNINGS is alist of (LINE . TEXT).
 Returns number of fixes."
   (let ((fixes 0)
-        (defvars nil))
+        (defvars nil)
+        (skip-vars '("err" "it" "result" "data" "body" "form" "key" "val" "_")))
     (dolist (w warnings)
-      (when (string-match "reference to free variable '\\([^']+\\)'" w)
-        (push (match-string 1 w) defvars))
-      (when (string-match "assignment to free variable '\\([^']+\\)'" w)
-        (push (match-string 1 w) defvars)))
+      (when (string-match "reference to free variable [`']\\([^']+\\)['`]" (cdr w))
+        (let ((v (match-string 1 (cdr w))))
+          (unless (member v skip-vars)
+            (push v defvars))))
+      (when (string-match "assignment to free variable [`']\\([^']+\\)['`]" (cdr w))
+        (let ((v (match-string 1 (cdr w))))
+          (unless (member v skip-vars)
+            (push v defvars)))))
     (setq defvars (delete-dups defvars))
     (when defvars
       (with-current-buffer (find-file-noselect file)
@@ -6943,25 +7083,29 @@ Returns number of fixes."
       fixes))
 
 (defun gptel-auto-workflow--fix-unknown-functions (file warnings)
-  "Auto-fix unknown function warnings in FILE by adding declare-function.
-Looks up function source via find-lisp-object-file-name.
-WARNINGS is the list of byte-compile warning strings.
-Returns number of fixes."
+  "Auto-fix unknown function warnings by adding declare-function.
+WARNINGS is alist of (LINE . TEXT).  Returns number of fixes."
   (let ((fixes 0)
         (declares nil))
     (dolist (w warnings)
-      (when (string-match "the function '\\([^']+\\)' is not known" w)
-        (let* ((fn-sym (match-string 1 w))
+      (when (string-match "the function [`']\\([^']+\\)['`] is not known" (cdr w))
+        (let* ((fn-sym (match-string 1 (cdr w)))
                (fn (intern-soft fn-sym)))
-          (when fn
-            (let ((src (ignore-errors
-                         (file-name-sans-extension
-                          (file-name-nondirectory
-                           (or (find-lisp-object-file-name fn (symbol-function fn))
-                               (when (boundp fn)
-                                 (find-lisp-object-file-name fn (symbol-value fn)))))))))
-              (when src
-                (push (cons fn-sym src) declares)))))))
+          (let ((src (or (ignore-errors
+                           (file-name-sans-extension
+                            (file-name-nondirectory
+                             (or (when (and fn (fboundp fn))
+                                   (find-lisp-object-file-name fn (symbol-function fn)))
+                                 (when (and fn (boundp fn))
+                                   (find-lisp-object-file-name fn (symbol-value fn)))))))
+                          (and (string-match "^gptel-auto-workflow--" fn-sym)
+                               "gptel-auto-workflow-evolution")
+                          (and (string-match "^gptel-auto-experiment--" fn-sym)
+                               "gptel-auto-experiment-evolution")
+                          (and (string-match "^gptel-ai-behaviors--" fn-sym)
+                               "gptel-ai-behaviors"))))
+            (when src
+              (push (cons fn-sym src) declares))))))
     (setq declares (delete-dups declares))
     (when declares
       (with-current-buffer (find-file-noselect file)
@@ -6979,58 +7123,173 @@ Returns number of fixes."
         (kill-buffer (current-buffer))))
       fixes))
 
-(defun gptel-auto-workflow--byte-compile-warnings-for-file (file)
-  "Collect byte-compile warnings for FILE.  Returns list of warning strings."
-  (let ((byte-compile-error-on-warn nil)
-        (byte-compile-warnings t)
-        (result nil))
-    (with-temp-buffer
-      (insert-file-contents file)
-      (byte-compile-from-buffer (current-buffer)))
-    (dolist (w byte-compile--warnings)
-      (push (cadr w) result))
-    (nreverse result)))
+(defun gptel-auto-workflow--fix-condition-case-no-handlers (file warnings)
+  "Auto-fix condition-case without handlers when free err is referenced.
+Binds err: (condition-case nil -> (condition-case err) at the warning line.
+WARNINGS is alist of (LINE . TEXT).  Returns number of fixes."
+  (let ((fixes 0)
+        (has-free-err nil))
+    (dolist (w warnings)
+      (when (string-match "reference to free variable.*`err'" (cdr w))
+        (setq has-free-err t)))
+    (when has-free-err
+      (with-current-buffer (find-file-noselect file)
+        (dolist (w warnings)
+          (when (and (car w)
+                     (string-match "condition-case.*without handlers" (cdr w)))
+            (goto-char (point-min))
+            (forward-line (1- (car w)))
+            (when (re-search-forward "(condition-case[ \t]+nil" (line-end-position) t)
+              (replace-match "(condition-case err")
+              (setq fixes (1+ fixes)))))
+        (when (> fixes 0) (save-buffer))
+        (kill-buffer (current-buffer))))
+    fixes))
+
+(defun gptel-auto-workflow--fix-arg-mismatch (file warnings)
+  "Auto-fix arg count mismatch by adding &optional to definition.
+WARNINGS is alist of (LINE . TEXT).  Returns number of fixes."
+  (let ((fixes 0))
+    (with-current-buffer (find-file-noselect file)
+      (dolist (w warnings)
+        (when (and (car w)
+                   (string-match "being defined to take \\([0-9]+\\) args?.*called with" (cdr w)))
+          (goto-char (point-min))
+          (forward-line (1- (car w)))
+          (when (re-search-forward "(defun\\|(cl-defun" (line-end-position) t)
+            (let ((arglist-start (point)))
+              (forward-sexp 1)
+              (let ((arglist (buffer-substring-no-properties arglist-start (point))))
+                (when (not (string-match "&optional" arglist))
+                  (goto-char (1- (point)))
+                  (insert " &optional")
+                  (setq fixes (1+ fixes))))))))
+      (when (> fixes 0) (save-buffer))
+      (kill-buffer (current-buffer)))
+    fixes))
+
+(defun gptel-auto-workflow--self-heal-byte-compiler-llm (warnings)
+  "Escalate stubborn WARNINGS in self to LLM backend.
+LLM fixes self-heal function itself when mechanical fixers fail.
+Returns number of fixes applied."
+  (let ((fixes 0)
+        (self-file (or load-file-name (buffer-file-name))))
+    (when (and self-file
+               (boundp 'gptel-backend) gptel-backend
+               (fboundp 'gptel-send))
+      (with-current-buffer (find-file-noselect self-file)
+        (let* ((warning-text (mapconcat (lambda (w) (cdr w)) warnings "\n"))
+               (prompt (format
+                        "Fix these byte-compiler warnings in YOUR OWN self-healing code.
+You are the self-heal function fixing itself.  Return ONLY corrected Elisp.
+WARNINGS:\n%s\n\nFILE:\n%s"
+                        warning-text
+                        (buffer-substring-no-properties (point-min) (min (point-max) 8000))))
+               (response nil))
+          (with-temp-buffer
+            (insert prompt)
+            (gptel-send nil ?w)
+            (sit-for 30)
+            (setq response (buffer-string)))
+          (when (and response (> (length response) 0))
+            (with-current-buffer (find-file-noselect self-file)
+              (erase-buffer)
+              (insert response)
+              (save-buffer)
+              (setq fixes (length warnings)))))
+        (kill-buffer (current-buffer))))
+    fixes))
+
+(defun gptel-auto-workflow--self-heal-byte-compiler--fix-file (file)
+  "Apply all 7 mechanical fixers to FILE.  Returns (FIX-COUNT . REMAINING)."
+  (let* ((warnings (gptel-auto-workflow--byte-compile-warnings-for-file file))
+         (fix-count 0))
+    (when warnings
+      (message "[self-heal] %s: %d warnings" (file-name-nondirectory file) (length warnings))
+      (cl-incf fix-count (gptel-auto-workflow--fix-docstring-width file))
+      (cl-incf fix-count (gptel-auto-workflow--fix-unescaped-quotes file))
+      (cl-incf fix-count (gptel-auto-workflow--fix-unused-variables file warnings))
+      (cl-incf fix-count (gptel-auto-workflow--fix-free-variables file warnings))
+      (cl-incf fix-count (gptel-auto-workflow--fix-unknown-functions file warnings))
+      (cl-incf fix-count (gptel-auto-workflow--fix-condition-case-no-handlers file warnings))
+      (cl-incf fix-count (gptel-auto-workflow--fix-arg-mismatch file warnings)))
+    (cons fix-count (gptel-auto-workflow--byte-compile-warnings-for-file file))))
 
 (defun gptel-auto-workflow--self-heal-byte-compiler (&optional files max-iterations)
   "Self-heal byte-compiler warnings across FILES.
-Iteratively applies fixes until clean or MAX-ITERATIONS reached.
-FILES defaults to all agent + auto-workflow .el files.
+Dog-food: Phase 1 fixes self (mechanical + LLM for self only).
+Phase 2 fixes others (mechanical only, accepts ceiling).
 Returns plist with :fixes-applied :remaining-warnings :files-fixed."
   (interactive)
-  (let* ((all-files
+  (let* ((self-file "lisp/modules/gptel-auto-workflow-evolution.el")
+         (all-files
           (or files
               (append
+               (list self-file)
                (file-expand-wildcards "lisp/modules/gptel-tools-agent-*.el")
-               (file-expand-wildcards "lisp/modules/gptel-auto-workflow-*.el"))))
-         (iterations 0)
+               (delq nil (remove self-file
+                                 (file-expand-wildcards "lisp/modules/gptel-auto-workflow-*.el"))))))
          (max-iter (or max-iterations 5))
          (total-fixes 0)
          (files-fixed nil))
-    (while (and (< iterations max-iter) all-files)
-      (setq iterations (1+ iterations))
-      (message "[self-heal] Byte-compiler iteration %d/%d" iterations max-iter)
-      (let ((still-unclean nil))
-        (dolist (f all-files)
-          (let* ((warnings (gptel-auto-workflow--byte-compile-warnings-for-file f))
-                 (fix-count 0))
-            (when warnings
-              (message "[self-heal] %s: %d warnings" (file-name-nondirectory f) (length warnings))
-              (cl-incf fix-count (gptel-auto-workflow--fix-docstring-width f))
-              (cl-incf fix-count (gptel-auto-workflow--fix-unescaped-quotes f))
-              (cl-incf fix-count (gptel-auto-workflow--fix-unused-variables f warnings))
-              (cl-incf fix-count (gptel-auto-workflow--fix-free-variables f warnings))
-              (cl-incf fix-count (gptel-auto-workflow--fix-unknown-functions f warnings))
-              (cl-incf total-fixes fix-count)
-              (when (> fix-count 0)
-                (push (file-name-nondirectory f) files-fixed))
-              (let ((remaining (gptel-auto-workflow--byte-compile-warnings-for-file f)))
-                (when remaining
-                  (push f still-unclean))))))
-        (setq all-files (nreverse still-unclean))))
+    (message "[self-heal] === Phase 1: Dog-food - fix self first ===")
+    (let ((self-iter 0)
+          (self-clean nil))
+      (while (and (< self-iter max-iter) (not self-clean))
+        (setq self-iter (1+ self-iter))
+        (let* ((result (gptel-auto-workflow--self-heal-byte-compiler--fix-file self-file))
+               (fc (car result))
+               (remaining (cdr result)))
+          (cl-incf total-fixes fc)
+          (when (> fc 0) (push (file-name-nondirectory self-file) files-fixed))
+          (if remaining
+              (progn
+                (message "[self-heal] Self: %d fixes, %d remain - LLM escalation"
+                         fc (length remaining))
+                (let ((llm-fixes (gptel-auto-workflow--self-heal-byte-compiler-llm remaining)))
+                  (cl-incf total-fixes llm-fixes)
+                  (when (> llm-fixes 0)
+                    (push (file-name-nondirectory self-file) files-fixed)))
+                (let ((after (gptel-auto-workflow--byte-compile-warnings-for-file self-file)))
+                  (if after
+                      (message "[self-heal] Self: %d unfixable warnings remain" (length after))
+                    (setq self-clean t))))
+            (setq self-clean t)))))
+    (message "[self-heal] === Phase 2: Mechanical fixes for others ===")
+    (let ((iterations 0)
+          (prev-count most-positive-fixnum)
+          (unclean (delq nil (mapcar (lambda (f)
+                                       (unless (string= f self-file)
+                                         (when (gptel-auto-workflow--byte-compile-warnings-for-file f) f)))
+                                     all-files))))
+      (while (and (< iterations max-iter) unclean)
+        (setq iterations (1+ iterations))
+        (message "[self-heal] Iteration %d/%d - %d files" iterations max-iter (length unclean))
+        (let ((still-unclean nil)
+              (cur-count 0))
+          (dolist (f unclean)
+            (let* ((result (gptel-auto-workflow--self-heal-byte-compiler--fix-file f))
+                   (fc (car result))
+                   (remaining (cdr result)))
+              (cl-incf total-fixes fc)
+              (cl-incf cur-count (length remaining))
+              (when (> fc 0) (push (file-name-nondirectory f) files-fixed))
+              (when remaining (push f still-unclean))))
+          (when (>= cur-count prev-count)
+            (message "[self-heal] Mechanical ceiling at %d warnings" cur-count)
+            (setq unclean nil iterations max-iter))
+          (setq prev-count cur-count)
+          (setq unclean
+                (delq nil (mapcar (lambda (f)
+                                    (when (gptel-auto-workflow--byte-compile-warnings-for-file f) f))
+                                  still-unclean))))))
     (let ((remaining (apply #'append
-                            (mapcar #'gptel-auto-workflow--byte-compile-warnings-for-file
-                                    all-files))))
-      (message "[self-heal] Done: %d fixes, %d remaining warnings, %d files fixed"
+                            (mapcar (lambda (f)
+                                      (gptel-auto-workflow--byte-compile-warnings-for-file f))
+                                    (delq nil (mapcar (lambda (f)
+                                                        (when (gptel-auto-workflow--byte-compile-warnings-for-file f) f))
+                                                      all-files))))))
+      (message "[self-heal] Done: %d fixes, %d remaining, %d files fixed"
                total-fixes (length remaining) (length (delete-dups files-fixed)))
       (list :fixes-applied total-fixes
             :remaining-warnings (length remaining)
