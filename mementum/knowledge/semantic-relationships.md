@@ -4,16 +4,10 @@
 
 # Semantic File Relationships
 
-Generated: 2026-06-04T09:21
+Generated: 2026-06-04T19:51
 
-| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-auto-workflow-strategic.el | 0.444 |
-| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-benchmark-core.el | 0.222 |
-| lisp/modules/gptel-auto-workflow-beads.el | lisp/modules/gptel-auto-workflow-projects.el | 0.222 |
-| lisp/modules/gptel-auto-workflow-cq-evolution.el | lisp/modules/gptel-auto-workflow-projects.el | 0.222 |
-| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-auto-workflow-research-benchmark.el | 0.222 |
+| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-auto-workflow-strategic.el | 0.400 |
 | lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-tools-agent-prompt-build.el | 0.214 |
-| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-ext-retry.el | 0.200 |
-| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-tools-agent-research.el | 0.200 |
 
 ## Ontology Implications
 
