@@ -127,8 +127,10 @@ When exceeded, oldest entries are evicted. Set to 0 for unlimited."
 
 (defcustom my/gptel-subagent-include-history-default nil
   "Default value for include_history when LLM doesn't specify.
-When nil (default), subagents start with clean context unless explicitly requested.
-When t, subagents receive recent conversation history (risks payload bloat on
+When nil (default), subagents start with clean context unless
+explicitly requested.
+When t, subagents receive recent conversation history (risks
+payload bloat on
 long-running daemons)."
   :type 'boolean
   :group 'gptel-tools-agent)
@@ -154,8 +156,6 @@ Keys are (agent-type prompt-hash), values are (timestamp . result).")
 (eval-and-compile
   (require 'gptel nil t)
   (require 'gptel-agent nil t))
-
-(require 'gptel-ext-fsm-utils)
 
 ;;; Subagent Result Cache
 

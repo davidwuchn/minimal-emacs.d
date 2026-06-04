@@ -10,7 +10,7 @@
 (defvar gptel-auto-workflow--project-root-override)
 (defvar gptel-auto-workflow--run-project-root)
 (defvar gptel-auto-workflow--headless)
-
+(defvar gptel-mementum-headless-auto-approve)
 (defun gptel-auto-workflow-update-mutation-skill (mutation-type all-results)
   "Update MUTATION-TYPE skill file with ALL-RESULTS."
   (let* ((skill-file (format "%s/mutations/%s.md"

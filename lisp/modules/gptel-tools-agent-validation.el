@@ -591,7 +591,7 @@ Criteria:
     (let* ((line-count (with-temp-buffer
                          (insert diff-text)
                          (count-matches "\n" (point-min) (point-max))))
-           (added (with-temp-buffer
+           (_added (with-temp-buffer
                     (insert diff-text)
                     (count-matches "^\\+" (point-min) (point-max))))
            (deleted (with-temp-buffer

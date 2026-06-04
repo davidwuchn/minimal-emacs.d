@@ -1,8 +1,9 @@
 ;;; gptel-tools-agent-benchmark.el --- Benchmark, evaluation, scoring -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
-(require 'gptel-tools-agent-validation)
-(require 'gptel-ext-backend-registry)
+(require 'cl-lib)
+(declare-function gptel-auto-experiment--validate-code "gptel-tools-agent-validation")
+(declare-function gptel-backend-registry-default-model "gptel-ext-backend-registry" (backend))
 (declare-function project-root "project")
 (declare-function gptel-auto-workflow--call-in-run-context "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--non-empty-string-p "gptel-tools-agent-base")

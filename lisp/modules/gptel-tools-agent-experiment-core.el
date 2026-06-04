@@ -180,6 +180,8 @@ Checks `gptel-auto-workflow--rate-limited-backends' and uses
           (message "[auto-experiment] Main backend %s is rate-limited but no fallback available"
                    current-name))))))
 
+(defvar gptel-auto-experiment-run)
+
 (cl-defun gptel-auto-experiment-run (target experiment-id max-experiments baseline baseline-code-quality previous-results callback &optional log-fn)
   "Run single experiment. Call CALLBACK with result plist.
 BASELINE-CODE-QUALITY is the initial code quality score.

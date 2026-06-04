@@ -17,6 +17,10 @@
 (defvar gptel-auto-workflow--current-target)
 (defvar gptel-auto-workflow--stats)
 (defvar gptel-auto-workflow--force-idle-status-overwrite)
+(defvar gptel-model)
+(defvar gptel-auto-workflow-use-staging)
+(defvar gptel-backend)
+(defvar gptel-auto-experiment-time-budget)
 (defvar gptel-auto-workflow--last-progress-time)
 (defvar gptel-auto-workflow--cron-safe-step nil
   "Current step in gptel-auto-workflow-cron-safe for debugging.")

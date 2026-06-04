@@ -158,7 +158,7 @@ Returns the adjusted max chars value."
 
 (defun gptel-auto-experiment--prompt-structure-score (prompt)
   "Score PROMPT structure quality (0.0-1.0).
-Like nucleus's compiler: well-structured prompts 'compile' better.
+Like nucleus's compiler: well-structured prompts ='compile=' better.
 Criteria: has sections, has examples, has specific guidance, right length."
   (let ((score 0.0))
     (when (stringp prompt)
@@ -232,8 +232,8 @@ Like verbum's lambda_kernel_probes.py: 400 probes across 15 axes.")
 Returns (refined-prompt . iterations)."
   (let ((current prompt) (iter 0) (max-iter (or max-iterations 3)))
     (while (< iter max-iter)
-      (let* ((score (gptel-auto-experiment--prompt-structure-score current))
-             (improved current))
+       (let* ((_score (gptel-auto-experiment--prompt-structure-score current))
+              (improved current))
         (when (and (< iter 1) (not (string-match-p "## " current)))
           (setq improved (concat "## Fix\n\n" current)))
         (when (and (< iter 2) (not (string-match-p "```" current))

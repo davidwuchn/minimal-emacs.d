@@ -1,9 +1,11 @@
 ;;; gptel-tools-agent-staging-merge.el --- Staging branch protection - merge & verify -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
+(require 'cl-lib)
 (require 'subr-x)
 (require 'gptel-auto-workflow-behavioral-tests nil t)
-(declare-function gptel-auto-workflow--current-run-id "gptel-tools-agent-base")
+(defvar gptel-auto-workflow--recovering-stale-staging)
+(declare-function magit-get-current-branch "magit-git" ())(declare-function gptel-auto-workflow--current-run-id "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--make-idempotent-callback "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--non-empty-string-p "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--optimize-branch-integrated-p "gptel-tools-agent-base")

@@ -8,7 +8,7 @@
 
 (require 'cl-lib)
 (require 'subr-x)
-(require 'gptel-tools-agent-strategy-harness)
+(require 'gptel-tools-agent-strategy-harness nil t)
 
 (declare-function gptel-auto-workflow--project-root "gptel-tools-agent-base" ())
 (declare-function gptel-auto-workflow--results-file-path "gptel-tools-agent-base" (&optional run-id))
@@ -299,7 +299,7 @@ Returns empty list if CODE is nil or empty."
     '(:type "cl-function" :description "CL-only function not in Emacs Lisp"))
    (t nil)))
 
-(defun gptel-auto-workflow--record-prototype-error (strategy-name error-string)
+(defun gptel-auto-workflow--record-prototype-error (_strategy-name error-string)
   "Record a prototype error, updating the persistent pattern counter."
   (let ((pattern (gptel-auto-workflow--classify-prototype-error error-string)))
     (when pattern

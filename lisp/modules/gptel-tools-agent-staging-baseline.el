@@ -1,5 +1,6 @@
 ; -*- lexical-binding: t; -*-
 (require 'cl-lib)
+(defvar gptel-auto-workflow--category-action-schemas)
 (declare-function cl-every "cl-lib")
 (declare-function cl-set-difference "cl-lib")
 (declare-function gptel-auto-workflow--default-dir "gptel-tools-agent-base")

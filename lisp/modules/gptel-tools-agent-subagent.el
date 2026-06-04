@@ -3,7 +3,7 @@
 
 (require 'cl-lib)
 (require 'subr-x)
-(require 'gptel-tools-agent-git)
+(require 'gptel-tools-agent-git nil t)
 
 ;; Forward declarations for dynamic variables from gptel-agent package
 (defvar my/gptel--current-agent-task-id)
@@ -18,8 +18,10 @@
 (defvar gptel-auto-workflow--defer-subagent-env-persistence)
 (defvar gptel-auto-workflow--subagent-process-environment)
 (defvar gptel-auto-experiment--subagent-dispatch-log (make-hash-table :test 'equal)
-  "Hash table tracking subagent dispatch counts per (agent-type, category).
-Populated by `my/gptel--run-agent-tool-with-timeout', consumed by evolution cycle.")
+  "Hash table tracking subagent dispatch counts per
+(agent-type, category).
+Populated by `my/gptel--run-agent-tool-with-timeout', consumed by
+evolution cycle.")
 (defvar gptel-agent--agents)
 (defvar my/gptel-subagent-include-history-default)
 (defvar gptel-auto-experiment-active-grace)
