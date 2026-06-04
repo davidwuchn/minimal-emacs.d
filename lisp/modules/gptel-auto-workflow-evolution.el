@@ -6919,6 +6919,24 @@ Call when keep_rate improves after fix."
     "prev-count" "still-unclean" "unclean" "all-files")
   "Variables internal to self-heal fixers.  Never rename these.")
 
+(defun gptel-auto-workflow--edit-distance (s1 s2)
+  "Return Levenshtein edit distance between S1 and S2."
+  (let* ((len1 (length s1))
+         (len2 (length s2))
+         (prev (make-vector (1+ len2) 0))
+         (curr (make-vector (1+ len2) 0)))
+    (dotimes (j (1+ len2)) (aset prev j j))
+    (dotimes (i len1)
+      (aset curr 0 (1+ i))
+      (dotimes (j len2)
+        (aset curr (1+ j)
+              (min (1+ (aref curr j))
+                   (1+ (aref prev (1+ j)))
+                   (+ (aref prev j)
+                      (if (eq (aref s1 i) (aref s2 j)) 0 1)))))
+      (cl-rotatef prev curr))
+    (aref prev len2)))
+
 (defun gptel-auto-workflow--byte-compile-warnings-for-file (file)
   "Collect byte-compile warnings for FILE.  Returns alist of (LINE . TEXT)."
   (let ((byte-compile-error-on-warn nil)
@@ -7053,77 +7071,115 @@ WARNINGS is alist of (LINE . TEXT).  Returns number of fixes."
 
 (defun gptel-auto-workflow--fix-free-variables (file warnings)
   "Auto-fix free variable references in FILE by adding defvar.
-Skips common locals.  WARNINGS is alist of (LINE . TEXT).
+Skips common locals and variables that look like typos (no similar
+bound var within edit distance 2).  WARNINGS is alist of (LINE . TEXT).
 Returns number of fixes."
   (let ((fixes 0)
         (defvars nil)
         (skip-vars '("err" "it" "result" "data" "body" "form" "key" "val" "_")))
-    (dolist (w warnings)
-      (when (string-match "reference to free variable [`']\\([^']+\\)['`]" (cdr w))
-        (let ((v (match-string 1 (cdr w))))
-          (unless (member v skip-vars)
-            (push v defvars))))
-      (when (string-match "assignment to free variable [`']\\([^']+\\)['`]" (cdr w))
-        (let ((v (match-string 1 (cdr w))))
-          (unless (member v skip-vars)
-            (push v defvars)))))
-    (setq defvars (delete-dups defvars))
-    (when defvars
-      (with-current-buffer (find-file-noselect file)
+    (with-current-buffer (find-file-noselect file)
+      (emacs-lisp-mode)
+      (let ((bound-vars nil))
         (goto-char (point-min))
-        (let ((insert-point
-               (save-excursion
-                 (if (re-search-forward "^(defvar\\|^(require" nil t)
-                     (match-beginning 0)
-                   (point-min)))))
-          (goto-char insert-point)
-          (dolist (v (sort defvars #'string<))
-            (insert (format "(defvar %s)\n" v))
-            (setq fixes (1+ fixes))))
-        (save-buffer)
-        (kill-buffer (current-buffer))))
-      fixes))
+        (while (re-search-forward "(def\\(?:un\\|subst\\|var\\|const\\|custom\\|macro\\)\\s-+\\(\\(?:\\sw\\|\\s_\\)+\\)" nil t)
+          (push (match-string 1) bound-vars))
+        (dolist (w warnings)
+          (when (string-match "reference to free variable [`']\\([^']+\\)['`]" (cdr w))
+            (let ((v (match-string 1 (cdr w))))
+              (unless (member v skip-vars)
+                (let ((similar (cl-some (lambda (bv)
+                                          (<= (gptel-auto-workflow--edit-distance v bv) 2))
+                                        bound-vars)))
+                  (if similar
+                      (message "[self-heal] free-var: skipping '%s' — likely typo for bound var" v)
+                    (push v defvars))))))
+          (when (string-match "assignment to free variable [`']\\([^']+\\)['`]" (cdr w))
+            (let ((v (match-string 1 (cdr w))))
+              (unless (member v skip-vars)
+                (push v defvars)))))
+        (setq defvars (delete-dups defvars))
+        (when defvars
+          (goto-char (point-min))
+          (let ((insert-point
+                 (save-excursion
+                   (if (re-search-forward "^(defvar\\|^(require" nil t)
+                       (match-beginning 0)
+                     (point-min)))))
+            (goto-char insert-point)
+            (dolist (v (sort defvars #'string<))
+              (insert (format "(defvar %s)\n" v))
+              (setq fixes (1+ fixes))))
+          (save-buffer))))
+    fixes))
+
+(defun gptel-auto-workflow--function-exists-in-file-p (fn-sym module-name)
+  "Return t if FN-SYM is defined as a defun in the file named MODULE-NAME.
+Searches lisp/modules/ for the file.  Returns nil if file not found or
+function not defined there."
+  (let ((file (cl-some (lambda (dir)
+                         (let ((f (expand-file-name (concat module-name ".el") dir)))
+                           (when (file-exists-p f) f)))
+                       '("lisp/modules" "lisp" "packages/gptel"
+                         "packages/gptel-agent"))))
+    (when file
+      (with-temp-buffer
+        (insert-file-contents file)
+        (re-search-forward
+         (concat "(def\\(?:un\\|subst\\|macro\\|generic\\)\\s-+"
+                 (regexp-quote fn-sym) "\\b")
+         nil t)))))
 
 (defun gptel-auto-workflow--fix-unknown-functions (file warnings)
   "Auto-fix unknown function warnings by adding declare-function.
-WARNINGS is alist of (LINE . TEXT).  Returns number of fixes."
+Verifies the function is actually defined in the target file before
+adding declare-function.  Skips if function is defined in the CURRENT
+file (would cause false duplicate warning).  WARNINGS is alist of
+\(LINE . TEXT).  Returns number of fixes."
   (let ((fixes 0)
         (declares nil))
-    (dolist (w warnings)
-      (when (string-match "the function [`']\\([^']+\\)['`] is not known" (cdr w))
-        (let* ((fn-sym (match-string 1 (cdr w)))
-               (fn (intern-soft fn-sym)))
-          (let ((src (or (ignore-errors
-                           (file-name-sans-extension
-                            (file-name-nondirectory
-                             (or (when (and fn (fboundp fn))
-                                   (find-lisp-object-file-name fn (symbol-function fn)))
-                                 (when (and fn (boundp fn))
-                                   (find-lisp-object-file-name fn (symbol-value fn)))))))
-                          (and (string-match "^gptel-auto-workflow--" fn-sym)
-                               "gptel-auto-workflow-evolution")
-                          (and (string-match "^gptel-auto-experiment--" fn-sym)
-                               "gptel-auto-experiment-evolution")
-                          (and (string-match "^gptel-ai-behaviors--" fn-sym)
-                               "gptel-ai-behaviors"))))
-            (when src
-              (push (cons fn-sym src) declares))))))
-    (setq declares (delete-dups declares))
-    (when declares
-      (with-current-buffer (find-file-noselect file)
+    (with-current-buffer (find-file-noselect file)
+      (emacs-lisp-mode)
+      (let ((current-file-defuns nil))
         (goto-char (point-min))
-        (let ((insert-point
-               (save-excursion
-                 (if (re-search-forward "^(declare-function\\|^(defvar\\|^(require" nil t)
-                     (match-beginning 0)
-                   (point-min)))))
-          (goto-char insert-point)
-          (dolist (d (sort declares (lambda (a b) (string< (car a) (car b)))))
-            (insert (format "(declare-function %s \"%s\")\n" (car d) (cdr d)))
-            (setq fixes (1+ fixes))))
-        (save-buffer)
-        (kill-buffer (current-buffer))))
-      fixes))
+        (while (re-search-forward
+                "(def\\(?:un\\|subst\\|macro\\|generic\\)\\s-+\\(\\(?:\\sw\\|\\s_\\)+\\)"
+                nil t)
+          (push (match-string 1) current-file-defuns))
+        (dolist (w warnings)
+          (when (string-match "the function [`']\\([^']+\\)['`] is not known" (cdr w))
+            (let* ((fn-sym (match-string 1 (cdr w)))
+                   (fn (intern-soft fn-sym)))
+              (unless (member fn-sym current-file-defuns)
+                (let ((src (or (ignore-errors
+                                 (file-name-sans-extension
+                                  (file-name-nondirectory
+                                   (or (when (and fn (fboundp fn))
+                                         (find-lisp-object-file-name fn (symbol-function fn)))
+                                       (when (and fn (boundp fn))
+                                         (find-lisp-object-file-name fn (symbol-value fn)))))))
+                                (and (string-match "^gptel-auto-workflow--" fn-sym)
+                                     "gptel-auto-workflow-evolution")
+                                (and (string-match "^gptel-auto-experiment--" fn-sym)
+                                     "gptel-auto-experiment-evolution")
+                                (and (string-match "^gptel-ai-behaviors--" fn-sym)
+                                     "gptel-ai-behaviors"))))
+                  (when (and src
+                             (gptel-auto-workflow--function-exists-in-file-p fn-sym src))
+                    (push (cons fn-sym src) declares)))))))
+        (setq declares (delete-dups declares))
+        (when declares
+          (goto-char (point-min))
+          (let ((insert-point
+                 (save-excursion
+                   (if (re-search-forward "^(declare-function\\|^(defvar\\|^(require" nil t)
+                       (match-beginning 0)
+                     (point-min)))))
+            (goto-char insert-point)
+            (dolist (d (sort declares (lambda (a b) (string< (car a) (car b)))))
+              (insert (format "(declare-function %s \"%s\")\n" (car d) (cdr d)))
+              (setq fixes (1+ fixes))))
+          (save-buffer))))
+    fixes))
 
 (defun gptel-auto-workflow--fix-condition-case-no-handlers (file warnings)
   "Auto-fix condition-case without handlers when free err is referenced.
@@ -7173,6 +7229,7 @@ WARNINGS is alist of (LINE . TEXT).  Returns number of fixes."
 (defun gptel-auto-workflow--self-heal-byte-compiler-llm (warnings)
   "Escalate stubborn WARNINGS in self to LLM backend.
 LLM fixes self-heal function itself when mechanical fixers fail.
+Extracts only elisp from response, verifies parens, reverts on failure.
 Returns number of fixes applied."
   (let ((fixes 0)
         (self-file (or load-file-name (buffer-file-name))))
@@ -7181,12 +7238,14 @@ Returns number of fixes applied."
                (fboundp 'gptel-send))
       (with-current-buffer (find-file-noselect self-file)
         (let* ((warning-text (mapconcat (lambda (w) (cdr w)) warnings "\n"))
+               (before-content (buffer-string))
                (prompt (format
                         "Fix these byte-compiler warnings in YOUR OWN self-healing code.
-You are the self-heal function fixing itself.  Return ONLY corrected Elisp.
+Return ONLY the complete corrected Emacs Lisp file content.
+No markdown fences, no explanation, no commentary.
 WARNINGS:\n%s\n\nFILE:\n%s"
                         warning-text
-                        (buffer-substring-no-properties (point-min) (min (point-max) 8000))))
+                        before-content))
                (response nil))
           (with-temp-buffer
             (insert prompt)
@@ -7194,12 +7253,22 @@ WARNINGS:\n%s\n\nFILE:\n%s"
             (sit-for 30)
             (setq response (buffer-string)))
           (when (and response (> (length response) 0))
-            (with-current-buffer (find-file-noselect self-file)
-              (erase-buffer)
-              (insert response)
-              (save-buffer)
-              (setq fixes (length warnings)))))
-        (kill-buffer (current-buffer))))
+            (let ((cleaned (replace-regexp-in-string
+                            "```elisp\\|```emacs-lisp\\|```" ""
+                            (replace-regexp-in-string "^```.+$" "" response))))
+              (with-current-buffer (find-file-noselect self-file)
+                (erase-buffer)
+                (insert cleaned)
+                (emacs-lisp-mode)
+                (if (condition-case nil (progn (check-parens) t) (error nil))
+                    (progn
+                     (save-buffer)
+                     (setq fixes (length warnings))
+                     (message "[self-heal] LLM: fixed %d warnings" fixes))
+                  (message "[self-heal] LLM: response broke parens, reverting")
+                  (erase-buffer)
+                  (insert before-content)
+                  (save-buffer))))))))
     fixes))
 
 (defun gptel-auto-workflow--check-parens (file)
@@ -7249,19 +7318,34 @@ actually in the same let form.  Returns number of fixes."
     fixes))
 
 (defun gptel-auto-workflow--fix-let-empty-body (file)
-  "Fix `let' with empty body caused by extra closing paren on bindings line.
-Detects bindings line ending in `)))` where the third `)` should be on
-the next line as the let body.  Returns number of fixes."
-  (let ((fixes 0))
-    (with-current-buffer (find-file-noselect file)
-      (emacs-lisp-mode)
-      (goto-char (point-min))
-      (while (re-search-forward
-              "(let[ \t\n]+(([^)]+))[ \t\n]*)[^ \t\n)]*)[ \t\n]*)\\([^)]\\)"
-              nil t)
-        (message "[self-heal] let-empty-body: found at line %d" (line-number-at-pos))
-        (cl-incf fixes))
-      (when (> fixes 0) (save-buffer)))
+  "Fix \\=`let\\=' with empty body by detecting byte-compiler \\='unused lexical variable\\='
+warnings where ALL bindings in a let form are unused — indicating the let
+has no body.  Removes the extra closing paren.  Returns number of fixes."
+  (let ((fixes 0)
+        (warnings (gptel-auto-workflow--byte-compile-warnings-for-file file))
+        (unused-lines nil))
+    (dolist (w warnings)
+      (when (string-match "Unused lexical variable" (cdr w))
+        (push (car w) unused-lines)))
+    (when unused-lines
+      (with-current-buffer (find-file-noselect file)
+        (emacs-lisp-mode)
+        (dolist (line (nreverse (sort unused-lines #'<)))
+          (goto-char (point-min))
+          (forward-line (1- line))
+          (when (re-search-backward "(let\\*?[ \t\n]+(" (line-beginning-position 0) t)
+            (let ((_let-start (point)))
+              (condition-case nil
+                  (progn
+                    (forward-sexp 1)
+                    (skip-chars-forward " \t\n")
+                    (when (looking-at ")")
+                      (delete-char 1)
+                      (cl-incf fixes)
+                      (message "[self-heal] let-empty-body: removed extra ) at line %d"
+                               (line-number-at-pos))))
+                (error nil)))))
+        (when (> fixes 0) (save-buffer))))
     fixes))
 
 (defun gptel-auto-workflow--run-fixer-with-rollback (file fixer-fn)
