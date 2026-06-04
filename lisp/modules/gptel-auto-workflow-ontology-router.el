@@ -2355,11 +2355,12 @@ model from `gptel-ai-behaviors--best-model' when no per-target data."
         (maphash (lambda (model stats)
                    (let ((total (car stats))
                          (kept (cdr stats)))
-                     (when (and (> total 0)
-                                (>= (/ (float kept) total) best-rate)
-                                (or (not (fboundp 'gptel-auto-workflow--model-combination-valid-p))
-                                    (gptel-auto-workflow--model-combination-valid-p
-                                     (concat backend "/" model))))
+                      (when (and (> total 0)
+                                 (> kept 0)
+                                 (> (/ (float kept) total) best-rate)
+                                 (or (not (fboundp 'gptel-auto-workflow--model-combination-valid-p))
+                                     (gptel-auto-workflow--model-combination-valid-p
+                                      (concat backend "/" model))))
                        (setq best-rate (/ (float kept) total))
                        (setq best-model model))))
                  model-stats)))

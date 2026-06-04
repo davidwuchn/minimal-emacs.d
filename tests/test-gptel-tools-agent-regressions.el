@@ -20618,6 +20618,84 @@ Only when all fail should human be notified."
     ;; After Copilot fails: → moonshot
     (let ((next (car (remove "Copilot" (remove current-backend escalation-backends)))))
       (should (string= next "moonshot")))))
+;;; ─── Phase 6b: Staging Completion Callback Regression ───
+
+(ert-deftest regression/staging/finalize-downgrades-on-failure ()
+  "Staging finalize callback must downgrade kept result when staging fails."
+  (require 'gptel-tools-agent-prompt-build)
+  (let* ((logged-result nil)
+         (final-callback-result nil)
+         (exp-result (list :target "test.el" :id 1 :score-before 0.4
+                           :score-after 0.8 :kept t :decision "kept"
+                           :comparator-reason "improvement"))
+         (finalize (gptel-auto-experiment--make-kept-result-callback
+                    "run-1" exp-result
+                    (lambda (_run-id result)
+                      (setq logged-result result))
+                    (lambda (result)
+                      (setq final-callback-result result)))))
+    ;; Simulate staging failure
+    (funcall finalize nil "staging-review-blocked")
+    ;; Result should be downgraded
+    (should (not (plist-get final-callback-result :kept)))
+    (should (string-match-p "staging-review-blocked"
+                            (plist-get final-callback-result :comparator-reason)))
+    ;; Should not still show "kept" decision
+    (should (not (equal (plist-get final-callback-result :decision) "kept")))))
+
+(ert-deftest regression/staging/finalize-preserves-on-success ()
+  "Staging finalize callback must preserve kept result when staging succeeds."
+  (require 'gptel-tools-agent-prompt-build)
+  (let* ((logged-result nil)
+         (final-callback-result nil)
+         (exp-result (list :target "test.el" :id 1 :score-before 0.4
+                           :score-after 0.8 :kept t :decision "kept"
+                           :comparator-reason "improvement"))
+         (finalize (gptel-auto-experiment--make-kept-result-callback
+                    "run-1" exp-result
+                    (lambda (_run-id result)
+                      (setq logged-result result))
+                    (lambda (result)
+                      (setq final-callback-result result)))))
+    ;; Simulate staging success
+    (funcall finalize t)
+    ;; Result should remain kept
+    (should (plist-get final-callback-result :kept))
+    (should (equal (plist-get final-callback-result :decision) "kept"))))
+
+(ert-deftest regression/staging/tsv-replaces-staging-pending ()
+  "TSV logger must replace staging-pending rows, not duplicate them."
+  (require 'gptel-tools-agent-prompt-build)
+  (let* ((tsv-file (make-temp-file "test-staging" nil ".tsv"))
+         ;; Write header + one staging-pending row
+         (_ (with-temp-file tsv-file
+              (insert gptel-auto-workflow--results-tsv-header)
+              (insert "1\ttest.el\thypothesis\t0.40\t0.80\t0.50\t+0.40\tstaging-pending\t100\t9\tgraded\tstaging-pending\tpatterns\toutput\t100\tMiniMax\t1000\tall\t?\t?\ttemplate-default\tnone\thash\tnone\tnone\t?\tmodel\tscores\tskills\tnone\n")))
+         (run-id "run-test")
+         (experiment (list :target "test.el" :id 1 :score-before 0.4
+                           :score-after 0.8 :kept t :decision "kept"
+                           :comparator-reason "improvement")))
+    ;; Mock results file path to use our temp file
+    (cl-letf (((symbol-function 'gptel-auto-workflow--results-file-path)
+               (lambda (&optional _run-id) tsv-file)))
+      ;; Log the kept result
+      (gptel-auto-experiment-log-tsv run-id experiment))
+    ;; Verify only one row exists (staging-pending was replaced)
+    (with-temp-buffer
+      (insert-file-contents tsv-file)
+      (goto-char (point-min))
+      (let ((row-count 0))
+        (while (not (eobp))
+          (forward-line 1)
+          (when (not (eobp))
+            (setq row-count (1+ row-count))))
+        ;; Should be header + 1 data row = 2 lines total
+        (should (= row-count 1))
+        ;; Verify the kept row exists
+        (goto-char (point-min))
+        (forward-line 1)
+        (should (search-forward "kept" nil t))))
+    (delete-file tsv-file)))
 
 (ert-deftest self-heal/backend-name-mapping-safe ()
   "Backend switching should use safe lookup table, not string concatenation.

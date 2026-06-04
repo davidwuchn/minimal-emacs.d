@@ -52,7 +52,7 @@ ARGS are passed to `gptel-make-openai'."
     :key (lambda () (my/gptel-api-key "api.minimaxi.com"))
     :stream t
     :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
-    :models '(MiniMax-M3 minimax-m2.7-highspeed minimax-m2.7)))
+    :models '(MiniMax-M3)))
 
 (defvar gptel--dashscope
   (gptel-make-dashscope "DashScope"

@@ -153,7 +153,7 @@ run_self_evolution() {
         log "Self-evolution skipped (throttled)"
     elif printf '%s' "$evolution_output" | grep -q "converged"; then
         log "Self-evolution skipped (converged)"
-    elif printf '%s' "$evolution_output" | grep -q "discard"; then
+    elif printf '%s' "$evolution_output" | grep -q '"discard"'; then
         log "Self-evolution skipped (discard)"
     elif printf '%s' "$evolution_output" | grep -q "first"; then
         log "Self-evolution skipped (first run / establishing baseline)"

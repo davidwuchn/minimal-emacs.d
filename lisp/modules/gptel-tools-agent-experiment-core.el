@@ -324,22 +324,29 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                            (fboundp 'gptel-auto-workflow--maybe-override-subagent-provider))
                                   (gptel-auto-workflow--maybe-override-subagent-provider "executor" base-preset)))
                                (effective-preset (or override-preset base-preset))
-                               (effective-backend
-                                (or (and effective-preset
-                                         (fboundp 'gptel-auto-workflow--preset-backend-name)
-                                         (gptel-auto-workflow--preset-backend-name
-                                          (plist-get effective-preset :backend)))
-                                    (and (boundp 'gptel-backend) gptel-backend
-                                         (fboundp 'gptel-backend-name)
-                                         (gptel-auto-workflow--safe-backend-name gptel-backend))
-                                    "unknown")))
+                           (effective-backend
+                            (or (and effective-preset
+                                     (fboundp 'gptel-auto-workflow--preset-backend-name)
+                                     (gptel-auto-workflow--preset-backend-name
+                                      (plist-get effective-preset :backend)))
+                                (and (boundp 'gptel-backend) gptel-backend
+                                     (fboundp 'gptel-backend-name)
+                                     (gptel-auto-workflow--safe-backend-name gptel-backend))
+                                (and (boundp 'gptel-model) gptel-model
+                                     (fboundp 'gptel-auto-workflow--backend-for-model)
+                                     (gptel-auto-workflow--backend-for-model gptel-model))
+                                "unknown")))
                           effective-backend))
                 (error
-                 (message "[auto-exp] Backend capture failed: %s" (error-message-string err))
-                 (setq experiment-backend
-                       (and (boundp 'gptel-backend) gptel-backend
-                            (fboundp 'gptel-backend-name)
-                            (gptel-auto-workflow--safe-backend-name gptel-backend)))))
+                  (message "[auto-exp] Backend capture failed: %s" (error-message-string err))
+                  (setq experiment-backend
+                        (or (and (boundp 'gptel-backend) gptel-backend
+                                 (fboundp 'gptel-backend-name)
+                                 (gptel-auto-workflow--safe-backend-name gptel-backend))
+                            (and (boundp 'gptel-model) gptel-model
+                                 (fboundp 'gptel-auto-workflow--backend-for-model)
+                                 (gptel-auto-workflow--backend-for-model gptel-model))
+                            "unknown"))))
               (condition-case err
                   (setq experiment-model
                         (let* ((base-preset
