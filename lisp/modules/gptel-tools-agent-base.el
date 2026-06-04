@@ -1,6 +1,9 @@
 ;;; gptel-tools-agent-base.el --- Base utilities, validation, shell commands -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
+(declare-function my/gptel--sanitize-for-logging "gptel-tools-agent-git" (text &optional max-len))
+(declare-function package-desc-version "package" (desc))
+
 ;;; gptel-tools-agent.el --- Subagent delegation for gptel -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;; Author: David Wu

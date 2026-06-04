@@ -849,8 +849,10 @@ Clears any stale health strikes for DashScope from health cache."
                (hash-table-p gptel-auto-workflow--backend-lambda-health-cache))
       (maphash (lambda (k v)
                  (when (and (symbolp k) (string-match-p "DashScope" (symbol-name k)))
-                   (puthash k (plist-put v :health :healthy)
-                            gptel-auto-workflow--backend-lambda-health-cache)))
+                   ;; EDGE CASE: v may be keyword not plist; guard plist-put
+                   (ignore-errors
+                     (puthash k (plist-put v :health :healthy)
+                              gptel-auto-workflow--backend-lambda-health-cache))))
                gptel-auto-workflow--backend-lambda-health-cache))
     (message "[onto-router] Reset to executor static fallback order: %s"
              (mapconcat (lambda (e) (format "%s/%s" (car e) (cdr e)))
@@ -2834,7 +2836,7 @@ experiment's code-quality delta so larger improvements count more.
 EXPERIMENT is a plist with :target, :kibcm-axis, :decision, :delta."
   (when (and experiment
              (equal (plist-get experiment :decision) "kept"))
-    (let* ((target (plist-get experiment :target))
+    (let* ((target (or (plist-get experiment :target) ""))
            (axis (or (plist-get experiment :kibcm-axis) "?"))
             (delta-val (plist-get experiment :delta))
             (delta (cond ((numberp delta-val) delta-val)

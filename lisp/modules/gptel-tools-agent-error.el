@@ -71,13 +71,15 @@ This is a convenience wrapper that sets case-fold-search around string-match-p."
 Usage-limit errors are excluded because they are retryable rate limits until
 the configured fallback chain is exhausted.")
 
+(defvar gptel-auto-workflow--runtime-subagent-provider-overrides)
 (defconst gptel-auto-experiment--shared-retryable-error-patterns
   (list :general
         (regexp-opt '("timeout" "timed out" "temporary" "server_error" "WebClientRequestException" "curl failed with exit code 28" "curl failed with exit code 35" "curl failed with exit code 56" "operation timed out" "authorized_error" "token is unusable" "invalid_api_key" "invalid api key" "unauthorized" "http_code \"401\"" "Malformed JSON") t)
         :transient
         (regexp-opt '("WebClientRequestException" "server_error" "curl failed with exit code 28" "curl failed with exit code 35" "curl failed with exit code 56" "operation timed out" "Malformed JSON") t))
   "Pre-compiled shared retryable error patterns as a plist.
-Keys :general (used in is-retryable-error-p) and :transient (used in provider-pressure-error-p).")
+Keys :general (used in is-retryable-error-p) and :transient
+(used in provider-pressure-error-p).")
 
 (defun gptel-auto-workflow--plist-delete-all (plist prop)
   "Return PLIST without any entries for PROP."
@@ -177,7 +179,8 @@ Returns PRESET unchanged if CANDIDATE is nil or malformed."
         override))))
 
 (defun gptel-auto-workflow--demote-backend-in-fallback-chain (backend-name)
-  "Move BACKEND-NAME to the end of `gptel-auto-workflow-executor-rate-limit-fallbacks'.
+  "Move BACKEND-NAME to the end of
+`gptel-auto-workflow-executor-rate-limit-fallbacks'.
 Does nothing when BACKEND-NAME is not in the chain."
   (when (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
              gptel-auto-workflow-executor-rate-limit-fallbacks

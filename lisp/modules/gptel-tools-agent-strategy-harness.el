@@ -7,6 +7,7 @@
 (defvar gptel-auto-workflow--strategy-active-test-set)
 
 (declare-function gptel-auto-workflow--discover-targets "gptel-auto-workflow-strategic" ())
+(declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base" ())
 
 ;;; Commentary:
 ;; This module evolves the PROMPT BUILDING STRATEGY itself, not just filling templates.

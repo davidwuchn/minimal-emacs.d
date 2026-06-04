@@ -148,7 +148,7 @@ Returns number of consecutive experiments with this strategy."
       (when (and (equal (plist-get r :target) target)
                  (not (equal (plist-get r :strategy) strategy)))
         ;; Found a different strategy — stop counting
-        nil))
+        (cl-return)))
     count))
 
 (defun gptel-auto-experiment--summarize (hypothesis)
@@ -760,7 +760,7 @@ Relative paths are resolved from the project root."
             (read (current-buffer)))
         (error
          (message "[auto-workflow] Failed to read status snapshot: %s" err)
-         nil)))))
+         (cl-return))))))
 
 (defun gptel-auto-workflow--suppress-ask-user-about-supersession-threat (orig-fn &rest args)
   "Suppress supersession threat prompts in headless mode."

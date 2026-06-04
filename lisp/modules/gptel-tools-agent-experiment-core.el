@@ -1,4 +1,5 @@
 ; -*- lexical-binding: t; -*-
+(require 'cl-lib)
 (declare-function gptel-auto-experiment--promote-correctness-fix-decision "gptel-tools-agent-prompt-analyze")
 (declare-function magit-git-success "magit-git")
 (declare-function gptel-auto-experiment--extract-axis "gptel-tools-agent-base")
@@ -180,6 +181,8 @@ Checks `gptel-auto-workflow--rate-limited-backends' and uses
           (message "[auto-experiment] Main backend %s is rate-limited but no fallback available"
                    current-name))))))
 
+(defvar gptel-auto-experiment-run)
+
 (cl-defun gptel-auto-experiment-run (target experiment-id max-experiments baseline baseline-code-quality previous-results callback &optional log-fn)
   "Run single experiment. Call CALLBACK with result plist.
 BASELINE-CODE-QUALITY is the initial code quality score.
@@ -250,7 +253,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
          ;; callbacks run after this outer let frame exits.
          (experiment-timeout gptel-auto-experiment-time-budget)
           (run-id gptel-auto-workflow--run-id)
-          (workflow-root (gptel-auto-workflow--resolve-run-root))
+          (_workflow-root (gptel-auto-workflow--resolve-run-root))
           (raw-callback callback)
           (result-callback-called nil)
           (callback (lambda (result)
