@@ -83,12 +83,16 @@ Keys :general (used in is-retryable-error-p) and :transient
 
 (defun gptel-auto-workflow--plist-delete-all (plist prop)
   "Return PLIST without any entries for PROP."
-  (let (result)
+  (let (result tail)
     (while plist
       (let ((key (pop plist))
             (val (pop plist)))
         (unless (eq key prop)
-          (setq result (append result (list key val))))))
+          (let ((cell (list key val)))
+            (if tail
+                (setcdr (cdr tail) cell)
+              (setq result cell))
+            (setq tail cell)))))
     result))
 
 (defun gptel-auto-workflow--first-available-provider-candidate (candidates &optional excluded-backends)
