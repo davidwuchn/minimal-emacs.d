@@ -1156,6 +1156,35 @@ Returns improvement/regression analysis."
       (princ (format "Difference: %.1f%%\n" (* 100 (or (plist-get stats :difference) 0))))
       (princ (format "Confidence: %s\n" (or (plist-get stats :confidence) "unknown"))))))
 
+;;; Agent Registration
+
+;; Register benchmark subagent types with gptel-agent so they pass
+;; `my/gptel-agent--task-override' validation.
+;; Without this, grader/analyzer/reviewer/explorer dispatch fails with
+;; "Unknown agent type".
+(defun gptel-benchmark--register-subagent-types ()
+  "Register benchmark subagent types in `gptel-agent--agents'."
+  (when (boundp 'gptel-agent--agents)
+    (dolist (type-entry gptel-benchmark-subagent-types)
+      (let* ((type-name (symbol-name (car type-entry)))
+             (type-plist (cdr type-entry))
+             (description (plist-get type-plist :description))
+             (existing (assoc type-name gptel-agent--agents)))
+        (unless existing
+          (push (cons type-name
+                      (list :description (or description
+                                             (format "%s subagent" type-name))
+                            :benchmark-subagent t))
+                gptel-agent--agents)
+          (message "[benchmark] Registered subagent type: %s" type-name))))))
+
+;; Try immediate registration if gptel-agent is already loaded.
+(gptel-benchmark--register-subagent-types)
+
+;; Also register when gptel-agent is loaded later (deferred init).
+(with-eval-after-load 'gptel-agent
+  (gptel-benchmark--register-subagent-types))
+
 ;;; Provide
 
 (provide 'gptel-benchmark-subagent)
