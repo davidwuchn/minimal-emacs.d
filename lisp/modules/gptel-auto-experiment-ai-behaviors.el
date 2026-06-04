@@ -1306,10 +1306,11 @@ DeepSeek: api-docs.deepseek.com, MiniMax: platform.minimaxi.com,
 DashScope: help.aliyun.com context-cache docs. Verified 2026-06-01.
 ALL backends through Bailian support implicit cache (auto-enabled).")
 
-(defvar gptel-ai-behaviors--cache-hit-rate 0.5
-  "Estimated cache-hit rate (0-1) for KV cache.
-Default 0.5 = half of tokens hit cache. Self-evolves from observed data.
-WARNING: Set from API response when `prompt_cache_hit_tokens' is available.")
+(defvar gptel-ai-behaviors--cache-hit-rate 0.8
+  "Estimated KV cache hit rate (0-1) for DeepSeek API input tokens.
+Default 0.8: ~80% of prompt is shared prefix (system prompt + tools).
+Self-evolves from observed prompt_cache_hit_tokens/prompt_cache_miss_tokens.
+Set from API response when available for real data.")
 
 (defun gptel-ai-behaviors--model-cost (model &optional prompt-chars response-chars)
   "Return estimated USD cost for MODEL given PROMPT-CHARS and RESPONSE-CHARS.
@@ -1338,12 +1339,6 @@ Falls back to $2.0 if model pricing not found."
            (if cache-price (* cached-input-tokens cache-price) 0)
            (* output-tokens output-price))
        1000000.0)))  ; convert from per-million to absolute
-
-(defvar gptel-ai-behaviors--cache-hit-rate 0.8
-  "Estimated KV cache hit rate (0-1) for DeepSeek API input tokens.
-Default 0.8: ~80% of prompt is shared prefix (system prompt + tools).
-Self-evolves from observed prompt_cache_hit_tokens/prompt_cache_miss_tokens.
-Set from API response when available for real data.")
 
 (defun gptel-ai-behaviors--record-cost (model effort &optional prompt-chars response-chars)
   "Record one API call for MODEL+EFFORT with actual token-based cost.
@@ -1459,7 +1454,12 @@ Aggregates across subagents and models for each (category strategy backend)."
 (defvar gptel-ai-behaviors--strategy-affinities nil
   "List of (category . ((strategy . cost-adjusted-rate) ...)).")
 (defvar gptel-auto-workflow-headless-subagent-fallbacks nil)
-(defvar gptel-ai-behaviors--category-chains (make-hash-table :test 'equal))
+(defvar gptel-ai-behaviors--category-chains (make-hash-table :test 'equal)
+  "Hash table mapping ontology category keyword to ordered backend list.
+Each entry: ((backend . keeps-per-dollar-score) ...).
+Populated by gptel-ai-behaviors--evolve-fallback-chain each evolution cycle.
+When available, gptel-auto-workflow--rate-limit-failover-candidates uses
+the category-specific chain instead of the global fallback.")
 
 (defun gptel-ai-behaviors--compute-strategy-affinities ()
   "Compute which strategies work best for each category.
@@ -1498,11 +1498,6 @@ for high-affinity strategy-category pairs."
                    (format "%s->%s(%.2f)" (car a) (caadr a) (cdadr a)))
                  (seq-take affinities 3) " | ")))))
 
-
-(defvar gptel-ai-behaviors--strategy-affinities nil
-  "List of (category . ((strategy . cost-adjusted-rate) ...)).
-Computed by gptel-ai-behaviors--compute-strategy-affinities.
-Used to allocate experiment budget to high-affinity pairs.")
 
 (defun gptel-ai-behaviors--evolve-fallback-chain ()
   "Reorder gptel-auto-workflow-headless-subagent-fallbacks by
@@ -1582,13 +1577,6 @@ Falls back to 1.0 if context-intercept module not loaded."
         (message "[chain-evolve] %s chain: %s" cat
                  (mapconcat (lambda (s) (format "%s(%.4f)" (car s) (cdr s)))
                             cat-scores " -> "))))))
-
-(defvar gptel-ai-behaviors--category-chains (make-hash-table :test 'equal)
-  "Hash table mapping ontology category keyword to ordered backend list.
-Each entry: ((backend . keeps-per-dollar-score) ...).
-Populated by gptel-ai-behaviors--evolve-fallback-chain each evolution cycle.
-When available, gptel-auto-workflow--rate-limit-failover-candidates uses
-the category-specific chain instead of the global fallback.")
 
 ;; ─── KV Cache Hit Rate Self-Evolution ───
 
