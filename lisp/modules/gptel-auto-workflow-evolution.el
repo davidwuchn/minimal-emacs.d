@@ -4082,30 +4082,30 @@ Return alist of strategy to average structure score."
 SCORE is the EDN richness (0.0-1.0), ELEMENT-COUNT is the number of
 statechart elements detected. Writes to the strategy's knowledge page.
 Systematic fix per SYSTEM_DESIGN.md §13 divergence taxonomy."
-  (let* ((root (gptel-auto-workflow--worktree-base-root))
-         (hint
-          (cond
-           ((< element-count 3)
-            ";; TIGHTEN: :invisible — strategy too abstract, no statechart elements
+  (let ((root (gptel-auto-workflow--worktree-base-root))
+        (hint
+         (cond
+          ((< element-count 3)
+           ";; TIGHTEN: :invisible — strategy too abstract, no statechart elements
 ;; Fix: add `where` block with concrete example (P1: example > rule > negation)
 ;; Add at least one with-temp-buffer or let* binding showing the full call chain")
-           ((< score 0.15)
-            ";; TIGHTEN: :wrong-generation — prompt doesn't compile to statechart
+          ((< score 0.15)
+           ";; TIGHTEN: :wrong-generation — prompt doesn't compile to statechart
 ;; Fix: add canonical code example from codebase (P8: examples must come from codebase)
 ;; Show (let ((result (some-function arg1 arg2))) ...) with real function names")
-           ((< score 0.25)
-            ";; TIGHTEN: :boundary-blur — output shape not constrained
+          ((< score 0.25)
+           ";; TIGHTEN: :boundary-blur — output shape not constrained
 ;; Fix: add where(input ≡ prose, output ≡ EDN) constraint
 ;; Specify exact output format: {:analysis _ :recommendation _ :confidence _}")
-           (t
-            ";; TIGHTEN: :over-application — hierarchy too deep, examples compete
+          (t
+           ";; TIGHTEN: :over-application — hierarchy too deep, examples compete
 ;; Fix: flatten hierarchy, one example per domain (P3: flat > nested)
-;; Remove nested conditions, use pcase or cond with single-level dispatch")))))
+;; Remove nested conditions, use pcase or cond with single-level dispatch"))))
     (when (and root hint (stringp strategy))
-      (let* ((knowledge-file (expand-file-name
-                              (format "mementum/knowledge/%s-strategy-guide.md"
-                                      (gptel-auto-workflow--sanitize-strategy-name-for-filename strategy))
-                              root)))
+      (let ((knowledge-file (expand-file-name
+                             (format "mementum/knowledge/%s-strategy-guide.md"
+                                     (gptel-auto-workflow--sanitize-strategy-name-for-filename strategy))
+                             root)))
         (condition-case nil
             (with-temp-buffer
               (when (file-exists-p knowledge-file)
@@ -4116,7 +4116,7 @@ Systematic fix per SYSTEM_DESIGN.md §13 divergence taxonomy."
               (write-region (point-min) (point-max) knowledge-file)
               (message "[tighten] Repair hint written for strategy '%s': score=%.2f elements=%d"
                        strategy score element-count))
-          (error (message "[tighten] Could not write repair hint for %s" strategy))))))
+          (error (message "[tighten] Could not write repair hint for %s" strategy)))))))
 
 (defun gptel-auto-workflow--audit-signal ()
   "Audit strategies needing nucleus compile review.
@@ -6112,7 +6112,7 @@ Signals ert-test-failed if check fails. Use in ERT tests."
       (when (eq (car result) :distill-failed)
         (message "[allium-bdd] Spec distillation failed — check input"))
       (when (eq (car result) :fail)
-        (should nil)))))
+        (error "BDD assertion failed: %s" behavior-description)))))
 
 ;;; ─── Self-Healing: Pipeline Health Monitor ───
 ;; When the evaluator itself breaks, the system must detect and fix it.
@@ -6201,6 +6201,22 @@ Returns plist with :healthy-p and :diagnosis."
 
 ;;; ─── Phase 7: Recovery Verification ───
 
+;; Forward declarations for self-healing state variables
+;; (defined in Phase 5 but referenced by recovery and persistence)
+(defvar gptel-auto-workflow--consecutive-failed-remediations 0)
+(defvar gptel-auto-workflow--grader-health-metrics nil)
+(defvar gptel-auto-workflow--blind-mode nil)
+
+;; Dynamic variables from gptel package
+(defvar gptel-max-tokens)
+(defvar gptel-temperature)
+
+;; Functions defined in other modules
+(declare-function gptel-auto-workflow--default-model-for-backend "gptel-tools-agent-prompt-build")
+(declare-function gptel-auto-workflow--model-valid-for-backend-p "gptel-tools-agent-prompt-build")
+(declare-function gptel-auto-workflow--backend-health-label "gptel-auto-workflow-ontology-router")
+(declare-function gptel-auto-workflow--check-all-targets-consistency "gptel-auto-workflow-ontology-router")
+
 (defvar gptel-auto-workflow--last-remediation nil
   "Plist tracking last auto-remediation for verification.
 Keys: :timestamp :diagnosis :remedy :before-rate :verified-p")
@@ -6260,11 +6276,10 @@ Keeps last 10 snapshots, discards older ones."
 Returns (:prediction warning/critical/healthy :confidence 0-1)
 when trend shows degradation, nil otherwise."
   (when (> (length gptel-auto-workflow--health-history) 3)
-    (let* ((recent (subseq gptel-auto-workflow--health-history 0 3))
-           (keep-rates (mapcar (lambda (h) (plist-get h :keep-rate)) recent))
-           (grader-failures (apply #'+ (mapcar (lambda (h) (plist-get h :grader-failures)) recent)))
-           (avg-keep (/ (apply #'+ keep-rates) (length keep-rates)))
-           (trend (- (car keep-rates) (car (last keep-rates)))))
+     (let* ((recent (seq-subseq gptel-auto-workflow--health-history 0 3))
+            (keep-rates (mapcar (lambda (h) (plist-get h :keep-rate)) recent))
+            (avg-keep (/ (apply #'+ keep-rates) (length keep-rates)))
+            (trend (- (car keep-rates) (car (last keep-rates)))))
       (cond
        ;; Critical: avg keep-rate below 5% and dropping
        ((and (< avg-keep 0.05) (< trend 0))
@@ -6484,7 +6499,7 @@ Verification: byte-compiled cleanly, no warnings.\n\nDiff:\n+ \"Return 1.\"\n"))
              (> (hash-table-count gptel-auto-workflow--grader-health-metrics) 0))
         ;; Use recent metrics: if any backend has success, grader is likely ok
         (let ((any-success nil))
-          (maphash (lambda (backend metrics)
+           (maphash (lambda (_backend metrics)
                      (let ((count (plist-get metrics :count))
                            (failures (plist-get metrics :failures)))
                        (when (and (> count 0) (< (/ failures (float count)) 0.5))
@@ -6576,15 +6591,26 @@ Tests still run, but no LLM grading — changes marked for manual review.")
 (defvar gptel-auto-workflow--grader-health-metrics
   (make-hash-table :test 'equal)
   "Hash table tracking grader performance per backend.
-Keys are backend names, values are plists with :count :total-latency :failures.")
+Keys are backend names, values are plists with :count :total-latency :failures :cost.")
+
+(defvar gptel-auto-workflow--backend-cost-estimates
+  '(("MiniMax" . 0.003)
+    ("Copilot" . 0.002)
+    ("moonshot" . 0.005)
+    ("DeepSeek" . 0.001)
+    ("DashScope" . 0.004))
+  "Estimated cost per grader call in USD.
+Used for cost-aware backend selection.")
 
 (defun gptel-auto-workflow--record-grader-metric (backend latency success-p)
   "Record grader metric for BACKEND.
 LATENCY is time in seconds. SUCCESS-P is t if grader returned valid output."
-  (let ((current (gethash backend gptel-auto-workflow--grader-health-metrics
-                          (list :count 0 :total-latency 0 :failures 0))))
+  (let* ((current (gethash backend gptel-auto-workflow--grader-health-metrics
+                           (list :count 0 :total-latency 0 :failures 0 :cost 0.0)))
+         (cost-per-call (or (cdr (assoc backend gptel-auto-workflow--backend-cost-estimates)) 0.003)))
     (plist-put current :count (1+ (plist-get current :count)))
     (plist-put current :total-latency (+ (plist-get current :total-latency) latency))
+    (plist-put current :cost (+ (or (plist-get current :cost) 0.0) cost-per-call))
     (unless success-p
       (plist-put current :failures (1+ (plist-get current :failures))))
     (puthash backend current gptel-auto-workflow--grader-health-metrics)))
@@ -6642,11 +6668,19 @@ Used for safe backend switching without assuming naming conventions.")
 
 (defun gptel-auto-workflow--escalate-to-backend (diagnosis)
   "Escalate broken pipeline to alternative LLM backend.
-Tries next backend in escalation chain instead of asking human."
+Tries next backend in escalation chain, preferring cheaper options.
+Considers cost-per-call when multiple backends are available."
   (let* ((current-backend (when (boundp 'gptel-backend)
                             (gptel-backend-name gptel-backend)))
          (candidates (remove current-backend gptel-auto-workflow--escalation-backends))
-         (next-backend-name (car candidates)))
+         ;; Sort candidates by cost (cheapest first) for cost-aware healing
+         (sorted-candidates
+          (sort candidates
+                (lambda (a b)
+                  (let ((cost-a (or (cdr (assoc a gptel-auto-workflow--backend-cost-estimates)) 0.003))
+                        (cost-b (or (cdr (assoc b gptel-auto-workflow--backend-cost-estimates)) 0.003)))
+                     (< cost-a cost-b)))))
+          (next-backend-name (car sorted-candidates)))
     (if next-backend-name
         (let* ((lookup-key (downcase next-backend-name))
                (backend-symbol (cdr (assoc lookup-key

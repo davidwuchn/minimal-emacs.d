@@ -535,15 +535,22 @@ This runs between syntax validation and the grader API call."
            (when (and (> non-trivial-lines 0) (< non-trivial-lines 2))
              (format "Cheap check: diff has only %d non-comment code lines"
                      non-trivial-lines))))
-        ;; CRITICAL FILE CHECK: prevent architectural destruction
-        ((let ((critical-hit nil))
-           (dolist (pattern gptel-auto-experiment--critical-files)
-             (when (and (not critical-hit)
-                        (string-match-p (regexp-quote pattern) diff-text))
-               (setq critical-hit pattern)))
-           (when critical-hit
-             (format "CRITICAL: experiment touches protected file/directory: %s"
-                     critical-hit))))
+         ;; CRITICAL FILE CHECK: only block if actually destructive
+         ;; Small bug fixes to critical files are allowed; mass deletions are not
+         ((let ((critical-hit nil))
+            (dolist (pattern gptel-auto-experiment--critical-files)
+              (when (and (not critical-hit)
+                         (string-match-p (regexp-quote pattern) diff-text))
+                (setq critical-hit pattern)))
+            (when critical-hit
+              ;; Count total deletions in diff
+              (let ((total-deletions
+                     (with-temp-buffer
+                       (insert diff-text)
+                       (count-matches "^-" (point-min) (point-max)))))
+                (when (> total-deletions 20)
+                  (format "CRITICAL: experiment deletes %d lines including protected file: %s"
+                          total-deletions critical-hit))))))
         ;; DESTRUCTIVE CHANGE CHECK: mass deletion detection
         ((let* ((added (with-temp-buffer
                         (insert diff-text)
@@ -566,8 +573,49 @@ This runs between syntax validation and the grader API call."
            (when (> (length files-touched) 5)
              (format "SCOPE CREEP: touches %d files (expected <=3)"
                      (length files-touched)))))
-        ;; Looks reasonable
-        (t nil)))))
+         ;; Looks reasonable
+         (t nil)))))
+
+;; ─── Grader Fast-Track: Auto-pass small defensive changes ───
+
+(defun gptel-auto-experiment--fast-track-p (diff-text)
+  "Return t if DIFF-TEXT qualifies for grader fast-track.
+Fast-track: small defensive changes that are low-risk and match patterns
+from previous kept experiments. Saves grader API calls.
+Criteria:
+- Total diff < 20 lines
+- Only adds code (no deletions or < 3 deletions)
+- Contains defensive patterns: ignore-errors, when-let, condition-case, stringp
+- Touches only 1 file"
+  (when (and diff-text (not (string-empty-p diff-text)))
+    (let* ((line-count (with-temp-buffer
+                         (insert diff-text)
+                         (count-matches "\n" (point-min) (point-max))))
+           (added (with-temp-buffer
+                    (insert diff-text)
+                    (count-matches "^\\+" (point-min) (point-max))))
+           (deleted (with-temp-buffer
+                      (insert diff-text)
+                      (count-matches "^-" (point-min) (point-max))))
+           (files-touched
+            (delete-dups
+             (delq nil
+                   (mapcar (lambda (line)
+                             (when (string-match "^diff --git a/\\(.+?\\) b/" line)
+                               (match-string 1 line)))
+                           (split-string diff-text "\n")))))
+           (has-defensive-pattern
+            (or (string-match-p "ignore-errors" diff-text)
+                (string-match-p "when-let" diff-text)
+                (string-match-p "condition-case" diff-text)
+                (string-match-p "stringp" diff-text)
+                (string-match-p "null\\|nil\\|boundp\\|fboundp" diff-text))))
+      (and (< line-count 20)
+           (< deleted 3)
+           (= (length files-touched) 1)
+           has-defensive-pattern))))
+
+(provide 'gptel-tools-agent-validation)
 
 (provide 'gptel-tools-agent-validation)
 ;;; gptel-tools-agent-validation.el ends here

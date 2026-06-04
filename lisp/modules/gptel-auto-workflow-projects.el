@@ -413,8 +413,8 @@ finish."
                                         (format "[auto-workflow] - Skipped: %s"
                                                 project-root)))))))
                    (error
-                    (push (cons project-root (format "error: %s" err-msg)) results)
-                    (message "[auto-workflow] ✗ Failed: %s - %s" project-root err)
+                    (push (cons project-root (format "error: %s" (error-message-string err))) results)
+                    (message "[auto-workflow] ✗ Failed: %s - %s" project-root (error-message-string err))
                     (run-next)))))))
         (run-next)))))
 
@@ -733,12 +733,18 @@ Gets target buffer from gptel-fsm-info and creates overlay there.
 Guard: If WHERE is a marker from a killed buffer, fall back to
 point-marker in target buffer to avoid dead-marker errors."
   (let* ((fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
-         (info (and fsm (fboundp 'gptel-fsm-info) (gptel-fsm-info fsm)))
+         (info (and fsm (fboundp 'gptel-fsm-info)
+           (condition-case err
+               (gptel-fsm-info fsm)
+             (error
+              (message "[auto-workflow] FSM info error in overlay advice: %s" (error-message-string err))
+              nil))))
          (valid-info (and (proper-list-p info) info))
          (target-buf (and valid-info (plist-get valid-info :buffer)))
          (safe-where (if (and (markerp where) (not (marker-buffer where)))
-                         (and target-buf
-                              (with-current-buffer target-buf (point-marker)))
+                         (or (and target-buf
+                                  (with-current-buffer target-buf (point-marker)))
+                             (point-marker))
                        where)))
     (if (and target-buf (buffer-live-p target-buf))
         (with-current-buffer target-buf
@@ -909,22 +915,22 @@ When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
                    (error
                     (let ((err-msg (error-message-string err))
                           (bt (with-output-to-string (backtrace))))
-                      (when (string-match "void-variable total" err-msg)
-                        (message "[research] DEBUG void-variable total backtrace:")
-                        (message "%s" bt)
-                        (with-temp-file (expand-file-name "var/tmp/research-total-backtrace.txt"
-                                                          (gptel-auto-workflow--worktree-base-root))
-                          (insert bt))))
-                    (push (cons project-root (format "error: %s" err-msg)) results)
-                    (message "[research] ✗ Failed: %s - %s" project-root err-msg)
-                    (setq gptel-auto-workflow--current-project nil)
-                    (run-next)))))))
+                       (when (string-match "void-variable total" err-msg)
+                         (message "[research] DEBUG void-variable total backtrace:")
+                         (message "%s" bt)
+                         (with-temp-file (expand-file-name "var/tmp/research-total-backtrace.txt"
+                                                           (gptel-auto-workflow--worktree-base-root))
+                           (insert bt)))
+                       (push (cons project-root (format "error: %s" err-msg)) results)
+                       (message "[research] ✗ Failed: %s - %s" project-root err-msg)
+                       (setq gptel-auto-workflow--current-project nil)
+                       (run-next))))))))
         (run-next)))))
 
 (defun gptel-auto-workflow--shutdown-researcher-daemon-after-job (&rest _args)
   "Mark researcher daemon as complete and keep it alive.
 The researcher daemon stays running so the pipeline can detect its
-phase as 'complete' or 'idle'. Previously shut down via kill-emacs
+phase as `complete' or `idle'.  Previously shut down via kill-emacs
 which caused the pipeline to misdiagnose a crash."
   (when (equal (or (daemonp) "") "ov5-researcher")
     (message "[research] Research job complete — daemon staying alive")
