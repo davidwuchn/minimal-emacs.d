@@ -715,7 +715,7 @@ Also removes old conflicting :override advice if present."
     ;; Remove old conflicting :override advice if present
     (condition-case nil
         (advice-remove 'gptel-agent--task #'my/gptel-agent--task-override)
-      (ignore))
+      (error nil))
     ;; Install new :around advice for buffer routing
     (advice-add 'gptel-agent--task :around #'gptel-auto-workflow--advice-task-override))
   ;; Install overlay buffer routing advice

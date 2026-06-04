@@ -31,7 +31,7 @@
   "Return non-nil when Semia CLI is available."
   (condition-case nil
       (= 0 (call-process gptel-auto-workflow--semia-bin nil nil nil "--version"))
-    (ignore)))
+    (error nil)))
 
 (defun gptel-auto-workflow--semia-scan-skill (skill-dir)
   "Run Semia security audit on SKILL-DIR.
@@ -104,7 +104,7 @@ Returns list of result plists."
             (progn
               (message "[skill-governance] Shell command failed: %s" cmd)
               nil))))
-    (ignore)))
+    (error nil)))
 
 (defun gptel-auto-workflow--skill-governance-json (cmd)
   "Run shell CMD, parse JSON output, return parsed object or nil."
@@ -115,7 +115,7 @@ Returns list of result plists."
                 (json-array-type 'list)
                 (json-key-type 'keyword))
             (json-read-from-string json))
-        (ignore)))))
+        (error nil)))))
 
 ;; ─── Layer 1: Governance Gate ───
 
@@ -297,7 +297,7 @@ Returns plist (:success t|nil :compile-ok t|nil :anti-patterns N)."
                          (progn
                            (byte-compile-file target-file)
                            t)
-                       (ignore)))
+                       (error nil)))
          ;; Run behavioral tests if available
          (tests-ok (and (fboundp 'gptel-auto-workflow--run-behavioral-tests)
                         (gptel-auto-workflow--run-behavioral-tests
@@ -413,7 +413,7 @@ Returns file path or nil if no suitable target found."
    (lambda ()
      (condition-case nil
          (gptel-auto-workflow--skill-governance-inject-canaries)
-       (ignore)))))
+       (error nil)))))
 
 (provide 'gptel-auto-workflow-skill-governance)
 ;;; gptel-auto-workflow-skill-governance.el ends here

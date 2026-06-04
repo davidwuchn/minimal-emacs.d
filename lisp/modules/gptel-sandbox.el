@@ -78,7 +78,7 @@ Returns list of tool names or nil if skill not found."
           (condition-case nil
               (let ((profile (json-read-from-string json-str)))
                 (cdr (assq 'allowed profile)))
-            (ignore)))))))
+            (error nil)))))))
 
 (defcustom my/gptel-programmatic-allowed-tools
   (or (gptel-sandbox--load-profile-from-skill "emacs-lisp")
@@ -706,7 +706,7 @@ CALLBACK receives non-nil when approved and nil when rejected."
              (condition-case nil
                  (prog1 (my/gptel-tool-permitted-p tool-name)
                    t)
-               (ignore)))
+               (error nil)))
         (funcall callback t)
       (funcall callback
                (y-or-n-p (format "Programmatic wants to run %s. Continue? " formatted))))))

@@ -562,7 +562,7 @@ Uses phase trace timestamps to determine time window."
            (existing (when (file-exists-p results-file)
                        (condition-case nil
                            (gptel-workflow--read-json results-file)
-                         (ignore))))
+                         (error nil))))
            (history (if (vectorp existing) (append existing nil)
                       (if (listp existing) existing '()))))
       (gptel-workflow--write-json (cons entry history) results-file)
@@ -697,7 +697,7 @@ TEST-ID is the test case ID."
          (existing (when (file-exists-p history-file)
                      (condition-case nil
                          (gptel-workflow--read-json history-file)
-                       (ignore))))
+                       (error nil))))
          (run-id (format-time-string "%Y%m%d-%H%M%S"))
          (summary (gptel-workflow--summarize-results results))
          (entry (list :run-id run-id
@@ -914,7 +914,7 @@ Returns plist with :patterns, :issues, and :recommendations."
          (existing (when (file-exists-p feedback-file)
                      (condition-case nil
                          (gptel-workflow--read-json feedback-file)
-                       (ignore))))
+                       (error nil))))
          (entry (list :workflow workflow-name
                       :analysis analysis))
          (history (if (vectorp existing) (append existing nil)

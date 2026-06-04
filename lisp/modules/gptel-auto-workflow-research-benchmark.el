@@ -262,7 +262,7 @@ When fewer than 10 traces, all go to train (not enough for meaningful split)."
                      (let ((form (car (read-from-string text start))))
                        (when (plistp form)
                          form))
-                   (ignore))))
+                   (error nil))))
       (or (read-plist-at 0)
           (catch 'controller-plist
             (let ((pos 0))
@@ -334,7 +334,7 @@ Compares train vs test performance to detect overfitting."
                  (condition-case nil
                      (gptel-auto-workflow--coerce-controller-rules
                       (car (read-from-string text start)))
-                   (ignore))))
+                   (error nil))))
       (or (read-rules-at 0)
           (catch 'controller-rules
             (let ((pos 0))
@@ -1181,7 +1181,7 @@ Each plist: (:target :decision :score :timestamp)."
                               :timestamp (nth 3 fields))
                         results))))
             results))
-      (ignore))))
+      (error nil))))
 
 (defun gptel-auto-workflow--save-trace-synthesis (topic-perf source-perf)
   "Merge trace synthesis into existing evolve pipeline data files.
@@ -1488,7 +1488,7 @@ produce concrete, named patterns?"
                                     (gptel-auto-workflow--run-autotts-evolution))
                                   (when (fboundp 'gptel-auto-workflow--evolve-all-skills)
                                      (gptel-auto-workflow--evolve-all-skills))))
-                            (ignore))))))
+                            (error nil))))))
                 (error
                  (message "[autotts] Failed to update trace outcome: %s" err))))))))))
 
@@ -1600,7 +1600,7 @@ Returns plist with :metric :value :delta :status, or nil."
           (condition-case nil
               (let ((json-object-type 'plist) (json-array-type 'list))
                 (json-read-from-string json-str))
-            (ignore)))))))
+            (error nil)))))))
 
 (defun gptel-auto-workflow--autoresearch-check (result-plist &optional target-file description)
   "Check RESULT-PLIST against running best. Implements keep/revert.
