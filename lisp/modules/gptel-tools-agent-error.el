@@ -66,7 +66,7 @@ This is a convenience wrapper that sets case-fold-search around string-match-p."
       (string-match-p pattern string))))
 
 (defconst gptel-auto-experiment--hard-quota-error-pattern
-  "allocated quota exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached\\|quota exceeded\\|quota exhausted"
+  "allocated quota exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached\\|quota exceeded\\|quota exhausted\\|1302\\|您的账户已达到速率限制"
   "Regex pattern matching hard quota exhaustion errors.
 Usage-limit errors are excluded because they are retryable rate limits until
 the configured fallback chain is exhausted.")
@@ -354,7 +354,7 @@ Returns the parsed timestamp (seconds since epoch) or nil if not found."
          (or (gptel-auto-experiment--provider-usage-limit-error-p msg)
              (let ((case-fold-search t))
                (string-match-p
-                "rate_limit_error\\|allocated quota exceeded\\|insufficient_quota\\|billing_hard_limit_reached\\|throttling\\|rate.limit\\|429\\|overloaded_error\\|cluster overloaded\\|529\\|负载较高\\|请求量较高\\|Token Plan"
+                 "rate_limit_error\\|allocated quota exceeded\\|insufficient_quota\\|billing_hard_limit_reached\\|throttling\\|rate.limit\\|429\\|overloaded_error\\|cluster overloaded\\|529\\|负载较高\\|请求量较高\\|Token Plan\\|1302\\|您的账户已达到速率限制"
                 msg))))))
 
 (defun gptel-auto-experiment--provider-auth-error-p (error-output)
