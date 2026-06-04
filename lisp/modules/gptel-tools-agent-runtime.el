@@ -52,7 +52,7 @@
     (let ((dir (file-name-directory target)))
       (when dir
         (make-directory dir t)))
-    (make-symbolic-link source target t)
+    (ignore-errors (make-symbolic-link source target t))
     t)))
 
 (defun gptel-auto-workflow--seed-worktree-runtime-var (worktree)
