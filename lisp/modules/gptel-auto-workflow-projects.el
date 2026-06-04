@@ -915,22 +915,22 @@ When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
                    (error
                     (let ((err-msg (error-message-string err))
                           (bt (with-output-to-string (backtrace))))
-                      (when (string-match "void-variable total" err-msg)
-                        (message "[research] DEBUG void-variable total backtrace:")
-                        (message "%s" bt)
-                        (with-temp-file (expand-file-name "var/tmp/research-total-backtrace.txt"
-                                                          (gptel-auto-workflow--worktree-base-root))
-                          (insert bt))))
-                    (push (cons project-root (format "error: %s" err-msg)) results)
-                    (message "[research] ✗ Failed: %s - %s" project-root err-msg)
-                    (setq gptel-auto-workflow--current-project nil)
-                    (run-next)))))))
+                       (when (string-match "void-variable total" err-msg)
+                         (message "[research] DEBUG void-variable total backtrace:")
+                         (message "%s" bt)
+                         (with-temp-file (expand-file-name "var/tmp/research-total-backtrace.txt"
+                                                           (gptel-auto-workflow--worktree-base-root))
+                           (insert bt)))
+                       (push (cons project-root (format "error: %s" err-msg)) results)
+                       (message "[research] ✗ Failed: %s - %s" project-root err-msg)
+                       (setq gptel-auto-workflow--current-project nil)
+                       (run-next))))))))
         (run-next)))))
 
 (defun gptel-auto-workflow--shutdown-researcher-daemon-after-job (&rest _args)
   "Mark researcher daemon as complete and keep it alive.
 The researcher daemon stays running so the pipeline can detect its
-phase as 'complete' or 'idle'. Previously shut down via kill-emacs
+phase as `complete' or `idle'.  Previously shut down via kill-emacs
 which caused the pipeline to misdiagnose a crash."
   (when (equal (or (daemonp) "") "ov5-researcher")
     (message "[research] Research job complete — daemon staying alive")
