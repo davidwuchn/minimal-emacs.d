@@ -14,7 +14,7 @@
           "lisp/modules/gptel-tools-agent-prompt-build.el"
           "lisp/modules/gptel-tools-agent-error.el"
           "lisp/modules/gptel-benchmark-subagent.el"))
-      (gptel-auto-experiment-max-per-target . 5)
+      (gptel-auto-experiment-max-per-target . 2)
       (gptel-auto-experiment-time-budget . 1200)
       (gptel-auto-experiment-no-improvement-threshold . 3))))
 

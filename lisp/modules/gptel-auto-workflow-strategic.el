@@ -76,11 +76,22 @@ Monthly subscription: 5 is optimal (diminishing returns after 3-4)."
     "lisp/modules/gptel-tools-code.el"
     "lisp/modules/gptel-tools-edit.el"
     "lisp/modules/gptel-tools-glob.el"
-    "lisp/modules/gptel-tools-grep.el")
+    "lisp/modules/gptel-tools-grep.el"
+    ;; Critical files require human approval (validation-hard-block)
+    "lisp/modules/gptel-auto-workflow-beads.el"
+    "lisp/modules/gptel-auto-workflow-production.el"
+    "lisp/modules/gptel-auto-workflow-strategic.el"
+    "lisp/modules/gptel-auto-workflow-evolution.el"
+    "lisp/modules/gptel-tools-agent-staging-baseline.el"
+    "lisp/modules/gptel-tools-agent-prompt-build.el"
+    "mementum/gtm/strategy-roadmap.md"
+    "mementum/decisions/")
   "Targets to skip during headless workflow runs.
 These modules define tools the executor actively depends on. Loading optimize
 worktree edits for them into the live daemon can destabilize the run before the
-worker restores the original file."
+worker restores the original file.
+
+Also includes critical files that require human approval (validation-hard-block)."
   :type '(repeat string)
   :group 'gptel-tools-agent)
 

@@ -122,13 +122,13 @@ Derived from `gptel-backend-registry` — update the registry, then regenerate t
 ;;; Fallback Chains
 
 (defconst gptel-fallback-chains
-  '((executor . (MiniMax moonshot DeepSeek DashScope Copilot))
-    (analyzer . (MiniMax moonshot DeepSeek DashScope Copilot))
-    (grader   . (MiniMax moonshot DeepSeek DashScope Copilot))
-    (default  . (MiniMax moonshot DeepSeek DashScope Copilot)))
+  '((executor . (Copilot MiniMax moonshot DeepSeek DashScope))
+    (analyzer . (Copilot MiniMax moonshot DeepSeek DashScope))
+    (grader   . (Copilot MiniMax moonshot DeepSeek DashScope))
+    (default  . (Copilot MiniMax moonshot DeepSeek DashScope)))
   "Fallback chain ordering per task type.
 Backends are tried in this order when rate-limited or failing.
-Derived from empirical keep-rate data.")
+Copilot first for executor (faster, less timeout) to improve experiment completion rate.")
 
 ;;; Accessor Functions
 
