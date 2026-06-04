@@ -44,6 +44,7 @@ DO NOT restructure. DO NOT refactor widely. Add ONE guard and stop.
 
 {{suggested-hypothesis}}
 {{mutation-templates}}
+{{memory-context}}
 {{evolved-recommendations}}
 {{agent-behavior}}
 {{validation-pipeline}}

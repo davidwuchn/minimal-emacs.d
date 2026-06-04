@@ -104,7 +104,8 @@ List of atom symbol names, e.g. (elisp-discover elisp-expert elisp-validator).")
 Uses the cached target state to detect pre-existing breakage.
 This helps avoid wasted retry attempts on files that were already invalid."
   (when (and (stringp target) (not (string-empty-p target)))
-    (let ((state (ignore-errors (gethash target gptel-auto-experiment--target-state-cache))))
+    (let ((state (when (hash-table-p gptel-auto-experiment--target-state-cache)
+                   (gethash target gptel-auto-experiment--target-state-cache))))
       (when state
         ;; If either byte-compiles or syntax-ok was already nil before experiment,
         ;; the file was pre-existing broken and retry won't help.
@@ -1228,7 +1229,6 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                                              :retries 1
                           :backend actual-backend
                           :model actual-model
-                          :model actual-model
                                                                                              :prompt-chars (length executor-prompt)
                            :output-chars (length (or effective-agent-output ""))
                                                                                              :prompt-structure (gptel-auto-experiment--prompt-structure-score executor-prompt)
@@ -1700,7 +1700,7 @@ Called when the grader passed but the benchmark/validation failed."
            (progn
              (setq gptel-auto-experiment--refine-convergence-stats
                    (plist-put gptel-auto-experiment--refine-convergence-stats :total
-                              (1+ (plist-get gptel-auto-experiment--refine-convergence-stats :total))))
+                              (1+ (or (plist-get gptel-auto-experiment--refine-convergence-stats :total) 0))))
              (setq gptel-auto-experiment--refine-convergence-stats
                    (plist-put gptel-auto-experiment--refine-convergence-stats :failure
                               (1+ (or (plist-get gptel-auto-experiment--refine-convergence-stats :failure) 0))))
@@ -1762,9 +1762,9 @@ Called when the grader passed but the benchmark/validation failed."
                     (setq gptel-auto-experiment--refine-convergence-stats
                           (plist-put gptel-auto-experiment--refine-convergence-stats :total
                                      (1+ (or (plist-get gptel-auto-experiment--refine-convergence-stats :total) 0))))
-                   (setq gptel-auto-experiment--refine-convergence-stats
-                         (plist-put gptel-auto-experiment--refine-convergence-stats :success
-                                    (1+ (or (plist-get gptel-auto-experiment--refine-convergence-stats :success) 0))))
+                    (setq gptel-auto-experiment--refine-convergence-stats
+                          (plist-put gptel-auto-experiment--refine-convergence-stats :success
+                                     (1+ (or (plist-get gptel-auto-experiment--refine-convergence-stats :success) 0))))
                     ;; Postcondition check: verify commit criteria from action schema
                     (when (and target (fboundp 'gptel-auto-workflow--schema-for-target))
                       (let* ((schema (gptel-auto-workflow--schema-for-target target))

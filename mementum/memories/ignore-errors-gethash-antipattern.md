@@ -1,0 +1,1 @@
+`ignore-errors` wrapping `gethash` is an anti-pattern. `gethash` returns nil for missing keys — no error thrown. `ignore-errors` silently swallows real errors (corrupted hash table, unbound variable, wrong-type-arg), hiding bugs. Use explicit guard: `(when (hash-table-p TABLE) (gethash KEY TABLE))` or just `(gethash KEY TABLE)` if the table is always initialized via defvar.

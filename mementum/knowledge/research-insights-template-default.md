@@ -6122,78 +6122,37 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Distillation
+**Distilled Summary**
 
-## Strategy
-**template-default** — applied across 180 experiments targeting 22 files in the gptel workflow/benchmark/agent ecosystem.
+- **Experiments:** 103 total
+- **Targets:** 21 files/scopes, including:
+  - `lisp/modules/gptel-benchmark-*.el` (core, principles, subagent)
+  - `lisp/modules/gptel-auto-workflow-*.el` (projects, strategic, ontology-strategy, ontology-router)
+  - `lisp/modules/gptel-tools-agent-*.el` (error, prompt-build, runtime, experiment-core)
+  - `lisp/modules/gptel-ext-*.el` (tool-permits, backend-registry)
+  - `lisp/modules/nucleus-prompts.el`
+  - `lisp/modules/treesit-agent-tools-workspace.el`
+  - `staging-scope`, `staging-merge`, `staging-verification`, `staging-review`
 
-## Scope
-Targets span: FSM utilities, context extensions, tool permits, agent runtime/error/benchmark, auto-workflow (ontology router/strategy, projects, production, research integration, strategic), benchmark analysis/comparator/subagent/integration tests, and staging artifacts (scope/verification/config/review).
+- **Kept hypotheses:** None stated
+- **Discarded hypotheses:** None stated
 
-## Kept Hypotheses (1 substantive)
-| # | Hypothesis |
-|---|---|
-| 1 | **Improving `gptel-auto-workflow-list-project-buffers`** |
-
-All other "kept" slots are placeholders (`No hypothesis stated`), indicating the search surface is far larger than what yielded actionable hypotheses.
-
-## Discarded Hypotheses — Pattern Analysis
-
-The 7 discarded hypotheses cluster into **6 recurring rationales**:
-
-| Pattern | Hypothesis | Rejection Reason |
-|---|---|---|
-| **Idiomatic refactor** | Replace `cl-letf` + `symbol-function` with `cl-labels` in FSM registry validator | Would improve Clarity + Vitality |
-| **Dead code removal** | Remove unreachable `hash-table-p` guard in FSM collect | Would improve Clarity |
-| **Helper extraction** | Add `my/gptel--fsm-for-each` to deduplicate traverse setup | Would improve Clarity + Vitality |
-| **Loop decomposition** | Extract `parse-one-autotts-trace` from monolithic while-loop | Would improve Clarity (depth 3→2) |
-| **Redundant write elimination** | Skip `puthash` when cons cell already in table | Would improve performance |
-| **Shallow-copy bug fix** | Use `copy-tree` over `copy-sequence` in priority fn | Would fix data corruption via in-place sort |
-| **Defensive guard** | Add `(listp class)` in ontology research-gaps | Would improve Vitality (error prevention) |
-
-## Key Insight — The Disconnect
-
-**All 7 discarded hypotheses had positive expected impact** (clarity, vitality, bug prevention, or performance). They were rejected, not on merit, but on:
-
-- **Semantic risk**: e.g., "removing it entirely might change semantics slightly if someone relied on it"
-- **Speculative value vs. verification cost**: the experimental strategy appears to favor hypotheses whose benefit is *observable in 180 runs* over refactors whose benefit is structural/aesthetic
-
-The lone kept hypothesis (`gptel-auto-workflow-list-project-buffers`) likely survived because it represents a **behavioral improvement measurable across the experiment matrix**, whereas the discarded set is dominated by **structural refactors and micro-fixes** whose payoff doesn't surface in template-default runs.
-
-## Recommendation Implied by the Data
-If the goal is genuine code health (not just experiment-validated behavior), the discarded set contains **higher-leverage improvements** than the kept set. The template-default strategy appears systematically biased against:
-- Refactors without runtime observable change
-- Bug fixes that only manifest under specific conditions
-- Defensive coding for malformed inputs
-
-This may warrant a **complementary strategy** (e.g., "structural-audit" or "mutation-testing") to surface these hypotheses in a kept state.
+**Assessment:** The research strategy generated substantial experimental activity (103 runs) across a broad surface area, but no hypotheses were formally stated, kept, or discarded. This suggests either pure exploratory data collection or a logging gap in hypothesis tracking. No actionable conclusions can be drawn from the hypothesis record.
 ```
 
 ### Check Issues
 
-# Review of the Distillation
-
-## What's solid
-
-The pattern taxonomy is genuinely useful — collapsing 7 rejections into 6 rationales makes the rejection logic legible, and naming the "disconnect" between intent and outcome is exactly the kind of meta-observation a good distillation should surface. The recommendation that a complementary strategy is warranted is a fair inference from the data shown.
-
-## What needs scrutiny
-
-### 1. The most important number is hiding in plain sight
-
-> All other "kept" slots are placeholders (`No hypothesis stated`)
-
-This means out of however many slots existed, **only 1 yielded a substantive hypothesis**. That is the headline finding, not the rejection analysis. The distillation buries it as a parenthetical framing the rejection patterns as the main story. The real story is: the search surface across 180 experiments / 22 files produced almost no actionable hypotheses, period.
-
-### 2. The framing treats "rejection" as a problem state
-
-The Key Insight section implicitly treats the 7 discarded hypotheses as a missed opportunity, but rejection *is* the correct terminal state for a hypothesis if its risk/cost exceeds its expected payoff. "Would improve Clarity" is not a measurement — it's the rationale someone used to propose the change in the first place. Listing it in the impact column of a "rejected" row conflates *consideration rationale* with *proven value*.
-
-The strategy may be doing exactly what it should: filtering out structural changes that do
+(tool-result (#s(gptel-tool #[(&rest call-args) ((condition-case err (let* ((actual-args (if async-p (cdr call-args) call-args)) (normalized-args (copy-sequence actual-args)) (i 0) (specs (if (functionp args) (funcall args) args))) (if (and specs (proper-list-p specs)) (progn (let ((tail specs)) (while tail (let ((spec (car tail))) (let* ((raw-val (nth i normalized-args)) (val (if (null raw-val) raw-val (nucleus-tools--normalize-arg-value raw-val spec))) (type (plist-get spec :type)) (arg-name (plist-get spec :name)) (optional (plist-get spec :optional))) (if (equal raw-val val) nil (let* ((c (nthcdr i normalized-args))) (setcar c val))) (cond ((and (null val) (not optional) (not (or (equal type boolean) (eq type 'boolean)))) (nucleus-tools--validation-error tool-name :required arg-name)) ((not (null val)) (cond ((member type '(string string)) (let nil (nucleus-tools--validate-string val arg-name spec))) ((member type '(integer integer)) (let nil (nucleus-tools--validate-number val arg-name spec) (if (integerp val) nil (nucleus-tools--validation-error arg-name :type an integer val)))) ((member type '(number number)) (let nil (nucleus-tools--validate-number val arg-name spec))) ((member type '(boolean boolean)) (let nil (if (memq val '(t nil :json-false)) nil (nucleus-tools--validation-error arg-name :type a boolean val)))) ((member type '(array array)) (let nil (nucleus-tools--validate-array val arg-name spec))) ((member type '(object object)) (let nil (if (or 
 
 ... (truncated)
