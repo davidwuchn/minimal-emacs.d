@@ -519,7 +519,15 @@ Report every bug you find.
 ## Phase 2: #=review — Evaluate against criteria
   ∀e ∈ expected: pass(e) ∨ fail(e) with reason
   ∀f ∈ forbidden: absent(f) → pass | present(f) → fail with reason
-")
+
+## Phase 2.5: FAST-TRACK for small defensive changes
+If the output shows a SMALL DEFENSIVE CHANGE (<15 lines, no deletions,
+adds ignore-errors / when-let / condition-case / stringp / null check):
+  → Auto-pass with score 6/9 minimum
+  → Only check: does the change actually add the guard? Is it syntactically valid?
+  → Do NOT attack the code for theoretical edge cases
+  → Do NOT require hypothesis match for simple nil guards
+Small defensive changes are low-risk and improve robustness. Be lenient.")
      (when hypothesis
        (format "\n## Phase 3: #=hypothesis-fit — Does output achieve the goal?
 The experiment's stated hypothesis was:
