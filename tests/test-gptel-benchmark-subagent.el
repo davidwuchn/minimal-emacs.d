@@ -39,8 +39,8 @@
   (should (= gptel-benchmark-subagent-timeout 120)))
 
 (ert-deftest test-subagent/slow-fallback-timeout-default ()
-  "Slow fallback timeout should default to 360 seconds."
-  (should (= gptel-benchmark-subagent-slow-fallback-timeout 360)))
+  "Slow fallback timeout should default to 480 seconds."
+  (should (= gptel-benchmark-subagent-slow-fallback-timeout 480)))
 
 (ert-deftest test-subagent/use-subagents-default ()
   "Use subagents should default to t."

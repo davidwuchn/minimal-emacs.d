@@ -89,8 +89,9 @@ for thorough analysis but produces better results."
   :type 'integer
   :group 'gptel-benchmark-subagent)
 
-(defcustom gptel-benchmark-subagent-slow-fallback-timeout 360
-  "Timeout in seconds for benchmark subagents using slow fallback providers."
+(defcustom gptel-benchmark-subagent-slow-fallback-timeout 480
+  "Timeout in seconds for benchmark subagents using slow fallback providers.
+Increased from 360 to 480 to accommodate complex file analysis."
   :type 'integer
   :group 'gptel-benchmark-subagent)
 
