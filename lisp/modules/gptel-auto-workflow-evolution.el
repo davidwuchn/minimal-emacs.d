@@ -6582,11 +6582,11 @@ Trivial Elisp file that should always pass grader.")
 If grader returns score=0 or errors on trivial safe output, the grader is
 broken.
 Returns t if grader healthy, nil if broken.
-Uses 30s timeout to avoid blocking pipeline on slow backends."
+Uses 120s timeout to avoid false-positives on slow backends."
   (message "[self-heal] Running diagnostic probe (real grader call)...")
   (let* ((probe-healthy nil)
          (probe-done nil)
-         (probe-timeout 30)
+         (probe-timeout 120)
          ;; Trivial output that should always score well
          (trivial-output "Changed: Added docstring to helper function.
 
