@@ -153,29 +153,16 @@ The ontology is your **team's executable memory**. New members don't ask "why di
 
 **Every engineering leader has the same problem: your team's knowledge is fragile, your best practices are words in a doc, and your code quality depends on reviewers catching mistakes after they're made.** OV5 closes the loop: knowledge becomes executable, practices become automated, and quality shifts left — from review to generation.
 
-### The Organizational Innovation Problem
+### Jobs-To-Be-Done
 
-Your team has accumulated hard-won knowledge about your codebase. But:
+OV5 serves four distinct jobs. Each job maps to a user type, a pain point, and a measurable outcome:
 
-| Problem | Cost |
-|---------|------|
-| A senior engineer leaves | 6-12 months of accumulated pattern knowledge walks out the door |
-| A decision made in a PR comment | No one reads PR comments 3 months later. Same bug, different fix |
-| Best practices enforced by review | Review catches mistakes after they're committed to a branch |
-| Onboarding takes months | New engineers repeat the same learning curve the team already climbed |
-
-These aren't people problems. They're **systems problems**. Knowledge that lives in heads doesn't scale. Knowledge that lives in OV5's ontology compounds.
-
-### How OV5 Transforms Your Organization
-
-```
-From:                          To:
-Individual expertise     →    Organizational pattern memory
-Reactive code review     →    Proactive guard rails
-Stale documentation      →    Executable, self-updating knowledge
-Manual refactoring       →    Automated experiment-driven improvement
-Onboarding knowledge gap →    Inherited codebase intelligence
-```
+| Job | User | Pain | OV5 delivers | Measured by |
+|-----|------|------|-------------|-------------|
+| **"Ship better code without spending time on it"** | Solo dev | Code rots between releases; no time for refactoring | Autonomous experiments run 24/7; you review only what passes | Keep-rate × merge count |
+| **"Stop reviewing the same class of bugs"** | Team lead | Reviewers catch nil-guards and style issues, not architecture | Ontology learns what your codebase rejects; guard rails auto-enforce | Review time ↓, architecture review time ↑ |
+| **"Make our codebase knowledge survive attrition"** | Engineering VP | Senior engineer leaves → 6 months of pattern knowledge walks out | Ontology is executable memory — every kept/discarded experiment is a decision recorded as code | Onboarding time ↓, pattern re-introduction rate ↓ |
+| **"Enforce standards without adding process"** | CTO | Best practices live in wikis nobody reads | Self-heal enforces byte-compile-zero-warnings; champion league enforces strategy quality | Warnings → 0, keep-rate → 20% |
 
 ### The GTM Narrative
 
@@ -192,6 +179,19 @@ Before OV5: review by hand, hope the reviewer caught everything, fix in the next
 | **OV5** | **Experiment-driven improvement + persistent ontology** | **Zero (worktree isolation)** | **Any codebase, compounding knowledge** |
 
 Every AI coding tool today generates code with no memory of what your team rejected last week. OV5 remembers every kept and discarded experiment. That's the difference between a tool and a system.
+
+### PMF Signals
+
+How to know OV5 has product-market fit for a new codebase:
+
+| Signal | What it means | Threshold |
+|--------|--------------|-----------|
+| Keep-rate >15% after 50 experiments | The ontology has learned the codebase's patterns | 50 experiments/category |
+| π Synthesis queues fill without human input | The system finds its own targets | Week 2+ |
+| Review time shifts from syntax to architecture | The ontology caught what reviewers used to catch | Week 4+ |
+| New targets cost near-zero setup | Strategy inheritance works across the codebase | 100+ experiments |
+
+**PMF validation needed:** All current data (2,000+ experiments) comes from this repo. True PMF requires N≥3 external repos with keep-rate >15%. If you run OV5 on your project, report your keep-rate — that data is the most valuable contribution you can make.
 
 ### The Innovation Adoption Path
 
@@ -219,6 +219,7 @@ Every AI coding tool today generates code with no memory of what your team rejec
 | "What if the ontology learns wrong patterns?" | Category drift detection (>20% deviation flagged). Eight-keys scoring catches overfitting. Holdout evaluation prevents self-deception. |
 | "What if it doesn't work for our codebase?" | It runs on every `.el` file by default. 4 ontology categories cover all file types. No special integration needed. |
 | "What if a backend goes down?" | 5 backends with automatic failover. Subagent routing self-tunes: unhealthy backends get health strikes → probation → exclusion. Auto-recovery after 1h without new strikes. |
+| "What if we don't use Emacs?" | The architecture is backend-agnostic (5 LLM providers, any language). The Emacs surface is the first implementation, not the last. Future: GitHub Action + hosted API. |
 
 ### The Pitch
 
@@ -241,7 +242,37 @@ This isn't a tool adoption. It's an **organizational capability upgrade**. The s
 
 ## Promoting OV5
 
-See [docs/promoting.md](docs/promoting.md) for channel-specific messaging (HN, LinkedIn, conference talks, etc.).
+### Channels
+
+| Channel | Message | CTA |
+|---------|---------|-----|
+| **GitHub README badge** | `![OV5: 117/117 clean](https://img.shields.io/badge/OV5-117%2F117-green)` | Other maintainers click → discover OV5 → install on their repo |
+| **HN Show HN** | "I built a system that runs 100 experiments/month on its own codebase" | Try it on your repo, report keep-rate |
+| **Conference talk** | "The Snake That Eats Its Own Code: Experiment-Driven Engineering" | 10-min demo: clone → run → review kept experiments |
+| **Blog post** | "Why Your Codebase Should Run Experiments, Not Just Tests" | Link to quickstart |
+| **r/emacs, r/lisp** | "Self-healing Emacs Lisp: 117/117 files compile with 0 warnings" | `M-x gptel-auto-workflow-run-async` |
+
+### Viral Vectors
+
+OV5 needs artifacts that **leave the repo** and reach new users:
+
+1. **Self-heal badge** — Every repo that shows `[OV5: 117/117 clean compile]` is a referral. Build: `ov5-badge` command generates shields.io endpoint from self-heal results.
+
+2. **Ontology dump** — `mementum/knowledge/patterns.md` is genuinely interesting independent of Emacs. Share it as "32 patterns learned from 2,000+ automated experiments."
+
+3. **Kept experiment log** — `git log --grep="kept"` produces a changelog written by the system, not humans. That's a demo artifact.
+
+4. **PMF data** — The most valuable export is keep-rate data from external repos. If you run OV5, report your numbers. N=1 is a prototype; N=3 is PMF.
+
+### Future: Beyond Emacs
+
+The architecture is provider-agnostic. The current Emacs surface is the first implementation. Future packaging:
+
+| Package | What it enables | JBTD |
+|---------|----------------|------|
+| **OV5 GitHub Action** | Run experiments on any repo in CI | "I don't use Emacs but I want this" |
+| **OV5 hosted API** | `api.ov5.dev/patterns?q=nil-safety` | "I want the knowledge, not the experiments" |
+| **OV5 multi-repo** | One ontology across multiple projects | "I want patterns from project A to apply to project B" |
 
 ---
 
