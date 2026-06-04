@@ -23,17 +23,32 @@
 - Pattern: `1302` (error code)
 - Both `rate-limit-error-p` and `hard-quota-error-p` functions updated
 
+### ⚒ Staging Verification Fix — 'passed unexpectedly' treated as failure
+**Problem:** Tests marked `:expected-result :failed` that actually passed were reported as "unexpected" by ERT, causing `run-tests.sh` to return failure
+**Fix:** `scripts/run-tests.sh` now checks for actual FAILED tests; if only "passed unexpectedly" results exist, treats as success
+
+### ⚒ Grader Bypass Commit Fix — merge commits in cherry-pick
+**Problem:** Experiment commits are often merge commits; `git cherry-pick` without `-m` option fails with "no -m option given"
+**Fix:** `gptel-tools-agent-staging-merge.el` detects merge commits via `git rev-parse --verify COMMIT^2` and adds `-m 1` flag
+
+### ⚒ Analyzer Timeout Fix — 360→480s
+**Problem:** Analyzer times out on complex files when using DeepSeek/CF-Gateway (slow fallback backends)
+**Fix:** Increased `gptel-benchmark-subagent-slow-fallback-timeout` from 360 to 480 seconds
+
 ### Pipeline Audit Results
 | Issue | Count | Status |
 |-------|-------|--------|
-| Rate-limit errors (24h) | 24+ | Detection improved |
-| GTM daemon dead | 1 | Fixed |
-| Analyzer timeouts | Multiple | Under investigation |
-| Staging verification failed | Multiple | Pending |
-| Grader bypass commit failed | Multiple | Pending |
+| Rate-limit errors (24h) | 24+ | Fixed (detection + backoff) |
+| GTM daemon dead | 1 | Fixed (auto-restart) |
+| Analyzer timeouts | Multiple | Fixed (480s timeout) |
+| Staging verification failed | Multiple | Fixed (unexpected passes OK) |
+| Grader bypass commit failed | Multiple | Fixed (merge commit cherry-pick) |
 
 ### Commits
 - `40ede3a0` ⚒ watchdog: auto-restart GTM daemon + rate-limit detection
+- `4567dcd9` ⚒ test-runner: treat 'passed unexpectedly' as success
+- `15c8b689` ⚒ staging-merge: handle merge commits in cherry-pick
+- `60342ddf` ⚒ benchmark: increase slow-fallback timeout 360→480s
 
 ---
 
