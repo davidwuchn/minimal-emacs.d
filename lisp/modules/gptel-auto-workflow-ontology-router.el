@@ -2860,7 +2860,7 @@ Returns plist with :total :consistent :inconsistent :targets."
     ;; Check each target
     (maphash (lambda (target _)
                (let ((check (gptel-auto-workflow--cross-backend-consistency target)))
-                 (when (>= (plist-get check :backend-count) 2)
+                 (when (>= (or (plist-get check :backend-count) 0) 2)
                    (cl-incf total)
                    (if (plist-get check :consistent)
                        (cl-incf consistent)
