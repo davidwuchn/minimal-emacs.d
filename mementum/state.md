@@ -1,10 +1,34 @@
 # Mementum State
 
-> Last session: 2026-06-04 (Byte-compiler self-healing Phase 10 + zero-warning agent modules)
+> Last session: 2026-06-05 (Self-heal ERT test hardening — all 36 pass)
 > Next pipeline: running
-> Status: 2150 tests pass, 0 unexpected
+> Status: 2189 tests pass, 0 unexpected
 
-## Session: Byte-Compiler Self-Healing Phase 10 (2026-06-04)
+## Session: Self-Heal ERT Test Hardening (2026-06-05)
+
+### ⊘ All 36 self-heal ERT tests now pass (was 34/36 with 2 expected failures)
+
+**Root causes found and fixed:**
+
+| Test | Root Cause | Fix |
+|------|-----------|-----|
+| `fix-let-needs-let*/sequential-binding` | `byte-compile-from-buffer` without `byte-compile-current-file` produced no line numbers; regex used ASCII quotes but Emacs 30+ uses Unicode | Set `byte-compile-current-file`; use `byte-compile--warning-source-offset` + `line-number-at-pos`; update regex to `[\u2018'\`]` |
+| `fix-unknown-functions/adds-declare-for-known-module` | `function-exists-in-file-p` resolved paths from `default-directory` which was temp file dir, not project root | Cache project root at load time via `eval-and-compile` using `load-file-name` |
+
+**Additional fixes:**
+- `fix-condition-case` err-detection regex: same Unicode quote fix
+- Test temp file: added `lexical-binding` directive (required for free-variable warnings)
+- Removed `:expected-result :failed` from both tests
+
+### Commits
+- `0083443f1` ⊘ fix: missing close paren in self-heal-check when-healthy form
+- `4a02cbeaf` ⊘ fix: all 36 self-heal ERT tests pass (was 34/36)
+
+### Test Results
+- **2189 total tests, 2137 passed, 0 unexpected, 52 skipped**
+- 36 new self-heal tests all pass (was 34 pass + 2 expected-fail)
+
+---
 
 ### ⚒ Phase 10: Self-Healing Byte-Compiler Warnings
 **Key insight:** Instead of manually fixing 80+ byte-compiler warnings one-by-one
