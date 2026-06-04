@@ -6058,44 +6058,98 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*4 check issues (severity 0.35). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-**Scope:** 91 experiments across 17 modules (gptel memory/staging/benchmarking, agent runtime/prompts/error handling, auto-workflow strategic/project/ontology layers, treesit workspace, tool permits, nucleus prompts).
+<think>
+The user wants me to distill a research strategy output. Let me analyze what's being presented:
 
-**Outcome:** No hypotheses kept. The run produced zero validated improvements.
+1. **Research strategy**: template-default
+2. **Experiments**: 180 across many target files
+3. **Kept hypotheses**: 2 items (one is empty "No hypothesis stated", one is about improving `gptel-auto-workflow-list-project-buffers`)
+4. **Discarded hypotheses**: 8 items - various refactoring/improvement suggestions for different functions
 
-**Discarded proposals (3):**
+The task seems to be to "distill" this — meaning to summarize, extract the essence, or provide a concise takeaway from this research output.
 
-1. **Hash-table allocation cleanup** — Remove redundant `(consp val) (keywordp (car val))` guard (already implied by `inner-ht` computation), defer `make-hash-table` allocation to avoid speculative work, and replace `condition-case nil` with `ignore-errors` (flagged anti-pattern at L362). *Rationale for discard: rejected as a candidate change.*
-2. **Defensive nil guard** — Block empty `status-lines` in `gptel-auto-workflow-research-status-all` to prevent caching empty results when no projects are configured. *Rationale for discard: edge-case hardening not accepted.*
-3. **Indentation/fractal clarity fixes** — Correct misleading visual nesting in `gptel-auto-workflow-run-all-projects` (`with-current-buffer` appearing inside `when` but sitting at `progn` level) and over-indentation in `gptel-auto-workflow--get-worktree-buffer` (`dolist`). *Rationale for discard: formatting-only change rejected.*
+Let me look at the content more carefully:
 
-**Assessment:** Purely exploratory or negative-result cycle. All three rejected items are minor local optimizations (allocation efficiency, defensive checks, readability) rather than structural or behavioral changes.
+- The kept hypotheses are minimal (2 items, one is empty)
+- The discarded hypotheses contain the actual substance — all the concrete improvement ideas
+- This seems ironic/inverted — all the meaningful hypotheses were discarded, and only trivial/empty ones were kept
+
+The actual research value seems to be in:
+- 180 experiments run
+- Various refactoring ideas explored and discarded
+- Only one kept: improving `gptel-auto-workflow-list-project-buffers`
+- All other substantive hypotheses (about cl-labels, hash-table guards, traversal extraction, parse extraction, puthash redundancy, copy-tree bug fix, listp guard) were discarded
+
+The "No hypothesis stated" entry in kept hypotheses is concerning — it suggests an empty/no-op experiment was kept.
+
+Let me provide a clear distillation:
+
+1. The research ran 180 experiments across many module files
+2. Only 1 substantive hypothesis was kept (about `gptel-auto-workflow-list-project-buffers`)
+3. 7 substantive hypotheses were discarded across various files
+4. The discarded hypotheses cover:
+   - FSM registry validation (cl-labels pattern)
+   - FSM collect-list (hash-table guard removal)
+   - FSM traversal helper extraction
+   - Autotts trace parsing extraction
+   - Research-to-outcomes correlation (redundant puthash)
+   - Top-research-priority data corruption (copy-tree fix)
+   - Ontology research gaps (listp guard)
+5. One discard reason mentions semantic concern about removal
+
+The key insight is that most of the proposed improvements were deemed not worth pursuing, suggesting the codebase is already in reasonable shape or the changes weren't deemed significant enough. The lone kept hypothesis is about a specific function improvement.
+
+Let me write a concise distillation.
+</think>
 ```
 
 ### Check Issues
 
-**Review: Negative-Result Cycle**
+What would you like me to check, and against what? You've pasted what looks like the *thinking block* of a distillation, not the distillation itself, and not the source material (the 180 experiments, the kept/discarded hypotheses, the code being analyzed).
 
-Your assessment is sound. This is a clean null-result run, and discarding all three proposals is the correct call.
+Here's what I can and can't assess:
 
-**Validation of the three discards**
+**What I can evaluate** — the structure of the thinking block:
+- It correctly identifies the inversion (most substantive hypotheses discarded, only trivial/empty ones kept)
+- The categorization of discarded hypotheses by target module (FSM, autotts, research-to-outcomes, top-research-priority, ontology) is useful
+- 7 discarded + 1 kept (substantive) + 1 empty "kept" is a plausible summary
 
-| Proposal | Verdict |
-|---|---|
-| **Hash-table allocation cleanup** | Correct to reject. Deferring `make-hash-table` in Emacs Lisp is a micro-optimization that rarely moves benchmarks. Removing the `consp/keywordp` guard trades a small amount of redundancy for latent brittleness if `inner-ht` ever changes. The `condition-case nil` → `ignore-errors` swap is purely idiomatic/ cosmetic (they compile to the same form); it does not justify an experiment slot. |
-| **Defensive nil guard** | Correct to reject. Hardening against an empty `status-lines` state without a demonstrated bug or reproducer adds speculative complexity. If caching an empty result is harmless, the guard has no validated upside. |
-| **Indentation/fractal clarity** | Correct to reject. Formatting fixes should be handled by automated tooling (`indent-region`, `elisp-lint`, or `apheleia`), not by a 91-experiment benchmark cycle. |
+**What I cannot verify**:
+- Whether the distillation's *content* matches the actual hypotheses — I have no source to compare against
+- Whether the technical claims about `gptel-auto-workflow-list-project-buffers` or the discarded changes (cl-labels refactor, hash-table guard removal, copy-tree bug) are accurate
+- Whether the discard reasons (e.g., "semantic concern about removal") were correctly attributed
 
-**Meta-issue: Signal-to-noise ratio**
-
-0 kept out of 91 experiments is a strong indicator that your **candidate-generation pipeline** is emitting high-volume, low-amplitude noise. If these hypotheses were LLM-generated, the prompt is likely tuned to produce *syntactic* or *local* edits rather than *semantic* or *structural* improvements.
-
-**Recommendations for the next cycle**
-
-1. **Add a pre-filter befor
+**Suspicious signals worth flagging**:
+- `gptel-auto-workflow-list-project-buffers` and the named modules (autotts, top-research-priority, ontology, research-to-outcomes) don't correspond to any well-known Emacs packages I can verify. If this is a real codebase, it's likely a private/AI-generated one.
+- An empty "No hypothesis stated" entry in the *kept* list is a real anomaly — it suggests either a
 
 ... (truncated)

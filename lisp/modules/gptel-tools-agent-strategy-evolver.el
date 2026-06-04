@@ -8,6 +8,24 @@
 
 (require 'cl-lib)
 (require 'subr-x)
+(require 'json)
+
+(eval-when-compile
+  (require 'gptel-tools-agent-base nil t)
+  (require 'gptel-tools-agent-strategy-harness nil t)
+  (require 'gptel-tools-agent-prompt-build nil t)
+  (require 'json))
+
+(defvar gptel-auto-workflow--strategy-interrupted)
+(defvar gptel-auto-workflow--strategy-evolution-enabled)
+(defvar gptel-auto-workflow--active-strategy)
+(declare-function gptel-auto-workflow--write-evolution-summary "gptel-tools-agent-strategy-harness")
+(declare-function gptel-auto-workflow--ensure-strategy-run-directories "gptel-tools-agent-strategy-harness")
+(declare-function gptel-auto-workflow--discover-strategies "gptel-tools-agent-strategy-harness")
+(declare-function gptel-auto-workflow--get-strategy-performance "gptel-tools-agent-strategy-harness")
+(declare-function gptel-auto-workflow--load-strategy "gptel-tools-agent-strategy-harness")
+(declare-function gptel-auto-workflow--strategies-directory "gptel-tools-agent-strategy-harness")
+(declare-function gptel-auto-workflow--strategy-results-file "gptel-tools-agent-strategy-harness")
 (require 'gptel-tools-agent-strategy-harness nil t)
 
 (declare-function gptel-auto-workflow--project-root "gptel-tools-agent-base" ())

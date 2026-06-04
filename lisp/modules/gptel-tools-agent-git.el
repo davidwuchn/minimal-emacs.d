@@ -1,6 +1,58 @@
 ;;; gptel-tools-agent-git.el --- Git operations, orphan tracking, branch sync -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
+(require 'cl-lib)
+(eval-when-compile
+  (require 'gptel-tools-agent-base nil t)
+  (require 'gptel-tools-agent-error nil t)
+  (require 'gptel-ext-fsm-utils nil t))
+(declare-function gptel-make-fsm "gptel-request")
+(declare-function gptel-make-tool "gptel-request")
+(declare-function gptel-get-tool "gptel-request")
+(declare-function gptel-tool-name "gptel")
+(declare-function gptel-tool-p "gptel")
+(declare-function gptel-request "gptel-request")
+(declare-function gptel-abort "gptel-request")
+(declare-function gptel--display-tool-calls "gptel")
+(declare-function gptel--transform-add-context "gptel-request")
+(declare-function gptel--update-status "gptel")
+(declare-function gptel-agent--task-overlay "gptel-agent-tools")
+(declare-function project-root "project")
+(declare-function gptel--apply-preset "gptel")
+(declare-function gptel--preset-syms "gptel")
+(declare-function my/gptel--coerce-fsm "gptel-ext-fsm-utils")
+(declare-function my/gptel--register-agent-task-buffer "gptel-tools-agent-subagent")
+(declare-function my/gptel--disable-auto-retry-transform "gptel-tools-agent-subagent")
+(declare-function gptel-auto-workflow--maybe-activate-rate-limit-failover "gptel-tools-agent-error")
+(declare-function my/gptel--disable-auto-retry-for-fsm "gptel-tools-agent-subagent")
+(declare-function my/gptel--reject-conflicted-frontmatter "gptel-tools-agent-git")
+(declare-function gptel-auto-workflow--hash-get-bound "gptel-tools-agent-base")
+(declare-function gptel-auto-workflow--agent-base-preset "gptel-tools-agent-prompt-build")
+(declare-function gptel-auto-workflow--maybe-override-subagent-provider "gptel-tools-agent-prompt-build")
+(declare-function gptel-auto-workflow--cherry-pick-orphan "gptel-tools-agent-base")
+(declare-function gptel-auto-workflow--project-root "gptel-tools-agent-benchmark")
+(declare-function gptel-auto-workflow--push-staging "gptel-tools-agent-staging-merge")
+(declare-function gptel-auto-workflow--recoverable-tracked-commits "gptel-tools-agent-base")
+(declare-function gptel-auto-workflow--review-retryable-error-p "gptel-tools-agent-staging-baseline")
+(declare-function gptel-auto-workflow--sync-staging-from-main "gptel-tools-agent-worktree")
+(declare-function gptel-auto-workflow--untrack-commit "gptel-tools-agent-base")
+(declare-function gptel-fsm-info "gptel-request")
+(declare-function gptel-fsm-p "gptel-request")
+
+(defvar gptel-agent--agents)
+(defvar gptel--tool-names)
+(defvar gptel-tools)
+(defvar gptel-use-tools)
+(defvar gptel--known-tools)
+(defvar gptel-send--transitions)
+(defvar gptel-agent-request--handlers)
+(defvar gptel--fsm-last)
+(defvar my/gptel--subagent-origin-buffer)
+(defvar gptel-auto-workflow--staging-worktree-dir)
+(defvar gptel-auto-workflow--worktree-state)
+(defvar gptel-auto-workflow--running)
+(defvar gptel-auto-workflow--last-progress-time)
+
 (defun gptel-auto-workflow--log-conflict (commit-hash conflict-output)
   "Log CONFLICT-OUTPUT for COMMIT-HASH to file for later review."
   (when (and (stringp commit-hash) (> (length commit-hash) 0))
@@ -160,7 +212,8 @@ Keys are (agent-type prompt-hash), values are (timestamp . result).")
 ;;; Subagent Result Cache
 
 (defun my/gptel--subagent-cache-key (agent-type prompt &optional files include-history include-diff)
-  "Generate cache key for (AGENT-TYPE, PROMPT, FILES, INCLUDE-HISTORY, INCLUDE-DIFF).
+  "Generate cache key for (AGENT-TYPE, PROMPT, FILES,
+INCLUDE-HISTORY, INCLUDE-DIFF).
 Context parameters are included to prevent stale cache hits when the same
 prompt is used with different context (files, history, diff).
 Always includes all params to distinguish nil from \"false\"."
@@ -286,8 +339,9 @@ Subagent requests can carry the full tool payload in `:data' while
 FSM-local snapshot so later tool dispatch matches the request payload."
   (when (and (gptel-fsm-p fsm) tools)
     (let ((info (gptel-fsm-info fsm)))
-      (setf (gptel-fsm-info fsm)
-            (plist-put info :tools (copy-sequence tools))))))
+      (with-no-warnings
+        (setf (gptel-fsm-info fsm)
+              (plist-put info :tools (copy-sequence tools)))))))
 
 
 ;; PATCH: Override gptel-agent--task to add tracking-marker for parent buffer
@@ -674,13 +728,14 @@ remove it."
         (insert-file-contents file-path)
         (goto-char (point-min))
         (when (re-search-forward "^\\(<<<<<<< \\|>>>>>>> \\|=======\\)" nil t)
-          (message "[guard] Refusing to parse %s: unresolved merge conflict markers"
-                   (file-name-nondirectory file-path))
-          (let ((body (buffer-substring-no-properties (point-min) (point-max))))
-            ;; metadata-only is the 4th positional arg (3rd in &rest)
-            (if (nth 2 args)
-                '()
-              (list :system body))))))
+           (message "[guard] Refusing to parse %s: unresolved merge conflict markers"
+                    (file-name-nondirectory file-path))
+            (with-no-warnings
+              (let* ((metadata-only (nth 2 args))
+                     (body (buffer-substring-no-properties (point-min) (point-max))))
+                (if metadata-only
+                    '()
+                  (list :system body)))))))
     (apply orig file-path args))
   (advice-add 'gptel-agent-parse-markdown-frontmatter :around
               #'my/gptel--reject-conflicted-frontmatter))
@@ -703,9 +758,10 @@ Returns t for \"true\" or t, nil for \"false\", nil, or any other value."
       (and (booleanp val) val)))
 (defun my/gptel--xml-escape (text)
   "Escape XML special characters in TEXT.
-Prevents XML injection when inserting file contents into context tags.
-Escapes &, <, >, \", and ' per XML spec.
-Single-pass replacement is more efficient and explicit than sequential regex."
+Prevents XML injection when inserting file contents into
+context tags.  Escapes &, <, >, \", and ' per XML spec.
+Single-pass replacement is more efficient and explicit
+than sequential regex."
   (if (not (stringp text))
       ""
     (replace-regexp-in-string
@@ -745,8 +801,9 @@ Optimized: checks file validity before expensive project lookup."
 
 (defun my/gptel--build-subagent-context (prompt files include-history include-diff &optional origin-buf)
   "Package context for a subagent payload.
-Appends contents of FILES, git diff if INCLUDE-DIFF, and recent buffer history
-if INCLUDE-HISTORY to the base PROMPT.
+Appends contents of FILES, git diff if INCLUDE-DIFF,
+and recent buffer history if INCLUDE-HISTORY to the
+base PROMPT.
 
 ORIGIN-BUF is the parent chat buffer to read history from.  Defaults to
 `current-buffer' if not provided, but callers should always pass it
@@ -754,12 +811,18 @@ explicitly to avoid capturing the wrong buffer.
 
 FILES are validated against project root for security.
 
-;; ASSUMPTION: Files must be within project root to prevent path traversal
-;; BEHAVIOR: Builds XML-escaped context with files, git diff, and conversation history
-;; EDGE CASE: Handles unreadable files, symlinks, and missing git repo gracefully
-;; TEST: Verify files outside project are rejected with error message
-;; GOAL: Provide secure, complete context for subagent decision-making
-;; MEASURABLE: Context size limited to prevent token overflow (history capped at 8000 chars)"
+;; ASSUMPTION: Files must be within project root to prevent
+;; path traversal
+;; BEHAVIOR: Builds XML-escaped context with files, git diff,
+;; and conversation history
+;; EDGE CASE: Handles unreadable files, symlinks, and missing
+;; git repo gracefully
+;; TEST: Verify files outside project are rejected with error
+;; message
+;; GOAL: Provide secure, complete context for subagent
+;; decision-making
+;; MEASURABLE: Context size limited to prevent token overflow
+;; \(history capped at 8000 chars\)"
   (let ((context ""))
     (when (and files (sequencep files))
       (let ((file-context ""))
@@ -828,8 +891,9 @@ FILES are validated against project root for security.
 ;;; Subagent Functions
 
 (defvar my/gptel--agent-task-state (make-hash-table :test 'eql)
-  "Hash table for per-task state. Keyed by task-id.
-Values are plist: (:done :timeout-timer :progress-timer :origin-buf :request-buf).")
+  "Hash table for per-task state.  Keyed by task-id.
+Values are plist: \(:done :timeout-timer
+:progress-timer :origin-buf :request-buf\).")
 
 (defvar my/gptel--agent-task-counter 0
   "Counter for generating unique task IDs.")
