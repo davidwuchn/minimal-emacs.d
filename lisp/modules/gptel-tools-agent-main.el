@@ -1066,7 +1066,8 @@ into staging or main."
       (setq gptel-auto-workflow--stats
             (plist-put gptel-auto-workflow--stats
                        :phase (if (bound-and-true-p gptel-auto-workflow--cron-job-running)
-                                  (or (plist-get gptel-auto-workflow--stats :phase)
+                                  (or (and (listp gptel-auto-workflow--stats)
+                                           (plist-get gptel-auto-workflow--stats :phase))
                                       "queued")
                                 "idle")))
       (gptel-auto-workflow--persist-status)

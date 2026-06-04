@@ -16,10 +16,11 @@
   "Hashline content addressing for gptel-agent Edit tool."
   :group 'gptel-tools-edit)
 
-(defcustom gptel-tools-edit-hashline-length 2
+(defcustom gptel-tools-edit-hashline-length 4
   "Length of content hash in characters (1-8).
 Shorter = more collisions but less context. Longer = more unique but more tokens.
-Default 2 chars = ~256 possible hashes, sufficient for most files <1000 lines."
+Default 4 chars = ~65,536 possible hashes, sufficient for files up to ~10,000 lines.
+Changed from 2 to 4 to reduce collision rate and improve edit reliability."
   :type 'integer
   :group 'gptel-tools-edit-hashline)
 

@@ -393,7 +393,8 @@ finish."
                                     (cons 'quota-exhausted
                                           (format "[auto-workflow] ! Quota exhausted: %s"
                                                   project-root)))
-                                   ((equal (plist-get gptel-auto-workflow--stats :phase) "error")
+                                   ((and (listp gptel-auto-workflow--stats)
+                                         (equal (plist-get gptel-auto-workflow--stats :phase) "error"))
                                     (cons 'error
                                           (format "[auto-workflow] ✗ Failed: %s"
                                                   project-root)))
