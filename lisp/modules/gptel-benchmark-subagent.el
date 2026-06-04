@@ -564,9 +564,11 @@ OUTPUT:
 (defun gptel-benchmark--parse-grade-response (response expected forbidden)
   "Parse LLM grading RESPONSE into plist.
 Handles SCORE: X/Y format, JSON format, and text-based PASS/FALL fallback.
-Passes if score >= 60% of total."
-  (let ((score 0)
-        (total (+ (length expected) (length forbidden)))
+Passes if score >= 60% of total.  The caller-supplied EXPECTED+FORBIDDEN
+total is authoritative; grader self-reported totals are capped to it."
+  (let* ((score 0)
+         (criteria-total (+ (length expected) (length forbidden)))
+         (total criteria-total)
         (details (let ((stripped (if (stringp response) response (format "%S" response)))
                        (start 0) (end 0))
                    ;; Strip <think> blocks — Emacs has no non-greedy match
@@ -586,23 +588,22 @@ Passes if score >= 60% of total."
     ;; Matches "SCORE: X/Y", "Total: X/Y", "score: X/Y", "Score: X/Y", etc.
     (cond
      ((let ((pos 0) (last-score nil) (last-total nil))
-        (while (string-match "\\(?:SCORE\\|Total\\|score\\)[:=]\\s-*\\([0-9]+\\)\\s-*/\\s-*\\([0-9]+\\)" details pos)
-          (setq last-score (string-to-number (match-string 1 details))
-                last-total (string-to-number (match-string 2 details))
-                pos (match-end 0)))
-        (when last-score
-          (setq score last-score
-                total last-total)
-          t)))
+         (while (string-match "\\(?:SCORE\\|Total\\|score\\)[:=]\\s-*\\([0-9]+\\)\\s-*/\\s-*\\([0-9]+\\)" details pos)
+           (setq last-score (string-to-number (match-string 1 details))
+                 last-total (string-to-number (match-string 2 details))
+                 pos (match-end 0)))
+         (when last-score
+           (setq score (min last-score criteria-total)
+                 total criteria-total)
+           t)))
      ;; Count "passed": true in JSON results
      ((string-match-p "\"passed\"" details)
-      (with-temp-buffer
-        (insert details)
-        (goto-char (point-min))
-        (while (re-search-forward "\"passed\"\\s-*:\\s-*true" nil t)
-          (cl-incf score)))
-      (when (string-match "\"total\"\\s-*:\\s-*\\([0-9]+\\)" details)
-        (setq total (string-to-number (match-string 1 details)))))
+       (with-temp-buffer
+         (insert details)
+         (goto-char (point-min))
+         (while (re-search-forward "\"passed\"\\s-*:\\s-*true" nil t)
+           (cl-incf score)))
+       (setq total criteria-total))
       ;; Fallback: count text-based PASS/✓ items in grader output
       (t
        (with-temp-buffer
@@ -618,9 +619,11 @@ Passes if score >= 60% of total."
              (cl-incf score)))
          ;; Also count "PASS (not present)" for forbidden behaviors
          (goto-char (point-min))
-         (while (re-search-forward ":\\s-+PASS\\s-+(not present)" nil t)
-           (cl-incf score)))))
-    (let* ((percentage (if (> total 0) (* 100.0 (/ (float score) total)) 0.0))
+          (while (re-search-forward ":\\s-+PASS\\s-+(not present)" nil t)
+            (cl-incf score)))
+        (setq score (min score criteria-total)
+              total criteria-total)))
+     (let* ((percentage (if (> total 0) (* 100.0 (/ (float score) total)) 0.0))
            ;; Pass if >= 60% (lowered from 80% to increase keep rate)
            (passed (and (> total 0) (>= percentage 60.0))))
       (list :score score
