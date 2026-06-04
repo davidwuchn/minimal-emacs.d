@@ -587,11 +587,10 @@ total is authoritative; grader self-reported totals are capped to it."
     ;; Try score: X/Y format — take LAST match (grader often revises)
     ;; Matches "SCORE: X/Y", "Total: X/Y", "score: X/Y", "Score: X/Y", etc.
     (cond
-     ((let ((pos 0) (last-score nil) (_last-total nil))
+     ((let ((pos 0) (last-score nil))
          (while (string-match "\\(?:SCORE\\|Total\\|score\\)[:=]\\s-*\\([0-9]+\\)\\s-*/\\s-*\\([0-9]+\\)" details pos)
-          (setq last-score (string-to-number (match-string 1 details))
-                  _last-total (string-to-number (match-string 2 details))
-                 pos (match-end 0)))
+           (setq last-score (string-to-number (match-string 1 details))
+                  pos (match-end 0)))
          (when last-score
            (setq score (min last-score criteria-total)
                  total criteria-total)
