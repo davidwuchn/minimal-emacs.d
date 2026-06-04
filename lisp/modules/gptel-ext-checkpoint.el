@@ -143,7 +143,7 @@
     (cl-loop for field in fields
              for val = (plist-get result field)
              when val
-             collect (cons (substring (symbol-name field) 1) val)))
+              collect (cons (substring (symbol-name field) 1) val))))
 
 (defun gptel-checkpoint--deserialize (json-string)
   "Deserialize JSON-STRING to checkpoint-data struct."

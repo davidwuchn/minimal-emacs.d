@@ -3,6 +3,13 @@
 (defvar gptel-auto-workflow--routing-audit-log)
 (defvar gptel-auto-workflow--run-failed-backends)
 (defvar gptel-auto-workflow--rate-limited-backends)
+(defvar gptel-ai-behaviors--best-concrete-tasks)
+(defvar gptel-auto-experiment--target-state-cache)
+
+(declare-function gptel-auto-experiment--replay-grader-insights-from-tsv
+  "gptel-auto-experiment-core")
+(declare-function gptel-auto-workflow--worktree-base-root
+  "gptel-auto-workflow-projects")
 
 ;; Copyright (C) 2024-2026  Self-Evolving Emacs Project
 
@@ -1885,7 +1892,7 @@ or nil if no drift detected."
                          (nreverse results))
              5))  ; last 5 experiments for this target
            (consecutive 0)
-           (last-backend nil)
+            (_last-backend nil)
            (backends (make-hash-table :test 'equal)))
       ;; Count consecutive failures and backend diversity
       (dolist (r target-results)
@@ -2464,8 +2471,8 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
                               (error nil))))
         (target-axis-cache (when (and (boundp 'gptel-auto-workflow--current-target)
                                       gptel-auto-workflow--current-target
-                                      (fboundp 'gptel-auto-workflow--get-holographic-consensus))
-                             (condition-case nil
+                                       (fboundp 'gptel-auto-workflow--get-holographic-consensus))
+         (condition-case _
                                  (gptel-auto-workflow--get-holographic-consensus
                                   gptel-auto-workflow--current-target)
                                (error nil))))
@@ -2639,7 +2646,7 @@ Returns nil if insufficient history (<3 checks)."
           (if (> trend 0.5) 1
             0))))))
 
-(defun gptel-auto-workflow--call-backend-for-lambda (backend model prompt)
+(defun gptel-auto-workflow--call-backend-for-lambda (backend _model _prompt)
   "Verify lambda compiler for BACKEND/MODEL.
 All known backends already support lambda notation (P(λ) ≈ 100%), so
 this is a no-op that immediately marks each backend as :healthy.
@@ -2652,7 +2659,7 @@ Returns t to indicate verification completed."
   (gptel-auto-workflow--record-lambda-trend backend :healthy)
   t)
 
-(defun gptel-auto-workflow--verify-backend-lambda-impl (backend model)
+(defun gptel-auto-workflow--verify-backend-lambda-impl (backend &optional _model)
   "Verify lambda compiler for BACKEND/MODEL.
 All known backends already support lambda notation, so this always
 returns :healthy immediately without API calls."
@@ -3462,6 +3469,11 @@ possible misclassification"
 
 
 
+
+
+
+
+
 sandbox\\|^gptel-tools-\\(?:bash\\|grep\\|glob\\|edit\\|apply\\|preview\\|programmatic\\)")
     (:natural-language . "context\\|prompt\\|chat\\|conversation\\|language\\|text\\|summarize\\|stream"))
   "Regex patterns used by `categorize-target' for each category.
@@ -3480,7 +3492,7 @@ Returns alist of suggestions: (target . suggested-category)."
         (let* ((target (car drift))
                (current-cat (nth 1 drift))
                (delta (nth 2 drift))
-               (basename (file-name-nondirectory target))
+                (_basename (file-name-nondirectory target))
                (best-cat nil)
                (best-rate 0))
           ;; Find which category this target would perform best in
@@ -3508,7 +3520,7 @@ Returns alist of suggestions: (target . suggested-category)."
               (message "[ontology-repair] 🔧 %s: %s → %s (Δ%+.0f%%, category keep-rate %.0f%%)"
                        (file-name-nondirectory target) current-cat best-cat
                        (* 100 delta) (* 100 best-rate))))))
-    suggestions))
+    suggestions)))
 
 ;; ─── Digital Twin Persistence ───
 
@@ -3557,7 +3569,7 @@ restart)."
     (let ((file (expand-file-name "var/tmp/digital-twin.json"
                                   (gptel-auto-workflow--worktree-base-root))))
       (when (file-exists-p file)
-        (condition-case nil
+        (condition-case err
             (with-temp-buffer
               (insert-file-contents file)
               (let ((data (json-read)))
@@ -3568,26 +3580,22 @@ restart)."
                              (list :byte-compiles (cdr (assq 'byte-compiles plist))
                                    :syntax-ok (cdr (assq 'syntax-ok plist)))
                              gptel-auto-experiment--target-state-cache)
-                    ;; Load rejection memory from digital twin
                     (let ((rejections (cdr (assq 'rejections plist))))
                       (when (and rejections
                                  (bound-and-true-p gptel-auto-experiment--rejection-memory)
                                  (fboundp 'gptel-auto-experiment--remember-rejection))
                         (dolist (rej rejections)
-                          (let ((reason (car rej)))
-                            (gptel-auto-experiment--remember-rejection target reason)))))
-                    ;; Load success memory from digital twin
+                          (gptel-auto-experiment--remember-rejection target (car rej)))))
                     (let ((successes (cdr (assq 'successes plist))))
                       (when (and successes
                                  (bound-and-true-p gptel-auto-experiment--success-memory)
                                  (fboundp 'gptel-auto-experiment--remember-success))
                         (dolist (succ successes)
-                          (let ((hypothesis (car succ))
-                                (diff (cdr succ)))
-                            (gptel-auto-experiment--remember-success target hypothesis diff)))))))
-              (message "[digital-twin] Loaded %d target states + rejection memory from %s"
-                       (hash-table-count gptel-auto-experiment--target-state-cache) file))
-          (error (message "[digital-twin] Failed to load: %s" (error-message-string err)))))))))
+                          (gptel-auto-experiment--remember-success
+                           target (car succ) (cdr succ)))))))
+                (message "[digital-twin] Loaded %d target states + rejection memory from %s"
+                         (hash-table-count gptel-auto-experiment--target-state-cache) file)))
+          (error (message "[digital-twin] Failed to load: %s" (error-message-string err)))))))
 
 ;; ─── Ontology Self-Evolution ───
 
@@ -3665,7 +3673,7 @@ Runs during the self-evolution cycle.  Results are stored in
                ;; Track best strategy if keep-rate > 0
                (when (and (> best-rate 0) (> (plist-get best :total) 2))
                  (let ((current (cdr (assoc category gptel-auto-workflow--category-strategy-preferences)))
-                       (total-strats (hash-table-count cat-strats)))
+                        (_total-strats (hash-table-count cat-strats)))
                    (unless (equal current best-strat)
                      (push (list category current best-strat best-rate) changes)
                      (message "[ontology-evolve] ✓ %s: strategy %s → %s (keep-rate %.0f%%)"
@@ -3735,7 +3743,7 @@ Runs during the self-evolution cycle.  Results are stored in
       (when (bound-and-true-p gptel-auto-experiment--refine-convergence-stats)
         (let ((t-ref (plist-get gptel-auto-experiment--refine-convergence-stats :total))
               (s-ref (plist-get gptel-auto-experiment--refine-convergence-stats :success))
-              (f-ref (plist-get gptel-auto-experiment--refine-convergence-stats :failure)))
+              (_f-ref (plist-get gptel-auto-experiment--refine-convergence-stats :failure)))
           (when (> t-ref 0)
             (message "[ontology-evolve] 🔄 Refine convergence: %d/%d success (%.0f%%) — Palantir target: 94%%"
                      s-ref t-ref (* 100 (/ (float s-ref) t-ref))))))
@@ -3781,7 +3789,7 @@ Runs during the self-evolution cycle.  Results are stored in
               (message "[ontology-evolve] 🔧 %d targets have suggested recategorization" (length repairs))))
         (error nil))
       (list :changes (length changes)
-            :backend-changes backend-changes
+            :backend-changes 0
             :saturated (length saturated)
             :total-strategies (hash-table-count cat-strats)))))))
 
@@ -3878,8 +3886,6 @@ Runs during evolution cycle alongside strategy learning."
 (condition-case nil (gptel-auto-workflow--load-target-state) (error nil))
 (condition-case nil (gptel-auto-experiment--replay-grader-insights-from-tsv) (error nil))
 
-;; ─── Skill Graph Dimensions (Future: integrate with skill graph data) ───
-
 (defun gptel-auto-workflow--graph-neighbor-success (backend target)
   "Return boost for BACKEND based on success on graph neighbors of TARGET.
 Looks up TARGET's category in the skill graph and checks BACKEND's
@@ -3914,7 +3920,7 @@ keep-rate on targets in the same category."
         (error 0.0))
     0.0))
 
-(defun gptel-auto-workflow--graph-edge-strength (backend active-skills)
+(defun gptel-auto-workflow--graph-edge-strength (_backend active-skills)
   "Return boost for BACKEND based on strength of skill combination edges.
 Looks up edges between skills in ACTIVE-SKILLS and checks if BACKEND
 succeeded when those skill pairs were used together."
@@ -3939,10 +3945,6 @@ succeeded when those skill pairs were used together."
               0.0))
         (error 0.0))
     0.0))
-
-;; Load persisted digital twin state + re-parse grader insights from TSV at startup
-(condition-case nil (gptel-auto-workflow--load-target-state) (error nil))
-(condition-case nil (gptel-auto-experiment--replay-grader-insights-from-tsv) (error nil))
 
 (provide 'gptel-auto-workflow-ontology-router)
 ;;; gptel-auto-workflow-ontology-router.el ends here

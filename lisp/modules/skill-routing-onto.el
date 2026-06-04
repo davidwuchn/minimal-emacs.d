@@ -9,10 +9,14 @@
 ;; ─── Category Ontology (ported from ontology-router:294-340) ───
 
 (defconst sr-category-patterns
-  '((:programming . "\\(?:benchmark\\|fsm\\|retry\\|reasoning\\|introspection\\|test\\|code\\|compile\\|elisp\\|refactor\\|validate\\|debug\\|discover\\|replace\\|function\\|syntax\\|macro\\|defun\\|byte-compil\\|segfault\\|infinite.loop\\|clojure\\|namespace\\|deps.edn\\|repl\\)")
-    (:tool-calls  . "\\(?:sandbox\\|tool\\|bash\\|grep\\|glob\\|edit\\|apply\\|preview\\|programmatic\\|security\\|profile\\|permission\\|restrict\\|audit\\)")
-    (:agentic     . "\\(?:agent\\|workflow\\|strategy\\|evolution\\|meta\\|propos\\|expert\\|prompt\\|system.prompt\\|code.review\\|pipeline\\)")
-    (:natural-language . "\\(?:context\\|chat\\|conversation\\|language\\|text\\|summarize\\|stream\\|research\\|digest\\|reddit\\|benchmark-llm\\|llm\\|provider\\|structured.output\\)"))
+  '((:programming . "
+\\(?:benchmark\\|fsm\\|retry\\|reasoning\\|introspection\\|test\\|code\\|compile\\|elisp\\|refactor\\|validate\\|debug\\|discover\\|replace\\|function\\|syntax\\|macro\\|defun\\|byte-compil\\|segfault\\|infinite.loop\\|clojure\\|namespace\\|deps.edn\\|repl\\)")
+    (:tool-calls  . "
+\\(?:sandbox\\|tool\\|bash\\|grep\\|glob\\|edit\\|apply\\|preview\\|programmatic\\|security\\|profile\\|permission\\|restrict\\|audit\\)")
+    (:agentic     . "
+\\(?:agent\\|workflow\\|strategy\\|evolution\\|meta\\|propos\\|expert\\|prompt\\|system.prompt\\|code.review\\|pipeline\\)")
+    (:natural-language . "
+\\(?:context\\|chat\\|conversation\\|language\\|text\\|summarize\\|stream\\|research\\|digest\\|reddit\\|benchmark-llm\\|llm\\|provider\\|structured.output\\)"))
   "Task category patterns: regex → category keyword.")
 
 (defun sr--categorize-task (task-text)
@@ -81,7 +85,7 @@
    "How many task-relevant keywords appear in skill content.
 Normalized to 0.0-1.0. Higher = better match.
 Uses exclusive-word bonus: keywords unique to <3 skills get 2x weight,
-reducing false positives from common words like 'code' or 'function'."
+reducing false positives from common words like \='code\=' or \='function\='."
   (let* ((task-words (delete-dups
                       (split-string (downcase task-text) "[^a-z0-9-]+" t)))
          (common-words '("code" "function" "file" "use" "set" "new" "write"
@@ -143,9 +147,10 @@ Skills with 3+ consecutive failures are quarantined (score reduced by 50%).")
   "Days since last SKILL.md edit beyond which a skill is considered stale.
 Stale skills receive a health penalty.")
 
-(defun sr--skill-health (skill-dir skill-content)
+(defun sr--skill-health (skill-dir _skill-content)
   "Check SKILL-DIR health. Returns (healthy-p . penalty 0.0-0.5).
-Penalty is subtracted from score. Ported from ontology-router `backend-quota-health`."
+Penalty is subtracted from score. Ported from ontology-router
+`backend-quota-health`."
   (let* ((strikes (gethash skill-dir sr--skill-strikes '(0 . 0)))
          (consecutive-failures (car strikes))
          (stale-p (sr--skill-stale-p skill-dir))
@@ -193,8 +198,8 @@ Resets when any other skill succeeds. Used by health ladder."
 (defun sr--exclusive-keyword-bonus (task-text skill-dir)
   "Bonus for skills whose directory name contains unique identity words.
 Only scores when the word is RARE across all skill directories.
-E.g., 'clojure' appears only in clojure-expert → full bonus.
-'research' appears in researcher-prompt AND research-digest → reduced bonus.
+E.g., \='clojure\=' appears only in clojure-expert → full bonus.
+\='research\=' appears in researcher-prompt AND research-digest → reduced bonus.
 Returns 0.0-0.5 bonus."
   (let* ((dir-name (downcase (or skill-dir "")))
          (task-lower (downcase task-text))
@@ -277,7 +282,8 @@ Analogous to ontology-router `record-holographic-experiment` for backends."
 
 (defun sr--skill-keep-rate (skill-dir)
   "Return keep-rate (success/total) for SKILL-DIR, or 0.25 if <3 attempts.
-Bayesian smoothing prevents cold-start problem. Ported from ontology-router:511-519."
+Bayesian smoothing prevents cold-start problem. Ported from
+ontology-router:511-519."
   (let* ((stats (gethash skill-dir sr--outcome-table '(0 . 0)))
          (success (car stats))
          (total (cdr stats)))
@@ -392,8 +398,8 @@ Uses 3-grams (trigrams). Returns 0.0-1.0. Simple embedding approximation."
          (b-grams (sr--ngrams text-b 3))
          (intersection 0) (union 0))
     (maphash (lambda (k _) (when (gethash k b-grams) (setq intersection (1+ intersection)))) a-grams)
-    (maphash (lambda (k v) (setq union (+ union v))) a-grams)
-    (maphash (lambda (k v) (setq union (+ union v))) b-grams)
+    (maphash (lambda (_k v) (setq union (+ union v))) a-grams)
+    (maphash (lambda (_k v) (setq union (+ union v))) b-grams)
     (if (> union 0) (/ (float (* 2 intersection)) union) 0.0)))
 
 (defun sr--embedding-fallback (task-text top-n)

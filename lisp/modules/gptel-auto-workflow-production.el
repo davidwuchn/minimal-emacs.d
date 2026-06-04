@@ -9,6 +9,7 @@
 (declare-function gptel-auto-workflow--bead-update-from-experiment "gptel-auto-workflow-beads")
 (declare-function gptel-auto-workflow--bead-file-from-research "gptel-auto-workflow-beads")
 (declare-function gptel-auto-workflow--bead-list "gptel-auto-workflow-beads")
+(declare-function gptel-auto-workflow--memory-status "gptel-auto-workflow-mementum")
 
 ;; ─── Configuration ───
 

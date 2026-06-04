@@ -121,7 +121,8 @@ Bind with `let' around the subsystem's scoring context.")
 
 (defun gptel-benchmark-get-subsystem-weights (subsystem)
   "Return the Eight Keys weight alist for SUBSYSTEM.
-SUBSYSTEM is a keyword: :autotts, :autogo, :self-evolve, :meta-harness, :ontology.
+SUBSYSTEM is a keyword: :autotts, :autogo, :self-evolve, :meta-harness,
+:ontology.
 Returns default weights if SUBSYSTEM not recognized."
   (or (plist-get
        (cl-find subsystem gptel-benchmark-eight-keys-subsystem-profiles
@@ -136,7 +137,8 @@ Returns default weights if SUBSYSTEM not recognized."
 (defun gptel-benchmark--load-keys-from-skill ()
   "Load Eight Keys definitions from eight-keys-grader skill.
 Returns list of key definitions suitable for use as
-`gptel-benchmark-eight-keys-definitions' (see there), or nil if skill unavailable."
+`gptel-benchmark-eight-keys-definitions' (see there), or nil if skill
+unavailable."
   (when (and (fboundp 'gptel-auto-workflow--load-skill-content)
              (fboundp 'gptel-auto-workflow--skill-root))
     (let* ((skill-root (funcall #'gptel-auto-workflow--skill-root "eight-keys-grader"))
@@ -353,7 +355,8 @@ otherwise the default `gptel-benchmark-eight-keys-weights'."
 
 (defun gptel-benchmark-eight-keys-score-for (output subsystem &optional hypothesis)
   "Score OUTPUT using subsystem-specific Eight Keys weights.
-SUBSYSTEM is a keyword: :autotts, :autogo, :self-evolve, :meta-harness, :ontology.
+SUBSYSTEM is a keyword: :autotts, :autogo, :self-evolve, :meta-harness,
+:ontology.
 Uses `gptel-benchmark-get-subsystem-weights' to look up the profile.
 Returns alist: ((key . score) ...) plus overall score."
   (gptel-benchmark--eight-keys-score-with-weights
