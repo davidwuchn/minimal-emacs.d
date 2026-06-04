@@ -267,7 +267,6 @@
 ;; validates the intended behavior; it will pass once
 ;; function-exists-in-file-p uses absolute paths.
 (ert-deftest tdd/self-heal/fix-unknown-functions/adds-declare-for-known-module ()
-  :expected-result :failed
   (let ((f (make-temp-file "self-heal-test" nil ".el")))
     (unwind-protect
         (progn
@@ -349,11 +348,10 @@
 ;; byte-compile-warnings-for-file preserves line numbers.
 
 (ert-deftest tdd/self-heal/fix-let-needs-let*/sequential-binding ()
-  :expected-result :failed
   (let ((f (make-temp-file "self-heal-test" nil ".el")))
     (unwind-protect
         (progn
-          (write-region "(defun foo ()\n  (let ((a 1)\n        (b (+ a 1)))\n    b))\n" nil f)
+          (write-region ";; -*- lexical-binding: t; -*-\n(defun foo ()\n  (let ((a 1)\n        (b (+ a 1)))\n    b))\n" nil f)
           (let ((fixes (gptel-auto-workflow--fix-let-needs-let* f)))
             (should (> fixes 0))
             (with-temp-buffer

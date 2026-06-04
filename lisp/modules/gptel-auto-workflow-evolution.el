@@ -6938,19 +6938,26 @@ Call when keep_rate improves after fix."
     (aref prev len2)))
 
 (defun gptel-auto-workflow--byte-compile-warnings-for-file (file)
-  "Collect byte-compile warnings for FILE.  Returns alist of (LINE . TEXT)."
+  "Collect byte-compile warnings for FILE.  Returns alist of (LINE . TEXT).
+Sets `byte-compile-current-file' so line numbers appear in warning strings.
+Uses `byte-compile-log-warning-function' to capture position for line numbers."
   (let ((byte-compile-error-on-warn nil)
         (byte-compile-warnings t)
         (captured nil))
     (cl-letf (((symbol-function 'byte-compile-log-warning)
                (lambda (string _fill &optional _level)
-                 (let ((line nil))
+                 (let ((line nil)
+                       (pos (or (byte-compile--warning-source-offset) (point))))
                    (when (string-match ":\\([0-9]+\\):" string)
                      (setq line (string-to-number (match-string 1 string))))
+                   (unless line
+                     (when pos
+                       (setq line (line-number-at-pos pos t))))
                    (push (cons line string) captured)))))
       (with-temp-buffer
         (insert-file-contents file)
-        (byte-compile-from-buffer (current-buffer))))
+        (let ((byte-compile-current-file file))
+          (byte-compile-from-buffer (current-buffer)))))
     (nreverse captured)))
 
 (defun gptel-auto-workflow--fix-docstring-width (file)
@@ -7112,15 +7119,28 @@ Returns number of fixes."
           (save-buffer))))
     fixes))
 
+(defvar gptel-auto-workflow--self-heal-project-root nil
+  "Project root cached at load time for function-exists-in-file-p.")
+
+(eval-and-compile
+  (setq gptel-auto-workflow--self-heal-project-root
+        (or (locate-dominating-file
+             (or (and load-file-name (file-name-directory load-file-name))
+                 default-directory)
+             ".git"))))
+
 (defun gptel-auto-workflow--function-exists-in-file-p (fn-sym module-name)
   "Return t if FN-SYM is defined as a defun in the file named MODULE-NAME.
 Searches lisp/modules/ for the file.  Returns nil if file not found or
 function not defined there."
-  (let ((file (cl-some (lambda (dir)
-                         (let ((f (expand-file-name (concat module-name ".el") dir)))
-                           (when (file-exists-p f) f)))
-                       '("lisp/modules" "lisp" "packages/gptel"
-                         "packages/gptel-agent"))))
+  (let* ((proj-root (or gptel-auto-workflow--self-heal-project-root
+                        (locate-dominating-file default-directory ".git")))
+         (file (cl-some (lambda (dir)
+                          (let ((f (expand-file-name (concat module-name ".el")
+                                                     (expand-file-name dir proj-root))))
+                            (when (file-exists-p f) f)))
+                        '("lisp/modules" "lisp" "packages/gptel"
+                          "packages/gptel-agent"))))
     (when file
       (with-temp-buffer
         (insert-file-contents file)
@@ -7188,7 +7208,7 @@ WARNINGS is alist of (LINE . TEXT).  Returns number of fixes."
   (let ((fixes 0)
         (has-free-err nil))
     (dolist (w warnings)
-      (when (string-match "reference to free variable.*`err'" (cdr w))
+      (when (string-match "reference to free variable.*[\u2018'`]err[\u2019'`]" (cdr w))
         (setq has-free-err t)))
     (when has-free-err
       (with-current-buffer (find-file-noselect file)
@@ -7296,7 +7316,7 @@ actually in the same let form.  Returns number of fixes."
   (let ((fixes 0)
         (warnings (gptel-auto-workflow--byte-compile-warnings-for-file file)))
     (dolist (w warnings)
-      (when (string-match "reference to free variable.*`\\(.*\\)'" (cdr w))
+      (when (string-match "reference to free variable [\u2018'`]\\([^\u2019']+\\)[\u2019'`]" (cdr w))
         (let ((var (match-string 1 (cdr w)))
               (line (car w)))
           (when (and var line)
