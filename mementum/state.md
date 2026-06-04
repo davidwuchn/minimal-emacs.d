@@ -1,10 +1,67 @@
 # Mementum State
 
-> Last session: 2026-06-04 (Byte-compiler self-healing Phase 10 + zero-warning agent modules)
+> Last session: 2026-06-05 (OV5 pipeline audit + GTM daemon fix + rate-limit detection)
 > Next pipeline: running
-> Status: 2150 tests pass, 0 unexpected
+> Status: GTM daemon restarted, watchdog monitoring both daemons, 2189 tests pass, 0 unexpected
 
-## Session: Byte-Compiler Self-Healing Phase 10 (2026-06-04)
+## Session: OV5 Pipeline Hardening — GTM Daemon + Rate-Limit Detection (2026-06-05)
+
+### ⚒ GTM Daemon Auto-Restart (watchdog-daemon.sh)
+**Problem:** GTM daemon (`gtm-product-org`) was dead for 2+ days — no research, stale findings
+**Root cause:** Watchdog only monitored PMF daemon (`pmf-value-stream`); GTM daemon was killed on memory but never restarted
+**Fix:**
+- Added `start_gtm_daemon()` function to watchdog
+- When PMF daemon is healthy, watchdog now checks if GTM daemon exists
+- If GTM missing → starts it
+- If GTM memory >2.5GB → kills + restarts it
+- GTM daemon now running (PID 434201)
+
+### ⚒ Rate-Limit Detection for Chinese Backends
+**Problem:** Error code 1302 + "您的账户已达到速率限制" not recognized as rate-limit → experiments failed with `tool-error`
+**Fix:** Added to `gptel-tools-agent-error.el`:
+- Pattern: `您的账户已达到速率限制` (MiniMax account rate limit)
+- Pattern: `1302` (error code)
+- Both `rate-limit-error-p` and `hard-quota-error-p` functions updated
+
+### Pipeline Audit Results
+| Issue | Count | Status |
+|-------|-------|--------|
+| Rate-limit errors (24h) | 24+ | Detection improved |
+| GTM daemon dead | 1 | Fixed |
+| Analyzer timeouts | Multiple | Under investigation |
+| Staging verification failed | Multiple | Pending |
+| Grader bypass commit failed | Multiple | Pending |
+
+### Commits
+- `40ede3a0` ⚒ watchdog: auto-restart GTM daemon + rate-limit detection
+
+---
+
+## Session: Self-Heal ERT Test Hardening (2026-06-05)
+
+### ⊘ All 36 self-heal ERT tests now pass (was 34/36 with 2 expected failures)
+
+**Root causes found and fixed:**
+
+| Test | Root Cause | Fix |
+|------|-----------|-----|
+| `fix-let-needs-let*/sequential-binding` | `byte-compile-from-buffer` without `byte-compile-current-file` produced no line numbers; regex used ASCII quotes but Emacs 30+ uses Unicode | Set `byte-compile-current-file`; use `byte-compile--warning-source-offset` + `line-number-at-pos`; update regex to `[\u2018'\`]` |
+| `fix-unknown-functions/adds-declare-for-known-module` | `function-exists-in-file-p` resolved paths from `default-directory` which was temp file dir, not project root | Cache project root at load time via `eval-and-compile` using `load-file-name` |
+
+**Additional fixes:**
+- `fix-condition-case` err-detection regex: same Unicode quote fix
+- Test temp file: added `lexical-binding` directive (required for free-variable warnings)
+- Removed `:expected-result :failed` from both tests
+
+### Commits
+- `0083443f1` ⊘ fix: missing close paren in self-heal-check when-healthy form
+- `4a02cbeaf` ⊘ fix: all 36 self-heal ERT tests pass (was 34/36)
+
+### Test Results
+- **2189 total tests, 2137 passed, 0 unexpected, 52 skipped**
+- 36 new self-heal tests all pass (was 34 pass + 2 expected-fail)
+
+---
 
 ### ⚒ Phase 10: Self-Healing Byte-Compiler Warnings
 **Key insight:** Instead of manually fixing 80+ byte-compiler warnings one-by-one

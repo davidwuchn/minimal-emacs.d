@@ -29,11 +29,11 @@
        :capabilities (reasoning code-generation)
        :speed slow
        :reasoning-effort (high max))
-      (deepseek-v4-flash
-       :context-window 1000000
-       :pricing-input 0.14 :pricing-output 0.28 :pricing-cache-hit 0.003
-       :capabilities (code-generation)
-       :speed fast)))
+       (deepseek-v4-flash
+        :context-window 1000000
+        :pricing-input 0.14 :pricing-output 0.28 :pricing-cache-hit 0.003
+        :capabilities (code-generation reasoning)
+        :speed fast)))
 
     (moonshot
      :host "api.kimi.com"
@@ -44,6 +44,17 @@
        :context-window 262144
        :pricing-input 0.95 :pricing-output 4.00 :pricing-cache-hit 0.16
        :capabilities (code-generation tool-calls long-context)
+       :speed medium)))
+
+    (CF-Gateway
+     :host "gateway.ai.cloudflare.com"
+     :models (\@cf/moonshotai/kimi-k2.6)
+     :default-model \@cf/moonshotai/kimi-k2.6
+     :model-metadata
+     ((\@cf/moonshotai/kimi-k2.6
+       :context-window 262144
+       :pricing-input 0.95 :pricing-output 4.00 :pricing-cache-hit 0.16
+       :capabilities (code-generation tool-calls long-context reasoning)
        :speed medium)))
 
     (DashScope
@@ -107,25 +118,30 @@ When adding/updating models, ONLY edit this structure.")
                    (MiniMax . MiniMax-M3)
                    (DashScope . qwen3.6-plus)
                    (DeepSeek . deepseek-v4-pro)
-                   (moonshot . kimi-k2.6)))
+                   (moonshot . kimi-k2.6)
+                   (CF-Gateway . \@cf/moonshotai/kimi-k2.6)))
     (executor   . ((Z-AI . glm-5.1)
-                    (DeepSeek . deepseek-v4-flash)
-                    (DashScope . qwen3.6-plus)
-                    (moonshot . kimi-k2.6)))
+                   (DeepSeek . deepseek-v4-flash)
+                   (CF-Gateway . \@cf/moonshotai/kimi-k2.6)
+                   (DashScope . qwen3.6-plus)
+                   (moonshot . kimi-k2.6)))
     (researcher . ((MiniMax . MiniMax-M3)
                    (DashScope . qwen3.6-plus)
                    (DeepSeek . deepseek-v4-pro)
-                   (moonshot . kimi-k2.6)))
+                   (moonshot . kimi-k2.6)
+                   (CF-Gateway . \@cf/moonshotai/kimi-k2.6)))
     (reviewer   . ((Z-AI . glm-5.1)
                    (MiniMax . MiniMax-M3)
                    (DashScope . qwen3.6-plus)
                    (DeepSeek . deepseek-v4-pro)
-                   (moonshot . kimi-k2.6)))
+                   (moonshot . kimi-k2.6)
+                   (CF-Gateway . \@cf/moonshotai/kimi-k2.6)))
     (comparator . ((Z-AI . glm-5.1)
                    (MiniMax . MiniMax-M3)
                    (DashScope . qwen3.6-plus)
                    (DeepSeek . deepseek-v4-pro)
-                   (moonshot . kimi-k2.6))))
+                   (moonshot . kimi-k2.6)
+                   (CF-Gateway . \@cf/moonshotai/kimi-k2.6))))
   "Per-task-type model defaults per backend.
 Derived from `gptel-backend-registry` — update the registry, then regenerate
 this.")
@@ -133,13 +149,16 @@ this.")
 ;;; Fallback Chains
 
 (defconst gptel-fallback-chains
-  '((executor . (Z-AI DeepSeek moonshot DashScope Copilot))
-    (analyzer . (Copilot Z-AI MiniMax moonshot DeepSeek DashScope))
-    (grader   . (Copilot Z-AI MiniMax moonshot DeepSeek DashScope))
-    (default  . (Copilot Z-AI MiniMax moonshot DeepSeek DashScope)))
+  '((executor  . (Z-AI DeepSeek CF-Gateway moonshot DashScope Copilot))
+    (analyzer  . (Z-AI MiniMax moonshot DeepSeek DashScope Copilot))
+    (grader    . (Z-AI MiniMax moonshot CF-Gateway DeepSeek DashScope Copilot))
+    (default   . (Z-AI MiniMax moonshot CF-Gateway DeepSeek DashScope Copilot)))
   "Fallback chain ordering per task type.
 Backends are tried in this order when rate-limited or failing.
-DeepSeek first for executor (proven to make edits), Copilot first for others.")
+DeepSeek first for executor (proven to make edits).
+Copilot is LAST — reserved for when all other backends are
+rate-limited/out of quota.  This preserves Copilot quota for
+emergency use only.")
 
 ;;; Accessor Functions
 

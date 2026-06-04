@@ -2829,7 +2829,8 @@ Returns empty string if no frontier data."
   "Select N targets with smallest Pareto frontiers for next experiments.
 Returns list of (target . frontier-size) sorted ascending by frontier size.
 Targets with no frontier experiments are prioritized.
-Reads from ALL historical TSV files (parse-all-results), not just current run."
+Reads from ALL historical TSV files (parse-all-results), not just current run.
+Filters out protected files from headless-target-denylist."
   (let* ((all-results (and (or (fboundp 'gptel-auto-workflow--parse-all-results)
                                ;; Evolution module may not be loaded yet
                                (ignore-errors
@@ -2837,13 +2838,18 @@ Reads from ALL historical TSV files (parse-all-results), not just current run."
                            (fboundp 'gptel-auto-workflow--parse-all-results)
                            (gptel-auto-workflow--parse-all-results)))
          (target-frontiers (make-hash-table :test 'equal))
-         (all-targets '()))
+         (all-targets '())
+         ;; Filter out protected files that always fail validation
+         (denylist (and (boundp 'gptel-auto-workflow-headless-target-denylist)
+                        gptel-auto-workflow-headless-target-denylist)))
     ;; Collect all targets from aggregate history
     (dolist (result all-results)
       (let ((target (cdr (assoc :target result))))
         (when (and (stringp target)
                    (not (string-empty-p target))
-                   (not (member target all-targets)))
+                   (not (member target all-targets))
+                   ;; Skip protected files — they always fail validation
+                   (not (member target denylist)))
           (push target all-targets))))
     ;; Compute frontier size for each target using pre-fetched results
     (dolist (target all-targets)

@@ -31,6 +31,18 @@ start_workflow_daemon() {
         "$DIR" "$SERVER_NAME" &
 }
 
+start_gtm_daemon() {
+    env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY -u XDG_RUNTIME_DIR \
+        EMACSNATIVELOADPATH= \
+        TMPDIR=/tmp \
+        AUTO_WORKFLOW_EMACS_SERVER=gtm-product-org \
+        MINIMAL_EMACS_WORKFLOW_ROLE=research \
+        MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
+        MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
+        bash -c 'ulimit -s 65532 2>/dev/null; exec emacs --init-directory="$0" --daemon="$1" --eval "(setq native-comp-jit-compilation nil)" </dev/null' \
+        "$DIR" gtm-product-org &
+}
+
 daemon_pids() {
     local name="$1"
     local pids=""
@@ -227,15 +239,26 @@ if daemon_responds; then
             exit 0
         fi
     fi
-    # Also check researcher daemon memory (persists between pipeline runs)
-    RESEARCHER_PID=$(first_daemon_pid "gtm-product-org")
-    if [ -n "$RESEARCHER_PID" ]; then
-        RSS_KB=$(ps -p "$RESEARCHER_PID" -o rss= 2>/dev/null | tr -d ' ')
+    # Also check GTM daemon (gtm-product-org) — restart if missing or memory high
+    GTM_PID=$(first_daemon_pid "gtm-product-org")
+    if [ -n "$GTM_PID" ]; then
+        RSS_KB=$(ps -p "$GTM_PID" -o rss= 2>/dev/null | tr -d ' ')
         if [ -n "$RSS_KB" ] && [ "$RSS_KB" -gt 2621440 ]; then
-            echo "[$(date '+%H:%M:%S')] High researcher memory (${RSS_KB}KB) — killing" >> "$LOG"
-            kill -9 "$RESEARCHER_PID" 2>/dev/null || true
+            echo "[$(date '+%H:%M:%S')] High GTM memory (${RSS_KB}KB) — killing" >> "$LOG"
+            kill -9 "$GTM_PID" 2>/dev/null || true
+            sleep 3
+            clean_all_sockets "gtm-product-org" "$MY_UID"
             echo "$(date +%s)" > "$LAST_RESTART_FILE"
+            start_gtm_daemon
+            echo "[$(date '+%H:%M:%S')] GTM daemon restarted (memory kill)" >> "$LOG"
         fi
+    else
+        # GTM daemon missing — start it
+        echo "[$(date '+%H:%M:%S')] GTM daemon missing — starting" >> "$LOG"
+        clean_all_sockets "gtm-product-org" "$MY_UID"
+        echo "$(date +%s)" > "$LAST_RESTART_FILE"
+        start_gtm_daemon
+        echo "[$(date '+%H:%M:%S')] GTM daemon started" >> "$LOG"
     fi
     exit 0
 fi

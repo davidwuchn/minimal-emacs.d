@@ -540,6 +540,16 @@ Usage:
           (gptel-auto-workflow--load-self-healing-state)
         (error (message "[self-heal] State restore skipped: %s"
                         (error-message-string err)))))
+    ;; Phase 3: Byte-compiler self-heal — fix warnings before experiments
+    (when (and gptel-auto-workflow--self-heal-enabled
+               (fboundp 'gptel-auto-workflow--self-heal-byte-compiler))
+      (condition-case err
+          (let ((result (gptel-auto-workflow--self-heal-byte-compiler)))
+            (when (> (plist-get result :remaining-warnings) 0)
+              (message "[self-heal] Byte-compiler: %d warnings remain after auto-fix"
+                       (plist-get result :remaining-warnings))))
+        (error (message "[self-heal] Byte-compiler self-heal error: %s"
+                        (error-message-string err)))))
     ;; Phase 4: Self-diagnostic probe — verify grader health before wasting experiments
     (when (and (fboundp 'gptel-auto-workflow--probe-before-experiments)
                (not (gptel-auto-workflow--probe-before-experiments)))
@@ -833,7 +843,7 @@ Works across macOS and Linux."
 Returns t if healthy, nil if broken (and attempts auto-rollback).
 Checks:
 1. Critical function symbols exist (fboundp)
-2. Syntax of recently modified module .el files
+2. Byte-compiler self-heal (fix warnings, verify parens)
 3. Load of critical modules succeeds
 
 If unhealthy and rollback succeeds, returns t after recovery."
@@ -844,26 +854,18 @@ If unhealthy and rollback succeeds, returns t after recovery."
       (unless (fboundp sym)
         (message "[self-heal] ⚠ Critical function void: %s" sym)
         (setq healthy nil)))
-    ;; Check 2: Syntax of recently changed .el files (last 3 commits)
+    ;; Check 2: Byte-compiler self-heal — fix warnings across all modules
     (when healthy
-      (let ((changed-files
-             (condition-case nil
-                 (with-temp-buffer
-                   (call-process "git" nil '(t nil) nil
-                                 "-C" proj-root "diff" "--name-only"
-                                 "HEAD~3..HEAD" "--" "*.el")
-                   (split-string (buffer-string) "\n" t))
-               (error nil))))
-        (dolist (file changed-files)
-          (let ((abs-file (expand-file-name file proj-root)))
-            (when (file-exists-p abs-file)
-              (with-temp-buffer
-                (condition-case err
-                    (byte-compile-file abs-file)
-                  (error
-                   (message "[self-heal] ⚠ Syntax error in %s: %s" file
-                            (error-message-string err))
-                   (setq healthy nil)))))))))
+      (when (fboundp 'gptel-auto-workflow--self-heal-byte-compiler)
+        (condition-case err
+            (let ((result (gptel-auto-workflow--self-heal-byte-compiler)))
+              (when (> (plist-get result :remaining-warnings) 0)
+                (message "[self-heal] ⚠ %d byte-compiler warnings remain"
+                         (plist-get result :remaining-warnings))))
+          (error
+           (message "[self-heal] ⚠ Byte-compiler self-heal error: %s"
+                    (error-message-string err))
+           (setq healthy nil)))))
     ;; Check 3: Load critical modules (idempotent)
     (when healthy
       (condition-case err
