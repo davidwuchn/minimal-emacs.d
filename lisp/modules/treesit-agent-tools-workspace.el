@@ -84,7 +84,7 @@ Uses ripgrep to find candidate files, then extracts the exact AST blocks.
         (when (file-readable-p file)
           (condition-case err
               (with-timeout (2 nil)
-                (let ((buf (find-file-noselect file)))
+                (when-let ((buf (find-file-noselect file)))
                   (unwind-protect
                       (with-current-buffer buf
                         (treesit-agent--ensure-parser file)
