@@ -3422,24 +3422,26 @@ before the executor runs, not just listed in the prompt."
 ;; The researcher discovers patterns that should refine the ontology.
 ;; This function surfaces category boundary mismatches from experiment data.
 
-(defun gptel-auto-workflow--detect-category-drift ()
-  "Check if any targets behave differently from their ontology category.
+ (defun gptel-auto-workflow--detect-category-drift ()
+   "Check if any targets behave differently from their ontology category.
 Compares each target's keep-rate against its category average.
+Uses regex-based categorization to avoid circularity: the graph-driven
+categorize-target could misclassify, and this function needs an independent
+check against that misclassification.
 A target that significantly outperforms/underperforms its category
 average may be misclassified.
 Returns alist of (target . (category . delta)) for drifts > 20%."
-  (when (fboundp 'gptel-auto-workflow--parse-all-results)
-    (let* ((results (gptel-auto-workflow--parse-all-results))
-           (cat-stats (make-hash-table :test 'equal))
-           (target-stats (make-hash-table :test 'equal))
-           (drifts nil))
-      ;; Aggregate category-level and target-level keep-rates
-      (dolist (r results)
-        (let* ((r-target (plist-get r :target))
-               (r-decision (plist-get r :decision))
-               (r-kept (equal r-decision "kept"))
-               (category (and r-target (fboundp 'gptel-auto-workflow--categorize-target)
-                              (gptel-auto-workflow--categorize-target r-target))))
+   (when (fboundp 'gptel-auto-workflow--parse-all-results)
+     (let* ((results (gptel-auto-workflow--parse-all-results))
+            (cat-stats (make-hash-table :test 'equal))
+            (target-stats (make-hash-table :test 'equal))
+            (drifts nil))
+       (dolist (r results)
+         (let* ((r-target (plist-get r :target))
+                (r-decision (plist-get r :decision))
+                (r-kept (equal r-decision "kept"))
+                (category (and r-target (fboundp 'gptel-auto-workflow--categorize-target-by-regex)
+                               (gptel-auto-workflow--categorize-target-by-regex r-target))))
           (when category
             (let ((c-entry (gethash category cat-stats (list :kept 0 :total 0))))
               (setq c-entry (plist-put c-entry :kept (+ (plist-get c-entry :kept) (if r-kept 1 0))))
@@ -3452,7 +3454,8 @@ Returns alist of (target . (category . delta)) for drifts > 20%."
       ;; Compare each target against its category average
       (maphash
        (lambda (target t-stats)
-         (let* ((category (and target (gptel-auto-workflow--categorize-target target)))
+          (let* ((category (and target (fboundp 'gptel-auto-workflow--categorize-target-by-regex)
+                                      (gptel-auto-workflow--categorize-target-by-regex target)))
                 (c-stats (or (gethash category cat-stats) (list :kept 0 :total 0)))
                 (t-total (plist-get t-stats :total))
                 (c-total (plist-get c-stats :total))
@@ -3510,7 +3513,8 @@ Returns alist of suggestions: (target . suggested-category)."
                 (let* ((r-target (plist-get r :target))
                        (r-decision (plist-get r :decision))
                        (r-kept (equal r-decision "kept"))
-                       (r-cat (and r-target (gptel-auto-workflow--categorize-target r-target))))
+                        (r-cat (and r-target (fboundp 'gptel-auto-workflow--categorize-target-by-regex)
+                                    (gptel-auto-workflow--categorize-target-by-regex r-target))))
                   (when r-cat
                     (let ((entry (gethash r-cat cat-rates (list :kept 0 :total 0))))
                       (setq entry (plist-put entry :kept (+ (plist-get entry :kept) (if r-kept 1 0))))
