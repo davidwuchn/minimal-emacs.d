@@ -404,11 +404,14 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                      :duration (- (float-time start-time))
                                                      :grader-reason precondition-error
                                                      :comparator-reason "precondition-blocked")))
-                       (message "[auto-exp] 🚫 %s" precondition-error)
-                       (magit-git-success "checkout" "--" ".")
-                       (setq finished t)
-                       (funcall log-fn run-id precondition-result)
-                       (funcall callback precondition-result))
+                        (message "[auto-exp] 🚫 %s" precondition-error)
+                        (magit-git-success "checkout" "--" ".")
+                        (setq finished t)
+                        (funcall log-fn run-id precondition-result)
+                        ;; Track token economics for this experiment
+                        (when (fboundp 'gptel-token-economics--track-experiment)
+                          (gptel-token-economics--track-experiment precondition-result))
+                        (funcall callback precondition-result))
                   ;; Routing handled by gptel-auto-workflow--advice-task-override
                   (my/gptel--run-agent-tool-with-timeout
                    experiment-timeout
@@ -418,12 +421,15 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                    executor-prompt
                    nil "false" nil)))))))
      (if (not worktree)
-         (let ((worktree-fail-result (list :target target :id experiment-id :kept nil
-                                          :error "Failed to create worktree" :backend "none")))
-           (setq finished t)
-           (funcall log-fn run-id worktree-fail-result)
-           (when (functionp callback)
-             (funcall callback worktree-fail-result)))
+          (let ((worktree-fail-result (list :target target :id experiment-id :kept nil
+                                           :error "Failed to create worktree" :backend "none")))
+            (setq finished t)
+            (funcall log-fn run-id worktree-fail-result)
+            ;; Track token economics for this experiment
+            (when (fboundp 'gptel-token-economics--track-experiment)
+              (gptel-token-economics--track-experiment worktree-fail-result))
+            (when (functionp callback)
+              (funcall callback worktree-fail-result)))
       (gptel-auto-experiment--call-in-context
        experiment-buffer experiment-worktree
        (lambda ()
@@ -634,10 +640,13 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                  (setq finished t)
                                  (message "[auto-exp] ⏭ Duplicate hypothesis: %s"
                                           (substring hypothesis 0 (min 80 (length hypothesis))))
-                                 (let ((default-directory experiment-worktree))
-                                   (magit-git-success "checkout" "--" "."))
-                                 (funcall log-fn run-id exp-result)
-                                 (funcall callback exp-result)))
+                                  (let ((default-directory experiment-worktree))
+                                    (magit-git-success "checkout" "--" "."))
+                                  (funcall log-fn run-id exp-result)
+                                  ;; Track token economics for this experiment
+                                  (when (fboundp 'gptel-token-economics--track-experiment)
+                                    (gptel-token-economics--track-experiment exp-result))
+                                  (funcall callback exp-result)))
                             (if repeated-focus
                               (let* ((hypothesis
                                       (gptel-auto-experiment--extract-hypothesis
@@ -669,10 +678,13 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                            symbol count)
                                   (magit-git-success "checkout" "--" "."))
                                    (gptel-auto-experiment--increment-no-improvement-count)
-                                  (when (fboundp 'gptel-auto-workflow--apply-category-vigilance)
-                                    (gptel-auto-workflow--apply-category-vigilance target 'discarded))
-                                  (funcall log-fn run-id exp-result)
-                                  (funcall callback exp-result))
+                                   (when (fboundp 'gptel-auto-workflow--apply-category-vigilance)
+                                     (gptel-auto-workflow--apply-category-vigilance target 'discarded))
+                                   (funcall log-fn run-id exp-result)
+                                   ;; Track token economics for this experiment
+                                   (when (fboundp 'gptel-token-economics--track-experiment)
+                                     (gptel-token-economics--track-experiment exp-result))
+                                   (funcall callback exp-result))
                                ;; Agent error early abort: if executor returned a timeout/curl
                                ;; error, any partial file changes are corrupted. Revert and
                                ;; fail fast — don't waste 300s on a teachable retry.
@@ -702,9 +714,12 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                               :agent-output effective-agent-output
                                               :backend actual-backend
                                               :model actual-model)))
-                                    (gptel-auto-experiment--increment-no-improvement-count)
-                                   (funcall log-fn run-id error-result)
-                                   (funcall callback error-result))
+                                     (gptel-auto-experiment--increment-no-improvement-count)
+                                    (funcall log-fn run-id error-result)
+                                    ;; Track token economics for this experiment
+                                    (when (fboundp 'gptel-token-economics--track-experiment)
+                                      (gptel-token-economics--track-experiment error-result))
+                                    (funcall callback error-result))
                                  (setq finished t))
                                ;; Validate syntax BEFORE calling grader to avoid wasting API calls
                                ;; Check ALL modified files, not just target — agent may edit dependencies
@@ -793,10 +808,13 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                           :model actual-model)))
                                                           (setq finished t)
                                                            (gptel-auto-experiment--increment-no-improvement-count)
-                                                          (when (fboundp 'gptel-auto-workflow--apply-category-vigilance)
-                                                            (gptel-auto-workflow--apply-category-vigilance target 'validation-failed))
-                                                          (funcall log-fn run-id retry-exp-result)
-                                                          (funcall callback retry-exp-result))
+                                                           (when (fboundp 'gptel-auto-workflow--apply-category-vigilance)
+                                                             (gptel-auto-workflow--apply-category-vigilance target 'validation-failed))
+                                                           (funcall log-fn run-id retry-exp-result)
+                                                           ;; Track token economics for this experiment
+                                                           (when (fboundp 'gptel-token-economics--track-experiment)
+                                                             (gptel-token-economics--track-experiment retry-exp-result))
+                                                           (funcall callback retry-exp-result))
                                                       ;; Retry succeeded: treat output as new executor output
                                                       (if (functionp executor-callback)
                                                           (funcall executor-callback retry-output)
@@ -837,8 +855,11 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                               :validation-error validation-error
                                                               :backend actual-backend
                                                               :model actual-model)))
-                                                   (funcall log-fn run-id fail-result)
-                                                   (funcall callback fail-result)))
+                                                    (funcall log-fn run-id fail-result)
+                                                    ;; Track token economics for this experiment
+                                                    (when (fboundp 'gptel-token-economics--track-experiment)
+                                                      (gptel-token-economics--track-experiment fail-result))
+                                                    (funcall callback fail-result)))
                                              ;; Record validation error for self-evolution
                                              (when (and target validation-error
                                                         (fboundp 'gptel-ai-behaviors--record-validation-error))
@@ -961,9 +982,12 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                   (string-match-p "\\`Error:" retry-output))
                                                              (progn
                                                                (setq finished t)
-                                                               (message "[auto-exp] ✗ Grader retry failed")
-                                                               (funcall log-fn run-id exp-result)
-                                                               (funcall callback exp-result))
+                                                                (message "[auto-exp] ✗ Grader retry failed")
+                                                                (funcall log-fn run-id exp-result)
+                                                                ;; Track token economics for this experiment
+                                                                (when (fboundp 'gptel-token-economics--track-experiment)
+                                                                  (gptel-token-economics--track-experiment exp-result))
+                                                                (funcall callback exp-result))
                                                            (if (functionp executor-callback)
                                                                (funcall executor-callback retry-output)
                                                              (message "[auto-exp] exec-callback nil after grader retry")
@@ -974,9 +998,12 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                        "executor" "Grader rejection retry"
                                                        retry-prompt nil nil nil
                                                        gptel-auto-experiment-validation-retry-active-grace)))
-                                                ;; Non-teachable: fail normally
-                                                  (funcall log-fn run-id exp-result)
-                                                  (funcall callback exp-result))))
+                                                 ;; Non-teachable: fail normally
+                                                   (funcall log-fn run-id exp-result)
+                                                   ;; Track token economics for this experiment
+                                                   (when (fboundp 'gptel-token-economics--track-experiment)
+                                                     (gptel-token-economics--track-experiment exp-result))
+                                                   (funcall callback exp-result))))
                                          (when grade-passed
                                            ;; Grader passed - create a provisional commit so the
                                            ;; benchmark/scope logic can diff against HEAD~1.
@@ -1047,6 +1074,13 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                        (bound-and-true-p gptel-ai-behaviors--current-hashtags)
                                        "")
                            :prompt-chars (length executor-prompt)
+                          :output-chars (length (or effective-agent-output ""))
+                          :input-tokens (/ (length executor-prompt) 4.0)
+                          :output-tokens (/ (length (or effective-agent-output "")) 4.0)
+                          :category (or (and (fboundp 'gptel-auto-workflow--categorize-target)
+                                             (gptel-auto-workflow--categorize-target target))
+                                        :unknown)
+                          :decision (if keep "kept" "discarded")
                           :prompt-structure (gptel-auto-experiment--prompt-structure-score executor-prompt)
                            :kibcm-axis (gptel-auto-experiment--kibcm-axis hypothesis)
                           :sections-included (or (and (boundp 'gptel-auto-workflow--last-prompt-sections)
@@ -1136,6 +1170,9 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 						                                                                      "optimize-push-failed")))
 				                                                              (setq failed-result (plist-put failed-result :kept nil))
 				                                                              (funcall log-fn run-id failed-result)
+				                                                              ;; Track token economics for this experiment
+				                                                              (when (fboundp 'gptel-token-economics--track-experiment)
+				                                                                (gptel-token-economics--track-experiment failed-result))
 				                                                              (funcall callback failed-result))))
 			                                                          (funcall finalize)))
 		                                                        (let ((failed-result
@@ -1148,6 +1185,9 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 		                                                          (setq provisional-commit-hash nil)
 		                                                          (setq failed-result (plist-put failed-result :kept nil))
 		                                                          (funcall log-fn run-id failed-result)
+		                                                          ;; Track token economics for this experiment
+		                                                          (when (fboundp 'gptel-token-economics--track-experiment)
+		                                                            (gptel-token-economics--track-experiment failed-result))
 		                                                          (funcall callback failed-result))))
 	                                                      (let ((default-directory experiment-worktree))
 		                                                    (message "[auto-experiment] Discarding changes for %s (no improvement)" target)
@@ -1159,6 +1199,9 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 		                                                    (gptel-auto-experiment--increment-no-improvement-count)
 		                                                    (funcall log-fn
 			                                                         run-id exp-result)
+		                                                    ;; Track token economics for this experiment
+		                                                    (when (fboundp 'gptel-token-economics--track-experiment)
+		                                                      (gptel-token-economics--track-experiment exp-result))
 																(funcall callback exp-result)))))))))
                                               (if (and (gptel-auto-experiment--teachable-validation-error-p
                                                        target validation-error)
@@ -1294,9 +1337,12 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                                                            (plist-put (copy-sequence exp-result)
                                                                                                                       :comparator-reason
                                                                                                                       "retry-push-failed")))
-                                                                                                      (setq failed-result (plist-put failed-result :kept nil))
-                                                                                                      (funcall log-fn run-id failed-result)
-                                                                                                      (funcall callback failed-result))))
+                                                                                                       (setq failed-result (plist-put failed-result :kept nil))
+                                                                                                       (funcall log-fn run-id failed-result)
+                                                                                                       ;; Track token economics for this experiment
+                                                                                                       (when (fboundp 'gptel-token-economics--track-experiment)
+                                                                                                         (gptel-token-economics--track-experiment failed-result))
+                                                                                                       (funcall callback failed-result))))
                                                                                               (funcall finalize)))
 								                                                        (let ((failed-result
 									                                                           (plist-put (copy-sequence exp-result)
@@ -1308,6 +1354,9 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 									                                                      (setq provisional-commit-hash nil)
 									                                                      (setq failed-result (plist-put failed-result :kept nil))
 									                                                      (funcall log-fn run-id failed-result)
+									                                                      ;; Track token economics for this experiment
+									                                                      (when (fboundp 'gptel-token-economics--track-experiment)
+									                                                        (gptel-token-economics--track-experiment failed-result))
 									                                                      (funcall callback failed-result))))
 							                                                      (let ((default-directory experiment-worktree))
 								                                                    (message "[auto-experiment] Discarding changes for %s (no improvement)" target)
@@ -1506,17 +1555,23 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                          (if gptel-auto-workflow-use-staging
                                                                              (gptel-auto-workflow--staging-flow experiment-branch finalize)
                                                                            (funcall finalize))
-                                                                       (let ((failed (plist-put (copy-sequence exp-result) :comparator-reason "grader-bypass-push-failed")))
-                                                                         (setq failed (plist-put failed :kept nil))
-                                                                         (funcall log-fn run-id failed)
-                                                                         (funcall callback failed)))
+                                                                        (let ((failed (plist-put (copy-sequence exp-result) :comparator-reason "grader-bypass-push-failed")))
+                                                                          (setq failed (plist-put failed :kept nil))
+                                                                          (funcall log-fn run-id failed)
+                                                                          ;; Track token economics for this experiment
+                                                                          (when (fboundp 'gptel-token-economics--track-experiment)
+                                                                            (gptel-token-economics--track-experiment failed))
+                                                                          (funcall callback failed)))
                                                                    (funcall finalize))
                                                              (let ((failed (plist-put (copy-sequence exp-result) :comparator-reason "grader-bypass-commit-failed")))
                                                                (gptel-auto-workflow--drop-provisional-commit provisional-commit-hash "Drop grader-bypass")
                                                                (setq provisional-commit-hash nil)
-                                                               (setq failed (plist-put failed :kept nil))
-                                                               (funcall log-fn run-id failed)
-                                                               (funcall callback failed)))))
+                                                                (setq failed (plist-put failed :kept nil))
+                                                                (funcall log-fn run-id failed)
+                                                                ;; Track token economics for this experiment
+                                                                (when (fboundp 'gptel-token-economics--track-experiment)
+                                                                  (gptel-token-economics--track-experiment failed))
+                                                                (funcall callback failed)))))
                                                        ;; Not a bypass — discard normally
                                                        (progn
                                                          (setq finished t)
@@ -1525,10 +1580,13 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                           provisional-commit-hash
                                                           (format "Discard provisional commit for %s" target))
                                                          (setq provisional-commit-hash nil)
-                                                         (message "[auto-experiment] ✗ %s for %s (passed=%s tests-passed=%s validation-error=%s)"
-                                                                  reason target passed tests-passed validation-error)
-                                                         (funcall log-fn run-id exp-result)
-                                                         (funcall callback exp-result)))))))))
+                                                          (message "[auto-experiment] ✗ %s for %s (passed=%s tests-passed=%s validation-error=%s)"
+                                                                   reason target passed tests-passed validation-error)
+                                                          (funcall log-fn run-id exp-result)
+                                                          ;; Track token economics for this experiment
+                                                          (when (fboundp 'gptel-token-economics--track-experiment)
+                                                            (gptel-token-economics--track-experiment exp-result))
+                                                          (funcall callback exp-result)))))))))
                                            ))))))))))))))))
                    (let ((raw-executor-callback executor-callback))
                      (setq executor-callback
@@ -1581,12 +1639,15 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                       (error
                                        (message "[auto-exp] Cleanup after executor callback error failed: %s"
                                                 (error-message-string cleanup-err))))
-                                    (condition-case log-err
-                                        (funcall log-fn run-id exp-result)
-                                      (error
-                                       (message "[auto-exp] Failed to log executor callback error result: %s"
-                                                (error-message-string log-err))))
-                                    (funcall callback exp-result))))))))
+                                     (condition-case log-err
+                                         (funcall log-fn run-id exp-result)
+                                       (error
+                                        (message "[auto-exp] Failed to log executor callback error result: %s"
+                                                 (error-message-string log-err))))
+                                     ;; Track token economics for this experiment
+                                     (when (fboundp 'gptel-token-economics--track-experiment)
+                                       (gptel-token-economics--track-experiment exp-result))
+                                     (funcall callback exp-result))))))))
                    (funcall launch-executor)))))))))))
 
 
@@ -1826,12 +1887,20 @@ Called when the grader passed but the benchmark/validation failed."
                   (if gptel-auto-workflow-use-staging
                       (gptel-auto-workflow--staging-flow experiment-branch finalize)
                     (funcall finalize))
-                (funcall log-fn run-id (plist-put (plist-put (copy-sequence exp-result) :comparator-reason "bypass-push-failed") :kept nil)))
+                 (let ((failed-result (plist-put (plist-put (copy-sequence exp-result) :comparator-reason "bypass-push-failed") :kept nil)))
+                   (funcall log-fn run-id failed-result)
+                   ;; Track token economics for this experiment
+                   (when (fboundp 'gptel-token-economics--track-experiment)
+                     (gptel-token-economics--track-experiment failed-result))))
             (funcall finalize)))
       (progn
         (gptel-auto-workflow--drop-provisional-commit
          provisional-commit-hash (format "Drop bypass commit for %s" target))
-        (funcall log-fn run-id (plist-put (plist-put (copy-sequence exp-result) :comparator-reason "bypass-commit-failed") :kept nil))))))
+        (let ((failed-result (plist-put (plist-put (copy-sequence exp-result) :comparator-reason "bypass-commit-failed") :kept nil)))
+          (funcall log-fn run-id failed-result)
+          ;; Track token economics for this experiment
+          (when (fboundp 'gptel-token-economics--track-experiment)
+            (gptel-token-economics--track-experiment failed-result)))))))
 
 (provide 'gptel-tools-agent-experiment-core)
 ;;; gptel-tools-agent-experiment-core.el ends here
