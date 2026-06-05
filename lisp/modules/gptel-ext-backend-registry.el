@@ -208,6 +208,51 @@ Copilot is LAST — reserved for when all other backends are
 rate-limited/out of quota.  This preserves Copilot quota for
 emergency use only.")
 
+;;; Effort Level Configuration
+
+(defconst gptel-backend-effort-levels
+  '((deepseek-v4-pro . ((xhigh . "high") (high . "medium") (default . "low")))
+    (deepseek-v4-flash . ((xhigh . "high") (high . "medium") (default . "low")))
+    (qwen3.7-max . ((xhigh . "high") (high . "medium") (default . "low")))
+    (kimi-k2.6 . ((xhigh . "high") (high . "medium") (default . "low")))
+    (glm-5.1 . ((xhigh . "high") (high . "medium") (default . "low"))))
+  "Effort level mapping per backend/model.
+Maps logical effort levels (xhigh, high, default) to API-specific reasoning_effort values.
+Based on DeepSWE benchmark data: effort level dramatically affects pass@1 scores.")
+
+(defconst gptel-task-type-effort-defaults
+  '((executor . high)
+    (grader . high)
+    (reviewer . high)
+    (analyzer . default)
+    (researcher . default)
+    (comparator . default))
+  "Default effort level per task type.
+Executor/grader/reviewer use 'high for quality-critical tasks.
+Analyzer/researcher/comparator use 'default for speed/cost optimization.")
+
+(defun gptel-backend-registry-effort-level (backend model &optional task-type)
+  "Return API-specific effort level for BACKEND/MODEL.
+TASK-TYPE defaults to 'executor if not provided.
+Returns the reasoning_effort value to send in API requests,
+or nil if the backend doesn't support effort levels."
+  (let* ((effort (or task-type 'executor))
+         (logical-level (or (cdr (assoc effort gptel-task-type-effort-defaults))
+                           'default))
+         (model-efforts (cdr (assoc model gptel-backend-effort-levels))))
+    (when model-efforts
+      (cdr (assoc logical-level model-efforts)))))
+
+(defun gptel-backend-registry-all-effort-levels ()
+  "Return list of all (BACKEND MODEL EFFORT-LEVEL API-VALUE) tuples.
+Useful for generating effort-level comparison tables."
+  (let (result)
+    (dolist (entry gptel-backend-effort-levels result)
+      (let ((model (car entry))
+            (efforts (cdr entry)))
+        (dolist (level efforts)
+          (push (list 'unknown model (car level) (cdr level)) result))))))
+
 ;;; Accessor Functions
 
 (defun gptel-backend-registry-get (backend model property)

@@ -1809,6 +1809,30 @@ row for the same experiment and target."
             results-file)))
     (gptel-auto-workflow--persist-status)))
 
+(defun gptel-auto-experiment--calculate-cost-usd (prompt-chars output-chars backend model)
+  "Calculate estimated API cost in USD for PROMPT-CHARS and OUTPUT-CHARS.
+Uses BACKEND and MODEL to look up pricing from the registry.
+Returns cost as a float, or 0.0 if pricing unavailable."
+  (let* ((pricing (when (and backend model
+                             (fboundp 'gptel-backend-registry-pricing))
+                    (gptel-backend-registry-pricing
+                     (intern (or (and (symbolp backend) (symbol-name backend))
+                                 backend))
+                     (intern (or (and (symbolp model) (symbol-name model))
+                                 model)))))
+         (input-price (or (plist-get pricing :input) 0.0))
+         (output-price (or (plist-get pricing :output) 0.0))
+         (cache-hit-price (or (plist-get pricing :cache-hit) 0.0))
+         ;; Estimate tokens: ~4 chars per token for English/code
+         (input-tokens (/ (or prompt-chars 0) 4.0))
+         (output-tokens (/ (or output-chars 0) 4.0))
+         ;; Assume 80% cache hit rate for prompt (system messages cached)
+         (cached-tokens (* input-tokens 0.8))
+         (uncached-tokens (- input-tokens cached-tokens)))
+    (+ (* uncached-tokens (/ input-price 1000000.0))
+       (* cached-tokens (/ cache-hit-price 1000000.0))
+       (* output-tokens (/ output-price 1000000.0)))))
+
 (defun gptel-auto-experiment-log-tsv (run-id experiment)
   "Append EXPERIMENT to results.tsv for RUN-ID.
 Captures executor reasoning from the dynamic variable
@@ -1832,7 +1856,20 @@ Captures executor reasoning from the dynamic variable
          (output-chars (gptel-auto-experiment--tsv-number
                         (gptel-auto-workflow--plist-get experiment :output-chars 0)))
          (prompt-chars (gptel-auto-experiment--tsv-number
-                        (gptel-auto-workflow--plist-get experiment :prompt-chars 0))))
+                        (gptel-auto-workflow--plist-get experiment :prompt-chars 0)))
+         (backend (gptel-auto-workflow--plist-get experiment :backend "unknown"))
+         (model (gptel-auto-workflow--plist-get experiment :model "unknown"))
+         (cost-usd (gptel-auto-experiment--calculate-cost-usd
+                    prompt-chars output-chars backend model))
+         (effort-level (or (gptel-auto-workflow--plist-get experiment :effort-level)
+                          (and (fboundp 'gptel-backend-registry-effort-level)
+                               (gptel-backend-registry-effort-level
+                                (intern (or (and (symbolp backend) (symbol-name backend))
+                                            backend))
+                                (intern (or (and (symbolp model) (symbol-name model))
+                                            model))
+                                'executor))
+                          "default")))
     ;; Capture executor reasoning for self-evolution feedback
     (when (and target (bound-and-true-p gptel-auto-experiment--executor-reasoning))
       (let* ((insights (gethash target gptel-auto-experiment--grader-insights))
@@ -1977,7 +2014,7 @@ Captures executor reasoning from the dynamic variable
       (unless (gptel-auto-experiment--drop-replaceable-tsv-rows
                experiment-id target)
         (goto-char (point-max))
-        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
+        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%.6f\t%s\n"
                         experiment-id
                         target
                         (gptel-auto-experiment--tsv-escape
@@ -2003,7 +2040,7 @@ Captures executor reasoning from the dynamic variable
                                (gptel-auto-workflow--backend-for-model model)
                              (or (gptel-auto-workflow--plist-get experiment :backend "unknown")
                                  "unknown"))))
-                         (round prompt-chars)
+                        (round prompt-chars)
                         (or (gptel-auto-experiment--tsv-escape
                              (gptel-auto-workflow--plist-get experiment :sections-included "all"))
                             "all")
@@ -2061,7 +2098,9 @@ Captures executor reasoning from the dynamic variable
                          (gptel-auto-workflow--plist-get experiment :skills ""))
                         (or (gptel-auto-experiment--tsv-escape
                              (gptel-auto-workflow--plist-get experiment :edit-mode "none"))
-                            "none"))))
+                            "none")
+                        cost-usd
+                        (or (gptel-auto-experiment--tsv-escape effort-level) "default"))))
       (write-region (point-min) (point-max) file))
     ;; Keep strategy metrics independent from the per-run TSV.
     (when (fboundp 'gptel-auto-workflow--record-strategy-evaluation)
