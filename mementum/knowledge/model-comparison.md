@@ -1,5 +1,5 @@
 # Model-Level Head-to-Head Comparison
-> Auto-generated from 114 experiments across 3 models
+> Auto-generated from 127 experiments across 3 models
 
 ## Model Rankings (by keep-rate)
 
@@ -18,4 +18,4 @@
 - Shared targets: 1 | won 0, won 0, ties 1
 
 
-*Generated: 2026-06-04 19:51*
+*Generated: 2026-06-05 09:42*

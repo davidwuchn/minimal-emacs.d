@@ -1819,12 +1819,12 @@ Called when the grader passed but the benchmark/validation failed."
                   (if gptel-auto-workflow-use-staging
                       (gptel-auto-workflow--staging-flow experiment-branch finalize)
                     (funcall finalize))
-                (funcall log-fn run-id (plist-put (copy-sequence exp-result) :comparator-reason "bypass-push-failed")))
+                (funcall log-fn run-id (plist-put (copy-sequence exp-result) :comparator-reason "bypass-push-failed" :kept nil)))
             (funcall finalize)))
       (progn
         (gptel-auto-workflow--drop-provisional-commit
          provisional-commit-hash (format "Drop bypass commit for %s" target))
-        (funcall log-fn run-id (plist-put (copy-sequence exp-result) :comparator-reason "bypass-commit-failed"))))))
+        (funcall log-fn run-id (plist-put (copy-sequence exp-result) :comparator-reason "bypass-commit-failed" :kept nil))))))
 
 (provide 'gptel-tools-agent-experiment-core)
 ;;; gptel-tools-agent-experiment-core.el ends here

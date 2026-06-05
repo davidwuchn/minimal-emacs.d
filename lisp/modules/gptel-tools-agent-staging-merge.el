@@ -538,6 +538,9 @@ commits are preserved."
            (remote (gptel-auto-workflow--shared-remote))
            (default-directory (or (gptel-auto-workflow--project-root)
                                   default-directory)))
+      ;; Self-heal: clear stale git state before any operation
+      (gptel-auto-workflow--git-result
+       "git merge --abort 2>/dev/null; git checkout HEAD -- mementum/ assistant/ 2>/dev/null; true" 30)
       (message "[auto-workflow] Auto-promoting staging to main...")
       (condition-case err
           (progn
@@ -1108,9 +1111,12 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                           :analyzer-patterns ""
                           :agent-output ""))
                    (funcall finish nil))
-               (let* ((staging-base (gptel-auto-workflow--current-staging-head))
-                 (merge-result
-                  (gptel-auto-workflow--merge-to-staging optimize-branch))
+                (let* ((staging-base (gptel-auto-workflow--current-staging-head))
+                  ;; Self-heal: clear stale git state before git operations
+                  (gptel-auto-workflow--git-result
+                   "cd ~/.emacs.d && git merge --abort 2>/dev/null; git checkout HEAD -- mementum/ assistant/ 2>/dev/null; true" 30)
+                  (merge-result
+                   (gptel-auto-workflow--merge-to-staging optimize-branch))
                  (already-integrated-p (eq merge-result :already-integrated))
                  (finish-publish
                   (lambda (&optional retried)
@@ -1135,8 +1141,10 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                          (if retried
                              "[auto-workflow] ✓ Staging pushed after refreshing remote advance."
                            "[auto-workflow] ✓ Staging pushed. Human must merge to main."))
-                        (gptel-auto-workflow--promote-staging-to-main)
-                        (funcall finish t))))))
+                         (if (gptel-auto-workflow--promote-staging-to-main)
+                             (funcall finish t)
+                           (message "[auto-workflow] ⚠ Auto-promote to main failed; staging pushed but not merged")
+                           (funcall finish nil)))))))
             (if (null merge-result)
                 (progn
                   (message "[auto-workflow] ✗ Merge to staging failed, aborting")

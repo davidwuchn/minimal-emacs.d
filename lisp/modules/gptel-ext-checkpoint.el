@@ -529,10 +529,7 @@ Call this periodically from the experiment loop."
                                     (and (boundp 'gptel-auto-experiment--no-improvement-count)
                                          gptel-auto-experiment--no-improvement-count)
                                     0)
-            :consecutive-timeouts (or
-                                   (and (boundp 'gptel-auto-experiment--consecutive-timeout-threshold)
-                                        gptel-auto-experiment--consecutive-timeout-threshold)
-                                   0)
+            :consecutive-timeouts 0  ; was incorrectly storing threshold, not the actual per-target count
             :captured-at (format-time-string "%Y-%m-%dT%H:%M:%SZ"))))
       (setf (gptel-checkpoint-data-experiment-loop-snapshot
              gptel-checkpoint--current) snapshot)
