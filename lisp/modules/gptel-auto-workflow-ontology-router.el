@@ -2394,8 +2394,9 @@ Fields: :total-decisions, :backend-counts (alist of backend→count),
 (defun gptel-auto-workflow--best-model-for-target (target backend)
   "Return the best historical model for TARGET on BACKEND.
 Searches all kept experiments for this target+backend pair and returns
-the model with the highest keep-rate. Falls back to category-level
-model from `gptel-ai-behaviors--best-model' when no per-target data."
+the model with the highest keep-rate.  When no per-target data exists,
+tries similar files via unified graph before falling back to category-level
+model from `gptel-ai-behaviors--best-model'."
   (let ((best-model nil)
         (best-rate 0.0))
     ;; Phase 1: per-target data from experiment history
@@ -2417,16 +2418,58 @@ model from `gptel-ai-behaviors--best-model' when no per-target data."
         (maphash (lambda (model stats)
                    (let ((total (car stats))
                          (kept (cdr stats)))
-                      (when (and (> total 0)
-                                 (> kept 0)
-                                 (> (/ (float kept) total) best-rate)
-                                 (or (not (fboundp 'gptel-auto-workflow--model-combination-valid-p))
-                                     (gptel-auto-workflow--model-combination-valid-p
-                                      (concat backend "/" model))))
+                     (when (and (> total 0)
+                                (> kept 0)
+                                (> (/ (float kept) total) best-rate)
+                                (or (not (fboundp 'gptel-auto-workflow--model-combination-valid-p))
+                                    (gptel-auto-workflow--model-combination-valid-p
+                                     (concat backend "/" model))))
                        (setq best-rate (/ (float kept) total))
                        (setq best-model model))))
                  model-stats)))
-    ;; Phase 2: fallback to category-level model from ai-behaviors
+    ;; Phase 2: similar-file model lookup via unified graph
+    (unless best-model
+      (when (and target backend
+                 (fboundp 'gptel-auto-workflow--unified-graph-neighbors)
+                 (fboundp 'gptel-auto-workflow--parse-all-results))
+        (let* ((basename (file-name-nondirectory target))
+               (slug (file-name-sans-extension basename))
+               (similar (mapcar (lambda (edge)
+                                  (cdr (cadr edge)))
+                                (gptel-auto-workflow--unified-graph-neighbors
+                                 :file slug '(:similar))))
+               (model-stats (make-hash-table :test 'equal)))
+          (when similar
+            (dolist (r (gptel-auto-workflow--parse-all-results))
+              (let ((r-target (plist-get r :target))
+                    (r-backend (plist-get r :backend))
+                    (r-model (plist-get r :model))
+                    (r-decision (plist-get r :decision)))
+                (when (and r-target r-backend r-model
+                           (string= r-backend backend)
+                           (member (file-name-nondirectory r-target)
+                                   (mapcar (lambda (s) (concat s ".el")) similar)))
+                  (let ((stats (or (gethash r-model model-stats) (cons 0 0))))
+                    (cl-incf (car stats))
+                    (when (equal r-decision "kept")
+                      (cl-incf (cdr stats)))
+                    (puthash r-model stats model-stats)))))
+            (maphash (lambda (model stats)
+                       (let ((total (car stats))
+                             (kept (cdr stats)))
+                         (when (and (> total 0)
+                                    (> kept 0)
+                                    (> (/ (float kept) total) best-rate)
+                                    (or (not (fboundp 'gptel-auto-workflow--model-combination-valid-p))
+                                        (gptel-auto-workflow--model-combination-valid-p
+                                         (concat backend "/" model))))
+                           (setq best-rate (/ (float kept) total))
+                           (setq best-model model))))
+                     model-stats)
+            (when best-model
+              (message "[model-select] Graph-similar model for %s: %s (from %d similar files)"
+                       target best-model (length similar)))))))
+    ;; Phase 3: fallback to category-level model from ai-behaviors
     (unless best-model
       (when (and (fboundp 'gptel-auto-workflow--categorize-target)
                  (fboundp 'gptel-ai-behaviors--best-model))
