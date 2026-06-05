@@ -196,11 +196,11 @@ Set to 0 to disable the check."
   :type 'integer
   :group 'gptel-auto-workflow)
 (defcustom gptel-auto-workflow-protected-configs
-  `(("assistant/agents/code_agent.md" . ,(symbol-name (gptel-backend-registry-default-model 'MiniMax)))
-    ("assistant/agents/plan_agent.md" . ,(symbol-name (gptel-backend-registry-default-model 'MiniMax)))
-    ("assistant/agents/comparator.md" . ,(symbol-name (gptel-backend-registry-default-model 'MiniMax)))
-    ("assistant/agents/explorer_agent.md" . ,(symbol-name (gptel-backend-registry-default-model 'MiniMax)))
-    ("assistant/agents/introspector.md" . ,(symbol-name (gptel-backend-registry-default-model 'MiniMax))))
+  '(("assistant/agents/code_agent.md" . "MiniMax-M3")
+    ("assistant/agents/plan_agent.md" . "MiniMax-M3")
+    ("assistant/agents/comparator.md" . "MiniMax-M3")
+    ("assistant/agents/explorer_agent.md" . "MiniMax-M3")
+    ("assistant/agents/introspector.md" . "MiniMax-M3"))
   "Protected configuration files and their expected values.
 AUTO-GENERATED from `gptel-backend-registry' — edit defaults there.
 Each element is (FILE . EXPECTED-VALUE).  If an experiment changes
