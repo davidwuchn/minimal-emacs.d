@@ -1,8 +1,69 @@
 # Mementum State
 
-> Last session: 2026-06-05 (YC Vision Strategic Planning)
+> Last session: 2026-06-05 (Benchmark Integration Planning)
 > Next pipeline: running
 > Status: 105/105 .el files, 3 modified this session, 0 byte-compile warnings
+
+## Session: Benchmark Integration Planning (2026-06-05)
+
+### 🎯 Strategic Implementation Plan: Benchmark as Sensor Layer
+
+Created comprehensive 24-month implementation plan for integrating the benchmark (32-column TSV) with all 5 YC vision gaps. The benchmark is the **nervous system** of OV5's self-improving company architecture.
+
+**Key insight:** Every subsystem (AutoTTS, AutoGo, Router, VSM, Monitoring Agent, Token Economics) consumes benchmark data to make decisions. The benchmark is the single source of truth that enables recursive self-improvement.
+
+**5-phase implementation roadmap:**
+
+**Phase 1: Production Sensors (0-6 months, P0)**
+- Extend TSV with columns 33-37: production metrics, user satisfaction, business value
+- Integrate Sentry/DataDog API for error rate tracking
+- Implement business value scoring (weight: 60% production impact, 40% code quality)
+- Goal: Close feedback loop between code quality and business value
+
+**Phase 2: Monitoring Agent (6-12 months, P1)**
+- Create meta-agent that analyzes failure patterns from last 50 runs
+- Detect systemic failures: grader fails 3+ times, backend has 0% keep-rate, effort level wastes tokens
+- Generate improvement proposals with concrete file changes and test plans
+- Test proposals against historical failures, deploy if new version is better
+- Goal: System that improves its own improvement mechanisms
+
+**Phase 3: Token Economics (12-18 months, P2)**
+- Track cumulative cost per category
+- Calculate ROI: business value per token spent
+- Optimize token allocation: spend more on high-ROI categories, less on low-ROI
+- Integrate into ontology router (adjust category weights based on budget)
+- Goal: 20% more kept experiments with same total tokens
+
+**Phase 4: Human Review Thresholds (12-18 months, P2)**
+- Calculate risk score (0.0-1.0) based on: keep-rate, quality delta, cost, production impact
+- Implement 3-tier approval: risk < 0.3 → AI auto-approves, 0.3-0.7 → recommend, > 0.7 → require human
+- Goal: Reduce human review time by 60%, humans only for high-risk decisions
+
+**Phase 5: Software as Consumable (18-24 months, P2)**
+- Detect when to regenerate vs maintain: keep-rate < 10%, cost-per-kept > $5, quality stagnant
+- Preserve business context (why we made decisions) before regeneration
+- Regenerate code with better model, test against historical experiments
+- Goal: Treat code as disposable, preserve business context
+
+**Resource requirements:** 3.0 engineer-years over 24 months
+
+**Success metrics:**
+- Phase 1: 10 targets tracked with production metrics
+- Phase 2: Monitoring agent generates 5+ proposals/month, system keep-rate +5%
+- Phase 3: 20% more kept experiments with same tokens
+- Phase 4: 70% experiments auto-approved, human review time -60%
+- Phase 5: 5 targets regenerated, maintenance cost -30%
+
+**Immediate next actions:**
+1. Extend TSV schema: add columns 33-39 (production metrics, risk score, regeneration flag)
+2. Create `gptel-auto-workflow--track-production-impact` stub function
+3. Design Sentry API integration for error rate tracking
+4. Implement monitoring agent prototype that analyzes failure patterns
+
+### Files created
+- `mementum/knowledge/strategic-plans/benchmark-integration-plan.md` - 24-month implementation roadmap with technical details for all 5 phases
+
+---
 
 ## Session: YC Vision Strategic Planning (2026-06-05)
 
