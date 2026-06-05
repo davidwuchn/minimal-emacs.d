@@ -49,6 +49,6 @@ MemGraphRAG solves the **recall-relevance tradeoff** in GraphRAG. Isolated local
 | P1 | Bidirectional memory-code links | **Done** | `@memory:` scan + `files-for-memory`/`memories-for-file` |
 | P1 | Temporal versioning for memories | **Done** | `valid-from`/`valid-until` frontmatter; auto-supersede on write |
 | P2 | Graph retrieval for recall | **Done** | PPR-lite neighbor walk in `entity-neighbors`/`retrieve` |
-| P2 | Entity-level synonymy edges | Skipped | Requires embedding backend; not available in batch Emacs |
+| P2 | Entity-level synonymy edges | **Done** | `gptel-auto-workflow--memory-schema-synonymy-edges` via git-embed file similarity + entity cross-reference |
 | P3 | Multi-agent shared memory per experiment | **Done** | `experiment-context` builds scoped memory for subagent prompts |
 | P3 | Hub suppression for memory ranking | **Done** | IDF weighting `1/log(deg+1)` in `entity-idf`/`rank-entities` |

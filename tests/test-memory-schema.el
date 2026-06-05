@@ -166,6 +166,10 @@
   (with-schema-test-env
    (puthash "agent-main" (cons 5 '("mem1.md" "mem2.md"))
             gptel-auto-workflow--memory-schema-entities)
+   (puthash "(agent-main dispatch subagent)" 3
+            gptel-auto-workflow--memory-schema-schemas)
+   (puthash "agent-main:dispatch:subagent" (cons "(agent-main dispatch subagent)" "mem1.md")
+            gptel-auto-workflow--memory-schema-triples)
    (should (eq (gptel-auto-workflow--memory-schema-category-for-target
                 "gptel-agent-main.el")
                :agentic))))
@@ -174,6 +178,10 @@
   (with-schema-test-env
    (puthash "tools-bash" (cons 3 '("mem1.md"))
             gptel-auto-workflow--memory-schema-entities)
+   (puthash "(tools-bash execute bash)" 3
+            gptel-auto-workflow--memory-schema-schemas)
+   (puthash "tools-bash:execute:bash" (cons "(tools-bash execute bash)" "mem1.md")
+            gptel-auto-workflow--memory-schema-triples)
    (should (eq (gptel-auto-workflow--memory-schema-category-for-target
                 "gptel-tools-bash.el")
                :tool-calls))))
@@ -182,6 +190,10 @@
   (with-schema-test-env
    (puthash "benchmark-core" (cons 4 '("mem1.md"))
             gptel-auto-workflow--memory-schema-entities)
+   (puthash "(benchmark-core fix warnings)" 3
+            gptel-auto-workflow--memory-schema-schemas)
+   (puthash "benchmark-core:fix:warnings" (cons "(benchmark-core fix warnings)" "mem1.md")
+            gptel-auto-workflow--memory-schema-triples)
    (should (eq (gptel-auto-workflow--memory-schema-category-for-target
                 "gptel-benchmark-core.el")
                :programming))))
@@ -389,6 +401,45 @@
    (let ((results (gptel-auto-workflow--memory-schema-retrieve "byte-compiler" 1)))
      (should results))))
 
+;; ─── git-embed Synonymy ───
+
+(ert-deftest tdd/memory-schema/synonymy/bin-unavailable ()
+  (with-schema-test-env
+   (cl-letf (((symbol-function 'gptel-auto-workflow--memory-schema-git-embed-bin)
+              (lambda () nil)))
+     (should-not (gptel-auto-workflow--memory-schema-synonymy-edges)))))
+
+(ert-deftest tdd/memory-schema/synonymy/synonyms-for-empty ()
+  (with-schema-test-env
+   (cl-letf (((symbol-function 'gptel-auto-workflow--memory-schema-git-embed-bin)
+              (lambda () nil)))
+     (should-not (gptel-auto-workflow--memory-schema-synonyms-for "foo")))))
+
+(ert-deftest tdd/memory-schema/synonymy/cache-reused ()
+  (with-schema-test-env
+   (let ((bin-call-count 0))
+     (cl-letf (((symbol-function 'gptel-auto-workflow--memory-schema-git-embed-bin)
+                (lambda () (cl-incf bin-call-count) "/usr/bin/true"))
+               ((symbol-function 'shell-command-to-string)
+                (lambda (_cmd) "")))
+       (gptel-auto-workflow--memory-schema-synonymy-edges)
+       (should (= 1 bin-call-count))
+       (gptel-auto-workflow--memory-schema-synonymy-edges)
+       (should (= 1 bin-call-count))))))
+
+(ert-deftest tdd/memory-schema/neighbors/includes-embed-synonyms ()
+  (with-schema-test-env
+   (puthash "byte-compiler" (cons 3 '("mem1.md"))
+            gptel-auto-workflow--memory-schema-entities)
+   (puthash "(byte-compiler fix warnings)" 3
+            gptel-auto-workflow--memory-schema-schemas)
+   (puthash "byte-compiler:fix:warnings" (cons "(byte-compiler fix warnings)" "mem1.md")
+            gptel-auto-workflow--memory-schema-triples)
+   (cl-letf (((symbol-function 'gptel-auto-workflow--memory-schema-synonyms-for)
+              (lambda (_entity) '(("compiler-warnings" . 0.85)))))
+     (let ((neighbors (gptel-auto-workflow--memory-schema-entity-neighbors "byte-compiler")))
+       (should (assoc "compiler-warnings" neighbors))))))
+
 ;; ─── Experiment-Scoped Memory Injection ───
 
 (ert-deftest tdd/memory-schema/experiment-context/no-data ()
@@ -405,5 +456,41 @@
             gptel-auto-workflow--memory-schema-triples)
    (let ((ctx (gptel-auto-workflow--memory-schema-experiment-context "gptel-foo-module.el")))
      (should (or ctx t)))))
+
+;; ─── Ontology → Memory Feedback ───
+
+(ert-deftest tdd/memory-schema/ontology-event/strategy-change ()
+  (with-schema-test-env
+   (gptel-auto-workflow--memory-schema-record-ontology-event
+    :strategy-change
+    '(:category :agentic :from "conservative" :to "aggressive"))
+   (should (gethash "agentic-strategy" gptel-auto-workflow--memory-schema-entities))
+   (should (gethash "(agentic switched strategy)"
+                     gptel-auto-workflow--memory-schema-schemas))))
+
+(ert-deftest tdd/memory-schema/ontology-event/saturation ()
+  (with-schema-test-env
+   (gptel-auto-workflow--memory-schema-record-ontology-event
+    :saturation
+    '(:category :programming :total 25))
+   (should (gethash "programming-saturation" gptel-auto-workflow--memory-schema-entities))))
+
+(ert-deftest tdd/memory-schema/ontology-event/drift ()
+  (with-schema-test-env
+   (gptel-auto-workflow--memory-schema-record-ontology-event
+    :drift
+    '(:target "gptel-tools-agent.el" :from-cat :agentic :delta -0.3))
+   (should (gethash "gptel-tools-agent.el-drift" gptel-auto-workflow--memory-schema-entities))))
+
+(ert-deftest tdd/memory-schema/ontology-evolution/records-events ()
+  (with-schema-test-env
+   (defvar gptel-auto-workflow--category-strategy-preferences)
+   (defvar gptel-auto-workflow--category-saturation)
+   (let ((gptel-auto-workflow--category-strategy-preferences '((:agentic . "aggressive")))
+         (gptel-auto-workflow--category-saturation '((:tool-calls . t))))
+     (gptel-auto-workflow--memory-schema-record-evolution
+      '(:changes 2 :saturated 1 :total-strategies 5))
+     (should (gethash "agentic-strategy" gptel-auto-workflow--memory-schema-entities))
+     (should (gethash "tool-calls-saturation" gptel-auto-workflow--memory-schema-entities)))))
 
 (provide 'test-memory-schema)

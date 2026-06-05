@@ -31,6 +31,7 @@
 (require 'gptel-auto-workflow-skill-graph)
 (require 'gptel-ext-backend-registry)
 (declare-function gptel-auto-workflow--memory-schema-category-for-target "gptel-auto-workflow-memory-schema")
+(declare-function gptel-auto-workflow--memory-schema-record-evolution "gptel-auto-workflow-memory-schema")
 
 (defvar gptel-auto-workflow-executor-rate-limit-fallbacks
   (mapcar (lambda (backend)
@@ -345,66 +346,65 @@ Returns float 0.0-1.0 or nil if no data."
 (defun gptel-auto-workflow--categorize-target (target)
   "Categorize TARGET for backend routing.
 Return :programming, :tool-calls, :agentic, or :natural-language.
-Categories based on module purpose from historical experiment analysis."
+Primary: graph-driven classification from memory schema (entity walk +
+schema signatures).  Fallback: regex heuristics from filename patterns."
   (when target
-    (let ((basename (file-name-nondirectory target)))
-      (cond
-       ;; Natural-language: context, prompts, chat, conversation, text processing
-       ((or (string-match-p "context" basename)
-            (string-match-p "prompt" basename)
-            (string-match-p "chat" basename)
-            (string-match-p "conversation" basename)
-            (string-match-p "language" basename)
-            (string-match-p "text" basename)
-            (string-match-p "summarize" basename)
-            (string-match-p "stream" basename)
-            (member basename '("gptel-ext-context.el" "gptel-ext-context-images.el"
-                              "gptel-ext-context-cache.el" "gptel-ext-streaming.el"
-                              "gptel-ext-transient.el")))
-        :natural-language)
-        ;; Programming: code, functions, benchmarks, FSM, tests, reasoning, compilation
-        ((or (string-match-p "benchmark" basename)
-             (string-match-p "fsm" basename)
-             (string-match-p "retry" basename)
-             (string-match-p "reasoning" basename)
-             (string-match-p "introspection" basename)
-             (string-match-p "test" basename)
-             (string-match-p "code" basename)
-             (string-match-p "function" basename)
-             (string-match-p "compile" basename)
-             (string-match-p "\\`gptel-ext-" basename))
-         :programming)
-       ;; Tool-calls: sandbox, tool execution, bash, grep, glob, tools infrastructure
-        ((or (string-match-p "sandbox" basename)
-             (string-match-p "\\`gptel-tools\\.el\\'" basename)  ; gptel-tools.el only
-             (string-match-p "\\`gptel-tools-[^a]" basename)  ; tools-* but not tools-agent*
-            (string-match-p "\\`nucleus-tools" basename)    ; nucleus-tools*
-            (member basename '("gptel-tools-bash.el" "gptel-tools-grep.el"
-                              "gptel-tools-glob.el" "gptel-tools-edit.el"
-                              "gptel-tools-apply.el" "gptel-tools-preview.el"
-                              "gptel-tools-programmatic.el")))
-        :tool-calls)
-       ;; Agentic: agent orchestration, workflow, evolution, strategy, ai-behaviors
-       ((or (string-match-p "agent" basename)
-            (string-match-p "workflow" basename)
-            (string-match-p "strategy" basename)
-            (string-match-p "evolution" basename)
-            (string-match-p "ai-behaviors" basename)
-            (string-match-p "\\`gptel-agent-" basename))
-        :agentic)
-       ;; Infrastructure: presets, UI, config, init modules
-       ((or (string-match-p "nucleus-presets" basename)
-            (string-match-p "nucleus-header" basename)
-            (string-match-p "init-" basename)
-            (string-match-p "tree-sitter\\|treesit" basename)
-            (string-match-p "skill-routing" basename)
-            (string-match-p "standalone" basename))
-        :natural-language)
-       ;; Default to :programming for unrecognized .el files (conservative)
-       ;; But check schema index first for data-driven category
-       (t (or (when (fboundp 'gptel-auto-workflow--memory-schema-category-for-target)
-                 (gptel-auto-workflow--memory-schema-category-for-target target))
-               :programming))))))
+    (or (when (fboundp 'gptel-auto-workflow--memory-schema-category-for-target)
+          (gptel-auto-workflow--memory-schema-category-for-target target))
+        (gptel-auto-workflow--categorize-target-by-regex target))))
+
+(defun gptel-auto-workflow--categorize-target-by-regex (target)
+  "Regex-based categorization fallback for TARGET.
+Used when memory schema has no graph data for the target."
+  (let ((basename (file-name-nondirectory target)))
+    (cond
+     ((or (string-match-p "context" basename)
+          (string-match-p "prompt" basename)
+          (string-match-p "chat" basename)
+          (string-match-p "conversation" basename)
+          (string-match-p "language" basename)
+          (string-match-p "text" basename)
+          (string-match-p "summarize" basename)
+          (string-match-p "stream" basename)
+          (member basename '("gptel-ext-context.el" "gptel-ext-context-images.el"
+                            "gptel-ext-context-cache.el" "gptel-ext-streaming.el"
+                            "gptel-ext-transient.el")))
+      :natural-language)
+     ((or (string-match-p "benchmark" basename)
+          (string-match-p "fsm" basename)
+          (string-match-p "retry" basename)
+          (string-match-p "reasoning" basename)
+          (string-match-p "introspection" basename)
+          (string-match-p "test" basename)
+          (string-match-p "code" basename)
+          (string-match-p "function" basename)
+          (string-match-p "compile" basename)
+          (string-match-p "\\`gptel-ext-" basename))
+      :programming)
+     ((or (string-match-p "sandbox" basename)
+          (string-match-p "\\`gptel-tools\\.el\\'" basename)
+          (string-match-p "\\`gptel-tools-[^a]" basename)
+          (string-match-p "\\`nucleus-tools" basename)
+          (member basename '("gptel-tools-bash.el" "gptel-tools-grep.el"
+                            "gptel-tools-glob.el" "gptel-tools-edit.el"
+                            "gptel-tools-apply.el" "gptel-tools-preview.el"
+                            "gptel-tools-programmatic.el")))
+      :tool-calls)
+     ((or (string-match-p "agent" basename)
+          (string-match-p "workflow" basename)
+          (string-match-p "strategy" basename)
+          (string-match-p "evolution" basename)
+          (string-match-p "ai-behaviors" basename)
+          (string-match-p "\\`gptel-agent-" basename))
+      :agentic)
+     ((or (string-match-p "nucleus-presets" basename)
+          (string-match-p "nucleus-header" basename)
+          (string-match-p "init-" basename)
+          (string-match-p "tree-sitter\\|treesit" basename)
+          (string-match-p "skill-routing" basename)
+          (string-match-p "standalone" basename))
+      :natural-language)
+     (t :programming))))
 
 ;; ─── Category-Level Performance Aggregation ───
 
@@ -3797,10 +3797,14 @@ Runs during the self-evolution cycle.  Results are stored in
             (when repairs
               (message "[ontology-evolve] 🔧 %d targets have suggested recategorization" (length repairs))))
         (error nil))
-      (list :changes (length changes)
-            :backend-changes 0
-            :saturated (length saturated)
-            :total-strategies (hash-table-count cat-strats)))))))
+      (let ((result (list :changes (length changes)
+                          :backend-changes 0
+                          :saturated (length saturated)
+                          :total-strategies (hash-table-count cat-strats))))
+        (when (fboundp 'gptel-auto-workflow--memory-schema-record-evolution)
+          (ignore-errors
+            (gptel-auto-workflow--memory-schema-record-evolution result)))
+        result))))))
 
 ;; ─── Per-Category Eight-Key Aggregation ───
 
