@@ -148,7 +148,7 @@ Contains :recovered :run-id :resume-targets etc.")
            (let ((comp (plist-get c :component))
                  (state (plist-get c :state))
                  (failures (plist-get c :total-failures))
-                 (successes (plist-get c :total-successes))
+                 (successes (or (plist-get c :total-successes) 0))
                  (last-msg (plist-get c :last-failure-msg)))
              (format "%s:%s(%dF/%dS)%s"
                      comp state failures successes
