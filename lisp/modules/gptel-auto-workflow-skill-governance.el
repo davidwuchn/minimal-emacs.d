@@ -11,6 +11,7 @@
 
 (require 'json)
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
+(declare-function gptel-auto-workflow--json-encode-plist "gptel-auto-workflow-ontology-router" (plist))
 
 ;; ─── Semia Security Audit (Layer 2) ───
 
@@ -233,7 +234,7 @@ allowing us to track which skills agents actually use vs ignore."
                                             (cl-incf cnt)))
                                          cnt))))
       (with-temp-file report-file
-        (insert (json-encode report)))
+        (insert (gptel-auto-workflow--json-encode-plist report)))
       (message "[skill-governance] Saved scan report: %s"
                (file-name-nondirectory report-file))
       report)))
@@ -403,7 +404,7 @@ Returns file path or nil if no suitable target found."
          (report-file (expand-file-name "ab-results.json" report-dir)))
     (make-directory report-dir t)
     (with-temp-file report-file
-      (insert (json-encode results)))
+       (insert (gptel-auto-workflow--json-encode-plist results)))
     (message "[skill-governance] Saved A/B results: %d skills tested" (length results))))
 
 (defun gptel-auto-workflow--skill-governance-schedule-canary-refresh ()

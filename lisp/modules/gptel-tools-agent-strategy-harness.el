@@ -41,6 +41,7 @@
 (require 'subr-x)
 
 (declare-function gptel-auto-workflow--project-root "gptel-tools-agent-base" ())
+(declare-function gptel-auto-workflow--json-encode-plist "gptel-auto-workflow-ontology-router" (plist))
 (declare-function gptel-auto-workflow--parse-all-results "gptel-auto-workflow-evolution" ())
 (declare-function gptel-auto-workflow--results-file-path "gptel-tools-agent-base" (&optional run-id))
 
@@ -258,7 +259,7 @@ Saves to assistant/strategies/metadata/NAME.json."
          (metadata-file (expand-file-name (format "%s.json" name) metadata-dir)))
     (make-directory metadata-dir t)
     (with-temp-file metadata-file
-      (insert (json-encode metadata)))
+       (insert (gptel-auto-workflow--json-encode-plist metadata)))
     (message "[strategy] Persisted metadata for %s" name)
     ;; Auto-commit strategy files so they survive workspace cleanup
     (gptel-auto-workflow--auto-commit-strategy-files name)))

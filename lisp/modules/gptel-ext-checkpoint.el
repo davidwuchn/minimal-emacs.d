@@ -41,6 +41,7 @@
 (declare-function gptel-circuit-state "gptel-ext-circuit-breaker" (component))
 (declare-function gptel-circuit-status "gptel-ext-circuit-breaker")
 (declare-function gptel-circuit--save-persistent "gptel-ext-circuit-breaker")
+(declare-function gptel-auto-workflow--json-encode-plist "gptel-auto-workflow-ontology-router" (plist))
 
 (defgroup gptel-checkpoint nil
   "Workflow state persistence and recovery."
@@ -132,7 +133,7 @@
                :last-target-at (gptel-checkpoint-data-last-target-at data)
                :experiment-loop-snapshot (gptel-checkpoint-data-experiment-loop-snapshot data)
                :metadata (gptel-checkpoint-data-metadata data))))
-    (json-encode plist)))
+    (gptel-auto-workflow--json-encode-plist plist)))
 
 (defun gptel-checkpoint--serialize-result (result)
   "Serialize a single experiment RESULT plist to alist for JSON."
