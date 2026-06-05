@@ -768,14 +768,14 @@ Regression test: deeply nested lambda after refactor should not confuse the eval
     (should-not (gptel-auto-workflow--allium-read-quality "test"))))
 
 (ert-deftest regression/auto-workflow-evolution/tsv-parse-column-alignment ()
-  "parse-all-results correctly reads all 26 TSV columns with correct indices."
+  "parse-all-results correctly reads all 32 TSV columns with correct indices."
   (let ((tmpdir (make-temp-file "tsvcol-" t)))
     (unwind-protect
         (let ((run-dir (expand-file-name "var/tmp/experiments/2026-05-01" tmpdir)))
           (make-directory run-dir t)
-           (with-temp-file (expand-file-name "results.tsv" run-dir)
-             (insert "id\ttarget\thypothesis\tscore-before\tscore-after\tcode-quality\tdelta\tdecision\tbenchmark-score\tgrader-quality\tquality-change\timpact\terror-type\tagent-output\tprompt-chars\tbackend\toutput-chars\tstrategy\tresearch-strategy\tresearch-quality\tresearch-options\tresearch-hash\tkibcm-axis\tmodel\tskills\tedit-mode\n")
-             (insert "1\tlisp/foo.el\tadd nil check\t0.00\t0.50\t0.8\t+0.50\tkept\t12.3\t0.9\tgood\tbetter\tnone\tagent out\t1500\tdeepseek\t2000\tall\tlearn\tnone\topt1\tresearch1\thash1\t0.8\tyes\t:K\n"))
+          (with-temp-file (expand-file-name "results.tsv" run-dir)
+            (insert "id\ttarget\thypothesis\tscore_before\tscore_after\tcode_quality\tdelta\tdecision\tduration\tgrader_quality\tgrader_reason\tcomparator_reason\tanalyzer_patterns\tagent_output\toutput_chars\tbackend\tprompt_chars\tsections_included\texploration_axis\tcandidate_scores\tstrategy\tresearch_strategy\tresearch_hash\tresearch_quality\tcontroller_decision\tkibcm_axis\tmodel\teight_key_scores\tskills\tedit_mode\tcost_usd\teffort_level\n")
+            (insert "1\tlisp/foo.el\tadd nil check\t0.00\t0.50\t0.8\t+0.50\tkept\t12.3\t0.9\tgood\tbetter\tnone\tagent out\t1500\tdeepseek\t2000\tall\tlearn\tnone\topt1\tresearch1\thash1\t0.8\tyes\t:K\tdeepseek-v4-pro\t{}\tnil-guard\thashline\t0.002500\thigh\n"))
           (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
                      (lambda () tmpdir)))
             (let ((results (gptel-auto-workflow--parse-all-results)))
@@ -792,7 +792,12 @@ Regression test: deeply nested lambda after refactor should not confuse the eval
                 (should (string= (plist-get r :research-strategy) "research1"))
                 (should (string= (plist-get r :research-hash) "hash1"))
                 (should (string= (plist-get r :research-quality) "0.8"))
-                (should (string= (plist-get r :kibcm-axis) ":K"))))))
+                (should (string= (plist-get r :kibcm-axis) ":K"))
+                (should (string= (plist-get r :model) "deepseek-v4-pro"))
+                (should (string= (plist-get r :skills) "nil-guard"))
+                (should (string= (plist-get r :edit-mode) "hashline"))
+                (should (> (plist-get r :cost-usd) 0.0))
+                (should (string= (plist-get r :effort-level) "high")))))) 
       (delete-directory tmpdir t))))
 
 (ert-deftest regression/auto-workflow-evolution/allium-read-quality-missing-file ()

@@ -294,30 +294,33 @@ Caches when MAX-AGE-DAYS is nil for cycle-local reuse."
                                                     (or (nth (if (<= format-version 24) 15 16) fields) "0")))
                                      (research-strategy (or (nth (if (<= format-version 20) 20 21) fields) "none"))
                                      (research-hash (or (nth (if (<= format-version 20) 20 22) fields) "none"))
-                                     (research-quality (or (nth (if (<= format-version 20) 20 23) fields) "none"))
-                                     (kibcm-axis (or (nth (if (<= format-version 24) 20 25) fields) "?"))
-                                     (model (or (nth (if (<= format-version 24) 20 26) fields) "unknown"))
-                                     (skills (or (nth 28 fields) ""))
-                                     (edit-mode (or (nth 29 fields) "none")))
-                                (push (list :experiment-id experiment-id
-                                            :target target
-                                            :hypothesis hypothesis
-                                            :score-before score-before
-                                            :score-after score-after
-                                            :code-quality quality
-                                            :delta delta
-                                            :decision decision
-                                            :grader-quality grader-q
-                                            :prompt-chars prompt-chars
-                                            :backend backend
-                                            :research-strategy research-strategy
-                                            :research-hash research-hash
-                                            :research-quality research-quality
-                                            :kibcm-axis kibcm-axis
-                                            :model model
-                                            :skills skills
-                                            :edit-mode edit-mode
-                                            :run-dir (file-name-nondirectory run-dir))
+                                      (research-quality (or (nth (if (<= format-version 20) 20 23) fields) "none"))
+                                      (kibcm-axis (or (nth (if (<= format-version 24) 20 25) fields) "?"))
+                                      (model (or (nth (if (<= format-version 24) 20 26) fields) "unknown"))
+                                      (skills (or (nth 28 fields) ""))
+                                      (edit-mode (or (nth 29 fields) "none"))
+                                      (cost-usd (string-to-number (or (nth 30 fields) "0")))
+                                      (effort-level (or (nth 31 fields) "default")))
+                                 (push (list :target target
+                                             :hypothesis hypothesis
+                                             :score-before score-before
+                                             :score-after score-after
+                                             :code-quality quality
+                                             :delta delta
+                                             :decision decision
+                                             :grader-quality grader-q
+                                             :prompt-chars prompt-chars
+                                             :backend backend
+                                             :research-strategy research-strategy
+                                             :research-hash research-hash
+                                             :research-quality research-quality
+                                             :kibcm-axis kibcm-axis
+                                             :model model
+                                             :skills skills
+                                             :edit-mode edit-mode
+                                             :cost-usd cost-usd
+                                             :effort-level effort-level
+                                             :run-dir (file-name-nondirectory run-dir))
                                       records))))
                            (forward-line 1))))))))))
         (message "[parse-all-results] Parsed %d runs, %d records" runs-parsed (length records))
