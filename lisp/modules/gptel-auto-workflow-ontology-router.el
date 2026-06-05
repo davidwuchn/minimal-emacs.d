@@ -3584,7 +3584,7 @@ Returns alist of suggestions: (target . suggested-category)."
 restart)."
   (when (and (bound-and-true-p gptel-auto-experiment--target-state-cache)
              (> (hash-table-count gptel-auto-experiment--target-state-cache) 0))
-    (let ((file (expand-file-name "var/tmp/digital-twin.json"
+    (let ((file (expand-file-name "var/tmp/target-state.json"
                                   (gptel-auto-workflow--worktree-base-root)))
           (data nil))
       (maphash (lambda (target state)
@@ -3616,12 +3616,12 @@ restart)."
       (with-temp-file file
         (insert (let ((json-encoding-pretty-print t))
                   (json-encode data))))
-      (message "[digital-twin] Persisted %d target states + rejection memory to %s" (length data) file))))
+      (message "[target-state] Persisted %d target states + rejection memory to %s" (length data) file))))
 
 (defun gptel-auto-workflow--load-target-state ()
   "Load target state cache and rejection memory from disk."
   (when (boundp 'gptel-auto-experiment--target-state-cache)
-    (let ((file (expand-file-name "var/tmp/digital-twin.json"
+    (let ((file (expand-file-name "var/tmp/target-state.json"
                                   (gptel-auto-workflow--worktree-base-root))))
       (when (file-exists-p file)
         (condition-case err
@@ -3629,8 +3629,7 @@ restart)."
               (insert-file-contents file)
               (let* ((json-object-type 'alist)
                      (json-key-type 'symbol)
-                     (raw (json-read))
-                     (data (cdr (assq 'files raw))))
+                     (data (json-read)))
                 (when (listp data)
                   (dolist (entry data)
                     (let ((target (car entry))
@@ -3652,9 +3651,9 @@ restart)."
                           (dolist (succ successes)
                             (gptel-auto-experiment--remember-success
                              target (car succ) (cdr succ)))))))
-                  (message "[digital-twin] Loaded %d target states + rejection memory from %s"
+                  (message "[target-state] Loaded %d target states + rejection memory from %s"
                            (hash-table-count gptel-auto-experiment--target-state-cache) file))))
-          (error (message "[digital-twin] Failed to load: %s" (error-message-string err)))))))
+          (error (message "[target-state] Failed to load: %s" (error-message-string err)))))))
 
 ;; ─── Ontology Self-Evolution ───
 
