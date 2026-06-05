@@ -1112,11 +1112,11 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                           :agent-output ""))
                    (funcall finish nil))
                 (let* ((staging-base (gptel-auto-workflow--current-staging-head))
-                  ;; Self-heal: clear stale git state before git operations
-                  (gptel-auto-workflow--git-result
-                   "cd ~/.emacs.d && git merge --abort 2>/dev/null; git checkout HEAD -- mementum/ assistant/ 2>/dev/null; true" 30)
                   (merge-result
-                   (gptel-auto-workflow--merge-to-staging optimize-branch))
+                   (progn
+                     (gptel-auto-workflow--git-result
+                      "git merge --abort 2>/dev/null; git checkout HEAD -- mementum/ assistant/ 2>/dev/null; true" 30)
+                     (gptel-auto-workflow--merge-to-staging optimize-branch)))
                  (already-integrated-p (eq merge-result :already-integrated))
                  (finish-publish
                   (lambda (&optional retried)
