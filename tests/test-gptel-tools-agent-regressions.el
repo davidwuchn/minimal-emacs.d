@@ -20821,6 +20821,239 @@ P0 FIX: Check for changes before staging, return t when worktree is clean."
     ;; Verify the fix includes the clean-worktree check
     (should (string-match-p "No changes to stage.*worktree clean" code))))
 
+;;; P0.1: Destructive Change Detection (2026-06-05)
+
+(ert-deftest regression/grader/destructive-change-detection-exists ()
+  "Destructive change detection function should exist.
+P0.1 FIX: Detect when diff deletes public functions/variables."
+  (require 'gptel-benchmark-subagent)
+  (should (fboundp 'gptel-benchmark--destructive-change-p)))
+
+(ert-deftest regression/grader/detects-public-function-deletion ()
+  "Should detect deletion of public functions (no leading dash).
+Example: deleting `defun gptel-backend-registry-get' is destructive."
+  (require 'gptel-benchmark-subagent)
+  (let ((diff "diff --git a/lisp/modules/gptel-ext-backend-registry.el b/lisp/modules/gptel-ext-backend-registry.el
+index 5ab25fae..da61bf7d 100644
+--- a/lisp/modules/gptel-ext-backend-registry.el
++++ b/lisp/modules/gptel-ext-backend-registry.el
+@@ -99,48 +99,7 @@
+-       :speed fast)))
+-
+-     (TokenPlan
+-      :host \"token-plan.cn-beijing.maas.aliyuncs.com\"
+-      :models (qwen3.7-max qwen3.6-plus)
+-      :default-model qwen3.7-max
+-      :model-metadata
+-      ((qwen3.7-max
+-        :context-window 131072
+-        :pricing-input 0.29 :pricing-output 1.14
+-        :capabilities (reasoning code-generation)
+-        :speed medium)
+-       (qwen3.6-plus
+-        :context-window 131072
+-        :pricing-input 0.29 :pricing-output 1.14
+-        :capabilities (code-generation tool-calls)
+-        :speed medium)))"))
+    (should (gptel-benchmark--destructive-change-p diff))))
+
+(ert-deftest regression/grader/allows-private-function-deletion ()
+  "Should NOT flag deletion of private functions (with leading dash).
+Example: deleting `defun gptel--internal-helper' is safe."
+  (require 'gptel-benchmark-subagent)
+  (let ((diff "diff --git a/lisp/modules/test.el b/lisp/modules/test.el
+index abc..def 100644
+--- a/lisp/modules/test.el
++++ b/lisp/modules/test.el
+@@ -10,5 +10,3 @@
+ (defun gptel-public-function ()
+   \"Public function.\"
+   (gptel--internal-helper))
+-
+-(defun gptel--internal-helper ()
+-  \"Private helper.\"
+-  nil)"))
+    (should-not (gptel-benchmark--destructive-change-p diff))))
+
+(ert-deftest regression/grader/detects-public-variable-deletion ()
+  "Should detect deletion of public variables (defvar/defcustom).
+Example: deleting `defvar gptel-backend-registry' is destructive."
+  (require 'gptel-benchmark-subagent)
+  (let ((diff "diff --git a/lisp/modules/test.el b/lisp/modules/test.el
+index abc..def 100644
+--- a/lisp/modules/test.el
++++ b/lisp/modules/test.el
+@@ -5,8 +5,6 @@
+ (defun gptel-some-function ()
+   \"Some function.\"
+   nil)
+-
+-(defvar gptel-important-config nil
+-  \"Important configuration variable.\")"))
+    (should (gptel-benchmark--destructive-change-p diff))))
+
+(ert-deftest regression/grader/allows-small-edits ()
+  "Should NOT flag small edits (adding nil guards, etc).
+Example: adding a nil check is safe."
+  (require 'gptel-benchmark-subagent)
+  (let ((diff "diff --git a/lisp/modules/test.el b/lisp/modules/test.el
+index abc..def 100644
+--- a/lisp/modules/test.el
++++ b/lisp/modules/test.el
+@@ -10,7 +10,8 @@
+ (defun gptel-process-data (data)
+   \"Process DATA.\"
+-  (let ((result (assoc data gptel-registry)))
++  (let ((result (when (listp gptel-registry)
++                  (assoc data gptel-registry))))
+     result))"))
+    (should-not (gptel-benchmark--destructive-change-p diff))))
+
+(ert-deftest regression/grader/integration-destructive-change-fails-grade ()
+  "Grader should auto-fail when destructive change detected.
+Even if LLM gives 9/9, destructive changes should be rejected."
+  (require 'gptel-benchmark-subagent)
+  (let* ((response "→ summary: SCORE: 9/9
+
+## Analysis
+
+**Output**: The user removed the TokenPlan backend configuration.
+
+**Expected behaviors**:
+1. change clearly described - PASS ✓
+2. change is minimal and focused - PASS ✓
+3. improves code - PASS ✓ (removes unused backend)
+4. verification attempted - PASS ✓
+
+**Forbidden behaviors**:
+1. large refactor - PASS ✓ (absent)
+2. changed security files - PASS ✓ (absent)
+3. no description - PASS ✓ (absent)
+4. style-only change - PASS ✓ (absent)
+5. replaces working code without improvement - PASS ✓ (absent)
+
+All 9 criteria pass. Score: 9/9.
+
+diff --git a/lisp/modules/gptel-ext-backend-registry.el b/lisp/modules/gptel-ext-backend-registry.el
+index 5ab25fae..da61bf7d 100644
+--- a/lisp/modules/gptel-ext-backend-registry.el
++++ b/lisp/modules/gptel-ext-backend-registry.el
+@@ -99,48 +99,7 @@
+-       :speed fast)))
+-
+-     (TokenPlan
+-      :host \"token-plan.cn-beijing.maas.aliyuncs.com\"
+-      :models (qwen3.7-max qwen3.6-plus)
+-      :default-model qwen3.7-max")
+         (expected '("change clearly described"
+                    "change is minimal and focused"
+                    "improves code"
+                    "verification attempted"))
+         (forbidden '("large refactor"
+                     "changed security files"
+                     "no description"
+                     "style-only change"
+                     "replaces working code without improvement"))
+         (result (gptel-benchmark--parse-grade-response response expected forbidden)))
+    ;; Should fail despite 9/9 score
+    (should-not (plist-get result :passed))
+    (should (string-match-p "Destructive change detected"
+                           (plist-get result :details)))))
+
+;;; P0.3: Decision Logging Fix (2026-06-05)
+
+(ert-deftest regression/decision-logging/distinguish-stage-vs-promote-failure ()
+  "Bypass commit failure should distinguish stage vs promote failure.
+P0.3 FIX: Split the and condition so we log which step actually failed."
+  (let ((code (with-temp-buffer
+                (insert-file-contents
+                 (expand-file-name "lisp/modules/gptel-tools-agent-experiment-core.el"
+                                   user-emacs-directory))
+                (buffer-string))))
+    ;; Verify the fix logs distinct reasons
+    (should (string-match-p "grader-bypass-stage-failed" code))
+    (should (string-match-p "grader-bypass-promote-failed" code))
+    ;; Verify the old generic reason is gone
+    (should-not (string-match-p "\"grader-bypass-commit-failed\"" code))
+    ;; Verify stage and promote are checked separately
+    (should (string-match-p "stage-ok" code))
+    (should (string-match-p "promote-ok" code))))
+
+;;; P1.1: Increase Max Experiments Per Target (2026-06-05)
+
+(ert-deftest regression/experiment-loop/max-per-target-increased ()
+  "Max experiments per target should be 4 (increased from 2).
+P1.1 FIX: Allow more experiments for better exploration."
+  (require 'gptel-tools-agent-subagent)
+  (should (= gptel-auto-experiment-max-per-target 4)))
+
+(ert-deftest regression/experiment-loop/saturation-cap-increased ()
+  "Saturation cap should allow 3 experiments (increased from 2).
+P1.1 FIX: Even saturated categories get more exploration chances."
+  (let ((code (with-temp-buffer
+                (insert-file-contents
+                 (expand-file-name "lisp/modules/gptel-tools-agent-experiment-loop.el"
+                                   user-emacs-directory))
+                (buffer-string))))
+    ;; Verify the saturation cap is now 3, not 2
+    (should (string-match-p "min gptel-auto-experiment-max-per-target 3" code))
+    (should-not (string-match-p "min gptel-auto-experiment-max-per-target 2" code))))
+
+;;; P1.2: Experiment Diversity Enforcement (2026-06-05)
+
+(ert-deftest regression/experiment-loop/duplicate-detection-exists ()
+  "Duplicate hypothesis detection should exist and work.
+P1.2 FIX: Stricter enforcement with 2-token threshold (was 3)."
+  (require 'gptel-tools-agent-experiment-loop)
+  (should (fboundp 'gptel-auto-experiment--hypothesis-already-tested-p)))
+
+(ert-deftest regression/experiment-loop/detects-near-duplicate-hypotheses ()
+  "Should detect near-duplicate hypotheses (sharing 2+ significant tokens).
+Example: 'Add nil guard before car' vs 'Add nil check before car' share 'guard/check', 'before', 'car'."
+  (require 'gptel-tools-agent-experiment-loop)
+  (let* ((hypothesis "Add nil guard before calling car")
+         (previous-results
+          (list (list :hypothesis "Add nil check before calling car"
+                      :target "lisp/modules/test.el"
+                      :kept nil)
+                (list :hypothesis "Something completely different"
+                      :target "lisp/modules/test.el"
+                      :kept nil)))
+         (result (gptel-auto-experiment--hypothesis-already-tested-p
+                  hypothesis previous-results)))
+    ;; Should detect the duplicate (shares "guard", "before", "calling", "car")
+    (should result)
+    (should (stringp result))))
+
+(ert-deftest regression/experiment-loop/allows-different-hypotheses ()
+  "Should NOT flag hypotheses that are genuinely different.
+Example: 'Add nil guard' vs 'Improve error handling' are different."
+  (require 'gptel-tools-agent-experiment-loop)
+  (let* ((hypothesis "Add nil guard before calling car")
+         (previous-results
+          (list (list :hypothesis "Improve error handling in validation"
+                      :target "lisp/modules/test.el"
+                      :kept nil)
+                (list :hypothesis "Refactor data structure"
+                      :target "lisp/modules/test.el"
+                      :kept nil)))
+         (result (gptel-auto-experiment--hypothesis-already-tested-p
+                  hypothesis previous-results)))
+    ;; Should NOT detect as duplicate (no shared significant tokens)
+    (should-not result)))
+
+(ert-deftest regression/experiment-loop/duplicate-threshold-is-two ()
+  "Duplicate detection threshold should be 2 shared tokens (not 3).
+P1.2 FIX: Stricter enforcement catches more duplicates."
+  (let ((code (with-temp-buffer
+                (insert-file-contents
+                 (expand-file-name "lisp/modules/gptel-tools-agent-experiment-loop.el"
+                                   user-emacs-directory))
+                (buffer-string))))
+    ;; Verify the threshold is 2, not 3
+    (should (string-match-p "when (>= shared 2)" code))
+    (should-not (string-match-p "when (>= shared 3)" code))))
+
 (provide 'test-gptel-tools-agent-regressions)
 
 ;;; test-gptel-tools-agent-regressions.el ends here

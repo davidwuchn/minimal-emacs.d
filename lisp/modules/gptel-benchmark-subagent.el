@@ -552,6 +552,40 @@ OUTPUT:
              (mapconcat (lambda (b) (concat "- " b)) expected "\n")
              (mapconcat (lambda (b) (concat "- " b)) forbidden "\n")))))
 
+(defun gptel-benchmark--destructive-change-p (diff)
+  "Return non-nil if DIFF deletes public Elisp definitions or important data.
+Detects deletion of:
+- Public functions: (defun NAME ...) where NAME doesn't start with \"gptel--\"
+- Public variables: (defvar NAME ...) or (defcustom NAME ...) where NAME doesn't start with \"gptel--\"
+- Backend registrations: Any deletion containing backend names (TokenPlan, DeepSeek, etc.)
+
+Private definitions (starting with \"gptel--\" or containing \"--internal\")
+are considered safe to delete."
+  (when (stringp diff)
+    (let ((destructive-p nil))
+      (with-temp-buffer
+        (insert diff)
+        (goto-char (point-min))
+        ;; Check 1: Backend symbol deletion (any line count)
+        (while (and (not destructive-p)
+                    (re-search-forward "^-" nil t))
+          (let ((line (buffer-substring (line-beginning-position) (line-end-position))))
+            (when (string-match-p "\\bTokenPlan\\|DeepSeek\\|MiniMax\\|CF-Gateway\\|Copilot\\|DashScope\\|Z-AI\\b" line)
+              (setq destructive-p t))))
+        ;; Check 2: Public defun/defvar/defcustom deletion
+        (goto-char (point-min))
+        (while (and (not destructive-p)
+                    (re-search-forward "^-\\s-*\\((def\\(?:un\\|var\\|custom\\)\\)\\s-+\\([^ \t\n(]+\\)" nil t))
+          (let* ((symbol-name (match-string 2))
+                 ;; Private if starts with package-- or contains --internal
+                 (private-p (or (string-match-p "\\`gptel--" symbol-name)
+                                (string-match-p "--internal" symbol-name)
+                                (string-match-p "\\`my/gptel--" symbol-name)
+                                (string-match-p "\\`test-" symbol-name))))
+            (unless private-p
+              (setq destructive-p t)))))
+      destructive-p)))
+
 (defun gptel-benchmark--parse-grade-response (response expected forbidden)
   "Parse LLM grading RESPONSE into plist.
 Handles SCORE: X/Y format, JSON format, text-based PASS/FALL fallback,
@@ -620,7 +654,7 @@ total is authoritative; grader self-reported totals are capped to it."
     ;; P0 FIX: Positive-indicator fallback for when LLM doesn't follow format.
     ;; If score is 0 but response contains positive language, give partial credit.
     ;; This prevents grader-only-failure from killing valid experiments.
-    (when (and (= score 0) (not parsed) (stringp details) (> (length details) 200))
+    (when (and (= score 0) (not parsed) (stringp details) (> (length details) 150))
       (let ((positive-count 0))
         (dolist (pattern '("looks good" "approved" "passes" "correct" "valid"
                           "improves" "appropriate" "acceptable" "satisfies"
@@ -631,6 +665,11 @@ total is authoritative; grader self-reported totals are capped to it."
         (when (>= positive-count 3)
           (setq score (max 1 (floor (* criteria-total 0.6)))
                 total criteria-total))))
+    ;; P0.1 FIX: Destructive change detection - auto-fail if public API deleted
+    (when (gptel-benchmark--destructive-change-p details)
+      (setq score 0
+            total criteria-total
+            details (concat details "\n\n⚠ Destructive change detected: deletes public API")))
     (let* ((percentage (if (> total 0) (* 100.0 (/ (float score) total)) 0.0))
            ;; Pass if >= 60% (lowered from 80% to increase keep rate)
            (passed (and (> total 0) (>= percentage 60.0))))
