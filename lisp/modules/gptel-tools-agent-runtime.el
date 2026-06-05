@@ -90,7 +90,7 @@ they are not tracked by Git."
          (when (and (file-directory-p source-elpa)
                     (directory-files source-elpa t directory-files-no-dot-files-regexp))
           (make-directory target-elpa t)
-          (dolist (source (ignore-errors (directory-files source-elpa t directory-files-no-dot-files-regexp)))
+          (dolist (source (or (ignore-errors (directory-files source-elpa t directory-files-no-dot-files-regexp)) nil))
             (when (gptel-auto-workflow--link-shared-runtime-path
                    source
                    (expand-file-name (file-name-nondirectory source) target-elpa))
