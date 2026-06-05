@@ -20979,6 +20979,26 @@ P0.3 FIX: Split the and condition so we log which step actually failed."
     (should (string-match-p "stage-ok" code))
     (should (string-match-p "promote-ok" code))))
 
+;;; P1.1: Increase Max Experiments Per Target (2026-06-05)
+
+(ert-deftest regression/experiment-loop/max-per-target-increased ()
+  "Max experiments per target should be 4 (increased from 2).
+P1.1 FIX: Allow more experiments for better exploration."
+  (require 'gptel-tools-agent-subagent)
+  (should (= gptel-auto-experiment-max-per-target 4)))
+
+(ert-deftest regression/experiment-loop/saturation-cap-increased ()
+  "Saturation cap should allow 3 experiments (increased from 2).
+P1.1 FIX: Even saturated categories get more exploration chances."
+  (let ((code (with-temp-buffer
+                (insert-file-contents
+                 (expand-file-name "lisp/modules/gptel-tools-agent-experiment-loop.el"
+                                   user-emacs-directory))
+                (buffer-string))))
+    ;; Verify the saturation cap is now 3, not 2
+    (should (string-match-p "min gptel-auto-experiment-max-per-target 3" code))
+    (should-not (string-match-p "min gptel-auto-experiment-max-per-target 2" code))))
+
 (provide 'test-gptel-tools-agent-regressions)
 
 ;;; test-gptel-tools-agent-regressions.el ends here

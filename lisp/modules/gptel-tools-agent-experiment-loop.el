@@ -336,7 +336,7 @@ Adapts max-experiments based on API error rate."
         (when saturated
           (message "[ontology-gate] ⚠ %s: category %s saturated — reducing experiments" target category)
           (setq gptel-auto-experiment-max-per-target
-                (min gptel-auto-experiment-max-per-target 2)))
+                (min gptel-auto-experiment-max-per-target 3)))
         ;; Target-level saturation: skip if same error 3+ times
         (when (and (fboundp 'gptel-ai-behaviors--target-saturated-p)
                    (gptel-ai-behaviors--target-saturated-p target))
