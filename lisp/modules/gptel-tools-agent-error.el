@@ -320,8 +320,9 @@ Returns the message string or nil."
          (or (gptel-auto-experiment--shared-transient-error-p msg)
              (gptel-auto-experiment--rate-limit-error-p msg)
              (gptel-auto-experiment--provider-usage-limit-error-p msg)
-             (let ((case-fold-search t))
-               (string-match-p (plist-get gptel-auto-experiment--shared-retryable-error-patterns :general) msg))))))
+             (let ((case-fold-search t)
+                   (pattern (plist-get gptel-auto-experiment--shared-retryable-error-patterns :general)))
+               (and pattern (string-match-p pattern msg)))))))
 
 (defvar gptel-auto-experiment--quota-reset-timestamp nil
   "Parsed timestamp (seconds since epoch) when quota resets.
