@@ -88,7 +88,7 @@ they are not tracked by Git."
       (let ((source-elpa (expand-file-name "elpa" source-var))
             (target-elpa (expand-file-name "elpa" target-var)))
          (when (and (file-directory-p source-elpa)
-                    (directory-files source-elpa t directory-files-no-dot-files-regexp))
+                    (or (ignore-errors (directory-files source-elpa t directory-files-no-dot-files-regexp)) nil))
           (make-directory target-elpa t)
           (dolist (source (or (ignore-errors (directory-files source-elpa t directory-files-no-dot-files-regexp)) nil))
             (when (gptel-auto-workflow--link-shared-runtime-path
