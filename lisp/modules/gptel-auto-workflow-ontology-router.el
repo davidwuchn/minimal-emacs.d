@@ -3628,9 +3628,9 @@ restart)."
             (with-temp-buffer
               (insert-file-contents file)
               (let* ((json-object-type 'alist)
-                     (json-key-type 'string)
+                     (json-key-type 'symbol)
                      (raw (json-read))
-                     (data (cdr (assoc "files" raw))))
+                     (data (cdr (assq 'files raw))))
                 (when (listp data)
                   (dolist (entry data)
                     (let ((target (car entry))
