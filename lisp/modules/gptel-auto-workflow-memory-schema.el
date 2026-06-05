@@ -329,13 +329,35 @@ Each entry is (NAME . WEIGHTED-SCORE)."
   "Look up category for TARGET using schema index graph.
 Returns a keyword (:programming, :tool-calls, :agentic,
 :natural-language) or nil if no graph data available.
-Uses IDF-weighted entity matching then graph-walks stable schemas
-to classify by predicate/object category signatures."
+Uses experiment history (primary), then IDF-weighted entity matching
+with schema classification (secondary)."
   (gptel-auto-workflow--memory-schema-ensure-loaded)
   (let* ((basename (file-name-nondirectory target))
          (slug (file-name-sans-extension basename))
          (total (hash-table-count gptel-auto-workflow--memory-schema-entities))
          (matches nil))
+    (when (and target (fboundp 'gptel-auto-workflow--categorize-target-by-regex)
+               (fboundp 'gptel-auto-workflow--parse-all-results))
+      (let ((regex-cat (gptel-auto-workflow--categorize-target-by-regex target))
+            (kept-counts (make-hash-table :test 'equal :size 4)))
+        (when regex-cat
+          (dolist (r (gptel-auto-workflow--parse-all-results 30))
+            (let ((r-target (plist-get r :target))
+                  (r-decision (plist-get r :decision)))
+              (when (and r-target
+                         (string= (file-name-nondirectory r-target) basename)
+                         (equal r-decision "kept"))
+                (let ((r-cat (gptel-auto-workflow--categorize-target-by-regex r-target)))
+                  (when r-cat
+                    (cl-incf (gethash r-cat kept-counts 0))))))
+            (when (> (hash-table-count kept-counts) 0)
+              (let ((best nil) (best-n 0))
+                (maphash (lambda (cat n)
+                           (when (> n best-n) (setq best cat best-n n)))
+                         kept-counts)
+                (when (and best (>= best-n 2))
+                  (cl-return-from gptel-auto-workflow--memory-schema-category-for-target
+                    best))))))))
     (maphash (lambda (name count-sources)
                (when (string-match-p (regexp-quote name) basename)
                  (push (cons name
