@@ -132,9 +132,17 @@ Stores individual triples for graph traversal.")
         (insert (json-encode index))))))
 
 (defun gptel-auto-workflow--memory-schema-ensure-loaded ()
-  "Ensure hash tables exist, loading from disk if not yet initialized."
+  "Ensure hash tables exist, loading from disk if not yet initialized.
+Falls back to empty tables when runtime deps are unavailable."
   (unless gptel-auto-workflow--memory-schema-schemas
-    (gptel-auto-workflow--memory-schema-load-index)))
+    (setq gptel-auto-workflow--memory-schema-schemas
+          (gptel-auto-workflow--memory-schema-make-schemas)
+          gptel-auto-workflow--memory-schema-entities
+          (gptel-auto-workflow--memory-schema-make-entities))
+    (when (fboundp 'gptel-auto-workflow--worktree-base-root)
+      (condition-case _err
+          (gptel-auto-workflow--memory-schema-load-index)
+        (error nil)))))
 
 (defvar gptel-auto-workflow--memory-schema-synonymy-cache nil
   "Alist of (ENTITY . ((SYNONYM . SCORE) ...)) from git-embed.
@@ -332,32 +340,49 @@ Returns a keyword (:programming, :tool-calls, :agentic,
 Uses experiment history (primary), then IDF-weighted entity matching
 with schema classification (secondary)."
   (gptel-auto-workflow--memory-schema-ensure-loaded)
+  (when target
+    (or (gptel-auto-workflow--memory-schema--category-from-history target)
+        (gptel-auto-workflow--memory-schema--category-from-schemas target))))
+
+(defun gptel-auto-workflow--memory-schema--category-from-history (target)
+  "Look up category for TARGET from experiment history.
+Returns keyword or nil.  Requires ≥2 kept experiments for same filename."
+  (when (and (fboundp 'gptel-auto-workflow--categorize-target-by-regex)
+             (fboundp 'gptel-auto-workflow--parse-all-results)
+             (fboundp 'gptel-auto-workflow--worktree-base-root))
+    (let ((basename (file-name-nondirectory target))
+          (regex-cat (gptel-auto-workflow--categorize-target-by-regex target))
+          (kept-counts (make-hash-table :test 'equal :size 4))
+          (result nil))
+      (when regex-cat
+        (condition-case _err
+            (dolist (r (gptel-auto-workflow--parse-all-results 30))
+              (let ((r-target (plist-get r :target))
+                    (r-decision (plist-get r :decision)))
+                (when (and r-target
+                           (string= (file-name-nondirectory r-target) basename)
+                           (equal r-decision "kept"))
+                  (let ((r-cat (gptel-auto-workflow--categorize-target-by-regex r-target)))
+                    (when r-cat
+                      (cl-incf (gethash r-cat kept-counts 0)))))))
+          (error nil)))
+      (when (> (hash-table-count kept-counts) 0)
+        (let ((best nil) (best-n 0))
+          (maphash (lambda (cat n)
+                     (when (> n best-n) (setq best cat best-n n)))
+                   kept-counts)
+          (when (and best (>= best-n 2))
+            (setq result best))))
+      result)))
+
+(defun gptel-auto-workflow--memory-schema--category-from-schemas (target)
+  "Look up category for TARGET from schema index.
+Uses IDF-weighted entity matching then schema classification.
+Returns keyword or nil."
   (let* ((basename (file-name-nondirectory target))
          (slug (file-name-sans-extension basename))
          (total (hash-table-count gptel-auto-workflow--memory-schema-entities))
          (matches nil))
-    (when (and target (fboundp 'gptel-auto-workflow--categorize-target-by-regex)
-               (fboundp 'gptel-auto-workflow--parse-all-results))
-      (let ((regex-cat (gptel-auto-workflow--categorize-target-by-regex target))
-            (kept-counts (make-hash-table :test 'equal :size 4)))
-        (when regex-cat
-          (dolist (r (gptel-auto-workflow--parse-all-results 30))
-            (let ((r-target (plist-get r :target))
-                  (r-decision (plist-get r :decision)))
-              (when (and r-target
-                         (string= (file-name-nondirectory r-target) basename)
-                         (equal r-decision "kept"))
-                (let ((r-cat (gptel-auto-workflow--categorize-target-by-regex r-target)))
-                  (when r-cat
-                    (cl-incf (gethash r-cat kept-counts 0))))))
-            (when (> (hash-table-count kept-counts) 0)
-              (let ((best nil) (best-n 0))
-                (maphash (lambda (cat n)
-                           (when (> n best-n) (setq best cat best-n n)))
-                         kept-counts)
-                (when (and best (>= best-n 2))
-                  (cl-return-from gptel-auto-workflow--memory-schema-category-for-target
-                    best))))))))
     (maphash (lambda (name count-sources)
                (when (string-match-p (regexp-quote name) basename)
                  (push (cons name
