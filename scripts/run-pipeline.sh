@@ -684,6 +684,20 @@ if compgen -G "$RESULTS_PATTERN" >/dev/null; then
 fi
 log "Kept experiments: $kept_count, Merged to main: $merged_count"
 
+# ─── Step 6.6: Clean old optimize branches (merged >7 days) ───
+log "=== Step 6.6: Clean old optimize branches ==="
+old_branches=$(git -C "$DIR" for-each-ref --sort=-committerdate --format='%(committerdate:unix) %(refname:short)' refs/remotes/origin/optimize/ 2>/dev/null | awk -v cutoff="$(date -d '7 days ago' +%s)" '$1 < cutoff {print $2}' || true)
+old_count=$(printf '%s\n' "$old_branches" | sed '/^$/d' | wc -l)
+if [ "$old_count" -gt 0 ]; then
+    printf '%s\n' "$old_branches" | while read branch; do
+        branch_name="${branch#origin/}"
+        git -C "$DIR" push origin --delete "$branch_name" 2>/dev/null || true
+    done
+    log "Cleaned $old_count old optimize branches (merged before 7 days)"
+else
+    log "No old optimize branches to clean"
+fi
+
 # ─── Step 7: Commit and push outcomes to main ───
 log "=== Step 7: Publish outcomes to main ==="
 
