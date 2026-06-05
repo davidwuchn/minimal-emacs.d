@@ -122,3 +122,135 @@ The benchmark is not a one-time test. It runs continuously:
 - **Every week** → instinct evolution commits learned patterns
 
 The system gets smarter with every experiment. The benchmark is the feedback loop that makes self-evolution possible.
+
+## Integration with OV5 Subsystems
+
+The benchmark is the **sensor layer** that feeds all OV5 control systems. Every subsystem depends on benchmark data to make decisions.
+
+### Data Flow Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        BENCHMARK (Sensor Layer)                      │
+│  results.tsv: experiment_id, target, decision, keep_rate, cost, ... │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+            ┌───────────────────────┼───────────────────────┐
+            │                       │                       │
+            ▼                       ▼                       ▼
+┌──────────────────┐    ┌──────────────────┐    ┌──────────────────────┐
+│   AutoTTS        │    │   AutoGo         │    │  Ontology Router     │
+│ (Research Stop)  │    │ (Strategy Gate)  │    │ (Backend Selection)  │
+│                  │    │                  │    │                      │
+│ Input:           │    │ Input:           │    │ Input:               │
+│ - keep_rate      │    │ - strategy_score │    │ - keep_rate_by_model │
+│ - cost_per_kept  │    │ - win/loss       │    │ - cost_per_task      │
+│ - experiment     │    │ - champion       │    │ - effort_level       │
+│   velocity       │    │   history        │    │ - backend_health     │
+│                  │    │                  │    │                      │
+│ Output:          │    │ Output:          │    │ Output:              │
+│ - continue/stop  │    │ - promote/reject │    │ - selected_backend   │
+│ - research       │    │ - champion       │    │ - selected_model     │
+│   priority       │    │   update         │    │ - selected_effort    │
+└──────────────────┘    └──────────────────┘    └──────────────────────┘
+            │                       │                       │
+            └───────────────────────┼───────────────────────┘
+                                    │
+                                    ▼
+                        ┌──────────────────────┐
+                        │   VSM Health         │
+                        │ (System Diagnosis)   │
+                        │                      │
+                        │ Input:               │
+                        │ - overall_keep_rate  │
+                        │ - cost_efficiency    │
+                        │ - backend_diversity  │
+                        │ - experiment_volume  │
+                        │                      │
+                        │ Output:              │
+                        │ - system_health      │
+                        │ - remediation        │
+                        │   suggestions        │
+                        └──────────────────────┘
+```
+
+### Subsystem Relationships
+
+| Subsystem | Uses Benchmark Data For | Feeds Back To Benchmark |
+|-----------|------------------------|------------------------|
+| **AutoTTS** | Decide when to stop research (keep_rate > 15% → stop) | Generates new research hypotheses |
+| **AutoGo** | Gate strategies (new strategy must beat champion) | Promotes winning strategies to prompt templates |
+| **Ontology Router** | Select backend/model/effort (cost_efficiency, keep_rate) | Routes experiments to different backends |
+| **VSM Health** | Diagnose system problems (low keep_rate → investigate) | Triggers remediation (backend swap, parameter tuning) |
+| **Eight Keys** | Grade experiment quality (part of keep/discard decision) | Provides quality signal for keep_rate calculation |
+| **Skill Graph** | Track which skills improve code (kept experiments) | Evolves skill recommendations |
+
+### Benchmark as Feedback Loop
+
+The benchmark is not just measurement—it's the **control signal** for the entire self-regulating system:
+
+```
+1. Benchmark measures: keep_rate, cost_per_kept, backend_performance
+   ↓
+2. Subsystems consume: AutoTTS stops research, AutoGo gates strategies, Router selects backends
+   ↓
+3. Subsystems act: Stop research, promote strategy, switch backend
+   ↓
+4. Benchmark measures again: Did the action improve keep_rate?
+   ↓
+5. Repeat (self-regulating loop)
+```
+
+### Key Metrics by Subsystem
+
+**AutoTTS (Research Control):**
+- `keep_rate > 15%` → Research is working, continue
+- `keep_rate < 10%` for 3 runs → Research is stuck, stop or change direction
+- `cost_per_kept > $5` → Too expensive, reduce research budget
+
+**AutoGo (Strategy Competition):**
+- `strategy.keep_rate > champion.keep_rate` → Promote new strategy
+- `strategy.keep_rate < 5%` → Reject strategy (doesn't work)
+- Track win/loss history for each strategy
+
+**Ontology Router (Backend Selection):**
+- `keep_rate_by_model` → Which model has highest success rate?
+- `cost_per_task` → Which model is most cost-efficient?
+- `effort_level` → High effort for complex tasks, low for simple
+- `backend_health` → Skip backends with recent failures
+
+**VSM Health (System Diagnosis):**
+- `overall_keep_rate < 10%` → System unhealthy, investigate
+- `cost_efficiency < 0.1` → Wasting money, tune parameters
+- `backend_diversity < 2` → Over-reliant on one backend, add fallbacks
+
+### Concrete Example
+
+```
+Run 1: Benchmark measures keep_rate = 12%, cost_per_kept = $8.50
+  ↓
+AutoTTS: keep_rate < 15%, continue research but lower priority
+AutoGo: Strategy A has 12% keep_rate, champion has 18%, reject A
+Router: DeepSeek has 15% keep_rate, MiniMax has 8%, prefer DeepSeek
+VSM: keep_rate < 10% threshold not yet hit, system healthy
+  ↓
+Run 2: Benchmark measures keep_rate = 18%, cost_per_kept = $6.20
+  ↓
+AutoTTS: keep_rate > 15%, research working well, continue
+AutoGo: Strategy B has 18% keep_rate, beats champion (18%), promote B
+Router: DeepSeek now 20% keep_rate, even better, keep using it
+VSM: System improving, no action needed
+```
+
+### The Ouroboros Loop
+
+The benchmark enables the self-eating snake:
+
+```
+Benchmark → Measure → AutoTTS/AutoGo/Router → Act → Benchmark → Measure → ...
+```
+
+Each subsystem is a **reflex arc** that consumes benchmark data and produces actions that change future benchmark results. The system regulates itself without human intervention.
+
+**Without benchmark:** Blind system, no feedback, no self-regulation.
+**With benchmark:** Self-aware system, continuous improvement, autonomous operation.
