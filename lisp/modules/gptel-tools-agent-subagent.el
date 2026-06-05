@@ -289,14 +289,18 @@ subagent callback fired, and avoids reusing a deleted worktree as
                         (with-current-buffer safe-buffer
                           (setq default-directory safe-default-directory)
                           (funcall callback result))
-                      (error (let* ((err-text (error-message-string err))
-                                    (short-err (if (> (length err-text) 300)
-                                                   (concat (substring err-text 0 300) "...")
-                                                 err-text)))
-                               (message "[nucleus] Callback error ignored after cleanup (%s %s): %s"
-                                        (or agent-type "unknown")
-                                        (if (symbolp callback) callback (type-of callback))
-                                        short-err))
+                       (error (let* ((err-text (error-message-string err))
+                                     (short-err (if (> (length err-text) 300)
+                                                    (concat (substring err-text 0 300) "...")
+                                                  err-text))
+                                     (bt (condition-case nil (with-output-to-string (backtrace)) (error ""))))
+                                (message "[nucleus] Callback error ignored after cleanup (%s %s): %s"
+                                         (or agent-type "unknown")
+                                         (if (symbolp callback) callback (type-of callback))
+                                         short-err)
+                                (when (> (length bt) 20)
+                                  (message "[nucleus] Backtrace (first 1500 chars):\n%s"
+                                           (if (> (length bt) 1500) (substring bt 0 1500) bt))))
                              (when (and (boundp 'debug-on-error) debug-on-error)
                                (signal (car err) (cdr err))))))))
             (if noninteractive
