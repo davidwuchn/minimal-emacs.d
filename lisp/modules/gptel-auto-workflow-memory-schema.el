@@ -579,6 +579,7 @@ suitable for injection into subagent prompts.  MAX-CHARS defaults to 1500."
   (gptel-auto-workflow--memory-schema-ensure-loaded)
   (let* ((max-len (or max-chars 1500))
          (basename (file-name-nondirectory target))
+         (slug (file-name-sans-extension basename))
          (parts nil))
     (when (fboundp 'gptel-auto-workflow--mementum-read-valid-memories)
       (let ((memories (gptel-auto-workflow--mementum-read-valid-memories 30))
@@ -618,15 +619,25 @@ suitable for injection into subagent prompts.  MAX-CHARS defaults to 1500."
                                  (seq-take (cl-sort related #'> :key #'cdr) 10)
                                  "\n"))
               parts)))
-    (let ((slug (file-name-sans-extension basename)))
-      (when (fboundp 'gptel-auto-workflow--memory-schema-files-for-memory)
-        (ignore-errors
-          (let ((code-links (gptel-auto-workflow--memory-schema-files-for-memory slug)))
-            (when code-links
-              (push (concat "## Code References\n\n"
-                            (mapconcat (lambda (s) (format "- @memory:%s" s))
-                                       (seq-take code-links 5) "\n"))
-                     parts))))))
+    (when (fboundp 'gptel-auto-workflow--memory-schema-files-for-memory)
+      (ignore-errors
+       (let ((code-links (gptel-auto-workflow--memory-schema-files-for-memory slug)))
+         (when code-links
+           (push (concat "## Code References\n\n"
+                         (mapconcat (lambda (s) (format "- @memory:%s" s))
+                                    (seq-take code-links 5) "\n"))
+                 parts)))))
+    (condition-case nil
+        (when (fboundp 'gptel-auto-workflow--unified-graph-walk)
+          (let ((walk (gptel-auto-workflow--unified-graph-walk :file slug 1 '(:similar :schema-neighbor :synonymy))))
+            (when walk
+              (push (concat "## Graph Neighbors\n\n"
+                            (mapconcat (lambda (n)
+                                         (format "- %s %s (%.2f)"
+                                                 (symbol-name (caar n)) (cdar n) (cdr n)))
+                                       (seq-take walk 8) "\n"))
+                    parts))))
+      (error nil))
     (when parts
       (let ((result (mapconcat #'identity (nreverse parts) "\n\n")))
         (if (> (length result) max-len)

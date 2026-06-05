@@ -32,6 +32,8 @@
 (require 'gptel-ext-backend-registry)
 (declare-function gptel-auto-workflow--memory-schema-category-for-target "gptel-auto-workflow-memory-schema")
 (declare-function gptel-auto-workflow--memory-schema-record-evolution "gptel-auto-workflow-memory-schema")
+(declare-function gptel-auto-workflow--unified-graph-best-backend-for "gptel-auto-workflow-memory-schema")
+(declare-function gptel-auto-workflow--unified-graph-neighbors "gptel-auto-workflow-memory-schema")
 
 (defvar gptel-auto-workflow-executor-rate-limit-fallbacks
   (mapcar (lambda (backend)
@@ -3901,10 +3903,23 @@ Runs during evolution cycle alongside strategy learning."
 
 (defun gptel-auto-workflow--graph-neighbor-success (backend target)
   "Return boost for BACKEND based on success on graph neighbors of TARGET.
-Looks up TARGET's category in the skill graph and checks BACKEND's
-keep-rate on targets in the same category."
-  (if (and (fboundp 'skill-graph-init)
-           target)
+Primary: uses unified graph (file similarity + entity schema neighbors +
+skill co-occurrence).  Fallback: skill graph category neighbors."
+  (if target
+      (condition-case nil
+          (let ((unified-boost
+                 (when (fboundp 'gptel-auto-workflow--unified-graph-best-backend-for)
+                   (let ((candidates (gptel-auto-workflow--unified-graph-best-backend-for target)))
+                     (or (cdr (assoc backend candidates)) 0.0)))))
+            (if (and unified-boost (> unified-boost 0))
+                (* 0.15 unified-boost)
+              (gptel-auto-workflow--graph-neighbor-success-skill-fallback backend target)))
+        (error 0.0))
+    0.0))
+
+(defun gptel-auto-workflow--graph-neighbor-success-skill-fallback (backend target)
+  "Fallback: skill graph category neighbor success for BACKEND/TARGET."
+  (if (fboundp 'skill-graph-init)
       (condition-case nil
           (let* ((category (and (fboundp 'gptel-auto-workflow--categorize-target)
                                 (gptel-auto-workflow--categorize-target target)))
@@ -3912,13 +3927,11 @@ keep-rate on targets in the same category."
                  (total-keep 0.0)
                  (count 0))
             (when category
-              ;; Find all nodes in the same category
               (maphash (lambda (id node)
                          (when (and (eq (skill-graph-node-level node) category)
                                     (not (eq id (intern target))))
                            (push id neighbors)))
                        skill-graph--nodes)
-              ;; Average keep-rate for BACKEND on neighbor targets
               (dolist (n neighbors)
                 (let ((rate (condition-case nil
                                 (gptel-auto-workflow--get-backend-performance-stats
@@ -3928,17 +3941,40 @@ keep-rate on targets in the same category."
                     (setq total-keep (+ total-keep (or (plist-get rate :keep-rate) 0.0)))
                     (setq count (1+ count)))))
               (if (> count 0)
-                  (* 0.15 (/ total-keep count))  ; max ~0.15 boost
+                  (* 0.15 (/ total-keep count))
                 0.0)))
         (error 0.0))
     0.0))
 
-(defun gptel-auto-workflow--graph-edge-strength (_backend active-skills)
-  "Return boost for BACKEND based on strength of skill combination edges.
-Looks up edges between skills in ACTIVE-SKILLS and checks if BACKEND
-succeeded when those skill pairs were used together."
-  (if (and (fboundp 'skill-graph-init)
-           active-skills)
+(defun gptel-auto-workflow--graph-edge-strength (backend active-skills)
+  "Return boost based on strength of skill combination edges.
+Primary: unified graph skill-cooccur edges.  Fallback: skill graph edges."
+  (if active-skills
+      (condition-case nil
+          (let ((unified-boost 0.0)
+                (edge-count 0))
+            (when (and (fboundp 'gptel-auto-workflow--unified-graph-neighbors)
+                       (>= (length active-skills) 2))
+              (let ((skills (if (stringp active-skills)
+                                (split-string active-skills)
+                              (mapcar #'symbol-name active-skills))))
+                (dolist (skill skills)
+                  (dolist (edge (gptel-auto-workflow--unified-graph-neighbors
+                                 :skill skill '(:skill-cooccur)))
+                    (let ((to-name (cdr (cadr edge)))
+                          (weight (nth 2 edge)))
+                      (when (and (member to-name (cdr skills)) (> weight 0))
+                        (setq unified-boost (+ unified-boost weight))
+                        (setq edge-count (1+ edge))))))))
+            (if (> edge-count 0)
+                (* 0.10 (/ unified-boost edge-count))
+              (gptel-auto-workflow--graph-edge-strength-skill-fallback backend active-skills)))
+        (error 0.0))
+    0.0))
+
+(defun gptel-auto-workflow--graph-edge-strength-skill-fallback (_backend active-skills)
+  "Fallback: skill graph edge strength for ACTIVE-SKILLS."
+  (if (fboundp 'skill-graph-init)
       (condition-case nil
           (let ((total-weight 0.0)
                 (edge-count 0))
@@ -3954,7 +3990,7 @@ succeeded when those skill pairs were used together."
                                 (setq total-weight (+ total-weight (skill-graph-edge-weight edge)))
                                 (setq edge-count (1+ edge-count)))))))
             (if (> edge-count 0)
-                (* 0.10 (/ total-weight edge-count))  ; max ~0.10 boost
+                (* 0.10 (/ total-weight edge-count))
               0.0))
         (error 0.0))
     0.0))
