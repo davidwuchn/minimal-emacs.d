@@ -593,10 +593,14 @@ commits are preserved."
             ;; Push main to origin — regular push, never force.
             ;; Because we fast-forwarded to origin/main above, this is
             ;; always a clean fast-forward.
-            (when (gptel-auto-workflow--git-result
-                   (format "git push %s main" remote) 180)
-              (message "[auto-workflow] ✓ Staging promoted to main")
-              t))
+            (let ((push-result (gptel-auto-workflow--git-result
+                                (format "git push %s main" remote) 180)))
+              (if (= 0 (cdr push-result))
+                  (progn
+                    (message "[auto-workflow] ✓ Staging promoted to main")
+                    t)
+                (message "[auto-workflow] ✗ Push failed: %s" (car push-result))
+                nil)))
         (error
          (message "[auto-workflow] ✗ Auto-promote error: %s" (error-message-string err))
          nil)))))
