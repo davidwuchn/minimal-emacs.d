@@ -21,24 +21,44 @@
 (defvar gptel-auto-workflow--evolution-next-cycle-hints nil)
 (defvar gptel-auto-workflow--current-target nil "Mock current target for testing.")
 
-;; Mock the existing fallback configuration
-(defvar gptel-auto-workflow-headless-subagent-fallbacks
-  '(("MiniMax" . "minimax-m2.7-highspeed")
-    ("moonshot" . "kimi-k2.6")
-    ("DashScope" . "qwen3.6-plus")
-    ("DeepSeek" . "deepseek-v4-flash"))
-  "Mock headless fallback list for testing.")
+;; Declare dynamic variables as special for the byte-compiler.
+;; Without these, `let` bindings in tests would be lexical (invisible to the
+;; functions under test that access these variables via dynamic scope).
+(eval-and-compile
+  (defvar gptel-auto-workflow-headless-subagent-fallbacks)
+  (defvar gptel-auto-workflow-executor-rate-limit-fallbacks)
+  (defvar gptel-auto-workflow--semantic-edges-cache)
+  (defvar gptel-auto-workflow--semantic-edges-cache-time)
+  (defvar gptel-auto-workflow--holographic-memory)
+  (defvar gptel-auto-workflow--lambda-strike-count)
+  (defvar gptel-auto-workflow--lambda-dead-until)
+  (defvar gptel-auto-workflow--lambda-last-strike-time)
+  (defvar gptel-auto-workflow--lambda-verification-results)
+  (defvar gptel-auto-workflow--backend-lambda-health-cache)
+  (defvar gptel-auto-workflow--task-backend-preference)
+  (defvar gptel-auto-workflow--routing-audit-log)
+  (defvar gptel-auto-workflow--run-failed-backends)
+  (defvar gptel-auto-workflow--rate-limited-backends)
+  (defvar gptel-auto-workflow--preference-persist-file))
 
-(defvar gptel-auto-workflow-executor-rate-limit-fallbacks
-  '(("DashScope" . "qwen3.6-plus")
-    ("DeepSeek" . "deepseek-v4-flash")
-    ("moonshot" . "kimi-k2.6")
-    ("MiniMax" . "minimax-m2.7-highspeed"))
-  "Mock executor fallback list for testing.")
-
+;; Load the module FIRST so defvar declarations are processed before test definitions.
+;; This ensures the byte-compiler treats dynamically-bound variables as special.
 (load-file (expand-file-name "../lisp/modules/gptel-auto-workflow-ontology-router.el"
                               (file-name-directory
                                (or load-file-name buffer-file-name default-directory))))
+
+;; Mock the existing fallback configuration (after load so defvar doesn't override)
+(setq gptel-auto-workflow-headless-subagent-fallbacks
+      '(("MiniMax" . "minimax-m2.7-highspeed")
+        ("moonshot" . "kimi-k2.6")
+        ("DashScope" . "qwen3.6-plus")
+        ("DeepSeek" . "deepseek-v4-flash")))
+
+(setq gptel-auto-workflow-executor-rate-limit-fallbacks
+      '(("DashScope" . "qwen3.6-plus")
+        ("DeepSeek" . "deepseek-v4-flash")
+        ("moonshot" . "kimi-k2.6")
+        ("MiniMax" . "minimax-m2.7-highspeed")))
 
 ;; ─── Performance Lookup Tests ───
 
