@@ -2,7 +2,7 @@
 
 > **The snake that researches what to eat, executes what it learned, and feeds outcomes back into its own appetite.**
 >
-> **Cost:** ~$0.50-2.00 per pipeline run (5 backends, cache-aware pricing). **Safety:** Git worktree isolation + 6 gates (tests, grader, reviewer, comparator, π Synthesis, champion league) — no change touches `main` without passing all gates. **Portability:** P(λ)=90.7% across 5 backends — lossless provider migration.
+> **Cost:** ~$0.50-2.00 per pipeline run (5 active backends, cache-aware pricing). **Safety:** Git worktree isolation + 6 gates (tests, grader, reviewer, comparator, π Synthesis, champion league) — no change touches `main` without passing all gates. **Portability:** P(λ)=90.7% across 5 backends — lossless provider migration.
 >
 > **First run:** [`./scripts/run-pipeline.sh`](scripts/run-pipeline.sh) — initializes itself. After that, the snake feeds itself.
 >
@@ -634,11 +634,11 @@ The snake's own immune system:
 | Routing audit trail | Every decision recorded with component scores and VSM adjustment history |
 | Nucleus persona injection | Subagent-appropriate attention shaping (Craftsman for coding, Logician for analysis, Investigator for review); per-category Constrain: directives |
 | Drift-forced backend swap | 3+ consecutive failures → deterministic backend rotation (DIALECTIC.md moderator pattern) |
-| 24/7 watchdog | emacsclient-only health checks (no lsof dependency), lock file prevents concurrent runs, stale socket cleanup before restart, 1GB memory guard with graceful restart |
+| 24/7 watchdog | emacsclient-only health checks (no lsof dependency), lock file prevents concurrent runs, stale socket cleanup before restart, 2.5GB RSS guard with graceful restart |
 | Daemon-init socket cleanup | Stale sockets removed at startup so emacsclient always resolves correct path |
-| Force-push protection | Stashes dirty artifacts, merges origin/main, then pushes; never force-pushes |
+| Force-push protection | Stashes dirty artifacts, merges origin/main, then pushes; never force-pushes main; `--force-with-lease` on staging branches only |
 | Conflict marker detection | No `<<<<<<<` in committed code |
-| Watchdog memory guard | Auto-restart daemon gracefully when memory-use-counts exceeds 4GB (not RSS — macOS malloc holds freed pages) |
+| Watchdog memory guard | Auto-restart daemon gracefully when RSS exceeds 2.5GB (checked via ps on Linux/macOS) |
 | Policy engine | Forbidden paths sealed |
 
 ### Self-Healing
@@ -666,7 +666,7 @@ The system detects when its own evaluators are broken and heals itself — no hu
 | **3. Dog-food principle** | Self-heal must fix its own warnings first (`gptel-auto-workflow-evolution.el`) before touching other files | Self-reference ensures fixers are tested on themselves |
 | **4. Pre-commit enforcement** | `byte-compile-error-on-warn t` — zero warnings allowed; hook compiles all staged `.el` files | Commit rejected if any warning |
 
-117/117 elisp files compile with 0 warnings. 103/103 have balanced parens. The system heals its own code before touching yours.
+117/117 elisp files compile with 0 warnings. 98/104 have balanced parens (6 use `no-byte-compile: t`). The system heals its own code before touching yours.
 
 **Key principle:** Timeout means "couldn't evaluate", not "code is bad". The grader auto-passes timeouts with score=4/5=80% instead of failing with 0. This prevents the death spiral where a broken grader destroys all experiments, leaving no data to learn from.
 
