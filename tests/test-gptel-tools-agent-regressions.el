@@ -20960,6 +20960,25 @@ index 5ab25fae..da61bf7d 100644
     (should (string-match-p "Destructive change detected"
                            (plist-get result :details)))))
 
+;;; P0.3: Decision Logging Fix (2026-06-05)
+
+(ert-deftest regression/decision-logging/distinguish-stage-vs-promote-failure ()
+  "Bypass commit failure should distinguish stage vs promote failure.
+P0.3 FIX: Split the and condition so we log which step actually failed."
+  (let ((code (with-temp-buffer
+                (insert-file-contents
+                 (expand-file-name "lisp/modules/gptel-tools-agent-experiment-core.el"
+                                   user-emacs-directory))
+                (buffer-string))))
+    ;; Verify the fix logs distinct reasons
+    (should (string-match-p "grader-bypass-stage-failed" code))
+    (should (string-match-p "grader-bypass-promote-failed" code))
+    ;; Verify the old generic reason is gone
+    (should-not (string-match-p "\"grader-bypass-commit-failed\"" code))
+    ;; Verify stage and promote are checked separately
+    (should (string-match-p "stage-ok" code))
+    (should (string-match-p "promote-ok" code))))
+
 (provide 'test-gptel-tools-agent-regressions)
 
 ;;; test-gptel-tools-agent-regressions.el ends here
