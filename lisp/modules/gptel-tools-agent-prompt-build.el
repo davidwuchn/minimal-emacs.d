@@ -3,6 +3,8 @@
 (require 'seq)
 (require 'subr-x)
 
+(declare-function gptel-auto-workflow--plist-delete-all "gptel-tools-agent-error")
+
 (defconst gptel-auto-experiment--axis-names
   '(("A" . "Error Handling")
     ("B" . "Performance")
@@ -60,6 +62,9 @@
 
 (declare-function gptel-auto-workflow--record-strategy-evaluation "gptel-tools-agent-strategy-harness"
                   (strategy-name target experiment-id score outcome &optional axis))
+(declare-function gptel-knowledge--dialectic-lens "gptel-auto-workflow-knowledge-reasoning" (failure-type))
+(declare-function gptel-knowledge--plist-to-edn "gptel-auto-workflow-knowledge-reasoning" (plist))
+(declare-function gptel-knowledge--forge-lambda-fixed-point "gptel-auto-workflow-knowledge-reasoning" (prompt-spec context))
 
 ;; Forward declarations for dynamic variables
 (defvar gptel-auto-workflow--skills)
@@ -974,7 +979,7 @@ receive live benchmark and experiment outcome data."
                         (when (string-match ":kept\\s-+t" line)
                           (setq kept (1+ kept)))))
                     (forward-line 1)))))))
-      (ignore))
+      (error nil))
     `((skill-name . ,skill-name)
       (skill-keep-rate . ,(if (> total 0) (format "%.1f%%" (* 100.0 (/ kept (float total)))) "0.0%"))
       (skill-experiments . ,(format "%d" total))
@@ -1530,7 +1535,13 @@ Read ONE function. Edit ONE line. Verify. Done."))))
                                                    (plist-get lens :lens)
                                                    (plist-get lens :reason)
                                                    (plist-get lens :consecutive-failures))
-                                         ""))
+                                         (if (fboundp 'gptel-knowledge--dialectic-lens)
+                                             (let ((dlens (gptel-knowledge--dialectic-lens :quality-drop)))
+                                               (when dlens
+                                                 (format "## Dialectic Lens\n%s: %s\n"
+                                                         (plist-get dlens :lens)
+                                                         (plist-get dlens :prompt))))
+                                           "")))
                                    ""))
               (allium-issues . ,(if (funcall section-included-p 'self-evolution)
                                     (if (fboundp 'gptel-auto-workflow--allium-load-issues-for-target)
@@ -1594,12 +1605,14 @@ Read ONE function. Edit ONE line. Verify. Done."))))
               (agent-behavior . ,(gptel-auto-workflow--load-skill-content "auto-workflow/agent-behavior"))
               (validation-pipeline . ,(gptel-auto-workflow--load-skill-content "auto-workflow/validation-pipeline"))
                (research-findings . ,(if (funcall section-included-p 'research-findings)
-                                           (let ((findings (gptel-auto-workflow-load-research-findings)))
-                                              (if (and findings (not (string-empty-p findings)))
-                                                  (gptel-auto-experiment--research-for-prompt findings target)
-                                                "No recent external research available."))
-                                         ""))
-              (time-budget . ,(/ gptel-auto-experiment-time-budget 60))
+                                            (let ((findings (gptel-auto-workflow-load-research-findings)))
+                                               (if (and findings (not (string-empty-p findings)))
+                                                   (gptel-auto-experiment--research-for-prompt findings target)
+                                                 "No recent external research available."))
+                                          ""))
+               (memory-context . ,(if (fboundp 'gptel-auto-workflow--memory-schema-experiment-context)
+                                      (or (gptel-auto-workflow--memory-schema-experiment-context target) "")))
+               (time-budget . ,(/ gptel-auto-experiment-time-budget 60))
               (focus-line . ,focus-line)
               (sexp-check-command . ,sexp-check-command))))
       ;; Try category-specific template first; fall back to EDN resolve
@@ -2543,16 +2556,6 @@ Preserves rate-limited backends blacklist across experiments within a run."
 Call at the start of a new workflow run."
   (setq gptel-auto-workflow--rate-limited-backends nil))
 
-(defun gptel-auto-workflow--prompt-plist-delete-all (plist prop)
-  "Return PLIST without any entries for PROP."
-  (let (result)
-    (while plist
-      (let ((key (pop plist))
-            (val (pop plist)))
-        (unless (eq key prop)
-          (setq result (append result (list key val))))))
-    result))
-
 (defun gptel-auto-workflow--rate-limit-failover-candidates (agent-type)
   "Return fallback provider candidates for AGENT-TYPE after rate limiting.
 When ontology health data is available, ranks backends by health × keep-rate
@@ -2667,8 +2670,8 @@ chain so that subagent calls do not fall through to the mode-hook default
                                             backend-obj model-str))))
                      (message "[subagent] %s base-preset auto-selected %s/%s"
                               agent-type (car pick) model-str)
-                     (setq merged (gptel-auto-workflow--prompt-plist-delete-all merged :backend))
-                     (setq merged (gptel-auto-workflow--prompt-plist-delete-all merged :model))
+                     (setq merged (gptel-auto-workflow--plist-delete-all merged :backend))
+                     (setq merged (gptel-auto-workflow--plist-delete-all merged :model))
                      (setq merged (plist-put merged :backend (car pick)))
                       (setq merged (plist-put merged :model model-str)))))
             ;; Headless active but no candidates: fall back to

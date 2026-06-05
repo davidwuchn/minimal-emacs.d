@@ -54,6 +54,7 @@ Put results outside <think> in VERIFY section.
 
 {{suggested-hypothesis}}
 {{mutation-templates}}
+{{memory-context}}
 {{evolved-recommendations}}
 {{axis-guidance}}
 {{axis-performance}}

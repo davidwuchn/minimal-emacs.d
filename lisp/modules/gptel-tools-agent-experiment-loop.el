@@ -435,13 +435,20 @@ Adapts max-experiments based on API error rate."
                                     baseline-code-quality))
                                  (hard-timeout
                                   (gptel-auto-experiment--result-hard-timeout-p result))
-                                (grader-only-failure
-                                 (plist-get result :grader-only-failure))
-                                (next-exp-id (1+ exp-id)))
-                           (when grader-only-failure
-                             (message "[auto-experiment] Final grader-only failure for %s in experiment %d; stopping further experiments for this target"
-                                      target exp-id)
-                             (setq max-exp exp-id))
+                                 (grader-only-failure
+                                  (plist-get result :grader-only-failure))
+                                 (next-exp-id (1+ exp-id)))
+                            ;; P1 FIX: Don't stop loop on grader-only-failure.
+                            ;; Grader-only failure means the grader couldn't evaluate,
+                            ;; not that the code is bad. Continue with different strategies.
+                            ;; Only stop after 3 consecutive grader failures.
+                            (when grader-only-failure
+                              (setq consecutive-timeouts (1+ consecutive-timeouts))
+                              (message "[auto-experiment] Grader-only failure for %s in experiment %d (%d consecutive); %s"
+                                       target exp-id consecutive-timeouts
+                                       (if (>= consecutive-timeouts gptel-auto-experiment--consecutive-timeout-threshold)
+                                           "threshold reached — stopping target"
+                                         "continuing with next experiment")))
                             (when kept
                               (setq best-score score-after
                                     baseline-code-quality quality-after
@@ -1145,12 +1152,35 @@ typechanges."
       t)))
 
 (defun gptel-auto-workflow--stage-worktree-changes (action &optional timeout)
-  "Stage current worktree changes for ACTION while preserving submodule gitlinks."
-  (and (gptel-auto-workflow--git-step-success-p
-        "git add -A"
-        action
-        timeout)
-       (gptel-auto-workflow--restage-top-level-submodule-gitlinks)))
+  "Stage current worktree changes for ACTION while preserving submodule gitlinks.
+Returns t on success, nil on failure.
+P0 FIX: More resilient to edge cases - check for changes before staging,
+make submodule restaging non-fatal since it's a preservation step."
+  (let ((git-add-ok (gptel-auto-workflow--git-step-success-p
+                     "git add -A"
+                     action
+                     timeout)))
+    (when git-add-ok
+      ;; Restage submodule gitlinks - non-fatal if it fails
+      ;; (the commit can still proceed, just may have typechange warnings)
+      (let ((restage-result (condition-case err
+                                (gptel-auto-workflow--restage-top-level-submodule-gitlinks)
+                              (error
+                               (message "[auto-workflow] Submodule restage error (non-fatal): %s"
+                                        (error-message-string err))
+                               t))))
+        (unless restage-result
+          (message "[auto-workflow] Submodule restage failed (non-fatal), continuing")))
+      ;; Check if there are actually changes to commit
+      (let ((status-output (gptel-auto-workflow--git-cmd
+                            "git status --porcelain" 30)))
+        (if (and (stringp status-output)
+                 (> (length (string-trim status-output)) 0))
+            t
+          ;; No changes staged - this is OK for bypass commits where
+          ;; the executor may have already committed or worktree is clean
+          (message "[auto-workflow] No changes to stage (worktree clean)")
+          t)))))
 
 (defun gptel-auto-workflow--create-provisional-experiment-commit (target hypothesis &optional timeout)
   "Create a provisional WIP commit for TARGET and return its hash.
@@ -1260,8 +1290,15 @@ Force-stops when:
                (active-tasks (and (boundp 'my/gptel--agent-task-state)
                                   (hash-table-p my/gptel--agent-task-state)
                                   (hash-table-count my/gptel--agent-task-state))))
-          (cond
-            ;; Total budget exceeded — workflow ran too long overall
+            (let ((rss-kb (and (fboundp 'gptel-auto-workflow--process-rss-kb)
+                               (gptel-auto-workflow--process-rss-kb))))
+              (cond
+               ;; RSS exceeds 2.5GB — memory leak or accumulation, force-stop to prevent OOM
+               ((and rss-kb (> rss-kb 2621440))  ; 2.5GB in KB
+                (let ((rss-mb (/ rss-kb 1024.0)))
+                  (message "[auto-workflow] WATCHDOG: RSS %.0fMB exceeds 2.5GB threshold, force-stopping" rss-mb)
+                  (gptel-auto-workflow--force-stop)))
+               ;; Total budget exceeded — workflow ran too long overall
             ((and (numberp elapsed-minutes) (> elapsed-minutes gptel-auto-workflow--total-budget-minutes))
              (message "[auto-workflow] WATCHDOG: Workflow exceeded total budget (%.0f > %d min), force-stopping"
                       elapsed-minutes gptel-auto-workflow--total-budget-minutes)
@@ -1281,7 +1318,7 @@ Force-stops when:
                       stuck-minutes)
              (gptel-auto-workflow--force-stop))
             (t
-             t))))
+             t)))))
     (error
      (message "[auto-workflow] WATCHDOG: Check failed: %S\n%s"
               err

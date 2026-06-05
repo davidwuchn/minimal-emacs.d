@@ -104,7 +104,8 @@ List of atom symbol names, e.g. (elisp-discover elisp-expert elisp-validator).")
 Uses the cached target state to detect pre-existing breakage.
 This helps avoid wasted retry attempts on files that were already invalid."
   (when (and (stringp target) (not (string-empty-p target)))
-    (let ((state (ignore-errors (gethash target gptel-auto-experiment--target-state-cache))))
+    (let ((state (when (hash-table-p gptel-auto-experiment--target-state-cache)
+                   (gethash target gptel-auto-experiment--target-state-cache))))
       (when state
         ;; If either byte-compiles or syntax-ok was already nil before experiment,
         ;; the file was pre-existing broken and retry won't help.
@@ -157,7 +158,9 @@ Also fails if NO files were modified (agent made no actual edits)."
           ;; WORKTREE BOUNDARY GUARD: ensure file is inside worktree
           (let ((full-path (expand-file-name file worktree)))
             (when (and (file-name-absolute-p full-path)
-                       (not (file-in-directory-p full-path worktree)))
+                       (not (condition-case nil
+                                (file-in-directory-p full-path worktree)
+                              (error nil))))
               (message "[auto-exp] ✗ WORKTREE BOUNDARY VIOLATION: %s is outside worktree %s"
                        full-path worktree)
               (throw 'validation-error
@@ -219,8 +222,10 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
              gptel-auto-experiment--quota-exhausted)
     (message "[auto-experiment] ⏹ All backends quota exhausted — aborting experiment %d/%d for %s"
              experiment-id max-experiments target)
-    (when (functionp callback)
-      (funcall callback (list :target target :id experiment-id :kept nil :error "all-backends-quota-exhausted")))
+    (let ((result (list :target target :id experiment-id :kept nil :error "all-backends-quota-exhausted")))
+      (gptel-auto-experiment-log-tsv gptel-auto-workflow--run-id result)
+      (when (functionp callback)
+        (funcall callback result)))
     (cl-return-from gptel-auto-experiment-run))
   (message "[auto-experiment] Starting %d/%d for %s" experiment-id max-experiments target)
   (setq gptel-auto-experiment--loaded-skills nil)
@@ -393,16 +398,17 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
               (let ((precondition-error
                      (when (fboundp 'gptel-auto-workflow--check-action-preconditions)
                        (gptel-auto-workflow--check-action-preconditions target))))
-                (if precondition-error
-                    (let ((default-directory experiment-worktree))
-                      (message "[auto-exp] 🚫 %s" precondition-error)
-                      (magit-git-success "checkout" "--" ".")
-                      (setq finished t)
-                      (funcall callback
-                               (list :target target :id experiment-id :kept nil
-                                     :duration (- (float-time start-time))
-                                     :grader-reason precondition-error
-                                     :comparator-reason "precondition-blocked")))
+                 (if precondition-error
+                     (let ((default-directory experiment-worktree)
+                           (precondition-result (list :target target :id experiment-id :kept nil
+                                                     :duration (- (float-time start-time))
+                                                     :grader-reason precondition-error
+                                                     :comparator-reason "precondition-blocked")))
+                       (message "[auto-exp] 🚫 %s" precondition-error)
+                       (magit-git-success "checkout" "--" ".")
+                       (setq finished t)
+                       (funcall log-fn run-id precondition-result)
+                       (funcall callback precondition-result))
                   ;; Routing handled by gptel-auto-workflow--advice-task-override
                   (my/gptel--run-agent-tool-with-timeout
                    experiment-timeout
@@ -411,9 +417,13 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                    (format "Experiment %d: optimize %s" experiment-id target)
                    executor-prompt
                    nil "false" nil)))))))
-    (if (not worktree)
-        (when (functionp callback)
-          (funcall callback (list :target target :error "Failed to create worktree" :backend "none")))
+     (if (not worktree)
+         (let ((worktree-fail-result (list :target target :id experiment-id :kept nil
+                                          :error "Failed to create worktree" :backend "none")))
+           (setq finished t)
+           (funcall log-fn run-id worktree-fail-result)
+           (when (functionp callback)
+             (funcall callback worktree-fail-result)))
       (gptel-auto-experiment--call-in-context
        experiment-buffer experiment-worktree
        (lambda ()
@@ -1228,7 +1238,6 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                                              :retries 1
                           :backend actual-backend
                           :model actual-model
-                          :model actual-model
                                                                                              :prompt-chars (length executor-prompt)
                            :output-chars (length (or effective-agent-output ""))
                                                                                              :prompt-structure (gptel-auto-experiment--prompt-structure-score executor-prompt)
@@ -1700,7 +1709,7 @@ Called when the grader passed but the benchmark/validation failed."
            (progn
              (setq gptel-auto-experiment--refine-convergence-stats
                    (plist-put gptel-auto-experiment--refine-convergence-stats :total
-                              (1+ (plist-get gptel-auto-experiment--refine-convergence-stats :total))))
+                              (1+ (or (plist-get gptel-auto-experiment--refine-convergence-stats :total) 0))))
              (setq gptel-auto-experiment--refine-convergence-stats
                    (plist-put gptel-auto-experiment--refine-convergence-stats :failure
                               (1+ (or (plist-get gptel-auto-experiment--refine-convergence-stats :failure) 0))))
@@ -1762,9 +1771,9 @@ Called when the grader passed but the benchmark/validation failed."
                     (setq gptel-auto-experiment--refine-convergence-stats
                           (plist-put gptel-auto-experiment--refine-convergence-stats :total
                                      (1+ (or (plist-get gptel-auto-experiment--refine-convergence-stats :total) 0))))
-                   (setq gptel-auto-experiment--refine-convergence-stats
-                         (plist-put gptel-auto-experiment--refine-convergence-stats :success
-                                    (1+ (or (plist-get gptel-auto-experiment--refine-convergence-stats :success) 0))))
+                    (setq gptel-auto-experiment--refine-convergence-stats
+                          (plist-put gptel-auto-experiment--refine-convergence-stats :success
+                                     (1+ (or (plist-get gptel-auto-experiment--refine-convergence-stats :success) 0))))
                     ;; Postcondition check: verify commit criteria from action schema
                     (when (and target (fboundp 'gptel-auto-workflow--schema-for-target))
                       (let* ((schema (gptel-auto-workflow--schema-for-target target))
@@ -1817,12 +1826,12 @@ Called when the grader passed but the benchmark/validation failed."
                   (if gptel-auto-workflow-use-staging
                       (gptel-auto-workflow--staging-flow experiment-branch finalize)
                     (funcall finalize))
-                (funcall log-fn run-id (plist-put (copy-sequence exp-result) :comparator-reason "bypass-push-failed")))
+                (funcall log-fn run-id (plist-put (plist-put (copy-sequence exp-result) :comparator-reason "bypass-push-failed") :kept nil)))
             (funcall finalize)))
       (progn
         (gptel-auto-workflow--drop-provisional-commit
          provisional-commit-hash (format "Drop bypass commit for %s" target))
-        (funcall log-fn run-id (plist-put (copy-sequence exp-result) :comparator-reason "bypass-commit-failed"))))))
+        (funcall log-fn run-id (plist-put (plist-put (copy-sequence exp-result) :comparator-reason "bypass-commit-failed") :kept nil))))))
 
 (provide 'gptel-tools-agent-experiment-core)
 ;;; gptel-tools-agent-experiment-core.el ends here

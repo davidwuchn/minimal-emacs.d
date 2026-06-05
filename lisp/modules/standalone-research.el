@@ -2,6 +2,7 @@
 ;;; Bypasses all strategic.el functions. Works even when load-file corrupts them.
 
 (require 'json)
+(declare-function gptel-auto-workflow--json-encode-plist "gptel-auto-workflow-ontology-router" (plist))
 (declare-function gptel-benchmark-call-subagent "gptel-benchmark-subagent")
 (define-error 'research-pipeline-defect "Research pipeline defect" 'error)
 (defvar gptel-auto-workflow--current-research-context)
@@ -69,7 +70,7 @@
                                 :standalone t))))
     (make-directory trace-dir t)
     (with-temp-file trace-file
-      (insert (json-encode trace-data)))
+      (insert (gptel-auto-workflow--json-encode-plist trace-data)))
     (when (fboundp 'gptel-auto-workflow--research-cache-index-trace-file)
       (gptel-auto-workflow--research-cache-index-trace-file trace-file))
     trace-file))

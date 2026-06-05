@@ -99,7 +99,7 @@ Returns t on success, nil if writing fails."
               (insert (json-encode json-data)))))
         t)
     (file-error nil)
-    (ignore)))
+    (error nil)))
 
 (defun gptel-benchmark--to-json-format (data)
   "Convert DATA to JSON-serializable format.
@@ -229,7 +229,7 @@ Creates a history entry with timestamp and summary."
          (existing (when (file-exists-p history-file)
                      (condition-case nil
                          (gptel-benchmark-read-json history-file)
-                       (ignore))))
+                       (error nil))))
          (run-id (format-time-string "%Y%m%d-%H%M%S"))
          (summary (gptel-benchmark--get-trend-summary results))
          (entry (list :run-id run-id

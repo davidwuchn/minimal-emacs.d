@@ -42,6 +42,7 @@ Working dir: {{worktree-path}}
 
 {{suggested-hypothesis}}
 {{mutation-templates}}
+{{memory-context}}
 {{evolved-recommendations}}
 {{axis-guidance}}
 {{agent-behavior}}

@@ -30,6 +30,10 @@
 (require 'gptel-auto-workflow-evolution)
 (require 'gptel-auto-workflow-skill-graph)
 (require 'gptel-ext-backend-registry)
+(declare-function gptel-auto-workflow--memory-schema-category-for-target "gptel-auto-workflow-memory-schema")
+(declare-function gptel-auto-workflow--memory-schema-record-evolution "gptel-auto-workflow-memory-schema")
+(declare-function gptel-auto-workflow--unified-graph-best-backend-for "gptel-auto-workflow-memory-schema")
+(declare-function gptel-auto-workflow--unified-graph-neighbors "gptel-auto-workflow-memory-schema")
 
 (defvar gptel-auto-workflow-executor-rate-limit-fallbacks
   (mapcar (lambda (backend)
@@ -344,63 +348,65 @@ Returns float 0.0-1.0 or nil if no data."
 (defun gptel-auto-workflow--categorize-target (target)
   "Categorize TARGET for backend routing.
 Return :programming, :tool-calls, :agentic, or :natural-language.
-Categories based on module purpose from historical experiment analysis."
+Primary: graph-driven classification from memory schema (entity walk +
+schema signatures).  Fallback: regex heuristics from filename patterns."
   (when target
-    (let ((basename (file-name-nondirectory target)))
-      (cond
-       ;; Natural-language: context, prompts, chat, conversation, text processing
-       ((or (string-match-p "context" basename)
-            (string-match-p "prompt" basename)
-            (string-match-p "chat" basename)
-            (string-match-p "conversation" basename)
-            (string-match-p "language" basename)
-            (string-match-p "text" basename)
-            (string-match-p "summarize" basename)
-            (string-match-p "stream" basename)
-            (member basename '("gptel-ext-context.el" "gptel-ext-context-images.el"
-                              "gptel-ext-context-cache.el" "gptel-ext-streaming.el"
-                              "gptel-ext-transient.el")))
-        :natural-language)
-        ;; Programming: code, functions, benchmarks, FSM, tests, reasoning, compilation
-        ((or (string-match-p "benchmark" basename)
-             (string-match-p "fsm" basename)
-             (string-match-p "retry" basename)
-             (string-match-p "reasoning" basename)
-             (string-match-p "introspection" basename)
-             (string-match-p "test" basename)
-             (string-match-p "code" basename)
-             (string-match-p "function" basename)
-             (string-match-p "compile" basename)
-             (string-match-p "\\`gptel-ext-" basename))
-         :programming)
-       ;; Tool-calls: sandbox, tool execution, bash, grep, glob, tools infrastructure
-        ((or (string-match-p "sandbox" basename)
-             (string-match-p "\\`gptel-tools\\.el\\'" basename)  ; gptel-tools.el only
-             (string-match-p "\\`gptel-tools-[^a]" basename)  ; tools-* but not tools-agent*
-            (string-match-p "\\`nucleus-tools" basename)    ; nucleus-tools*
-            (member basename '("gptel-tools-bash.el" "gptel-tools-grep.el"
-                              "gptel-tools-glob.el" "gptel-tools-edit.el"
-                              "gptel-tools-apply.el" "gptel-tools-preview.el"
-                              "gptel-tools-programmatic.el")))
-        :tool-calls)
-       ;; Agentic: agent orchestration, workflow, evolution, strategy, ai-behaviors
-       ((or (string-match-p "agent" basename)
-            (string-match-p "workflow" basename)
-            (string-match-p "strategy" basename)
-            (string-match-p "evolution" basename)
-            (string-match-p "ai-behaviors" basename)
-            (string-match-p "\\`gptel-agent-" basename))
-        :agentic)
-       ;; Infrastructure: presets, UI, config, init modules
-       ((or (string-match-p "nucleus-presets" basename)
-            (string-match-p "nucleus-header" basename)
-            (string-match-p "init-" basename)
-            (string-match-p "tree-sitter\\|treesit" basename)
-            (string-match-p "skill-routing" basename)
-            (string-match-p "standalone" basename))
-        :natural-language)
-       ;; Default to :programming for unrecognized .el files (conservative)
-       (t :programming)))))
+    (or (when (fboundp 'gptel-auto-workflow--memory-schema-category-for-target)
+          (gptel-auto-workflow--memory-schema-category-for-target target))
+        (gptel-auto-workflow--categorize-target-by-regex target))))
+
+(defun gptel-auto-workflow--categorize-target-by-regex (target)
+  "Regex-based categorization fallback for TARGET.
+Used when memory schema has no graph data for the target."
+  (let ((basename (file-name-nondirectory target)))
+    (cond
+     ((or (string-match-p "context" basename)
+          (string-match-p "prompt" basename)
+          (string-match-p "chat" basename)
+          (string-match-p "conversation" basename)
+          (string-match-p "language" basename)
+          (string-match-p "text" basename)
+          (string-match-p "summarize" basename)
+          (string-match-p "stream" basename)
+          (member basename '("gptel-ext-context.el" "gptel-ext-context-images.el"
+                            "gptel-ext-context-cache.el" "gptel-ext-streaming.el"
+                            "gptel-ext-transient.el")))
+      :natural-language)
+     ((or (string-match-p "benchmark" basename)
+          (string-match-p "fsm" basename)
+          (string-match-p "retry" basename)
+          (string-match-p "reasoning" basename)
+          (string-match-p "introspection" basename)
+          (string-match-p "test" basename)
+          (string-match-p "code" basename)
+          (string-match-p "function" basename)
+          (string-match-p "compile" basename)
+          (string-match-p "\\`gptel-ext-" basename))
+      :programming)
+     ((or (string-match-p "sandbox" basename)
+          (string-match-p "\\`gptel-tools\\.el\\'" basename)
+          (string-match-p "\\`gptel-tools-[^a]" basename)
+          (string-match-p "\\`nucleus-tools" basename)
+          (member basename '("gptel-tools-bash.el" "gptel-tools-grep.el"
+                            "gptel-tools-glob.el" "gptel-tools-edit.el"
+                            "gptel-tools-apply.el" "gptel-tools-preview.el"
+                            "gptel-tools-programmatic.el")))
+      :tool-calls)
+     ((or (string-match-p "agent" basename)
+          (string-match-p "workflow" basename)
+          (string-match-p "strategy" basename)
+          (string-match-p "evolution" basename)
+          (string-match-p "ai-behaviors" basename)
+          (string-match-p "\\`gptel-agent-" basename))
+      :agentic)
+     ((or (string-match-p "nucleus-presets" basename)
+          (string-match-p "nucleus-header" basename)
+          (string-match-p "init-" basename)
+          (string-match-p "tree-sitter\\|treesit" basename)
+          (string-match-p "skill-routing" basename)
+          (string-match-p "standalone" basename))
+      :natural-language)
+     (t :programming))))
 
 ;; ─── Category-Level Performance Aggregation ───
 
@@ -2388,8 +2394,9 @@ Fields: :total-decisions, :backend-counts (alist of backend→count),
 (defun gptel-auto-workflow--best-model-for-target (target backend)
   "Return the best historical model for TARGET on BACKEND.
 Searches all kept experiments for this target+backend pair and returns
-the model with the highest keep-rate. Falls back to category-level
-model from `gptel-ai-behaviors--best-model' when no per-target data."
+the model with the highest keep-rate.  When no per-target data exists,
+tries similar files via unified graph before falling back to category-level
+model from `gptel-ai-behaviors--best-model'."
   (let ((best-model nil)
         (best-rate 0.0))
     ;; Phase 1: per-target data from experiment history
@@ -2411,16 +2418,58 @@ model from `gptel-ai-behaviors--best-model' when no per-target data."
         (maphash (lambda (model stats)
                    (let ((total (car stats))
                          (kept (cdr stats)))
-                      (when (and (> total 0)
-                                 (> kept 0)
-                                 (> (/ (float kept) total) best-rate)
-                                 (or (not (fboundp 'gptel-auto-workflow--model-combination-valid-p))
-                                     (gptel-auto-workflow--model-combination-valid-p
-                                      (concat backend "/" model))))
+                     (when (and (> total 0)
+                                (> kept 0)
+                                (> (/ (float kept) total) best-rate)
+                                (or (not (fboundp 'gptel-auto-workflow--model-combination-valid-p))
+                                    (gptel-auto-workflow--model-combination-valid-p
+                                     (concat backend "/" model))))
                        (setq best-rate (/ (float kept) total))
                        (setq best-model model))))
                  model-stats)))
-    ;; Phase 2: fallback to category-level model from ai-behaviors
+    ;; Phase 2: similar-file model lookup via unified graph
+    (unless best-model
+      (when (and target backend
+                 (fboundp 'gptel-auto-workflow--unified-graph-neighbors)
+                 (fboundp 'gptel-auto-workflow--parse-all-results))
+        (let* ((basename (file-name-nondirectory target))
+               (slug (file-name-sans-extension basename))
+               (similar (mapcar (lambda (edge)
+                                   (cdr (cadr edge)))
+                                 (gptel-auto-workflow--unified-graph-neighbors
+                                  :file slug '(:similar))))
+               (similar-files (mapcar (lambda (s) (concat s ".el")) similar))
+               (model-stats (make-hash-table :test 'equal)))
+          (when similar
+            (dolist (r (gptel-auto-workflow--parse-all-results))
+              (let ((r-target (plist-get r :target))
+                    (r-backend (plist-get r :backend))
+                    (r-model (plist-get r :model))
+                    (r-decision (plist-get r :decision)))
+                (when (and r-target r-backend r-model
+                           (string= r-backend backend)
+                           (member (file-name-nondirectory r-target) similar-files))
+                  (let ((stats (or (gethash r-model model-stats) (cons 0 0))))
+                    (cl-incf (car stats))
+                    (when (equal r-decision "kept")
+                      (cl-incf (cdr stats)))
+                    (puthash r-model stats model-stats)))))
+            (maphash (lambda (model stats)
+                       (let ((total (car stats))
+                             (kept (cdr stats)))
+                         (when (and (> total 0)
+                                    (> kept 0)
+                                    (> (/ (float kept) total) best-rate)
+                                    (or (not (fboundp 'gptel-auto-workflow--model-combination-valid-p))
+                                        (gptel-auto-workflow--model-combination-valid-p
+                                         (concat backend "/" model))))
+                           (setq best-rate (/ (float kept) total))
+                           (setq best-model model))))
+                     model-stats)
+            (when best-model
+              (message "[model-select] Graph-similar model for %s: %s (from %d similar files)"
+                       target best-model (length similar)))))))
+    ;; Phase 3: fallback to category-level model from ai-behaviors
     (unless best-model
       (when (and (fboundp 'gptel-auto-workflow--categorize-target)
                  (fboundp 'gptel-ai-behaviors--best-model))
@@ -3416,24 +3465,26 @@ before the executor runs, not just listed in the prompt."
 ;; The researcher discovers patterns that should refine the ontology.
 ;; This function surfaces category boundary mismatches from experiment data.
 
-(defun gptel-auto-workflow--detect-category-drift ()
-  "Check if any targets behave differently from their ontology category.
+ (defun gptel-auto-workflow--detect-category-drift ()
+   "Check if any targets behave differently from their ontology category.
 Compares each target's keep-rate against its category average.
+Uses regex-based categorization to avoid circularity: the graph-driven
+categorize-target could misclassify, and this function needs an independent
+check against that misclassification.
 A target that significantly outperforms/underperforms its category
 average may be misclassified.
 Returns alist of (target . (category . delta)) for drifts > 20%."
-  (when (fboundp 'gptel-auto-workflow--parse-all-results)
-    (let* ((results (gptel-auto-workflow--parse-all-results))
-           (cat-stats (make-hash-table :test 'equal))
-           (target-stats (make-hash-table :test 'equal))
-           (drifts nil))
-      ;; Aggregate category-level and target-level keep-rates
-      (dolist (r results)
-        (let* ((r-target (plist-get r :target))
-               (r-decision (plist-get r :decision))
-               (r-kept (equal r-decision "kept"))
-               (category (and r-target (fboundp 'gptel-auto-workflow--categorize-target)
-                              (gptel-auto-workflow--categorize-target r-target))))
+   (when (fboundp 'gptel-auto-workflow--parse-all-results)
+     (let* ((results (gptel-auto-workflow--parse-all-results))
+            (cat-stats (make-hash-table :test 'equal))
+            (target-stats (make-hash-table :test 'equal))
+            (drifts nil))
+       (dolist (r results)
+         (let* ((r-target (plist-get r :target))
+                (r-decision (plist-get r :decision))
+                (r-kept (equal r-decision "kept"))
+                (category (and r-target (fboundp 'gptel-auto-workflow--categorize-target-by-regex)
+                               (gptel-auto-workflow--categorize-target-by-regex r-target))))
           (when category
             (let ((c-entry (gethash category cat-stats (list :kept 0 :total 0))))
               (setq c-entry (plist-put c-entry :kept (+ (plist-get c-entry :kept) (if r-kept 1 0))))
@@ -3446,7 +3497,8 @@ Returns alist of (target . (category . delta)) for drifts > 20%."
       ;; Compare each target against its category average
       (maphash
        (lambda (target t-stats)
-         (let* ((category (and target (gptel-auto-workflow--categorize-target target)))
+          (let* ((category (and target (fboundp 'gptel-auto-workflow--categorize-target-by-regex)
+                                      (gptel-auto-workflow--categorize-target-by-regex target)))
                 (c-stats (or (gethash category cat-stats) (list :kept 0 :total 0)))
                 (t-total (plist-get t-stats :total))
                 (c-total (plist-get c-stats :total))
@@ -3504,7 +3556,8 @@ Returns alist of suggestions: (target . suggested-category)."
                 (let* ((r-target (plist-get r :target))
                        (r-decision (plist-get r :decision))
                        (r-kept (equal r-decision "kept"))
-                       (r-cat (and r-target (gptel-auto-workflow--categorize-target r-target))))
+                        (r-cat (and r-target (fboundp 'gptel-auto-workflow--categorize-target-by-regex)
+                                    (gptel-auto-workflow--categorize-target-by-regex r-target))))
                   (when r-cat
                     (let ((entry (gethash r-cat cat-rates (list :kept 0 :total 0))))
                       (setq entry (plist-put entry :kept (+ (plist-get entry :kept) (if r-kept 1 0))))
@@ -3524,6 +3577,40 @@ Returns alist of suggestions: (target . suggested-category)."
                        (* 100 delta) (* 100 best-rate))))))
     suggestions)))
 
+;; ─── JSON Encoding Helpers ───
+
+(defun gptel-auto-workflow--plist-to-alist-for-json (plist)
+  "Convert PLIST to alist suitable for json-encode.
+json-encode cannot handle nested plists — it encodes (:key val) pairs
+as JSON arrays instead of objects.  This function recursively converts
+all nested plists to alists of cons pairs, which json-encode handles
+correctly: ((:key . val)) → {\"key\": val}."
+  (when (and (listp plist) (keywordp (car plist)))
+    (let ((result nil))
+      (while (and plist (keywordp (car plist)))
+        (let ((key (car plist))
+              (val (cadr plist)))
+          (push (cons key
+                      (cond
+                       ((and (listp val) (keywordp (car val)))
+                        (gptel-auto-workflow--plist-to-alist-for-json val))
+                       ((listp val)
+                        (mapcar (lambda (item)
+                                  (if (and (listp item) (keywordp (car item)))
+                                      (gptel-auto-workflow--plist-to-alist-for-json item)
+                                    item))
+                                val))
+                       (t val)))
+                result)
+          (setq plist (cddr plist))))
+      (nreverse result))))
+
+(defun gptel-auto-workflow--json-encode-plist (plist)
+  "Encode PLIST to JSON, correctly handling nested plists.
+Standard json-encode treats nested plists as arrays.  This converts
+the plist to an alist first, then encodes."
+  (json-encode (gptel-auto-workflow--plist-to-alist-for-json plist)))
+
 ;; ─── Digital Twin Persistence ───
 
 (defun gptel-auto-workflow--persist-target-state ()
@@ -3531,7 +3618,7 @@ Returns alist of suggestions: (target . suggested-category)."
 restart)."
   (when (and (bound-and-true-p gptel-auto-experiment--target-state-cache)
              (> (hash-table-count gptel-auto-experiment--target-state-cache) 0))
-    (let ((file (expand-file-name "var/tmp/digital-twin.json"
+    (let ((file (expand-file-name "var/tmp/target-state.json"
                                   (gptel-auto-workflow--worktree-base-root)))
           (data nil))
       (maphash (lambda (target state)
@@ -3563,41 +3650,51 @@ restart)."
       (with-temp-file file
         (insert (let ((json-encoding-pretty-print t))
                   (json-encode data))))
-      (message "[digital-twin] Persisted %d target states + rejection memory to %s" (length data) file))))
+      (message "[target-state] Persisted %d target states + rejection memory to %s" (length data) file))))
 
 (defun gptel-auto-workflow--load-target-state ()
-  "Load target state cache and rejection memory from disk."
+  "Load target state cache and rejection memory from disk.
+P1 FIX: Skip entries where value is not a list (e.g., version, built keys)."
   (when (boundp 'gptel-auto-experiment--target-state-cache)
-    (let ((file (expand-file-name "var/tmp/digital-twin.json"
+    (let ((file (expand-file-name "var/tmp/target-state.json"
                                   (gptel-auto-workflow--worktree-base-root))))
       (when (file-exists-p file)
         (condition-case err
             (with-temp-buffer
               (insert-file-contents file)
-              (let ((data (json-read)))
-                (dolist (entry data)
-                  (let ((target (car entry))
-                        (plist (cdr entry)))
-                    (puthash target
-                             (list :byte-compiles (cdr (assq 'byte-compiles plist))
-                                   :syntax-ok (cdr (assq 'syntax-ok plist)))
-                             gptel-auto-experiment--target-state-cache)
-                    (let ((rejections (cdr (assq 'rejections plist))))
-                      (when (and rejections
-                                 (bound-and-true-p gptel-auto-experiment--rejection-memory)
-                                 (fboundp 'gptel-auto-experiment--remember-rejection))
-                        (dolist (rej rejections)
-                          (gptel-auto-experiment--remember-rejection target (car rej)))))
-                    (let ((successes (cdr (assq 'successes plist))))
-                      (when (and successes
-                                 (bound-and-true-p gptel-auto-experiment--success-memory)
-                                 (fboundp 'gptel-auto-experiment--remember-success))
-                        (dolist (succ successes)
-                          (gptel-auto-experiment--remember-success
-                           target (car succ) (cdr succ)))))))
-                (message "[digital-twin] Loaded %d target states + rejection memory from %s"
-                         (hash-table-count gptel-auto-experiment--target-state-cache) file)))
-          (error (message "[digital-twin] Failed to load: %s" (error-message-string err)))))))
+              (let* ((json-object-type 'alist)
+                     (json-key-type 'symbol)
+                     (data (json-read)))
+                (when (listp data)
+                  (dolist (entry data)
+                    (let ((target (car entry))
+                          (plist (cdr entry)))
+                      ;; P1 FIX: Skip entries where plist is not a list
+                      ;; (e.g., version: 1, built: "2025-...")
+                      (when (and (listp plist) (or (assq 'byte-compiles plist)
+                                                   (assq 'syntax-ok plist)
+                                                   (assq 'rejections plist)
+                                                   (assq 'successes plist)))
+                        (puthash target
+                                 (list :byte-compiles (cdr (assq 'byte-compiles plist))
+                                       :syntax-ok (cdr (assq 'syntax-ok plist)))
+                                 gptel-auto-experiment--target-state-cache)
+                        (let ((rejections (cdr (assq 'rejections plist))))
+                          (when (and rejections
+                                     (bound-and-true-p gptel-auto-experiment--rejection-memory)
+                                     (fboundp 'gptel-auto-experiment--remember-rejection))
+                            (dolist (rej rejections)
+                              (gptel-auto-experiment--remember-rejection target (car rej)))))
+                        (let ((successes (cdr (assq 'successes plist))))
+                          (when (and successes
+                                     (bound-and-true-p gptel-auto-experiment--success-memory)
+                                     (fboundp 'gptel-auto-experiment--remember-success))
+                            (dolist (succ successes)
+                              (gptel-auto-experiment--remember-success
+                               target (car succ) (cdr succ))))))))
+                  (message "[target-state] Loaded %d target states + rejection memory from %s"
+                           (hash-table-count gptel-auto-experiment--target-state-cache) file))))
+          (error (message "[target-state] Failed to load: %s" (error-message-string err)))))))
 
 ;; ─── Ontology Self-Evolution ───
 
@@ -3790,10 +3887,14 @@ Runs during the self-evolution cycle.  Results are stored in
             (when repairs
               (message "[ontology-evolve] 🔧 %d targets have suggested recategorization" (length repairs))))
         (error nil))
-      (list :changes (length changes)
-            :backend-changes 0
-            :saturated (length saturated)
-            :total-strategies (hash-table-count cat-strats)))))))
+      (let ((result (list :changes (length changes)
+                          :backend-changes 0
+                          :saturated (length saturated)
+                          :total-strategies (hash-table-count cat-strats))))
+        (when (fboundp 'gptel-auto-workflow--memory-schema-record-evolution)
+          (ignore-errors
+            (gptel-auto-workflow--memory-schema-record-evolution result)))
+        result))))))
 
 ;; ─── Per-Category Eight-Key Aggregation ───
 
@@ -3890,10 +3991,23 @@ Runs during evolution cycle alongside strategy learning."
 
 (defun gptel-auto-workflow--graph-neighbor-success (backend target)
   "Return boost for BACKEND based on success on graph neighbors of TARGET.
-Looks up TARGET's category in the skill graph and checks BACKEND's
-keep-rate on targets in the same category."
-  (if (and (fboundp 'skill-graph-init)
-           target)
+Primary: uses unified graph (file similarity + entity schema neighbors +
+skill co-occurrence).  Fallback: skill graph category neighbors."
+  (if target
+      (condition-case nil
+          (let ((unified-boost
+                 (when (fboundp 'gptel-auto-workflow--unified-graph-best-backend-for)
+                   (let ((candidates (gptel-auto-workflow--unified-graph-best-backend-for target)))
+                     (or (cdr (assoc backend candidates)) 0.0)))))
+            (if (and unified-boost (> unified-boost 0))
+                (* 0.15 unified-boost)
+              (gptel-auto-workflow--graph-neighbor-success-skill-fallback backend target)))
+        (error 0.0))
+    0.0))
+
+(defun gptel-auto-workflow--graph-neighbor-success-skill-fallback (backend target)
+  "Fallback: skill graph category neighbor success for BACKEND/TARGET."
+  (if (fboundp 'skill-graph-init)
       (condition-case nil
           (let* ((category (and (fboundp 'gptel-auto-workflow--categorize-target)
                                 (gptel-auto-workflow--categorize-target target)))
@@ -3901,13 +4015,11 @@ keep-rate on targets in the same category."
                  (total-keep 0.0)
                  (count 0))
             (when category
-              ;; Find all nodes in the same category
               (maphash (lambda (id node)
                          (when (and (eq (skill-graph-node-level node) category)
                                     (not (eq id (intern target))))
                            (push id neighbors)))
                        skill-graph--nodes)
-              ;; Average keep-rate for BACKEND on neighbor targets
               (dolist (n neighbors)
                 (let ((rate (condition-case nil
                                 (gptel-auto-workflow--get-backend-performance-stats
@@ -3917,17 +4029,40 @@ keep-rate on targets in the same category."
                     (setq total-keep (+ total-keep (or (plist-get rate :keep-rate) 0.0)))
                     (setq count (1+ count)))))
               (if (> count 0)
-                  (* 0.15 (/ total-keep count))  ; max ~0.15 boost
+                  (* 0.15 (/ total-keep count))
                 0.0)))
         (error 0.0))
     0.0))
 
-(defun gptel-auto-workflow--graph-edge-strength (_backend active-skills)
-  "Return boost for BACKEND based on strength of skill combination edges.
-Looks up edges between skills in ACTIVE-SKILLS and checks if BACKEND
-succeeded when those skill pairs were used together."
-  (if (and (fboundp 'skill-graph-init)
-           active-skills)
+(defun gptel-auto-workflow--graph-edge-strength (backend active-skills)
+  "Return boost based on strength of skill combination edges.
+Primary: unified graph skill-cooccur edges.  Fallback: skill graph edges."
+  (if active-skills
+      (condition-case nil
+          (let ((unified-boost 0.0)
+                (edge-count 0))
+            (when (and (fboundp 'gptel-auto-workflow--unified-graph-neighbors)
+                       (>= (length active-skills) 2))
+              (let ((skills (if (stringp active-skills)
+                                (split-string active-skills)
+                              (mapcar #'symbol-name active-skills))))
+                (dolist (skill skills)
+                  (dolist (edge (gptel-auto-workflow--unified-graph-neighbors
+                                 :skill skill '(:skill-cooccur)))
+                    (let ((to-name (cdr (cadr edge)))
+                          (weight (nth 2 edge)))
+                      (when (and (member to-name (cdr skills)) (> weight 0))
+                        (setq unified-boost (+ unified-boost weight))
+                        (setq edge-count (1+ edge))))))))
+            (if (> edge-count 0)
+                (* 0.10 (/ unified-boost edge-count))
+              (gptel-auto-workflow--graph-edge-strength-skill-fallback backend active-skills)))
+        (error 0.0))
+    0.0))
+
+(defun gptel-auto-workflow--graph-edge-strength-skill-fallback (_backend active-skills)
+  "Fallback: skill graph edge strength for ACTIVE-SKILLS."
+  (if (fboundp 'skill-graph-init)
       (condition-case nil
           (let ((total-weight 0.0)
                 (edge-count 0))
@@ -3943,7 +4078,7 @@ succeeded when those skill pairs were used together."
                                 (setq total-weight (+ total-weight (skill-graph-edge-weight edge)))
                                 (setq edge-count (1+ edge-count)))))))
             (if (> edge-count 0)
-                (* 0.10 (/ total-weight edge-count))  ; max ~0.10 boost
+                (* 0.10 (/ total-weight edge-count))
               0.0))
         (error 0.0))
     0.0))

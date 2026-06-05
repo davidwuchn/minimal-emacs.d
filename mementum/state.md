@@ -1,10 +1,167 @@
 # Mementum State
 
-> Last session: 2026-06-05 (OV5 pipeline audit + GTM daemon fix + rate-limit detection)
+> Last session: 2026-06-05 (Knowledge reasoning wiring)
 > Next pipeline: running
-> Status: GTM daemon restarted, watchdog monitoring both daemons, 2189 tests pass, 0 unexpected
+> Status: 105/105 .el files, 3 modified this session, 0 byte-compile warnings
 
-## Session: OV5 Pipeline Hardening — GTM Daemon + Rate-Limit Detection (2026-06-05)
+## Session: Wire Knowledge Reasoning Features into Pipeline (2026-06-05)
+
+### ⚒ Wire: All 7 OV5 knowledge reasoning features into pipeline
+
+All features from `gptel-auto-workflow-knowledge-reasoning.el` (646 lines) now wired:
+
+1. **DIALECTIC moderator** → experiment loop target-complete callback.
+   Forced backend swap on 3+ consecutive failures for a target.
+2. **frontier-select-targets** → target ordering in `--run-with-targets`.
+   Pareto frontier ranking (60% recency, 40% keep-rate) reorders validated targets.
+3. **Horn SAT** → ontology consistency check in `gate-strategies`.
+   Logs warning on logical contradictions in ontology rules.
+4. **Floyd-Warshall** → new `--synthesize-causal-chains` helper.
+   Writes transitive causal chain analysis to evolution self-evolution skill.
+5. **Allen intervals** → new `--synthesize-gap-detection` helper.
+   Writes temporal gap analysis between experiments.
+6. **OWL/SHACL generation** → evolution synthesize.
+   Writes `ontology.ttl` + `shacl.ttl` to `var/tmp/evolution/`.
+7. **EDN/forge-lambda + dialectic-lens** → prompt construction.
+   Dialectic lens fallback in moderator-lens; `plist-to-edn`/`forge-lambda-fixed-point` declared.
+
+### Files modified
+- `lisp/modules/gptel-tools-agent-main.el` — DIALECTIC + frontier-select
+- `lisp/modules/gptel-auto-workflow-evolution.el` — Horn SAT + Floyd-Warshall + Allen + OWL + Playout Cap
+- `lisp/modules/gptel-tools-agent-prompt-build.el` — dialectic-lens fallback + EDN declares
+
+### Key lesson
+Paren counting in deeply nested Elisp is treacherous. When `check-parens` reports
+"Unmatched bracket or quote" inside `with-temp-file`, extract the code into
+standalone `defun` helpers with `cl-return-from` for early exits. This flattens
+nesting and makes paren balance verifiable.
+
+### Commits
+- (pending commit) ⚒ wire: all 7 OV5 knowledge reasoning features into pipeline
+- `4cddf9b` ◈ best-model-for-target: Phase 2 graph-similar model lookup
+- `40f39ba` ⚒ perf: hoist similar-files mapcar out of dolist
+- `22c7e51` ◈ graph-categorization: experiment-history primary, schema secondary
+- `33ded1a` ⊘ fix: ensure-loaded guard for batch/test mode
+
+### Key Findings
+- Graph-driven categorization was a **no-op**: all schemas had freq=1 (below τ=3 stability
+  threshold) because entity extraction produced noisy unique names. Each schema was seen once
+  and never repeated.
+- Memory index had 64 entities, 31 were prose fragments (>30 chars)
+- `ensure-loaded` crashed in batch/test mode — `worktree-base-root` void
+- Pi5 commit `8d79adeff` had a `let*` binding bug (function call treated as variable)
+
+### Remaining Opportunities
+- Unified graph persistence (low priority — rebuilds in seconds)
+- Pipeline keep rate verification (need Pi5 access)
+- `classify-schema` could use experiment-learned weights instead of hardcoded scoring
+- Pre-existing test failure: `reorder-puts-best-first` expects `deepseek-v4-pro` but gets `deepseek-v4-flash`
+
+---
+
+## Session: Systematic Bug Fixes + Pipeline Improvements (2026-06-05)
+
+### ⊘ Fix: Grader score parsing — criteria-total authoritative
+Grader outputs SCORE:3/9 but we specified 5 criteria → 3/9=33% < 60% → grader-failed.
+Fix: `criteria-total` from expected+forbidden is authoritative in all 3 parse paths.
+**Impact:** This was the root cause of 0% keep rate — nearly all experiments failed grading.
+
+### ⊘ Fix: condition-case (ignore) → (error nil) — 28 occurrences in 9 files
+`(ignore)` is not a valid error condition name. condition-case matches handler symbols
+against the signaled error's condition-name. No standard Emacs error uses `ignore`, so
+these handlers never triggered. Found via pipeline trying to fix safe-truename repeatedly.
+
+### ⊘ Fix: nil-guard (cdr best) → (or (cdr best) 0) in ontology-strategy.el
+
+### ⊘ Fix: safe-truename (ignore)→(error nil) + stringp guard + remove useless proper-list-p
+
+### ⚒ plist-delete-all: O(n²)→O(n) + deduplicate (3 copies → 1 canonical)
+Tail-pointer pattern replaces append. Removed duplicate definitions in
+benchmark-subagent.el and prompt-build.el; all callers now use
+gptel-auto-workflow--plist-delete-all from error.el.
+
+### Commits
+- `50c3135` ⊘ fix: 16 byte-compile warnings → 0 across all modules
+- `785bdbe` ⊘ fix: grader score parsing uses caller total
+- `37214d4` ⊘ fix: remove unused last-total variable
+- `700946e` ⚒ plist-delete-all O(n²)→O(n) in 2 files
+- `fcadc3e` ⊘ fix: safe-truename + proper-list-p
+- `da7c2aa` ⊘ fix: condition-case (ignore)→(error nil) in 9 files
+- `4d4b702` ⚒ plist-delete-all O(n²)→O(n) in error.el
+- `c9d2276` ◈ deduplicate plist-delete-all: 3 copies → 1
+
+---
+
+## Session: Grader Score Parsing + Pipeline Fixes (2026-06-05)
+
+### ⊘ Fix: Grader score parsing uses caller total, not grader self-reported total
+**Root cause:** Grader outputs `SCORE:3/9` (its own 9-point scale) but we specified
+4 expected + 1 forbidden = 5 criteria. Parser used 9 as total → 3/9=33% < 60%
+threshold → `grader-failed` decision despite 3/5 PASS.
+**Fix:** `criteria-total` from expected+forbidden is authoritative. All 3 parse
+paths (SCORE:X/Y, JSON, text PASS) now cap score to `criteria-total` and ignore
+grader self-reported totals.
+**Impact:** This was causing nearly all experiments to be marked `grader-failed`
+even when the grader text said PASS. The pipeline was repeatedly attempting
+the same nil-guard fixes (3+ times on `ontology-strategy.el`) because the
+grader kept rejecting valid changes.
+
+### ⊘ Fix: Nil-guard in ontology-strategy.el
+`(cdr best)` → `(or (cdr best) 0)` in `gptel-auto-workflow--category-eight-key-weight`.
+Pipeline had tried to fix this 3+ times but grader always rejected.
+
+### ⊘ Fix: 16 byte-compile warnings → 0
+- `gptel-auto-workflow-projects.el`: 4 `defvar`, 4 `declare-function` added
+- `gptel-benchmark-subagent.el`: shortened 4 docstrings, prefixed unused
+  variable, added 2 `declare-function`
+
+### Commits
+- `50c313530` ⊘ fix: 16 byte-compile warnings in projects.el and benchmark-subagent.el
+- `785bdbe97` ⊘ fix: grader score parsing uses caller total, not grader self-reported total
+- `37214d488` ⊘ fix: remove unused last-total variable from grade parser
+
+---
+
+### ⚒ P0: Schema Extraction + Frequency-Based Promotion
+**New module:** `lisp/modules/gptel-auto-workflow-memory-schema.el`
+- Hash-table-based schema index at `mementum/.ov5-memory-index.json`
+- Heuristic triple extraction from memory text (verb+preposition patterns)
+- Schema inference with frequency tracking
+- τ=3 threshold: schemas need ≥3 observations before ontology router uses them
+- Category lookup via entity matching (fallback for `categorize-target`)
+- Conflict detection: entity overlap across multiple sources
+
+**Integration:**
+- `gptel-auto-workflow-mementum.el`: calls `extract-from-file` after `write-memory` and `synthesize-knowledge`
+- `gptel-auto-workflow-ontology-router.el`: `categorize-target` checks schema index before defaulting to `:programming`
+
+### ⚒ P1: Temporal Versioning
+- New memories get `valid-from` frontmatter (YAML)
+- `supersede-memory`: adds `valid-until` + `superseded-by` to old memory
+- `read-valid-memories`: filters out superseded memories
+- `find-superseded`: finds existing memories matching a slug for auto-supersession
+- Auto-supersede wired into `write-memory`: existing memories with same slug are superseded
+
+### ⚒ P1: Bidirectional Memory-Code Links
+- `@memory:slug-name` references in code files scanned into reverse index
+- `memories-for-file`: given code file, return referenced memory slugs
+- `files-for-memory`: given memory slug, return code files referencing it
+
+### ⚒ P2: Graph Retrieval (PPR-lite)
+- Triple store for graph traversal (entity→schema→entity neighbor walk)
+- `entity-neighbors`: find entities connected via shared schemas
+- `retrieve`: multi-hop graph walk with score aggregation
+
+### ⚒ P3: Hub Suppression (IDF Weighting)
+- `entity-idf`: score = count * 1/log(deg+1) — penalizes generic entities, boosts rare
+- `rank-entities`: IDF-weighted entity ranking
+- `category-for-target` now uses IDF weighting instead of raw count
+
+### Tests
+- `tests/test-memory-schema.el`: 40 ERT tests covering all features
+- 2229 total tests, 0 unexpected
+
+---
 
 ### ⚒ GTM Daemon Auto-Restart (watchdog-daemon.sh)
 **Problem:** GTM daemon (`gtm-product-org`) was dead for 2+ days — no research, stale findings

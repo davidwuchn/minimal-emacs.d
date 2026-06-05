@@ -538,6 +538,9 @@ commits are preserved."
            (remote (gptel-auto-workflow--shared-remote))
            (default-directory (or (gptel-auto-workflow--project-root)
                                   default-directory)))
+      ;; Self-heal: clear stale git state before any operation
+      (gptel-auto-workflow--git-result
+       "git merge --abort 2>/dev/null; git checkout HEAD -- mementum/ assistant/ 2>/dev/null; true" 30)
       (message "[auto-workflow] Auto-promoting staging to main...")
       (condition-case err
           (progn
@@ -590,10 +593,14 @@ commits are preserved."
             ;; Push main to origin — regular push, never force.
             ;; Because we fast-forwarded to origin/main above, this is
             ;; always a clean fast-forward.
-            (when (gptel-auto-workflow--git-result
-                   (format "git push %s main" remote) 180)
-              (message "[auto-workflow] ✓ Staging promoted to main")
-              t))
+            (let ((push-result (gptel-auto-workflow--git-result
+                                (format "git push %s main" remote) 180)))
+              (if (= 0 (cdr push-result))
+                  (progn
+                    (message "[auto-workflow] ✓ Staging promoted to main")
+                    t)
+                (message "[auto-workflow] ✗ Push failed: %s" (car push-result))
+                nil)))
         (error
          (message "[auto-workflow] ✗ Auto-promote error: %s" (error-message-string err))
          nil)))))
@@ -1108,9 +1115,12 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                           :analyzer-patterns ""
                           :agent-output ""))
                    (funcall finish nil))
-               (let* ((staging-base (gptel-auto-workflow--current-staging-head))
-                 (merge-result
-                  (gptel-auto-workflow--merge-to-staging optimize-branch))
+                (let* ((staging-base (gptel-auto-workflow--current-staging-head))
+                  (merge-result
+                   (progn
+                     (gptel-auto-workflow--git-result
+                      "git merge --abort 2>/dev/null; git checkout HEAD -- mementum/ assistant/ 2>/dev/null; true" 30)
+                     (gptel-auto-workflow--merge-to-staging optimize-branch)))
                  (already-integrated-p (eq merge-result :already-integrated))
                  (finish-publish
                   (lambda (&optional retried)
@@ -1135,8 +1145,10 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                          (if retried
                              "[auto-workflow] ✓ Staging pushed after refreshing remote advance."
                            "[auto-workflow] ✓ Staging pushed. Human must merge to main."))
-                        (gptel-auto-workflow--promote-staging-to-main)
-                        (funcall finish t))))))
+                         (if (gptel-auto-workflow--promote-staging-to-main)
+                             (funcall finish t)
+                           (message "[auto-workflow] ⚠ Auto-promote to main failed; staging pushed but not merged")
+                           (funcall finish nil)))))))
             (if (null merge-result)
                 (progn
                   (message "[auto-workflow] ✗ Merge to staging failed, aborting")

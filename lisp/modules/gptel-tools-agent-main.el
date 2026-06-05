@@ -4,6 +4,9 @@
 (require 'cl-lib)
 
 (declare-function gptel-auto-workflow--plist-get "gptel-tools-agent-base")
+(declare-function gptel-knowledge--frontier-select-targets "gptel-auto-workflow-knowledge-reasoning")
+(declare-function gptel-knowledge--dialectic-check "gptel-auto-workflow-knowledge-reasoning")
+(declare-function gptel-auto-workflow--gap-prioritize-targets "gptel-auto-workflow-evolution" (targets))
 (declare-function gptel-benchmark-eight-keys-weakest-with-signals "gptel-benchmark-principles")
 (declare-function gptel-auto-workflow--read-file-contents "gptel-tools-agent-base")
 (declare-function gptel-auto-experiment--reset-grade-state "gptel-tools-agent-benchmark")
@@ -176,7 +179,7 @@ Also monitors memory and triggers GC when RSS exceeds threshold."
         ;; gptel-auto-workflow-production.el) forces full GC every 5 min.
         ;; RSS stays at 2.9GB from malloc caching — this is normal.
         ;; Watchdog handles physical memory (>5GB → restart).
-        (ignore))
+        (error nil))
     (gptel-auto-workflow--stop-status-refresh-timer)))
 
 (defun gptel-auto-workflow--maybe-start-status-refresh-timer ()
@@ -556,6 +559,30 @@ Usage:
       (message "[auto-workflow] Diagnostic probe failed: grader broken, experiments halted")
       (setq gptel-auto-workflow--running nil)
       (cl-return-from gptel-auto-workflow-run-async nil))
+    ;; Phase 4a: Git lock detection — prevent concurrent run collisions
+    (let ((git-lock (expand-file-name ".git/index.lock"
+                                       (gptel-auto-workflow--default-dir))))
+      (when (file-exists-p git-lock)
+        (let ((lock-age (- (float-time) (float-time (file-attribute-modification-time
+                                                       (file-attributes git-lock))))))
+          (if (> lock-age 600)
+              (progn
+                (message "[preflight] Removing stale git lock (%.0fs old): %s" lock-age git-lock)
+                (delete-file git-lock))
+            (message "[preflight] Git lock exists (%.0fs old), aborting: %s" lock-age git-lock)
+            (setq gptel-auto-workflow--running nil)
+            (cl-return-from gptel-auto-workflow-run-async nil)))))
+    ;; Phase 4b: Daemon socket health — verify Emacs daemon is responsive
+    (when (and (boundp 'gptel-auto-workflow-persistent-headless)
+               gptel-auto-workflow-persistent-headless)
+      (let ((socket-dir (or (getenv "XDG_RUNTIME_DIR")
+                            (getenv "TMPDIR")
+                            (format "/tmp/emacs%d" (user-uid)))))
+        (when (and socket-dir (file-directory-p socket-dir))
+          (let ((socket (expand-file-name "server" socket-dir)))
+            (when (and (file-exists-p socket)
+                       (not (file-executable-p socket)))
+              (message "[preflight] Daemon socket exists but not executable, may need restart: %s" socket))))))
     ;; Wrap completion-callback with memory/disk cleanup for 24/7 operation
      (let ((cleanup-callback
             (lambda (results)
@@ -1158,8 +1185,28 @@ into staging or main."
               (gptel-auto-workflow--filter-valid-targets
                targets proj-root most-positive-fixnum)
             targets))
-         (dropped-count (- (length targets) (length validated-targets)))
-         (run-id (gptel-auto-workflow--current-run-id))
+           (validated-targets
+            (if (and (fboundp 'gptel-knowledge--frontier-select-targets)
+                     (fboundp 'gptel-auto-workflow--results-file-path))
+                (let* ((tsv (gptel-auto-workflow--results-file-path))
+                       (frontier (and (file-readable-p tsv)
+                                      (gptel-knowledge--frontier-select-targets tsv (length validated-targets))))
+                       (ranked (plist-get frontier :targets)))
+                  (if (and ranked (> (length ranked) 0))
+                      (let ((frontier-set (delete-dups ranked))
+                            (rest nil))
+                        (dolist (tgt validated-targets)
+                          (unless (member tgt frontier-set)
+                            (push tgt rest)))
+                        (append frontier-set (nreverse rest)))
+                    validated-targets))
+              validated-targets))
+           (validated-targets
+            (if (fboundp 'gptel-auto-workflow--gap-prioritize-targets)
+                (gptel-auto-workflow--gap-prioritize-targets validated-targets)
+              validated-targets))
+          (dropped-count (- (length targets) (length validated-targets)))
+          (run-id (gptel-auto-workflow--current-run-id))
          (callback-run-id (and gptel-auto-workflow--running
                                gptel-auto-workflow--run-id))
          (run-buffer (current-buffer))
@@ -1250,11 +1297,31 @@ into staging or main."
                           (if (not (gptel-auto-workflow--run-callback-live-p callback-run-id))
                               (message "[auto-workflow] Ignoring stale target completion for %s; run %s is no longer active"
                                        target run-id)
-                            (setq all-results (append all-results results))
+                           (setq all-results (append all-results results))
                            (setq kept-count
-                                 (gptel-auto-workflow--kept-target-count all-results))
+                                  (gptel-auto-workflow--kept-target-count all-results))
                            (setq gptel-auto-workflow--stats
-                                 (plist-put gptel-auto-workflow--stats :kept kept-count))
+                                  (plist-put gptel-auto-workflow--stats :kept kept-count))
+                           ;; DIALECTIC moderator: forced backend swap on
+                           ;; 3+ consecutive failures for this target
+                           (when (and (fboundp 'gptel-knowledge--dialectic-check)
+                                      (fboundp 'gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+                                      results
+                                      (cl-every (lambda (r) (not (equal (plist-get r :decision) "kept"))) results))
+                             (let ((dialectic (gptel-knowledge--dialectic-check
+                                               (mapcar (lambda (r)
+                                                         (list :id (plist-get r :id)
+                                                               :decision (plist-get r :decision)
+                                                               :failure-type (if (plist-get r :error) :timeout :quality-drop)))
+                                                       results))))
+                               (when (plist-get dialectic :intervention)
+                                 (message "[dialectic] %s: %s — %s"
+                                          target
+                                          (plist-get dialectic :prompt)
+                                          (plist-get dialectic :forced-action))
+                                 (when (eq (plist-get dialectic :forced-action) :backend-swap)
+                                   (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+                                   (message "[dialectic] Forced backend swap for next target")))))
                            (gptel-auto-workflow--persist-status)
                            (if gptel-auto-experiment--quota-exhausted
                                  (progn

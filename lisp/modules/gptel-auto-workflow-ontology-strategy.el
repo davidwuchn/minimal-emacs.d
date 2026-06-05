@@ -107,7 +107,7 @@ otherwise falls back to hardcoded defaults based on category semantics:
                (sorted (sort (copy-sequence key-deltas)
                              (lambda (a b) (> (abs (cdr a)) (abs (cdr b))))))
                (best (car sorted))
-               (delta (abs (cdr best)))
+               (delta (abs (or (cdr best) 0)))
                ;; Scale: avg delta of 0.10 → 1.5x, 0.05 → 1.25x, etc.
                (multiplier (max 0.8 (min 2.0 (+ 1.0 (* delta 5))))))
           (cons (car best) multiplier))

@@ -196,11 +196,11 @@ Set to 0 to disable the check."
   :type 'integer
   :group 'gptel-auto-workflow)
 (defcustom gptel-auto-workflow-protected-configs
-  `(("assistant/agents/code_agent.md" . ,(symbol-name (gptel-backend-registry-default-model 'MiniMax)))
-    ("assistant/agents/plan_agent.md" . ,(symbol-name (gptel-backend-registry-default-model 'MiniMax)))
-    ("assistant/agents/comparator.md" . ,(symbol-name (gptel-backend-registry-default-model 'MiniMax)))
-    ("assistant/agents/explorer_agent.md" . ,(symbol-name (gptel-backend-registry-default-model 'MiniMax)))
-    ("assistant/agents/introspector.md" . ,(symbol-name (gptel-backend-registry-default-model 'MiniMax))))
+  '(("assistant/agents/code_agent.md" . "MiniMax-M3")
+    ("assistant/agents/plan_agent.md" . "MiniMax-M3")
+    ("assistant/agents/comparator.md" . "MiniMax-M3")
+    ("assistant/agents/explorer_agent.md" . "MiniMax-M3")
+    ("assistant/agents/introspector.md" . "MiniMax-M3"))
   "Protected configuration files and their expected values.
 AUTO-GENERATED from `gptel-backend-registry' — edit defaults there.
 Each element is (FILE . EXPECTED-VALUE).  If an experiment changes
@@ -691,7 +691,19 @@ on the current provider."
                                   (lambda ()
                                     (gptel-auto-experiment--call-aux-subagent-with-retry
                                      at inv cb next-att next-prov))))))
-         (funcall callback result))))))
+          (condition-case err
+              (funcall callback result)
+            (error
+             (message "[auto-exp] ⚠ %s callback error caught and recovered: %s"
+                      agent-type (error-message-string err))
+             ;; Try to unblock the experiment loop by providing a tool-error result.
+             ;; The callback may be broken (e.g. --cl-block-nil-- after async timer),
+             ;; so we attempt a direct fallback-result path to avoid stalling.
+             (condition-case nil
+                 (let ((result-cb callback))
+                   (setq callback (lambda (_r) (message "[auto-exp] %s stale callback ignored" agent-type)))
+                   (funcall result-cb (list :error (format "Callback error in %s: %s" agent-type (error-message-string err)))))
+               (error (message "[auto-exp] ⚠ %s fallback callback also failed; experiment may stall" agent-type))))))))))
 
 (defun gptel-auto-experiment-analyze (previous-results callback)
   "Analyze patterns from PREVIOUS-RESULTS. Call CALLBACK with analysis.

@@ -1,5 +1,7 @@
 ;;; gptel-benchmark-daily.el --- Daily workflow/skill integration -*- lexical-binding: t; -*-
 
+(declare-function gptel-auto-workflow--json-encode-plist "gptel-auto-workflow-ontology-router" (plist))
+
 ;; Copyright (C) 2025 David Wu
 ;; Author: David Wu
 ;; Version: 1.0.0
@@ -376,7 +378,7 @@ Triggers synthesis for:
                       :capabilities (length (plist-get gptel-benchmark-evolution-state :capabilities))
                       :ai-complete (plist-get gptel-benchmark-evolution-state :ai-complete-p)
                       :evolution-cycle (plist-get gptel-benchmark-evolution-state :cycle))))
-    (json-encode report)))
+    (gptel-auto-workflow--json-encode-plist report)))
 
 ;;; Provide
 

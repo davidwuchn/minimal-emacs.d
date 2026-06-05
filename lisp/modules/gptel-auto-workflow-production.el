@@ -277,7 +277,7 @@ Called when research context changes or run completes."
                               (plist-get facts :historical-merges)))
               (insert (format "  Merge rate: %.1f%%\n\n" 
                               (* 100 (or (plist-get facts :active-merge-rate) 0.0)))))
-          (ignore)))
+          (error nil)))
       
       ;; Benchmark stats
       (when (fboundp 'gptel-auto-experiment--parse-all-results)
@@ -291,7 +291,7 @@ Called when research context changes or run completes."
               (insert (format "  Total experiments: %d\n" total))
               (insert (format "  Kept: %d (%.1f%%)\n\n" 
                               kept (* 100.0 (/ (float kept) (max total 1))))))
-          (ignore)))
+          (error nil)))
       
       ;; Conflicted target review queue
       (when (and (boundp 'gptel-auto-workflow--conflicted-targets)
@@ -335,7 +335,7 @@ Called when research context changes or run completes."
                               (plist-get report :unknown)))
               (dolist (entry (plist-get report :backends))
                 (insert (format "  %s: %s\n" (car entry) (cdr entry)))))
-          (ignore)))
+          (error nil)))
       ;; Bead protocol status
       (when (fboundp 'gptel-auto-workflow--bead-list)
         (condition-case nil
@@ -344,7 +344,7 @@ Called when research context changes or run completes."
               (insert "\nBead Protocol:\n")
               (insert (format "  GTM → PMF: %d beads\n" (length gtm-to-pmf)))
               (insert (format "  PMF → GTM: %d beads\n" (length pmf-to-gtm))))
-          (ignore)))
+          (error nil)))
       
       ;; Human decision gate
       (when (and gptel-auto-workflow-human-decision-gate
@@ -353,7 +353,7 @@ Called when research context changes or run completes."
             (let ((pending (gptel-auto-workflow--pending-decisions-p)))
               (insert "\nDecision Gate:\n")
               (insert (format "  Status: %s\n" (if pending "BLOCKED (pending decisions)" "clear"))))
-          (ignore)))
+          (error nil)))
       
       (insert "\n")
       

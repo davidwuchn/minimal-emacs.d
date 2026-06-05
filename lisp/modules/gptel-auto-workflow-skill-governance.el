@@ -11,6 +11,7 @@
 
 (require 'json)
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
+(declare-function gptel-auto-workflow--json-encode-plist "gptel-auto-workflow-ontology-router" (plist))
 
 ;; ─── Semia Security Audit (Layer 2) ───
 
@@ -31,7 +32,7 @@
   "Return non-nil when Semia CLI is available."
   (condition-case nil
       (= 0 (call-process gptel-auto-workflow--semia-bin nil nil nil "--version"))
-    (ignore)))
+    (error nil)))
 
 (defun gptel-auto-workflow--semia-scan-skill (skill-dir)
   "Run Semia security audit on SKILL-DIR.
@@ -104,7 +105,7 @@ Returns list of result plists."
             (progn
               (message "[skill-governance] Shell command failed: %s" cmd)
               nil))))
-    (ignore)))
+    (error nil)))
 
 (defun gptel-auto-workflow--skill-governance-json (cmd)
   "Run shell CMD, parse JSON output, return parsed object or nil."
@@ -115,7 +116,7 @@ Returns list of result plists."
                 (json-array-type 'list)
                 (json-key-type 'keyword))
             (json-read-from-string json))
-        (ignore)))))
+        (error nil)))))
 
 ;; ─── Layer 1: Governance Gate ───
 
@@ -233,7 +234,7 @@ allowing us to track which skills agents actually use vs ignore."
                                             (cl-incf cnt)))
                                          cnt))))
       (with-temp-file report-file
-        (insert (json-encode report)))
+        (insert (gptel-auto-workflow--json-encode-plist report)))
       (message "[skill-governance] Saved scan report: %s"
                (file-name-nondirectory report-file))
       report)))
@@ -297,7 +298,7 @@ Returns plist (:success t|nil :compile-ok t|nil :anti-patterns N)."
                          (progn
                            (byte-compile-file target-file)
                            t)
-                       (ignore)))
+                       (error nil)))
          ;; Run behavioral tests if available
          (tests-ok (and (fboundp 'gptel-auto-workflow--run-behavioral-tests)
                         (gptel-auto-workflow--run-behavioral-tests
@@ -403,7 +404,7 @@ Returns file path or nil if no suitable target found."
          (report-file (expand-file-name "ab-results.json" report-dir)))
     (make-directory report-dir t)
     (with-temp-file report-file
-      (insert (json-encode results)))
+       (insert (gptel-auto-workflow--json-encode-plist results)))
     (message "[skill-governance] Saved A/B results: %d skills tested" (length results))))
 
 (defun gptel-auto-workflow--skill-governance-schedule-canary-refresh ()
@@ -413,7 +414,7 @@ Returns file path or nil if no suitable target found."
    (lambda ()
      (condition-case nil
          (gptel-auto-workflow--skill-governance-inject-canaries)
-       (ignore)))))
+       (error nil)))))
 
 (provide 'gptel-auto-workflow-skill-governance)
 ;;; gptel-auto-workflow-skill-governance.el ends here

@@ -99,7 +99,48 @@
        :context-window 128000
        :pricing-input 0.50 :pricing-output 1.50
        :capabilities (code-generation)
-       :speed fast))))
+       :speed fast)))
+
+     (TokenPlan
+      :host "token-plan.cn-beijing.maas.aliyuncs.com"
+      :models (qwen3.7-max qwen3.6-plus qwen3.6-flash deepseek-v4-pro deepseek-v4-flash kimi-k2.6 glm-5.1)
+      :default-model qwen3.7-max
+      :model-metadata
+      ((qwen3.7-max
+        :context-window 131072
+        :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
+        :capabilities (reasoning code-generation)
+        :speed medium)
+       (qwen3.6-plus
+        :context-window 131072
+        :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
+        :capabilities (code-generation tool-calls)
+        :speed medium)
+       (qwen3.6-flash
+        :context-window 131072
+        :pricing-input 0.14 :pricing-output 0.57 :pricing-cache-hit 0.03
+        :capabilities (code-generation)
+        :speed fast)
+       (deepseek-v4-pro
+        :context-window 1000000
+        :pricing-input 0.43 :pricing-output 0.86 :pricing-cache-hit 0.004
+        :capabilities (reasoning code-generation)
+        :speed slow)
+       (deepseek-v4-flash
+        :context-window 1000000
+        :pricing-input 0.14 :pricing-output 0.28 :pricing-cache-hit 0.003
+        :capabilities (code-generation)
+        :speed fast)
+       (kimi-k2.6
+        :context-window 262144
+        :pricing-input 0.95 :pricing-output 4.00 :pricing-cache-hit 0.16
+        :capabilities (code-generation tool-calls long-context)
+        :speed medium)
+       (glm-5.1
+        :context-window 128000
+        :pricing-input 0.50 :pricing-output 2.00
+        :capabilities (code-generation)
+        :speed medium))))
   "Unified backend registry.
 Each entry: (BACKEND-NAME :host HOST :models (MODELS...) :default-model MODEL
              :model-metadata ((MODEL :context-window N :pricing-input X ...)))
@@ -111,37 +152,44 @@ When adding/updating models, ONLY edit this structure.")
 
 (defconst gptel-task-type-model-defaults
   '((analyzer   . ((MiniMax . MiniMax-M3)
-                   (DashScope . qwen3.6-plus)
-                   (moonshot . kimi-k2.6)
-                   (DeepSeek . deepseek-v4-flash)))
-    (grader     . ((Z-AI . glm-5.1)
-                   (MiniMax . MiniMax-M3)
-                   (DashScope . qwen3.6-plus)
-                   (DeepSeek . deepseek-v4-pro)
-                   (moonshot . kimi-k2.6)
-                   (CF-Gateway . \@cf/moonshotai/kimi-k2.6)))
-    (executor   . ((Z-AI . glm-5.1)
-                   (DeepSeek . deepseek-v4-flash)
-                   (CF-Gateway . \@cf/moonshotai/kimi-k2.6)
-                   (DashScope . qwen3.6-plus)
-                   (moonshot . kimi-k2.6)))
-    (researcher . ((MiniMax . MiniMax-M3)
-                   (DashScope . qwen3.6-plus)
-                   (DeepSeek . deepseek-v4-pro)
-                   (moonshot . kimi-k2.6)
-                   (CF-Gateway . \@cf/moonshotai/kimi-k2.6)))
-    (reviewer   . ((Z-AI . glm-5.1)
-                   (MiniMax . MiniMax-M3)
-                   (DashScope . qwen3.6-plus)
-                   (DeepSeek . deepseek-v4-pro)
-                   (moonshot . kimi-k2.6)
-                   (CF-Gateway . \@cf/moonshotai/kimi-k2.6)))
-    (comparator . ((Z-AI . glm-5.1)
-                   (MiniMax . MiniMax-M3)
-                   (DashScope . qwen3.6-plus)
-                   (DeepSeek . deepseek-v4-pro)
-                   (moonshot . kimi-k2.6)
-                   (CF-Gateway . \@cf/moonshotai/kimi-k2.6))))
+                    (TokenPlan . qwen3.7-max)
+                    (DashScope . qwen3.6-plus)
+                    (moonshot . kimi-k2.6)
+                    (DeepSeek . deepseek-v4-flash)))
+     (grader     . ((Z-AI . glm-5.1)
+                    (MiniMax . MiniMax-M3)
+                    (TokenPlan . qwen3.7-max)
+                    (DashScope . qwen3.6-plus)
+                    (DeepSeek . deepseek-v4-pro)
+                    (moonshot . kimi-k2.6)
+                    (CF-Gateway . \@cf/moonshotai/kimi-k2.6)))
+     (executor   . ((Z-AI . glm-5.1)
+                    (MiniMax . MiniMax-M3)
+                    (TokenPlan . qwen3.6-flash)
+                    (DeepSeek . deepseek-v4-flash)
+                    (CF-Gateway . \@cf/moonshotai/kimi-k2.6)
+                    (DashScope . qwen3.6-plus)
+                    (moonshot . kimi-k2.6)))
+     (researcher . ((MiniMax . MiniMax-M3)
+                    (TokenPlan . qwen3.7-max)
+                    (DashScope . qwen3.6-plus)
+                    (DeepSeek . deepseek-v4-pro)
+                    (moonshot . kimi-k2.6)
+                    (CF-Gateway . \@cf/moonshotai/kimi-k2.6)))
+     (reviewer   . ((Z-AI . glm-5.1)
+                    (MiniMax . MiniMax-M3)
+                    (TokenPlan . qwen3.7-max)
+                    (DashScope . qwen3.6-plus)
+                    (DeepSeek . deepseek-v4-pro)
+                    (moonshot . kimi-k2.6)
+                    (CF-Gateway . \@cf/moonshotai/kimi-k2.6)))
+     (comparator . ((Z-AI . glm-5.1)
+                    (MiniMax . MiniMax-M3)
+                    (TokenPlan . qwen3.7-max)
+                    (DashScope . qwen3.6-plus)
+                    (DeepSeek . deepseek-v4-pro)
+                    (moonshot . kimi-k2.6)
+                    (CF-Gateway . \@cf/moonshotai/kimi-k2.6))))
   "Per-task-type model defaults per backend.
 Derived from `gptel-backend-registry` — update the registry, then regenerate
 this.")
@@ -149,10 +197,10 @@ this.")
 ;;; Fallback Chains
 
 (defconst gptel-fallback-chains
-  '((executor  . (Z-AI DeepSeek CF-Gateway moonshot DashScope Copilot))
-    (analyzer  . (Z-AI MiniMax moonshot DeepSeek DashScope Copilot))
-    (grader    . (Z-AI MiniMax moonshot CF-Gateway DeepSeek DashScope Copilot))
-    (default   . (Z-AI MiniMax moonshot CF-Gateway DeepSeek DashScope Copilot)))
+  '((executor  . (MiniMax moonshot TokenPlan Z-AI DeepSeek CF-Gateway DashScope Copilot))
+    (analyzer  . (MiniMax moonshot TokenPlan Z-AI DeepSeek CF-Gateway DashScope Copilot))
+    (grader    . (MiniMax moonshot TokenPlan Z-AI CF-Gateway DeepSeek DashScope Copilot))
+    (default   . (MiniMax moonshot TokenPlan Z-AI CF-Gateway DeepSeek DashScope Copilot)))
   "Fallback chain ordering per task type.
 Backends are tried in this order when rate-limited or failing.
 DeepSeek first for executor (proven to make edits).

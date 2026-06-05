@@ -83,12 +83,16 @@ Keys :general (used in is-retryable-error-p) and :transient
 
 (defun gptel-auto-workflow--plist-delete-all (plist prop)
   "Return PLIST without any entries for PROP."
-  (let (result)
+  (let (result tail)
     (while plist
       (let ((key (pop plist))
             (val (pop plist)))
         (unless (eq key prop)
-          (setq result (append result (list key val))))))
+          (let ((cell (list key val)))
+            (if tail
+                (setcdr (cdr tail) cell)
+              (setq result cell))
+            (setq tail cell)))))
     result))
 
 (defun gptel-auto-workflow--first-available-provider-candidate (candidates &optional excluded-backends)
@@ -316,8 +320,9 @@ Returns the message string or nil."
          (or (gptel-auto-experiment--shared-transient-error-p msg)
              (gptel-auto-experiment--rate-limit-error-p msg)
              (gptel-auto-experiment--provider-usage-limit-error-p msg)
-             (let ((case-fold-search t))
-               (string-match-p (plist-get gptel-auto-experiment--shared-retryable-error-patterns :general) msg))))))
+             (let ((case-fold-search t)
+                   (pattern (plist-get gptel-auto-experiment--shared-retryable-error-patterns :general)))
+               (and pattern (string-match-p pattern msg)))))))
 
 (defvar gptel-auto-experiment--quota-reset-timestamp nil
   "Parsed timestamp (seconds since epoch) when quota resets.
@@ -374,8 +379,9 @@ This is used for retry logic and includes transient errors."
       (gptel-auto-experiment--shared-transient-error-p error-output)
       (let ((msg (gptel-auto-experiment--error-message error-output)))
         (and (stringp msg)
-             (let ((case-fold-search t))
-               (string-match-p (plist-get gptel-auto-experiment--shared-retryable-error-patterns :transient) msg))))))
+             (let ((case-fold-search t)
+                   (pattern (plist-get gptel-auto-experiment--shared-retryable-error-patterns :transient)))
+               (and pattern (string-match-p pattern msg)))))))
 
 (defun gptel-auto-experiment--should-blacklist-provider-p (error-output)
   "Return non-nil only when ERROR-OUTPUT shows a real rate limit or hard quota.
@@ -696,7 +702,7 @@ RETRY-COUNT tracks current retry attempt."
                        "executor"
                        (gptel-auto-workflow--agent-base-preset "executor")
                        raw-error)
-                    (ignore)))
+                    (error nil)))
                 (setq attempt-logs nil)
                 (message "[auto-exp] Retrying experiment %d (attempt %d/%d) after %ds delay%s"
                          experiment-id (1+ retries) gptel-auto-experiment-max-retries
@@ -729,7 +735,7 @@ RETRY-COUNT tracks current retry attempt."
                    "executor"
                    (gptel-auto-workflow--agent-base-preset "executor")
                    raw-error)
-                (ignore))
+                (error nil))
               (setq prov-attempts 0)
               (message "[auto-exp] Executor hard timeout during experiment %d; advancing provider for retry"
                        experiment-id))

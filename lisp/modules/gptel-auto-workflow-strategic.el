@@ -55,6 +55,7 @@
 (declare-function gptel-auto-workflow--filter-frontier-saturated-targets "gptel-tools-agent-prompt-build" (targets))
 (defvar gptel-auto-experiment--critical-files)
 (declare-function gptel-auto-experiment--quota-exhausted-p "gptel-tools-agent-error" (agent-output))
+(declare-function gptel-auto-workflow--json-encode-plist "gptel-auto-workflow-ontology-router" (plist))
 (declare-function gptel-auto-experiment--is-retryable-error-p "gptel-tools-agent-error" (response))
 (declare-function gptel-auto-workflow--project-root "gptel-tools-agent-benchmark" ())
 (declare-function gptel-auto-workflow--valid-strategy-name-p "gptel-tools-agent-strategy-evolver" (name))
@@ -129,7 +130,7 @@ Reset after each run.")
                       (insert-file-contents file)
                       (setq trace (json-read)))
                     (throw 'found trace))
-                (ignore))))))
+                (error nil))))))
       trace)))
 
 (defun gptel-auto-workflow--research-context-from-findings (findings &optional source)
@@ -404,7 +405,7 @@ MULTI-LAYER ANALYSIS: code patterns + experiment failures + git trends."
                     (when (and (>= (length fields) 2)
                                (member (nth 1 fields) '("validation-failed" "discarded" "timeout")))
                       (push (nth 0 fields) recent-failures)))))
-            (ignore))))
+            (error nil))))
       (when recent-failures
         (let ((top-failures (seq-take (sort (cl-remove-duplicates recent-failures :test #'string=)
                                             (lambda (a b)
@@ -492,7 +493,7 @@ Returns formatted string for research prompt."
                   (when (> (length lines) 3)
                     (format "\nRecent failure patterns: %d validation/timeout errors in last 10 commits"
                             (length lines)))))
-            (ignore))))
+            (error nil))))
     (concat (mapconcat (lambda (topic) (concat "- " topic)) topics "\n")
             (or failure-patterns ""))))
 
@@ -1038,7 +1039,7 @@ Shows which strategies/sources produced kept vs discarded downstream experiments
 Returns empty string when no trace data is available."
   (let* ((traces (condition-case nil
                      (gptel-auto-workflow--load-research-traces)
-                   (ignore)))
+                   (error nil)))
          (recent (and traces
                       (seq-take traces (min 20 (length traces)))))
          (source-stats (make-hash-table :test 'equal))
@@ -2331,7 +2332,7 @@ Called during research initialization to restore evolved strategy after daemon r
                       (plist-get data :active-strategy))
                 (message "[autotts] Restored active strategy: %s"
                          gptel-auto-workflow--active-strategy)))
-          (ignore))))))
+          (error nil))))))
 
 (defvar gptel-auto-workflow--research-steps nil
   "List of step-level traces for current research session.
@@ -2438,7 +2439,7 @@ EDGE CASE: nil or non-string OUTPUT returns nil safely."
                                            ((string= (plist-get metadata :confidence) "medium") 0.6)
                                            (t 0.3)))
                         steps))
-              (ignore))))))
+              (error nil))))))
     ;; If we found explicit steps, prefer those over parsed ones
     (reverse steps))))
 
@@ -2507,7 +2508,7 @@ TOKENS-USED is estimated token count."
                                  :step-count (length all-steps)
                                  :has-steps (if all-steps t nil)))))
       (with-temp-file trace-file
-        (insert (json-encode trace-data)))
+        (insert (gptel-auto-workflow--json-encode-plist trace-data)))
       (when (fboundp 'gptel-auto-workflow--research-cache-index-trace-file)
         (gptel-auto-workflow--research-cache-index-trace-file trace-file))
       (message "[autotts] Saved research trace: %s (%d steps)"

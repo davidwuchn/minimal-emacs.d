@@ -41,6 +41,7 @@ Changes must maintain tool safety. Add validation, not refactoring.
 - Removing error handlers without replacement
 - Adding new tools without registration
 
+{{memory-context}}
 {{agent-behavior}}
 {{validation-pipeline}}
 

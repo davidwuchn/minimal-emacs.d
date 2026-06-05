@@ -119,7 +119,7 @@ CIRCUITS: name symbol → circuit-breaker struct."
                       :state-data (gptel-circuit--state-to-plist cb)))
               (cl-loop for k being the hash-keys of circuits collect k)
               (cl-loop for v being the hash-values of circuits collect v))))
-        (insert (json-encode data))))
+         (insert (gptel-auto-workflow--json-encode-plist data))))
     (message "[circuit-breaker] State persisted (%d circuits)" (hash-table-count circuits))))
 
 ;;; ─── Configuration ───

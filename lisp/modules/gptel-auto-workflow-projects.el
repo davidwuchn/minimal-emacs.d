@@ -41,6 +41,14 @@
 (declare-function gptel-auto-workflow--reorder-fallbacks-by-ontology "gptel-auto-workflow-ontology-router")
 (declare-function gptel-auto-workflow--run-research-champion-league "gptel-auto-workflow-research-integration")
 (declare-function gptel-auto-workflow--run-strategy-evolution "gptel-auto-workflow-strategic")
+(defvar gptel-auto-experiment--quota-exhausted nil)
+(defvar gptel-auto-workflow--run-id nil)
+(defvar gptel-auto-workflow--status-run-id nil)
+(defvar gptel-auto-workflow-persistent-headless nil)
+(declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
+(declare-function gptel-auto-workflow--make-idempotent-callback "gptel-tools-agent")
+(declare-function gptel-agent--update-agents "gptel-agent")
+(declare-function my/gptel-agent--task-override "gptel-tools-agent")
 
 (defvar gptel-auto-workflow-projects
   (list (expand-file-name
@@ -707,7 +715,7 @@ Also removes old conflicting :override advice if present."
     ;; Remove old conflicting :override advice if present
     (condition-case nil
         (advice-remove 'gptel-agent--task #'my/gptel-agent--task-override)
-      (ignore))
+      (error nil))
     ;; Install new :around advice for buffer routing
     (advice-add 'gptel-agent--task :around #'gptel-auto-workflow--advice-task-override))
   ;; Install overlay buffer routing advice

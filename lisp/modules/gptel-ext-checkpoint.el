@@ -41,6 +41,7 @@
 (declare-function gptel-circuit-state "gptel-ext-circuit-breaker" (component))
 (declare-function gptel-circuit-status "gptel-ext-circuit-breaker")
 (declare-function gptel-circuit--save-persistent "gptel-ext-circuit-breaker")
+(declare-function gptel-auto-workflow--json-encode-plist "gptel-auto-workflow-ontology-router" (plist))
 
 (defgroup gptel-checkpoint nil
   "Workflow state persistence and recovery."
@@ -132,7 +133,7 @@
                :last-target-at (gptel-checkpoint-data-last-target-at data)
                :experiment-loop-snapshot (gptel-checkpoint-data-experiment-loop-snapshot data)
                :metadata (gptel-checkpoint-data-metadata data))))
-    (json-encode plist)))
+    (gptel-auto-workflow--json-encode-plist plist)))
 
 (defun gptel-checkpoint--serialize-result (result)
   "Serialize a single experiment RESULT plist to alist for JSON."
@@ -529,10 +530,7 @@ Call this periodically from the experiment loop."
                                     (and (boundp 'gptel-auto-experiment--no-improvement-count)
                                          gptel-auto-experiment--no-improvement-count)
                                     0)
-            :consecutive-timeouts (or
-                                   (and (boundp 'gptel-auto-experiment--consecutive-timeout-threshold)
-                                        gptel-auto-experiment--consecutive-timeout-threshold)
-                                   0)
+            :consecutive-timeouts 0  ; was incorrectly storing threshold, not the actual per-target count
             :captured-at (format-time-string "%Y-%m-%dT%H:%M:%SZ"))))
       (setf (gptel-checkpoint-data-experiment-loop-snapshot
              gptel-checkpoint--current) snapshot)

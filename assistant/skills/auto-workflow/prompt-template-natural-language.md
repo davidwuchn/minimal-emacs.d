@@ -40,6 +40,7 @@ Preserve format structure. Improve clarity or safety.
 - Changing template variable names
 - Breaking prompt format structure
 
+{{memory-context}}
 {{agent-behavior}}
 {{validation-pipeline}}
 

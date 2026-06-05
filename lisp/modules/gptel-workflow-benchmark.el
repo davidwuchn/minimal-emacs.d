@@ -24,6 +24,7 @@
 (declare-function gptel-agent-loop--task-step-count "gptel-agent-loop")
 
 (declare-function gptel-agent--task "gptel-tools-agent")
+(declare-function gptel-auto-workflow--plist-to-alist-for-json "gptel-auto-workflow-ontology-router" (plist))
 (declare-function gptel-benchmark-eight-keys-score "gptel-benchmark-principles")
 (declare-function gptel-benchmark-memory-search "gptel-benchmark-memory")
 (declare-function gptel-benchmark-memory-read "gptel-benchmark-memory")
@@ -562,7 +563,7 @@ Uses phase trace timestamps to determine time window."
            (existing (when (file-exists-p results-file)
                        (condition-case nil
                            (gptel-workflow--read-json results-file)
-                         (ignore))))
+                         (error nil))))
            (history (if (vectorp existing) (append existing nil)
                       (if (listp existing) existing '()))))
       (gptel-workflow--write-json (cons entry history) results-file)
@@ -572,7 +573,13 @@ Uses phase trace timestamps to determine time window."
   "Write DATA as JSON to FILE."
   (with-temp-file file
     (let ((json-encoding-pretty-print t))
-      (insert (json-encode data)))))
+      (insert (json-encode
+               (cond
+                ((and (listp data) (keywordp (car-safe data)))
+                 (gptel-auto-workflow--plist-to-alist-for-json data))
+                ((and (listp data) (listp (car-safe data)) (keywordp (car-safe (car-safe data))))
+                 (mapcar #'gptel-auto-workflow--plist-to-alist-for-json data))
+                (t data)))))))
 
 ;;; Interactive Commands
 
@@ -697,7 +704,7 @@ TEST-ID is the test case ID."
          (existing (when (file-exists-p history-file)
                      (condition-case nil
                          (gptel-workflow--read-json history-file)
-                       (ignore))))
+                       (error nil))))
          (run-id (format-time-string "%Y%m%d-%H%M%S"))
          (summary (gptel-workflow--summarize-results results))
          (entry (list :run-id run-id
@@ -914,7 +921,7 @@ Returns plist with :patterns, :issues, and :recommendations."
          (existing (when (file-exists-p feedback-file)
                      (condition-case nil
                          (gptel-workflow--read-json feedback-file)
-                       (ignore))))
+                       (error nil))))
          (entry (list :workflow workflow-name
                       :analysis analysis))
          (history (if (vectorp existing) (append existing nil)

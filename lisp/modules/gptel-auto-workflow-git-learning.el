@@ -193,7 +193,7 @@ Returns plist with :recent-rate :older-rate :trend."
              (time-list (when date-str (parse-time-string date-str)))
              (date (when time-list (condition-case nil
                                         (encode-time time-list)
-                                      (ignore)))))
+                                      (error nil)))))
         (when date
           (if (< (float-time (time-subtract now date)) (* 7 24 60 60))
               (push commit recent-commits)

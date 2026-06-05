@@ -272,6 +272,10 @@ See mementum/knowledge/nucleus-patterns.md for documentation.")
 (defvar gptel-benchmark--key-property-cache (make-hash-table :test 'equal)
   "Cache for eight-keys property lookups.
 Maps (key . property) cons cells to cached values.")
+(defvar gptel-benchmark--cache-sentinel (make-symbol "--cache-miss--")
+  "Uninterned sentinel for distinguishing cache-miss from cached nil values.
+Used by `gptel-benchmark--get-key-property' to avoid recomputation
+when a property value is legitimately nil.")
 
 (defun gptel-benchmark--get-key-property (key property)
   "Get PROPERTY for KEY from Eight Keys definitions.
@@ -279,13 +283,21 @@ Uses memoization cache to avoid redundant lookups.
 Helper to reduce duplication in accessor functions."
   (unless (symbolp key)
     (error "Expected symbol for key, got: %s" (type-of key)))
+  ;; BEHAVIOR: Recover from cache corruption by reinitializing
+  ;; EDGE CASE: If cache var is not a hash-table, reset it before proceeding
+  ;; EDGE CASE: nil values properly cached via sentinel comparison
+  (unless (hash-table-p gptel-benchmark--key-property-cache)
+    (setq gptel-benchmark--key-property-cache (make-hash-table :test 'equal)))
   (let ((cache-key (cons key property)))
-    (or (gethash cache-key gptel-benchmark--key-property-cache)
-        (let* ((def (alist-get key gptel-benchmark-eight-keys-definitions))
-               (value (if def (plist-get def property)
-                        (error "Unknown key: %s" key))))
-          (puthash cache-key value gptel-benchmark--key-property-cache)
-          value))))
+    (let ((cached (gethash cache-key gptel-benchmark--key-property-cache
+                           gptel-benchmark--cache-sentinel)))
+      (if (eq cached gptel-benchmark--cache-sentinel)
+          (let* ((def (alist-get key gptel-benchmark-eight-keys-definitions))
+                 (value (if def (plist-get def property)
+                          (error "Unknown key: %s" key))))
+            (puthash cache-key value gptel-benchmark--key-property-cache)
+            value)
+        cached))))
 
 (defun gptel-benchmark-eight-keys-signals (key)
   "Return positive signal patterns for KEY."

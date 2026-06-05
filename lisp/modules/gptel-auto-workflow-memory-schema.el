@@ -1,0 +1,1067 @@
+;;; gptel-auto-workflow-memory-schema.el --- Schema extraction and indexing for mementum memories -*- lexical-binding: t -*-
+
+;; Inspired by MemGraphRAG (KDD 2026): three-layer memory with schema
+;; extraction, frequency-based promotion, and conflict detection.
+;;
+;; Architecture:
+;;   Memory markdown → heuristic triple extraction → Schema inference → Freq index
+;;   Schema promotion: Freq(s) >= tau -> stable (used by ontology router)
+;;   Conflict detection: entity overlap scan
+;;   Index: mementum/.ov5-memory-index.json
+;;
+;; Internal data model uses hash tables for JSON-compatible serialization.
+
+(require 'cl-lib)
+(require 'json)
+(require 'subr-x)
+
+(declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
+(declare-function gptel-auto-workflow--log "gptel-auto-workflow-evolution")
+(declare-function gptel-auto-workflow--build-digital-twin "gptel-auto-workflow-ontology-router")
+(declare-function gptel-auto-workflow--semantic-similarity-edges "gptel-auto-workflow-ontology-router")
+(declare-function gptel-auto-workflow--categorize-target "gptel-auto-workflow-ontology-router")
+(declare-function skill-graph-node-level "gptel-auto-workflow-skill-graph")
+(declare-function skill-graph-edge-weight "gptel-auto-workflow-skill-graph")
+(defvar skill-graph--edges)
+
+;; ─── Configuration ───
+
+(defcustom gptel-auto-workflow-memory-schema-enabled t
+  "When non-nil, extract schema triples from mementum memories."
+  :type 'boolean
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-auto-workflow-memory-schema-threshold 3
+  "Minimum observations before a schema pattern is promoted to stable.
+Analogous to MemGraphRAG's tau threshold."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-auto-workflow-memory-schema-index-file
+  "mementum/.ov5-memory-index.json"
+  "Path to the schema index file, relative to project root."
+  :type 'file
+  :group 'gptel-tools-agent)
+
+(defvar gptel-auto-workflow--memory-schema-schemas nil
+  "Hash table: SCHEMA-KEY -> frequency count.")
+
+(defvar gptel-auto-workflow--memory-schema-entities nil
+  "Hash table: ENTITY-NAME -> (count . (source-file ...)).")
+
+(defvar gptel-auto-workflow--memory-schema-triples nil
+  "Hash table: TRIPLE-KEY -> (schema-key . source-file).
+Stores individual triples for graph traversal.")
+
+;; ─── Schema Index: Load / Save ───
+
+(defun gptel-auto-workflow--memory-schema-index-path ()
+  "Return absolute path to the schema index file."
+  (expand-file-name gptel-auto-workflow-memory-schema-index-file
+                    (gptel-auto-workflow--worktree-base-root)))
+
+(defun gptel-auto-workflow--memory-schema-make-schemas ()
+  "Create a fresh schemas hash table."
+  (make-hash-table :test 'equal :size 32))
+
+(defun gptel-auto-workflow--memory-schema-make-entities ()
+  "Create a fresh entities hash table."
+  (make-hash-table :test 'equal :size 64))
+
+(defun gptel-auto-workflow--memory-schema-make-triples ()
+  "Create a fresh triples hash table."
+  (make-hash-table :test 'equal :size 64))
+
+(defun gptel-auto-workflow--memory-schema-load-index ()
+  "Load the schema index from disk into hash tables."
+  (setq gptel-auto-workflow--memory-schema-schemas
+        (gptel-auto-workflow--memory-schema-make-schemas))
+  (setq gptel-auto-workflow--memory-schema-entities
+        (gptel-auto-workflow--memory-schema-make-entities))
+  (setq gptel-auto-workflow--memory-schema-triples
+        (gptel-auto-workflow--memory-schema-make-triples))
+  (let ((file (gptel-auto-workflow--memory-schema-index-path)))
+    (when (file-exists-p file)
+      (let ((data (with-temp-buffer
+                    (insert-file-contents file)
+                    (goto-char (point-min))
+                    (condition-case nil
+                        (let ((json-object-type 'alist)
+                              (json-key-type 'string))
+                          (json-read-from-string (buffer-string)))
+                      (error nil)))))
+        (when data
+          (let ((schemas-vec (cdr (assoc "schemas" data))))
+            (dotimes (i (length schemas-vec))
+              (let* ((entry (aref schemas-vec i))
+                     (key (cdr (assoc "key" entry)))
+                     (freq (cdr (assoc "freq" entry))))
+                (when key
+                  (puthash key freq
+                           gptel-auto-workflow--memory-schema-schemas)))))
+          (let ((entities-vec (cdr (assoc "entities" data))))
+            (dotimes (i (length entities-vec))
+              (let* ((entry (aref entities-vec i))
+                     (name (cdr (assoc "name" entry)))
+                     (count (cdr (assoc "count" entry)))
+                     (sources-vec (cdr (assoc "sources" entry)))
+                     (sources (append sources-vec nil)))
+                (when name
+                  (puthash name (cons count sources)
+                           gptel-auto-workflow--memory-schema-entities))))))))))
+
+(defun gptel-auto-workflow--memory-schema-save-index ()
+  "Write schema index to disk as JSON."
+  (let ((file (gptel-auto-workflow--memory-schema-index-path))
+        (json-encoding-pretty-print t)
+        (schemas-list nil)
+        (entities-list nil))
+    (maphash (lambda (key freq)
+               (push `(("key" . ,key) ("freq" . ,freq)) schemas-list))
+             gptel-auto-workflow--memory-schema-schemas)
+    (maphash (lambda (name count-sources)
+               (push `(("name" . ,name)
+                       ("count" . ,(car count-sources))
+                       ("sources" . ,(vconcat (cdr count-sources))))
+                     entities-list))
+             gptel-auto-workflow--memory-schema-entities)
+    (let ((index `(("schemas" . ,(vconcat (nreverse schemas-list)))
+                   ("entities" . ,(vconcat (nreverse entities-list))))))
+      (make-directory (file-name-directory file) t)
+      (with-temp-file file
+        (insert (json-encode index))))))
+
+(defun gptel-auto-workflow--memory-schema-ensure-loaded ()
+  "Ensure hash tables exist, loading from disk if not yet initialized.
+Falls back to empty tables when runtime deps are unavailable."
+  (unless gptel-auto-workflow--memory-schema-schemas
+    (setq gptel-auto-workflow--memory-schema-schemas
+          (gptel-auto-workflow--memory-schema-make-schemas)
+          gptel-auto-workflow--memory-schema-entities
+          (gptel-auto-workflow--memory-schema-make-entities))
+    (when (fboundp 'gptel-auto-workflow--worktree-base-root)
+      (condition-case _err
+          (gptel-auto-workflow--memory-schema-load-index)
+        (error nil)))))
+
+(defvar gptel-auto-workflow--memory-schema-synonymy-cache nil
+  "Alist of (ENTITY . ((SYNONYM . SCORE) ...)) from git-embed.
+Nil means not yet computed.")
+
+(defvar gptel-auto-workflow--memory-schema-synonymy-cache-time nil
+  "Time when synonymy cache was last computed.")
+
+(defvar gptel-auto-workflow--unified-graph nil
+  "Unified multigraph: (TYPE . ID) -> ((EDGE-TYPE (TO-TYPE . TO-ID) WEIGHT) ...).
+Nil means not yet built.")
+
+(defvar gptel-auto-workflow--unified-graph-time nil
+  "Timestamp when unified graph was last built.")
+
+(defun gptel-auto-workflow--memory-schema-reset ()
+  "Reset in-memory schema index to empty."
+  (setq gptel-auto-workflow--memory-schema-schemas
+        (gptel-auto-workflow--memory-schema-make-schemas))
+  (setq gptel-auto-workflow--memory-schema-entities
+        (gptel-auto-workflow--memory-schema-make-entities))
+  (setq gptel-auto-workflow--memory-schema-triples
+        (gptel-auto-workflow--memory-schema-make-triples))
+  (setq gptel-auto-workflow--memory-schema-synonymy-cache nil
+        gptel-auto-workflow--memory-schema-synonymy-cache-time nil
+        gptel-auto-workflow--unified-graph nil
+        gptel-auto-workflow--unified-graph-time nil))
+
+;; ─── Triple Extraction ───
+
+(defun gptel-auto-workflow--memory-schema--clean-entity (str)
+  "Clean STR into a valid entity name, or nil if too noisy.
+Filters: max 30 chars, no newlines, must contain a letter if non-empty,
+no leading special chars (💡 →, etc).  Returns nil for noisy entities."
+  (let ((s (string-trim str)))
+    (when (and (<= (length s) 30)
+               (not (string-match-p "\n" s))
+               (or (= (length s) 0)
+                   (and (string-match-p "[a-zA-Z]" s)
+                        (not (string-match-p "^[💡→✓✗✅❌🔧⚠⚡📋📐🔄]" s)))))
+      s)))
+
+(defun gptel-auto-workflow--memory-schema--valid-entity-p (str)
+  "Return non-nil if STR is a non-empty, non-noisy entity name."
+  (let ((clean (gptel-auto-workflow--memory-schema--clean-entity str)))
+    (and clean (> (length clean) 0))))
+
+(defun gptel-auto-workflow--memory-schema-extract-triples (text)
+  "Extract (subject predicate object) triples from TEXT.
+Returns list of plists: (:subject S :predicate P :object O
+                         :subject-type ST :object-type OT).
+Uses heuristic parsing — no LLM call required."
+  (let ((triples nil))
+    (dolist (line (split-string text "\n"))
+      (cond
+       ((string-match-p
+         (concat "reference to free variable"
+                 "\\|assignment to free variable"
+                 "\\|the function.*is not known")
+         line)
+        nil)
+       ((string-match
+         (concat "\\(?:add\\|remov\\|fix\\|enforc\\|improv"
+                 "\\|updat\\|refactor\\|rewrit\\|replac\\|harden\\)"
+                 "\\(?:ed\\|es\\|ing\\|s\\)?\\b")
+         line)
+         (let* ((verb-start (match-beginning 0))
+                (verb-end (match-end 0))
+                (verb (substring line verb-start verb-end))
+                (before-verb (substring line 0 verb-start))
+                (after-verb (substring line verb-end))
+                (subject (gptel-auto-workflow--memory-schema--clean-entity before-verb)))
+           (when (string-match "\\(?:for\\|in\\|on\\|of\\|to\\) +\\(.+\\)"
+                               after-verb)
+             (let ((object-raw (match-string 1 after-verb)))
+               (when (gptel-auto-workflow--memory-schema--valid-entity-p object-raw)
+                 (push (list :subject (or subject "")
+                            :predicate (string-trim verb)
+                            :object (gptel-auto-workflow--memory-schema--clean-entity object-raw)
+                            :subject-type nil
+                            :object-type nil)
+                      triples))))))))
+    (delq nil triples)))
+
+(defun gptel-auto-workflow--memory-schema-infer-schema (triple)
+  "Infer a schema key from TRIPLE.
+A schema is (HEAD-TYPE RELATION TAIL-TYPE).  When types are nil,
+use the entity names as proxy types."
+  (format "(%s %s %s)"
+          (or (plist-get triple :subject-type)
+              (plist-get triple :subject)
+              "?")
+          (or (plist-get triple :predicate) "?")
+          (or (plist-get triple :object-type)
+              (plist-get triple :object)
+              "?")))
+
+;; ─── Index Update ───
+
+(defun gptel-auto-workflow--memory-schema-index-triples (triples source-file)
+  "Add TRIPLES from SOURCE-FILE to the schema index.
+Updates schema frequencies, entity counts, and triple store.
+Returns new schemas count."
+  (gptel-auto-workflow--memory-schema-ensure-loaded)
+  (let ((new-count 0))
+    (dolist (triple triples)
+      (let* ((schema-key (gptel-auto-workflow--memory-schema-infer-schema triple))
+             (subject (plist-get triple :subject))
+             (object (plist-get triple :object))
+             (triple-key (format "%s:%s:%s"
+                                 (or subject "?")
+                                 (or (plist-get triple :predicate) "?")
+                                 (or object "?")))
+             (existing-freq (gethash schema-key
+                                     gptel-auto-workflow--memory-schema-schemas)))
+        (if existing-freq
+            (puthash schema-key (1+ existing-freq)
+                     gptel-auto-workflow--memory-schema-schemas)
+          (puthash schema-key 1 gptel-auto-workflow--memory-schema-schemas)
+          (cl-incf new-count))
+        (puthash triple-key (cons schema-key source-file)
+                 gptel-auto-workflow--memory-schema-triples)
+        (dolist (entity (delq nil (list subject object)))
+          (let ((existing (gethash entity
+                                   gptel-auto-workflow--memory-schema-entities)))
+            (if existing
+                (puthash entity
+                         (cons (1+ (car existing))
+                               (cons source-file (cdr existing)))
+                         gptel-auto-workflow--memory-schema-entities)
+              (puthash entity (cons 1 (list source-file))
+                        gptel-auto-workflow--memory-schema-entities))))))
+     (condition-case nil (gptel-auto-workflow--memory-schema-save-index) (error nil))
+     new-count))
+
+;; ─── Schema Stability ───
+
+(defun gptel-auto-workflow--memory-schema-stable-p (schema-key)
+  "Return non-nil if SCHEMA-KEY has enough observations to be stable.
+Stable means freq >= `gptel-auto-workflow-memory-schema-threshold'."
+  (gptel-auto-workflow--memory-schema-ensure-loaded)
+  (let ((freq (gethash schema-key
+                       gptel-auto-workflow--memory-schema-schemas)))
+    (and freq (>= freq gptel-auto-workflow-memory-schema-threshold))))
+
+(defun gptel-auto-workflow--memory-schema-stable-schemas ()
+  "Return list of (SCHEMA-KEY . FREQ) for all stable schemas."
+  (gptel-auto-workflow--memory-schema-ensure-loaded)
+  (let ((result nil))
+    (maphash (lambda (key freq)
+               (when (>= freq gptel-auto-workflow-memory-schema-threshold)
+                 (push (cons key freq) result)))
+             gptel-auto-workflow--memory-schema-schemas)
+    result))
+
+(defun gptel-auto-workflow--memory-schema-candidate-schemas ()
+  "Return list of (SCHEMA-KEY . FREQ) for unstable (candidate) schemas."
+  (gptel-auto-workflow--memory-schema-ensure-loaded)
+  (let ((result nil))
+    (maphash (lambda (key freq)
+               (when (< freq gptel-auto-workflow-memory-schema-threshold)
+                 (push (cons key freq) result)))
+             gptel-auto-workflow--memory-schema-schemas)
+    result))
+
+;; ─── Category Lookup via Schema Index ───
+
+(defun gptel-auto-workflow--memory-schema-entity-idf (_name count-sources _total-entities)
+  "Compute IDF-inspired score for entity NAME.
+COUNT-SOURCES is (count . sources).  TOTAL-ENTITIES is total entity count.
+Score = count * 1/log(deg+1) where deg = number of sources.
+Penalizes generic entities (high degree); boosts rare ones."
+  (let* ((count (car count-sources))
+         (deg (length (cdr count-sources)))
+         (hub-penalty (/ 1.0 (log (+ deg 1) 10.0))))
+    (* count (max hub-penalty 0.1))))
+
+(defun gptel-auto-workflow--memory-schema-rank-entities (entities-hash)
+  "Return entities from ENTITIES-HASH sorted by IDF-weighted score.
+Each entry is (NAME . WEIGHTED-SCORE)."
+  (let ((total (hash-table-count entities-hash))
+        (result nil))
+    (maphash (lambda (name count-sources)
+               (push (cons name
+                           (gptel-auto-workflow--memory-schema-entity-idf
+                            name count-sources total))
+                     result))
+             entities-hash)
+    (cl-sort result #'> :key #'cdr)))
+
+(defun gptel-auto-workflow--memory-schema-category-for-target (target)
+  "Look up category for TARGET using schema index graph.
+Returns a keyword (:programming, :tool-calls, :agentic,
+:natural-language) or nil if no graph data available.
+Uses experiment history (primary), then IDF-weighted entity matching
+with schema classification (secondary)."
+  (gptel-auto-workflow--memory-schema-ensure-loaded)
+  (when target
+    (or (gptel-auto-workflow--memory-schema--category-from-history target)
+        (gptel-auto-workflow--memory-schema--category-from-schemas target))))
+
+(defun gptel-auto-workflow--memory-schema--category-from-history (target)
+  "Look up category for TARGET from experiment history.
+Returns keyword or nil.  Requires ≥2 kept experiments for same filename."
+  (when (and (fboundp 'gptel-auto-workflow--categorize-target-by-regex)
+             (fboundp 'gptel-auto-workflow--parse-all-results)
+             (fboundp 'gptel-auto-workflow--worktree-base-root))
+    (let ((basename (file-name-nondirectory target))
+          (regex-cat (gptel-auto-workflow--categorize-target-by-regex target))
+          (kept-counts (make-hash-table :test 'equal :size 4))
+          (result nil))
+      (when regex-cat
+        (condition-case _err
+            (dolist (r (gptel-auto-workflow--parse-all-results 30))
+              (let ((r-target (plist-get r :target))
+                    (r-decision (plist-get r :decision)))
+                (when (and r-target
+                           (string= (file-name-nondirectory r-target) basename)
+                           (equal r-decision "kept"))
+                  (let ((r-cat (gptel-auto-workflow--categorize-target-by-regex r-target)))
+                    (when r-cat
+                      (cl-incf (gethash r-cat kept-counts 0)))))))
+          (error nil)))
+      (when (> (hash-table-count kept-counts) 0)
+        (let ((best nil) (best-n 0))
+          (maphash (lambda (cat n)
+                     (when (> n best-n) (setq best cat best-n n)))
+                   kept-counts)
+          (when (and best (>= best-n 2))
+            (setq result best))))
+      result)))
+
+(defun gptel-auto-workflow--memory-schema--category-from-schemas (target)
+  "Look up category for TARGET from schema index.
+Uses IDF-weighted entity matching then schema classification.
+Returns keyword or nil."
+  (let* ((basename (file-name-nondirectory target))
+         (slug (file-name-sans-extension basename))
+         (total (hash-table-count gptel-auto-workflow--memory-schema-entities))
+         (matches nil))
+    (maphash (lambda (name count-sources)
+               (when (string-match-p (regexp-quote name) basename)
+                 (push (cons name
+                             (gptel-auto-workflow--memory-schema-entity-idf
+                              name count-sources total))
+                       matches)))
+             gptel-auto-workflow--memory-schema-entities)
+    (when (and (not matches)
+               (gethash slug gptel-auto-workflow--memory-schema-entities))
+      (push (cons slug
+                  (gptel-auto-workflow--memory-schema-entity-idf
+                   slug (gethash slug gptel-auto-workflow--memory-schema-entities) total))
+            matches))
+    (when matches
+      (let* ((sorted (cl-sort matches #'> :key #'cdr))
+             (best-entity (car (car sorted)))
+             (cat-scores (list (cons :agentic 0)
+                               (cons :programming 0)
+                               (cons :tool-calls 0)
+                               (cons :natural-language 0))))
+        (maphash
+         (lambda (_key schema-source)
+           (let ((schema-key (car schema-source)))
+             (when (and (string-match-p (regexp-quote best-entity) schema-key)
+                        (gptel-auto-workflow--memory-schema-stable-p schema-key))
+               (dolist (cat-score
+                        (gptel-auto-workflow--memory-schema--classify-schema schema-key))
+                 (cl-incf (cdr (assq (car cat-score) cat-scores))
+                          (cdr cat-score))))))
+         gptel-auto-workflow--memory-schema-triples)
+        (let ((best-cat (car (cl-sort cat-scores #'> :key #'cdr))))
+          (when (> (cdr best-cat) 0)
+            (car best-cat)))))))
+
+(defun gptel-auto-workflow--memory-schema--classify-schema (schema-key)
+  "Classify SCHEMA-KEY into category scores.
+Returns list of (CATEGORY . SCORE) where SCORE reflects how strongly
+the schema's predicate/object signals that category."
+  (let ((parts (split-string (substring schema-key 1 -1) " "))
+        (scores nil))
+    (when (>= (length parts) 2)
+      (let ((subject (nth 0 parts))
+            (predicate (nth 1 parts))
+            (object (or (nth 2 parts) "")))
+        (let ((agentic-score
+               (+ (if (string-match-p
+                       "agent\\|workflow\\|evolution\\|strategy\\|dispatch\\|orchestrat"
+                       predicate) 2 0)
+                  (if (string-match-p
+                       "agent\\|workflow\\|evolution\\|strategy\\|subagent\\|persona"
+                       object) 1 0)
+                  (if (string-match-p
+                       "agent\\|workflow\\|evolution\\|strategy"
+                       subject) 1 0)))
+              (tool-score
+               (+ (if (string-match-p
+                       "tool\\|bash\\|grep\\|edit\\|sandbox\\|execut\\|invok"
+                       predicate) 2 0)
+                  (if (string-match-p
+                       "tool\\|bash\\|grep\\|edit\\|sandbox\\|command\\|shell"
+                       object) 1 0)
+                  (if (string-match-p
+                       "tool\\|bash\\|grep\\|sandbox"
+                       subject) 1 0)))
+              (nl-score
+               (+ (if (string-match-p
+                       "context\\|prompt\\|stream\\|summariz\\|generat\\|render"
+                       predicate) 2 0)
+                  (if (string-match-p
+                       "context\\|prompt\\|stream\\|text\\|language\\|cache"
+                       object) 1 0)
+                  (if (string-match-p
+                       "context\\|prompt\\|stream\\|chat"
+                       subject) 1 0)))
+              (prog-score
+               (+ (if (string-match-p
+                       "fix\\|add\\|remov\\|updat\\|refactor\\|rewrit\\|harden\\|enforc\\|compil\\|debug"
+                       predicate) 1 0)
+                  (if (string-match-p
+                       "warning\\|error\\|bug\\|test\\|compil\\|byte\\|type"
+                       object) 2 0)
+                  (if (string-match-p
+                       "compil\\|byte\\|test\\|bench\\|fsm\\|retry"
+                       subject) 1 0))))
+          (when (> agentic-score 0) (push (cons :agentic agentic-score) scores))
+          (when (> tool-score 0) (push (cons :tool-calls tool-score) scores))
+          (when (> nl-score 0) (push (cons :natural-language nl-score) scores))
+          (when (> prog-score 0) (push (cons :programming prog-score) scores))
+          (when (null scores) (push (cons :programming 1) scores)))))
+    scores))
+
+;; ─── Conflict Detection ───
+
+(defun gptel-auto-workflow--memory-schema-detect-conflicts ()
+  "Scan entity index for potential conflicts.
+Returns list of (ENTITY (SOURCE1 . SOURCE2) CONFLICT-TYPE)."
+  (gptel-auto-workflow--memory-schema-ensure-loaded)
+  (let ((conflicts nil))
+    (maphash (lambda (name count-sources)
+               (let ((sources (cdr count-sources)))
+                 (when (and (>= (length sources) 2)
+                            (string-match-p "\\(?:fix\\|remov\\|add\\)" name))
+                   (let ((unique-sources (delete-dups sources)))
+                     (when (>= (length unique-sources) 2)
+                       (push (list name
+                                   (cons (nth 0 unique-sources)
+                                         (nth 1 unique-sources))
+                                   :mutual)
+                             conflicts))))))
+              gptel-auto-workflow--memory-schema-entities)
+     conflicts))
+
+;; ─── Graph Retrieval (PPR-lite) ───
+
+(defun gptel-auto-workflow--memory-schema-entity-neighbors (entity)
+   "Return entities connected to ENTITY via shared schemas and git-embed synonymy.
+Each neighbor is (ENTITY-NAME . SCORE).
+Schema neighbors use shared-schema count; git-embed neighbors use
+file-similarity score.  Git-embed edges are included when available."
+   (gptel-auto-workflow--memory-schema-ensure-loaded)
+   (let ((entity-schemas nil)
+         (neighbors (make-hash-table :test 'equal :size 16)))
+     (maphash (lambda (_key schema-source)
+                (let ((schema-key (car schema-source)))
+                  (when (string-match-p (regexp-quote entity) schema-key)
+                    (push schema-key entity-schemas))))
+              gptel-auto-workflow--memory-schema-triples)
+     (dolist (schema entity-schemas)
+       (maphash (lambda (_key schema-source)
+                  (let ((sk (car schema-source)))
+                    (when (equal sk schema)
+                      (dolist (part (split-string (substring sk 1 -1) " "))
+                        (when (and (not (equal part entity))
+                                   (not (equal part "?"))
+                                   (not (member part '("fix" "add" "remov" "updat"
+                                                       "improv" "replac" "rewrit"
+                                                       "refactor" "enforc" "harden"))))
+                          (puthash part (1+ (gethash part neighbors 0))
+                                   neighbors))))))
+                gptel-auto-workflow--memory-schema-triples))
+     (let ((embed-synonyms (ignore-errors
+                             (gptel-auto-workflow--memory-schema-synonyms-for entity))))
+       (dolist (syn embed-synonyms)
+         (let ((name (car syn))
+               (score (cdr syn)))
+           (puthash name (max score (gethash name neighbors 0))
+                    neighbors))))
+     (let ((result nil))
+       (maphash (lambda (name count) (push (cons name count) result))
+                neighbors)
+       (cl-sort result #'> :key #'cdr))))
+
+(defun gptel-auto-workflow--memory-schema-retrieve (query &optional max-depth)
+  "Retrieve related entities for QUERY via graph walk.
+MAX-DEPTH defaults to 2.  Returns list of (ENTITY . SCORE) where
+SCORE = sum of shared-schema counts at each depth level."
+  (gptel-auto-workflow--memory-schema-ensure-loaded)
+  (let* ((depth (or max-depth 2))
+         (seen (make-hash-table :test 'equal))
+         (results nil)
+         (frontier (list query)))
+    (dotimes (_d depth)
+      (let ((next-frontier nil))
+        (dolist (entity frontier)
+          (dolist (neighbor (gptel-auto-workflow--memory-schema-entity-neighbors entity))
+            (let ((name (car neighbor))
+                  (score (cdr neighbor)))
+              (unless (gethash name seen)
+                (puthash name t seen)
+                (push (cons name score) results)
+                (push name next-frontier)))))
+        (setq frontier next-frontier)))
+    (cl-sort (delete-dups results) #'> :key #'cdr)))
+
+;; ─── Integration: Extract from Memory File ───
+
+(defun gptel-auto-workflow--memory-schema-extract-from-file (file)
+  "Extract triples from a mementum memory FILE and update the index."
+  (when gptel-auto-workflow-memory-schema-enabled
+    (let* ((content (with-temp-buffer
+                      (insert-file-contents file)
+                      (buffer-string)))
+           (body (if (string-match "^---\n.*?\n---\n" content)
+                     (substring content (match-end 0))
+                   content))
+           (triples (gptel-auto-workflow--memory-schema-extract-triples body)))
+      (when triples
+        (gptel-auto-workflow--memory-schema-index-triples
+         triples (file-name-nondirectory file))))))
+
+(defun gptel-auto-workflow--memory-schema-rebuild-index ()
+  "Rebuild the schema index from all memory and knowledge files."
+  (interactive)
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (memories-dir (expand-file-name "mementum/memories" root))
+         (knowledge-dir (expand-file-name "mementum/knowledge" root))
+         (total 0))
+    (gptel-auto-workflow--memory-schema-reset)
+    (dolist (dir (list memories-dir knowledge-dir))
+      (when (file-directory-p dir)
+        (dolist (file (directory-files dir t "\\.md$"))
+          (cl-incf total
+                   (or (gptel-auto-workflow--memory-schema-extract-from-file file) 0)))))
+    (gptel-auto-workflow--memory-schema-save-index)
+    (message "[memory-schema] Rebuilt index: %d new schemas, %d stable"
+             total
+             (length (gptel-auto-workflow--memory-schema-stable-schemas)))))
+
+;; ─── Bidirectional Memory-Code Links ───
+
+(defvar gptel-auto-workflow--memory-schema-code-links nil
+  "Hash table: CODE-FILE-REL -> list of referenced memory slugs.
+Populated by `gptel-auto-workflow--memory-schema-scan-code-links'.")
+
+(defun gptel-auto-workflow--memory-schema-scan-code-links ()
+  "Scan project source files for @memory: references.
+Populates `gptel-auto-workflow--memory-schema-code-links'."
+  (setq gptel-auto-workflow--memory-schema-code-links
+        (make-hash-table :test 'equal :size 128))
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (lisp-dir (expand-file-name "lisp/modules" root)))
+    (when (file-directory-p lisp-dir)
+      (dolist (file (directory-files lisp-dir t "\\.el$"))
+        (let* ((rel (file-relative-name file root))
+               (refs nil))
+          (with-temp-buffer
+            (insert-file-contents file)
+            (goto-char (point-min))
+            (while (re-search-forward "@memory:\\([a-zA-Z0-9_-]+\\)" nil t)
+              (push (match-string 1) refs)))
+          (when refs
+            (puthash rel (delete-dups refs)
+                     gptel-auto-workflow--memory-schema-code-links)))))))
+
+(defun gptel-auto-workflow--memory-schema-memories-for-file (code-file)
+  "Return list of memory slugs referenced by CODE-FILE.
+CODE-FILE can be absolute or relative to project root."
+  (unless gptel-auto-workflow--memory-schema-code-links
+    (gptel-auto-workflow--memory-schema-scan-code-links))
+  (let* ((root (gptel-auto-workflow--worktree-base-root))
+         (rel (file-relative-name code-file root)))
+    (gethash rel gptel-auto-workflow--memory-schema-code-links)))
+
+(defun gptel-auto-workflow--memory-schema-files-for-memory (slug)
+  "Return list of code files that reference memory with SLUG."
+  (unless gptel-auto-workflow--memory-schema-code-links
+    (gptel-auto-workflow--memory-schema-scan-code-links))
+  (let ((files nil))
+    (maphash (lambda (code-file slugs)
+               (when (member slug slugs)
+                 (push code-file files)))
+             gptel-auto-workflow--memory-schema-code-links)
+    files))
+
+;; ─── Experiment-Scoped Memory Injection ───
+
+(defun gptel-auto-workflow--memory-schema-experiment-context (target &optional max-chars)
+  "Build experiment-scoped memory context for TARGET.
+Returns a string with relevant memories and graph-retrieved entities,
+suitable for injection into subagent prompts.  MAX-CHARS defaults to 1500."
+  (gptel-auto-workflow--memory-schema-ensure-loaded)
+  (let* ((max-len (or max-chars 1500))
+         (basename (file-name-nondirectory target))
+         (slug (file-name-sans-extension basename))
+         (parts nil))
+    (when (fboundp 'gptel-auto-workflow--mementum-read-valid-memories)
+      (let ((memories (gptel-auto-workflow--mementum-read-valid-memories 30))
+            (relevant nil))
+        (dolist (mem memories)
+          (let ((_file (car mem))
+                (content (cdr mem)))
+            (when (string-match-p (regexp-quote basename) content)
+              (push content relevant))))
+        (when relevant
+          (push (concat "## Relevant Memories\n\n"
+                        (mapconcat (lambda (s)
+                                     (let ((trimmed (string-trim s)))
+                                       (if (> (length trimmed) 300)
+                                           (concat (substring trimmed 0 297) "...")
+                                         trimmed)))
+                                   (seq-take (nreverse relevant) 5)
+                                   "\n\n"))
+                parts))))
+    (let ((related nil)
+          (basename-slug (file-name-sans-extension basename)))
+      (dolist (entity-name (cons basename-slug
+                                  (delq nil
+                                        (mapcar (lambda (e)
+                                                  (when (string-match-p (regexp-quote (car e)) basename)
+                                                    (car e)))
+                                                (let ((all nil))
+                                                  (maphash (lambda (k v) (push (cons k v) all))
+                                                           gptel-auto-workflow--memory-schema-entities)
+                                                  all)))))
+        (dolist (r (gptel-auto-workflow--memory-schema-retrieve entity-name 1))
+          (push r related)))
+      (setq related (delete-dups related))
+      (when related
+        (push (concat "## Related Entities\n\n"
+                      (mapconcat (lambda (e) (format "- %s (%d)" (car e) (cdr e)))
+                                 (seq-take (cl-sort related #'> :key #'cdr) 10)
+                                 "\n"))
+              parts)))
+    (when (fboundp 'gptel-auto-workflow--memory-schema-files-for-memory)
+      (ignore-errors
+       (let ((code-links (gptel-auto-workflow--memory-schema-files-for-memory slug)))
+         (when code-links
+           (push (concat "## Code References\n\n"
+                         (mapconcat (lambda (s) (format "- @memory:%s" s))
+                                    (seq-take code-links 5) "\n"))
+                 parts)))))
+    (condition-case nil
+        (when (fboundp 'gptel-auto-workflow--unified-graph-walk)
+          (let ((walk (gptel-auto-workflow--unified-graph-walk :file slug 1 '(:similar :schema-neighbor :synonymy))))
+            (when walk
+              (push (concat "## Graph Neighbors\n\n"
+                            (mapconcat (lambda (n)
+                                         (format "- %s %s (%.2f)"
+                                                 (symbol-name (caar n)) (cdar n) (cdr n)))
+                                       (seq-take walk 8) "\n"))
+                    parts))))
+      (error nil))
+    (when parts
+      (let ((result (mapconcat #'identity (nreverse parts) "\n\n")))
+        (if (> (length result) max-len)
+            (concat (substring result 0 (- max-len 3)) "...")
+          result)))))
+
+;; ─── Entity Synonymy via git-embed ───
+
+(defun gptel-auto-workflow--memory-schema-git-embed-bin ()
+  "Return path to git-embed binary, or nil if unavailable."
+  (or (executable-find "git-embed")
+      (let ((bin (expand-file-name "bin/git-embed"
+                                   (gptel-auto-workflow--worktree-base-root))))
+        (when (file-executable-p bin) bin))))
+
+(defun gptel-auto-workflow--memory-schema-synonymy-edges (&optional threshold)
+  "Compute entity synonymy edges using git-embed file similarity.
+Strategy: for each entity's source files, find similar files via
+git-embed, then extract entities from those similar files.  Entities
+co-occurring in similar file neighborhoods are synonymy candidates.
+Returns alist of (ENTITY . ((SYNONYM . SCORE) ...)) with SCORE >= THRESHOLD
+\(default 0.70).  Cached for 1 hour."
+  (let ((threshold (or threshold 0.70))
+        (now (float-time)))
+    (if (and gptel-auto-workflow--memory-schema-synonymy-cache-time
+             (< (- now gptel-auto-workflow--memory-schema-synonymy-cache-time) 3600))
+        (cl-remove-if (lambda (entry)
+                        (< (cdr entry) threshold))
+                      (mapcar (lambda (group)
+                                (cons (car group)
+                                      (cl-remove-if (lambda (p) (< (cdr p) threshold))
+                                                    (cdr group))))
+                              gptel-auto-workflow--memory-schema-synonymy-cache))
+      (let ((git-embed (gptel-auto-workflow--memory-schema-git-embed-bin))
+            (root (gptel-auto-workflow--worktree-base-root))
+            (result nil))
+        (if (not git-embed)
+            (progn
+              (setq gptel-auto-workflow--memory-schema-synonymy-cache nil
+                    gptel-auto-workflow--memory-schema-synonymy-cache-time now)
+              nil)
+          (gptel-auto-workflow--memory-schema-ensure-loaded)
+          (let ((entity-files (make-hash-table :test 'equal :size 64)))
+            (maphash (lambda (entity _count)
+                       (let ((files (ignore-errors
+                                      (gptel-auto-workflow--memory-schema-files-for-memory entity))))
+                         (when files
+                           (puthash entity files entity-files))))
+                     gptel-auto-workflow--memory-schema-entities)
+            (let ((file-entities (make-hash-table :test 'equal :size 64)))
+              (maphash (lambda (entity files)
+                         (dolist (f files)
+                           (puthash f (cons entity (gethash f file-entities nil))
+                                    file-entities)))
+                       entity-files)
+              (maphash
+               (lambda (entity files)
+                 (let ((synonyms (make-hash-table :test 'equal :size 16))
+                       (max-score 0.0))
+                   (dolist (rel-file files)
+                     (let ((abs (expand-file-name rel-file root)))
+                       (when (file-exists-p abs)
+                         (let ((output (shell-command-to-string
+                                        (mapconcat #'shell-quote-argument
+                                                   (list git-embed "similar" abs "-n" "5")
+                                                   " "))))
+                           (dolist (line (split-string output "\n" t))
+                             (when (string-match
+                                    "^\\([0-9.]+\\)\\s-+\\(.+\\)$" line)
+                               (let ((score (string-to-number (match-string 1 line)))
+                                     (sim-file (match-string 2 line)))
+                                 (when (>= score threshold)
+                                   (setq max-score (max max-score score))
+                                   (dolist (e (gethash sim-file file-entities nil))
+                                     (unless (equal e entity)
+                                       (puthash e (max score (gethash e synonyms 0.0))
+                                                synonyms)))))))))))
+                   (when (> (hash-table-count synonyms) 0)
+                     (let ((pairs nil))
+                       (maphash (lambda (name score) (push (cons name score) pairs))
+                                synonyms)
+                       (push (cons entity (cl-sort pairs #'> :key #'cdr))
+                             result)))))
+               entity-files))
+            (setq gptel-auto-workflow--memory-schema-synonymy-cache result
+                  gptel-auto-workflow--memory-schema-synonymy-cache-time now)
+            result))))))
+
+(defun gptel-auto-workflow--memory-schema-synonyms-for (entity)
+  "Return synonymy edges for ENTITY from git-embed, or nil."
+  (let ((edges (gptel-auto-workflow--memory-schema-synonymy-edges)))
+    (cdr (assoc entity edges))))
+
+;; ─── Ontology → Memory Feedback ───
+
+(defun gptel-auto-workflow--memory-schema-record-ontology-event (event-type data)
+  "Record an ontology EVENT-TYPE with DATA into the schema index.
+EVENT-TYPE is one of :saturation, :strategy-change, :drift, :backend-change.
+DATA is a plist with event-specific fields.
+Creates entity and triple entries so future graph walks surface these learnings."
+  (gptel-auto-workflow--memory-schema-ensure-loaded)
+  (let* ((category (plist-get data :category))
+         (cat-str (and category
+                       (let ((s (symbol-name category)))
+                         (if (string-prefix-p ":" s) (substring s 1) s))))
+         (entity-name (cond
+                       ((eq event-type :saturation)
+                        (format "%s-saturation" cat-str))
+                       ((eq event-type :strategy-change)
+                        (format "%s-strategy" cat-str))
+                       ((eq event-type :drift)
+                        (format "%s-drift" (plist-get data :target)))
+                       ((eq event-type :backend-change)
+                        (format "%s-backend" cat-str))
+                       (t nil))))
+    (when entity-name
+      (let ((triple (pcase event-type
+                      (:saturation
+                       (list :subject entity-name
+                             :predicate "saturated"
+                             :object (format "%d-experiments-0-keeps"
+                                             (or (plist-get data :total) 0))
+                             :subject-type cat-str
+                             :object-type "diagnostic"))
+                      (:strategy-change
+                       (list :subject entity-name
+                             :predicate "switched"
+                             :object (format "%s-to-%s"
+                                             (or (plist-get data :from) "default")
+                                             (or (plist-get data :to) "unknown"))
+                             :subject-type cat-str
+                             :object-type "strategy"))
+                      (:drift
+                       (list :subject entity-name
+                             :predicate "drifted"
+                             :object (format "from-%s-delta-%+.0f%%"
+                                             (or (plist-get data :from-cat) "unknown")
+                                             (* 100 (or (plist-get data :delta) 0)))
+                             :subject-type cat-str
+                             :object-type "diagnostic"))
+                      (:backend-change
+                       (list :subject entity-name
+                             :predicate "preferred"
+                             :object (or (plist-get data :backend) "unknown")
+                             :subject-type cat-str
+                             :object-type "backend"))
+                      (_ nil))))
+        (when triple
+          (gptel-auto-workflow--memory-schema-index-triples
+           (list triple) (format "ontology-%s" entity-name)))))))
+
+(defun gptel-auto-workflow--memory-schema-record-evolution (evolve-result)
+  "Record all ontology events from EVOLVE-RESULT into the schema index.
+EVOLVE-RESULT is the plist returned by `evolve-ontology':
+  (:changes N :backend-changes N :saturated N :total-strategies N).
+Reads the global state to extract individual events."
+  (when (and evolve-result (> (+ (or (plist-get evolve-result :changes) 0)
+                                  (or (plist-get evolve-result :saturated) 0)) 0))
+    (gptel-auto-workflow--memory-schema-ensure-loaded)
+    (when (boundp 'gptel-auto-workflow--category-strategy-preferences)
+      (dolist (pref gptel-auto-workflow--category-strategy-preferences)
+        (gptel-auto-workflow--memory-schema-record-ontology-event
+         :strategy-change
+         (list :category (car pref)
+               :to (cdr pref)))))
+    (when (boundp 'gptel-auto-workflow--category-saturation)
+      (dolist (sat gptel-auto-workflow--category-saturation)
+        (when (cdr sat)
+          (gptel-auto-workflow--memory-schema-record-ontology-event
+           :saturation
+           (list :category (car sat))))))
+    (gptel-auto-workflow--memory-schema-persist)))
+
+;; ─── Persistence ───
+
+(defun gptel-auto-workflow--memory-schema-persist ()
+  "Save current schema index to disk."
+  (when gptel-auto-workflow--memory-schema-schemas
+    (gptel-auto-workflow--memory-schema-save-index)))
+
+;; ─── Unified Entity-Ontology Graph ───
+
+(defun gptel-auto-workflow--unified-graph-build ()
+  "Build the unified entity-ontology graph from all data sources.
+Merges edges from: digital twin (requires), git-embed (similar),
+schema triples (schema-neighbor), synonymy, skill graph,
+category routing, and backend preferences.
+Returns the graph hash table."
+  (let ((graph (make-hash-table :test 'equal :size 256)))
+    (cl-labels ((ensure-node (type id)
+                  (let ((key (cons type id)))
+                    (unless (gethash key graph)
+                      (puthash key nil graph))
+                    key))
+                (add-edge (from-type from-id to-type to-id edge-type weight)
+                  (when (and from-id to-id (> weight 0))
+                    (let* ((from-key (ensure-node from-type from-id))
+                           (to-key (cons to-type to-id))
+                           (existing (gethash from-key graph)))
+                      (puthash from-key
+                               (cons (list edge-type to-key weight) existing)
+                               graph)))))
+      (gptel-auto-workflow--memory-schema-ensure-loaded)
+      (let ((root (condition-case nil (gptel-auto-workflow--worktree-base-root) (error nil))))
+        (when root
+          (condition-case nil
+              (let ((twin (or (and (fboundp 'gptel-auto-workflow--build-digital-twin)
+                                   (condition-case nil
+                                       (gptel-auto-workflow--build-digital-twin)
+                                     (error nil)))
+                              (and (fboundp 'gptel-auto-workflow--load-target-state)
+                                   (condition-case nil
+                                       (progn (gptel-auto-workflow--load-target-state) nil)
+                                     (error nil))))))
+                (when (and twin (hash-table-p twin))
+                  (maphash
+                   (lambda (file-key entry)
+                     (let ((basename (file-name-nondirectory file-key)))
+                       (dolist (req (plist-get entry :requires))
+                         (add-edge :file basename :file req :requires 1.0))))
+                   twin)))
+            (error nil)))
+        (condition-case nil
+            (when (fboundp 'gptel-auto-workflow--semantic-similarity-edges)
+              (dolist (edge (gptel-auto-workflow--semantic-similarity-edges 0.50))
+                (let ((src (file-name-nondirectory (plist-get edge :source)))
+                      (tgt (plist-get edge :target))
+                      (score (plist-get edge :score)))
+                  (when (and src tgt score)
+                    (add-edge :file src :file tgt :similar score)))))
+          (error nil))
+        (maphash
+         (lambda (_key schema-source)
+           (let ((schema-key (car schema-source))
+                 (source (cdr schema-source)))
+             (let ((parts (split-string (substring schema-key 1 -1) " ")))
+               (when (>= (length parts) 2)
+                 (let ((subject (nth 0 parts))
+                       (object (or (nth 2 parts) "")))
+                   (dolist (entity (delq nil (list subject object)))
+                     (add-edge :entity entity :entity subject :schema-neighbor 1.0))
+                   (when (and source (not (string= source "")))
+                     (add-edge :entity subject :file source :category-of 1.0)))))))
+         gptel-auto-workflow--memory-schema-triples)
+        (condition-case nil
+            (when (fboundp 'gptel-auto-workflow--memory-schema-synonymy-edges)
+              (dolist (group (gptel-auto-workflow--memory-schema-synonymy-edges 0.60))
+                (let ((entity (car group)))
+                  (dolist (syn (cdr group))
+                    (add-edge :entity entity :entity (car syn) :synonymy (cdr syn))))))
+          (error nil))
+        (when (and (boundp 'gptel-auto-workflow--category-strategy-preferences)
+                   gptel-auto-workflow--category-strategy-preferences)
+          (dolist (pref gptel-auto-workflow--category-strategy-preferences)
+            (let ((cat-str (substring (symbol-name (car pref)) 1)))
+              (add-edge :category cat-str :strategy (cdr pref) :strategy-pref 1.0))))
+        (when (and (boundp 'gptel-auto-workflow--category-backend-overrides)
+                   gptel-auto-workflow--category-backend-overrides)
+          (dolist (override gptel-auto-workflow--category-backend-overrides)
+            (let ((cat-str (substring (symbol-name (car override)) 1)))
+              (add-edge :category cat-str :backend (cdr override) :best-backend 1.0))))
+        (condition-case nil
+            (when (and (boundp 'skill-graph--nodes) (hash-table-p skill-graph--nodes))
+              (maphash
+               (lambda (id node)
+                 (add-edge :skill (symbol-name id)
+                           :category (substring (symbol-name (skill-graph-node-level node)) 1)
+                           :category-of 1.0))
+               skill-graph--nodes)
+              (maphash
+               (lambda (key edge)
+                 (add-edge :skill (symbol-name (car key))
+                           :skill (symbol-name (cdr key))
+                           :skill-cooccur (skill-graph-edge-weight edge)))
+               skill-graph--edges))
+          (error nil))))
+    (setq gptel-auto-workflow--unified-graph graph
+          gptel-auto-workflow--unified-graph-time (float-time))
+    graph))
+
+(defun gptel-auto-workflow--unified-graph-ensure ()
+  "Ensure the unified graph is built, rebuilding if stale (1 hour)."
+  (let ((now (float-time)))
+    (when (or (not gptel-auto-workflow--unified-graph)
+              (not gptel-auto-workflow--unified-graph-time)
+              (> (- now gptel-auto-workflow--unified-graph-time) 3600))
+      (gptel-auto-workflow--unified-graph-build)))
+  gptel-auto-workflow--unified-graph)
+
+(defun gptel-auto-workflow--unified-graph-neighbors (type id &optional edge-types)
+  "Return neighbors of node (TYPE . ID) in the unified graph.
+EDGE-TYPES is an optional list of edge types to filter by.
+Returns list of (EDGE-TYPE (TO-TYPE . TO-ID) WEIGHT)."
+  (let ((graph (gptel-auto-workflow--unified-graph-ensure))
+        (key (cons type id)))
+    (let ((edges (gethash key graph)))
+      (if edge-types
+          (cl-remove-if-not (lambda (e) (memq (car e) edge-types)) edges)
+        edges))))
+
+(defun gptel-auto-workflow--unified-graph-walk (type id &optional max-depth edge-types)
+  "Walk the unified graph from node (TYPE . ID) up to MAX-DEPTH (default 2).
+Returns list of ((TO-TYPE . TO-ID) . CUMULATIVE-SCORE) sorted by score.
+EDGE-TYPES optionally filters which edge types to traverse."
+  (let ((graph (gptel-auto-workflow--unified-graph-ensure))
+        (depth (or max-depth 2))
+        (seen (make-hash-table :test 'equal :size 64))
+        (results nil)
+        (frontier (list (cons (cons type id) 1.0))))
+    (dotimes (_d depth)
+      (let ((next-frontier nil))
+        (dolist (entry frontier)
+          (let* ((node-key (car entry))
+                 (cum-score (cdr entry)))
+            (dolist (edge (gethash node-key graph))
+              (let* ((edge-type (car edge))
+                     (to-key (cadr edge))
+                     (weight (nth 2 edge)))
+                (when (and (or (null edge-types) (memq edge-type edge-types))
+                           (not (gethash to-key seen)))
+                  (puthash to-key t seen)
+                  (let ((score (* cum-score weight)))
+                    (push (cons to-key score) results)
+                    (push (cons to-key score) next-frontier)))))))
+        (setq frontier next-frontier)))
+    (cl-sort (delete-dups results) #'> :key #'cdr)))
+
+(defun gptel-auto-workflow--unified-graph-best-backend-for (target)
+  "Find the best backend for TARGET using unified graph walk.
+Walks: target -> category -> best-backend, and target -> file ->
+similar files -> their categories -> their backends.
+Returns list of (BACKEND . SCORE)."
+  (let* ((basename (file-name-nondirectory target))
+         (slug (file-name-sans-extension basename))
+         (category (when (fboundp 'gptel-auto-workflow--categorize-target)
+                     (gptel-auto-workflow--categorize-target target)))
+         (cat-str (and category (substring (symbol-name category) 1)))
+         (backends (make-hash-table :test 'equal :size 8)))
+    (when cat-str
+      (dolist (edge (gptel-auto-workflow--unified-graph-neighbors :category cat-str
+                                                                    '(:best-backend)))
+        (let ((backend (cdr (cadr edge)))
+              (weight (nth 2 edge)))
+          (puthash backend (max weight (gethash backend backends 0.0)) backends))))
+    (dolist (edge (gptel-auto-workflow--unified-graph-neighbors :file slug '(:similar)))
+      (let ((sim-file (cdr (cadr edge)))
+            (sim-score (nth 2 edge)))
+        (let ((sim-cat (when (fboundp 'gptel-auto-workflow--categorize-target)
+                         (gptel-auto-workflow--categorize-target sim-file))))
+          (when sim-cat
+            (dolist (be (gptel-auto-workflow--unified-graph-neighbors
+                         :category (substring (symbol-name sim-cat) 1) '(:best-backend)))
+              (let ((backend (cdr (cadr be)))
+                    (weight (* sim-score (nth 2 be))))
+                (puthash backend (max weight (gethash backend backends 0.0)) backends)))))))
+    (let ((result nil))
+      (maphash (lambda (backend score) (push (cons backend score) result)) backends)
+      (cl-sort result #'> :key #'cdr))))
+
+(provide 'gptel-auto-workflow-memory-schema)
