@@ -85,8 +85,27 @@
 
 (ert-deftest tdd/memory-schema/extract-triples/multiple-lines ()
   (let ((triples (gptel-auto-workflow--memory-schema-extract-triples
-                  "fix for byte-compiler warnings\nupdated in schema index")))
+                   "fix for byte-compiler warnings\nupdated in schema index")))
     (should (>= (length triples) 2))))
+
+(ert-deftest tdd/memory-schema/clean-entity/valid ()
+  (should (equal (gptel-auto-workflow--memory-schema--clean-entity "byte-compiler") "byte-compiler"))
+  (should (equal (gptel-auto-workflow--memory-schema--clean-entity "  schema  ") "schema"))
+  (should (equal (gptel-auto-workflow--memory-schema--clean-entity "ontology router") "ontology router"))
+  (should (equal (gptel-auto-workflow--memory-schema--clean-entity "") "")))
+
+(ert-deftest tdd/memory-schema/clean-entity/rejects-noise ()
+  (should-not (gptel-auto-workflow--memory-schema--clean-entity
+               "a large file, verify the diff before pushing"))
+  (should (equal (gptel-auto-workflow--memory-schema--clean-entity "   ") ""))
+  (should-not (gptel-auto-workflow--memory-schema--valid-entity-p "   "))
+  (should-not (gptel-auto-workflow--memory-schema--valid-entity-p "12345"))
+  (should-not (gptel-auto-workflow--memory-schema--clean-entity "💡 insight text here")))
+
+(ert-deftest tdd/memory-schema/extract-triples/long-entity-rejected ()
+  (should-not
+   (gptel-auto-workflow--memory-schema-extract-triples
+    "fixed in a large file, verify the diff — not just the stat line — before pushing")))
 
 ;; ─── Schema Inference ───
 

@@ -165,6 +165,23 @@ Nil means not yet built.")
 
 ;; ─── Triple Extraction ───
 
+(defun gptel-auto-workflow--memory-schema--clean-entity (str)
+  "Clean STR into a valid entity name, or nil if too noisy.
+Filters: max 30 chars, no newlines, must contain a letter if non-empty,
+no leading special chars (💡 →, etc).  Returns nil for noisy entities."
+  (let ((s (string-trim str)))
+    (when (and (<= (length s) 30)
+               (not (string-match-p "\n" s))
+               (or (= (length s) 0)
+                   (and (string-match-p "[a-zA-Z]" s)
+                        (not (string-match-p "^[💡→✓✗✅❌🔧⚠⚡📋📐🔄]" s)))))
+      s)))
+
+(defun gptel-auto-workflow--memory-schema--valid-entity-p (str)
+  "Return non-nil if STR is a non-empty, non-noisy entity name."
+  (let ((clean (gptel-auto-workflow--memory-schema--clean-entity str)))
+    (and clean (> (length clean) 0))))
+
 (defun gptel-auto-workflow--memory-schema-extract-triples (text)
   "Extract (subject predicate object) triples from TEXT.
 Returns list of plists: (:subject S :predicate P :object O
@@ -184,19 +201,22 @@ Uses heuristic parsing — no LLM call required."
                  "\\|updat\\|refactor\\|rewrit\\|replac\\|harden\\)"
                  "\\(?:ed\\|es\\|ing\\|s\\)?\\b")
          line)
-        (let* ((verb-start (match-beginning 0))
-               (verb-end (match-end 0))
-               (verb (substring line verb-start verb-end))
-               (before-verb (substring line 0 verb-start))
-               (after-verb (substring line verb-end)))
-          (when (string-match "\\(?:for\\|in\\|on\\|of\\|to\\) +\\(.+\\)"
-                              after-verb)
-            (push (list :subject (string-trim before-verb)
-                        :predicate (string-trim verb)
-                        :object (string-trim (match-string 1 after-verb))
-                        :subject-type nil
-                        :object-type nil)
-                  triples))))))
+         (let* ((verb-start (match-beginning 0))
+                (verb-end (match-end 0))
+                (verb (substring line verb-start verb-end))
+                (before-verb (substring line 0 verb-start))
+                (after-verb (substring line verb-end))
+                (subject (gptel-auto-workflow--memory-schema--clean-entity before-verb)))
+           (when (string-match "\\(?:for\\|in\\|on\\|of\\|to\\) +\\(.+\\)"
+                               after-verb)
+             (let ((object-raw (match-string 1 after-verb)))
+               (when (gptel-auto-workflow--memory-schema--valid-entity-p object-raw)
+                 (push (list :subject (or subject "")
+                            :predicate (string-trim verb)
+                            :object (gptel-auto-workflow--memory-schema--clean-entity object-raw)
+                            :subject-type nil
+                            :object-type nil)
+                      triples))))))))
     (delq nil triples)))
 
 (defun gptel-auto-workflow--memory-schema-infer-schema (triple)
