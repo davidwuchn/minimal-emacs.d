@@ -5,13 +5,13 @@ category: knowledge
 tags: [research, auto-workflow, template-default]
 insight-quality: 0.4/10
 allium-issues: 0
-allium-severity: 0.00
+allium-severity: 0.05
 allium-status: coherent
 ---
 
 # Research Strategy: template-default
 
-*Consolidated from 176 experiments (4% keep rate).*
+*Consolidated from 180 experiments (4% keep rate).*
 
 **Performance:** 7 kept / 1 discarded / 10 failed (EXTRACTED — from TSV)
 
@@ -56,68 +56,67 @@ were misleading.
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-<think>
-The user is asking me to "distill" something. Looking at the input, it appears to be a research strategy with a template-default approach, listing 176 experiments across various targets, with kept hypotheses and discarded hypotheses.
+# Distillation
 
-The input seems to be jumbled - the content appears to be a mix of bullet points without clear structure. Let me try to understand what's being asked:
+## Research Strategy
+**Template-default** applied across 180 experiments, with no alternative strategy deployed.
 
-1. There are 176 experiments across many lisp module files
-2. There are "Kept hypotheses" - these are hypotheses that were kept after some research/filtering
-3. There are "Discarded hypotheses" - with only one: "No hypothesis stated"
+## Target Coverage
+Experiments spanned 19 targets across four functional clusters:
 
-The user wants me to "distill" this. I think they want me to summarize, condense, or extract the essence of what was found.
+| Cluster | Targets |
+|---------|---------|
+| **Staging pipeline** | staging-merge, staging-scope, staging-review, staging-config |
+| **Auto-workflow** | ontology-router, ontology-strategy, evolution, mementum, bootstrap, projects, production-metrics, strategic |
+| **Tools agent** | error, runtime, benchmark, prompt-build, experiment-core |
+| **Benchmark/framework** | gptel-benchmark-subagent, gptel-benchmark-principles |
 
-Let me look at the structure more carefully. The input has:
-- A "Research strategy: template-default" header
-- A list of 176 experiments across various targets
-- Kept hypotheses (with many bullet points that appear to be jumbled together)
-- Discarded hypotheses (with "No hypothesis stated")
+## Hypotheses Kept — Recurring Patterns
 
-The kept hypotheses seem to be a list of insights/changes found during research. The jumbled text suggests these were concatenated together without proper formatting. Let me try to parse them:
+The 8 surviving hypotheses converge on **two intertwined principles**: **φ Vitality** (progressive improvement that adapts to discovery) and **fractal Clarity** (explicit, testable assumptions). Concrete recurring patterns:
 
-Looking at the kept hypotheses, I can identify several distinct items:
+1. **Idempotency + symmetric extraction** — guard against re-adding active advice; pair enable/disable functions symmetrically.
+2. **Bug fixes paired with validation** — correct misleading messages; add directory/file existence checks.
+3. **Identity → content comparison** — `eq` → `equal` for cache keys; cache should invalidate on semantic change, not pointer change. Reorder to check cache *before* expensive setup (`ensure-buffer-tables`).
+4. **Explicit nil guards** — extract buffer lookups into validation sequences that fail gracefully on missing FSM state.
+5. **Edge-case recovery** — `ignore-errors` around `file-attributes`; early-exit on empty project lists.
+6. **Construct simplification** — `format-mode-line` → direct `mode-name`; `if` with single branch → `when`; guard buffer iteration against nil.
+7. **Latent-bug surfacing** — filter `not-applicable` sentinels before numeric sorting (prevents `(< 'not-applicable <number>)` crash in `gptel-benchmark-eight-keys-weakest`).
 
-1. "Add an idempotency guard to prevent re-adding advice that's already active, AND extract the symmetric disable function. This targets both φ Vitality (progressive improvement, adapts to discovery) and fractal Clarity (explicit assumptions, testable)."
+## Hypotheses Discarded
+None — discarded set is empty (placeholder: "No hypothesis stated").
 
-2. "Fix the misleading message and add directory existence validation. This is a bug fix type change."
-
-3. "**HYPOTHESIS**: The cache validation in `gptel-auto-workflow--normalized-projects` uses `eq` (identity comparison) for the project list, which causes unnecessary cache invalidation when `gptel-auto-workflow-projects` is reassigned to a new list with identical content. Changing to `equal` (content comparison) and reordering to check cache before calling `ensure-buffer-tables` will improve φ Vitality (adapts to actual usage patterns) and fractal Clarity (explicit assumption: cache invalidation should be content-based, not identity-based)."
-
-4. "**HYPOTHESIS**: Extracting the buffer lookup into a clear validation sequence with explicit nil guards will improve Clarity by making the assumptions visible and improve Vitality by adapting to missing FSM state gracefully."
-
-5. "The function lacks adaptive error recovery for invalid project paths and doesn't handle the empty-projects edge case explicitly. Adding `ignore-errors` around `file-attributes` and an early guard for empty project lists will improve φ Vitality (adapts to new information/edge cases) and fractal Clarity (explicit assumptions about project validity)."
-
-6. "**HYPOTHESIS**: Replacing `format-mode-line` with direct `mode-name` access and using `when` instead of `if` will improve fractal Clarity by removing unnecessary complexity and making the code's intent clearer. Additionally, adding a nil-safety guard for the buffer iteration will improve φ Vitality by making the function more robust."
-
-7. "The `gptel-benchmark-eight-keys-weakest` function will crash at runtime when scoring with a task-type hypothesis because `not-applicable` symbols in the scores alist cause `(< 'not-applicable <number>)` during sorting. Adding a filter for `not-applicable` entries before sorting prevents this runtime error, improving both Clarity (explicit data filtering) and Vitality (builds on discovery of latent bug)."
-
-So there are 7 kept hypotheses, and 1 discarded (or none were stated).
-
-The "Now let me implement the change" text suggests this is a mid-stream note from the researcher.
-
-Given that the user says "Research strategy: template-default" and they want me to "distill," I think they want a concise summary of:
-- What was the research strategy
-- What was found (the kept hypotheses)
-- What was rejected (the discarded)
-
-Let me create a clean, distilled version. I s
--- ... truncated ...
+## Net Insight
+The template-default strategy produced hypotheses that are uniformly **micro-refactors** in gptel's auto-workflow and tools-agent stack: each is small in scope, but each tightens an invariant (idempotency, content-equality, nil-safety, edge-case handling, latent-bug exposure). The dual lens of Vitality+Clarity appears to systematically surface the same class of issues — defensive guards around state and explicit assumptions about data shape — across otherwise unrelated modules.
 ```
 
+### Check Issues
+
+# Review of the Distillation Document
+
+The document is well-structured and largely internally consistent, but there are several issues worth flagging — some factual, some presentational, and some concerning the framing.
+
+## ✅ What's solid
+
+- **Target count checks out**: 4 + 8 + 5 + 2 = 19. ✓
+- **Concrete grounding**: Specific identifiers (`eq` → `equal`, `ensure-buffer-tables`, `not-applicable` sentinel, `gptel-benchmark-eight-keys-weakest`) make the patterns falsifiable rather than hand-wavy.
+- **Honest about gaps**: Explicitly noting the empty discarded-hypothesis section is good epistemic hygiene.
+- **Net Insight is appropriately scoped**: "uniformly micro-refactors" is a defensible characterization given the cited examples.
+
+## ⚠️ Issues to address
+
+### 1. Undefined framing vocabulary
+**"φ Vitality"** and **"fractal Clarity"** are used as load-bearing organizing principles but never defined. A reader cannot evaluate whether the patterns actually instantiate these concepts, because the concepts themselves are not specified. As written, "Vitality" ≈ "improvement" and "fractal" ≈ "explicit" — but those reductions aren't given.
+
+### 2. Stylistic asymmetry
+If the two principles are meant to be parallel, "φ Vitality" and "fractal Clarity" should share formatting. Pick one convention: either both are Latin-initial capitals or both are uncapitalized, and decide whether φ is a meaningful label or a typographic flourish (currently unclear).
+
+### 3. The 8 hypotheses ↔ 7 patterns gap
+You 
+
+... (truncated)

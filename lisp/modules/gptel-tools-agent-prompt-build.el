@@ -1861,15 +1861,30 @@ Captures executor reasoning from the dynamic variable
          (model (gptel-auto-workflow--plist-get experiment :model "unknown"))
          (cost-usd (gptel-auto-experiment--calculate-cost-usd
                     prompt-chars output-chars backend model))
-         (effort-level (or (gptel-auto-workflow--plist-get experiment :effort-level)
-                          (and (fboundp 'gptel-backend-registry-effort-level)
-                               (gptel-backend-registry-effort-level
-                                (intern (or (and (symbolp backend) (symbol-name backend))
-                                            backend))
-                                (intern (or (and (symbolp model) (symbol-name model))
-                                            model))
-                                'executor))
-                          "default")))
+          (effort-level (or (gptel-auto-workflow--plist-get experiment :effort-level)
+                           (and (fboundp 'gptel-backend-registry-effort-level)
+                                (gptel-backend-registry-effort-level
+                                 (intern (or (and (symbolp backend) (symbol-name backend))
+                                             backend))
+                                 (intern (or (and (symbolp model) (symbol-name model))
+                                             model))
+                                 'executor))
+                           "default"))
+          ;; Production metrics (columns 33-39)
+          (prod-error-rate-before (gptel-auto-experiment--tsv-number
+                                   (gptel-auto-workflow--plist-get experiment :prod-error-rate-before 0.0)))
+          (prod-error-rate-after (gptel-auto-experiment--tsv-number
+                                  (gptel-auto-workflow--plist-get experiment :prod-error-rate-after 0.0)))
+          (prod-error-rate-delta (gptel-auto-experiment--tsv-number
+                                  (gptel-auto-workflow--plist-get experiment :prod-error-rate-delta 0.0)))
+          (user-satisfaction-delta (gptel-auto-experiment--tsv-number
+                                    (gptel-auto-workflow--plist-get experiment :user-satisfaction-delta 0.0)))
+          (support-tickets-reduced (gptel-auto-experiment--tsv-number
+                                    (gptel-auto-workflow--plist-get experiment :support-tickets-reduced 0)))
+          (business-value-score (gptel-auto-experiment--tsv-number
+                                 (gptel-auto-workflow--plist-get experiment :business-value-score 0.0)))
+          (risk-score (gptel-auto-experiment--tsv-number
+                       (gptel-auto-workflow--plist-get experiment :risk-score 0.0))))
     ;; Capture executor reasoning for self-evolution feedback
     (when (and target (bound-and-true-p gptel-auto-experiment--executor-reasoning))
       (let* ((insights (gethash target gptel-auto-experiment--grader-insights))
@@ -2014,7 +2029,7 @@ Captures executor reasoning from the dynamic variable
       (unless (gptel-auto-experiment--drop-replaceable-tsv-rows
                experiment-id target)
         (goto-char (point-max))
-        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%.6f\t%s\n"
+        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%.6f\t%s\t%.4f\t%.4f\t%+.4f\t%+.2f\t%d\t%.2f\t%.2f\n"
                         experiment-id
                         target
                         (gptel-auto-experiment--tsv-escape
@@ -2094,13 +2109,21 @@ Captures executor reasoning from the dynamic variable
                                               (format "%s:%.2f" (car pair) (cdr pair)))
                                             ks ",") "}")
                              "")))
-                        (gptel-auto-experiment--tsv-escape
-                         (gptel-auto-workflow--plist-get experiment :skills ""))
-                        (or (gptel-auto-experiment--tsv-escape
-                             (gptel-auto-workflow--plist-get experiment :edit-mode "none"))
-                            "none")
-                        cost-usd
-                        (or (gptel-auto-experiment--tsv-escape effort-level) "default"))))
+                         (gptel-auto-experiment--tsv-escape
+                          (gptel-auto-workflow--plist-get experiment :skills ""))
+                         (or (gptel-auto-experiment--tsv-escape
+                               (gptel-auto-workflow--plist-get experiment :edit-mode "none"))
+                              "none")
+                         cost-usd
+                         (or (gptel-auto-experiment--tsv-escape effort-level) "default")
+                         ;; Production metrics (columns 33-39)
+                         prod-error-rate-before
+                         prod-error-rate-after
+                         prod-error-rate-delta
+                         user-satisfaction-delta
+                         (round support-tickets-reduced)
+                         business-value-score
+                         risk-score)))
       (write-region (point-min) (point-max) file))
     ;; Keep strategy metrics independent from the per-run TSV.
     (when (fboundp 'gptel-auto-workflow--record-strategy-evaluation)
