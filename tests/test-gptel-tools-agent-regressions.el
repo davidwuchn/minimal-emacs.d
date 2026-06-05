@@ -20999,6 +20999,61 @@ P1.1 FIX: Even saturated categories get more exploration chances."
     (should (string-match-p "min gptel-auto-experiment-max-per-target 3" code))
     (should-not (string-match-p "min gptel-auto-experiment-max-per-target 2" code))))
 
+;;; P1.2: Experiment Diversity Enforcement (2026-06-05)
+
+(ert-deftest regression/experiment-loop/duplicate-detection-exists ()
+  "Duplicate hypothesis detection should exist and work.
+P1.2 FIX: Stricter enforcement with 2-token threshold (was 3)."
+  (require 'gptel-tools-agent-experiment-loop)
+  (should (fboundp 'gptel-auto-experiment--hypothesis-already-tested-p)))
+
+(ert-deftest regression/experiment-loop/detects-near-duplicate-hypotheses ()
+  "Should detect near-duplicate hypotheses (sharing 2+ significant tokens).
+Example: 'Add nil guard before car' vs 'Add nil check before car' share 'guard/check', 'before', 'car'."
+  (require 'gptel-tools-agent-experiment-loop)
+  (let* ((hypothesis "Add nil guard before calling car")
+         (previous-results
+          (list (list :hypothesis "Add nil check before calling car"
+                      :target "lisp/modules/test.el"
+                      :kept nil)
+                (list :hypothesis "Something completely different"
+                      :target "lisp/modules/test.el"
+                      :kept nil)))
+         (result (gptel-auto-experiment--hypothesis-already-tested-p
+                  hypothesis previous-results)))
+    ;; Should detect the duplicate (shares "guard", "before", "calling", "car")
+    (should result)
+    (should (stringp result))))
+
+(ert-deftest regression/experiment-loop/allows-different-hypotheses ()
+  "Should NOT flag hypotheses that are genuinely different.
+Example: 'Add nil guard' vs 'Improve error handling' are different."
+  (require 'gptel-tools-agent-experiment-loop)
+  (let* ((hypothesis "Add nil guard before calling car")
+         (previous-results
+          (list (list :hypothesis "Improve error handling in validation"
+                      :target "lisp/modules/test.el"
+                      :kept nil)
+                (list :hypothesis "Refactor data structure"
+                      :target "lisp/modules/test.el"
+                      :kept nil)))
+         (result (gptel-auto-experiment--hypothesis-already-tested-p
+                  hypothesis previous-results)))
+    ;; Should NOT detect as duplicate (no shared significant tokens)
+    (should-not result)))
+
+(ert-deftest regression/experiment-loop/duplicate-threshold-is-two ()
+  "Duplicate detection threshold should be 2 shared tokens (not 3).
+P1.2 FIX: Stricter enforcement catches more duplicates."
+  (let ((code (with-temp-buffer
+                (insert-file-contents
+                 (expand-file-name "lisp/modules/gptel-tools-agent-experiment-loop.el"
+                                   user-emacs-directory))
+                (buffer-string))))
+    ;; Verify the threshold is 2, not 3
+    (should (string-match-p "when (>= shared 2)" code))
+    (should-not (string-match-p "when (>= shared 3)" code))))
+
 (provide 'test-gptel-tools-agent-regressions)
 
 ;;; test-gptel-tools-agent-regressions.el ends here

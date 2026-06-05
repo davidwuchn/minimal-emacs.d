@@ -160,7 +160,8 @@ Returns number of consecutive experiments with this strategy."
 (defun gptel-auto-experiment--hypothesis-already-tested-p (hypothesis previous-results)
   "Return non-nil when HYPOTHESIS was already tested on this target.
 Compares against `:hypothesis' fields in PREVIOUS-RESULTS.
-Uses fuzzy matching: share at least 3 significant tokens after normalization."
+Uses fuzzy matching: share at least 2 significant tokens after normalization.
+P1.2 FIX: Stricter enforcement with 2-token threshold (was 3)."
   (when (and hypothesis previous-results (listp previous-results))
     (let* ((normalized (replace-regexp-in-string
                         "[^a-zA-Z0-9 ]" " " (downcase hypothesis)))
@@ -177,7 +178,7 @@ Uses fuzzy matching: share at least 3 significant tokens after normalization."
                 (dolist (tkn sig-tokens)
                   (when (member tkn prev-tokens)
                     (cl-incf shared)))
-                (when (>= shared 3)
+                (when (>= shared 2)
                   (throw 'found prev-hyp))))))))))
 
 (defvar gptel-auto-experiment-max-validation-retries 1
