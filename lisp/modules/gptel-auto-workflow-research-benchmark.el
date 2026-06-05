@@ -130,7 +130,8 @@ Uses heuristics based on AutoTTS paper:
     (if (file-exists-p strategy-file)
         (with-temp-buffer
           (insert-file-contents strategy-file)
-          (let ((data (json-read)))
+          (let ((json-object-type 'alist)
+                (data (json-read)))
             (format "**Strategy**: %s\n**Description**: %s\n**Phases**: %s"
                     (cdr (assoc 'name data))
                     (cdr (assoc 'description data))

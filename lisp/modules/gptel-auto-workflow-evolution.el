@@ -3380,19 +3380,22 @@ Returns the keep-rate as a float, or 0.10 as a safe lower-bound fallback."
 Writes to pending_eval.json for the meta-harness pipeline to process."
   (let* ((root (or (gptel-auto-workflow--worktree-base-root) default-directory))
          (pending-file (expand-file-name "var/tmp/strategy-evaluations/pending_eval.json" root))
-         (pending (if (file-exists-p pending-file)
-                      (condition-case nil
-                          (with-temp-buffer
-                            (insert-file-contents pending-file)
-                            (json-read))
-                        (error nil))
-                    (list :candidates '())))
-         (candidates (plist-get pending :candidates)))
-    (push (list :name strategy-name :axis (format "%s" axis)
-                :queued-at (format-time-string "%Y-%m-%dT%H:%M:%SZ")
-                :status "pending")
+          (pending (if (file-exists-p pending-file)
+                       (condition-case nil
+                           (with-temp-buffer
+                             (insert-file-contents pending-file)
+                             (let ((json-object-type 'alist)
+                                   (json-key-type 'keyword)
+                                   (json-array-type 'list))
+                               (json-read)))
+                         (error nil))
+                     '((:candidates . nil))))
+          (candidates (cdr (assq :candidates pending))))
+    (push (list (cons :name strategy-name) (cons :axis (format "%s" axis))
+                (cons :queued-at (format-time-string "%Y-%m-%dT%H:%M:%SZ"))
+                (cons :status "pending"))
           candidates)
-    (setq pending (plist-put pending :candidates candidates))
+    (setcdr (assq :candidates pending) candidates)
     (make-directory (file-name-directory pending-file) t)
     (with-temp-file pending-file
       (insert (json-encode pending)))
