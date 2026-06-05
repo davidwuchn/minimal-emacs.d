@@ -774,7 +774,7 @@ Regression test: deeply nested lambda after refactor should not confuse the eval
         (let ((run-dir (expand-file-name "var/tmp/experiments/2026-05-01" tmpdir)))
           (make-directory run-dir t)
           (with-temp-file (expand-file-name "results.tsv" run-dir)
-            (insert "header\trow\n")
+            (insert "id\ttarget\thypothesis\tscore-before\tscore-after\tcode-quality\tdelta\tdecision\tbenchmark-score\tgrader-quality\tquality-change\timpact\terror-type\tagent-output\tprompt-chars\tbackend\toutput-chars\tstrategy\tresearch-strategy\tresearch-quality\tresearch-options\tresearch-hash\tkibcm-axis\tmodel\tskills\tedit-mode\n")
             (insert "1\tlisp/foo.el\tadd nil check\t0.00\t0.50\t0.8\t+0.50\tkept\t12.3\t0.9\tgood\tbetter\tnone\tagent out\t1500\tdeepseek\t2000\tall\tlearn\tnone\topt1\tresearch1\thash1\t0.8\tyes\t:K\n"))
           (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
                      (lambda () tmpdir)))
