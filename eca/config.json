@@ -162,6 +162,149 @@
         "qwen3-coder-next": {}
       }
     },
+    "dashscope-token-plan": {
+      "api": "openai-chat",
+      "url": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+      "keyRc": "token-plan.cn-beijing.maas.aliyuncs.com",
+      "models": {
+        "qwen3.7-max": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 8192
+            }
+          }
+        },
+        "qwen3.5-plus": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 1024
+            }
+          }
+        },
+        "qwen3.6-plus": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 1024
+            }
+          }
+        },
+        "qwen3-coder-plus": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 1024
+            }
+          }
+        },
+        "qwen3-coder-next": {},
+        "deepseek-v4-pro": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled"
+            }
+          }
+        },
+        "deepseek-v4-flash": {},
+        "deepseek-v3.2": {},
+        "kimi-k2.6": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 1024
+            }
+          }
+        },
+        "kimi-k2.5": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 1024
+            }
+          }
+        },
+        "glm-5.1": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 1024
+            }
+          }
+        },
+        "glm-5": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 1024
+            }
+          }
+        },
+        "MiniMax-M2.5": {}
+      }
+    },
+    "dashscope-token-plan-anthropic": {
+      "api": "anthropic-messages",
+      "url": "https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic",
+      "keyRc": "token-plan.cn-beijing.maas.aliyuncs.com",
+      "models": {
+        "qwen3.7-max": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 8192
+            }
+          }
+        },
+        "qwen3.5-plus": {},
+        "qwen3.6-plus": {},
+        "qwen3-coder-plus": {},
+        "qwen3-coder-next": {},
+        "deepseek-v4-pro": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled"
+            }
+          }
+        },
+        "deepseek-v4-flash": {},
+        "deepseek-v3.2": {},
+        "kimi-k2.6": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 1024
+            }
+          }
+        },
+        "kimi-k2.5": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 1024
+            }
+          }
+        },
+        "glm-5.1": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 1024
+            }
+          }
+        },
+        "glm-5": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 1024
+            }
+          }
+        },
+        "MiniMax-M2.5": {}
+      }
+    },
     "openrouter": {
       "api": "openai-chat",
       "url": "https://openrouter.ai/api/v1",
