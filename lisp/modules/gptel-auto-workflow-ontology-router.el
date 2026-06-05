@@ -2435,9 +2435,10 @@ model from `gptel-ai-behaviors--best-model'."
         (let* ((basename (file-name-nondirectory target))
                (slug (file-name-sans-extension basename))
                (similar (mapcar (lambda (edge)
-                                  (cdr (cadr edge)))
-                                (gptel-auto-workflow--unified-graph-neighbors
-                                 :file slug '(:similar))))
+                                   (cdr (cadr edge)))
+                                 (gptel-auto-workflow--unified-graph-neighbors
+                                  :file slug '(:similar))))
+               (similar-files (mapcar (lambda (s) (concat s ".el")) similar))
                (model-stats (make-hash-table :test 'equal)))
           (when similar
             (dolist (r (gptel-auto-workflow--parse-all-results))
@@ -2447,8 +2448,7 @@ model from `gptel-ai-behaviors--best-model'."
                     (r-decision (plist-get r :decision)))
                 (when (and r-target r-backend r-model
                            (string= r-backend backend)
-                           (member (file-name-nondirectory r-target)
-                                   (mapcar (lambda (s) (concat s ".el")) similar)))
+                           (member (file-name-nondirectory r-target) similar-files))
                   (let ((stats (or (gethash r-model model-stats) (cons 0 0))))
                     (cl-incf (car stats))
                     (when (equal r-decision "kept")
