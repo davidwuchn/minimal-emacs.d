@@ -3628,8 +3628,10 @@ restart)."
             (with-temp-buffer
               (insert-file-contents file)
               (let* ((raw (json-read))
-                     (data (if (listp raw) raw
-                             (cdr (assq 'files raw)))))
+                     (data (cond
+                            ((listp raw) raw)
+                            ((hash-table-p raw) (gethash 'files raw))
+                            (t nil))))
                 (when (listp data)
                   (dolist (entry data)
                     (let ((target (car entry))
