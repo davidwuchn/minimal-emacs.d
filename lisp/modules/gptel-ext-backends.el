@@ -101,6 +101,16 @@ ARGS are passed to `gptel-make-openai'."
                :request-params (:thinking (:type "enabled")
                                 :reasoning_effort "high")))))
 
+(defvar gptel--token-plan
+  (gptel-make-openai "TokenPlan"
+    :host "token-plan.cn-beijing.maas.aliyuncs.com"
+    :endpoint "/compatible-mode/v1/chat/completions"
+    :key (lambda () (my/gptel-api-key "token-plan.cn-beijing.maas.aliyuncs.com"))
+    :stream t
+    :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
+    :models '(qwen3.7-max qwen3.6-plus qwen3.6-flash
+              deepseek-v4-pro kimi-k2.6 glm-5.1 MiniMax-M2.5)))
+
 (defvar gptel--cf-gateway
   (gptel-make-openai "CF-Gateway"
     :host "gateway.ai.cloudflare.com"
