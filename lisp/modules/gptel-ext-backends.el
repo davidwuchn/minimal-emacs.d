@@ -109,7 +109,7 @@ ARGS are passed to `gptel-make-openai'."
     :stream t
     :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
     :models '(qwen3.7-max qwen3.6-plus qwen3.6-flash
-              deepseek-v4-pro kimi-k2.6 glm-5.1 MiniMax-M2.5)))
+              deepseek-v4-pro deepseek-v4-flash kimi-k2.6 glm-5.1 MiniMax-M2.5)))
 
 (defvar gptel--cf-gateway
   (gptel-make-openai "CF-Gateway"
