@@ -1,8 +1,35 @@
 # Mementum State
 
-> Last session: 2026-06-05 (Grader fix, condition-case bug, plist dedup)
+> Last session: 2026-06-05 (Drift circularity, entity noise filter, Pi5 let* bug)
 > Next pipeline: running
-> Status: 2231 tests, 0 unexpected, 0 byte-compile warnings
+> Status: 2257+ tests, 0 unexpected, 0 byte-compile warnings
+
+## Session: Drift Circularity Fix + Entity Quality + Pi5 Bug Fix (2026-06-05)
+
+### ⊘ Fix: Drift detector circular categorization
+`detect-category-drift` and `repair-ontology` used `categorize-target` (graph-driven)
+to check if targets were misclassified. But graph-driven categorization could make
+the same error → drift detector would never catch it. Circular dependency.
+Fix: both functions now use `categorize-target-by-regex` (independent heuristic).
+If regex and graph disagree → drift flagged.
+
+### ⚒ Entity noise filter for triple extraction
+15/64 (23%) entities were noisy prose fragments (>30 chars, no clear entity name).
+Added `clean-entity` (max 30 chars, must contain letter, no emoji prefix) and
+`valid-entity-p` (non-empty + clean). Objects must pass valid-entity-p; subjects
+can be empty (absent before verb in source). 3 new ERT tests.
+
+### ⊘ Fix: Pi5 self-heal git-result in let* binding
+Pi5 commit `8d79adeff` placed `gptel-auto-workflow--git-result` call as a let*
+binding instead of standalone expression → byte-compile warnings + cleanup never
+executed. Moved into progn. Also removed hardcoded `cd ~/.emacs.d`.
+
+### Commits
+- `823e4dc` ⊘ fix: drift detector circular categorization
+- `904adff` ⚒ tdd: entity noise filter (30-char cap)
+- `a197563` ⊘ fix: Pi5 self-heal git-result in let* binding
+
+---
 
 ## Session: Systematic Bug Fixes + Pipeline Improvements (2026-06-05)
 
