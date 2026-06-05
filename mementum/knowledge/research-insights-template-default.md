@@ -11,7 +11,7 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 181 experiments (4% keep rate).*
+*Consolidated from 183 experiments (4% keep rate).*
 
 **Performance:** 7 kept / 1 discarded / 10 failed (EXTRACTED — from TSV)
 
@@ -48,12 +48,6 @@ were misleading.
 - **This strategy underperforms.** Consider evolving a new approach.
 - The findings may be too generic or targeting the wrong files.
 - Try combining with git history for recency bias.
-
-
-
-
-
-
 
 
 

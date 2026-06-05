@@ -54,9 +54,10 @@ Used to query production metrics for the right service.")
   (or gptel-auto-workflow--sentry-api-key
       (getenv "OV5_SENTRY_API_KEY")
       (when (file-exists-p "~/.ov5/sentry-key")
-        (with-temp-buffer
-          (insert-file-contents "~/.ov5/sentry-key")
-          (string-trim (buffer-string))))))
+        (ignore-errors
+          (with-temp-buffer
+            (insert-file-contents "~/.ov5/sentry-key")
+            (string-trim (buffer-string)))))))
 
 (defun gptel-auto-workflow--infer-service-from-target (target)
   "Infer service name from TARGET file path.
@@ -114,7 +115,7 @@ Returns parsed JSON or nil on failure."
                (call-process "curl" nil t nil
                              "-s" "-H" (format "Authorization: Bearer %s" api-key)
                              url)))
-          (when (zerop exit-code)
+          (when (and exit-code (zerop exit-code))
             (goto-char (point-min))
             (json-parse-buffer :object-type 'plist :array-type 'list))))
     (error
@@ -218,10 +219,10 @@ Risk factors:
 (defun gptel-auto-workflow--get-production-metrics (target)
   "Get production metrics for TARGET, using cache if available.
 Returns plist with production metrics or default values if unavailable."
-  (or (and gptel-auto-workflow--production-metrics-cache
-           (ignore-errors (gethash target gptel-auto-workflow--production-metrics-cache)))
+  (or (when (hash-table-p gptel-auto-workflow--production-metrics-cache)
+        (gethash target gptel-auto-workflow--production-metrics-cache))
       (let ((metrics (ignore-errors (gptel-auto-workflow--track-production-impact target nil))))
-        (when gptel-auto-workflow--production-metrics-cache
+        (when (hash-table-p gptel-auto-workflow--production-metrics-cache)
           (puthash target metrics gptel-auto-workflow--production-metrics-cache))
         metrics)))
 
