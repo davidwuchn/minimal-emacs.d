@@ -29,11 +29,23 @@ executed. Moved into progn. Also removed hardcoded `cd ~/.emacs.d`.
 - `904adff` ⚒ tdd: entity noise filter (30-char cap)
 - `a197563` ⊘ fix: Pi5 self-heal git-result in let* binding
 - `4cddf9b` ◈ best-model-for-target: Phase 2 graph-similar model lookup
+- `40f39ba` ⚒ perf: hoist similar-files mapcar out of dolist
+- `22c7e51` ◈ graph-categorization: experiment-history primary, schema secondary
+- `33ded1a` ⊘ fix: ensure-loaded guard for batch/test mode
+
+### Key Findings
+- Graph-driven categorization was a **no-op**: all schemas had freq=1 (below τ=3 stability
+  threshold) because entity extraction produced noisy unique names. Each schema was seen once
+  and never repeated.
+- Memory index had 64 entities, 31 were prose fragments (>30 chars)
+- `ensure-loaded` crashed in batch/test mode — `worktree-base-root` void
+- Pi5 commit `8d79adeff` had a `let*` binding bug (function call treated as variable)
 
 ### Remaining Opportunities
 - Unified graph persistence (low priority — rebuilds in seconds)
 - Pipeline keep rate verification (need Pi5 access)
 - `classify-schema` could use experiment-learned weights instead of hardcoded scoring
+- Pre-existing test failure: `reorder-puts-best-first` expects `deepseek-v4-pro` but gets `deepseek-v4-flash`
 
 ---
 
