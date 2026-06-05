@@ -3578,29 +3578,32 @@ restart)."
         (condition-case err
             (with-temp-buffer
               (insert-file-contents file)
-              (let ((data (json-read)))
-                (dolist (entry data)
-                  (let ((target (car entry))
-                        (plist (cdr entry)))
-                    (puthash target
-                             (list :byte-compiles (cdr (assq 'byte-compiles plist))
-                                   :syntax-ok (cdr (assq 'syntax-ok plist)))
-                             gptel-auto-experiment--target-state-cache)
-                    (let ((rejections (cdr (assq 'rejections plist))))
-                      (when (and rejections
-                                 (bound-and-true-p gptel-auto-experiment--rejection-memory)
-                                 (fboundp 'gptel-auto-experiment--remember-rejection))
-                        (dolist (rej rejections)
-                          (gptel-auto-experiment--remember-rejection target (car rej)))))
-                    (let ((successes (cdr (assq 'successes plist))))
-                      (when (and successes
-                                 (bound-and-true-p gptel-auto-experiment--success-memory)
-                                 (fboundp 'gptel-auto-experiment--remember-success))
-                        (dolist (succ successes)
-                          (gptel-auto-experiment--remember-success
-                           target (car succ) (cdr succ)))))))
-                (message "[digital-twin] Loaded %d target states + rejection memory from %s"
-                         (hash-table-count gptel-auto-experiment--target-state-cache) file)))
+              (let* ((raw (json-read))
+                     (data (if (listp raw) raw
+                             (cdr (assq 'files raw)))))
+                (when (listp data)
+                  (dolist (entry data)
+                    (let ((target (car entry))
+                          (plist (cdr entry)))
+                      (puthash target
+                               (list :byte-compiles (cdr (assq 'byte-compiles plist))
+                                     :syntax-ok (cdr (assq 'syntax-ok plist)))
+                               gptel-auto-experiment--target-state-cache)
+                      (let ((rejections (cdr (assq 'rejections plist))))
+                        (when (and rejections
+                                   (bound-and-true-p gptel-auto-experiment--rejection-memory)
+                                   (fboundp 'gptel-auto-experiment--remember-rejection))
+                          (dolist (rej rejections)
+                            (gptel-auto-experiment--remember-rejection target (car rej)))))
+                      (let ((successes (cdr (assq 'successes plist))))
+                        (when (and successes
+                                   (bound-and-true-p gptel-auto-experiment--success-memory)
+                                   (fboundp 'gptel-auto-experiment--remember-success))
+                          (dolist (succ successes)
+                            (gptel-auto-experiment--remember-success
+                             target (car succ) (cdr succ)))))))
+                  (message "[digital-twin] Loaded %d target states + rejection memory from %s"
+                           (hash-table-count gptel-auto-experiment--target-state-cache) file))))
           (error (message "[digital-twin] Failed to load: %s" (error-message-string err)))))))
 
 ;; ─── Ontology Self-Evolution ───
