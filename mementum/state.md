@@ -28,6 +28,12 @@ executed. Moved into progn. Also removed hardcoded `cd ~/.emacs.d`.
 - `823e4dc` ⊘ fix: drift detector circular categorization
 - `904adff` ⚒ tdd: entity noise filter (30-char cap)
 - `a197563` ⊘ fix: Pi5 self-heal git-result in let* binding
+- `4cddf9b` ◈ best-model-for-target: Phase 2 graph-similar model lookup
+
+### Remaining Opportunities
+- Unified graph persistence (low priority — rebuilds in seconds)
+- Pipeline keep rate verification (need Pi5 access)
+- `classify-schema` could use experiment-learned weights instead of hardcoded scoring
 
 ---
 
