@@ -126,7 +126,7 @@ Returns parsed JSON or nil on failure."
 Returns float 0.0-1.0 representing error rate."
   (if (and stats-data (listp stats-data))
       (let* ((events (or (plist-get stats-data :data) '()))
-             (total-events (apply #'+ (mapcar #'cadr events)))
+             (total-events (or (ignore-errors (apply #'+ (mapcar #'cadr events))) 0))
              (time-span (length events))
              ;; Normalize to rate per day
              (rate (if (> time-span 0)
