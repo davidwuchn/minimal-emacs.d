@@ -55,6 +55,7 @@
 (declare-function gptel-auto-workflow--filter-frontier-saturated-targets "gptel-tools-agent-prompt-build" (targets))
 (defvar gptel-auto-experiment--critical-files)
 (declare-function gptel-auto-experiment--quota-exhausted-p "gptel-tools-agent-error" (agent-output))
+(declare-function gptel-auto-workflow--json-encode-plist "gptel-auto-workflow-ontology-router" (plist))
 (declare-function gptel-auto-experiment--is-retryable-error-p "gptel-tools-agent-error" (response))
 (declare-function gptel-auto-workflow--project-root "gptel-tools-agent-benchmark" ())
 (declare-function gptel-auto-workflow--valid-strategy-name-p "gptel-tools-agent-strategy-evolver" (name))
@@ -2507,7 +2508,7 @@ TOKENS-USED is estimated token count."
                                  :step-count (length all-steps)
                                  :has-steps (if all-steps t nil)))))
       (with-temp-file trace-file
-        (insert (json-encode trace-data)))
+        (insert (gptel-auto-workflow--json-encode-plist trace-data)))
       (when (fboundp 'gptel-auto-workflow--research-cache-index-trace-file)
         (gptel-auto-workflow--research-cache-index-trace-file trace-file))
       (message "[autotts] Saved research trace: %s (%d steps)"

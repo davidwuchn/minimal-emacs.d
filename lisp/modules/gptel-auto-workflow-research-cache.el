@@ -19,6 +19,7 @@
 (require 'json)
 (require 'subr-x)
 (declare-function gptel-auto-workflow--controller-decide-with-doom-check "strategic-daemon-functions")
+(declare-function gptel-auto-workflow--json-encode-plist "gptel-auto-workflow-ontology-router" (plist))
 
 (defvar gptel-auto-workflow--research-cache-dir
   (expand-file-name "var/tmp/research-traces/"
@@ -189,7 +190,7 @@
   (gptel-auto-workflow--ensure-research-cache-dir)
   (let ((index-file (gptel-auto-workflow--research-cache-index-file)))
     (with-temp-file index-file
-      (insert (json-encode gptel-auto-workflow--research-cache-index)))))
+      (insert (gptel-auto-workflow--json-encode-plist gptel-auto-workflow--research-cache-index)))))
 
 (defun gptel-auto-workflow--cache-research-turn (topic turn-data)
   "Cache a research turn for TOPIC.
@@ -216,7 +217,7 @@ TURN-DATA is a plist with :prompt :findings :controller-decision
     
     ;; Save raw data
     (with-temp-file raw-file
-      (insert (json-encode turn-data)))
+       (insert (gptel-auto-workflow--json-encode-plist turn-data)))
     
     ;; Update index
     (push entry gptel-auto-workflow--research-cache-index)

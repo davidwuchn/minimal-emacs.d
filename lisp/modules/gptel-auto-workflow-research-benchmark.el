@@ -21,6 +21,7 @@
 (declare-function gptel-benchmark-call-subagent "gptel-benchmark-subagent")
 (declare-function gptel-benchmark-call-subagent-sync "gptel-benchmark-subagent")
 (declare-function gptel-auto-workflow--load-autotts-controller "strategic-daemon-functions")
+(declare-function gptel-auto-workflow--json-encode-plist "gptel-auto-workflow-ontology-router" (plist))
 (declare-function gptel-auto-workflow--alist-to-sandbox-env "strategic-daemon-functions")
 (declare-function gptel-auto-workflow--eval-rule-sandbox "strategic-daemon-functions")
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent" ())
@@ -458,7 +459,7 @@ update-controller-from-champion-changes survive the save."
           (setq tail (cddr tail))))
       (make-directory (file-name-directory controller-file) t)
       (with-temp-file controller-file
-        (insert (json-encode merged)))
+         (insert (gptel-auto-workflow--json-encode-plist merged)))
       (message "[autotts] Saved evolved controller: %s (preserved champion keys)" controller-file))))
 
 (defvar gptel-auto-workflow--controller-evolution-history nil
@@ -503,7 +504,7 @@ Returns list of evolution records."
                                         (gptel-auto-workflow--worktree-base-root))))
     (make-directory (file-name-directory history-file) t)
     (with-temp-file history-file
-      (insert (json-encode history)))
+      (insert (gptel-auto-workflow--json-encode-plist history)))
     (message "[autotts] Saved evolution history: %d generations" (length history))))
 
 (defun gptel-auto-workflow--count-actionable-patterns (findings)
@@ -1338,7 +1339,7 @@ won't overwrite it.  The researcher-prompt/SKILL.md uses
             :best-topic-rate ,(or best-topic-rate 0.0))))
     (make-directory data-dir t)
     (with-temp-file guidance-file
-      (insert (json-encode guidance-json)))
+      (insert (gptel-auto-workflow--json-encode-plist guidance-json)))
     (message "[autotts] Saved strategy guidance to %s (own=%.0f%% ext=%.0f%% beta=%.2f)"
              (file-name-nondirectory guidance-file) own-priority ext-priority beta)))
 
@@ -1469,7 +1470,7 @@ produce concrete, named patterns?"
                                             (cl-remove-if (lambda (p) (eq (car p) :total)) pattern-counts)
                                             " "))
                         (erase-buffer)
-                        (insert (json-encode trace))
+                         (insert (gptel-auto-workflow--json-encode-plist trace))
                         (write-region (point-min) (point-max) file))
                        (setq updated t)
                        ;; Schedule trace synthesis + maybe controller evolution
@@ -1556,7 +1557,7 @@ Persists evolved strategy for daemon restarts."
                                                 (gptel-auto-workflow--worktree-base-root))))
           (make-directory (file-name-directory strategy-file) t)
            (with-temp-file strategy-file
-             (insert (json-encode `(:active-strategy ,(if (and (fboundp 'gptel-auto-workflow--valid-strategy-name-p)
+              (insert (gptel-auto-workflow--json-encode-plist `(:active-strategy ,(if (and (fboundp 'gptel-auto-workflow--valid-strategy-name-p)
                                                                (gptel-auto-workflow--valid-strategy-name-p
                                                                 gptel-auto-workflow--active-strategy))
                                                           gptel-auto-workflow--active-strategy

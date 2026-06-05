@@ -22,6 +22,7 @@
 
 ;; External functions from other modules
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base" ())
+(declare-function gptel-auto-workflow--json-encode-plist "gptel-auto-workflow-ontology-router" (plist))
 (declare-function gptel-auto-workflow--load-skill-content "gptel-tools-agent-prompt-build" (skill-name))
 (declare-function gptel-auto-workflow-run-async "gptel-tools-agent-main" (&optional targets completion-callback))
 (declare-function gptel-auto-workflow--discover-strategies "gptel-tools-agent-strategy-harness" ())
@@ -3684,7 +3685,7 @@ AutoGo holdout pattern: crosses train vs holdout trends."
       (setq history (plist-put history :history
                        (cons entry (seq-take (plist-get history :history) 10))))
       (make-directory (file-name-directory hf) t)
-      (with-temp-file hf (insert (json-encode (list :history (plist-get history :history) :best best :last avg))))
+      (with-temp-file hf (insert (gptel-auto-workflow--json-encode-plist (list :history (plist-get history :history) :best best :last avg))))
       (list :average avg :trend trend :best best))))
 
 (defun gptel-auto-workflow--score-holdout-target (file-path)
@@ -5008,7 +5009,7 @@ Persists updated config to var/tmp/researcher-controller.json."
                          gptel-auto-workflow--category-champions)))
       (make-directory (file-name-directory config-file) t)
       (with-temp-file config-file
-        (insert (json-encode existing))))))
+         (insert (gptel-auto-workflow--json-encode-plist existing))))))
 
 (defun gptel-auto-workflow--category-experiment-budget (total-experiments)
   "Allocate TOTAL-EXPERIMENTS slots across 4 categories by champion status.
@@ -5240,7 +5241,7 @@ Also persists EMA confidence history for cross-session trend analysis."
     (when file
       (make-directory (file-name-directory file) t)
       (with-temp-file file
-        (insert (json-encode hints))))))
+         (insert (gptel-auto-workflow--json-encode-plist hints))))))
 
 (defun gptel-auto-workflow--json-map-entries (value)
   "Return VALUE as alist entries after JSON plist/alist restoration."
@@ -6083,14 +6084,14 @@ Saves to var/tmp/evolution-scores.json."
     (setq history (plist-put history :last-total total))
     (setq history (plist-put history :scores
                 (cons (list :timestamp (format-time-string "%Y-%m-%dT%H:%M")
-                           :score score :total total)
-                      (seq-take scores 20))))
+                            :score score :total total)
+                       (seq-take scores 20))))
     (when (> score (or best 0.0))
       (setq history (plist-put history :best score))
       (setq history (plist-put history :best-at (format-time-string "%Y-%m-%dT%H:%M"))))
     (make-directory (file-name-directory score-file) t)
     (with-temp-file score-file
-      (insert (json-encode history)))
+      (insert (gptel-auto-workflow--json-encode-plist history)))
     (message "[evolution] Recorded score: %.4f (best: %.4f, total: %d)" score (plist-get history :best) total)
     score))
 

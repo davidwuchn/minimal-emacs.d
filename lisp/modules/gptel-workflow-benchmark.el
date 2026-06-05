@@ -24,6 +24,7 @@
 (declare-function gptel-agent-loop--task-step-count "gptel-agent-loop")
 
 (declare-function gptel-agent--task "gptel-tools-agent")
+(declare-function gptel-auto-workflow--plist-to-alist-for-json "gptel-auto-workflow-ontology-router" (plist))
 (declare-function gptel-benchmark-eight-keys-score "gptel-benchmark-principles")
 (declare-function gptel-benchmark-memory-search "gptel-benchmark-memory")
 (declare-function gptel-benchmark-memory-read "gptel-benchmark-memory")
@@ -572,7 +573,13 @@ Uses phase trace timestamps to determine time window."
   "Write DATA as JSON to FILE."
   (with-temp-file file
     (let ((json-encoding-pretty-print t))
-      (insert (json-encode data)))))
+      (insert (json-encode
+               (cond
+                ((and (listp data) (keywordp (car-safe data)))
+                 (gptel-auto-workflow--plist-to-alist-for-json data))
+                ((and (listp data) (listp (car-safe data)) (keywordp (car-safe (car-safe data))))
+                 (mapcar #'gptel-auto-workflow--plist-to-alist-for-json data))
+                (t data)))))))
 
 ;;; Interactive Commands
 

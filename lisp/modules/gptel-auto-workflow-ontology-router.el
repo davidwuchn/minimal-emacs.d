@@ -3577,6 +3577,40 @@ Returns alist of suggestions: (target . suggested-category)."
                        (* 100 delta) (* 100 best-rate))))))
     suggestions)))
 
+;; ─── JSON Encoding Helpers ───
+
+(defun gptel-auto-workflow--plist-to-alist-for-json (plist)
+  "Convert PLIST to alist suitable for json-encode.
+json-encode cannot handle nested plists — it encodes (:key val) pairs
+as JSON arrays instead of objects.  This function recursively converts
+all nested plists to alists of cons pairs, which json-encode handles
+correctly: ((:key . val)) → {\"key\": val}."
+  (when (and (listp plist) (keywordp (car plist)))
+    (let ((result nil))
+      (while (and plist (keywordp (car plist)))
+        (let ((key (car plist))
+              (val (cadr plist)))
+          (push (cons key
+                      (cond
+                       ((and (listp val) (keywordp (car val)))
+                        (gptel-auto-workflow--plist-to-alist-for-json val))
+                       ((listp val)
+                        (mapcar (lambda (item)
+                                  (if (and (listp item) (keywordp (car item)))
+                                      (gptel-auto-workflow--plist-to-alist-for-json item)
+                                    item))
+                                val))
+                       (t val)))
+                result)
+          (setq plist (cddr plist))))
+      (nreverse result))))
+
+(defun gptel-auto-workflow--json-encode-plist (plist)
+  "Encode PLIST to JSON, correctly handling nested plists.
+Standard json-encode treats nested plists as arrays.  This converts
+the plist to an alist first, then encodes."
+  (json-encode (gptel-auto-workflow--plist-to-alist-for-json plist)))
+
 ;; ─── Digital Twin Persistence ───
 
 (defun gptel-auto-workflow--persist-target-state ()
