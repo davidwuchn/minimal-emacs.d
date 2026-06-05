@@ -222,8 +222,10 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
              gptel-auto-experiment--quota-exhausted)
     (message "[auto-experiment] ⏹ All backends quota exhausted — aborting experiment %d/%d for %s"
              experiment-id max-experiments target)
-    (when (functionp callback)
-      (funcall callback (list :target target :id experiment-id :kept nil :error "all-backends-quota-exhausted")))
+    (let ((result (list :target target :id experiment-id :kept nil :error "all-backends-quota-exhausted")))
+      (gptel-auto-experiment-log-tsv gptel-auto-workflow--run-id result)
+      (when (functionp callback)
+        (funcall callback result)))
     (cl-return-from gptel-auto-experiment-run))
   (message "[auto-experiment] Starting %d/%d for %s" experiment-id max-experiments target)
   (setq gptel-auto-experiment--loaded-skills nil)
@@ -396,16 +398,17 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
               (let ((precondition-error
                      (when (fboundp 'gptel-auto-workflow--check-action-preconditions)
                        (gptel-auto-workflow--check-action-preconditions target))))
-                (if precondition-error
-                    (let ((default-directory experiment-worktree))
-                      (message "[auto-exp] 🚫 %s" precondition-error)
-                      (magit-git-success "checkout" "--" ".")
-                      (setq finished t)
-                      (funcall callback
-                               (list :target target :id experiment-id :kept nil
-                                     :duration (- (float-time start-time))
-                                     :grader-reason precondition-error
-                                     :comparator-reason "precondition-blocked")))
+                 (if precondition-error
+                     (let ((default-directory experiment-worktree)
+                           (precondition-result (list :target target :id experiment-id :kept nil
+                                                     :duration (- (float-time start-time))
+                                                     :grader-reason precondition-error
+                                                     :comparator-reason "precondition-blocked")))
+                       (message "[auto-exp] 🚫 %s" precondition-error)
+                       (magit-git-success "checkout" "--" ".")
+                       (setq finished t)
+                       (funcall log-fn run-id precondition-result)
+                       (funcall callback precondition-result))
                   ;; Routing handled by gptel-auto-workflow--advice-task-override
                   (my/gptel--run-agent-tool-with-timeout
                    experiment-timeout
@@ -414,12 +417,13 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                    (format "Experiment %d: optimize %s" experiment-id target)
                    executor-prompt
                    nil "false" nil)))))))
-    (if (not worktree)
-        (progn
-          (setq finished t)
-          (when (functionp callback)
-            (funcall callback (list :target target :id experiment-id :kept nil
-                                    :error "Failed to create worktree" :backend "none"))))
+     (if (not worktree)
+         (let ((worktree-fail-result (list :target target :id experiment-id :kept nil
+                                          :error "Failed to create worktree" :backend "none")))
+           (setq finished t)
+           (funcall log-fn run-id worktree-fail-result)
+           (when (functionp callback)
+             (funcall callback worktree-fail-result)))
       (gptel-auto-experiment--call-in-context
        experiment-buffer experiment-worktree
        (lambda ()

@@ -6452,20 +6452,32 @@ Returns plist with :healthy-p and :diagnosis."
             :grader-failures grader-failures
             :remedy "Auto-pass grader timeouts; increase grader timeout to match experiment budget"))
 
-     ;; Warning: high timeout rate
-     ((and (> total 2) (> timeouts (/ total 2)))
-      (list :healthy-p nil
-            :diagnosis "timeouts-too-aggressive"
-            :confidence 0.8
-            :keep-rate keep-rate
-            :timeouts timeouts
-            :remedy "Increase experiment or grader timeout by 50%%"))
+      ;; Warning: high timeout rate
+      ((and (> total 2) (> timeouts (/ total 2)))
+       (list :healthy-p nil
+             :diagnosis "timeouts-too-aggressive"
+             :confidence 0.8
+             :keep-rate keep-rate
+             :timeouts timeouts
+             :remedy "Increase experiment or grader timeout by 50%%"))
 
-     ;; Healthy
-     (t (list :healthy-p t
-              :keep-rate keep-rate
-              :diagnosis nil
-              :total total)))))
+      ;; New: all experiments rejected for quality reasons (not infrastructure)
+      ;; This indicates hypothesis generation is producing poor ideas
+      ((and (> total 3) (= kept-count 0)
+            (< grader-failures (/ total 2))
+            (< timeouts (/ total 2)))
+       (list :healthy-p nil
+             :diagnosis "hypotheses-poor-quality"
+             :confidence 0.85
+             :keep-rate keep-rate
+             :total total
+             :remedy "Review hypothesis generation strategy; consider narrowing target selection or using research-first mode"))
+
+      ;; Healthy
+      (t (list :healthy-p t
+               :keep-rate keep-rate
+               :diagnosis nil
+               :total total)))))
 
 (defun gptel-auto-workflow--auto-remediate (diagnosis)
   "Apply automatic fix for DIAGNOSIS.  Returns t if fix applied."
@@ -6487,19 +6499,33 @@ Returns plist with :healthy-p and :diagnosis."
                  gptel-auto-workflow--self-healing-log)
            (setq fixed t))))
 
-      ("timeouts-too-aggressive"
-       ;; Increase experiment budget by 50%
-       (when (boundp 'gptel-auto-experiment-time-budget)
-         (let ((new-budget (floor (* gptel-auto-experiment-time-budget 1.5))))
-           (setq gptel-auto-experiment-time-budget new-budget)
-           (message "[self-heal] Too many timeouts — increased budget to %ds"
-                    new-budget)
+       ("timeouts-too-aggressive"
+        ;; Increase experiment budget by 50%
+        (when (boundp 'gptel-auto-experiment-time-budget)
+          (let ((new-budget (floor (* gptel-auto-experiment-time-budget 1.5))))
+            (setq gptel-auto-experiment-time-budget new-budget)
+            (message "[self-heal] Too many timeouts — increased budget to %ds"
+                     new-budget)
+            (push (list :timestamp (float-time)
+                        :diagnosis diagnosis-str
+                        :remedy (format "budget=%d" new-budget)
+                        :before-rate (plist-get diagnosis :keep-rate))
+                  gptel-auto-workflow--self-healing-log)
+             (setq fixed t))))
+
+      ("hypotheses-poor-quality"
+       ;; Reduce experiments per target to focus on quality; log for human review
+       (when (boundp 'gptel-auto-workflow--max-experiments-per-target)
+         (let ((new-max (max 1 (/ gptel-auto-workflow--max-experiments-per-target 2))))
+           (setq gptel-auto-workflow--max-experiments-per-target new-max)
+           (message "[self-heal] Poor hypothesis quality — reduced experiments/target to %d"
+                    new-max)
            (push (list :timestamp (float-time)
                        :diagnosis diagnosis-str
-                       :remedy (format "budget=%d" new-budget)
+                       :remedy (format "max-exp/target=%d" new-max)
                        :before-rate (plist-get diagnosis :keep-rate))
                  gptel-auto-workflow--self-healing-log)
-            (setq fixed t)))))
+           (setq fixed t)))))
      fixed))
 
 ;;; ─── Phase 7: Recovery Verification ───

@@ -1260,8 +1260,15 @@ Force-stops when:
                (active-tasks (and (boundp 'my/gptel--agent-task-state)
                                   (hash-table-p my/gptel--agent-task-state)
                                   (hash-table-count my/gptel--agent-task-state))))
-          (cond
-            ;; Total budget exceeded — workflow ran too long overall
+            (let ((rss-kb (and (fboundp 'gptel-auto-workflow--process-rss-kb)
+                               (gptel-auto-workflow--process-rss-kb))))
+              (cond
+               ;; RSS exceeds 2.5GB — memory leak or accumulation, force-stop to prevent OOM
+               ((and rss-kb (> rss-kb 2621440))  ; 2.5GB in KB
+                (let ((rss-mb (/ rss-kb 1024.0)))
+                  (message "[auto-workflow] WATCHDOG: RSS %.0fMB exceeds 2.5GB threshold, force-stopping" rss-mb)
+                  (gptel-auto-workflow--force-stop)))
+               ;; Total budget exceeded — workflow ran too long overall
             ((and (numberp elapsed-minutes) (> elapsed-minutes gptel-auto-workflow--total-budget-minutes))
              (message "[auto-workflow] WATCHDOG: Workflow exceeded total budget (%.0f > %d min), force-stopping"
                       elapsed-minutes gptel-auto-workflow--total-budget-minutes)
@@ -1281,7 +1288,7 @@ Force-stops when:
                       stuck-minutes)
              (gptel-auto-workflow--force-stop))
             (t
-             t))))
+             t)))))
     (error
      (message "[auto-workflow] WATCHDOG: Check failed: %S\n%s"
               err
