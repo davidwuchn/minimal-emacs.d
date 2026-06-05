@@ -23,6 +23,15 @@
 ;; External functions from other modules
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base" ())
 (declare-function gptel-auto-workflow--json-encode-plist "gptel-auto-workflow-ontology-router" (plist))
+(declare-function gptel-knowledge--playout-cap-randomize "gptel-auto-workflow-knowledge-reasoning" ())
+(declare-function gptel-knowledge--playout-sample-limit "gptel-auto-workflow-knowledge-reasoning" (depth))
+(declare-function gptel-knowledge--dialectic-check "gptel-auto-workflow-knowledge-reasoning" (target-history))
+(declare-function gptel-knowledge--horn-sat-p "gptel-auto-workflow-knowledge-reasoning" (clauses))
+(declare-function gptel-knowledge--check-ontology-consistency "gptel-auto-workflow-knowledge-reasoning" (ontology-rules))
+(declare-function gptel-knowledge--floyd-warshall "gptel-auto-workflow-knowledge-reasoning" (nodes edges))
+(declare-function gptel-knowledge--experiment-causal-graph "gptel-auto-workflow-knowledge-reasoning" (results))
+(declare-function gptel-knowledge--allen-detect-gaps "gptel-auto-workflow-knowledge-reasoning" (intervals))
+(declare-function gptel-knowledge--ontology-from-experiments "gptel-auto-workflow-knowledge-reasoning" (results))
 (declare-function gptel-auto-workflow--load-skill-content "gptel-tools-agent-prompt-build" (skill-name))
 (declare-function gptel-auto-workflow-run-async "gptel-tools-agent-main" (&optional targets completion-callback))
 (declare-function gptel-auto-workflow--discover-strategies "gptel-tools-agent-strategy-harness" ())
@@ -451,6 +460,60 @@ Returns alist of target → (category success-rate count)."
 
 ;; ─── Phase 3: Synthesize ──→ Mementum as Knowledge ───
 
+(defun gptel-auto-workflow--synthesize-causal-chains ()
+  "Insert causal chain analysis section into current buffer."
+  (insert "## Causal Chain Analysis\n\n")
+  (unless (fboundp 'gptel-knowledge--floyd-warshall)
+    (insert "*Knowledge reasoning module not loaded - causal analysis unavailable.*\n")
+    (insert "\n")
+    (cl-return-from gptel-auto-workflow--synthesize-causal-chains nil))
+  (let* ((all-results (gptel-auto-workflow--parse-all-results))
+         (graph (gptel-knowledge--experiment-causal-graph all-results)))
+    (if (or (null (car graph)) (< (length (car graph)) 2))
+        (insert "*Insufficient experiment data for causal chain analysis.*\n")
+      (let* ((fw (gptel-knowledge--floyd-warshall (car graph) (cdr graph)))
+             (chains (plist-get fw :causal-chains))
+             (long-chains (seq-filter (lambda (c) (> (plist-get c :distance) 1)) chains)))
+        (if (null long-chains)
+            (insert "*No multi-hop causal chains detected in experiment history.*\n")
+          (insert (format "*%d causal chain(s) detected (transitive dependencies):*\n\n" (length long-chains)))
+          (dolist (chain (seq-take long-chains 5))
+            (insert (format "- exp %s -> exp %s (distance: %d, path: %s)\n"
+                            (plist-get chain :from)
+                            (plist-get chain :to)
+                            (plist-get chain :distance)
+                            (mapconcat #'identity (plist-get chain :path) " -> ")))))))
+    (insert "\n")))
+
+(defun gptel-auto-workflow--synthesize-gap-detection ()
+  "Insert experiment gap detection section into current buffer."
+  (insert "## Experiment Gap Detection\n\n")
+  (unless (fboundp 'gptel-knowledge--allen-detect-gaps)
+    (insert "*Knowledge reasoning module not loaded - gap detection unavailable.*\n")
+    (insert "\n")
+    (cl-return-from gptel-auto-workflow--synthesize-gap-detection nil))
+  (let* ((all-results (gptel-auto-workflow--parse-all-results))
+         (with-time (cl-remove-if-not (lambda (r) (plist-get r :timestamp)) all-results)))
+    (if (< (length with-time) 2)
+        (insert "*Insufficient timestamped experiments for gap detection.*\n")
+      (let* ((intervals (mapcar (lambda (r)
+                                  (list :start (plist-get r :timestamp)
+                                        :end (+ (plist-get r :timestamp)
+                                                (or (plist-get r :duration) 60))
+                                        :id (plist-get r :id)
+                                        :target (plist-get r :target)))
+                                with-time))
+             (gaps (gptel-knowledge--allen-detect-gaps intervals)))
+        (if (null gaps)
+            (insert "*No significant gaps detected between experiments.*\n")
+          (insert (format "*%d gap(s) detected between experiment intervals:*\n\n" (length gaps)))
+          (dolist (gap (seq-take gaps 5))
+            (insert (format "- Gap between exp %s and exp %s (%.0fs)\n"
+                            (plist-get gap :before-id)
+                            (plist-get gap :after-id)
+                            (plist-get gap :gap-duration)))))))
+    (insert "\n")))
+
 (defun gptel-auto-workflow--evolution-synthesize ()
   "Synthesize git facts and benchmark verification into skill files.
 This is the CENTRAL function of self-evolution.
@@ -645,6 +708,9 @@ target).*\n")
                 (insert "\n")))))
         (insert "\n")
 
+        (gptel-auto-workflow--synthesize-causal-chains)
+        (gptel-auto-workflow--synthesize-gap-detection)
+
         (insert "## Feedback Loop\n\n")
         (insert "```\n")
         (insert "Experiments → Git History → Facts\n")
@@ -655,6 +721,25 @@ target).*\n")
         (insert "```\n")))
 
       (message "[auto-workflow] Synthesized self-evolution skills")
+      ;; Generate OWL/SHACL ontology from experiment data
+      (when (fboundp 'gptel-knowledge--ontology-from-experiments)
+        (let* ((all-results (gptel-auto-workflow--parse-all-results))
+               (ontology (gptel-knowledge--ontology-from-experiments all-results))
+               (owl-file (expand-file-name "var/tmp/evolution/ontology.ttl"
+                                            (gptel-auto-workflow--worktree-base-root)))
+               (shacl-file (expand-file-name "var/tmp/evolution/shacl.ttl"
+                                              (gptel-auto-workflow--worktree-base-root)))
+               (stats (plist-get ontology :stats)))
+          (when (plist-get ontology :owl)
+            (with-temp-file owl-file
+              (insert (plist-get ontology :owl)))
+            (message "[evolution] OWL ontology written (%d classes, %d instances)"
+                     (or (plist-get stats :classes) 0)
+                     (or (plist-get stats :instances) 0)))
+          (when (plist-get ontology :shacl)
+            (with-temp-file shacl-file
+              (insert (plist-get ontology :shacl)))
+            (message "[evolution] SHACL shapes written"))))
       ;; Invalidate self-evolution cache so next prompt gets fresh knowledge
       (when (fboundp 'gptel-auto-workflow--knowledge-cache-invalidate)
         (gptel-auto-workflow--knowledge-cache-invalidate 'self-evolution)
@@ -3520,14 +3605,45 @@ threshold."
   "Gate evolved strategies against per-category champions.
 AutoGo category-gating: each ontology category has its own champion.
 μ Directness: first champion must beat category baseline, not absolute zero.
-Promotion: challenger must exceed category champion by >5% relative."
+Promotion: challenger must exceed category champion by >5% relative.
+Playout Cap Randomization (80/15/5): limits evaluation depth to
+prevent over-specialization — quick evaluates top 3, medium top 7, deep all."
   (let* ((_loaded (gptel-auto-workflow--load-category-champions))
          (_baselines (gptel-auto-workflow--compute-category-baselines))
          (strategies (gptel-auto-workflow--discover-strategies))
          (scores (mapcar (lambda (s) (cons s (gptel-auto-workflow--strategy-composite-score s)))
                          strategies))
          (scores (sort scores (lambda (a b) (> (cdr a) (cdr b)))))
+         (playout-depth (when (fboundp 'gptel-knowledge--playout-cap-randomize)
+                          (gptel-knowledge--playout-cap-randomize)))
+         (sample-limit (when (fboundp 'gptel-knowledge--playout-sample-limit)
+                         (gptel-knowledge--playout-sample-limit playout-depth)))
+         (_ (when playout-depth
+              (message "[champion] Playout cap: %s (limit=%d)" playout-depth (or sample-limit 0))))
+         (scores (if (and sample-limit (> sample-limit 0) (< sample-limit (length scores)))
+                     (seq-take scores sample-limit)
+                   scores))
          (categories '(:programming :tool-calls :agentic :natural-language))
+         (ontology-ok
+          (if (fboundp 'gptel-knowledge--check-ontology-consistency)
+              (let* ((onto (gptel-auto-workflow--generate-experiment-ontology))
+                     (horn-rules (when onto
+                                   (delq nil
+                                         (mapcar (lambda (cls)
+                                                   (when-let* ((name (plist-get cls :name))
+                                                               (deps (plist-get cls :depends-on)))
+                                                     (list :head (intern name)
+                                                           :body (mapcar #'intern deps))))
+                                                 (plist-get onto :classes))))))
+                (if horn-rules
+                    (let ((sat (gptel-knowledge--check-ontology-consistency horn-rules)))
+                      (when (not (plist-get sat :consistent))
+                        (message "[champion] ⚠ Ontology inconsistency: %S" (plist-get sat :conflicts)))
+                      (plist-get sat :consistent))
+                  t))
+            t))
+         (_ (when (not ontology-ok)
+              (message "[champion] Ontology check: inconsistencies detected")))
          (results nil))
     (dolist (entry scores)
       (let* ((name (car entry))

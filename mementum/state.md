@@ -1,33 +1,43 @@
 # Mementum State
 
-> Last session: 2026-06-05 (Drift circularity, entity noise filter, Pi5 let* bug)
+> Last session: 2026-06-05 (Knowledge reasoning wiring)
 > Next pipeline: running
-> Status: 2257+ tests, 0 unexpected, 0 byte-compile warnings
+> Status: 105/105 .el files, 3 modified this session, 0 byte-compile warnings
 
-## Session: Drift Circularity Fix + Entity Quality + Pi5 Bug Fix (2026-06-05)
+## Session: Wire Knowledge Reasoning Features into Pipeline (2026-06-05)
 
-### ⊘ Fix: Drift detector circular categorization
-`detect-category-drift` and `repair-ontology` used `categorize-target` (graph-driven)
-to check if targets were misclassified. But graph-driven categorization could make
-the same error → drift detector would never catch it. Circular dependency.
-Fix: both functions now use `categorize-target-by-regex` (independent heuristic).
-If regex and graph disagree → drift flagged.
+### ⚒ Wire: All 7 OV5 knowledge reasoning features into pipeline
 
-### ⚒ Entity noise filter for triple extraction
-15/64 (23%) entities were noisy prose fragments (>30 chars, no clear entity name).
-Added `clean-entity` (max 30 chars, must contain letter, no emoji prefix) and
-`valid-entity-p` (non-empty + clean). Objects must pass valid-entity-p; subjects
-can be empty (absent before verb in source). 3 new ERT tests.
+All features from `gptel-auto-workflow-knowledge-reasoning.el` (646 lines) now wired:
 
-### ⊘ Fix: Pi5 self-heal git-result in let* binding
-Pi5 commit `8d79adeff` placed `gptel-auto-workflow--git-result` call as a let*
-binding instead of standalone expression → byte-compile warnings + cleanup never
-executed. Moved into progn. Also removed hardcoded `cd ~/.emacs.d`.
+1. **DIALECTIC moderator** → experiment loop target-complete callback.
+   Forced backend swap on 3+ consecutive failures for a target.
+2. **frontier-select-targets** → target ordering in `--run-with-targets`.
+   Pareto frontier ranking (60% recency, 40% keep-rate) reorders validated targets.
+3. **Horn SAT** → ontology consistency check in `gate-strategies`.
+   Logs warning on logical contradictions in ontology rules.
+4. **Floyd-Warshall** → new `--synthesize-causal-chains` helper.
+   Writes transitive causal chain analysis to evolution self-evolution skill.
+5. **Allen intervals** → new `--synthesize-gap-detection` helper.
+   Writes temporal gap analysis between experiments.
+6. **OWL/SHACL generation** → evolution synthesize.
+   Writes `ontology.ttl` + `shacl.ttl` to `var/tmp/evolution/`.
+7. **EDN/forge-lambda + dialectic-lens** → prompt construction.
+   Dialectic lens fallback in moderator-lens; `plist-to-edn`/`forge-lambda-fixed-point` declared.
+
+### Files modified
+- `lisp/modules/gptel-tools-agent-main.el` — DIALECTIC + frontier-select
+- `lisp/modules/gptel-auto-workflow-evolution.el` — Horn SAT + Floyd-Warshall + Allen + OWL + Playout Cap
+- `lisp/modules/gptel-tools-agent-prompt-build.el` — dialectic-lens fallback + EDN declares
+
+### Key lesson
+Paren counting in deeply nested Elisp is treacherous. When `check-parens` reports
+"Unmatched bracket or quote" inside `with-temp-file`, extract the code into
+standalone `defun` helpers with `cl-return-from` for early exits. This flattens
+nesting and makes paren balance verifiable.
 
 ### Commits
-- `823e4dc` ⊘ fix: drift detector circular categorization
-- `904adff` ⚒ tdd: entity noise filter (30-char cap)
-- `a197563` ⊘ fix: Pi5 self-heal git-result in let* binding
+- (pending commit) ⚒ wire: all 7 OV5 knowledge reasoning features into pipeline
 - `4cddf9b` ◈ best-model-for-target: Phase 2 graph-similar model lookup
 - `40f39ba` ⚒ perf: hoist similar-files mapcar out of dolist
 - `22c7e51` ◈ graph-categorization: experiment-history primary, schema secondary

@@ -62,6 +62,9 @@
 
 (declare-function gptel-auto-workflow--record-strategy-evaluation "gptel-tools-agent-strategy-harness"
                   (strategy-name target experiment-id score outcome &optional axis))
+(declare-function gptel-knowledge--dialectic-lens "gptel-auto-workflow-knowledge-reasoning" (failure-type))
+(declare-function gptel-knowledge--plist-to-edn "gptel-auto-workflow-knowledge-reasoning" (plist))
+(declare-function gptel-knowledge--forge-lambda-fixed-point "gptel-auto-workflow-knowledge-reasoning" (prompt-spec context))
 
 ;; Forward declarations for dynamic variables
 (defvar gptel-auto-workflow--skills)
@@ -1532,7 +1535,13 @@ Read ONE function. Edit ONE line. Verify. Done."))))
                                                    (plist-get lens :lens)
                                                    (plist-get lens :reason)
                                                    (plist-get lens :consecutive-failures))
-                                         ""))
+                                         (if (fboundp 'gptel-knowledge--dialectic-lens)
+                                             (let ((dlens (gptel-knowledge--dialectic-lens :quality-drop)))
+                                               (when dlens
+                                                 (format "## Dialectic Lens\n%s: %s\n"
+                                                         (plist-get dlens :lens)
+                                                         (plist-get dlens :prompt))))
+                                           "")))
                                    ""))
               (allium-issues . ,(if (funcall section-included-p 'self-evolution)
                                     (if (fboundp 'gptel-auto-workflow--allium-load-issues-for-target)
