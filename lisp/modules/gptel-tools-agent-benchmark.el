@@ -701,7 +701,7 @@ on the current provider."
              ;; so we attempt a direct fallback-result path to avoid stalling.
              (condition-case nil
                  (let ((result-cb callback))
-                   (setq callback (lambda (r) (message "[auto-exp] %s stale callback ignored" agent-type)))
+                   (setq callback (lambda (_r) (message "[auto-exp] %s stale callback ignored" agent-type)))
                    (funcall result-cb (list :error (format "Callback error in %s: %s" agent-type (error-message-string err)))))
                (error (message "[auto-exp] ⚠ %s fallback callback also failed; experiment may stall" agent-type))))))))))
 
