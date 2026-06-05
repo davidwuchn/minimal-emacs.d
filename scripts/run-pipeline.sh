@@ -660,26 +660,30 @@ if compgen -G "$RESULTS_PATTERN" >/dev/null; then
                 # Find corresponding optimize branch for this run
                 result_dir=$(basename "$(dirname "$latest_result")")
                 run_id="${result_dir##*-}"
-                # P2 FIX: Extract just the last part of target name (after last hyphen)
-                # Branch format: optimize/{name}-{host}-r{run}-exp{N}
+                # P2.1 FIX: Extract just the last part of target name (after last hyphen)
+                # Branch format: optimize/{name}-{hostname}-r{run_id}-exp{N}
                 # where name is the last component of target filename
                 target_base=$(basename "$target" .el)
                 target_name="${target_base##*-}"
-                # Try multiple patterns to find the branch
+                # Try multiple patterns to find the branch (check remote first)
                 branch=""
-                # Pattern 1: exact match with target_name and run_id
-                branch=$(git -C "$DIR" branch --list "optimize/${target_name}-*-${run_id}-exp*" 2>/dev/null | head -1 | sed 's/^[* ]*//')
-                # Pattern 2: match with just target_name and exp number
+                # Pattern 1: exact match with run_id on remote (most specific)
+                branch=$(git -C "$DIR" branch -r --list "origin/optimize/*-r${run_id}-exp${exp_id}" 2>/dev/null | head -1 | sed 's/^[* ]*//' | sed 's|^origin/||')
+                # Pattern 2: match with target_name and run_id on remote
                 if [ -z "$branch" ]; then
-                    branch=$(git -C "$DIR" branch --list "optimize/${target_name}-*-exp${exp_id}" 2>/dev/null | head -1 | sed 's/^[* ]*//')
+                    branch=$(git -C "$DIR" branch -r --list "origin/optimize/${target_name}-*-r${run_id}-exp*" 2>/dev/null | head -1 | sed 's/^[* ]*//' | sed 's|^origin/||')
                 fi
-                # Pattern 3: broader match with any target containing the name
+                # Pattern 3: match with just target_name and exp_id on remote
                 if [ -z "$branch" ]; then
-                    branch=$(git -C "$DIR" branch --list "optimize/*${target_name}*-exp${exp_id}" 2>/dev/null | head -1 | sed 's/^[* ]*//')
+                    branch=$(git -C "$DIR" branch -r --list "origin/optimize/${target_name}-*-exp${exp_id}" 2>/dev/null | head -1 | sed 's/^[* ]*//' | sed 's|^origin/||')
                 fi
-                # Pattern 4: match from remote branches
+                # Pattern 4: broader match with any target containing the name on remote
                 if [ -z "$branch" ]; then
-                    branch=$(git -C "$DIR" branch -r --list "origin/optimize/${target_name}-*" 2>/dev/null | head -1 | sed 's/^[* ]*//' | sed 's|^origin/||')
+                    branch=$(git -C "$DIR" branch -r --list "origin/optimize/*${target_name}*-exp${exp_id}" 2>/dev/null | head -1 | sed 's/^[* ]*//' | sed 's|^origin/||')
+                fi
+                # Pattern 5: check local branches as fallback
+                if [ -z "$branch" ]; then
+                    branch=$(git -C "$DIR" branch --list "optimize/${target_name}-*-${run_id}-exp*" 2>/dev/null | head -1 | sed 's/^[* ]*//')
                 fi
                 if [ -n "$branch" ]; then
                     log "  Merging kept experiment: $branch (decision: $decision)"
