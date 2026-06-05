@@ -415,8 +415,11 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                    executor-prompt
                    nil "false" nil)))))))
     (if (not worktree)
-        (when (functionp callback)
-          (funcall callback (list :target target :error "Failed to create worktree" :backend "none")))
+        (progn
+          (setq finished t)
+          (when (functionp callback)
+            (funcall callback (list :target target :id experiment-id :kept nil
+                                    :error "Failed to create worktree" :backend "none"))))
       (gptel-auto-experiment--call-in-context
        experiment-buffer experiment-worktree
        (lambda ()
