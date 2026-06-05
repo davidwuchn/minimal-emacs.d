@@ -132,6 +132,7 @@ Uses heuristics based on AutoTTS paper:
         (with-temp-buffer
           (insert-file-contents strategy-file)
           (let ((json-object-type 'alist)
+                (json-key-type 'symbol)
                 (data (json-read)))
             (format "**Strategy**: %s\n**Description**: %s\n**Phases**: %s"
                     (cdr (assoc 'name data))
@@ -491,7 +492,8 @@ Returns list of evolution records."
         (condition-case err
             (with-temp-buffer
               (insert-file-contents history-file)
-              (let ((json-object-type 'plist))
+              (let ((json-object-type 'plist)
+                    (json-key-type 'keyword))
                 (json-read)))
           (error
            (message "[autotts] Failed to load evolution history: %s" err)

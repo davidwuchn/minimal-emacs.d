@@ -6071,12 +6071,13 @@ Saves to var/tmp/evolution-scores.json."
           (history (gptel-auto-workflow--evolution-normalize-history
                     (condition-case nil
                         (let ((json-object-type 'plist)
-                              (json-array-type 'list))
+                              (json-array-type 'list)
+                              (json-key-type 'keyword))
                           (with-temp-buffer
                             (insert-file-contents score-file)
                             (goto-char (point-min))
                             (json-read)))
-                      (error (list :scores nil :best 0.0)))))
+                       (error (list :scores nil :best 0.0)))))
           (scores (gptel-auto-workflow--evolution-score-list
                    (plist-get history :scores)))
           (best (plist-get history :best)))
@@ -6100,7 +6101,8 @@ Saves to var/tmp/evolution-scores.json."
   (let* ((score-file (expand-file-name "var/tmp/evolution-scores.json"
                                        (or (gptel-auto-workflow--worktree-base-root) "~")))
           (last-total (condition-case nil
-                          (let ((json-object-type 'plist))
+                          (let ((json-object-type 'plist)
+                                (json-key-type 'keyword))
                             (with-temp-buffer
                               (insert-file-contents score-file)
                               (goto-char (point-min))
