@@ -219,20 +219,24 @@ Returns plist with :total-cost, :total-roi, :category-breakdown, :optimization-r
 
 (defun gptel-token-economics--load-data (file)
   "Load economics data from FILE."
-  (when (file-exists-p file)
-    (with-temp-buffer
-      (insert-file-contents file)
-      (setq gptel-token-economics--records
-            (mapcar (lambda (r)
-                      (list :id (plist-get r :id)
-                            :category (intern (plist-get r :category))
-                            :input-tokens (plist-get r :input-tokens)
-                            :output-tokens (plist-get r :output-tokens)
-                            :cost (plist-get r :cost)
-                            :score-before (plist-get r :score-before)
-                            :score-after (plist-get r :score-after)
-                            :decision (plist-get r :decision)))
-                    (json-read-from-string (buffer-string)))))))
+  (when (and (stringp file) (file-exists-p file))
+    (condition-case err
+        (with-temp-buffer
+          (insert-file-contents file)
+          (let ((raw (json-read-from-string (buffer-string))))
+            (when (listp raw)
+              (setq gptel-token-economics--records
+                    (mapcar (lambda (r)
+                              (list :id (plist-get r :id)
+                                    :category (intern (plist-get r :category))
+                                    :input-tokens (plist-get r :input-tokens)
+                                    :output-tokens (plist-get r :output-tokens)
+                                    :cost (plist-get r :cost)
+                                    :score-before (plist-get r :score-before)
+                                    :score-after (plist-get r :score-after)
+                                    :decision (plist-get r :decision)))
+                            raw)))))
+      (error (message "gptel-token-economics: failed to load %s: %s" file err)))))
 
 (provide 'gptel-token-economics)
 
