@@ -176,7 +176,7 @@ Also monitors memory and triggers GC when RSS exceeds threshold."
         ;; gptel-auto-workflow-production.el) forces full GC every 5 min.
         ;; RSS stays at 2.9GB from malloc caching — this is normal.
         ;; Watchdog handles physical memory (>5GB → restart).
-        (ignore))
+        (error nil))
     (gptel-auto-workflow--stop-status-refresh-timer)))
 
 (defun gptel-auto-workflow--maybe-start-status-refresh-timer ()

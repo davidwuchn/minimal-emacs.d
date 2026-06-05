@@ -664,7 +664,7 @@ Returns list of plists: (:name :start :end :has-docstring :length)."
                                      (forward-sexp)
                                      (skip-chars-forward " \t\n")
                                      (eq (char-after) ?\"))
-                                 (ignore)))
+                                 (error nil)))
                (func-end (condition-case nil
                               (save-excursion
                                 (goto-char start)
