@@ -3,6 +3,8 @@
 (require 'seq)
 (require 'subr-x)
 
+(declare-function gptel-auto-workflow--plist-delete-all "gptel-tools-agent-error")
+
 (defconst gptel-auto-experiment--axis-names
   '(("A" . "Error Handling")
     ("B" . "Performance")
@@ -2545,20 +2547,6 @@ Preserves rate-limited backends blacklist across experiments within a run."
 Call at the start of a new workflow run."
   (setq gptel-auto-workflow--rate-limited-backends nil))
 
-(defun gptel-auto-workflow--prompt-plist-delete-all (plist prop)
-  "Return PLIST without any entries for PROP."
-  (let (result tail)
-    (while plist
-      (let ((key (pop plist))
-            (val (pop plist)))
-        (unless (eq key prop)
-          (let ((cell (list key val)))
-            (if tail
-                (setcdr (cdr tail) cell)
-              (setq result cell))
-            (setq tail cell)))))
-    result))
-
 (defun gptel-auto-workflow--rate-limit-failover-candidates (agent-type)
   "Return fallback provider candidates for AGENT-TYPE after rate limiting.
 When ontology health data is available, ranks backends by health × keep-rate
@@ -2673,8 +2661,8 @@ chain so that subagent calls do not fall through to the mode-hook default
                                             backend-obj model-str))))
                      (message "[subagent] %s base-preset auto-selected %s/%s"
                               agent-type (car pick) model-str)
-                     (setq merged (gptel-auto-workflow--prompt-plist-delete-all merged :backend))
-                     (setq merged (gptel-auto-workflow--prompt-plist-delete-all merged :model))
+                     (setq merged (gptel-auto-workflow--plist-delete-all merged :backend))
+                     (setq merged (gptel-auto-workflow--plist-delete-all merged :model))
                      (setq merged (plist-put merged :backend (car pick)))
                       (setq merged (plist-put merged :model model-str)))))
             ;; Headless active but no candidates: fall back to

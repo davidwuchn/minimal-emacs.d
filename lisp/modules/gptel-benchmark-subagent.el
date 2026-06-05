@@ -77,6 +77,7 @@ Set by bump-model when consecutive failures exceed thresholds.")
                   (agent-type))
 (declare-function gptel-auto-workflow--subagent-persona "gptel-auto-workflow-ontology-router")
 (declare-function my/gptel--sanitize-for-logging "gptel-tools-agent")
+(declare-function gptel-auto-workflow--plist-delete-all "gptel-tools-agent-error")
 
 ;;; Customization
 
@@ -102,20 +103,6 @@ Increased from 360 to 480 to accommodate complex file analysis."
 When nil, falls back to local evaluation."
   :type 'boolean
   :group 'gptel-benchmark-subagent)
-
-(defun gptel-benchmark--plist-delete-all (plist prop)
-  "Return PLIST without any entries for PROP."
-  (let (result tail)
-    (while plist
-      (let ((key (pop plist))
-            (val (pop plist)))
-        (unless (eq key prop)
-          (let ((cell (list key val)))
-            (if tail
-                (setcdr (cdr tail) cell)
-              (setq result cell))
-            (setq tail cell)))))
-    result))
 
 (defvar gptel-benchmark--subagent-files nil
   "Dynamic file context for the next benchmark subagent dispatch.
@@ -311,8 +298,8 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                                    ((plistp override-preset) override-preset)
                                    ((plistp gptel-agent-preset) gptel-agent-preset)
                                    (t nil)))))
-                     (setq preset (gptel-benchmark--plist-delete-all preset :backend))
-                      (setq preset (gptel-benchmark--plist-delete-all preset :model))
+                     (setq preset (gptel-auto-workflow--plist-delete-all preset :backend))
+                      (setq preset (gptel-auto-workflow--plist-delete-all preset :model))
                       (setq preset (plist-put preset :backend selected-backend))
                       (if selected-model-sym
                           (plist-put preset :model selected-model-sym)
