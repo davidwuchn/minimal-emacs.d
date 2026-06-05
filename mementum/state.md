@@ -1,8 +1,41 @@
 # Mementum State
 
-> Last session: 2026-06-05 (Grader score parsing fix + byte-compile warnings)
+> Last session: 2026-06-05 (Grader fix, condition-case bug, plist dedup)
 > Next pipeline: running
 > Status: 2231 tests, 0 unexpected, 0 byte-compile warnings
+
+## Session: Systematic Bug Fixes + Pipeline Improvements (2026-06-05)
+
+### ⊘ Fix: Grader score parsing — criteria-total authoritative
+Grader outputs SCORE:3/9 but we specified 5 criteria → 3/9=33% < 60% → grader-failed.
+Fix: `criteria-total` from expected+forbidden is authoritative in all 3 parse paths.
+**Impact:** This was the root cause of 0% keep rate — nearly all experiments failed grading.
+
+### ⊘ Fix: condition-case (ignore) → (error nil) — 28 occurrences in 9 files
+`(ignore)` is not a valid error condition name. condition-case matches handler symbols
+against the signaled error's condition-name. No standard Emacs error uses `ignore`, so
+these handlers never triggered. Found via pipeline trying to fix safe-truename repeatedly.
+
+### ⊘ Fix: nil-guard (cdr best) → (or (cdr best) 0) in ontology-strategy.el
+
+### ⊘ Fix: safe-truename (ignore)→(error nil) + stringp guard + remove useless proper-list-p
+
+### ⚒ plist-delete-all: O(n²)→O(n) + deduplicate (3 copies → 1 canonical)
+Tail-pointer pattern replaces append. Removed duplicate definitions in
+benchmark-subagent.el and prompt-build.el; all callers now use
+gptel-auto-workflow--plist-delete-all from error.el.
+
+### Commits
+- `50c3135` ⊘ fix: 16 byte-compile warnings → 0 across all modules
+- `785bdbe` ⊘ fix: grader score parsing uses caller total
+- `37214d4` ⊘ fix: remove unused last-total variable
+- `700946e` ⚒ plist-delete-all O(n²)→O(n) in 2 files
+- `fcadc3e` ⊘ fix: safe-truename + proper-list-p
+- `da7c2aa` ⊘ fix: condition-case (ignore)→(error nil) in 9 files
+- `4d4b702` ⚒ plist-delete-all O(n²)→O(n) in error.el
+- `c9d2276` ◈ deduplicate plist-delete-all: 3 copies → 1
+
+---
 
 ## Session: Grader Score Parsing + Pipeline Fixes (2026-06-05)
 
