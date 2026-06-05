@@ -96,9 +96,10 @@ they are not tracked by Git."
                    (expand-file-name (file-name-nondirectory source) target-elpa))
               (cl-incf linked)))))
       (dolist (rel '("package-quickstart.el" "tree-sitter"))
-        (when (gptel-auto-workflow--link-shared-runtime-path
-               (expand-file-name rel source-var)
-               (expand-file-name rel target-var))
+        (when (ignore-errors
+                (gptel-auto-workflow--link-shared-runtime-path
+                 (expand-file-name rel source-var)
+                 (expand-file-name rel target-var)))
           (cl-incf linked)))
       (when (> linked 0)
         (message "[auto-workflow] Seeded runtime var for %s from %s"
