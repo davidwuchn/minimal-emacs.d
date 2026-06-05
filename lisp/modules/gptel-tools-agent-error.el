@@ -379,8 +379,9 @@ This is used for retry logic and includes transient errors."
       (gptel-auto-experiment--shared-transient-error-p error-output)
       (let ((msg (gptel-auto-experiment--error-message error-output)))
         (and (stringp msg)
-             (let ((case-fold-search t))
-               (string-match-p (plist-get gptel-auto-experiment--shared-retryable-error-patterns :transient) msg))))))
+             (let ((case-fold-search t)
+                   (pattern (plist-get gptel-auto-experiment--shared-retryable-error-patterns :transient)))
+               (and pattern (string-match-p pattern msg)))))))
 
 (defun gptel-auto-experiment--should-blacklist-provider-p (error-output)
   "Return non-nil only when ERROR-OUTPUT shows a real rate limit or hard quota.
