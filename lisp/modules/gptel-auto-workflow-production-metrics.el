@@ -126,7 +126,7 @@ Returns parsed JSON or nil on failure."
 Returns float 0.0-1.0 representing error rate."
   (if (and stats-data (listp stats-data))
       (let* ((events (or (plist-get stats-data :data) '()))
-             (total-events (apply #'+ (mapcar #'cadr events)))
+             (total-events (or (ignore-errors (apply #'+ (mapcar #'cadr events))) 0))
              (time-span (length events))
              ;; Normalize to rate per day
              (rate (if (> time-span 0)
@@ -219,7 +219,7 @@ Risk factors:
   "Get production metrics for TARGET, using cache if available.
 Returns plist with production metrics or default values if unavailable."
   (or (and gptel-auto-workflow--production-metrics-cache
-           (gethash target gptel-auto-workflow--production-metrics-cache))
+           (ignore-errors (gethash target gptel-auto-workflow--production-metrics-cache)))
       (let ((metrics (ignore-errors (gptel-auto-workflow--track-production-impact target nil))))
         (when gptel-auto-workflow--production-metrics-cache
           (puthash target metrics gptel-auto-workflow--production-metrics-cache))

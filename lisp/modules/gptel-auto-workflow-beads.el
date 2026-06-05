@@ -96,10 +96,10 @@ Example: \(bead-create \='gtm-to-pmf :source \='github
   (let ((beads (gptel-auto-workflow--bead-list)))
     (cl-some (lambda (bead)
                (when (string= (plist-get bead :id) id)
-                 (let* ((file (plist-get bead :file))
-                        (content (with-temp-buffer
-                                   (insert-file-contents file)
-                                   (buffer-string))))
+               (when-let ((file (plist-get bead :file)))
+                 (let ((content (with-temp-buffer
+                                  (insert-file-contents file)
+                                  (buffer-string))))
                    (setq content (replace-regexp-in-string
                                   "^status:.*$"
                                   (format "status: %s" new-status)
@@ -107,7 +107,7 @@ Example: \(bead-create \='gtm-to-pmf :source \='github
                    (with-temp-file file
                      (insert content))
                    (message "[bead] Updated %s → %s" id new-status)
-                   t)))
+                   t))))
              beads)))
 
 ;;; ─── Auto-Filing from Research (GTM → PMF) ───

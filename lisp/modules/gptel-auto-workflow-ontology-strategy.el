@@ -260,7 +260,7 @@ Triggers skill evolution for knowledge-management when gaps found."
   "Enhance experiment setup for TARGET with ontology data.
 Returns plist with :strategy, :backend recommendations."
   (let* ((ontology (gptel-auto-workflow--generate-experiment-ontology))
-         (strategies (mapcar (lambda (c) (plist-get c :name))
+         (strategies (mapcar (lambda (c) (or (plist-get c :name) "unknown"))
                              (plist-get ontology :classes)))
          (recommended-strategy (when strategies
                                  (gptel-auto-workflow--select-best-strategy-with-ontology
