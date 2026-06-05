@@ -493,4 +493,92 @@
      (should (gethash "agentic-strategy" gptel-auto-workflow--memory-schema-entities))
      (should (gethash "tool-calls-saturation" gptel-auto-workflow--memory-schema-entities)))))
 
+;; ─── Unified Entity-Ontology Graph ───
+
+(ert-deftest tdd/memory-schema/unified-graph/builds-from-schemas ()
+  (with-schema-test-env
+   (puthash "byte-compiler" (cons 5 '("mem1.md"))
+            gptel-auto-workflow--memory-schema-entities)
+   (puthash "(byte-compiler fix warnings)" 3
+            gptel-auto-workflow--memory-schema-schemas)
+   (puthash "byte-compiler:fix:warnings" (cons "(byte-compiler fix warnings)" "mem1.md")
+            gptel-auto-workflow--memory-schema-triples)
+   (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+              (lambda () gptel-auto-workflow--test-tmpdir))
+             ((symbol-function 'gptel-auto-workflow--build-digital-twin)
+              (lambda (&optional _force) nil))
+             ((symbol-function 'gptel-auto-workflow--semantic-similarity-edges)
+              (lambda (&optional _threshold) nil))
+             ((symbol-function 'gptel-auto-workflow--memory-schema-synonymy-edges)
+              (lambda (&optional _threshold) nil)))
+     (let ((graph (gptel-auto-workflow--unified-graph-build)))
+       (should graph)
+       (should (gethash (cons :entity "byte-compiler") graph))
+       (let ((neighbors (gptel-auto-workflow--unified-graph-neighbors :entity "byte-compiler")))
+         (should neighbors))))))
+
+(ert-deftest tdd/memory-schema/unified-graph/walk-finds-neighbors ()
+  (with-schema-test-env
+   (puthash "foo" (cons 3 '("mem1.md"))
+            gptel-auto-workflow--memory-schema-entities)
+   (puthash "(foo fix bar)" 3
+            gptel-auto-workflow--memory-schema-schemas)
+   (puthash "foo:fix:bar" (cons "(foo fix bar)" "mem1.md")
+            gptel-auto-workflow--memory-schema-triples)
+   (puthash "bar" (cons 3 '("mem2.md"))
+            gptel-auto-workflow--memory-schema-entities)
+   (puthash "(bar add baz)" 3
+            gptel-auto-workflow--memory-schema-schemas)
+   (puthash "bar:add:baz" (cons "(bar add baz)" "mem2.md")
+            gptel-auto-workflow--memory-schema-triples)
+   (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+              (lambda () gptel-auto-workflow--test-tmpdir))
+             ((symbol-function 'gptel-auto-workflow--build-digital-twin)
+              (lambda (&optional _force) nil))
+             ((symbol-function 'gptel-auto-workflow--semantic-similarity-edges)
+              (lambda (&optional _threshold) nil))
+             ((symbol-function 'gptel-auto-workflow--memory-schema-synonymy-edges)
+              (lambda (&optional _threshold) nil)))
+     (gptel-auto-workflow--unified-graph-build)
+     (let ((walk (gptel-auto-workflow--unified-graph-walk :entity "foo" 1)))
+       (should walk)))))
+
+(ert-deftest tdd/memory-schema/unified-graph/filter-by-edge-type ()
+  (with-schema-test-env
+   (puthash "test-ent" (cons 3 '("mem1.md"))
+            gptel-auto-workflow--memory-schema-entities)
+   (puthash "(test-ent fix bug)" 3
+            gptel-auto-workflow--memory-schema-schemas)
+   (puthash "test-ent:fix:bug" (cons "(test-ent fix bug)" "mem1.md")
+            gptel-auto-workflow--memory-schema-triples)
+   (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+              (lambda () gptel-auto-workflow--test-tmpdir))
+             ((symbol-function 'gptel-auto-workflow--build-digital-twin)
+              (lambda (&optional _force) nil))
+             ((symbol-function 'gptel-auto-workflow--semantic-similarity-edges)
+              (lambda (&optional _threshold) nil))
+             ((symbol-function 'gptel-auto-workflow--memory-schema-synonymy-edges)
+              (lambda (&optional _threshold) nil)))
+     (gptel-auto-workflow--unified-graph-build)
+     (let ((schema-neighbors (gptel-auto-workflow--unified-graph-neighbors
+                              :entity "test-ent" '(:schema-neighbor)))
+           (all-neighbors (gptel-auto-workflow--unified-graph-neighbors
+                           :entity "test-ent")))
+       (should (<= (length schema-neighbors) (length all-neighbors)))))))
+
+(ert-deftest tdd/memory-schema/unified-graph/reset-clears-cache ()
+  (with-schema-test-env
+   (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+              (lambda () gptel-auto-workflow--test-tmpdir))
+             ((symbol-function 'gptel-auto-workflow--build-digital-twin)
+              (lambda (&optional _force) nil))
+             ((symbol-function 'gptel-auto-workflow--semantic-similarity-edges)
+              (lambda (&optional _threshold) nil))
+             ((symbol-function 'gptel-auto-workflow--memory-schema-synonymy-edges)
+              (lambda (&optional _threshold) nil)))
+     (gptel-auto-workflow--unified-graph-build)
+     (should gptel-auto-workflow--unified-graph)
+     (gptel-auto-workflow--memory-schema-reset)
+     (should-not gptel-auto-workflow--unified-graph))))
+
 (provide 'test-memory-schema)

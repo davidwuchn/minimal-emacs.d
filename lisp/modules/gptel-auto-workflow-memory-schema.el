@@ -17,6 +17,12 @@
 
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--log "gptel-auto-workflow-evolution")
+(declare-function gptel-auto-workflow--build-digital-twin "gptel-auto-workflow-ontology-router")
+(declare-function gptel-auto-workflow--semantic-similarity-edges "gptel-auto-workflow-ontology-router")
+(declare-function gptel-auto-workflow--categorize-target "gptel-auto-workflow-ontology-router")
+(declare-function skill-graph-node-level "gptel-auto-workflow-skill-graph")
+(declare-function skill-graph-edge-weight "gptel-auto-workflow-skill-graph")
+(defvar skill-graph--edges)
 
 ;; ─── Configuration ───
 
@@ -137,6 +143,13 @@ Nil means not yet computed.")
 (defvar gptel-auto-workflow--memory-schema-synonymy-cache-time nil
   "Time when synonymy cache was last computed.")
 
+(defvar gptel-auto-workflow--unified-graph nil
+  "Unified multigraph: (TYPE . ID) -> ((EDGE-TYPE (TO-TYPE . TO-ID) WEIGHT) ...).
+Nil means not yet built.")
+
+(defvar gptel-auto-workflow--unified-graph-time nil
+  "Timestamp when unified graph was last built.")
+
 (defun gptel-auto-workflow--memory-schema-reset ()
   "Reset in-memory schema index to empty."
   (setq gptel-auto-workflow--memory-schema-schemas
@@ -146,7 +159,9 @@ Nil means not yet computed.")
   (setq gptel-auto-workflow--memory-schema-triples
         (gptel-auto-workflow--memory-schema-make-triples))
   (setq gptel-auto-workflow--memory-schema-synonymy-cache nil
-        gptel-auto-workflow--memory-schema-synonymy-cache-time nil))
+        gptel-auto-workflow--memory-schema-synonymy-cache-time nil
+        gptel-auto-workflow--unified-graph nil
+        gptel-auto-workflow--unified-graph-time nil))
 
 ;; ─── Triple Extraction ───
 
@@ -791,5 +806,184 @@ Reads the global state to extract individual events."
   "Save current schema index to disk."
   (when gptel-auto-workflow--memory-schema-schemas
     (gptel-auto-workflow--memory-schema-save-index)))
+
+;; ─── Unified Entity-Ontology Graph ───
+
+(defun gptel-auto-workflow--unified-graph-build ()
+  "Build the unified entity-ontology graph from all data sources.
+Merges edges from: digital twin (requires), git-embed (similar),
+schema triples (schema-neighbor), synonymy, skill graph,
+category routing, and backend preferences.
+Returns the graph hash table."
+  (let ((graph (make-hash-table :test 'equal :size 256)))
+    (cl-labels ((ensure-node (type id)
+                  (let ((key (cons type id)))
+                    (unless (gethash key graph)
+                      (puthash key nil graph))
+                    key))
+                (add-edge (from-type from-id to-type to-id edge-type weight)
+                  (when (and from-id to-id (> weight 0))
+                    (let* ((from-key (ensure-node from-type from-id))
+                           (to-key (cons to-type to-id))
+                           (existing (gethash from-key graph)))
+                      (puthash from-key
+                               (cons (list edge-type to-key weight) existing)
+                               graph)))))
+      (gptel-auto-workflow--memory-schema-ensure-loaded)
+      (let ((root (condition-case nil (gptel-auto-workflow--worktree-base-root) (error nil))))
+        (when root
+          (condition-case nil
+              (let ((twin (or (and (fboundp 'gptel-auto-workflow--build-digital-twin)
+                                   (condition-case nil
+                                       (gptel-auto-workflow--build-digital-twin)
+                                     (error nil)))
+                              (and (fboundp 'gptel-auto-workflow--load-target-state)
+                                   (condition-case nil
+                                       (progn (gptel-auto-workflow--load-target-state) nil)
+                                     (error nil))))))
+                (when (and twin (hash-table-p twin))
+                  (maphash
+                   (lambda (file-key entry)
+                     (let ((basename (file-name-nondirectory file-key)))
+                       (dolist (req (plist-get entry :requires))
+                         (add-edge :file basename :file req :requires 1.0))))
+                   twin)))
+            (error nil)))
+        (condition-case nil
+            (when (fboundp 'gptel-auto-workflow--semantic-similarity-edges)
+              (dolist (edge (gptel-auto-workflow--semantic-similarity-edges 0.50))
+                (let ((src (file-name-nondirectory (plist-get edge :source)))
+                      (tgt (plist-get edge :target))
+                      (score (plist-get edge :score)))
+                  (when (and src tgt score)
+                    (add-edge :file src :file tgt :similar score)))))
+          (error nil))
+        (maphash
+         (lambda (_key schema-source)
+           (let ((schema-key (car schema-source))
+                 (source (cdr schema-source)))
+             (let ((parts (split-string (substring schema-key 1 -1) " ")))
+               (when (>= (length parts) 2)
+                 (let ((subject (nth 0 parts))
+                       (object (or (nth 2 parts) "")))
+                   (dolist (entity (delq nil (list subject object)))
+                     (add-edge :entity entity :entity subject :schema-neighbor 1.0))
+                   (when (and source (not (string= source "")))
+                     (add-edge :entity subject :file source :category-of 1.0)))))))
+         gptel-auto-workflow--memory-schema-triples)
+        (condition-case nil
+            (when (fboundp 'gptel-auto-workflow--memory-schema-synonymy-edges)
+              (dolist (group (gptel-auto-workflow--memory-schema-synonymy-edges 0.60))
+                (let ((entity (car group)))
+                  (dolist (syn (cdr group))
+                    (add-edge :entity entity :entity (car syn) :synonymy (cdr syn))))))
+          (error nil))
+        (when (and (boundp 'gptel-auto-workflow--category-strategy-preferences)
+                   gptel-auto-workflow--category-strategy-preferences)
+          (dolist (pref gptel-auto-workflow--category-strategy-preferences)
+            (let ((cat-str (substring (symbol-name (car pref)) 1)))
+              (add-edge :category cat-str :strategy (cdr pref) :strategy-pref 1.0))))
+        (when (and (boundp 'gptel-auto-workflow--category-backend-overrides)
+                   gptel-auto-workflow--category-backend-overrides)
+          (dolist (override gptel-auto-workflow--category-backend-overrides)
+            (let ((cat-str (substring (symbol-name (car override)) 1)))
+              (add-edge :category cat-str :backend (cdr override) :best-backend 1.0))))
+        (condition-case nil
+            (when (and (boundp 'skill-graph--nodes) (hash-table-p skill-graph--nodes))
+              (maphash
+               (lambda (id node)
+                 (add-edge :skill (symbol-name id)
+                           :category (substring (symbol-name (skill-graph-node-level node)) 1)
+                           :category-of 1.0))
+               skill-graph--nodes)
+              (maphash
+               (lambda (key edge)
+                 (add-edge :skill (symbol-name (car key))
+                           :skill (symbol-name (cdr key))
+                           :skill-cooccur (skill-graph-edge-weight edge)))
+               skill-graph--edges))
+          (error nil))))
+    (setq gptel-auto-workflow--unified-graph graph
+          gptel-auto-workflow--unified-graph-time (float-time))
+    graph))
+
+(defun gptel-auto-workflow--unified-graph-ensure ()
+  "Ensure the unified graph is built, rebuilding if stale (1 hour)."
+  (let ((now (float-time)))
+    (when (or (not gptel-auto-workflow--unified-graph)
+              (not gptel-auto-workflow--unified-graph-time)
+              (> (- now gptel-auto-workflow--unified-graph-time) 3600))
+      (gptel-auto-workflow--unified-graph-build)))
+  gptel-auto-workflow--unified-graph)
+
+(defun gptel-auto-workflow--unified-graph-neighbors (type id &optional edge-types)
+  "Return neighbors of node (TYPE . ID) in the unified graph.
+EDGE-TYPES is an optional list of edge types to filter by.
+Returns list of (EDGE-TYPE (TO-TYPE . TO-ID) WEIGHT)."
+  (let ((graph (gptel-auto-workflow--unified-graph-ensure))
+        (key (cons type id)))
+    (let ((edges (gethash key graph)))
+      (if edge-types
+          (cl-remove-if-not (lambda (e) (memq (car e) edge-types)) edges)
+        edges))))
+
+(defun gptel-auto-workflow--unified-graph-walk (type id &optional max-depth edge-types)
+  "Walk the unified graph from node (TYPE . ID) up to MAX-DEPTH (default 2).
+Returns list of ((TO-TYPE . TO-ID) . CUMULATIVE-SCORE) sorted by score.
+EDGE-TYPES optionally filters which edge types to traverse."
+  (let ((graph (gptel-auto-workflow--unified-graph-ensure))
+        (depth (or max-depth 2))
+        (seen (make-hash-table :test 'equal :size 64))
+        (results nil)
+        (frontier (list (cons (cons type id) 1.0))))
+    (dotimes (_d depth)
+      (let ((next-frontier nil))
+        (dolist (entry frontier)
+          (let* ((node-key (car entry))
+                 (cum-score (cdr entry)))
+            (dolist (edge (gethash node-key graph))
+              (let* ((edge-type (car edge))
+                     (to-key (cadr edge))
+                     (weight (nth 2 edge)))
+                (when (and (or (null edge-types) (memq edge-type edge-types))
+                           (not (gethash to-key seen)))
+                  (puthash to-key t seen)
+                  (let ((score (* cum-score weight)))
+                    (push (cons to-key score) results)
+                    (push (cons to-key score) next-frontier)))))))
+        (setq frontier next-frontier)))
+    (cl-sort (delete-dups results) #'> :key #'cdr)))
+
+(defun gptel-auto-workflow--unified-graph-best-backend-for (target)
+  "Find the best backend for TARGET using unified graph walk.
+Walks: target -> category -> best-backend, and target -> file ->
+similar files -> their categories -> their backends.
+Returns list of (BACKEND . SCORE)."
+  (let* ((basename (file-name-nondirectory target))
+         (slug (file-name-sans-extension basename))
+         (category (when (fboundp 'gptel-auto-workflow--categorize-target)
+                     (gptel-auto-workflow--categorize-target target)))
+         (cat-str (and category (substring (symbol-name category) 1)))
+         (backends (make-hash-table :test 'equal :size 8)))
+    (when cat-str
+      (dolist (edge (gptel-auto-workflow--unified-graph-neighbors :category cat-str
+                                                                    '(:best-backend)))
+        (let ((backend (cdr (cadr edge)))
+              (weight (nth 2 edge)))
+          (puthash backend (max weight (gethash backend backends 0.0)) backends))))
+    (dolist (edge (gptel-auto-workflow--unified-graph-neighbors :file slug '(:similar)))
+      (let ((sim-file (cdr (cadr edge)))
+            (sim-score (nth 2 edge)))
+        (let ((sim-cat (when (fboundp 'gptel-auto-workflow--categorize-target)
+                         (gptel-auto-workflow--categorize-target sim-file))))
+          (when sim-cat
+            (dolist (be (gptel-auto-workflow--unified-graph-neighbors
+                         :category (substring (symbol-name sim-cat) 1) '(:best-backend)))
+              (let ((backend (cdr (cadr be)))
+                    (weight (* sim-score (nth 2 be))))
+                (puthash backend (max weight (gethash backend backends 0.0)) backends)))))))
+    (let ((result nil))
+      (maphash (lambda (backend score) (push (cons backend score) result)) backends)
+      (cl-sort result #'> :key #'cdr))))
 
 (provide 'gptel-auto-workflow-memory-schema)
