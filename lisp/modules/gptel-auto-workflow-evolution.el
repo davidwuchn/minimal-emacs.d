@@ -179,6 +179,47 @@ Uses cached value from load time, or detects from current directory."
   "Cached result of `gptel-auto-workflow--parse-all-results'.
 Reset to nil at evolution cycle start.")
 
+(defun gptel-auto-workflow--verify-tsv-integrity (tsv-file)
+  "Verify TSV-FILE integrity before parsing.
+Returns plist with :valid :errors :warnings.
+Checks: file exists, not empty, header present, field counts consistent."
+  (let ((errors nil)
+        (warnings nil))
+    (cond
+     ((not (file-exists-p tsv-file))
+      (push "File does not exist" errors))
+     ((= 0 (file-attribute-size (file-attributes tsv-file)))
+      (push "File is empty" errors))
+     (t
+      (with-temp-buffer
+        (insert-file-contents tsv-file)
+        (goto-char (point-min))
+        (let ((header (buffer-substring-no-properties
+                       (line-beginning-position) (line-end-position))))
+          (unless (string-match-p "^id\t" header)
+            (push "Missing or malformed header" errors)))
+        (forward-line 1)
+        (let ((line-num 1)
+              (malformed-lines 0))
+          (while (not (eobp))
+            (setq line-num (1+ line-num))
+            (let ((line (buffer-substring-no-properties
+                         (line-beginning-position) (line-end-position))))
+              (unless (string-empty-p line)
+                (let ((fields (split-string line "\t")))
+                  (when (< (length fields) 14)
+                    (setq malformed-lines (1+ malformed-lines))
+                    (when (<= malformed-lines 3)
+                      (push (format "Line %d: only %d fields (min 14)"
+                                    line-num (length fields))
+                            warnings))))))
+            (forward-line 1))
+          (when (> malformed-lines 0)
+            (push (format "%d malformed lines detected" malformed-lines) warnings))))))
+    (list :valid (null errors)
+          :errors (nreverse errors)
+          :warnings (nreverse warnings))))
+
 (defun gptel-auto-workflow--parse-all-results (&optional max-age-days)
   "Parse historical results.tsv files into a list of experiment records.
 Optional MAX-AGE-DAYS limits to runs within that many days (default: all).
@@ -208,7 +249,13 @@ Caches when MAX-AGE-DAYS is nil for cycle-local reuse."
                              (> (float-time (file-attribute-modification-time (file-attributes run-dir)))
                                 cutoff-time)))
                 (let ((tsv-file (expand-file-name "results.tsv" run-dir)))
-                  (when (file-exists-p tsv-file)
+                  (when (and (file-exists-p tsv-file)
+                             (let ((integrity (gptel-auto-workflow--verify-tsv-integrity tsv-file)))
+                               (when (plist-get integrity :warnings)
+                                 (message "[tsv-integrity] %s: %s"
+                                          (file-name-nondirectory run-dir)
+                                          (string-join (plist-get integrity :warnings) "; ")))
+                               (plist-get integrity :valid)))
                     (with-temp-buffer
                       (insert-file-contents tsv-file)
                       (goto-char (point-min))
@@ -270,7 +317,7 @@ Caches when MAX-AGE-DAYS is nil for cycle-local reuse."
                                             :edit-mode edit-mode
                                             :run-dir (file-name-nondirectory run-dir))
                                       records))))
-                          (forward-line 1))))))))))
+                           (forward-line 1))))))))))
         (message "[parse-all-results] Parsed %d runs, %d records" runs-parsed (length records))
         (let ((result (nreverse records)))
           (unless max-age-days
@@ -514,6 +561,33 @@ Returns alist of target → (category success-rate count)."
                             (plist-get gap :gap-duration)))))))
     (insert "\n")))
 
+(defun gptel-auto-workflow--gap-prioritize-targets (targets)
+  "Reorder TARGETS to prioritize those with largest temporal gaps.
+Targets not experimented on in 7+ days are boosted to the front.
+Returns reordered list with gap-neglected targets first."
+  (let* ((all-results (gptel-auto-workflow--parse-all-results))
+         (now (float-time))
+         (last-run-time (make-hash-table :test 'equal)))
+    (dolist (r all-results)
+      (let ((tgt (plist-get r :target))
+            (ts (plist-get r :timestamp)))
+        (when (and tgt ts)
+          (let ((existing (gethash tgt last-run-time)))
+            (when (or (null existing) (> ts existing))
+              (puthash tgt ts last-run-time))))))
+    (let ((stale nil)
+          (fresh nil))
+      (dolist (tgt targets)
+        (let ((last (gethash tgt last-run-time)))
+          (if (or (null last) (> (- now last) (* 7 24 60 60)))
+              (push tgt stale)
+            (push tgt fresh))))
+      (let ((result (append (nreverse stale) (nreverse fresh))))
+        (when (> (length stale) 0)
+          (message "[gap-priority] Boosting %d stale targets (no experiments in 7+ days)"
+                   (length stale)))
+        result))))
+
 (defun gptel-auto-workflow--evolution-synthesize ()
   "Synthesize git facts and benchmark verification into skill files.
 This is the CENTRAL function of self-evolution.
@@ -708,9 +782,6 @@ target).*\n")
                 (insert "\n")))))
         (insert "\n")
 
-        (gptel-auto-workflow--synthesize-causal-chains)
-        (gptel-auto-workflow--synthesize-gap-detection)
-
         (insert "## Feedback Loop\n\n")
         (insert "```\n")
         (insert "Experiments → Git History → Facts\n")
@@ -719,6 +790,20 @@ target).*\n")
         (insert "     ↑                           ↓\n")
         (insert "Prompt Injection ← Knowledge ←─┘\n")
         (insert "```\n")))
+
+      ;; Write causal chains and gap detection to self-evolution.md (consumed by prompts)
+      (let ((self-evolution-file (expand-file-name "mementum/knowledge/self-evolution.md"
+                                                    (gptel-auto-workflow--worktree-base-root))))
+        (with-temp-file self-evolution-file
+          (insert "---\n")
+          (insert "title: Self-Evolution Knowledge\n")
+          (insert "status: active\n")
+          (insert "category: knowledge\n")
+          (insert "---\n\n")
+          (insert "# Self-Evolution Knowledge\n\n")
+          (insert "Auto-generated from experiment history. Injected into researcher prompts.\n\n")
+          (gptel-auto-workflow--synthesize-causal-chains)
+          (gptel-auto-workflow--synthesize-gap-detection)))
 
       (message "[auto-workflow] Synthesized self-evolution skills")
       ;; Generate OWL/SHACL ontology from experiment data
