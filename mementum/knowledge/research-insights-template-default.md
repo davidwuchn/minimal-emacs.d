@@ -3,7 +3,7 @@ title: Research Insights - template-default
 status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
-insight-quality: 0.4/10
+insight-quality: 0.2/10
 allium-issues: 0
 allium-severity: 0.00
 allium-status: coherent
@@ -11,14 +11,13 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 176 experiments (4% keep rate).*
+*Consolidated from 127 experiments (2% keep rate).*
 
-**Performance:** 7 kept / 1 discarded / 10 failed (EXTRACTED — from TSV)
+**Performance:** 2 kept / 0 discarded / 43 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
-- `lisp/modules/gptel-auto-workflow-projects.el` (6 kept / 2 failed)
-- `lisp/modules/gptel-benchmark-principles.el` (1 kept / 6 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (2 kept / 4 failed)
 
 ### Structure (deterministic scan)
 
@@ -38,10 +37,11 @@ advised: gptel-agent--task, gptel-agent--task-overlay
 These targets may need different research patterns or the research findings
 were misleading.
 
-- `lisp/modules/gptel-auto-workflow-strategic.el` (1 failed)
-- `lisp/modules/gptel-auto-workflow-projects.el` (6 kept / 2 failed)
-- `lisp/modules/gptel-benchmark-principles.el` (1 kept / 6 failed)
-- `lisp/modules/gptel-auto-workflow-mementum.el` (1 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (2 kept / 4 failed)
+- `lisp/modules/gptel-benchmark-subagent.el` (3 failed)
+- `lisp/modules/gptel-tools-agent-error.el` (3 failed)
+- `lisp/modules/gptel-tools-agent-prompt-build.el` (3 failed)
+- `lisp/modules/gptel-auto-workflow-strategic.el` (10 failed)
 
 ## Meta-Learning Recommendations (INFERRED — from pattern analysis)
 
@@ -52,73 +52,11 @@ were misleading.
 
 
 
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-<think>
-The user wants me to "distill" research that was conducted using a "template-default" strategy across 176 experiments. The output should be a distillation of the kept hypotheses, since the discarded ones only contain "No hypothesis stated" entries.
-
-Let me look at what was kept:
-
-1. **Idempotency guard + symmetric disable** - Targets φ Vitality and fractal Clarity
-2. **Fix misleading message + directory validation** - Bug fix
-3. **Cache validation uses `eq` instead of `equal`** - Change to content-based comparison
-4. **Extract buffer lookup with explicit nil guards** - Clarity/Vitality
-5. **Adaptive error recovery for invalid project paths + empty-projects edge case** - φ Vitality/fractal Clarity
-6. **Replace `format-mode-line` with `mode-name` + `when` instead of `if`** - fractal Clarity
-7. **`gptel-benchmark-eight-keys-weakest` runtime crash on `not-applicable` symbols** - Filter before sorting
-
-The user wants these distilled. "Distill" typically means to extract the essence, find common patterns, or create a more concentrated/refined version. Given the context of "template-default" research strategy with 176 experiments, the distillation should:
-- Identify common themes
-- Remove redundancy
-- Group by category/principle
-- Make patterns visible
-
-Let me think about what these hypotheses share:
-
-**Common themes:**
-1. **Defensive programming** - nil guards, validation, idempotency, error recovery (hypotheses 1, 2, 3, 4, 5, 6, 7)
-2. **φ Vitality** (adapts to discovery, new information, edge cases) - appears in 1, 3, 4, 5, 7
-3. **fractal Clarity** (explicit assumptions, testable, removes complexity) - appears in 1, 3, 4, 5, 6
-4. **Comparison/equality semantics** - hypothesis 3 (eq vs equal)
-5. **Filtering/preconditioning** - hypothesis 7 (filter not-applicable)
-6. **Bug fixes vs improvements** - hypothesis 2 is explicit bug fix
-
-**Categories I can extract:**
-- **Precondition validation** (hypotheses 2, 4, 5, 7) - validating inputs/state before processing
-- **Identity vs content semantics** (hypothesis 3) - choosing right comparison
-- **Idempotency / lifecycle symmetry** (hypothesis 1) - paired add/remove operations
-- **Complexity reduction** (hypothesis 6) - removing unnecessary indirection
-
-**Underlying principle:**
-All hypotheses are about making code more robust to its actual operating environment - whether that's edge cases, runtime errors, identity mismatches, or unnecessary work. They all target two of the seven hermetic principles: φ Vitality and fractal Clarity.
-
-Let me write a distillation that:
-1. Identifies the meta-pattern
-2. Groups hypotheses by category
-3. Shows the principle coverage
-4. Is concise but preserves the substance
-
-Format-wise, since there's no formatting instruction, I should be reasonably structured. Markdown with headers seems appropriate for a research distillation. I shouldn't be too verbose. The user said "distill" - so be concise.
-
-Let me also note: the "Discarded hypotheses" section is entirely empty except for "No hypothesis stated" — so the discarded list yields nothing. I should acknowledge that briefly or just focus on the kept ones.
-
-I'll structure the distillation as:
-1. Brief framing of what the experiments converged on
-2. The meta-pattern
-3. Categorized hypotheses
-4. Principle coverage
-5. Maybe a note on what's not covered (gaps)
-</think>
+nil
 ```
 

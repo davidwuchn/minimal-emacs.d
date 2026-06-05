@@ -1662,3 +1662,7 @@ SPECS is a list of (backend decision days-ago ...) triples."
 
 (provide 'test-gptel-auto-workflow-ontology-router)
 ;;; test-gptel-auto-workflow-ontology-router.el ends here
+
+;; Local Variables:
+;; byte-compile-warnings: (not unused lexical free)
+;; End:
