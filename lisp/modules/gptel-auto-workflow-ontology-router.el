@@ -3627,11 +3627,10 @@ restart)."
         (condition-case err
             (with-temp-buffer
               (insert-file-contents file)
-              (let* ((raw (json-read))
-                     (data (cond
-                            ((listp raw) raw)
-                            ((hash-table-p raw) (gethash 'files raw))
-                            (t nil))))
+              (let* ((json-object-type 'alist)
+                     (json-key-type 'string)
+                     (raw (json-read))
+                     (data (cdr (assoc "files" raw))))
                 (when (listp data)
                   (dolist (entry data)
                     (let ((target (car entry))
