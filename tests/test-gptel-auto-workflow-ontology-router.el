@@ -90,7 +90,8 @@
               ((symbol-function 'random) (lambda (_) 999)))  ; No exploration
       (let ((reordered (gptel-auto-workflow--reorder-fallbacks-by-ontology)))
         (should (string= "DeepSeek" (caar reordered)))
-        (should (string= "deepseek-v4-pro" (cdar reordered)))))))
+        (should (string= (cdr (assoc "DeepSeek" gptel-auto-workflow-headless-subagent-fallbacks))
+                         (cdar reordered)))))))
 
 (ert-deftest regression/ontology-router/reorder-keeps-all-backends ()
   "Reordering should preserve all backends from static list."
