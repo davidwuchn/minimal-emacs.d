@@ -153,8 +153,8 @@ run_self_evolution() {
         log "Self-evolution skipped (throttled)"
     elif printf '%s' "$evolution_output" | grep -q "converged"; then
         log "Self-evolution skipped (converged)"
-    elif printf '%s' "$evolution_output" | grep -q '"discard"'; then
-        log "Self-evolution skipped (discard)"
+    elif printf '%s' "$evolution_output" | grep -qE '(^|[^a-z])discard($|[^a-z])'; then
+        log "Self-evolution skipped (discard - keep rate not improved)"
     elif printf '%s' "$evolution_output" | grep -q "first"; then
         log "Self-evolution skipped (first run / establishing baseline)"
     elif printf '%s' "$evolution_output" | grep -q "keep"; then
@@ -660,12 +660,33 @@ if compgen -G "$RESULTS_PATTERN" >/dev/null; then
                 # Find corresponding optimize branch for this run
                 result_dir=$(basename "$(dirname "$latest_result")")
                 run_id="${result_dir##*-}"
+                # P2 FIX: Extract just the last part of target name (after last hyphen)
+                # Branch format: optimize/{name}-{host}-r{run}-exp{N}
+                # where name is the last component of target filename
                 target_base=$(basename "$target" .el)
-                # Try to find matching branch: optimize/{target_base}-*-{run_id}-exp{N}
-                branch_pattern="optimize/${target_base}-*-${run_id}-exp*"
-                branch=$(git -C "$DIR" branch --list "$branch_pattern" | head -1 | sed 's/^[* ]*//')
+                target_name="${target_base##*-}"
+                # Try multiple patterns to find the branch
+                branch=""
+                # Pattern 1: exact match with target_name and run_id
+                branch=$(git -C "$DIR" branch --list "optimize/${target_name}-*-${run_id}-exp*" 2>/dev/null | head -1 | sed 's/^[* ]*//')
+                # Pattern 2: match with just target_name and exp number
+                if [ -z "$branch" ]; then
+                    branch=$(git -C "$DIR" branch --list "optimize/${target_name}-*-exp${exp_id}" 2>/dev/null | head -1 | sed 's/^[* ]*//')
+                fi
+                # Pattern 3: broader match with any target containing the name
+                if [ -z "$branch" ]; then
+                    branch=$(git -C "$DIR" branch --list "optimize/*${target_name}*-exp${exp_id}" 2>/dev/null | head -1 | sed 's/^[* ]*//')
+                fi
+                # Pattern 4: match from remote branches
+                if [ -z "$branch" ]; then
+                    branch=$(git -C "$DIR" branch -r --list "origin/optimize/${target_name}-*" 2>/dev/null | head -1 | sed 's/^[* ]*//' | sed 's|^origin/||')
+                fi
                 if [ -n "$branch" ]; then
                     log "  Merging kept experiment: $branch (decision: $decision)"
+                    # Fetch the branch from remote if not available locally
+                    if ! git -C "$DIR" rev-parse --verify "$branch" >/dev/null 2>&1; then
+                        git -C "$DIR" fetch origin "$branch:$branch" 2>/dev/null || true
+                    fi
                     if git -C "$DIR" merge --no-ff "$branch" -m "⚒ Merge $branch: $decision" 2>/dev/null; then
                         log "    ✓ Merged $branch"
                         merged_count=$((merged_count + 1))
@@ -676,7 +697,7 @@ if compgen -G "$RESULTS_PATTERN" >/dev/null; then
                         git -C "$DIR" merge --abort 2>/dev/null || true
                     fi
                 else
-                    log "  ⚠ No branch found for kept experiment: $target (run: $run_id)"
+                    log "  ⚠ No branch found for kept experiment: $target (run: $run_id, exp: $exp_id)"
                 fi
                 ;;
         esac

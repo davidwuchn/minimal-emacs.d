@@ -3653,7 +3653,8 @@ restart)."
       (message "[target-state] Persisted %d target states + rejection memory to %s" (length data) file))))
 
 (defun gptel-auto-workflow--load-target-state ()
-  "Load target state cache and rejection memory from disk."
+  "Load target state cache and rejection memory from disk.
+P1 FIX: Skip entries where value is not a list (e.g., version, built keys)."
   (when (boundp 'gptel-auto-experiment--target-state-cache)
     (let ((file (expand-file-name "var/tmp/target-state.json"
                                   (gptel-auto-workflow--worktree-base-root))))
@@ -3668,23 +3669,29 @@ restart)."
                   (dolist (entry data)
                     (let ((target (car entry))
                           (plist (cdr entry)))
-                      (puthash target
-                               (list :byte-compiles (cdr (assq 'byte-compiles plist))
-                                     :syntax-ok (cdr (assq 'syntax-ok plist)))
-                               gptel-auto-experiment--target-state-cache)
-                      (let ((rejections (cdr (assq 'rejections plist))))
-                        (when (and rejections
-                                   (bound-and-true-p gptel-auto-experiment--rejection-memory)
-                                   (fboundp 'gptel-auto-experiment--remember-rejection))
-                          (dolist (rej rejections)
-                            (gptel-auto-experiment--remember-rejection target (car rej)))))
-                      (let ((successes (cdr (assq 'successes plist))))
-                        (when (and successes
-                                   (bound-and-true-p gptel-auto-experiment--success-memory)
-                                   (fboundp 'gptel-auto-experiment--remember-success))
-                          (dolist (succ successes)
-                            (gptel-auto-experiment--remember-success
-                             target (car succ) (cdr succ)))))))
+                      ;; P1 FIX: Skip entries where plist is not a list
+                      ;; (e.g., version: 1, built: "2025-...")
+                      (when (and (listp plist) (or (assq 'byte-compiles plist)
+                                                   (assq 'syntax-ok plist)
+                                                   (assq 'rejections plist)
+                                                   (assq 'successes plist)))
+                        (puthash target
+                                 (list :byte-compiles (cdr (assq 'byte-compiles plist))
+                                       :syntax-ok (cdr (assq 'syntax-ok plist)))
+                                 gptel-auto-experiment--target-state-cache)
+                        (let ((rejections (cdr (assq 'rejections plist))))
+                          (when (and rejections
+                                     (bound-and-true-p gptel-auto-experiment--rejection-memory)
+                                     (fboundp 'gptel-auto-experiment--remember-rejection))
+                            (dolist (rej rejections)
+                              (gptel-auto-experiment--remember-rejection target (car rej)))))
+                        (let ((successes (cdr (assq 'successes plist))))
+                          (when (and successes
+                                     (bound-and-true-p gptel-auto-experiment--success-memory)
+                                     (fboundp 'gptel-auto-experiment--remember-success))
+                            (dolist (succ successes)
+                              (gptel-auto-experiment--remember-success
+                               target (car succ) (cdr succ))))))))
                   (message "[target-state] Loaded %d target states + rejection memory from %s"
                            (hash-table-count gptel-auto-experiment--target-state-cache) file))))
           (error (message "[target-state] Failed to load: %s" (error-message-string err)))))))

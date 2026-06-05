@@ -20753,6 +20753,74 @@ This ensures restart doesn't lose escalation context."
     (should (> (or (plist-get health :total) 0) 0))
     (should (plist-get health :healthy-p))))
 
+;;; P0: Grader Parser Robustness (2026-06-05)
+
+(ert-deftest regression/grader/positive-indicator-fallback ()
+  "Grader output with positive language but no score format should pass.
+P0 FIX: When LLM doesn't follow SCORE: X/Y format but output contains
+positive indicators, give partial credit instead of score=0."
+  (require 'gptel-benchmark-subagent)
+  (let ((result (gptel-benchmark--parse-grade-response
+                 "The change looks good and improves code quality. The modification is appropriate and correct. It satisfies the requirements and meets all criteria. The implementation is sound and reasonable."
+                 '("change clearly described" "change is minimal" "improves code")
+                 '("large refactor" "style-only"))))
+    (should (> (plist-get result :score) 0))
+    (should (plist-get result :passed))))
+
+(ert-deftest regression/grader/final-score-format ()
+  "Grader 'Final: X/Y' format should be parsed.
+P0 FIX: Added 'Final' to the score pattern regex."
+  (require 'gptel-benchmark-subagent)
+  (let ((result (gptel-benchmark--parse-grade-response
+                 "After analysis, the Final: 7/9 criteria are met."
+                 '("a" "b" "c" "d" "e" "f" "g" "h" "i")
+                 '())))
+    (should (= (plist-get result :score) 7))
+    (should (plist-get result :passed))))
+
+(ert-deftest regression/grader/short-output-no-false-positive ()
+  "Short grader output without positive indicators should still fail.
+P0 FIX: Positive-indicator fallback only triggers for responses >200 chars."
+  (require 'gptel-benchmark-subagent)
+  (let ((result (gptel-benchmark--parse-grade-response
+                 "looks good"
+                 '("change clearly described" "change is minimal")
+                 '("large refactor"))))
+    (should (= (plist-get result :score) 0))
+    (should (not (plist-get result :passed)))))
+
+;;; P1: Experiment Loop Grader-Only-Failure (2026-06-05)
+
+(ert-deftest regression/experiment-loop/grader-only-failure-no-early-stop ()
+  "Grader-only failure should NOT stop the experiment loop immediately.
+P1 FIX: grader-only-failure now increments consecutive-timeouts counter
+instead of setting max-exp = exp-id. Loop continues until threshold reached."
+  (require 'gptel-tools-agent-experiment-loop)
+  ;; Verify the fix: grader-only-failure uses consecutive-timeouts, not max-exp
+  (let ((code (with-temp-buffer
+                (insert-file-contents
+                 (expand-file-name "lisp/modules/gptel-tools-agent-experiment-loop.el"
+                                   user-emacs-directory))
+                (buffer-string))))
+    ;; Old broken pattern: (setq max-exp exp-id) after grader-only-failure
+    (should-not (string-match-p "grader-only-failure.*\n.*setq max-exp exp-id" code))
+    ;; New fixed pattern: increments consecutive-timeouts
+    (should (string-match-p "grader-only-failure.*\n.*consecutive-timeouts.*1\\+.*consecutive-timeouts" code))))
+
+;;; P0: Stage Worktree Changes Resilience (2026-06-05)
+
+(ert-deftest regression/staging/empty-worktree-does-not-fail ()
+  "stage-worktree-changes should not fail on clean worktree.
+P0 FIX: Check for changes before staging, return t when worktree is clean."
+  (require 'gptel-tools-agent-experiment-loop)
+  (let ((code (with-temp-buffer
+                (insert-file-contents
+                 (expand-file-name "lisp/modules/gptel-tools-agent-experiment-loop.el"
+                                   user-emacs-directory))
+                (buffer-string))))
+    ;; Verify the fix includes the clean-worktree check
+    (should (string-match-p "No changes to stage.*worktree clean" code))))
+
 (provide 'test-gptel-tools-agent-regressions)
 
 ;;; test-gptel-tools-agent-regressions.el ends here
