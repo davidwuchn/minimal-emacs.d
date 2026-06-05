@@ -5,13 +5,13 @@ category: knowledge
 tags: [research, auto-workflow, template-default]
 insight-quality: 0.4/10
 allium-issues: 0
-allium-severity: 0.00
+allium-severity: 0.05
 allium-status: coherent
 ---
 
 # Research Strategy: template-default
 
-*Consolidated from 179 experiments (4% keep rate).*
+*Consolidated from 180 experiments (4% keep rate).*
 
 **Performance:** 7 kept / 1 discarded / 10 failed (EXTRACTED — from TSV)
 
@@ -58,80 +58,65 @@ were misleading.
 
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*7 check issues (severity 0.05). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Distilled Research Summary
+# Distillation
 
-## Approach
-**Strategy:** template-default across 179 experiments targeting 18 gptel-related Emacs Lisp files (staging + module sources).
+## Research Strategy
+**Template-default** applied across 180 experiments, with no alternative strategy deployed.
 
-## Surviving Hypotheses (4 → grouped by intent)
+## Target Coverage
+Experiments spanned 19 targets across four functional clusters:
 
-### 1. Robustness via Idempotency & Error Recovery
-- **Advice re-entry guard** + symmetric disable extraction → prevents double-application, makes lifecycle symmetric.
-- **`not-applicable` symbol filter** in `gptel-benchmark-eight-keys-weakest` → prevents `(< 'not-applicable <number>)` runtime crash during sort.
-- **Adaptive error recovery** for invalid project paths (`ignore-errors` around `file-attributes`) + empty-projects early guard.
+| Cluster | Targets |
+|---------|---------|
+| **Staging pipeline** | staging-merge, staging-scope, staging-review, staging-config |
+| **Auto-workflow** | ontology-router, ontology-strategy, evolution, mementum, bootstrap, projects, production-metrics, strategic |
+| **Tools agent** | error, runtime, benchmark, prompt-build, experiment-core |
+| **Benchmark/framework** | gptel-benchmark-subagent, gptel-benchmark-principles |
 
-**φ Vitality:** adapts to discovered edge cases and latent bugs.
-**fractal Clarity:** makes validity assumptions explicit and testable.
+## Hypotheses Kept — Recurring Patterns
 
----
+The 8 surviving hypotheses converge on **two intertwined principles**: **φ Vitality** (progressive improvement that adapts to discovery) and **fractal Clarity** (explicit, testable assumptions). Concrete recurring patterns:
 
-### 2. Cache Correctness (Identity → Content Semantics)
-`gptel-auto-workflow--normalized-projects` uses `eq` on the project list, forcing unnecessary invalidation when `gptel-auto-workflow-projects` is reassigned to an equivalent new list.
-- Switch to `equal` (content comparison).
-- Reorder: check cache **before** invoking `ensure-buffer-tables`.
+1. **Idempotency + symmetric extraction** — guard against re-adding active advice; pair enable/disable functions symmetrically.
+2. **Bug fixes paired with validation** — correct misleading messages; add directory/file existence checks.
+3. **Identity → content comparison** — `eq` → `equal` for cache keys; cache should invalidate on semantic change, not pointer change. Reorder to check cache *before* expensive setup (`ensure-buffer-tables`).
+4. **Explicit nil guards** — extract buffer lookups into validation sequences that fail gracefully on missing FSM state.
+5. **Edge-case recovery** — `ignore-errors` around `file-attributes`; early-exit on empty project lists.
+6. **Construct simplification** — `format-mode-line` → direct `mode-name`; `if` with single branch → `when`; guard buffer iteration against nil.
+7. **Latent-bug surfacing** — filter `not-applicable` sentinels before numeric sorting (prevents `(< 'not-applicable <number>)` crash in `gptel-benchmark-eight-keys-weakest`).
 
-**φ Vitality:** matches actual usage patterns rather than memory identity.
-**fractal Clarity:** encodes the explicit assumption *invalidation should be content-based*.
+## Hypotheses Discarded
+None — discarded set is empty (placeholder: "No hypothesis stated").
 
----
-
-### 3. Explicit Validation Sequencing
-Extract buffer lookup into a named validation chain with explicit `nil` guards (instead of inline checks). Handles missing FSM state gracefully.
-
-**Clarity:** assumptions become visible in the call shape.
-**Vitality:** degrades cleanly when downstream state is absent.
-
----
-
-### 4. Surface-Level Simplifications
-- Replace `format-mode-line` with direct `mode-name` access.
-- `if` → `when` where there's no else branch.
-- Add nil-safety to buffer iteration.
-
-**Clarity:** removes gratuitous indirection; intent is locally readable.
-
----
-
-## Discarded
-- 1 entry: *"No hypothesis stated"* — noise from an unprompted target.
-
-## Pattern Across Survivors
-Every kept hypothesis trades **implicit/runtime behavior** for **explicit/assumed** behavior, and **memory-identity or symbol-trapping semantics** for **content-or-shape semantics** — a consistent refinement from accidental correctness to asserted correctness.
+## Net Insight
+The template-default strategy produced hypotheses that are uniformly **micro-refactors** in gptel's auto-workflow and tools-agent stack: each is small in scope, but each tightens an invariant (idempotency, content-equality, nil-safety, edge-case handling, latent-bug exposure). The dual lens of Vitality+Clarity appears to systematically surface the same class of issues — defensive guards around state and explicit assumptions about data shape — across otherwise unrelated modules.
 ```
 
 ### Check Issues
 
-# Review of Distilled Research Summary
+# Review of the Distillation Document
 
-## What's Solid
+The document is well-structured and largely internally consistent, but there are several issues worth flagging — some factual, some presentational, and some concerning the framing.
 
-**The meta-pattern at the end is the strongest part of this document.** The observation that survivors consistently trade *implicit/runtime* for *explicit/assumed* and *identity* for *content/shape* semantics is a genuine insight, not boilerplate. "Accidental correctness → asserted correctness" is a useful framing for code review.
+## ✅ What's solid
 
-**Hypothesis 2 (Cache Correctness) is the most defensible.** The `eq` vs `equal` distinction is real and the scenario it describes (reassignment of a list to an equivalent new list forcing invalidation) is a textbook identity-vs-equality bug. The reorder recommendation also has a clear rationale — fail fast on cache hit before paying for side-effect work.
+- **Target count checks out**: 4 + 8 + 5 + 2 = 19. ✓
+- **Concrete grounding**: Specific identifiers (`eq` → `equal`, `ensure-buffer-tables`, `not-applicable` sentinel, `gptel-benchmark-eight-keys-weakest`) make the patterns falsifiable rather than hand-wavy.
+- **Honest about gaps**: Explicitly noting the empty discarded-hypothesis section is good epistemic hygiene.
+- **Net Insight is appropriately scoped**: "uniformly micro-refactors" is a defensible characterization given the cited examples.
 
-**Hypothesis 1's first sub-point** (the `(< 'not-applicable <number>)` crash) is a concrete, verifiable runtime bug. Good.
+## ⚠️ Issues to address
 
-**The Discarded section is honest** — admitting that most of 179 experiments produced noise rather than signal is useful.
+### 1. Undefined framing vocabulary
+**"φ Vitality"** and **"fractal Clarity"** are used as load-bearing organizing principles but never defined. A reader cannot evaluate whether the patterns actually instantiate these concepts, because the concepts themselves are not specified. As written, "Vitality" ≈ "improvement" and "fractal" ≈ "explicit" — but those reductions aren't given.
 
----
+### 2. Stylistic asymmetry
+If the two principles are meant to be parallel, "φ Vitality" and "fractal Clarity" should share formatting. Pick one convention: either both are Latin-initial capitals or both are uncapitalized, and decide whether φ is a meaningful label or a typographic flourish (currently unclear).
 
-## What Needs Verification or Context
-
-1. **The `eq` → `equal` switch has a cost you don't acknowledge.** `equal` on a list is O(n); `eq` is O(1). If the cache is hit on every request, this is a real tradeoff. The summary asserts "matches actual usage patterns" but doesn't show that the perf delta is acceptable. Worth measuring or noting as a residual risk.
-
-2. **The reorder in Hypothesis 2** ("check cache **before** invoking `ensure-buffer-tables`") assumes `ensure-buffer-tables` is either pure 
+### 3. The 8 hypotheses ↔ 7 patterns gap
+You 
 
 ... (truncated)

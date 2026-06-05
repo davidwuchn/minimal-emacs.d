@@ -125,7 +125,7 @@ Returns parsed JSON or nil on failure."
   "Calculate error rate from Sentry STATS-DATA.
 Returns float 0.0-1.0 representing error rate."
   (if (and stats-data (listp stats-data))
-      (let* ((events (plist-get stats-data :data))
+      (let* ((events (or (plist-get stats-data :data) '()))
              (total-events (apply #'+ (mapcar #'cadr events)))
              (time-span (length events))
              ;; Normalize to rate per day
