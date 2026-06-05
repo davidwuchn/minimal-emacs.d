@@ -220,7 +220,7 @@ Risk factors:
 Returns plist with production metrics or default values if unavailable."
   (or (and gptel-auto-workflow--production-metrics-cache
            (gethash target gptel-auto-workflow--production-metrics-cache))
-      (let ((metrics (gptel-auto-workflow--track-production-impact target nil)))
+      (let ((metrics (ignore-errors (gptel-auto-workflow--track-production-impact target nil))))
         (when gptel-auto-workflow--production-metrics-cache
           (puthash target metrics gptel-auto-workflow--production-metrics-cache))
         metrics)))
