@@ -11,7 +11,7 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 176 experiments (4% keep rate).*
+*Consolidated from 179 experiments (4% keep rate).*
 
 **Performance:** 7 kept / 1 discarded / 10 failed (EXTRACTED — from TSV)
 
@@ -56,68 +56,82 @@ were misleading.
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*7 check issues (severity 0.05). EXTRACTED from distill→check pipeline.*
 
 ```allium
-<think>
-The user is asking me to "distill" something. Looking at the input, it appears to be a research strategy with a template-default approach, listing 176 experiments across various targets, with kept hypotheses and discarded hypotheses.
+# Distilled Research Summary
 
-The input seems to be jumbled - the content appears to be a mix of bullet points without clear structure. Let me try to understand what's being asked:
+## Approach
+**Strategy:** template-default across 179 experiments targeting 18 gptel-related Emacs Lisp files (staging + module sources).
 
-1. There are 176 experiments across many lisp module files
-2. There are "Kept hypotheses" - these are hypotheses that were kept after some research/filtering
-3. There are "Discarded hypotheses" - with only one: "No hypothesis stated"
+## Surviving Hypotheses (4 → grouped by intent)
 
-The user wants me to "distill" this. I think they want me to summarize, condense, or extract the essence of what was found.
+### 1. Robustness via Idempotency & Error Recovery
+- **Advice re-entry guard** + symmetric disable extraction → prevents double-application, makes lifecycle symmetric.
+- **`not-applicable` symbol filter** in `gptel-benchmark-eight-keys-weakest` → prevents `(< 'not-applicable <number>)` runtime crash during sort.
+- **Adaptive error recovery** for invalid project paths (`ignore-errors` around `file-attributes`) + empty-projects early guard.
 
-Let me look at the structure more carefully. The input has:
-- A "Research strategy: template-default" header
-- A list of 176 experiments across various targets
-- Kept hypotheses (with many bullet points that appear to be jumbled together)
-- Discarded hypotheses (with "No hypothesis stated")
+**φ Vitality:** adapts to discovered edge cases and latent bugs.
+**fractal Clarity:** makes validity assumptions explicit and testable.
 
-The kept hypotheses seem to be a list of insights/changes found during research. The jumbled text suggests these were concatenated together without proper formatting. Let me try to parse them:
+---
 
-Looking at the kept hypotheses, I can identify several distinct items:
+### 2. Cache Correctness (Identity → Content Semantics)
+`gptel-auto-workflow--normalized-projects` uses `eq` on the project list, forcing unnecessary invalidation when `gptel-auto-workflow-projects` is reassigned to an equivalent new list.
+- Switch to `equal` (content comparison).
+- Reorder: check cache **before** invoking `ensure-buffer-tables`.
 
-1. "Add an idempotency guard to prevent re-adding advice that's already active, AND extract the symmetric disable function. This targets both φ Vitality (progressive improvement, adapts to discovery) and fractal Clarity (explicit assumptions, testable)."
+**φ Vitality:** matches actual usage patterns rather than memory identity.
+**fractal Clarity:** encodes the explicit assumption *invalidation should be content-based*.
 
-2. "Fix the misleading message and add directory existence validation. This is a bug fix type change."
+---
 
-3. "**HYPOTHESIS**: The cache validation in `gptel-auto-workflow--normalized-projects` uses `eq` (identity comparison) for the project list, which causes unnecessary cache invalidation when `gptel-auto-workflow-projects` is reassigned to a new list with identical content. Changing to `equal` (content comparison) and reordering to check cache before calling `ensure-buffer-tables` will improve φ Vitality (adapts to actual usage patterns) and fractal Clarity (explicit assumption: cache invalidation should be content-based, not identity-based)."
+### 3. Explicit Validation Sequencing
+Extract buffer lookup into a named validation chain with explicit `nil` guards (instead of inline checks). Handles missing FSM state gracefully.
 
-4. "**HYPOTHESIS**: Extracting the buffer lookup into a clear validation sequence with explicit nil guards will improve Clarity by making the assumptions visible and improve Vitality by adapting to missing FSM state gracefully."
+**Clarity:** assumptions become visible in the call shape.
+**Vitality:** degrades cleanly when downstream state is absent.
 
-5. "The function lacks adaptive error recovery for invalid project paths and doesn't handle the empty-projects edge case explicitly. Adding `ignore-errors` around `file-attributes` and an early guard for empty project lists will improve φ Vitality (adapts to new information/edge cases) and fractal Clarity (explicit assumptions about project validity)."
+---
 
-6. "**HYPOTHESIS**: Replacing `format-mode-line` with direct `mode-name` access and using `when` instead of `if` will improve fractal Clarity by removing unnecessary complexity and making the code's intent clearer. Additionally, adding a nil-safety guard for the buffer iteration will improve φ Vitality by making the function more robust."
+### 4. Surface-Level Simplifications
+- Replace `format-mode-line` with direct `mode-name` access.
+- `if` → `when` where there's no else branch.
+- Add nil-safety to buffer iteration.
 
-7. "The `gptel-benchmark-eight-keys-weakest` function will crash at runtime when scoring with a task-type hypothesis because `not-applicable` symbols in the scores alist cause `(< 'not-applicable <number>)` during sorting. Adding a filter for `not-applicable` entries before sorting prevents this runtime error, improving both Clarity (explicit data filtering) and Vitality (builds on discovery of latent bug)."
+**Clarity:** removes gratuitous indirection; intent is locally readable.
 
-So there are 7 kept hypotheses, and 1 discarded (or none were stated).
+---
 
-The "Now let me implement the change" text suggests this is a mid-stream note from the researcher.
+## Discarded
+- 1 entry: *"No hypothesis stated"* — noise from an unprompted target.
 
-Given that the user says "Research strategy: template-default" and they want me to "distill," I think they want a concise summary of:
-- What was the research strategy
-- What was found (the kept hypotheses)
-- What was rejected (the discarded)
-
-Let me create a clean, distilled version. I s
--- ... truncated ...
+## Pattern Across Survivors
+Every kept hypothesis trades **implicit/runtime behavior** for **explicit/assumed** behavior, and **memory-identity or symbol-trapping semantics** for **content-or-shape semantics** — a consistent refinement from accidental correctness to asserted correctness.
 ```
 
+### Check Issues
+
+# Review of Distilled Research Summary
+
+## What's Solid
+
+**The meta-pattern at the end is the strongest part of this document.** The observation that survivors consistently trade *implicit/runtime* for *explicit/assumed* and *identity* for *content/shape* semantics is a genuine insight, not boilerplate. "Accidental correctness → asserted correctness" is a useful framing for code review.
+
+**Hypothesis 2 (Cache Correctness) is the most defensible.** The `eq` vs `equal` distinction is real and the scenario it describes (reassignment of a list to an equivalent new list forcing invalidation) is a textbook identity-vs-equality bug. The reorder recommendation also has a clear rationale — fail fast on cache hit before paying for side-effect work.
+
+**Hypothesis 1's first sub-point** (the `(< 'not-applicable <number>)` crash) is a concrete, verifiable runtime bug. Good.
+
+**The Discarded section is honest** — admitting that most of 179 experiments produced noise rather than signal is useful.
+
+---
+
+## What Needs Verification or Context
+
+1. **The `eq` → `equal` switch has a cost you don't acknowledge.** `equal` on a list is O(n); `eq` is O(1). If the cache is hit on every request, this is a real tradeoff. The summary asserts "matches actual usage patterns" but doesn't show that the perf delta is acceptable. Worth measuring or noting as a residual risk.
+
+2. **The reorder in Hypothesis 2** ("check cache **before** invoking `ensure-buffer-tables`") assumes `ensure-buffer-tables` is either pure 
+
+... (truncated)

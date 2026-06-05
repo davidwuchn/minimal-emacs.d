@@ -616,8 +616,9 @@ allowed for compatibility with isolated tests."
           (or run-id (gptel-auto-workflow--current-run-id))))
 
 (defconst gptel-auto-workflow--results-tsv-header
-  "experiment_id\ttarget\thypothesis\tscore_before\tscore_after\tcode_quality\tdelta\tdecision\tduration\tgrader_quality\tgrader_reason\tcomparator_reason\tanalyzer_patterns\tagent_output\toutput_chars\tbackend\tprompt_chars\tsections_included\texploration_axis\tcandidate_scores\tstrategy\tresearch_strategy\tresearch_hash\tresearch_quality\tcontroller_decision\tkibcm_axis\tmodel\teight_key_scores\tskills\tedit_mode\tcost_usd\teffort_level\n"
-  "Header row written to auto-workflow results.tsv artifacts.")
+  "experiment_id\ttarget\thypothesis\tscore_before\tscore_after\tcode_quality\tdelta\tdecision\tduration\tgrader_quality\tgrader_reason\tcomparator_reason\tanalyzer_patterns\tagent_output\toutput_chars\tbackend\tprompt_chars\tsections_included\texploration_axis\tcandidate_scores\tstrategy\tresearch_strategy\tresearch_hash\tresearch_quality\tcontroller_decision\tkibcm_axis\tmodel\teight_key_scores\tskills\tedit_mode\tcost_usd\teffort_level\tprod_error_rate_before\tprod_error_rate_after\tprod_error_rate_delta\tuser_satisfaction_delta\tsupport_tickets_reduced\tbusiness_value_score\trisk_score\n"
+  "Header row written to auto-workflow results.tsv artifacts.
+32 core columns + 7 production metrics columns (33-39).")
 
 (defun gptel-auto-experiment--extract-axis (agent-output)
   "Extract exploration axis (A-F) from AGENT-OUTPUT.
