@@ -1,8 +1,54 @@
 # Mementum State
 
-> Last session: 2026-06-05 (Phase 2 Monitoring Agent - TDD Complete)
+> Last session: 2026-06-05 (Phase 3 Token Economics - TDD Complete)
 > Next pipeline: running
-> Status: 107/107 .el files, 2 new files this session, 0 byte-compile warnings
+> Status: 108/108 .el files, 2 new files this session, 0 byte-compile warnings
+
+## Session: Phase 3 Token Economics Implementation (2026-06-05)
+
+### ✅ Phase 3 Complete: Token Economics Tracking and Budget Optimization
+
+Implemented Phase 3 of the YC Vision roadmap (Token Economics) using Test-Driven Development. This phase enables the system to track ROI per token spent and optimize budget allocation by category.
+
+**What was delivered:**
+- New module: `lisp/modules/gptel-token-economics.el`
+  * Token cost calculation with configurable pricing
+  * ROI calculation per experiment and per category
+  * Budget allocation algorithm (proportional to ROI with minimum guarantees)
+  * Category ranking by ROI
+  * Cost-per-kept-experiment tracking
+  * Comprehensive economics report generation
+  * Data persistence and loading
+
+- **Token Tracking Integration:**
+  - Added `:input-tokens`, `:output-tokens`, `:category`, `:decision` fields to experiment results
+  - Integrated tracking at all 19 experiment logging points in `gptel-tools-agent-experiment-core.el`
+  - Automatic token tracking for every experiment (kept and discarded)
+
+- **Budget Optimization:**
+  - Allocate budget proportionally to category ROI
+  - Minimum budget guarantee for all categories
+  - Rank categories by ROI (highest first)
+  - Generate optimization recommendations
+
+- Comprehensive test suite: 16 tests (all passing)
+- All 2293 tests pass (0 unexpected failures)
+
+**Key insight:** Token economics closes the resource allocation loop. The system now tracks what it spends, measures the value gained, and optimizes future spending. This enables the "burn tokens on high-ROI categories" strategy from YC's vision.
+
+**Architecture:**
+```
+Experiment → Token Tracking → ROI Calculation → Category Ranking → Budget Allocation
+     ↑                                                                    ↓
+     └──────────────────── Optimization Loop ─────────────────────────────┘
+```
+
+**Test Results:**
+- 16 new token economics tests (all passing)
+- 2293 total tests pass (0 unexpected failures)
+- TDD approach: tests written first, then implementation
+
+---
 
 ## Session: Phase 2 Monitoring Agent Implementation (2026-06-05)
 
