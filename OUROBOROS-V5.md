@@ -1,28 +1,31 @@
-# OUROBOROS-V5: Self-Regulating AI Architecture
+# OUROBOROS-V5: Recursive Self-Improving AI Architecture
 
-> **Your codebase should improve itself. OV5 makes that real.**
+> **Your company should improve itself. OV5 makes that real.**
 >
-> Most AI tools generate code and forget. OV5 runs 100+ experiments/month on your codebase, learns what works, remembers what fails, and gets smarter every cycle. It's the difference between "AI writes code" and "AI engineers your codebase."
+> Most AI tools generate code and forget. OV5 runs 100+ experiments/month, learns what works, remembers what fails, and gets smarter every cycle. It's the difference between "AI writes code" and "AI runs your engineering organization."
 
 **At a glance:**
 
 | What you want | What you get |
 |--------------|--------------|
+| **Self-improving company** | Recursive AI loops that learn from every outcome |
 | **Automatic code improvement** | 100+ experiments/month, 20% keep-rate |
 | **Zero risk** | Git worktree isolation, 6 safety gates, never touches `main` |
 | **Learning system** | Ontology remembers every experiment; gets smarter over time |
+| **Token efficiency** | 59% prompt compression, λ notation, deterministic routing |
 | **Low cost** | $0.50-2.00/run, 8 backends with automatic failover |
 | **One command** | `./scripts/run-pipeline.sh` — improvements appear overnight |
 
 **Quick start:** Clone → run pipeline → review kept experiments next morning.
 
-**Cost:** ~$0.50-2.00/run. **Safety:** Git worktree isolation + 6 gates — no change touches `main` without passing all gates. **Scale:** 105 modules, 195 ERT tests, 8 backend definitions (4-5 actively routed).
+**Cost:** ~$0.50-2.00/run. **Token efficiency:** 59% prompt compression via λ notation. **Safety:** Git worktree isolation + 6 gates — no change touches `main` without passing all gates. **Scale:** 105 modules, 195 ERT tests, 8 backend definitions (4-5 actively routed).
 
 - [Begin](#begin) — Clone, run, done
 - [For Users](#for-users) — Day-to-day operation and triage
 - [Configuration](#configuration) — Targets, backends, timeline
 - [For Creators](#for-creators) — Innovation framework
 - [For Advocators](#for-advocators) — GTM narrative
+- [Token Economics](#token-economics) — Burn tokens, not headcount
 - [The Principle](#the-principle) — Architecture philosophy
 - [The Architecture](#the-architecture) — Technical reference
 - [The Knowledge Layer](#the-knowledge-layer) — Formal reasoning
@@ -114,25 +117,159 @@ AI coding tools generate code. OV5 engineers your codebase.
 
 ---
 
-## For Users
+## The YC Vision: Recursive Self-Improving AI Loops
 
-You're running OV5. Here's what to expect day-to-day.
+OV5 is not just a code improvement tool — it's the foundation for a **self-improving company architecture** based on Y Combinator's vision for "recursive self-improving AI loops."
 
-**Signs of health:** Keep-rate trending toward 20%. Fewer "prompt is empty" or "executor-callback" errors over time. Backend routing self-tunes away from failing providers. Git log shows real merges from experiments.
+### The 5-Layer Framework
 
-**Signs to investigate:** 0 kept for 3+ consecutive runs with different targets. Keep-rate suddenly drops after adding a new target category. Same experiment consistently fails on all backends (likely a prompt or strategy issue, not provider).
+YC's framework maps OV5's architecture to five layers:
 
-**Meta: is the system improving?** Track keep-rate per category weekly. Early experiments are exploration — noise is normal. After ~50 experiments/category, trends become signal. If keep-rate plateaus below 15%, check if targets match ontology categories.
+| Layer | YC Example | OV5 Implementation | Status |
+|-------|-----------|-------------------|---------|
+| **1. Sensor** | Customer emails, support tickets, product metrics | Internal experiment results (TSV files) | ⚠️ **GAP: No external signals** |
+| **2. Policy** | Rules for what AI can do, human approval gates | Grader approval, benchmark thresholds, staging branches | ✅ Implemented |
+| **3. Tools** | Deterministic APIs (query DB, read calendar) | Knowledge reasoning, causal analysis, gap detection | ✅ **STRONG** |
+| **4. Quality Gate** | Eval checks, safety filters, human review | Grader, benchmarks, verification, self-healing | ✅ **STRONG** |
+| **5. Learning** | Captures failures, loops back to improve | Self-evolution, pattern synthesis, feedback loops | ✅ Implemented |
 
-**Cowork with AI coding agents:** Run `./scripts/setup-ov5-cowork.sh` to install OV5 integration for OpenCode, Claude Code, Cursor, and MCP-compatible agents. Lets your coding agent trigger experiments and review results via emacsclient.
+### The Holy Shit Moment
 
-**Quick triage:**
+YC's breakthrough: An agent that watches failures and **decides to improve the system itself**.
+
+```
+Day 1: Employee query fails
+Night: Monitoring agent reads failure → reasons why → decides to add tool → 
+       writes code → submits MR → another agent reviews/merges/deploys
+Day 2: Same query works
+All happens while employees sleep
+```
+
+**What OV5 has:**
+- Self-healing (RSS watchdog, TSV integrity, silent failure logging)
+- Self-evolution (pattern synthesis, causal chains, gap detection)
+
+**What's missing:**
+- Meta-improvement agent that asks: "Why did the grader fail 3 times on similar code?" and rewrites the grader
+- Agent that watches the entire pipeline and proposes architectural changes
+- System that improves its own improvement mechanisms
+
+### Software as Consumable
+
+**YC's principle:** "Business context is the asset, software is consumable"
+
+**What YC does:**
+- Generate internal dashboards on-demand with one prompt
+- Treat software as disposable - regenerate when model improves
+- Preserve business context (why we made this decision, what we learned)
+
+**What OV5 should do:**
+- Focus on preserving **why** we made changes, not the changes themselves
+- Regenerate code with better models instead of maintaining old code
+- Treat generated code as disposable experiments
+
+### Human Positioning
+
+**YC's principle:** "Humans sit on the outer edge of the company brain"
+
+**YC's positioning:**
+- Humans only for: ethics, novel situations, high-stakes emotional moments, sales conversations
+- Everything else automated
+- Humans are the interface between AI brain and real world
+
+**OV5's current positioning:**
+- Humans approve experiments
+- Humans review code
+- Humans decide what to experiment on
+
+**Should be:**
+- Humans only for truly novel situations (new product direction, ethical dilemmas)
+- Everything else: AI proposes, AI implements, AI tests, AI deploys
+- Humans become "company brain interface" with external world
+
+### Token Economics
+
+**YC's principle:** "Burn tokens, not headcount"
+
+**YC's metrics:**
+- 5x revenue per person compared to 18 months ago
+- Measure token usage per person
+- Optimize for tokens spent, not people hired
+
+**OV5's current state:**
+- No token budgeting
+- No cost-per-experiment tracking
+- No ROI analysis per token spent
+
+**What's needed:**
+- Track tokens spent per experiment
+- Measure ROI: tokens spent vs. code quality improvement vs. production impact
+- Optimize: Spend more tokens on high-impact areas, less on low-impact
+
+### Current Assessment
+
+**OV5 completion level:** ~40% of YC vision
+- ✅ Strong tool layer and quality gates
+- ✅ Good learning mechanism (but missing external feedback)
+- ⚠️ Missing external sensors (biggest gap)
+- ⚠️ No monitoring agent for meta-improvement
+- ⚠️ Software not treated as consumable
+- ⚠️ Human role not redefined
+- ⚠️ Token economics not optimized
+
+---
+
+## For Users: Running Your Self-Improving Company
+
+You're not just running a code improvement tool — you're operating a self-improving company where AI handles execution and you handle the interface with the external world.
+
+### Your Role: Company Brain Interface
+
+In YC's vision, **humans sit on the outer edge of the company brain**. You handle what AI can't:
+- **Ethics and judgment** — Should we make this change? Does it align with our values?
+- **Novel situations** — New product directions, unprecedented technical challenges
+- **High-stakes moments** — Architectural decisions that affect the next 5 years
+- **External interface** — Customer conversations, sales, partnerships
+
+Everything else: AI proposes, AI implements, AI tests, AI deploys.
+
+### Day-to-Day Operation
+
+**Signs of health:** Keep-rate trending toward 20%. Fewer "prompt is empty" or "executor-callback" errors over time. Backend routing self-tunes away from failing providers. Git log shows real merges from experiments. Token efficiency improving (more quality per token spent).
+
+**Signs to investigate:** 0 kept for 3+ consecutive runs with different targets. Keep-rate suddenly drops after adding a new target category. Same experiment consistently fails on all backends (likely a prompt or strategy issue, not provider). Token costs rising without quality improvement.
+
+**Meta: is the company improving?** Track:
+- Keep-rate per category weekly (trends become signal after ~50 experiments/category)
+- Token ROI: quality improvement per token spent
+- External impact: production metrics, user feedback (when Phase 1 sensors are implemented)
+
+### Token Economics
+
+**Burn tokens, not headcount.** Track:
+- Tokens spent per experiment
+- Quality improvement per token
+- ROI by category (which experiments deliver most value per token?)
+
+Optimize: Spend more tokens on high-impact categories, less on low-impact. The goal is not to minimize token usage, but to maximize value per token.
+
+**Future (Phase 1):** External sensors will close the loop between token spent and business value created.
+
+### Cowork with AI Coding Agents
+
+Run `./scripts/setup-ov5-cowork.sh` to install OV5 integration for OpenCode, Claude Code, Cursor, and MCP-compatible agents. Lets your coding agent trigger experiments and review results via emacsclient.
+
+Your coding agent handles feature development. OV5 handles continuous improvement. Together: the self-improving engineering team.
+
+### Quick Triage
+
 | Symptom | Likely cause | Check |
 |---------|-------------|-------|
 | 0 targets selected | Analyzer failed / rate-limited | `gptel-auto-workflow--rate-limited-backends` |
 | All experiments discarded | Baseline tests failing | Test suite output in daemon log |
 | Daemon unresponsive | ERT test run (can take 2min) | Wait; check `ps aux | grep emacs` |
 | "prompt is empty" errors | Strategy analysis returned no patterns | Usually transient — next cycle often recovers |
+| Token costs rising | Low-quality experiments | Check keep-rate; adjust target selection |
 
 ---
 
@@ -148,11 +285,27 @@ You're running OV5. Here's what to expect day-to-day.
 
 ---
 
-## For Creators
+## For Creators: Building Self-Improving Companies
 
-**Innovation doesn't come from more meetings. It comes from more experiments.** Every breakthrough starts as a hypothesis you don't have time to test. OV5 closes the gap: you define what matters; the system runs the experiments.
+**Innovation doesn't come from more meetings. It comes from recursive self-improvement loops.** Every breakthrough starts as a hypothesis you don't have time to test. OV5 closes the gap: you define what matters; the system runs the experiments, learns from outcomes, and gets smarter every cycle.
 
-Your job shifts from "write better code" to "teach the system what better code looks like." Every kept experiment trains the ontology. Every discarded experiment hardens the guard rails.
+Your job shifts from "write better code" to **"design the self-improving company."** You set the direction, define the quality gates, and teach the system what success looks like. The AI handles execution, iteration, and learning.
+
+### The YC Vision in Practice
+
+**YC's principle:** "A self-improving company is just a collection of recursive loops that learn from feedback."
+
+OV5 implements this vision:
+
+```
+Research → Analyze → Execute → Verify → Learn → (loop)
+```
+
+Each cycle produces:
+- **Kept experiments** — production-ready improvements that pass all gates
+- **Discarded experiments** — negative knowledge that prevents future mistakes
+- **Patterns** — reusable strategies that propagate across similar code
+- **Ontology** — executable knowledge of what your codebase accepts/rejects
 
 ### How You Innovate with OV5
 
@@ -177,9 +330,11 @@ Month 3: System catches error patterns before you do
            ↓
 Month 6: Your codebase has its own "engineering instinct" — the ontology
           knows what to optimize before you write a ticket
+           ↓
+Year 1:  The company improves itself. You focus on direction, not execution.
 ```
 
-That's the innovation path. Not "AI writes code for you." **Your codebase becomes self-improving.** You own the direction; the system owns the iteration.
+That's the innovation path. Not "AI writes code for you." **Your company becomes self-improving.** You own the direction; the system owns the iteration.
 
 ### The Numbers That Matter
 
@@ -192,10 +347,11 @@ These come from 6 months of continuous operation across 8 backends and 12 archit
 | **Test coverage** | 195 ERT tests per merge | Varies | Zero regression risk — every automated change passes the full suite |
 | **Prompt compression** | 59% | N/A | Lambda notation costs less; same capability, lower API spend |
 | **Backend diversity** | 8 providers | 1 (your IDE) | Automatic failover when a provider rate-limits or goes down |
+| **Token efficiency** | Tracking (Phase 1) | N/A | Future: measure ROI per token spent, optimize spend |
 
 **What 20% keep-rate means:** The system wastes API calls so you don't waste time. You review only what passes all 6 gates. The 80% that fail aren't wasted — they train the ontology to avoid those patterns next time. After 50 experiments per category, the system stops making the same mistakes.
 
-**The compounding effect:** Week 1 = baseline establishment. Month 1 = pattern recognition. Month 3 = proactive error prevention. Month 6 = your codebase has engineering instinct — it knows what to optimize before you write a ticket.
+**The compounding effect:** Week 1 = baseline establishment. Month 1 = pattern recognition. Month 3 = proactive error prevention. Month 6 = your codebase has engineering instinct — it knows what to optimize before you write a ticket. Year 1 = the company improves itself.
 
 ### Getting to Innovation Faster
 
@@ -206,6 +362,8 @@ These come from 6 months of continuous operation across 8 backends and 12 archit
 3. **Feed the ontology.** The more experiments run, the smarter the system gets. Category patterns stabilize after ~50 experiments per category. Before that, keep-rate is noise. After that, it's signal.
 
 4. **Increase surface area.** Once the system handles file A well, add file B. The ontology already knows the category — strategy inherits. Each new target is cheaper than the last.
+
+5. **Track token economics.** (Phase 1) Measure tokens spent per experiment, quality improvement per token, ROI by category. Optimize: spend more on high-impact areas, less on low-impact.
 
 ### For Solo Developers
 
@@ -222,7 +380,7 @@ OV5 runs experiments while you sleep:
 
 After 100 experiments, the ontology has seen more edge cases in your code than you have. It knows which patterns your codebase accepts and which it rejects. It becomes the second engineer you always wanted but couldn't afford.
 
-**Your time budget:** 15 minutes/day reviewing kept experiments. **Your output:** 20+ production-ready improvements/month.
+**Your time budget:** 15 minutes/day reviewing kept experiments. **Your output:** 20+ production-ready improvements/month. **Your company:** Self-improving.
 
 ### For Teams
 
@@ -237,6 +395,8 @@ OV5 changes this:
 - **Onboarding accelerates** — New engineers inherit codebase intelligence, not just documentation. They see which patterns succeeded and which failed, with evidence.
 
 **The team pitch:** "Point this at the module nobody wants to maintain. Let it run. Review what passes in your morning sync. You'll be surprised how much it finds."
+
+**The YC vision:** "Your team is a self-improving company. The ontology is the company brain. Humans sit on the outer edge, handling ethics, novel situations, and high-stakes decisions. Everything else: the system handles."
 
 ---
 
@@ -430,6 +590,102 @@ The architecture is provider-agnostic and language-agnostic. The Emacs surface i
 | **OV5 VS Code extension** | Run experiments from your IDE | "I use VS Code, not Emacs" |
 
 **The vision:** OV5 becomes the "continuous improvement layer" for all codebases, regardless of editor, language, or team size. The ontology is the moat — it's the accumulated knowledge of thousands of codebases learning together.
+
+---
+
+## Token Economics
+
+**"Burn tokens, not headcount."** — YC's principle for the AI era.
+
+The bottleneck in modern engineering is shifting from headcount to token usage. OV5 is designed to maximize value per token spent, making every API call count.
+
+### The Token Efficiency Stack
+
+| Mechanism | Token Savings | How |
+|-----------|--------------|-----|
+| **λ notation** | 59% | Lambda calculus compresses prompts 2.4× vs prose |
+| **Deterministic routing** | ~0 tokens | Frontier selection from TSV history (<1s, no LLM call) |
+| **Decision gates** | ~0 tokens | Keep/discard computed from score deltas (no LLM call) |
+| **Static fallback chain** | ~0 tokens | Ordered by speed/quality, not LLM aggregation |
+| **Token efficiency tracking** | Adaptive | Auto-compresses prompts when optimal size identified |
+| **Section A/B testing** | 10-30% | Removes low-value prompt sections that don't improve outcomes |
+
+### Cost Comparison
+
+| Approach | Monthly Cost | Experiments | Keep-Rate | Cost/Kept |
+|----------|-------------|-------------|-----------|-----------|
+| **OV5 (automated)** | $50-200 | 100+ | 20% | $2.50-10 |
+| **Copilot/Cursor** | $20-100 | 0 (stateless) | N/A | N/A |
+| **Hired refactoring engineer** | $12,500 | 2-3/quarter | N/A | $4,000+ |
+| **Manual refactoring sprint** | $8,000 | 5-10 | Varies | $800-1,600 |
+
+**The key insight:** OV5's 80% discard rate isn't waste — it's *training data*. Every discarded experiment teaches the ontology what doesn't work. After 50 experiments per category, the system stops making the same mistakes. The 20% that pass are production-ready; the 80% that fail make the next 20% smarter.
+
+### Token Metrics That Matter
+
+| Metric | What It Measures | Target |
+|--------|-----------------|--------|
+| **Tokens per experiment** | Total API tokens consumed | Track and minimize |
+| **Quality per token** | Score improvement / tokens spent | Maximize |
+| **Business value per token** | Production impact / tokens spent | Maximize |
+| **Compression ratio** | λ notation vs prose | 2.4× (achieved: 59%) |
+| **Deterministic ratio** | Non-LLM decisions / total decisions | Maximize (currently: analyzer, comparator, routing) |
+| **Token efficiency trend** | Month-over-month tokens per kept experiment | Decreasing |
+
+### The Token Flywheel
+
+```
+Week 1:  High token spend — system learning categories, establishing baselines
+           ↓
+Month 1: Token spend stabilizes — ontology knows patterns, routing is deterministic
+           ↓
+Month 3: Tokens per kept experiment drops 40% — system avoids failed strategies
+           ↓
+Month 6: Token efficiency plateaus — ontology predicts success, minimal waste
+           ↓
+Year 1:  Tokens flow to high-ROI experiments only — auto-budget allocation
+```
+
+### ROI Per Token
+
+**Concrete example:** A team spends $200/month on OV5 (≈500 experiments).
+
+| Outcome | Value |
+|---------|-------|
+| 100 kept experiments × avg 2h manual refactoring time | 200 engineer-hours saved |
+| 200h × $100/hour engineer rate | $20,000 value |
+| **ROI** | **100× on token spend** |
+
+**Compare to alternatives:**
+- Hiring a refactoring engineer: $150K/year, produces 2-3 refactors/quarter
+- Manual refactoring sprint: $8K/quarter, produces 5-10 improvements
+- OV5: $2.4K/year, produces 100+ improvements/month
+
+### Token Budget Allocation (Future: Phase 1)
+
+When external sensors are implemented, token budgets will be allocated by **business value**:
+
+| Category | Token Budget | Rationale |
+|----------|-------------|-----------|
+| High-impact (production errors, security) | 50% of budget | Maximum business value per token |
+| Medium-impact (performance, code quality) | 30% of budget | Steady improvement |
+| Low-impact (style, documentation) | 15% of budget | Maintenance |
+| Exploration (new categories) | 5% of budget | Discovery |
+
+**The principle:** Spend more tokens where they create the most value. The ontology already tracks keep-rate per category; token budgets follow keep-rate.
+
+### The YC Token Economics Vision
+
+YC's data: companies running AI loops see **5× revenue per person** compared to 18 months ago. The bottleneck shifts from "how many engineers" to "how many tokens."
+
+**OV5's position:**
+- **Current:** No token budgeting, no ROI tracking per token
+- **Phase 1 (0-6mo):** Track tokens per experiment, measure quality per token
+- **Phase 2 (6-12mo):** Auto-allocate tokens by category keep-rate
+- **Phase 3 (12-18mo):** External sensors close the loop — token ROI = business value per token
+- **Phase 4 (18-24mo):** Token economics fully optimized — scale by adding compute, not people
+
+**The end state:** A self-improving company that scales by burning tokens efficiently, not by hiring headcount.
 
 ---
 

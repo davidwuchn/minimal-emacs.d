@@ -273,11 +273,12 @@ Caches when MAX-AGE-DAYS is nil for cycle-local reuse."
                                      ;; 20 cols: backend at index 14, no research fields
                                      ;; 24 cols: backend at index 14, research fields at 20-23
                                      ;; 27 cols: backend at index 15, full research fields
-                                     (format-version (cond ((<= field-count 14) 14)
-                                                           ((<= field-count 20) 20)
-                                                           ((<= field-count 24) 24)
-                                                           (t 27)))
-                                     (target (nth 1 fields))
+                                      (format-version (cond ((<= field-count 14) 14)
+                                                            ((<= field-count 20) 20)
+                                                            ((<= field-count 24) 24)
+                                                            (t 27)))
+                                      (experiment-id (nth 0 fields))
+                                      (target (nth 1 fields))
                                      (hypothesis (nth 2 fields))
                                      (score-before (string-to-number (or (nth 3 fields) "0")))
                                      (score-after (string-to-number (or (nth 4 fields) "0")))
@@ -298,7 +299,8 @@ Caches when MAX-AGE-DAYS is nil for cycle-local reuse."
                                      (model (or (nth (if (<= format-version 24) 20 26) fields) "unknown"))
                                      (skills (or (nth 28 fields) ""))
                                      (edit-mode (or (nth 29 fields) "none")))
-                                (push (list :target target
+                                (push (list :experiment-id experiment-id
+                                            :target target
                                             :hypothesis hypothesis
                                             :score-before score-before
                                             :score-after score-after
@@ -543,20 +545,22 @@ Returns alist of target → (category success-rate count)."
       (cl-return-from nil nil))
     (let* ((all-results (gptel-auto-workflow--parse-all-results))
            ;; Add timestamps from directory names since TSV doesn't include them
-           (with-time (mapcar (lambda (r)
-                                (let ((dir-name (plist-get r :run-dir)))
-                                  (if (and dir-name
-                                           (string-match "\\([0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}T[0-9]\\{2\\}[0-9]\\{2\\}[0-9]\\{2\\}Z\\)" dir-name))
-                                      (append r (list :timestamp (float-time (date-to-time (match-string 1 dir-name)))))
-                                    r)))
-                              all-results)))
+           (with-time (cl-remove-if-not
+                       (lambda (r) (plist-get r :timestamp))
+                       (mapcar (lambda (r)
+                                 (let ((dir-name (plist-get r :run-dir)))
+                                   (if (and dir-name
+                                            (string-match "\\([0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}T[0-9]\\{2\\}[0-9]\\{2\\}[0-9]\\{2\\}Z\\)" dir-name))
+                                       (append r (list :timestamp (float-time (date-to-time (match-string 1 dir-name)))))
+                                     r)))
+                               all-results))))
       (if (< (length with-time) 2)
           (insert "*Insufficient timestamped experiments for gap detection.*\n")
         (let* ((intervals (mapcar (lambda (r)
                                     (list :start (plist-get r :timestamp)
                                           :end (+ (plist-get r :timestamp)
                                                   (or (plist-get r :duration) 60))
-                                          :id (plist-get r :id)
+                                          :id (plist-get r :experiment-id)
                                           :target (plist-get r :target)))
                                   with-time))
                (gaps (gptel-knowledge--allen-detect-gaps intervals)))

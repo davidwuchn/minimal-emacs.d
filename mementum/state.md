@@ -1,8 +1,45 @@
 # Mementum State
 
-> Last session: 2026-06-05 (Knowledge reasoning wiring)
+> Last session: 2026-06-05 (YC Vision Strategic Planning)
 > Next pipeline: running
 > Status: 105/105 .el files, 3 modified this session, 0 byte-compile warnings
+
+## Session: YC Vision Strategic Planning (2026-06-05)
+
+### 🎯 Strategic Analysis: YC Self-Improving Company Framework
+
+Analyzed YC's vision for "recursive self-improving AI loops" and mapped OV5's current state against their 5-layer framework.
+
+**Key finding:** OV5 is at ~40% of YC vision. Strong tool layer and quality gates, but missing external sensors (biggest gap).
+
+**5 major gaps identified:**
+1. **External Sensors** (P0) - No production metrics or user feedback
+2. **Monitoring Agent** (P1) - No meta-improvement system
+3. **Software as Consumable** (P2) - Code treated as asset, not disposable
+4. **Human Positioning** (P3) - Humans still approving all experiments
+5. **Token Economics** (P2) - No ROI tracking per token spent
+
+**Strategic documents created:**
+- `mementum/knowledge/strategic-plans/yc-vision-analysis.md` - Framework mapping
+- `mementum/knowledge/strategic-plans/gap-analysis.md` - Detailed gap breakdown
+- `mementum/knowledge/strategic-plans/implementation-roadmap.md` - 4-phase, 24-month plan
+
+**24-month roadmap:**
+- Phase 1 (0-6 months): External sensors - close loop between code quality and business value
+- Phase 2 (6-12 months): Monitoring agent - system that improves its own improvement mechanisms
+- Phase 3 (12-18 months): Software as consumable - regenerate with better models
+- Phase 4 (18-24 months): Human positioning + token economics
+
+**Resource requirements:** 4 engineer-years over 24 months
+
+**Next actions:** Begin Phase 1 - design production monitoring integration
+
+### Files created
+- `mementum/knowledge/strategic-plans/yc-vision-analysis.md`
+- `mementum/knowledge/strategic-plans/gap-analysis.md`
+- `mementum/knowledge/strategic-plans/implementation-roadmap.md`
+
+---
 
 ## Session: Wire Knowledge Reasoning Features into Pipeline (2026-06-05)
 
