@@ -219,12 +219,13 @@ Risk factors:
 (defun gptel-auto-workflow--get-production-metrics (target)
   "Get production metrics for TARGET, using cache if available.
 Returns plist with production metrics or default values if unavailable."
-  (or (when (hash-table-p gptel-auto-workflow--production-metrics-cache)
-        (ignore-errors (gethash target gptel-auto-workflow--production-metrics-cache)))
-      (let ((metrics (ignore-errors (gptel-auto-workflow--track-production-impact target nil))))
-        (when (and (hash-table-p gptel-auto-workflow--production-metrics-cache) metrics)
-          (puthash target metrics gptel-auto-workflow--production-metrics-cache))
-        metrics)))
+  (when target
+    (or (when (hash-table-p gptel-auto-workflow--production-metrics-cache)
+          (ignore-errors (gethash target gptel-auto-workflow--production-metrics-cache)))
+        (let ((metrics (ignore-errors (gptel-auto-workflow--track-production-impact target nil))))
+          (when (and (hash-table-p gptel-auto-workflow--production-metrics-cache) metrics)
+            (puthash target metrics gptel-auto-workflow--production-metrics-cache))
+          metrics))))
 
 (defun gptel-auto-workflow--init-production-metrics-cache ()
   "Initialize production metrics cache."
