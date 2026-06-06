@@ -516,12 +516,12 @@ Returns alist of target → (category success-rate count)."
 
 (defun gptel-auto-workflow--synthesize-causal-chains ()
   "Insert causal chain analysis section into current buffer."
-  (cl-block nil
+  (cl-block synthesize-causal-chains
     (insert "## Causal Chain Analysis\n\n")
     (unless (fboundp 'gptel-knowledge--floyd-warshall)
       (insert "*Knowledge reasoning module not loaded - causal analysis unavailable.*\n")
       (insert "\n")
-      (cl-return-from nil nil))
+      (cl-return-from synthesize-causal-chains nil))
     (let* ((all-results (gptel-auto-workflow--parse-all-results))
            (graph (gptel-knowledge--experiment-causal-graph all-results)))
       (if (or (null (car graph)) (< (length (car graph)) 2))
@@ -542,12 +542,12 @@ Returns alist of target → (category success-rate count)."
 
 (defun gptel-auto-workflow--synthesize-gap-detection ()
   "Insert experiment gap detection section into current buffer."
-  (cl-block nil
+  (cl-block synthesize-gap-detection
     (insert "## Experiment Gap Detection\n\n")
     (unless (fboundp 'gptel-knowledge--allen-detect-gaps)
       (insert "*Knowledge reasoning module not loaded - gap detection unavailable.*\n")
       (insert "\n")
-      (cl-return-from nil nil))
+      (cl-return-from synthesize-gap-detection nil))
     (let* ((all-results (gptel-auto-workflow--parse-all-results))
            ;; Add timestamps from directory names since TSV doesn't include them
            (with-time (cl-remove-if-not
