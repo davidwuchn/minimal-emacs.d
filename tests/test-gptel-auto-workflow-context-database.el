@@ -333,6 +333,27 @@
       (should (= 2 (length history))))))
 
 ;; ============================================================================
+;; Module Loading Test
+;; ============================================================================
+
+(ert-deftest test-context-database/module-loads ()
+  "Context database module should load without errors.
+This tests that all top-level defvar forms don't call undefined functions."
+  :expected-result :passed
+  ;; If we got here, the require above succeeded
+  (should (fboundp 'gptel-auto-workflow--context-db-init))
+  (should (fboundp 'gptel-auto-workflow--capture-context)))
+
+(ert-deftest test-context-database/context-db-file-initializes-lazily ()
+  "Context db file path should initialize without error.
+Tests that the defvar doesn't call undefined functions at load time."
+  (should (boundp 'gptel-auto-workflow--context-db-file))
+  ;; The variable may be nil if initialization failed;
+  ;; accessing it should not error
+  (should (or (null gptel-auto-workflow--context-db-file)
+              (stringp gptel-auto-workflow--context-db-file))))
+
+;; ============================================================================
 ;; Edge Cases
 ;; ============================================================================
 

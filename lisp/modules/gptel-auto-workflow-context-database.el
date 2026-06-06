@@ -41,9 +41,20 @@
 (defvar gptel-auto-workflow--preserved-contexts (make-hash-table :test 'equal)
   "Store for preserved contexts before disposal.")
 
-(defvar gptel-auto-workflow--context-db-file
-  (expand-file-name "var/context-database.json" (gptel-auto-workflow--project-root))
-  "Path to persistent context database file.")
+(defvar gptel-auto-workflow--context-db-file nil
+  "Path to persistent context database file.
+Initialized lazily by `gptel-auto-workflow--context-db-file-path'.
+Cached after first access to avoid repeated calls to project-root.")
+
+(defun gptel-auto-workflow--context-db-file-path ()
+  "Return the path to the context database file.
+Initializes lazily on first call to avoid calling project-root at load time.
+Returns nil if project-root is not available."
+  (or gptel-auto-workflow--context-db-file
+      (when (fboundp 'gptel-auto-workflow--project-root)
+        (setq gptel-auto-workflow--context-db-file
+              (expand-file-name "var/context-database.json"
+                                (gptel-auto-workflow--project-root))))))
 
 ;; ============================================================================
 ;; Persistence Functions
@@ -64,37 +75,42 @@ Saves all in-memory stores to survive daemon restarts."
                                     gptel-auto-workflow--disposable-modules)
                :preserved-contexts (gptel-auto-workflow--hash-table-to-alist
                                     gptel-auto-workflow--preserved-contexts))))
-    (make-directory (file-name-directory gptel-auto-workflow--context-db-file) t)
-    (with-temp-file gptel-auto-workflow--context-db-file
-      (insert (json-encode data)))
-    (message "[context-db] Persisted to %s" gptel-auto-workflow--context-db-file)))
+    (let ((file (gptel-auto-workflow--context-db-file-path)))
+      (unless file
+        (message "[context-db] Cannot persist: project-root not available")
+        (cl-return-from gptel-auto-workflow--context-db-persist))
+      (make-directory (file-name-directory file) t)
+      (with-temp-file file
+        (insert (json-encode data)))
+      (message "[context-db] Persisted to %s" file))))
 
 (defun gptel-auto-workflow--context-db-load ()
   "Load context database from JSON file.
 Restores all in-memory stores from persistent storage."
-  (when (file-exists-p gptel-auto-workflow--context-db-file)
-    (condition-case err
-        (let ((data (json-read-file gptel-auto-workflow--context-db-file)))
-          (setq gptel-auto-workflow--context-store
-                (gptel-auto-workflow--alist-to-hash-table
-                 (plist-get data :context-store)))
-          (setq gptel-auto-workflow--module-context-store
-                (gptel-auto-workflow--alist-to-hash-table
-                 (plist-get data :module-context-store)))
-          (setq gptel-auto-workflow--regeneration-history
-                (gptel-auto-workflow--alist-to-hash-table
-                 (plist-get data :regeneration-history)))
-          (setq gptel-auto-workflow--scheduled-regenerations
-                (plist-get data :scheduled-regenerations))
-          (setq gptel-auto-workflow--disposable-modules
-                (gptel-auto-workflow--alist-to-hash-table
-                 (plist-get data :disposable-modules)))
-          (setq gptel-auto-workflow--preserved-contexts
-                (gptel-auto-workflow--alist-to-hash-table
-                 (plist-get data :preserved-contexts)))
-          (message "[context-db] Loaded from %s" gptel-auto-workflow--context-db-file))
-      (error
-       (message "[context-db] Load error: %s" err)))))
+  (let ((file (gptel-auto-workflow--context-db-file-path)))
+    (when (and file (file-exists-p file))
+      (condition-case err
+          (let ((data (json-read-file file)))
+            (setq gptel-auto-workflow--context-store
+                  (gptel-auto-workflow--alist-to-hash-table
+                   (plist-get data :context-store)))
+            (setq gptel-auto-workflow--module-context-store
+                  (gptel-auto-workflow--alist-to-hash-table
+                   (plist-get data :module-context-store)))
+            (setq gptel-auto-workflow--regeneration-history
+                  (gptel-auto-workflow--alist-to-hash-table
+                   (plist-get data :regeneration-history)))
+            (setq gptel-auto-workflow--scheduled-regenerations
+                  (plist-get data :scheduled-regenerations))
+            (setq gptel-auto-workflow--disposable-modules
+                  (gptel-auto-workflow--alist-to-hash-table
+                   (plist-get data :disposable-modules)))
+            (setq gptel-auto-workflow--preserved-contexts
+                  (gptel-auto-workflow--alist-to-hash-table
+                   (plist-get data :preserved-contexts)))
+            (message "[context-db] Loaded from %s" file))
+        (error
+         (message "[context-db] Load error: %s" err))))))
 
 (defun gptel-auto-workflow--hash-table-to-alist (hash-table)
   "Convert HASH-TABLE to alist for JSON serialization."
@@ -123,6 +139,11 @@ Restores all in-memory stores from persistent storage."
 (defun gptel-auto-workflow--context-db-configured-p ()
   "Return t if context database is configured."
   (not (null gptel-auto-workflow--context-db-config)))
+
+(defalias 'gptel-auto-workflow--capture-experiment-context
+  'gptel-auto-workflow--capture-context
+  "Alias for `gptel-auto-workflow--capture-context'.
+Used by production.el via fboundp guard.")
 
 (defun gptel-auto-workflow--capture-context (experiment)
   "Capture business context for EXPERIMENT."
