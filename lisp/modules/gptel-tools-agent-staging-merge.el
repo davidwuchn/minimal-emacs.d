@@ -997,9 +997,9 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                :grader-reason "review-failed-max-retries"
                :comparator-reason (truncate-string-to-width review-output 200)
                :analyzer-patterns ""
-               :agent-output review-output))
-        (funcall finish nil)))
-     ((not approved)
+                :agent-output review-output))
+         (funcall finish nil "review-failed-max-retries")))
+      ((not approved)
       (if (< gptel-auto-workflow--review-retry-count
              gptel-auto-workflow--review-max-retries)
           (progn
@@ -1050,8 +1050,8 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                           :grader-reason "fix-failed"
                           :comparator-reason (truncate-string-to-width fix-output 200)
                           :analyzer-patterns ""
-                          :agent-output review-output))
-                   (funcall finish nil)))))))
+                           :agent-output review-output))
+                    (funcall finish nil "fix-failed")))))))
         (message "[auto-workflow] ✗ Review BLOCKED (max retries): %s"
                  (my/gptel--sanitize-for-logging review-output 200))
         (gptel-auto-experiment-log-tsv
@@ -1067,9 +1067,9 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                :grader-reason "review-blocked-max-retries"
                :comparator-reason (truncate-string-to-width review-output 200)
                :analyzer-patterns ""
-               :agent-output review-output))
-        (funcall finish nil)))
-     (t
+                :agent-output review-output))
+         (funcall finish nil "review-blocked-max-retries")))
+      (t
       (let* ((scope-check (gptel-auto-experiment--check-scope optimize-branch))
              (scope-ok (car scope-check))
              (changed-files (cdr scope-check)))
@@ -1091,9 +1091,9 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                      :comparator-reason
                      (format "Too many files: %s" (mapconcat #'identity changed-files ", "))
                      :analyzer-patterns ""
-                     :agent-output ""))
-              (funcall finish nil))
-           (let* ((config-check (gptel-auto-workflow--check-protected-configs optimize-branch))
+                      :agent-output ""))
+               (funcall finish nil "scope-creep-blocked"))
+            (let* ((config-check (gptel-auto-workflow--check-protected-configs optimize-branch))
                   (config-ok (car config-check))
                   (config-reason (cdr config-check)))
              (if (not config-ok)
@@ -1113,9 +1113,9 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                           :grader-reason "protected-config-regression"
                           :comparator-reason config-reason
                           :analyzer-patterns ""
-                          :agent-output ""))
-                   (funcall finish nil))
-                (let* ((staging-base (gptel-auto-workflow--current-staging-head))
+                           :agent-output ""))
+                    (funcall finish nil "protected-config-regression"))
+                 (let* ((staging-base (gptel-auto-workflow--current-staging-head))
                   (merge-result
                    (progn
                      (gptel-auto-workflow--git-result
@@ -1147,8 +1147,8 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                            "[auto-workflow] ✓ Staging pushed. Human must merge to main."))
                          (if (gptel-auto-workflow--promote-staging-to-main)
                              (funcall finish t)
-                           (message "[auto-workflow] ⚠ Auto-promote to main failed; staging pushed but not merged")
-                           (funcall finish nil)))))))
+                            (message "[auto-workflow] ⚠ Auto-promote to main failed; staging pushed but not merged")
+                            (funcall finish nil "auto-promote-failed")))))))
             (if (null merge-result)
                 (progn
                   (message "[auto-workflow] ✗ Merge to staging failed, aborting")
@@ -1166,27 +1166,27 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                          :comparator-reason
                          (format "Failed to merge %s to staging" optimize-branch)
                          :analyzer-patterns ""
-                         :agent-output ""))
-                  (funcall finish nil))
-              (when already-integrated-p
+                          :agent-output ""))
+                   (funcall finish nil "staging-merge-failed"))
+               (when already-integrated-p
                 (message "[auto-workflow] Candidate changes already present in staging; verifying staged sync only"))
               (let ((worktree (or gptel-auto-workflow--staging-worktree-dir
                                   (gptel-auto-workflow--create-staging-worktree))))
                 (if (not worktree)
                     (progn
-                      (gptel-auto-workflow--log-staging-step-failure
-                       'staging-worktree-failed optimize-branch "")
-                      (gptel-auto-workflow--reset-staging-after-failure staging-base)
-                      (funcall finish nil))
+                       (gptel-auto-workflow--log-staging-step-failure
+                        'staging-worktree-failed optimize-branch "")
+                       (gptel-auto-workflow--reset-staging-after-failure staging-base)
+                       (funcall finish nil "staging-worktree-failed"))
                   (let* ((verification (gptel-auto-workflow--verify-staging))
                          (tests-passed (car verification))
                          (output (or (cdr verification) "")))
                     (if (not tests-passed)
                         (progn
-                          (gptel-auto-workflow--log-staging-step-failure
-                           'staging-verification-failed optimize-branch output)
-                          (gptel-auto-workflow--reset-staging-after-failure staging-base)
-                          (funcall finish nil))
+                           (gptel-auto-workflow--log-staging-step-failure
+                            'staging-verification-failed optimize-branch output)
+                           (gptel-auto-workflow--reset-staging-after-failure staging-base)
+                           (funcall finish nil "staging-verification-failed"))
                       (message "[auto-workflow] ✓ Staging verification PASSED")
                       (if (gptel-auto-workflow--push-staging)
                           (funcall finish-publish nil)
@@ -1206,16 +1206,16 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                                         (funcall finish-publish t)
                                       (gptel-auto-workflow--log-staging-step-failure
                                        retry-reason optimize-branch retry-output)
-                                      (gptel-auto-workflow--sync-staging-from-main)
-                                      (funcall finish nil)))
-                                (gptel-auto-workflow--log-staging-step-failure
-                                 'staging-push-failed optimize-branch push-output)
-                                (gptel-auto-workflow--sync-staging-from-main)
-                                (funcall finish nil))
-                            (gptel-auto-workflow--log-staging-step-failure
-                             'staging-push-failed optimize-branch push-output)
-                            (gptel-auto-workflow--reset-staging-after-failure staging-base)
-                            (funcall finish nil))))))))))))))))))
+                                       (gptel-auto-workflow--sync-staging-from-main)
+                                       (funcall finish nil "staging-push-failed")))
+                                 (gptel-auto-workflow--log-staging-step-failure
+                                  'staging-push-failed optimize-branch push-output)
+                                 (gptel-auto-workflow--sync-staging-from-main)
+                                 (funcall finish nil "staging-push-failed"))
+                             (gptel-auto-workflow--log-staging-step-failure
+                              'staging-push-failed optimize-branch push-output)
+                             (gptel-auto-workflow--reset-staging-after-failure staging-base)
+                             (funcall finish nil "staging-push-failed"))))))))))))))))))
 
 
 ;;; Multi-Project Support
