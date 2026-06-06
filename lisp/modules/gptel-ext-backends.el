@@ -174,5 +174,16 @@ Falls back to reasoning_content when content is nil (CF-Gateway path)."
 
 (advice-add #'gptel--parse-response :around #'my/gptel--capture-reasoning-content)
 
+;;; Self-Evolving Thinking Mode (infrastructure)
+;;;
+;;; gptel-ext-backend-registry.el tracks :thinking-policy per model.
+;;; gptel-backend-registry--record-thinking-outcome collects experiment data.
+;;; When enough data exists for 'auto policy models (min 5 each on/off),
+;;; gptel-backend-registry--auto-thinking returns the better policy.
+;;;
+;;; Current safe defaults (thinking OFF) are in the backend model definitions.
+;;; To evolve: wire gptel-backend-registry--record-thinking-outcome into the
+;;; experiment completion callback, then flip policy from 'off to 'auto.
+
 (provide 'gptel-ext-backends)
 ;;; gptel-ext-backends.el ends here

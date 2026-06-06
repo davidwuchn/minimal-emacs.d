@@ -12,94 +12,104 @@
      :models (MiniMax-M3)
      :default-model MiniMax-M3
      :model-metadata
-      ((MiniMax-M3
-       :context-window 1000000
-       :pricing-input 0.30 :pricing-output 1.20 :pricing-cache-hit 0.06
-       :capabilities (code-generation tool-calls)
-       :speed fast)))
+       ((MiniMax-M3
+        :context-window 1000000
+        :pricing-input 0.30 :pricing-output 1.20 :pricing-cache-hit 0.06
+        :capabilities (code-generation tool-calls)
+        :speed fast
+        :thinking-policy off)))
 
     (DeepSeek
      :host "api.deepseek.com"
      :models (deepseek-v4-pro deepseek-v4-flash)
      :default-model deepseek-v4-pro
      :model-metadata
-     ((deepseek-v4-pro
-       :context-window 1000000
-       :pricing-input 0.43 :pricing-output 0.86 :pricing-cache-hit 0.004
-       :capabilities (reasoning code-generation)
-       :speed slow
-       :reasoning-effort (high max))
-       (deepseek-v4-flash
+      ((deepseek-v4-pro
         :context-window 1000000
-        :pricing-input 0.14 :pricing-output 0.28 :pricing-cache-hit 0.003
-        :capabilities (code-generation reasoning)
-        :speed fast)))
+        :pricing-input 0.43 :pricing-output 0.86 :pricing-cache-hit 0.004
+        :capabilities (reasoning code-generation)
+        :speed slow
+        :reasoning-effort (high max)
+        :thinking-policy auto)
+        (deepseek-v4-flash
+         :context-window 1000000
+         :pricing-input 0.14 :pricing-output 0.28 :pricing-cache-hit 0.003
+         :capabilities (code-generation reasoning)
+         :speed fast
+         :thinking-policy auto)))
 
     (moonshot
      :host "api.kimi.com"
      :models (kimi-k2.6 kimi-k2.5)
      :default-model kimi-k2.6
      :model-metadata
-     ((kimi-k2.6
-       :context-window 262144
-       :pricing-input 0.95 :pricing-output 4.00 :pricing-cache-hit 0.16
-       :capabilities (code-generation tool-calls long-context)
-       :speed medium)))
+      ((kimi-k2.6
+        :context-window 262144
+        :pricing-input 0.95 :pricing-output 4.00 :pricing-cache-hit 0.16
+        :capabilities (code-generation tool-calls long-context)
+        :speed medium
+        :thinking-policy auto)))
 
     (CF-Gateway
      :host "gateway.ai.cloudflare.com"
      :models (\@cf/moonshotai/kimi-k2.6)
      :default-model \@cf/moonshotai/kimi-k2.6
      :model-metadata
-     ((\@cf/moonshotai/kimi-k2.6
-       :context-window 262144
-       :pricing-input 0.95 :pricing-output 4.00 :pricing-cache-hit 0.16
-       :capabilities (code-generation tool-calls long-context reasoning)
-       :speed medium)))
+      ((\@cf/moonshotai/kimi-k2.6
+        :context-window 262144
+        :pricing-input 0.95 :pricing-output 4.00 :pricing-cache-hit 0.16
+        :capabilities (code-generation tool-calls long-context reasoning)
+        :speed medium
+        :thinking-policy auto)))
 
     (DashScope
      :host "coding.dashscope.aliyuncs.com"
      :models (qwen3.6-plus qwen3.5-plus qwen3-coder-plus)
      :default-model qwen3.6-plus
      :model-metadata
-     ((qwen3.6-plus
-       :context-window 131072
-       :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
-       :capabilities (code-generation tool-calls)
-       :speed medium)
-      (qwen3.5-plus
-       :context-window 131072
-       :pricing-input 0.14 :pricing-output 0.57 :pricing-cache-hit 0.03
-       :capabilities (code-generation)
-       :speed fast)))
+      ((qwen3.6-plus
+        :context-window 131072
+        :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
+        :capabilities (code-generation tool-calls)
+        :speed medium
+        :thinking-policy off)
+       (qwen3.5-plus
+        :context-window 131072
+        :pricing-input 0.14 :pricing-output 0.57 :pricing-cache-hit 0.03
+        :capabilities (code-generation)
+        :speed fast
+        :thinking-policy off)))
 
     (Z-AI
      :host "open.bigmodel.cn"
      :models (glm-5.1 glm-5 glm-4.7)
      :default-model glm-5.1
      :model-metadata
-     ((glm-5.1
-       :context-window 200000
-       :pricing-input 0.50 :pricing-output 1.50
-       :capabilities (code-generation tool-calls reasoning)
-       :speed medium
-       :max-output 128000)
-      (glm-5
-       :context-window 131072
-       :pricing-input 0.50 :pricing-output 1.50
-       :capabilities (code-generation)
-       :speed medium)))
+      ((glm-5.1
+        :context-window 200000
+        :pricing-input 0.50 :pricing-output 1.50
+        :capabilities (code-generation tool-calls reasoning)
+        :speed medium
+        :max-output 128000
+        :thinking-policy off)
+       (glm-5
+        :context-window 131072
+        :pricing-input 0.50 :pricing-output 1.50
+        :capabilities (code-generation)
+        :speed medium
+        :thinking-policy off)))
 
     (Copilot
      :host "api.github.com"
      :models (gpt-5.4-mini gpt-5.4)
      :default-model gpt-5.4-mini
      :model-metadata
-     ((gpt-5.4-mini
-       :context-window 128000
-       :pricing-input 0.50 :pricing-output 1.50
-       :capabilities (code-generation)
-       :speed fast)))
+      ((gpt-5.4-mini
+        :context-window 128000
+        :pricing-input 0.50 :pricing-output 1.50
+        :capabilities (code-generation)
+        :speed fast
+        :thinking-policy off)))
 
      (TokenPlan
       :host "token-plan.cn-beijing.maas.aliyuncs.com"
@@ -107,40 +117,47 @@
       :default-model qwen3.7-max
       :model-metadata
       ((qwen3.7-max
-        :context-window 131072
-        :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
-        :capabilities (reasoning code-generation)
-        :speed medium)
-       (qwen3.6-plus
-        :context-window 131072
-        :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
-        :capabilities (code-generation tool-calls)
-        :speed medium)
-       (qwen3.6-flash
-        :context-window 131072
-        :pricing-input 0.14 :pricing-output 0.57 :pricing-cache-hit 0.03
-        :capabilities (code-generation)
-        :speed fast)
-       (deepseek-v4-pro
-        :context-window 1000000
-        :pricing-input 0.43 :pricing-output 0.86 :pricing-cache-hit 0.004
-        :capabilities (reasoning code-generation)
-        :speed slow)
-       (deepseek-v4-flash
-        :context-window 1000000
-        :pricing-input 0.14 :pricing-output 0.28 :pricing-cache-hit 0.003
-        :capabilities (code-generation)
-        :speed fast)
-       (kimi-k2.6
-        :context-window 262144
-        :pricing-input 0.95 :pricing-output 4.00 :pricing-cache-hit 0.16
-        :capabilities (code-generation tool-calls long-context)
-        :speed medium)
-       (glm-5.1
-        :context-window 128000
-        :pricing-input 0.50 :pricing-output 2.00
-        :capabilities (code-generation)
-        :speed medium))))
+         :context-window 131072
+         :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
+         :capabilities (reasoning code-generation)
+         :speed medium
+         :thinking-policy off)
+        (qwen3.6-plus
+         :context-window 131072
+         :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
+         :capabilities (code-generation tool-calls)
+         :speed medium
+         :thinking-policy off)
+        (qwen3.6-flash
+         :context-window 131072
+         :pricing-input 0.14 :pricing-output 0.57 :pricing-cache-hit 0.03
+         :capabilities (code-generation)
+         :speed fast
+         :thinking-policy off)
+        (deepseek-v4-pro
+         :context-window 1000000
+         :pricing-input 0.43 :pricing-output 0.86 :pricing-cache-hit 0.004
+         :capabilities (reasoning code-generation)
+         :speed slow
+         :thinking-policy auto)
+        (deepseek-v4-flash
+         :context-window 1000000
+         :pricing-input 0.14 :pricing-output 0.28 :pricing-cache-hit 0.003
+         :capabilities (code-generation)
+         :speed fast
+         :thinking-policy auto)
+        (kimi-k2.6
+         :context-window 262144
+         :pricing-input 0.95 :pricing-output 4.00 :pricing-cache-hit 0.16
+         :capabilities (code-generation tool-calls long-context)
+         :speed medium
+         :thinking-policy auto)
+        (glm-5.1
+         :context-window 128000
+         :pricing-input 0.50 :pricing-output 2.00
+         :capabilities (code-generation)
+         :speed medium
+         :thinking-policy off))))
   "Unified backend registry.
 Each entry: (BACKEND-NAME :host HOST :models (MODELS...) :default-model MODEL
              :model-metadata ((MODEL :context-window N :pricing-input X ...)))
@@ -302,6 +319,85 @@ Returns nil if not found."
   "Return API host for BACKEND."
   (when-let* ((entry (assoc backend gptel-backend-registry)))
     (plist-get (cdr entry) :host)))
+
+;;; Thinking Policy — Self-Evolving
+
+(defun gptel-backend-registry-thinking-policy (model)
+  "Return thinking-policy for MODEL from the unified registry.
+Values: off, on, auto."
+  (let ((policy nil))
+    (catch 'found
+      (dolist (backend-entry gptel-backend-registry)
+        (when-let* ((metadata (plist-get (cdr backend-entry) :model-metadata))
+                    (model-entry (assoc model metadata)))
+          (setq policy (plist-get (cdr model-entry) :thinking-policy))
+          (throw 'found t))))
+    (or policy 'off)))
+
+(defun gptel-backend-registry--thinking-params (model)
+  "Return request-params for MODEL's thinking mode based on self-evolving policy.
+Looks up :thinking-policy from gptel-backend-registry.
+- 'off → (:enable_thinking :json-false) or (:thinking (:type \"disabled\"))
+- 'on  → (:enable_thinking :json-true) or (:thinking (:type \"enabled\"))
+- 'auto → checks experiment history; defaults to off for executor."
+  (let* ((policy (gptel-backend-registry-thinking-policy model))
+         (effective (if (eq policy 'auto)
+                        (gptel-backend-registry--auto-thinking model)
+                      policy)))
+    (cond
+     ((memq model '(MiniMax-M3))
+      (if (eq effective 'off)
+          '(:thinking (:type "disabled") :max_completion_tokens 8192)
+        '(:thinking (:type "enabled") :max_completion_tokens 8192)))
+     ((memq model '(kimi-k2.6 \@cf/moonshotai/kimi-k2.6))
+      (if (eq effective 'off)
+          '(:enable_thinking :json-false)
+        '(:enable_thinking :json-true)))
+     (t
+      (if (eq effective 'off)
+          '(:enable_thinking :json-false)
+        '(:enable_thinking :json-true))))))
+
+(defvar gptel-backend-registry--thinking-history nil
+  "Alist of (model . ((kept-on . N) (total-on . N) (kept-off . N) (total-off . N))).
+Populated by gptel-auto-experiment-ai-behaviors when experiments complete.
+Used by gptel-backend-registry--auto-thinking to decide thinking mode.")
+
+(defun gptel-backend-registry--auto-thinking (model)
+  "Decide thinking mode for MODEL based on experiment history.
+Returns 'off if insufficient data or thinking-off wins; 'on otherwise.
+Minimum 5 experiments with each mode before making a decision."
+  (let* ((stats (cdr (assoc model gptel-backend-registry--thinking-history)))
+         (on-kept (or (cdr (assoc 'kept-on stats)) 0))
+         (on-total (or (cdr (assoc 'total-on stats)) 0))
+         (off-kept (or (cdr (assoc 'kept-off stats)) 0))
+         (off-total (or (cdr (assoc 'total-off stats)) 0)))
+    (if (and (>= on-total 5) (>= off-total 5))
+        ;; Enough data: compare keep-rates
+        (let ((on-rate (if (> on-total 0) (/ (float on-kept) on-total) 0.0))
+              (off-rate (if (> off-total 0) (/ (float off-kept) off-total) 0.0)))
+          (if (> off-rate on-rate) 'off 'on))
+      ;; Insufficient data: default to 'off (safer for executor)
+      'off)))
+
+(defun gptel-backend-registry--record-thinking-outcome (model thinking-enabled kept-p)
+  "Record one thinking experiment outcome for MODEL.
+THINKING-ENABLED is t or nil. KEPT-P is t if the experiment was kept."
+  (let* ((entry (assoc model gptel-backend-registry--thinking-history))
+         (stats (if entry
+                    (cdr entry)
+                  (let ((new (list (cons 'kept-on 0) (cons 'total-on 0)
+                                   (cons 'kept-off 0) (cons 'total-off 0))))
+                    (push (cons model new) gptel-backend-registry--thinking-history)
+                    new))))
+    (if thinking-enabled
+        (progn
+          (setf (cdr (assoc 'total-on stats)) (1+ (or (cdr (assoc 'total-on stats)) 0)))
+          (when kept-p
+            (setf (cdr (assoc 'kept-on stats)) (1+ (or (cdr (assoc 'kept-on stats)) 0)))))
+      (setf (cdr (assoc 'total-off stats)) (1+ (or (cdr (assoc 'total-off stats)) 0)))
+      (when kept-p
+        (setf (cdr (assoc 'kept-off stats)) (1+ (or (cdr (assoc 'kept-off stats)) 0)))))))
 
 (provide 'gptel-ext-backend-registry)
 ;;; gptel-ext-backend-registry.el ends here
