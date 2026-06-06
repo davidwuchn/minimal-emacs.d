@@ -60,6 +60,7 @@ lisp/modules/*.elc
 !mementum/knowledge/strategic-plans/
 !mementum/knowledge/strategic-plans/*.md
 !plans/
+!plans/**/
 !plans/**/*.md
 mementum/knowledge/*REJECTED*
 !mementum/memories/
