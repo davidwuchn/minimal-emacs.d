@@ -79,4 +79,15 @@ if [ -f "$DIR/mementum/state.md" ]; then
     mv "$TMP" "$DIR/mementum/state.md"
 fi
 
+# ─── Step 5: Auto-trigger Mementum Update ───
+echo "[pipeline-ops] Running update-mementum..."
+if [ -f "$DIR/mementum/state.md" ]; then
+    # Extract patterns from this run
+    echo "[pipeline-ops] Detecting patterns..."
+    # Log pipeline completion for pattern analysis
+    echo "$(date '+%Y-%m-%d %H:%M:%S') | Pipeline $STATUS | Plan: $PLANS_DIR/run-$TIMESTAMP/" >> "$DIR/mementum/.pipeline-log"
+    echo "[pipeline-ops] Patterns logged to mementum/.pipeline-log"
+fi
+
 echo "[pipeline-ops] Done. Plan: $PLANS_DIR/run-$TIMESTAMP/"
+echo "[pipeline-ops] Next: Run 'skill: update-mementum' to update state.md"
