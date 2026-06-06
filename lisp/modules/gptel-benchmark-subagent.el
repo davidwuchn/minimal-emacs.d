@@ -474,7 +474,15 @@ Uses grader subagent - no local fallback (fail if subagent unavailable)."
          "Grade output"
          grading-prompt
          (lambda (result)
-           (funcall callback (gptel-benchmark--parse-grade-response result expected forbidden)))
+           ;; Validate grader response before parsing
+           (let ((result-str (if (stringp result) result (format "%S" result)))
+                 (min-length 100))
+             (when (< (length result-str) min-length)
+               (message "[auto-exp] ⚠ Grader returned truncated response (length=%d, expected>=%d): %s"
+                        (length result-str)
+                        min-length
+                        (substring result-str 0 (min 200 (length result-str)))))
+             (funcall callback (gptel-benchmark--parse-grade-response result expected forbidden))))
          timeout)
       ;; No local fallback - fail the grade
       (funcall callback (list :score 0 
@@ -592,6 +600,12 @@ Handles SCORE: X/Y format, JSON format, text-based PASS/FALL fallback,
 and positive-indicator detection for robust parsing.
 Passes if score >= 60% of total.  The caller-supplied EXPECTED+FORBIDDEN
 total is authoritative; grader self-reported totals are capped to it."
+  ;; Log response details for debugging empty/truncated responses
+  (let ((response-str (if (stringp response) response (format "%S" response))))
+    (when (< (length response-str) 200)
+      (message "[auto-exp] Parsing grader response (length=%d): %.200s..."
+               (length response-str)
+               response-str)))
   (let* ((score 0)
          (criteria-total (+ (length expected) (length forbidden)))
          (total criteria-total)
