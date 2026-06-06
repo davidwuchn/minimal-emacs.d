@@ -119,7 +119,45 @@ AI coding tools generate code. OV5 engineers your codebase.
 
 ---
 
-## The YC Vision: Recursive Self-Improving AI Loops
+## The Three Perspectives
+
+OV5 can be understood through three complementary frameworks, each revealing different aspects:
+
+| Perspective | Framework | Reveals |
+|------------|-----------|---------|
+| **External View** | 5-Layer Framework (YC Vision) | What the system does |
+| **Control View** | VSM (Viable System Model) | How the system works |
+| **Quality View** | Eight Keys (Nucleus) | How well the system performs |
+
+### Framework Mapping
+
+| 5-Layer (YC) | VSM (Cybernetics) | Eight Keys (Quality) | Relationship |
+|--------------|-------------------|----------------------|--------------|
+| **1. Sensor** | System 4 (Intelligence) | τ Wisdom | Both look outward and learn from external signals |
+| **2. Policy** | System 5 (Policy) | λ Identity | Policy defines system identity and values |
+| **3. Tools** | System 3 (Control) | π Synthesis | Tools provide capabilities, synthesis combines them |
+| **4. Quality Gate** | System 2 (Coordination) | ε Purpose | Quality gates coordinate and validate against purpose |
+| **5. Learning** | System 1 (Operations) | μ Memory | Learning requires persistent memory from operations |
+
+### Integration Gaps
+
+**Critical Gap: Business Context Database is Isolated**
+
+All 5 phases are implemented, but the context database (Phase 3) has **zero integration** with any subsystem:
+- No module loads `gptel-auto-workflow-context-database`
+- No function calls any context database function
+- No persistence mechanism (data lost on daemon restart)
+- 6 stub functions prevent regeneration candidate identification
+
+**Impact:** Business context (WHY decisions were made) is never captured or used by other systems. The context database exists as a completely isolated island.
+
+**Remaining Work:**
+1. Wire context database into experiment completion (capture context)
+2. Implement persistence (save/load to JSON)
+3. Replace 6 stub functions with real implementations
+4. Wire context into evolution cycle (inform strategy with rationale)
+5. Wire context into human interface (surface rationale in dashboards)
+6. Wire context into token economics (correlate cost with rationale)
 
 OV5 is not just a code improvement tool — it's the foundation for a **self-improving company architecture** based on Y Combinator's vision for "recursive self-improving AI loops."
 
@@ -165,11 +203,21 @@ All happens while employees sleep
 - Preserve business context (why we made this decision, what we learned)
 
 **What OV5 has (Phase 3 - Context Database):**
-- Context preservation system that captures **why** changes were made
-- Context database stores decision rationale, not just code
-- Regenerate code with better models when available
-- Treat generated code as disposable experiments
-- Context survives across regenerations
+- ✅ Context preservation system implemented (`gptel-auto-workflow-context-database.el`)
+- ✅ Context database stores decision rationale, not just code
+- ✅ Regeneration infrastructure (prepare context, generate prompts, track history)
+- ✅ Disposable code practices (identify candidates, estimate value, schedule regeneration)
+- ⚠️ **CRITICAL: Module exists but has ZERO integration** - no module loads it, no function calls it
+- ⚠️ **No persistence mechanism** - all data lost on daemon restart
+- ⚠️ 6 stub functions prevent regeneration candidate identification from working
+
+**Integration needed:**
+- Wire context database into experiment completion (capture context after each experiment)
+- Implement JSON persistence (save/load to survive daemon restarts)
+- Replace 6 stub functions with real implementations
+- Wire context into evolution cycle (inform strategy with business rationale)
+- Wire context into human interface (surface decision rationale in dashboards)
+- Wire context into token economics (correlate cost with business rationale)
 
 ### Human Positioning
 

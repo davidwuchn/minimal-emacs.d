@@ -45,7 +45,8 @@
 ;; ============================================================================
 
 (defun gptel-auto-workflow--generate-dashboard-summary ()
-  "Generate dashboard summary from approval history."
+  "Generate dashboard summary from approval history.
+Includes business context from context database when available."
   (let* ((history (or gptel-auto-workflow--approval-history nil))
          (total (length history))
          (auto-approved (cl-count :auto-approved history
@@ -59,13 +60,17 @@
                       0.0))
          (recent-alerts (cl-subseq (or gptel-auto-workflow--alert-history nil)
                                    0
-                                   (min 5 (length (or gptel-auto-workflow--alert-history nil))))))
+                                   (min 5 (length (or gptel-auto-workflow--alert-history nil)))))
+         ;; Get business context from context database (Phase 3)
+         (context-summary (when (fboundp 'gptel-auto-workflow--get-context-summary)
+                           (gptel-auto-workflow--get-context-summary))))
     (list :total-experiments total
           :auto-approved-count auto-approved
           :recommend-count recommend
           :review-count review
           :auto-approval-rate auto-rate
           :recent-alerts recent-alerts
+          :context-summary context-summary
           :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ"))))
 
 (defun gptel-auto-workflow--generate-dashboard-detailed ()

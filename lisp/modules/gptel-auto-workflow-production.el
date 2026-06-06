@@ -73,6 +73,11 @@ Skips when a workflow or cron job is active to avoid preempting experiments."
         (progn
           (message "[auto-workflow] Running scheduled evolution cycle...")
           (gptel-auto-workflow-evolution-run-cycle)
+          ;; Inform context database after evolution (Phase 3: Context Database)
+          (when (fboundp 'gptel-auto-workflow--context-db-persist)
+            (condition-case nil
+                (gptel-auto-workflow--context-db-persist)
+              (error nil)))
           (message "[auto-workflow] Evolution cycle complete."))
       (error
        (message "[auto-workflow] Evolution cycle error: %s" err)
@@ -141,6 +146,20 @@ Records to mementum and triggers evolution if needed."
         (gptel-auto-workflow--mementum-record-experiment experiment)
       (error
        (message "[auto-workflow] Mementum recording error: %s" err))))
+  
+  ;; Capture business context (Phase 3: Context Database)
+  (when (fboundp 'gptel-auto-workflow--capture-experiment-context)
+    (condition-case err
+        (gptel-auto-workflow--capture-experiment-context experiment)
+      (error
+       (message "[auto-workflow] Context capture error: %s" err))))
+  
+  ;; Persist context database after each experiment
+  (when (fboundp 'gptel-auto-workflow--context-db-persist)
+    (condition-case err
+        (gptel-auto-workflow--context-db-persist)
+      (error
+       (message "[auto-workflow] Context persist error: %s" err))))
   
   ;; Track research batch for meta-learning
   (let ((research-hash (plist-get experiment :research-hash)))

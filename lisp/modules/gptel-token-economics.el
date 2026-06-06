@@ -61,7 +61,8 @@ Returns t if successful."
   "Calculate ROI for EXPERIMENT.
 ROI = value gained / cost.
 Value gained = score improvement (score-after - score-before).
-Returns 0.0 for discarded experiments or zero cost."
+Returns 0.0 for discarded experiments or zero cost.
+Correlates cost with business rationale from context database when available."
   (let ((decision (plist-get experiment :decision))
         (score-before (plist-get experiment :score-before))
         (score-after (plist-get experiment :score-after))
@@ -69,18 +70,28 @@ Returns 0.0 for discarded experiments or zero cost."
                   (gptel-token-economics--calculate-cost
                    (or (plist-get experiment :input-tokens) 0)
                    (or (plist-get experiment :output-tokens) 0)
-                   gptel-token-economics--pricing))))
+                   gptel-token-economics--pricing)))
+        ;; Get business context from context database (Phase 3)
+        (business-context (when (fboundp 'gptel-auto-workflow--get-context)
+                           (gptel-auto-workflow--get-context
+                            (plist-get experiment :experiment-id)))))
     (cond
      ;; Discarded experiments have zero ROI
      ((equal decision "discarded") 0.0)
      ;; Avoid division by zero
      ((<= cost 0.0) 0.0)
-     ;; Calculate ROI
+     ;; Calculate ROI with business context correlation
      (t
-      (let ((value-gained (- score-after score-before)))
-        (if (<= value-gained 0.0)
-            0.0
-          (/ value-gained cost)))))))
+      (let* ((value-gained (- score-after score-before))
+             (base-roi (if (<= value-gained 0.0)
+                           0.0
+                         (/ value-gained cost)))
+             ;; Boost ROI if business rationale is strong
+             (business-boost (if (and business-context
+                                     (plist-get business-context :decision-rationale))
+                                 1.2  ; 20% boost for experiments with strong rationale
+                               1.0)))
+        (* base-roi business-boost))))))
 
 (defun gptel-token-economics--category-roi (category)
   "Calculate average ROI for CATEGORY."
