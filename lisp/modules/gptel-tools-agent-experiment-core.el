@@ -1128,67 +1128,46 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 			                                                       (finalize
 			                                                        (gptel-auto-experiment--make-kept-result-callback
 			                                                         run-id exp-result log-fn callback)))
-                                                          (gptel-auto-workflow--assert-main-untouched)
-                                                          (message "[auto-experiment] ✓ Committing improvement for %s" target)
-                                                          (let* ((stage-ok (gptel-auto-workflow--stage-worktree-changes
-                                                                            (format "Stage experiment changes for %s" target)
-                                                                            60))
-                                                                 (commit-ok (and stage-ok
-                                                                                 (gptel-auto-workflow--promote-provisional-commit
-                                                                                  msg
-                                                                                  (format "Commit experiment changes for %s" target)
-                                                                                  provisional-commit-hash
-                                                                                  commit-timeout))))
-                                                            (message "[auto-exp] Commit result: stage-ok=%s commit-ok=%s" stage-ok commit-ok)
-                                                            (if commit-ok
+		                                                      (gptel-auto-workflow--assert-main-untouched)
+		                                                      (message "[auto-experiment] ✓ Committing improvement for %s" target)
+		                                                      (message "[auto-exp] About to stage and commit (auto-push=%s, use-staging=%s)"
+		                                                               gptel-auto-experiment-auto-push
+		                                                               gptel-auto-workflow-use-staging)
+		                                                      (if (and (gptel-auto-workflow--stage-worktree-changes
+			                                                            (format "Stage experiment changes for %s" target)
+			                                                            60)
+			                                                           (gptel-auto-workflow--promote-provisional-commit
+			                                                            msg
+			                                                            (format "Commit experiment changes for %s" target)
+			                                                            provisional-commit-hash
+			                                                            commit-timeout))
                                                           (progn
                                                         (setq provisional-commit-hash nil)
-                                                         (gptel-auto-workflow--track-commit experiment-id
-                                                                                            target
-                                                                                            experiment-worktree)
-                                                         (gptel-auto-experiment--maybe-log-staging-pending
-                                                          run-id exp-result log-fn)
-                                                         (when (fboundp 'gptel-auto-workflow--apply-category-vigilance)
-                                                           (gptel-auto-workflow--apply-category-vigilance target 'kept))
-                                                         ;; π Synthesis: queue similar targets with inherited strategy
-                                                         (when (fboundp 'gptel-auto-workflow--queue-cluster-experiments)
-                                                           (gptel-auto-workflow--queue-cluster-experiments target))
+                                                        (gptel-auto-workflow--track-commit experiment-id
+								                                           target
+								                                           experiment-worktree)
+                                                        (gptel-auto-experiment--maybe-log-staging-pending
+								                                     run-id exp-result log-fn)
+                                                        (when (fboundp 'gptel-auto-workflow--apply-category-vigilance)
+                                                          (gptel-auto-workflow--apply-category-vigilance target 'kept))
+                                                        ;; π Synthesis: queue similar targets with inherited strategy
+                                                        (when (fboundp 'gptel-auto-workflow--queue-cluster-experiments)
+                                                          (gptel-auto-workflow--queue-cluster-experiments target))
                                                          (setq gptel-auto-experiment--best-score score-after
                                                                gptel-auto-experiment--no-improvement-count 0)
-                                                         (message "[auto-exp] About to check auto-push: gptel-auto-experiment-auto-push=%s use-staging=%s"
-                                                                  gptel-auto-experiment-auto-push
-                                                                  gptel-auto-workflow-use-staging)
-                                                            (if gptel-auto-experiment-auto-push
-                                                                (progn
-                                                                  (message "[auto-experiment] Pushing to %s" experiment-branch)
-                                                                  (let ((push-ok (gptel-auto-workflow--push-branch-with-lease
-                                                                                  experiment-branch
-                                                                                  (format "Push optimize branch %s" experiment-branch)
-                                                                                  180)))
-                                                                    (message "[auto-exp] Push result: push-ok=%s" push-ok)
-                                                                    (if push-ok
-                                                                        (if gptel-auto-workflow-use-staging
-                                                                            (progn
-                                                                              (message "[auto-exp] Starting staging flow for %s" experiment-branch)
-                                                                              (gptel-auto-workflow--staging-flow
-                                                                               experiment-branch
-                                                                               finalize))
-                                                                          (progn
-                                                                            (message "[auto-exp] No staging, calling finalize directly")
-                                                                            (funcall finalize)))
-                                                                      (let ((failed-result
-                                                                             (plist-put (copy-sequence exp-result)
-                                                                                        :comparator-reason
-                                                                                        "optimize-push-failed")))
-                                                                        (setq failed-result (plist-put failed-result :kept nil))
-                                                                        (funcall log-fn run-id failed-result)
-                                                                        ;; Track token economics for this experiment
-                                                                        (when (fboundp 'gptel-token-economics--track-experiment)
-                                                                          (gptel-token-economics--track-experiment failed-result))
-                                                                        (funcall callback failed-result)))))
-                                                              (progn
-                                                                (message "[auto-exp] Auto-push disabled, calling finalize directly")
-                                                                (funcall finalize)))
+                                                         (message "[auto-exp] Commit successful, proceeding with push/staging")
+			                                                        (if gptel-auto-experiment-auto-push
+			                                                            (progn
+			                                                              (message "[auto-experiment] Pushing to %s" experiment-branch)
+			                                                              (if (gptel-auto-workflow--push-branch-with-lease
+				                                                               experiment-branch
+				                                                               (format "Push optimize branch %s" experiment-branch)
+				                                                               180)
+				                                                              (if gptel-auto-workflow-use-staging
+				                                                                  (gptel-auto-workflow--staging-flow
+					                                                               experiment-branch
+					                                                               finalize)
+				                                                                (funcall finalize))
 				                                                            (let ((failed-result
 					                                                               (plist-put (copy-sequence exp-result)
 						                                                                      :comparator-reason
