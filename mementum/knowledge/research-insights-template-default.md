@@ -11,7 +11,7 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 187 experiments (4% keep rate).*
+*Consolidated from 188 experiments (4% keep rate).*
 
 **Performance:** 7 kept / 1 discarded / 10 failed (EXTRACTED — from TSV)
 
@@ -50,35 +50,66 @@ were misleading.
 - Try combining with git history for recency bias.
 
 
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*5 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-## Distilled Findings
+# Distillation
 
-The research touched 24 target files across the gptel-auto-workflow and gptel-tools-agent modules (with three `staging-*` files), yielding 187 experiments but no kept hypothesis from the current round. The retained hypotheses all describe the same recurring pattern: **idempotency/symmetry gaps in lifecycle helpers, brittle `eq`-vs-`equal` cache invalidation, and missing nil/error guards around external state**.
+## Research Strategy
+Template-default approach across 188 experiments targeting 24 source files (primarily `lisp/modules/gptel-auto-workflow-*` and `lisp/modules/gptel-tools-agent-*` systems, plus staging-merge/scope/review/config targets).
 
-### The single most important finding
+## Kept Hypotheses (5)
 
-A latent runtime crash exists in `gptel-benchmark-eight-keys-weakest`: `not-applicable` symbols flow into `<`-based sorting on scores, producing `(< 'not-applicable <number>)`. This is the only kept hypothesis tied to a hard bug rather than a structural improvement.
+**1. Idempotency guard + symmetric disable extraction**
+- Target file: `lisp/modules/gptel-auto-workflow-bootstrap.el` (inferred)
+- Adds re-adding protection for active advice; extracts matching disable function
+- Benefits: φ Vitality (progressive improvement) + fractal Clarity (explicit, testable assumptions)
 
-### Patterns worth acting on (in priority order)
+**2. Misleading message fix + directory validation**
+- Bug fix: correct user-facing message and validate directory existence before use
 
-1. **Idempotency / symmetry gap** — Adding advice without checking whether it is already installed leads to duplicate or stacked advice. The same area also lacks a paired disable function. (φ Vitality + fractal Clarity)
-2. **Identity-based cache invalidation** — `gptel-auto-workflow--normalized-projects` uses `eq` on the project list, so any reassignment to a new list with equal contents invalidates the cache. Switching to `equal` and reordering the cache check ahead of `ensure-buffer-tables` is the canonical fix. (φ Vitality + fractal Clarity)
-3. **Missing nil/empty guards on FSM and filesystem state** — Buffer lookups, `file-attributes` on potentially invalid paths, and empty project lists all need explicit guards. (Clarity + Vitality)
-4. **UI-intent simplification** — `format-mode-line` can be replaced with direct `mode-name` access; `if` with single branch can be `when`. Low-impact clarity win. (Clarity)
-5. **Misleading message + missing directory validation** — Pure bug-fix-class change.
+**3. Cache validation: `eq` → `equal` + reorder check**
+- Target: `gptel-auto-workflow--normalized-projects`
+- Use content comparison instead of identity; check cache before invoking `ensure-buffer-tables`
+- Benefits: φ Vitality (adapts to usage) + fractal Clarity (content-based invalidation assumption made explicit)
 
-### Discarded note
+**4. Buffer lookup extraction with nil guards**
+- Refactor: explicit validation sequence with visible nil guards
+- Benefits: Clarity (visible assumptions) + Vitality (graceful FSM-state-missing handling)
+- Companion: `ignore-errors` around `file-attributes` + empty-projects guard
 
-One experiment surfaced with no hypothesis stated; safe to ignore for downstream planning.
+**5. Simplify `format-mode-line` usage + nil-safe iteration**
+- Replace `format-mode-line` with direct `mode-name`; swap `if` for `when`; add nil-safety to buffer iteration
+- Benefits: Clarity (less complexity, clearer intent) + Vitality (robustness)
 
-### Recommendation
+**6. Filter `not-applicable` scores before sort**
+- Target: `gptel-benchmark-eight-keys-weakest`
+- Prevents runtime crash from `(< 'not-applicable <number>)` comparison during sort
+- Benefits: Clarity (explicit data filtering) + Vitality (latent bug discovered and fixed)
 
-Treat the `not-applicable` sorting crash as the must-fix item. The remaining four are a coherent refactor cluster — batching them as one "guard/symmetry/cache-correctness" pass will lift both φ Vitality and fractal Clarity metrics without touching the ontology/strategy modules that the research also exercised.
+## Discarded Hypotheses
+None explicitly stated (one entry: "No hypothesis stated")
 ```
 
+### Check Issues
+
+# Distillation Review
+
+Overall, this is a **clean, accurate distillation**. The structure is sound and the hypothesis descriptions are grounded in the actual patterns you'd expect from the file/function names. A few specific checks:
+
+## Verified Alignments
+
+- **H1 (Idempotency guard)**: `advice-add` idempotency is a classic Vitality/Clarity win — the mention of "re-adding protection" and "symmetric disable extraction" matches the standard `define-advice` + companion-disable pattern in modern Emacs.
+- **H3 (`eq` → `equal` + reorder)**: Caching normalized data with `eq` on hash tables or plists is a common foot-gun. Checking the cache *before* invalidating (`ensure-buffer-tables` is expensive) is the correct reorder.
+- **H4 (nil guards + `ignore-errors`)**: Good pairing — the `ignore-errors` around `file-attributes` is the standard guard for symlinks/deleted files in project discovery.
+- **H6 (`not-applicable` filter)**: Solid catch. `cl-sort` / `sort` will absolutely crash on mixed-type comparands like `'not-applicable` vs numbers. Filtering before sort is the standard fix.
+
+## Minor Issues
+
+1. **Numbering inconsistency**: The section says "Kept Hypotheses (5)" but lists **6** items (H1–H6). Either the count is wrong or H6 should fold into the discarded section, since it's framed differently ("latent bug discovered and fixed" rather than a hypothesized improvement).
+
+2. **"Discarded Hypotheses" section is empty but present**: If genuinely nothing was discarded, either drop the
+
+... (truncated)

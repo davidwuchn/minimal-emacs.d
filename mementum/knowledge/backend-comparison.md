@@ -1,5 +1,5 @@
 # Backend Head-to-Head Comparison
-> Auto-generated from 187 experiments across 4 backends
+> Auto-generated from 188 experiments across 4 backends
 
 ## DashScope vs DeepSeek (winner: **DashScope**)
 - DashScope: 21.4% keep-rate
@@ -27,4 +27,4 @@
 - Shared targets: 1 | DashScope won 0, moonshot won 0, ties 1
 
 
-*Generated: 2026-06-06 10:31*
+*Generated: 2026-06-06 11:30*
