@@ -469,21 +469,37 @@ Uses grader subagent - no local fallback (fail if subagent unavailable)."
     (if (and gptel-benchmark-use-subagents
              (fboundp 'gptel-agent--task)
              (> total 0))
-        (gptel-benchmark-call-subagent
-         'grader
-         "Grade output"
-         grading-prompt
-         (lambda (result)
-           ;; Validate grader response before parsing
-           (let ((result-str (if (stringp result) result (format "%S" result)))
-                 (min-length 100))
-             (when (< (length result-str) min-length)
-               (message "[auto-exp] ⚠ Grader returned truncated response (length=%d, expected>=%d): %s"
-                        (length result-str)
-                        min-length
-                        (substring result-str 0 (min 200 (length result-str)))))
-             (funcall callback (gptel-benchmark--parse-grade-response result expected forbidden))))
-         timeout)
+         (cl-labels ((try-grade (attempt max-attempts)
+                       (gptel-benchmark-call-subagent
+                        'grader
+                        "Grade output"
+                        grading-prompt
+                        (lambda (result)
+                          ;; Validate grader response before parsing
+                          (let* ((result-str (if (stringp result) result (format "%S" result)))
+                                 (min-length 100)
+                                 (is-truncated (< (length result-str) min-length)))
+                            (if (and is-truncated (< attempt max-attempts))
+                                ;; Retry with exponential backoff (2^attempt seconds)
+                                (let ((delay (expt 2 attempt)))
+                                  (message "[auto-exp] ⚠ Grader returned truncated response (length=%d, expected>=%d), retrying in %ds (attempt %d/%d): %s"
+                                           (length result-str)
+                                           min-length
+                                           delay
+                                           (1+ attempt)
+                                           max-attempts
+                                           (substring result-str 0 (min 200 (length result-str))))
+                                  (run-with-timer delay nil (lambda () (try-grade (1+ attempt) max-attempts))))
+                              ;; Either success or max retries reached
+                              (progn
+                                (when is-truncated
+                                  (message "[auto-exp] ✗ Grader failed after %d attempts (final length=%d): %s"
+                                           max-attempts
+                                           (length result-str)
+                                           (substring result-str 0 (min 200 (length result-str)))))
+                                (funcall callback (gptel-benchmark--parse-grade-response result expected forbidden))))))
+                        timeout)))
+           (try-grade 0 2))
       ;; No local fallback - fail the grade
       (funcall callback (list :score 0 
                               :total total
