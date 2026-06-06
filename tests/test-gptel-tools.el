@@ -38,11 +38,17 @@
 ;;; Test Fixtures
 
 (defvar test-tools--temp-dir nil)
+(defvar test-tools--original-roots nil)
 
 (defun test-tools--setup ()
-  (setq test-tools--temp-dir (make-temp-file "gptel-tools-test-" t)))
+  (setq test-tools--original-roots gptel-auto-workflow--allowed-workspace-roots)
+  (setq test-tools--temp-dir (make-temp-file "gptel-tools-test-" t))
+  (setq gptel-auto-workflow--allowed-workspace-roots
+        (append gptel-auto-workflow--allowed-workspace-roots (list test-tools--temp-dir))))
 
 (defun test-tools--teardown ()
+  (when test-tools--original-roots
+    (setq gptel-auto-workflow--allowed-workspace-roots test-tools--original-roots))
   (when (and test-tools--temp-dir (file-directory-p test-tools--temp-dir))
     (delete-directory test-tools--temp-dir t)))
 
@@ -125,6 +131,18 @@
       (should (file-exists-p filepath))
       (should (string= "existing content" (test-tools--read-file filename))))))
 
+;;; Boundary Check Tests for Write
+
+(ert-deftest tools/write/boundary-rejects-outside-path ()
+  "Write tool should reject paths outside the workspace."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (gptel-auto-workflow--run-project-root root)
+         (gptel-auto-workflow--project-root-override nil)
+         (gptel-auto-workflow--current-project nil))
+    (should-error
+     (gptel-auto-workflow--expand-workspace-path (expand-file-name "outside.txt" "/tmp")))))
+
 ;;; Tests for Read tool
 
 (ert-deftest tools/read/reads-entire-file ()
@@ -157,6 +175,38 @@
   "Read tool should error on nonexistent file."
   (should-error
    (my/gptel--read-file-safe "/nonexistent/file/path")))
+
+;;; Boundary Check Tests for Read
+
+(ert-deftest tools/read/boundary-rejects-outside-path ()
+  "Read tool should reject paths outside the workspace."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (gptel-auto-workflow--run-project-root root)
+         (gptel-auto-workflow--project-root-override nil)
+         (gptel-auto-workflow--current-project nil))
+    (should-error (my/gptel--read-file-safe "/tmp/outside-file.txt"))))
+
+(ert-deftest tools/read/boundary-accepts-inside-path ()
+  "Read tool should accept paths inside the workspace."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (gptel-auto-workflow--run-project-root root)
+         (gptel-auto-workflow--project-root-override nil)
+         (gptel-auto-workflow--current-project nil)
+         (file (expand-file-name "boundary-test-inside.el" root)))
+    (unwind-protect
+        (progn
+          (with-temp-file file (insert "(defun foo () 1)"))
+          (should (stringp (my/gptel--read-file-safe file))))
+      (when (file-exists-p file)
+        (delete-file file)))))
+
+(ert-deftest tools/read/boundary-rejects-nil-path ()
+  "Read tool should reject nil path via boundary check."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root)))
+    (should-error (my/gptel--read-file-safe nil))))
 
 ;;; Tests for Insert tool
 

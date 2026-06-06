@@ -239,6 +239,33 @@
   (should (fboundp 'gptel-tools-edit-register))
   (should (functionp 'gptel-tools-edit-register)))
 
+;;; Boundary Check Tests for Edit
+
+(ert-deftest test-edit/boundary-rejects-outside-path ()
+  "Edit tool should reject file_path outside the workspace."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (gptel-auto-workflow--run-project-root root)
+         (gptel-auto-workflow--project-root-override nil)
+         (gptel-auto-workflow--current-project nil)
+         (result nil))
+    (my/gptel--agent-edit-async
+     (lambda (r) (setq result r))
+     "/tmp/outside-file.txt" "old" "new")
+    (should (stringp result))
+    (should (string-match-p "\\[boundary\\]" result))))
+
+(ert-deftest test-edit/boundary-rejects-nil-path ()
+  "Edit tool should reject nil file_path via boundary check."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (result nil))
+    (my/gptel--agent-edit-async
+     (lambda (r) (setq result r))
+     nil "old" "new")
+    (should (stringp result))
+    (should (string-match-p "\\[boundary\\]" result))))
+
 (provide 'test-gptel-tools-edit)
 
 ;;; test-gptel-tools-edit.el ends here

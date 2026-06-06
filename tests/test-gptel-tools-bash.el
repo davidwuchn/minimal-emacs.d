@@ -18,6 +18,7 @@
 
 (require 'ert)
 (require 'cl-lib)
+(require 'gptel-tools-agent-base)
 
 ;;; Bash Mode Simulation
 
@@ -308,6 +309,42 @@ All commands allowed but still tracked for audit."
       (let ((result (test-gptel-bash--execute cmd)))
         (should (equal (plist-get result :status) "allowed"))
         (should (equal (plist-get result :mode) "agent"))))))
+
+;;; Boundary Check Tests for Bash
+
+;; Load real modules needed for boundary testing
+(declare-function gptel-auto-workflow--path-within-workspace-p "gptel-tools-agent-base" (path))
+(declare-function my/gptel--bash-context-directory "gptel-tools-bash" (&optional buffer))
+(declare-function my/gptel--agent-bash-async "gptel-tools-bash" (callback command))
+(defvar gptel-auto-workflow--allowed-workspace-roots)
+(defvar gptel-auto-workflow--run-project-root)
+(defvar gptel-auto-workflow--project-root-override)
+(defvar gptel-auto-workflow--current-project)
+(defvar my/gptel--abort-generation)
+(defvar my/gptel--persistent-bash-process)
+
+(ert-deftest test-bash/boundary-rejects-outside-workdir ()
+  "Bash tool should reject when working directory is outside workspace."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (default-directory "/tmp/")
+         (result nil))
+    (my/gptel--agent-bash-async (lambda (r) (setq result r)) "echo hello")
+    (should (stringp result))
+    (should (string-match-p "\\[boundary\\]" result))))
+
+(ert-deftest test-bash/boundary-accepts-inside-workdir ()
+  "Bash tool should accept when working directory is inside workspace."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (default-directory root))
+    ;; Should not signal a boundary error — the command may fail for other
+    ;; reasons (no persistent bash process, etc.) but not a [boundary] error.
+    (condition-case err
+        (my/gptel--agent-bash-async (lambda (_)) "echo hello")
+      (error
+       (should-not (string-match-p "\\[boundary\\]"
+                                   (error-message-string err)))))))
 
 ;;; Provide the test suite
 

@@ -9,6 +9,7 @@
 (require 'subr-x)
 (require 'seq)
 (require 'gptel-ext-abort)
+(require 'gptel-tools-agent-base)
 
 (declare-function gptel-fsm-info "gptel-request" (&optional fsm))
 (defvar gptel-auto-workflow--subagent-process-environment nil)
@@ -259,6 +260,9 @@ CALLBACK is called with the result string on completion."
               (if sandbox-err
                   (finish (format "Error: Command rejected by Sandbox. %s.\n\nTIP: For file operations, prefer native tools (`Read`, `Grep`, `Glob`) over Bash. For shell commands, use whitelisted read-only commands (git, ls, cat, grep, etc.)." sandbox-err))
 
+                (unless (gptel-auto-workflow--path-within-workspace-p (my/gptel--bash-context-directory))
+                  (error "[boundary] Bash working directory %S is outside allowed workspace roots: %S"
+                         (my/gptel--bash-context-directory) gptel-auto-workflow--allowed-workspace-roots))
                 (my/gptel--ensure-persistent-bash)
 
               (let* ((proc my/gptel--persistent-bash-process)

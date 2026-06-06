@@ -8,6 +8,7 @@
 (require 'cl-lib)
 (require 'subr-x)
 (require 'seq)
+(require 'gptel-tools-agent-base)
 
 (declare-function gptel--file-binary-p "gptel-request")
 
@@ -107,7 +108,7 @@ Call this after gptel-agent-tools loads."
      :category "gptel-agent"
      :function (lambda (path filename content)
                  "Create a new file safely. Refuses to overwrite existing files."
-                 (let ((filepath (expand-file-name filename path)))
+                 (let ((filepath (gptel-auto-workflow--expand-workspace-path (expand-file-name filename path))))
                    (if (file-exists-p filepath)
                        (error "File already exists: %s. Use Edit or Insert instead." filepath)
                      (with-temp-file filepath (insert content)))
@@ -257,7 +258,7 @@ Call this after gptel-agent-tools loads."
 START-LINE and END-LINE specify the line range to read.
 When HASHLINE is non-nil, return content with hashline tags for stable editing.
 PDF files are extracted using pdftotext if available."
-  (let ((path (expand-file-name file-path)))
+  (let ((path (gptel-auto-workflow--expand-workspace-path file-path)))
     (cond
      ((not (file-readable-p path))
       (error "Error: File %s is not readable" path))

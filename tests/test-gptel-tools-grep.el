@@ -20,6 +20,7 @@
 
 (require 'ert)
 (require 'cl-lib)
+(require 'gptel-tools-agent-base)
 
 ;;; Mock File Content
 
@@ -369,6 +370,40 @@ For simple globs without path, matches any file ending with the pattern."
       (should (plist-get match :context))
       ;; Context should include surrounding lines
       (should (>= (length (plist-get match :context)) 1)))))
+
+;;; Boundary Check Tests for Grep
+
+(declare-function my/gptel--agent-grep-async "gptel-tools-grep" (callback regex path &optional glob context-lines))
+(defvar gptel-auto-workflow--run-project-root)
+(defvar gptel-auto-workflow--project-root-override)
+(defvar gptel-auto-workflow--current-project)
+
+(ert-deftest test-grep/boundary-rejects-outside-path ()
+  "Grep tool should reject search paths outside the workspace."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (gptel-auto-workflow--run-project-root root)
+         (gptel-auto-workflow--project-root-override nil)
+         (gptel-auto-workflow--current-project nil)
+         (result nil))
+    (my/gptel--agent-grep-async (lambda (r) (setq result r)) "pattern" "/tmp/outside-dir")
+    (should (stringp result))
+    (should (string-match-p "\\[boundary\\]" result))))
+
+(ert-deftest test-grep/boundary-accepts-inside-path ()
+  "Grep tool should accept search paths inside the workspace."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (gptel-auto-workflow--run-project-root root)
+         (gptel-auto-workflow--project-root-override nil)
+         (gptel-auto-workflow--current-project nil))
+    ;; Should not signal a [boundary] error. May fail for other reasons
+    ;; (e.g. no matches) but not boundary violation.
+    (condition-case err
+        (my/gptel--agent-grep-async (lambda (_)) "defun" root)
+      (error
+       (should-not (string-match-p "\\[boundary\\]"
+                                    (error-message-string err)))))))
 
 ;;; Provide the test suite
 

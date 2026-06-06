@@ -13,6 +13,7 @@
 (require 'seq)
 (require 'gptel-tools-preview)
 (require 'gptel-tools-edit-hashline)
+(require 'gptel-tools-agent-base)
 
 ;;; Customization
 
@@ -121,6 +122,7 @@ to prevent callers from hanging indefinitely."
                                     (string-match-p "^[0-9]+:[a-f0-9]+" old_str))))
             (when (and patch-mode (not (executable-find "patch")))
               (error "Command \"patch\" not available, cannot apply diffs"))
+            (setq file_path (gptel-auto-workflow--expand-workspace-path file_path))
             (unless (file-exists-p file_path)
               (error "File %s does not exist" file_path))
             (unless (file-regular-p file_path)
@@ -138,7 +140,7 @@ to prevent callers from hanging indefinitely."
              ;; Patch mode: unified diff
              (patch-mode
               (setq gptel-tools-edit--mode-used 'patch)
-              (let* ((target (expand-file-name file_path))
+              (let* ((target file_path)
                      (patch-text (my/gptel--agent--strip-diff-fences new_str))
                      (patch-text (if (string-suffix-p "\n" patch-text)
                                      patch-text

@@ -10,6 +10,7 @@
 (require 'seq)
 (require 'gptel-ext-abort)
 (require 'nucleus-tools)
+(require 'gptel-tools-agent-base)
 
 ;;; Customization
 
@@ -57,98 +58,99 @@ receives an error message to prevent callers from hanging."
          (max-chars (or max_answer_chars
                         (bound-and-true-p nucleus-tool-max-answer-chars)
                         4000)))
-    (condition-case err
+(condition-case err
         (progn
           (unless (and (stringp regex) (not (string-empty-p (string-trim regex))))
             (error "regex is empty"))
-          (unless (and (stringp path) (file-readable-p path))
-            (error "File or directory %s is not readable" path))
-          (let* ((grepper (or (executable-find "rg") (executable-find "grep")))
-                 (_ (unless grepper (error "ripgrep/grep not available")))
-                 (cmd (file-name-sans-extension (file-name-nondirectory grepper)))
-                 (context-lines (if (natnump context-lines) context-lines 0))
-                 (expanded-path (expand-file-name (substitute-in-file-name path)))
-                 (args
-                  (cond
-                   ((string= "rg" cmd)
-                    (delq nil (list "--sort=modified"
-                                    (format "--context=%d" context-lines)
-                                    (and glob (format "--glob=%s" glob))
-                                    (format "--max-count=%d" my/gptel-grep-max-count)
-                                    "--heading" "--line-number"
-                                    "-e" regex
-                                    expanded-path)))
-                   ((string= "grep" cmd)
-                    (delq nil (list "--recursive"
-                                    (format "--context=%d" context-lines)
-                                    (and glob (format "--include=%s" glob))
-                                    (format "--max-count=%d" my/gptel-grep-max-count)
-                                    "--line-number" "--regexp" regex
-                                    expanded-path)))
-                   (t (error "failed to identify grepper"))))
-                 (buf (generate-new-buffer " *gptel-grep*"))
-                 (done nil)
-                 (finish
-                  (lambda (result)
-                    (unless done
-                      (setq done t)
-                      (when (buffer-live-p buf) (kill-buffer buf))
-                      (let ((shortened
-                             (if (and (stringp result)
-                                      (not (string-prefix-p "Error:" result))
-                                      (fboundp 'nucleus-limit-result-length)
-                                      (> (length result) max-chars))
-                                 (let ((lines (split-string result "\n")))
-                                   (nucleus-limit-result-length
-                                    result max-chars
-                                    (list
-                                     (lambda ()
-                                       (format "%s\n...[%d more matches truncated]"
-                                               (string-join (seq-take lines (max 1 (/ (length lines) 2))) "\n")
-                                               (- (length lines) (/ (length lines) 2))))
-                                     (lambda ()
-                                       (format "Found %d matches for '%s' (refine query or increase max_answer_chars)"
-                                               (length lines) regex)))))
-                               result)))
-                        (cond
-                         ((and (buffer-live-p origin)
-                               (with-current-buffer origin
-                                 (= gen my/gptel--abort-generation)))
-                          (funcall callback shortened))
-                         ((not (buffer-live-p origin))
-                          (funcall callback shortened))
-                         (t
-                          (funcall callback (format "Error: Request aborted\n%s"
-                                                    (if (string-prefix-p "Error:" shortened) shortened
-                                                      (concat "Partial output:\n" shortened)))))))))))
-            (let ((proc
-                   (make-process
-                    :name "gptel-grep"
-                    :buffer buf
-                    :command (cons grepper args)
-                    :noquery t
-                    :connection-type 'pipe
-                    :sentinel
-                    (lambda (p _event)
-                      (when (memq (process-status p) '(exit signal))
-                        (let* ((status (process-exit-status p))
-                               (out (with-current-buffer buf (buffer-string))))
-                          (funcall finish
-                                   (if (= status 0)
-                                       (string-trim out)
-                                     (string-trim
-                                      (format "Error: search failed with exit-code %d. Tool output:\n\n%s"
-                                              status out))))))))))
-              (process-put proc 'my/gptel-managed t)
-              (run-at-time
-               my/gptel-grep-timeout nil
-               (lambda (p)
-                 (when (process-live-p p)
-                   (ignore-errors (set-process-filter p #'ignore))
-                   (ignore-errors (set-process-sentinel p #'ignore))
-                   (delete-process p))
-                 (funcall finish "Error: search timed out."))
-               proc))))
+          (let ((expanded-path (gptel-auto-workflow--expand-workspace-path
+                               (substitute-in-file-name path))))
+            (unless (file-readable-p expanded-path)
+              (error "File or directory %s is not readable" expanded-path))
+            (let* ((grepper (or (executable-find "rg") (executable-find "grep")))
+                   (_ (unless grepper (error "ripgrep/grep not available")))
+                   (cmd (file-name-sans-extension (file-name-nondirectory grepper)))
+                   (context-lines (if (natnump context-lines) context-lines 0))
+                   (args
+                    (cond
+                     ((string= "rg" cmd)
+                      (delq nil (list "--sort=modified"
+                                      (format "--context=%d" context-lines)
+                                      (and glob (format "--glob=%s" glob))
+                                      (format "--max-count=%d" my/gptel-grep-max-count)
+                                      "--heading" "--line-number"
+                                      "-e" regex
+                                      expanded-path)))
+                     ((string= "grep" cmd)
+                      (delq nil (list "--recursive"
+                                      (format "--context=%d" context-lines)
+                                      (and glob (format "--include=%s" glob))
+                                      (format "--max-count=%d" my/gptel-grep-max-count)
+                                      "--line-number" "--regexp" regex
+                                      expanded-path)))
+                     (t (error "failed to identify grepper"))))
+                   (buf (generate-new-buffer " *gptel-grep*"))
+                   (done nil)
+                   (finish
+                    (lambda (result)
+                      (unless done
+                        (setq done t)
+                        (when (buffer-live-p buf) (kill-buffer buf))
+                        (let ((shortened
+                               (if (and (stringp result)
+                                        (not (string-prefix-p "Error:" result))
+                                        (fboundp 'nucleus-limit-result-length)
+                                        (> (length result) max-chars))
+                                   (let ((lines (split-string result "\n")))
+                                     (nucleus-limit-result-length
+                                      result max-chars
+                                      (list
+                                       (lambda ()
+                                         (format "%s\n...[%d more matches truncated]"
+                                                 (string-join (seq-take lines (max 1 (/ (length lines) 2))) "\n")
+                                                 (- (length lines) (/ (length lines) 2))))
+                                       (lambda ()
+                                         (format "Found %d matches for '%s' (refine query or increase max_answer_chars)"
+                                                 (length lines) regex)))))
+                                 result)))
+                          (cond
+                           ((and (buffer-live-p origin)
+                                 (with-current-buffer origin
+                                   (= gen my/gptel--abort-generation)))
+                            (funcall callback shortened))
+                           ((not (buffer-live-p origin))
+                            (funcall callback shortened))
+                           (t
+                            (funcall callback (format "Error: Request aborted\n%s"
+                                                      (if (string-prefix-p "Error:" shortened) shortened
+                                                        (concat "Partial output:\n" shortened))))))))))
+              (let ((proc
+                     (make-process
+                      :name "gptel-grep"
+                      :buffer buf
+                      :command (cons grepper args)
+                      :noquery t
+                      :connection-type 'pipe
+                      :sentinel
+                      (lambda (p _event)
+                        (when (memq (process-status p) '(exit signal))
+                          (let* ((status (process-exit-status p))
+                                 (out (with-current-buffer buf (buffer-string))))
+                            (funcall finish
+                                     (if (= status 0)
+                                         (string-trim out)
+                                       (string-trim
+                                        (format "Error: search failed with exit-code %d. Tool output:\n\n%s"
+                                                status out))))))))))
+                (process-put proc 'my/gptel-managed t)
+                (run-at-time
+                 my/gptel-grep-timeout nil
+                 (lambda (p)
+                   (when (process-live-p p)
+                     (ignore-errors (set-process-filter p #'ignore))
+                     (ignore-errors (set-process-sentinel p #'ignore))
+                     (delete-process p))
+(funcall finish "Error: search timed out."))
+                  proc))))))
       (error
        (funcall callback (format "Error: %s" (error-message-string err)))))))
 
