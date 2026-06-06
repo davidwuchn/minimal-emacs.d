@@ -188,8 +188,19 @@
     (when (memq :message methods)
       (message "[OV5 Alert] %s" text))
     (when (memq :log methods)
-      ;; TODO: Write to log file
-      nil)))
+      (let ((base-root (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                            (gptel-auto-workflow--worktree-base-root)))
+            (timestamp (format-time-string "%Y-%m-%d %H:%M:%S")))
+        (when base-root
+          (let ((log-file (expand-file-name "mementum/alerts.log" base-root)))
+            (make-directory (file-name-directory log-file) t)
+            (with-temp-buffer
+              (when (file-exists-p log-file)
+                (insert-file-contents log-file))
+              (goto-char (point-max))
+              (insert (format "[%s] %s\n" timestamp text))
+              (write-region (point-min) (point-max) log-file))))))
+    nil))
 
 (defun gptel-auto-workflow--format-notification-text (alert)
   "Format ALERT as human-readable text."
