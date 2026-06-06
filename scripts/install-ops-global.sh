@@ -47,10 +47,27 @@ additional_implementers:
     model: bailian-token-plan/glm-5.1
 EOF
 
-# 3. Run installer
+# 3. Ensure GNU sed on macOS (BSD sed is incompatible with install.sh)
+if [[ "$(uname)" == "Darwin" ]]; then
+    if ! command -v gsed >/dev/null 2>&1; then
+        if command -v brew >/dev/null 2>&1; then
+            echo "Installing gnu-sed for macOS compatibility..."
+            brew install gnu-sed || { echo "ERROR: Failed to install gnu-sed"; exit 1; }
+        else
+            echo "ERROR: macOS requires gnu-sed. Install with: brew install gnu-sed"
+            exit 1
+        fi
+    fi
+    # Prepend gnu-sed gnubin so 'sed' resolves to GNU sed in all subprocesses
+    GNUBIN="$(brew --prefix gnu-sed)/libexec/gnubin"
+    export PATH="$GNUBIN:$PATH"
+    echo "Using GNU sed ($GNUBIN)"
+fi
+
+# 4. Run installer
 cd "$TMPDIR/ops" && bash install.sh || echo "WARNING: install.sh failed, continuing with model fixes"
 
-# 4. Fix models in agent files
+# 5. Fix models in agent files
 AGENTS_DIR="$HOME/.config/opencode/agents"
 
 update_model() {
@@ -88,7 +105,7 @@ update_model "$AGENTS_DIR/implementer.md"           "bailian-token-plan/glm-5.1"
 update_model "$AGENTS_DIR/implementer-safe.md"      "bailian-token-plan/glm-5.1"
 update_model "$AGENTS_DIR/legacy-curator.md"        "bailian-token-plan/deepseek-v4-pro"
 
-# 5. Enable thinking for DeepSeek models in opencode.json (pure jq, no python3)
+# 6. Enable thinking for DeepSeek models in opencode.json (pure jq, no python3)
 OPENCODE_JSON="$HOME/.config/opencode/opencode.json"
 if [ -f "$OPENCODE_JSON" ]; then
     if command -v jq >/dev/null 2>&1; then
