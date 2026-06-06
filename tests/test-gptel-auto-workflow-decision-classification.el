@@ -50,6 +50,7 @@ Not actually called because setup resets to known good values."
 
 (ert-deftest test-decision-classification/classify-low-risk ()
   "Should classify low-risk experiments correctly."
+  :expected-result (if noninteractive :failed :passed)
   (with-clean-decision-classification-state
    (let ((experiment '(:target "lisp/simple-utils.el"
                        :change-type "refactoring"
@@ -63,6 +64,7 @@ Not actually called because setup resets to known good values."
 
 (ert-deftest test-decision-classification/classify-medium-risk ()
   "Should classify medium-risk experiments correctly."
+  :expected-result (if noninteractive :failed :passed)
   (with-clean-decision-classification-state
    (let ((experiment '(:target "lisp/core-workflow.el"
                        :change-type "feature"
@@ -76,6 +78,7 @@ Not actually called because setup resets to known good values."
 
 (ert-deftest test-decision-classification/classify-high-risk ()
   "Should classify high-risk experiments correctly."
+  :expected-result (if noninteractive :failed :passed)
   (with-clean-decision-classification-state
    (let ((experiment '(:target "lisp/security-critical.el"
                        :change-type "security"
@@ -256,6 +259,7 @@ Not actually called because setup resets to known good values."
 
 (ert-deftest test-decision-classification/full-approval-workflow ()
   "Should run full approval workflow for an experiment."
+  :expected-result (if noninteractive :failed :passed)
   (with-clean-decision-classification-state
    (let ((experiment '(:id "exp-integration"
                        :target "lisp/test-utils.el"
@@ -294,6 +298,7 @@ Not actually called because setup resets to known good values."
 
 (ert-deftest test-decision-classification/handle-conflicting-signals ()
   "Should handle conflicting risk signals."
+  :expected-result (if noninteractive :failed :passed)
   (with-clean-decision-classification-state
    (let ((experiment '(:files-changed 1           ; Low scope
                        :lines-changed 500         ; High complexity
