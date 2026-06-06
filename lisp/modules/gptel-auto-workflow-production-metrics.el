@@ -235,7 +235,7 @@ Returns plist with production metrics or default values if unavailable."
 (defun gptel-auto-workflow--approval-threshold (experiment)
   "Determine approval type based on EXPERIMENT risk score.
 Returns :auto (risk < 0.3), :recommend (0.3-0.7), or :required (> 0.7)."
-  (let ((risk (or (and experiment (plist-get experiment :risk-score)) 0.0)))
+  (let ((risk (or (and experiment (ignore-errors (plist-get experiment :risk-score))) 0.0)))
     (cond
      ((< risk 0.3) :auto)
      ((< risk 0.7) :recommend)
