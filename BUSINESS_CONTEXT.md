@@ -124,6 +124,90 @@ All happens while employees sleep
 
 ---
 
+## Execution Platform: OpenCode
+
+OV5 runs on **OpenCode** — an agent-centric AI development environment. While OV5 defines the *strategy* (what to improve, how to learn), OpenCode provides the *execution layer* (who runs the experiments, how work is delegated).
+
+### Agent Hierarchy
+
+| Agent | Role | Model | Handles |
+|-------|------|-------|---------|
+| **@maintainer** | Primary orchestrator | `kimi-k2.6` | Planning, review, gated decisions |
+| **@delegate** | General execution | `deepseek-v4-pro` | Exploration, analysis, research |
+| **@delegate-strong** | Deep analysis | `gpt-5.4` | Complex multi-step synthesis |
+| **@delegate-gpt** | Frontier reasoning | `gpt-5.5` | Maximum reasoning effort |
+| **@delegate-opus** | Long-context tasks | `claude-opus-4.8` | Large codebases, architecture |
+| **@delegate-qwen** | Cost-efficient reasoning | `qwen3.7-max` | High-effort, budget-conscious |
+| **@delegate-creative** | Novel solutions | `kimi-k2.6` | Brainstorming, alternatives |
+| **@delegate-fast** | Quick checks | `deepseek-v4-flash` | Rapid validation, pre-screening |
+| **@implementer** | Code execution | `glm-5.1` | Gated code changes, tests |
+| **@implementer-safe** | Safe fallback | `glm-5.1` | Conservative implementation |
+
+### Skill System
+
+OpenCode skills are reusable workflows that agents load on demand. OV5 installs these via `./scripts/install-ops-global.sh`:
+
+| Skill | Purpose | Used By |
+|-------|---------|---------|
+| `create-plan` | Structured planning (plan.md, phases/, todo.md) | @maintainer |
+| `execute-work-package` | Gated code execution (blueprint → gate → execute → digest) | @implementer |
+| `generate-docs` | Module/feature documentation from codebase | @doc-explorer |
+| `update-docs` | Sync docs after code changes | @doc-explorer |
+| `review-plan` | Independent plan review | @delegate-strong |
+| `review-implementation` | Post-execution quality review | @delegate-strong |
+| `generate-handover` | Session continuity docs | @maintainer |
+| `resume-plan` | Continue multi-session plans | @maintainer |
+
+### OV5 ↔ OpenCode Mapping
+
+```
+YC Vision Layer     →  OV5 Module                          →  OpenCode Agent
+─────────────────────────────────────────────────────────────────────────────
+Sensor (Phase 1)    →  gptel-auto-workflow-external-sensors  →  @delegate
+Policy (Phase 4)    →  gptel-auto-workflow-decision-classification  →  @maintainer
+Tools (Phase 3)     →  gptel-auto-workflow-knowledge-reasoning      →  @delegate-strong
+Quality Gate        →  Grader, benchmarks, Six Gates              →  @implementer
+Learning (Phase 5)  →  gptel-auto-workflow-evolution             →  @maintainer
+```
+
+An **experiment** in OV5 maps to an **OpenCode work package**:
+1. **Plan** (`create-plan`) — @maintainer defines scope, gates, acceptance criteria
+2. **Execute** (`execute-work-package`) — @implementer runs the experiment in isolated worktree
+3. **Review** (`review-implementation`) — @delegate-strong validates against plan
+4. **Decide** (`decision-classification`) — @maintainer approves/rejects based on risk
+5. **Learn** (`update-docs` + `generate-handover`) — @doc-explorer captures knowledge
+
+### @ov5 Cowork Setup
+
+Distributed across three editors:
+
+| Editor | Config | File |
+|--------|--------|------|
+| **OpenCode** | Skills + agents | `~/.config/opencode/` (installed by `install-ops-global.sh`) |
+| **Claude Code** | Context + rules | `CLAUDE.md` (auto-generated from `OUROBOROS-V5.md`) |
+| **Cursor** | Rules | `.cursorrules` (auto-generated from `AGENTS.md`) |
+
+Run `./scripts/setup-ov5-cowork.sh` to configure all three. The setup:
+1. Clones OpenCode Processing Skills (skills + agents)
+2. Patches agent files with correct models (handles `sed` compatibility)
+3. Generates `CLAUDE.md` for Claude Code
+4. Generates `.cursorrules` for Cursor
+5. Enables DeepSeek thinking mode in `opencode.json`
+
+### Why This Matters
+
+**Without OpenCode:** OV5 is a theory — smart loops, no execution.
+**With OpenCode:** OV5 is a **self-operating system** that plans, executes, reviews, and learns autonomously.
+
+The agents are not just LLM wrappers. They are **roles with permissions**:
+- @maintainer can plan and review, but cannot modify code directly
+- @implementer can modify code, but only within gated work packages
+- @delegate can explore and analyze, but cannot commit
+
+This separation of concerns is what makes OV5 safe to run autonomously — no single agent has full control. The human (you) sits at the outer edge, reviewing what the system proposes, not executing what the system generates.
+
+---
+
 ## The Three Perspectives
 
 OV5 can be understood through three complementary frameworks, each revealing different aspects:
