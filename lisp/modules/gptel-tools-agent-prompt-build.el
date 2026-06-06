@@ -1883,8 +1883,17 @@ Captures executor reasoning from the dynamic variable
                                     (gptel-auto-workflow--plist-get experiment :support-tickets-reduced 0)))
           (business-value-score (gptel-auto-experiment--tsv-number
                                  (gptel-auto-workflow--plist-get experiment :business-value-score 0.0)))
-          (risk-score (gptel-auto-experiment--tsv-number
-                       (gptel-auto-workflow--plist-get experiment :risk-score 0.0))))
+           (risk-score (gptel-auto-experiment--tsv-number
+                        (gptel-auto-workflow--plist-get experiment :risk-score 0.0)))
+           ;; Complexity metrics (columns 40-43)
+           (complexity-before (gptel-auto-experiment--tsv-number
+                               (gptel-auto-workflow--plist-get experiment :complexity-before 0.0)))
+           (complexity-after (gptel-auto-experiment--tsv-number
+                              (gptel-auto-workflow--plist-get experiment :complexity-after 0.0)))
+           (lines-removed (gptel-auto-experiment--tsv-number
+                          (gptel-auto-workflow--plist-get experiment :lines-removed 0)))
+           (understanding-score (gptel-auto-experiment--tsv-number
+                                 (gptel-auto-workflow--plist-get experiment :understanding-score 0.0))))
     ;; Capture executor reasoning for self-evolution feedback
     (when (and target (bound-and-true-p gptel-auto-experiment--executor-reasoning))
       (let* ((insights (gethash target gptel-auto-experiment--grader-insights))
@@ -2029,7 +2038,7 @@ Captures executor reasoning from the dynamic variable
       (unless (gptel-auto-experiment--drop-replaceable-tsv-rows
                experiment-id target)
         (goto-char (point-max))
-        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%.6f\t%s\t%.4f\t%.4f\t%+.4f\t%+.2f\t%d\t%.2f\t%.2f\n"
+        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%.6f\t%s\t%.4f\t%.4f\t%+.4f\t%+.2f\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%d\t%.2f\n"
                         experiment-id
                         target
                         (gptel-auto-experiment--tsv-escape
@@ -2123,7 +2132,12 @@ Captures executor reasoning from the dynamic variable
                          user-satisfaction-delta
                          (round support-tickets-reduced)
                          business-value-score
-                         risk-score)))
+                         risk-score
+                         ;; Complexity metrics (columns 40-43)
+                         complexity-before
+                         complexity-after
+                         (round lines-removed)
+                         understanding-score)))
       (write-region (point-min) (point-max) file))
     ;; Keep strategy metrics independent from the per-run TSV.
     (when (fboundp 'gptel-auto-workflow--record-strategy-evaluation)

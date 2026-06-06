@@ -21,8 +21,8 @@
   "TSV header must include columns 33-39 for production metrics."
   (let* ((header (string-trim-right gptel-auto-workflow--results-tsv-header))
          (columns (split-string header "\t")))
-    ;; Should have 39 columns (32 original + 7 production metrics)
-    (should (= 39 (length columns)))
+    ;; Should have 43 columns (32 original + 7 production metrics + 4 complexity metrics)
+    (should (= 43 (length columns)))
     ;; Column 33: prod_error_rate_before
     (should (string= "prod_error_rate_before" (nth 32 columns)))
     ;; Column 34: prod_error_rate_after
@@ -36,7 +36,15 @@
     ;; Column 38: business_value_score
     (should (string= "business_value_score" (nth 37 columns)))
     ;; Column 39: risk_score
-    (should (string= "risk_score" (nth 38 columns)))))
+    (should (string= "risk_score" (nth 38 columns)))
+    ;; Column 40: complexity_before
+    (should (string= "complexity_before" (nth 39 columns)))
+    ;; Column 41: complexity_after
+    (should (string= "complexity_after" (nth 40 columns)))
+    ;; Column 42: lines_removed
+    (should (string= "lines_removed" (nth 41 columns)))
+    ;; Column 43: understanding_score
+    (should (string= "understanding_score" (nth 42 columns)))))
 
 ;; Test 2: Service inference from target path
 (ert-deftest test-production-metrics/infer-service-from-target ()
