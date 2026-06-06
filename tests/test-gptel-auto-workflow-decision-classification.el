@@ -22,10 +22,11 @@
 ;; Helper macro to ensure clean state for each test
 (defmacro with-clean-decision-classification-state (&rest body)
   "Execute BODY with clean decision classification state."
-  `(let ((gptel-auto-workflow--risk-thresholds '(:low-max 0.3 :medium-max 0.7))
-         (gptel-auto-workflow--risk-weights '(:scope 0.25 :complexity 0.30 :coverage 0.20 :business-impact 0.25))
-         (gptel-auto-workflow--approval-history nil)
-         (gptel-auto-workflow--risk-patterns nil))
+  `(progn
+     (setq gptel-auto-workflow--risk-thresholds '(:low-max 0.3 :medium-max 0.7))
+     (setq gptel-auto-workflow--risk-weights '(:scope 0.25 :complexity 0.30 :coverage 0.20 :business-impact 0.25))
+     (setq gptel-auto-workflow--approval-history nil)
+     (setq gptel-auto-workflow--risk-patterns nil)
      ,@body))
 
 ;; Setup function to ensure clean state

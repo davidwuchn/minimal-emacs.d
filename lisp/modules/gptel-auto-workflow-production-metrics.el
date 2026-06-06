@@ -126,7 +126,7 @@ Returns parsed JSON or nil on failure."
   "Calculate error rate from Sentry STATS-DATA.
 Returns float 0.0-1.0 representing error rate."
   (if (and stats-data (listp stats-data))
-      (let* ((events (or (plist-get stats-data :data) '()))
+      (let* ((events (let ((d (plist-get stats-data :data))) (if (listp d) d '())))
              (total-events (or (ignore-errors (apply #'+ (mapcar #'cadr events))) 0))
              (time-span (length events))
              ;; Normalize to rate per day
@@ -220,9 +220,9 @@ Risk factors:
   "Get production metrics for TARGET, using cache if available.
 Returns plist with production metrics or default values if unavailable."
   (or (when (hash-table-p gptel-auto-workflow--production-metrics-cache)
-        (gethash target gptel-auto-workflow--production-metrics-cache))
+        (ignore-errors (gethash target gptel-auto-workflow--production-metrics-cache)))
       (let ((metrics (ignore-errors (gptel-auto-workflow--track-production-impact target nil))))
-        (when (hash-table-p gptel-auto-workflow--production-metrics-cache)
+        (when (and (hash-table-p gptel-auto-workflow--production-metrics-cache) metrics)
           (puthash target metrics gptel-auto-workflow--production-metrics-cache))
         metrics)))
 
