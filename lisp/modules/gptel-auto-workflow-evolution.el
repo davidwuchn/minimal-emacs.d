@@ -7688,10 +7688,11 @@ Dog-food: Phase 1 fixes self (mechanical + LLM for self only).
 Phase 2 fixes others (mechanical only, accepts ceiling).
 Returns plist with :fixes-applied :remaining-warnings :files-fixed."
   (interactive)
-  (let* ((self-file "lisp/modules/gptel-auto-workflow-evolution.el")
+  (let* ((self-file (gptel-auto-workflow--expand-workspace-path
+                      "lisp/modules/gptel-auto-workflow-evolution.el"))
          (all-files
           (or files
-              (directory-files "lisp/modules" t "\\.el\\'")))
+              (directory-files (gptel-auto-workflow--expand-workspace-path "lisp/modules") t "\\.el\\'")))
          (max-iter (or max-iterations 5))
          (total-fixes 0)
          (files-fixed nil))

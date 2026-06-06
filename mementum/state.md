@@ -1,8 +1,8 @@
 # Mementum State
 
 > **Bootstrapped**: 2026-06-06
-> **Session**: Testing Active Mementum Skills
-> **Status**: All 4 phases complete, 112 modules documented, OPS integrated
+> **Session**: Workspace Boundary Validator — Phase 1 Complete, Phase 2 In Progress
+> **Status**: Core functions added to gptel-tools-agent-base.el, self-heal integration pending
 
 ---
 
@@ -10,13 +10,15 @@
 
 | Priority | Item | Model | Status |
 |---|---|---|---|
-| **P0** | Submit PR for install.sh macOS sed | delegate-opus | **BLOCKED** (upstream) |
-| **P1** | Refine top 20 auto-generated module docs | doc-explorer | **IN PROGRESS** |
-| **P2** | Test pipeline wrapper in production | pipeline-ops | Pending |
-| **P3** | Optimize model routing based on task type | ov5-architect | Pending |
+| **P0** | OV5 self-heal: fix workspace boundary violations | @maintainer | **IN PROGRESS** |
+| **P1** | Submit PR for install.sh macOS sed | delegate-opus | **BLOCKED** (upstream) |
+| **P2** | Refine top 20 auto-generated module docs | doc-explorer | Pending |
+| **P3** | Test pipeline wrapper in production | pipeline-ops | Pending |
+| **P4** | Optimize model routing based on task type | ov5-architect | Pending |
 
 ## Active Patterns (from last 3 sessions)
 
+- **Workspace boundary violation**: Self-heal accessed `/Users/davidwu/lisp/modules` — fixed by `gptel-auto-workflow--expand-workspace-path`
 - **Pi5 auto-evolves**: `research-insights-template-default.md`, `strategy-guidance.json` — merge=theirs
 - **python3 regression**: Scripts should use `jq` not python3 — use `test-script-hygiene.el`
 - **Hardcoded paths**: `find` glob over machine-specific paths — use `test-script-hygiene.el`
@@ -38,10 +40,10 @@
 
 ## Next Steps (Suggested by Active Mementum)
 
-1. **Refine top 20 docs** — Use `doc-explorer` to improve auto-generated module docs
-2. **Test pipeline wrapper** — Run `scripts/run-pipeline-ops.sh` end-to-end
-3. **Model routing heuristic** — Auto-detect task type from prompt keywords
-4. **Pattern synthesis** — ≥3 similar issues → knowledge page candidate
+1. **Complete Phase 2** — Integrate boundary checks into all auto-workflow modules
+2. **Self-heal diagnostic** — Add workspace boundary scan to self-heal routine
+3. **Refine top 20 docs** — Use `doc-explorer` to improve auto-generated module docs
+4. **Test pipeline wrapper** — Run `scripts/run-pipeline-ops.sh` end-to-end
 
 ## Blockers
 
@@ -56,6 +58,7 @@
 - Pipeline plans at `mementum/knowledge/plans/pipeline-runs/`
 - Module docs at `mementum/knowledge/modules/`
 - Installer at `scripts/install-ops-global.sh`
+- **NEW**: Boundary validator in `lisp/modules/gptel-tools-agent-base.el` (`--path-within-workspace-p`, `--expand-workspace-path`, `with-workspace-boundary`)
 
 ---
 *Active Mementum v1.0 — auto-ranked priorities, pattern detection, model routing*

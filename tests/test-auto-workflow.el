@@ -14,6 +14,7 @@
 
 (require 'ert)
 (require 'cl-lib)
+(require 'gptel-tools-agent-base)
 
 ;;; Mock implementations (for use with cl-letf)
 
@@ -127,6 +128,143 @@ HYPOTHESIS: [your hypothesis here]"
                                                     proj-root))))
       (should (file-name-absolute-p full-path))
       (should (string-match-p "/gptel-ext-retry\\.el$" full-path)))))
+
+;;; Unit Tests: workspace boundary validator
+
+(ert-deftest auto-workflow/workspace-boundary/path-within-workspace-p-inside ()
+  "Path inside ~/.emacs.d/ should return t."
+  (let ((gptel-auto-workflow--allowed-workspace-roots
+         (list (expand-file-name "~/.emacs.d/")))
+        (path (expand-file-name "lisp/modules/gptel-tools-agent-base.el" "~/.emacs.d/")))
+    (should (gptel-auto-workflow--path-within-workspace-p path))))
+
+(ert-deftest auto-workflow/workspace-boundary/path-within-workspace-p-outside ()
+  "Path outside all roots should return nil."
+  (let ((gptel-auto-workflow--allowed-workspace-roots
+         (list (expand-file-name "~/.emacs.d/")))
+        (path "/tmp/outside-workspace-test-dir/"))
+    (should-not (gptel-auto-workflow--path-within-workspace-p path))))
+
+(ert-deftest auto-workflow/workspace-boundary/path-within-workspace-p-nil ()
+  "nil path should return nil."
+  (let ((gptel-auto-workflow--allowed-workspace-roots
+         (list (expand-file-name "~/.emacs.d/"))))
+    (should-not (gptel-auto-workflow--path-within-workspace-p nil))))
+
+(ert-deftest auto-workflow/workspace-boundary/path-within-workspace-p-exact-root ()
+  "Path exactly equal to a root directory should return t."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root)))
+    (should (gptel-auto-workflow--path-within-workspace-p root))))
+
+(ert-deftest auto-workflow/workspace-boundary/path-within-workspace-p-relative ()
+  "Relative path inside workspace should return t when default-directory is inside a root."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (default-directory root))
+    (should (gptel-auto-workflow--path-within-workspace-p "lisp/modules/test.el"))))
+
+(ert-deftest auto-workflow/workspace-boundary/path-within-workspace-p-dotdot-escape ()
+  "Path with .. escaping workspace should return nil."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (default-directory root))
+    (should-not (gptel-auto-workflow--path-within-workspace-p "../../../outside-escape.el"))))
+
+(ert-deftest auto-workflow/workspace-boundary/path-within-workspace-p-multiple-roots ()
+  "Path inside second root should return t when first root doesn't match."
+  (let* ((root1 (expand-file-name "~/.emacs.d/"))
+         (root2 (expand-file-name "/tmp/aw-boundary-test-root/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root1 root2))
+         (path (expand-file-name "some-file.el" root2)))
+    (unwind-protect
+        (progn
+          (make-directory root2 t)
+          (should (gptel-auto-workflow--path-within-workspace-p path)))
+      (when (file-directory-p root2)
+        (delete-directory root2 t)))))
+
+(ert-deftest auto-workflow/workspace-boundary/expand-workspace-path-valid ()
+  "Valid path within workspace should return expanded absolute path."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (gptel-auto-workflow--run-project-root root)
+         (gptel-auto-workflow--project-root-override nil)
+         (gptel-auto-workflow--current-project nil)
+         (result (gptel-auto-workflow--expand-workspace-path "lisp/modules/test.el")))
+    (should (stringp result))
+    (should (file-name-absolute-p result))
+    (should (string-prefix-p (file-name-as-directory root) result))))
+
+(ert-deftest auto-workflow/workspace-boundary/expand-workspace-path-invalid ()
+  "Path outside workspace should signal an error."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (gptel-auto-workflow--run-project-root root)
+         (gptel-auto-workflow--project-root-override nil)
+         (gptel-auto-workflow--current-project nil))
+    (should-error (gptel-auto-workflow--expand-workspace-path "/tmp/outside-path.el"))))
+
+(ert-deftest auto-workflow/workspace-boundary/expand-workspace-path-nil ()
+  "nil path should signal an error."
+  (let ((gptel-auto-workflow--allowed-workspace-roots
+         (list (expand-file-name "~/.emacs.d/"))))
+    (should-error (gptel-auto-workflow--expand-workspace-path nil))))
+
+(ert-deftest auto-workflow/workspace-boundary/expand-workspace-path-with-root ()
+  "Path expanded relative to explicit root argument."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (result (gptel-auto-workflow--expand-workspace-path "lisp/modules/test.el" root)))
+    (should (stringp result))
+    (should (string-prefix-p (file-name-as-directory root) result))))
+
+(ert-deftest auto-workflow/workspace-boundary/macro-inside-workspace ()
+  "with-workspace-boundary should execute body when path is inside workspace."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (gptel-auto-workflow--run-project-root root)
+         (gptel-auto-workflow--project-root-override nil)
+         (gptel-auto-workflow--current-project nil)
+         (executed nil))
+    (with-workspace-boundary (f "lisp/modules/test.el")
+      (setq executed t))
+    (should executed)))
+
+(ert-deftest auto-workflow/workspace-boundary/macro-outside-workspace ()
+  "with-workspace-boundary should signal error when path is outside workspace."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (gptel-auto-workflow--run-project-root root)
+         (gptel-auto-workflow--project-root-override nil)
+         (gptel-auto-workflow--current-project nil))
+    (should-error
+     (with-workspace-boundary (f "/tmp/outside-path.el")
+       f))))
+
+(ert-deftest auto-workflow/workspace-boundary/macro-binds-path-var ()
+  "with-workspace-boundary should bind path-var to the expanded absolute path."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (gptel-auto-workflow--run-project-root root)
+         (gptel-auto-workflow--project-root-override nil)
+         (gptel-auto-workflow--current-project nil)
+         (bound-value nil))
+    (with-workspace-boundary (f "lisp/modules/test.el")
+      (setq bound-value f))
+    (should (stringp bound-value))
+    (should (file-name-absolute-p bound-value))
+    (should (string-prefix-p (file-name-as-directory root) bound-value))))
+
+(ert-deftest auto-workflow/workspace-boundary/macro-with-explicit-root ()
+  "with-workspace-boundary should accept optional root argument."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (bound-value nil))
+    (with-workspace-boundary (f "lisp/modules/test.el" root)
+      (setq bound-value f))
+    (should (stringp bound-value))
+    (should (string-prefix-p (file-name-as-directory root) bound-value))))
 
 ;;; Unit Tests: prompt content
 

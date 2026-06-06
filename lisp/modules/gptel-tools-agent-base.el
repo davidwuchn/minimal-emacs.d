@@ -71,6 +71,13 @@ Prefer the root captured at workflow start over mutable experiment context."
 (defvar gptel-benchmark--subagent-files nil)
 (defvar package-archive-contents)
 
+(defvar gptel-auto-workflow--allowed-workspace-roots
+  (list (expand-file-name "~/.emacs.d/"))
+  "List of absolute directory paths allowed as workspace roots.
+Each entry must be an expanded absolute path with trailing slash.
+The default includes ~/.emacs.d/ aligned with the worktree-base-root fallback.
+Additional project directories may be added by workflow orchestration.")
+
 ;;; Shell Command with Timeout
 
 (defcustom gptel-auto-workflow-shell-timeout 30
@@ -93,6 +100,50 @@ Signals an error if validation fails."
   "Return t if VALUE is a non-nil, non-empty string.
 Helper for validation in callback-based functions."
   (and (stringp value) (not (string-empty-p (string-trim value)))))
+
+;;; Workspace Boundary Validation
+
+(defun gptel-auto-workflow--path-within-workspace-p (path)
+  "Return t if PATH is within any root in `gptel-auto-workflow--allowed-workspace-roots'.
+Handles nil input, relative paths, .. escapes, and symlinks.
+Uses `file-truename' on both the candidate path and each root to resolve
+symlinks and .. components.  Path exactly equal to a root directory returns t.
+Empty roots list returns nil (deny by default)."
+  (when (and path (stringp path))
+    (let* ((roots gptel-auto-workflow--allowed-workspace-roots)
+           (resolved (file-truename (expand-file-name path default-directory))))
+      (cl-some (lambda (root)
+                 (let ((resolved-root (file-truename root)))
+                   (or (equal resolved resolved-root)
+                       (equal (file-name-as-directory resolved)
+                              (file-name-as-directory resolved-root))
+                       (string-prefix-p (file-name-as-directory resolved-root)
+                                        (file-name-as-directory resolved)))))
+               roots))))
+
+(defun gptel-auto-workflow--expand-workspace-path (path &optional root)
+  "Expand PATH relative to ROOT, then validate it is within allowed workspace roots.
+ROOT defaults to `gptel-auto-workflow--worktree-base-root' when nil.
+Returns the expanded absolute path on success.
+Signals an error when PATH is nil/empty or outside allowed roots."
+  (unless (gptel-auto-workflow--non-empty-string-p path)
+    (error "[boundary] Invalid path: %S" path))
+  (let* ((base (or root (gptel-auto-workflow--worktree-base-root)))
+         (expanded (expand-file-name path base)))
+    (unless (gptel-auto-workflow--path-within-workspace-p expanded)
+      (error "[boundary] Path %S resolves outside allowed workspace roots: %S"
+             expanded gptel-auto-workflow--allowed-workspace-roots))
+    expanded))
+
+(defmacro with-workspace-boundary (spec &rest body)
+  "Execute BODY with PATH-VAR bound to the boundary-checked expansion of PATH.
+SPEC is (PATH-VAR PATH &optional ROOT).  PATH-VAR is a symbol bound in a
+`let' to the result of `gptel-auto-workflow--expand-workspace-path'.
+Signals an error if PATH is outside the allowed workspace roots."
+  (declare (indent 1) (debug (sexp body)))
+  (pcase-let ((`(,path-var ,path ,root) spec))
+    `(let ((,path-var (gptel-auto-workflow--expand-workspace-path ,path ,root)))
+       ,@body)))
 
 
 (defun gptel-auto-workflow--plist-get (plist key &optional default)
