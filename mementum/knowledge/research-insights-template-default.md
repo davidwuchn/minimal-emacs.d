@@ -11,7 +11,7 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 185 experiments (4% keep rate).*
+*Consolidated from 188 experiments (4% keep rate).*
 
 **Performance:** 7 kept / 1 discarded / 10 failed (EXTRACTED — from TSV)
 
@@ -50,42 +50,66 @@ were misleading.
 - Try combining with git history for recency bias.
 
 
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*5 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Distillation: Template-Default Strategy Results
+# Distillation
 
-## Summary
+## Research Strategy
+Template-default approach across 188 experiments targeting 24 source files (primarily `lisp/modules/gptel-auto-workflow-*` and `lisp/modules/gptel-tools-agent-*` systems, plus staging-merge/scope/review/config targets).
 
-| Metric | Count |
-|--------|-------|
-| Total experiments | 157 |
-| Targets explored | 25 |
-| **Kept hypotheses** | **2** |
-| Discarded hypotheses | 1 |
+## Kept Hypotheses (5)
 
-## Kept Hypotheses (2)
+**1. Idempotency guard + symmetric disable extraction**
+- Target file: `lisp/modules/gptel-auto-workflow-bootstrap.el` (inferred)
+- Adds re-adding protection for active advice; extracts matching disable function
+- Benefits: φ Vitality (progressive improvement) + fractal Clarity (explicit, testable assumptions)
 
-1. **No explicit hypothesis stated** — One experiment lacked an articulated hypothesis (passes through by default).
-2. **Improving `gptel-auto-workflow-list-project-buffers`** — The only substantive kept finding, targeting the `lisp/modules/` namespace.
+**2. Misleading message fix + directory validation**
+- Bug fix: correct user-facing message and validate directory existence before use
 
-## Discarded Hypotheses (1)
+**3. Cache validation: `eq` → `equal` + reorder check**
+- Target: `gptel-auto-workflow--normalized-projects`
+- Use content comparison instead of identity; check cache before invoking `ensure-buffer-tables`
+- Benefits: φ Vitality (adapts to usage) + fractal Clarity (content-based invalidation assumption made explicit)
 
-- *Removal would change semantics for users depending on the function* — Counterargument: re-evaluating scope; the referenced behavior is not load-bearing for the template-default strategy.
+**4. Buffer lookup extraction with nil guards**
+- Refactor: explicit validation sequence with visible nil guards
+- Benefits: Clarity (visible assumptions) + Vitality (graceful FSM-state-missing handling)
+- Companion: `ignore-errors` around `file-attributes` + empty-projects guard
 
-## Observations
+**5. Simplify `format-mode-line` usage + nil-safe iteration**
+- Replace `format-mode-line` with direct `mode-name`; swap `if` for `when`; add nil-safety to buffer iteration
+- Benefits: Clarity (less complexity, clearer intent) + Vitality (robustness)
 
-- **Very low yield**: 157 experiments distilled to a single actionable signal (1.3% kept rate by unique hypothesis).
-- **Target concentration**: `lisp/modules/` files dominate (22 of 25 targets), with `staging-*` targets making up the remainder — none yielded kept hypotheses.
-- **Single actionable direction**: the function `gptel-auto-workflow-list-project-buffers` is the only concrete target for improvement.
-- The "no hypothesis" kept entry suggests the template-default strategy may be auto-accepting trivially-passing cases without requiring an explicit hypothesis statement.
+**6. Filter `not-applicable` scores before sort**
+- Target: `gptel-benchmark-eight-keys-weakest`
+- Prevents runtime crash from `(< 'not-applicable <number>)` comparison during sort
+- Benefits: Clarity (explicit data filtering) + Vitality (latent bug discovered and fixed)
 
-## Recommendation
-
-Given the thin output, consider tightening the strategy so experiments without an explicit hypothesis aren't auto-kept, and focus future runs on the `staging-*` targets which produced no kept signals.
+## Discarded Hypotheses
+None explicitly stated (one entry: "No hypothesis stated")
 ```
 
+### Check Issues
+
+# Distillation Review
+
+Overall, this is a **clean, accurate distillation**. The structure is sound and the hypothesis descriptions are grounded in the actual patterns you'd expect from the file/function names. A few specific checks:
+
+## Verified Alignments
+
+- **H1 (Idempotency guard)**: `advice-add` idempotency is a classic Vitality/Clarity win — the mention of "re-adding protection" and "symmetric disable extraction" matches the standard `define-advice` + companion-disable pattern in modern Emacs.
+- **H3 (`eq` → `equal` + reorder)**: Caching normalized data with `eq` on hash tables or plists is a common foot-gun. Checking the cache *before* invalidating (`ensure-buffer-tables` is expensive) is the correct reorder.
+- **H4 (nil guards + `ignore-errors`)**: Good pairing — the `ignore-errors` around `file-attributes` is the standard guard for symlinks/deleted files in project discovery.
+- **H6 (`not-applicable` filter)**: Solid catch. `cl-sort` / `sort` will absolutely crash on mixed-type comparands like `'not-applicable` vs numbers. Filtering before sort is the standard fix.
+
+## Minor Issues
+
+1. **Numbering inconsistency**: The section says "Kept Hypotheses (5)" but lists **6** items (H1–H6). Either the count is wrong or H6 should fold into the discarded section, since it's framed differently ("latent bug discovered and fixed" rather than a hypothesized improvement).
+
+2. **"Discarded Hypotheses" section is empty but present**: If genuinely nothing was discarded, either drop the
+
+... (truncated)

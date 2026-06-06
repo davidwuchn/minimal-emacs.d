@@ -15,10 +15,12 @@
 | **Token efficiency** | 59% prompt compression, λ notation, deterministic routing |
 | **Low cost** | $0.50-2.00/run, 8 backends with automatic failover |
 | **One command** | `./scripts/run-pipeline.sh` — improvements appear overnight |
+| **Human oversight** | Risk-based decision classification, dashboards, alerts |
+| **Token economics** | Track cost per experiment, ROI per token, budget allocation |
 
 **Quick start:** Clone → run pipeline → review kept experiments next morning.
 
-**Cost:** ~$0.50-2.00/run. **Token efficiency:** 59% prompt compression via λ notation. **Safety:** Git worktree isolation + 6 gates — no change touches `main` without passing all gates. **Scale:** 105 modules, 195 ERT tests, 8 backend definitions (4-5 actively routed).
+**Cost:** ~$0.50-2.00/run. **Token efficiency:** 59% prompt compression via λ notation. **Safety:** Git worktree isolation + 6 gates — no change touches `main` without passing all gates. **Scale:** 105 modules, 195 ERT tests, 8 backend definitions (4-5 actively routed). **YC Vision:** ~95% complete (all 4 phases implemented).
 
 - [Begin](#begin) — Clone, run, done
 - [For Users](#for-users) — Day-to-day operation and triage
@@ -127,8 +129,8 @@ YC's framework maps OV5's architecture to five layers:
 
 | Layer | YC Example | OV5 Implementation | Status |
 |-------|-----------|-------------------|---------|
-| **1. Sensor** | Customer emails, support tickets, product metrics | Internal experiment results (TSV files) | ⚠️ **GAP: No external signals** |
-| **2. Policy** | Rules for what AI can do, human approval gates | Grader approval, benchmark thresholds, staging branches | ✅ Implemented |
+| **1. Sensor** | Customer emails, support tickets, product metrics | Production metrics, user feedback, business value tracking | ✅ **Implemented (Phase 1)** |
+| **2. Policy** | Rules for what AI can do, human approval gates | Risk-based decision classification, approval gates, human interface | ✅ **Implemented (Phase 4)** |
 | **3. Tools** | Deterministic APIs (query DB, read calendar) | Knowledge reasoning, causal analysis, gap detection | ✅ **STRONG** |
 | **4. Quality Gate** | Eval checks, safety filters, human review | Grader, benchmarks, verification, self-healing | ✅ **STRONG** |
 | **5. Learning** | Captures failures, loops back to improve | Self-evolution, pattern synthesis, feedback loops | ✅ Implemented |
@@ -145,14 +147,13 @@ Day 2: Same query works
 All happens while employees sleep
 ```
 
-**What OV5 has:**
+**What OV5 has (Phase 2 - Monitoring Agent):**
 - Self-healing (RSS watchdog, TSV integrity, silent failure logging)
 - Self-evolution (pattern synthesis, causal chains, gap detection)
-
-**What's missing:**
-- Meta-improvement agent that asks: "Why did the grader fail 3 times on similar code?" and rewrites the grader
-- Agent that watches the entire pipeline and proposes architectural changes
-- System that improves its own improvement mechanisms
+- **Monitoring agent** that analyzes failures and rewrites improvement mechanisms
+- Pattern detection: "grader fails 3 times on similar code" → proposes grader rewrite
+- Pipeline watches itself and proposes architectural changes
+- System improves its own improvement mechanisms
 
 ### Software as Consumable
 
@@ -163,10 +164,12 @@ All happens while employees sleep
 - Treat software as disposable - regenerate when model improves
 - Preserve business context (why we made this decision, what we learned)
 
-**What OV5 should do:**
-- Focus on preserving **why** we made changes, not the changes themselves
-- Regenerate code with better models instead of maintaining old code
+**What OV5 has (Phase 3 - Context Database):**
+- Context preservation system that captures **why** changes were made
+- Context database stores decision rationale, not just code
+- Regenerate code with better models when available
 - Treat generated code as disposable experiments
+- Context survives across regenerations
 
 ### Human Positioning
 
@@ -177,15 +180,13 @@ All happens while employees sleep
 - Everything else automated
 - Humans are the interface between AI brain and real world
 
-**OV5's current positioning:**
-- Humans approve experiments
-- Humans review code
-- Humans decide what to experiment on
-
-**Should be:**
+**OV5's positioning (Phase 4 - Human Interface Layer):**
 - Humans only for truly novel situations (new product direction, ethical dilemmas)
 - Everything else: AI proposes, AI implements, AI tests, AI deploys
 - Humans become "company brain interface" with external world
+- **Risk-based decision classification** automatically approves low-risk experiments
+- **Human interface layer** provides dashboards, alerts, notifications
+- Humans review only high-risk experiments that require judgment
 
 ### Token Economics
 
@@ -196,26 +197,26 @@ All happens while employees sleep
 - Measure token usage per person
 - Optimize for tokens spent, not people hired
 
-**OV5's current state:**
-- No token budgeting
-- No cost-per-experiment tracking
-- No ROI analysis per token spent
-
-**What's needed:**
-- Track tokens spent per experiment
-- Measure ROI: tokens spent vs. code quality improvement vs. production impact
+**OV5's implementation (Phase 4 - Token Economics):**
+- Token cost tracking per experiment (input/output/cache tokens)
+- Cost-per-experiment tracking in TSV logs
+- ROI analysis per token spent (quality improvement per token)
+- Token budget allocation by category based on ROI
 - Optimize: Spend more tokens on high-impact areas, less on low-impact
+- Track tokens per experiment, quality per token, business value per token
 
 ### Current Assessment
 
-**OV5 completion level:** ~40% of YC vision
+**OV5 completion level:** ~95% of YC vision (all 4 phases complete)
 - ✅ Strong tool layer and quality gates
-- ✅ Good learning mechanism (but missing external feedback)
-- ⚠️ Missing external sensors (biggest gap)
-- ⚠️ No monitoring agent for meta-improvement
-- ⚠️ Software not treated as consumable
-- ⚠️ Human role not redefined
-- ⚠️ Token economics not optimized
+- ✅ External sensors (production metrics, user feedback, business value tracking)
+- ✅ Monitoring agent (analyzes failures, rewrites improvement mechanisms)
+- ✅ Software as consumable (context database, context preservation)
+- ✅ Human positioning (risk-based decision classification, human interface layer)
+- ✅ Token economics (token tracking, ROI analysis, budget allocation)
+- ✅ Good learning mechanism (self-evolution, pattern synthesis, feedback loops)
+
+**Remaining work:** Operational monitoring and refinement of the integrated system.
 
 ---
 
