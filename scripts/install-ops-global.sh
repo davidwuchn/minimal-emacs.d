@@ -48,7 +48,7 @@ additional_implementers:
 EOF
 
 # 3. Run installer
-cd "$TMPDIR/ops" && bash install.sh 2>/dev/null || true
+cd "$TMPDIR/ops" && bash install.sh || echo "WARNING: install.sh failed, continuing with model fixes"
 
 # 4. Fix models in agent files
 AGENTS_DIR="$HOME/.config/opencode/agents"
@@ -58,7 +58,7 @@ update_model() {
     if [ -f "$file" ]; then
         local tmpf
         tmpf="$(mktemp)"
-        sed "s/^model:.*/model: $model/" "$file" > "$tmpf" && mv "$tmpf" "$file"
+        sed "s|^model:.*|model: $model|" "$file" > "$tmpf" && mv "$tmpf" "$file"
     fi
 }
 
