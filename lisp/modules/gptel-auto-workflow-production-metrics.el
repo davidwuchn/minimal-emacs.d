@@ -157,7 +157,7 @@ Stub implementation - returns 0 until ticket system is integrated."
   "Track production impact for TARGET experiment.
 EXPERIMENT-ID: unique identifier for this experiment.
 Returns plist with production metrics for TSV columns 33-39."
-  (let* ((metrics (gptel-auto-workflow--query-sentry-errors target))
+  (let* ((metrics (or (gptel-auto-workflow--query-sentry-errors target) '()))
          (error-before (or (plist-get metrics :before-rate) 0.0))
          (error-after (or (plist-get metrics :after-rate) 0.0))
          (error-delta (- error-after error-before))
