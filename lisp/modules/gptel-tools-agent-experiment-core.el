@@ -28,6 +28,8 @@
 (declare-function gptel-auto-workflow--truncate-hash "gptel-tools-agent-base")
 (declare-function gptel-auto-experiment--call-in-context "gptel-tools-agent-benchmark")
 (declare-function gptel-auto-experiment--code-quality-score "gptel-tools-agent-benchmark")
+(declare-function gptel-benchmark--complexity-penalty "gptel-benchmark-subagent")
+(declare-function gptel-benchmark--calculate-complexity-before-after "gptel-benchmark-subagent")
 (declare-function gptel-auto-experiment--repeated-focus-match "gptel-tools-agent-benchmark")
 (declare-function gptel-auto-experiment--timeout-salvage-output "gptel-tools-agent-benchmark")
 (declare-function gptel-auto-experiment-analyze "gptel-tools-agent-benchmark")
@@ -1052,9 +1054,25 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 	                                                         grade-total
 	                                                         grade-details
 	                                                         hypothesis))
-	                                                       (keep (plist-get decision :keep))
-		                                                   (reasoning (plist-get decision :reasoning))
-												   (exp-result
+                                                      (keep (plist-get decision :keep))
+                                                      (reasoning (plist-get decision :reasoning))
+                                                      ;; Gate 3.5: Complexity gate
+                                                      (complexity-metrics
+                                                       (when (and keep (fboundp 'gptel-benchmark--calculate-complexity-before-after))
+                                                         (gptel-benchmark--calculate-complexity-before-after
+                                                          (list :target target :agent-output effective-agent-output))))
+                                                      (complexity-passed
+                                                       (if (and keep complexity-metrics)
+                                                           (let ((penalty (gptel-benchmark--complexity-penalty
+                                                                          (plist-get complexity-metrics :complexity-before)
+                                                                          (plist-get complexity-metrics :complexity-after))))
+                                                             (>= penalty 0.5))
+                                                         t))
+                                                      (keep (if complexity-passed keep nil))
+                                                      (reasoning (if complexity-passed
+                                                                     reasoning
+                                                                   (concat reasoning "\n[Complexity Gate] Experiment rejected: complexity increased beyond threshold.")))
+                                                      (exp-result
 												    (list :target target :id experiment-id :hypothesis
 												          hypothesis :score-before baseline :score-after
 												          effective-score :code-quality code-quality :kept
@@ -1080,8 +1098,10 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                           :category (or (and (fboundp 'gptel-auto-workflow--categorize-target)
                                              (gptel-auto-workflow--categorize-target target))
                                         :unknown)
-                          :decision (if keep "kept" "discarded")
-                          :prompt-structure (gptel-auto-experiment--prompt-structure-score executor-prompt)
+                           :decision (if keep "kept" "discarded")
+                           :complexity-before (or (plist-get complexity-metrics :complexity-before) 0)
+                           :complexity-after (or (plist-get complexity-metrics :complexity-after) 0)
+                           :prompt-structure (gptel-auto-experiment--prompt-structure-score executor-prompt)
                            :kibcm-axis (gptel-auto-experiment--kibcm-axis hypothesis)
                           :sections-included (or (and (boundp 'gptel-auto-workflow--last-prompt-sections)
                                                       gptel-auto-workflow--last-prompt-sections)
