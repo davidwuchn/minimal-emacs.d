@@ -2166,6 +2166,30 @@ Captures executor reasoning from the dynamic variable
                 (run-with-idle-timer 30 nil (lambda () (condition-case err (gptel-auto-workflow-evolution-run-cycle) (error (message "[evolution] Timer error: %s" err))))))))
         (error
          (message "[auto-workflow] Evolution hook error: %s" err))))
+    ;; Phase 4: Human Interface Layer Integration
+    ;; Track approval decision and generate alerts for high-risk experiments
+    (when (fboundp 'gptel-auto-workflow--track-approval-decision)
+      (condition-case err
+          (let ((approval-decision (list :experiment-id experiment-id
+                                         :target target
+                                         :decision decision
+                                         :approval-type (cond ((equal decision "kept") :auto-approved)
+                                                              ((equal decision "recommend") :recommend-confirm)
+                                                              (t :require-review))
+                                         :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")
+                                         :risk-score risk-score)))
+            (gptel-auto-workflow--track-approval-decision approval-decision))
+        (error
+         (message "[auto-workflow] Decision classification error: %s" err))))
+    (when (fboundp 'gptel-auto-workflow--process-approval-decision)
+      (condition-case err
+          (progn
+            (gptel-auto-workflow--process-approval-decision experiment)
+            ;; Process any queued alerts
+            (when (fboundp 'gptel-auto-workflow--process-alert-queue)
+              (gptel-auto-workflow--process-alert-queue)))
+        (error
+         (message "[auto-workflow] Human interface error: %s" err))))
     (gptel-auto-workflow--sync-live-kept-count run-id file)))
 
 (defun gptel-auto-experiment--make-kept-result-callback (run-id exp-result log-fn callback)

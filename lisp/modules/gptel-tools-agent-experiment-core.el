@@ -1130,6 +1130,9 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 			                                                         run-id exp-result log-fn callback)))
 		                                                      (gptel-auto-workflow--assert-main-untouched)
 		                                                      (message "[auto-experiment] ✓ Committing improvement for %s" target)
+		                                                      (message "[auto-exp] About to stage and commit (auto-push=%s, use-staging=%s)"
+		                                                               gptel-auto-experiment-auto-push
+		                                                               gptel-auto-workflow-use-staging)
 		                                                      (if (and (gptel-auto-workflow--stage-worktree-changes
 			                                                            (format "Stage experiment changes for %s" target)
 			                                                            60)
@@ -1150,8 +1153,9 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                         ;; π Synthesis: queue similar targets with inherited strategy
                                                         (when (fboundp 'gptel-auto-workflow--queue-cluster-experiments)
                                                           (gptel-auto-workflow--queue-cluster-experiments target))
-                                                        (setq gptel-auto-experiment--best-score score-after
-                                                              gptel-auto-experiment--no-improvement-count 0)
+                                                         (setq gptel-auto-experiment--best-score score-after
+                                                               gptel-auto-experiment--no-improvement-count 0)
+                                                         (message "[auto-exp] Commit successful, proceeding with push/staging")
 			                                                        (if gptel-auto-experiment-auto-push
 			                                                            (progn
 			                                                              (message "[auto-experiment] Pushing to %s" experiment-branch)
@@ -1521,57 +1525,62 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                            run-id exp-result log-fn callback)))
                                                            (message "[auto-experiment] ✓ grader-bypass committing changes for %s"
                                                                     target)
-                                                            (gptel-auto-workflow--assert-main-untouched)
-                                                            (if (let ((commit-ok
-                                                                       (and (gptel-auto-workflow--stage-worktree-changes "Stage grader-bypass" 60)
-                                                                            (gptel-auto-workflow--promote-provisional-commit
-                                                                              msg "Commit grader-bypass" provisional-commit-hash
-                                                                              (gptel-auto-experiment--git-timeout)))))
-                                                                  ;; Recovery: if commit step reports failure but a commit
-                                                                  ;; actually exists (e.g., submodule restage raced with
-                                                                  ;; commit), treat as success to avoid false negatives.
-                                                                  (when (and (not commit-ok)
-                                                                             provisional-commit-hash
-                                                                             (not (equal (ignore-errors
-                                                                                           (gptel-auto-workflow--current-head-hash))
-                                                                                         provisional-commit-hash)))
-                                                                    (message "[auto-experiment] ⚠ Commit step reported failure but HEAD changed (%s → %s), treating as success"
-                                                                             (gptel-auto-workflow--truncate-hash provisional-commit-hash)
-                                                                             (gptel-auto-workflow--truncate-hash (gptel-auto-workflow--current-head-hash)))
-                                                                    (setq commit-ok t))
-                                                                  commit-ok)
-                                                               (progn
-                                                                 (setq provisional-commit-hash nil)
-                                                                 (gptel-auto-workflow--track-commit experiment-id target experiment-worktree)
-                                                                 (gptel-auto-experiment--maybe-log-staging-pending run-id exp-result log-fn)
-                                                                 (when (fboundp 'gptel-auto-workflow--apply-category-vigilance)
-                                                                   (gptel-auto-workflow--apply-category-vigilance target 'kept))
-                                                                 (setq gptel-auto-experiment--best-score
-                                                                       (/ (float grade-score) grade-total)
-                                                                       gptel-auto-experiment--no-improvement-count 0)
-                                                                 (if gptel-auto-experiment-auto-push
-                                                                     (if (gptel-auto-workflow--push-branch-with-lease
-                                                                          experiment-branch "Push grader-bypass" 180)
-                                                                         (if gptel-auto-workflow-use-staging
-                                                                             (gptel-auto-workflow--staging-flow experiment-branch finalize)
-                                                                           (funcall finalize))
-                                                                        (let ((failed (plist-put (copy-sequence exp-result) :comparator-reason "grader-bypass-push-failed")))
-                                                                          (setq failed (plist-put failed :kept nil))
-                                                                          (funcall log-fn run-id failed)
-                                                                          ;; Track token economics for this experiment
-                                                                          (when (fboundp 'gptel-token-economics--track-experiment)
-                                                                            (gptel-token-economics--track-experiment failed))
-                                                                          (funcall callback failed)))
-                                                                   (funcall finalize))
-                                                             (let ((failed (plist-put (copy-sequence exp-result) :comparator-reason "grader-bypass-commit-failed")))
-                                                               (gptel-auto-workflow--drop-provisional-commit provisional-commit-hash "Drop grader-bypass")
-                                                               (setq provisional-commit-hash nil)
-                                                                (setq failed (plist-put failed :kept nil))
-                                                                (funcall log-fn run-id failed)
-                                                                ;; Track token economics for this experiment
-                                                                (when (fboundp 'gptel-token-economics--track-experiment)
-                                                                  (gptel-token-economics--track-experiment failed))
-                                                                (funcall callback failed)))))
+                                                             (gptel-auto-workflow--assert-main-untouched)
+                                                             (let* ((stage-ok (gptel-auto-workflow--stage-worktree-changes "Stage grader-bypass" 60))
+                                                                    (promote-ok (and stage-ok
+                                                                                     (gptel-auto-workflow--promote-provisional-commit
+                                                                                      msg "Commit grader-bypass" provisional-commit-hash
+                                                                                      (gptel-auto-experiment--git-timeout))))
+                                                                    (commit-ok (or promote-ok
+                                                                                   ;; Recovery: if commit step reports failure but a commit
+                                                                                   ;; actually exists (e.g., submodule restage raced with
+                                                                                   ;; commit), treat as success to avoid false negatives.
+                                                                                   (and stage-ok
+                                                                                        provisional-commit-hash
+                                                                                        (not (equal (ignore-errors
+                                                                                                      (gptel-auto-workflow--current-head-hash))
+                                                                                                    provisional-commit-hash))))))
+                                                               (when (and (not promote-ok) stage-ok commit-ok)
+                                                                 (message "[auto-experiment] ⚠ Commit step reported failure but HEAD changed (%s → %s), treating as success"
+                                                                          (gptel-auto-workflow--truncate-hash provisional-commit-hash)
+                                                                          (gptel-auto-workflow--truncate-hash (gptel-auto-workflow--current-head-hash))))
+                                                               (if commit-ok
+                                                                   (progn
+                                                                     (setq provisional-commit-hash nil)
+                                                                     (gptel-auto-workflow--track-commit experiment-id target experiment-worktree)
+                                                                     (gptel-auto-experiment--maybe-log-staging-pending run-id exp-result log-fn)
+                                                                     (when (fboundp 'gptel-auto-workflow--apply-category-vigilance)
+                                                                       (gptel-auto-workflow--apply-category-vigilance target 'kept))
+                                                                     (setq gptel-auto-experiment--best-score
+                                                                           (/ (float grade-score) grade-total)
+                                                                           gptel-auto-experiment--no-improvement-count 0)
+                                                                     (if gptel-auto-experiment-auto-push
+                                                                         (if (gptel-auto-workflow--push-branch-with-lease
+                                                                              experiment-branch "Push grader-bypass" 180)
+                                                                             (if gptel-auto-workflow-use-staging
+                                                                                 (gptel-auto-workflow--staging-flow experiment-branch finalize)
+                                                                               (funcall finalize))
+                                                                           (let ((failed (plist-put (copy-sequence exp-result) :comparator-reason "grader-bypass-push-failed")))
+                                                                             (setq failed (plist-put failed :kept nil))
+                                                                             (funcall log-fn run-id failed)
+                                                                             ;; Track token economics for this experiment
+                                                                             (when (fboundp 'gptel-token-economics--track-experiment)
+                                                                               (gptel-token-economics--track-experiment failed))
+                                                                             (funcall callback failed)))
+                                                                       (funcall finalize)))
+                                                                 (let ((failed (plist-put (copy-sequence exp-result)
+                                                                                          :comparator-reason
+                                                                                          (if stage-ok
+                                                                                              "grader-bypass-promote-failed"
+                                                                                            "grader-bypass-stage-failed"))))
+                                                                   (gptel-auto-workflow--drop-provisional-commit provisional-commit-hash "Drop grader-bypass")
+                                                                   (setq provisional-commit-hash nil)
+                                                                   (setq failed (plist-put failed :kept nil))
+                                                                   (funcall log-fn run-id failed)
+                                                                   ;; Track token economics for this experiment
+                                                                   (when (fboundp 'gptel-token-economics--track-experiment)
+                                                                     (gptel-token-economics--track-experiment failed))
+                                                                   (funcall callback failed)))))
                                                        ;; Not a bypass — discard normally
                                                        (progn
                                                          (setq finished t)

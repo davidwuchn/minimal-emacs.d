@@ -52,7 +52,9 @@ ARGS are passed to `gptel-make-openai'."
     :key (lambda () (my/gptel-api-key "api.minimaxi.com"))
     :stream t
     :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
-    :models '(MiniMax-M3)))
+    :models '((MiniMax-M3
+               :request-params (:thinking (:type "disabled")
+                               :max_completion_tokens 8192)))))
 
 (defvar gptel--dashscope
   (gptel-make-dashscope "DashScope"
@@ -60,7 +62,15 @@ ARGS are passed to `gptel-make-openai'."
     :key (lambda () (my/gptel-api-key "coding.dashscope.aliyuncs.com"))
     :stream t
     :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
-    :models '(qwen3.6-plus qwen3.5-plus qwen3-max-2026-01-23 qwen3-coder-next qwen3-coder-plus kimi-k2.5 glm-5 glm-4.7)))
+    :models '((qwen3.6-plus
+               :request-params (:enable_thinking :json-true))
+              (qwen3.5-plus
+               :request-params (:enable_thinking :json-true))
+              qwen3-max-2026-01-23 qwen3-coder-next qwen3-coder-plus kimi-k2.5
+              (glm-5
+               :request-params (:enable_thinking :json-true))
+              (glm-4.7
+               :request-params (:enable_thinking :json-true)))))
 
 (defvar gptel--z-ai
   (gptel-make-openai "Z-AI"
@@ -69,7 +79,15 @@ ARGS are passed to `gptel-make-openai'."
     :key (lambda () (my/gptel-api-key "open.bigmodel.cn"))
     :stream t
     :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
-    :models '(glm-5.1 glm-5 glm-4.7)))
+    :models '((glm-5.1
+               :request-params (:thinking (:type "enabled")
+                                :max_tokens 65536))
+              (glm-5
+               :request-params (:thinking (:type "enabled")
+                                :max_tokens 65536))
+              (glm-4.7
+               :request-params (:thinking (:type "enabled")
+                                :max_tokens 65536)))))
 
 ;; Refresh the backend object on reload so long-lived workflow daemons pick up
 ;; contract changes like header callback arity.
@@ -108,8 +126,20 @@ ARGS are passed to `gptel-make-openai'."
     :key (lambda () (my/gptel-api-key "token-plan.cn-beijing.maas.aliyuncs.com"))
     :stream t
     :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
-    :models '(qwen3.7-max qwen3.6-plus qwen3.6-flash
-              deepseek-v4-pro deepseek-v4-flash kimi-k2.6 glm-5.1 MiniMax-M2.5)))
+    :models '((qwen3.7-max
+               :request-params (:enable_thinking :json-true))
+              (qwen3.6-plus
+               :request-params (:enable_thinking :json-true))
+              (qwen3.6-flash
+               :request-params (:enable_thinking :json-true))
+              (deepseek-v4-pro
+               :request-params (:enable_thinking :json-true))
+              (deepseek-v4-flash
+               :request-params (:enable_thinking :json-true))
+              kimi-k2.6
+              (glm-5.1
+               :request-params (:enable_thinking :json-true))
+              MiniMax-M2.5)))
 
 (defvar gptel--cf-gateway
   (gptel-make-openai "CF-Gateway"
@@ -146,6 +176,17 @@ Falls back to reasoning_content when content is nil (CF-Gateway path)."
     result))
 
 (advice-add #'gptel--parse-response :around #'my/gptel--capture-reasoning-content)
+
+;;; Self-Evolving Thinking Mode (infrastructure)
+;;;
+;;; gptel-ext-backend-registry.el tracks :thinking-policy per model.
+;;; gptel-backend-registry--record-thinking-outcome collects experiment data.
+;;; When enough data exists for 'auto policy models (min 5 each on/off),
+;;; gptel-backend-registry--auto-thinking returns the better policy.
+;;;
+;;; Current safe defaults (thinking OFF) are in the backend model definitions.
+;;; To evolve: wire gptel-backend-registry--record-thinking-outcome into the
+;;; experiment completion callback, then flip policy from 'off to 'auto.
 
 (provide 'gptel-ext-backends)
 ;;; gptel-ext-backends.el ends here

@@ -11,7 +11,7 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 181 experiments (4% keep rate).*
+*Consolidated from 185 experiments (4% keep rate).*
 
 **Performance:** 7 kept / 1 discarded / 10 failed (EXTRACTED — from TSV)
 
@@ -52,62 +52,11 @@ were misleading.
 
 
 
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*6 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-## Distillation
-
-**Strategy**: Template-default across 181 experiments spanning 20 targets (Emacs Lisp gptel auto-workflow, tools-agent, benchmark, and staging modules).
-
-**Kept Hypotheses** (8 surviving, thematically clustered around *φ Vitality* + *fractal Clarity* metrics):
-
-1. **Idempotency + symmetry** — Guard against re-adding active advice; extract a symmetric disable function. *(Dual-metric: progressive improvement + explicit assumptions.)*
-2. **Bug fix (messaging + validation)** — Correct misleading message; add directory-existence validation.
-3. **Cache: `eq` → `equal`** — Switch identity comparison to content comparison in `gptel-auto-workflow--normalized-projects`; reorder to check cache before `ensure-buffer-tables`. *(Assumption: invalidation should be content-based.)*
-4. **Buffer lookup with nil guards** — Extract explicit validation sequence; make nil-FSM-state handling visible.
-5. **Adaptive error recovery** — Wrap `file-attributes` in `ignore-errors`; add early guard for empty project lists.
-6. **Simplify mode-line access** — Replace `format-mode-line` with direct `mode-name`; swap `if` for `when`; add nil-safety for buffer iteration.
-7. **Score-alist `not-applicable` filter** — Pre-filter before sort in `gptel-benchmark-eight-keys-weakest` to prevent `<` comparison crash on symbols. *(Latent-bug-driven.)*
-
-**Discarded**: 0 (template-default discarded none).
-
-**Pattern**: All keepers are *small, surgical, dual-metric* changes — no architectural rewrites. Two classes dominate: (a) **hardening** (idempotency, nil guards, content-equality, error recovery, filter-before-sort) and (b) **clarification** (extract symmetric pair, reorder for intent, drop redundant `format-mode-line`). The `not-applicable` hypothesis is the only one explicitly triggered by a discovered runtime defect.
+nil
 ```
 
-### Check Issues
-
-# Review of Distillation
-
-## 🔴 Critical Inconsistency
-
-**Count mismatch**: Header states "8 surviving, thematically clustered" — the numbered list contains **only 7** hypotheses (1–7). Either the count is wrong, or one hypothesis is missing. If #2's "messaging + validation" actually represents two sub-hypotheses that got merged, that would reconcile the count — but it's not labeled that way.
-
-## 🟡 Pattern-Classification Math
-
-The "Pattern" section claims two classes dominate, with parenthetical examples:
-
-- **(a) hardening** — 5 items listed: idempotency, nil guards, content-equality, error recovery, filter-before-sort
-- **(b) clarification** — 3 items listed: extract symmetric pair, reorder for intent, drop redundant `format-mode-line`
-
-5 + 3 = 8, but you only have 7 hypotheses. The reconciliation is that **#1 and #3 are double-counted** (each appears in both classes). That works, but it means:
-- **Hypothesis #2 (bug fix: messaging + validation) is unclassified** by the pattern. It fits hardening loosely (validation), but isn't enumerated.
-- The phrasing "two classes dominate" obscures the fact that they overlap in 2/7 cases.
-
-## 🟡 Inconsistent Metric Tagging
-
-The header advertises "*φ Vitality* + *fractal Clarity* metrics" but only **#1 explicitly carries a "Dual-metric" tag**. The others use varied ad-hoc labels:
-
-| # | Tag |
-|---|---|
-| 1 | "Dual-metric: progressive improvement + explicit assumptions" |
-| 2 | (none) |
-| 3 | "Assumption: invalidation should be content-based" |
-| 4
-
-... (truncated)

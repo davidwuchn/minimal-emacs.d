@@ -901,9 +901,10 @@ reviewer must inspect them via tools when needed."
   :safe #'integerp
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-max-per-target 2
+(defcustom gptel-auto-experiment-max-per-target 4
   "Maximum experiments per target.
-Increased to 7 to allow broader exploration across 9 axes."
+Increased from 2 to 4 for better exploration. The adaptive system may
+increase this further based on frontier size and target complexity."
   :type 'integer
   :safe #'integerp
   :group 'gptel-tools-agent)
