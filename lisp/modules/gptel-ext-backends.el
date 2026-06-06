@@ -129,7 +129,11 @@ ARGS are passed to `gptel-make-openai'."
                :request-params (:enable_thinking :json-false))
               (qwen3.6-flash
                :request-params (:enable_thinking :json-false))
-              deepseek-v4-pro deepseek-v4-flash kimi-k2.6
+              (deepseek-v4-pro
+               :request-params (:enable_thinking :json-false))
+              (deepseek-v4-flash
+               :request-params (:enable_thinking :json-false))
+              kimi-k2.6
               (glm-5.1
                :request-params (:enable_thinking :json-false))
               MiniMax-M2.5)))
