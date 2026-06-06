@@ -180,7 +180,8 @@ Returns plist of optimal allocation."
 
 (defun gptel-token-economics--generate-report ()
   "Generate comprehensive economics report.
-Returns plist with :total-cost, :total-roi, :category-breakdown, :optimization-recommendations."
+Returns plist with :total-cost, :total-roi, :category-breakdown,
+:optimization-recommendations."
   (let* ((records gptel-token-economics--records)
          (total-cost (apply #'+ (mapcar (lambda (r) (or (plist-get r :cost) 0.0))
                                         records)))
