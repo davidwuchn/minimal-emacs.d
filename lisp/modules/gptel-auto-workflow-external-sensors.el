@@ -244,7 +244,8 @@ ARGS may include :start-time and :end-time."
 (defun gptel-auto-workflow--calculate-feedback-impact (before after)
   "Calculate user satisfaction improvement from BEFORE to AFTER.
 BEFORE and AFTER are plists with :satisfaction-rate, :negative, etc.
-Returns plist with :satisfaction-improvement-pct, :complaints-reduced, :direction."
+Returns plist with :satisfaction-improvement-pct,
+:complaints-reduced, :direction."
   (let* ((before-metrics (if (listp (car before)) (car before) before))
          (after-metrics (if (listp (car after)) (car after) after))
          (satisfaction-before (or (plist-get before-metrics :satisfaction-rate) 0.0))
@@ -358,7 +359,7 @@ Returns weighted score 0.0-1.0."
   "Calculate business value ROI for EXPERIMENT.
 Returns plist with :roi-percentage and :value-per-dollar."
   (let* ((cost-usd (or (plist-get experiment :cost-usd) 0.0))
-         (business-value-score (or (plist-get experiment :business-value-score) 0.0))
+          (_business-value-score (or (plist-get experiment :business-value-score) 0.0))
          (errors-reduced (or (plist-get experiment :errors-reduced) 0))
          (support-tickets-reduced (or (plist-get experiment :support-tickets-reduced) 0))
          (development-hours-saved (or (plist-get experiment :development-hours-saved) 0))
@@ -413,7 +414,8 @@ Returns sorted list of experiments."
 
 (defun gptel-auto-workflow--generate-business-impact-report (experiments)
   "Generate business impact report for EXPERIMENTS.
-Returns plist with :total-business-value, :total-cost, :overall-roi, :top-performing-experiments."
+Returns plist with :total-business-value, :total-cost,
+:overall-roi, :top-performing-experiments."
   (let ((total-business-value 0.0)
         (total-cost 0.0)
         (sorted-experiments (sort (copy-sequence experiments)
