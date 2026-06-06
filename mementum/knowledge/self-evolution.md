@@ -10,9 +10,15 @@ Auto-generated from experiment history. Injected into researcher prompts.
 
 ## Causal Chain Analysis
 
-*Insufficient experiment data for causal chain analysis.*
+*No multi-hop causal chains detected in experiment history.*
 
 ## Experiment Gap Detection
 
-*Insufficient timestamped experiments for gap detection.*
+*36 gap(s) detected between experiment intervals:*
+
+- Gap between exp nil and exp nil (56604s)
+- Gap between exp nil and exp nil (10659s)
+- Gap between exp nil and exp nil (3594s)
+- Gap between exp nil and exp nil (8220s)
+- Gap between exp nil and exp nil (1549s)
 

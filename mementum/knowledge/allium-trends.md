@@ -1,8 +1,11 @@
 ### Allium Issue Trends
 **Recurring patterns** across all strategies:
 
-- **No reproducibility pointer.**: 1 occurrence(s)
-- **H1 is under-specified.**: 1 occurrence(s)
-- **Staging items are unaccounted for.**: 1 occurrence(s)
-- **`Discarded: None recorded` is the red flag.**: 1 occurrence(s)
+- **What's the test surface for H7?**: 1 occurrence(s)
+- **Does H6 really belong as a "cleanup that can ride along"?**: 1 occurrence(s)
+- **Is the 7-hypothesis set exhaustive within its scope?**: 1 occurrence(s)
+
+**Regression warnings** (1 strategies with increased issues):
+
+- `template-default`: 0 → 3 issues (worse)
 

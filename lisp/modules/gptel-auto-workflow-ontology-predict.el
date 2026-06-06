@@ -235,8 +235,49 @@ ARGS: (target experiment-id max-experiments ...)."
                        "template-default"))
          (preflight (gptel-auto-workflow--experiment-preflight strategy target)))
     (if (plist-get preflight :run)
-        (apply orig-fun args)
-      ;; Skip experiment, return synthetic failure result
+        ;; Preflight passed, now check decision classification (Phase 4)
+        (if (fboundp 'gptel-auto-workflow--classify-experiment-risk)
+            (let* ((experiment-plist (list :target target
+                                           :strategy strategy
+                                           :experiment-id (cadr args)))
+                   ;; Read context from context database if available
+                   (context (when (fboundp 'gptel-auto-workflow--get-context)
+                             (condition-case nil
+                                 (gptel-auto-workflow--get-context (cadr args))
+                               (error nil))))
+                   (risk-level (gptel-auto-workflow--classify-experiment-risk
+                               (append experiment-plist
+                                       (when context
+                                         (list :context context))))))
+              (cond
+               ;; Low risk: auto-approve, run experiment
+               ((eq risk-level :low-risk)
+                (message "[decision] LOW RISK: auto-approving %s" target)
+                (apply orig-fun args))
+               ;; Medium risk: run but flag for human review
+               ((eq risk-level :medium-risk)
+                (message "[decision] MEDIUM RISK: running %s (flagged for review)" target)
+                (apply orig-fun args))
+               ;; High risk: skip, require human review
+               ((eq risk-level :high-risk)
+                (message "[decision] HIGH RISK: skipping %s (requires human review)" target)
+                (when (> (length args) 5)
+                  (let ((callback (nth 5 args)))
+                    (when (functionp callback)
+                      (funcall callback
+                               (list :target target
+                                     :decision "discarded"
+                                     :reason "high-risk: requires human review"
+                                     :risk-level :high-risk
+                                     :skipped t)))))
+                nil)
+               ;; Unknown risk level: run but flag
+               (t
+                (message "[decision] UNKNOWN RISK: running %s (flagged for review)" target)
+                (apply orig-fun args))))
+          ;; Decision classification not available, just run
+          (apply orig-fun args))
+      ;; Preflight failed, skip experiment
       (let ((reason (plist-get preflight :reason)))
         (message "[onto-preflight] SKIPPED %s: %s" target reason)
         ;; Suggest alternative
