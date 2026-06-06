@@ -7,7 +7,7 @@ set -euo pipefail
 
 REPO_URL="https://github.com/DasDigitaleMomentum/opencode-processing-skills.git"
 TMPDIR="$(mktemp -d)"
-trap "rm -rf $TMPDIR" EXIT
+trap 'rm -rf "$TMPDIR"' EXIT
 
 echo "=== OpenCode Processing Skills - Global Install ==="
 
