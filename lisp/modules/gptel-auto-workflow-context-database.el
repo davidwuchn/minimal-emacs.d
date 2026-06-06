@@ -16,6 +16,8 @@
 (require 'cl-lib)
 (require 'json)
 
+(declare-function gptel-auto-workflow--project-root "gptel-tools-agent-benchmark")
+
 ;; ============================================================================
 ;; Configuration and State
 ;; ============================================================================
@@ -89,7 +91,7 @@ Saves all in-memory stores to survive daemon restarts."
 Restores all in-memory stores from persistent storage."
   (let ((file (gptel-auto-workflow--context-db-file-path)))
     (when (and file (file-exists-p file))
-      (condition-case err
+    (condition-case err
           (let ((data (json-read-file file)))
             (setq gptel-auto-workflow--context-store
                   (gptel-auto-workflow--alist-to-hash-table
@@ -182,7 +184,7 @@ Used by production.el via fboundp guard.")
       (let ((merged (append module-context existing)))
         (puthash module merged gptel-auto-workflow--module-context-store)))))
 
-(defun gptel-auto-workflow--context-db-query (query params)
+(defun gptel-auto-workflow--context-db-query (_query params)
   "Execute database QUERY with PARAMS.
 Queries the in-memory hash table stores based on QUERY type.
 QUERY can be :module, :time-range, :all-modules, :module-age, :model-version.
@@ -206,7 +208,7 @@ PARAMS is a plist with query-specific parameters."
 (defun gptel-auto-workflow--query-context-by-module (module)
   "Query all contexts for MODULE."
   (let ((results nil))
-    (maphash (lambda (id ctx)
+    (maphash (lambda (_id ctx)
                (when (string= (plist-get ctx :target) module)
                  (push ctx results)))
              gptel-auto-workflow--context-store)
@@ -215,7 +217,7 @@ PARAMS is a plist with query-specific parameters."
 (defun gptel-auto-workflow--query-context-by-time-range (start-time end-time)
   "Query contexts between START-TIME and END-TIME."
   (let ((results nil))
-    (maphash (lambda (id ctx)
+    (maphash (lambda (_id ctx)
                (let ((timestamp (plist-get ctx :timestamp)))
                  (when (and timestamp
                             (not (string< timestamp start-time))
@@ -250,7 +252,7 @@ Returns plist with :modules-count, :experiments-count, :recent-decisions."
         (recent-decisions nil))
     ;; Get last 5 experiment contexts
     (let ((contexts nil))
-      (maphash (lambda (id ctx) (push ctx contexts))
+      (maphash (lambda (_id ctx) (push ctx contexts))
                gptel-auto-workflow--context-store)
       (setq recent-decisions
             (mapcar (lambda (ctx)
@@ -348,7 +350,7 @@ Scans lisp/modules directory for .el files."
 Checks git history for first commit date."
   (let ((default-directory (gptel-auto-workflow--project-root))
         (result nil))
-    (condition-case err
+    (condition-case _err
         (let ((output (shell-command-to-string
                        (format "git log --format='%%aI' --diff-filter=A --follow -- %s | tail -1" module))))
           (when (and output (> (length output) 0))
@@ -394,7 +396,7 @@ ARGS may include :max-age-days and :require-newer-model."
           (push module candidates))))
     candidates))
 
-(defun gptel-auto-workflow--estimate-regeneration-value (module current-metrics expected-improvements)
+(defun gptel-auto-workflow--estimate-regeneration-value (_module current-metrics expected-improvements)
   "Estimate value of regenerating MODULE.
 CURRENT-METRICS and EXPECTED-IMPROVEMENTS are plists."
   (let* ((perf-current (plist-get current-metrics :performance))

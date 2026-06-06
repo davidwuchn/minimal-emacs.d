@@ -27,12 +27,22 @@
 (defvar gptel-auto-workflow--dashboard-cache nil
   "Cached dashboard data.")
 
-(defvar gptel-auto-workflow--notification-thresholds
+(defconst gptel-auto-workflow--notification-thresholds
+  '((high-risk . 0.7)
+    (medium-risk . 0.3)
+    (low-risk . 0.0))
+  "Risk thresholds for notification triggering.")
+
+(defvar gptel-auto-workflow--notification-policy
   '(:high-risk t :medium-risk nil :low-risk nil)
   "Thresholds for when to send notifications.
 :high-risk - always notify for high-risk decisions
 :medium-risk - notify for medium-risk when t
 :low-risk - notify for low-risk when t")
+
+;; Forward declaration from decision-classification.el
+(defvar gptel-auto-workflow--approval-history nil
+  "Approval history for experiments.")
 
 (defvar gptel-auto-workflow--notification-methods
   '(:message)
