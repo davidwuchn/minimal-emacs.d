@@ -1,0 +1,1 @@
+Fixed dead code in gptel-auto-workflow-ontology-router.el moderator-drift-lens function. `(cl-incf consecutive 0)` is a no-op (increments by 0). The actual reset was on the next line `(setq consecutive 0)`. Removed the dead `cl-incf` line, keeping only the `setq`. Edge case: `cl-incf` with 0 is always dead code since it adds 0 to the variable.

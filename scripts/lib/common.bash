@@ -118,13 +118,15 @@ require_emacs() {
 # ═══════════════════════════════════════════════════════════════════════════
 
 run_batch_bootstrap() {
+    local yaml_dir
+    yaml_dir=$(find "$DIR/var/elpa" -maxdepth 1 -type d -name 'yaml-*' | head -n1)
     emacs --batch -Q \
         -L "$DIR" \
         -L "$DIR/lisp" \
         -L "$DIR/lisp/modules" \
         -L "$DIR/packages/gptel" \
         -L "$DIR/packages/gptel-agent" \
-        -L "$DIR/var/elpa/yaml-1.2.3" \
+        ${yaml_dir:+-L "$yaml_dir"} \
         -l "$DIR/tests/test-auto-workflow-batch.el" \
         -f test-auto-workflow-batch-run
 }

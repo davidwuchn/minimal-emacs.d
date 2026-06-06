@@ -21,7 +21,20 @@ SUBCOMMAND="${1:-all}"
 touch_minutes_ago() {
     local minutes="$1"
     local path="$2"
-    touch -d "-${minutes} minutes" "$path"
+    if touch -d "-${minutes} minutes" "$path" 2>/dev/null; then
+        return
+    fi
+    # BSD touch fallback (macOS)
+    local ts
+    ts=$(date -v-${minutes}M +%Y%m%d%H%M.%S 2>/dev/null)
+    if [ -z "$ts" ]; then
+        ts=$(date -d "${minutes} minutes ago" +%Y%m%d%H%M.%S 2>/dev/null)
+    fi
+    if [ -n "$ts" ]; then
+        touch -t "$ts" "$path"
+    else
+        touch "$path"
+    fi
 }
 
 # ═══════════════════════════════════════════════════════════════════════════

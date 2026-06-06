@@ -46,7 +46,7 @@ on shared plists where `copy-sequence' preserves old keys."
     (plist-put cleaned key value)))
 
 (defvar gptel-auto-workflow--research-strategies
-  '("own-repos-first" "deep-external" "quick-own-only" "topic-specific")
+  '("own-repos-first" "deep-external" "quick-own-only" "topic-specific" "subtractive")
   "Available research strategies to benchmark.")
 
 (defvar gptel-auto-workflow--research-benchmark-results nil
@@ -1385,14 +1385,19 @@ Faster than `benchmark-all-research-strategies` which calls LLMs."
                        (if (string= source "external")
                            (+ 0.3 (* confidence 0.3) (if has-urls 0.2 0) (* step-count 0.02))
                          (+ 0.2 (* confidence 0.3) (if has-urls 0.1 0))))
-                      ;; quick-own-only: only own-repo, penalize external
-                      ((string= strategy "quick-own-only")
-                       (if (string= source "own-repo")
-                           (+ 0.5 (* confidence 0.3) (if has-urls 0.2 0))
-                         0.05))
-                      ;; topic-specific: assume medium performance everywhere
-                      (t
-                       (+ 0.25 (* confidence 0.3) (if has-urls 0.15 0)))))))
+                       ;; quick-own-only: only own-repo, penalize external
+                       ((string= strategy "quick-own-only")
+                        (if (string= source "own-repo")
+                            (+ 0.5 (* confidence 0.3) (if has-urls 0.2 0))
+                          0.05))
+                       ;; subtractive: high score for high-complexity targets with removal potential
+                       ((string= strategy "subtractive")
+                        (if (string= source "own-repo")
+                            (+ 0.3 (* confidence 0.3) (if has-urls 0.1 0) (* step-count 0.01))
+                          (+ 0.2 (* confidence 0.2) (if has-urls 0.1 0))))
+                       ;; topic-specific: assume medium performance everywhere
+                       (t
+                        (+ 0.25 (* confidence 0.3) (if has-urls 0.15 0)))))))
             (setq strategy-score (+ strategy-score simulated-quality))
             (setq strategy-tokens (+ strategy-tokens tokens))
             (setq trace-count (1+ trace-count))))

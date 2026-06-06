@@ -126,8 +126,10 @@ Returns parsed JSON or nil on failure."
   "Calculate error rate from Sentry STATS-DATA.
 Returns float 0.0-1.0 representing error rate."
   (if (and stats-data (listp stats-data))
-      (let* ((events (let ((d (or (ignore-errors (plist-get stats-data :data)) '()))) (if (listp d) d '())))
-             (total-events (or (ignore-errors (apply #'+ (mapcar #'cadr events))) 0))
+      (let* ((raw-events (or (plist-get stats-data :data) '()))
+             ;; EDGE CASE: parsed JSON items may not be lists; filter to prevent cadr crash
+             (events (delq nil (mapcar (lambda (e) (when (listp e) e)) raw-events)))
+             (total-events (apply #'+ (mapcar #'cadr events)))
              (time-span (length events))
              ;; Normalize to rate per day
              (rate (if (> time-span 0)
@@ -165,7 +167,7 @@ Returns plist with production metrics for TSV columns 33-39."
          (tickets-reduced (gptel-auto-workflow--query-support-tickets target))
          (business-value (gptel-auto-workflow--calculate-business-value
                           error-delta satisfaction-delta tickets-reduced))
-         (risk-score (gptel-auto-workflow--calculate-risk-score
+         (risk-score (gptel-auto-workflow--calculate-production-risk-score
                       error-delta satisfaction-delta tickets-reduced)))
     (list :prod-error-rate-before error-before
           :prod-error-rate-after error-after
@@ -189,7 +191,7 @@ Weights: error-reduction (40%), support-tickets (30%), satisfaction (30%)."
        (* 0.3 ticket-score)
        (* 0.3 satisfaction-score))))
 
-(defun gptel-auto-workflow--calculate-risk-score (error-delta satisfaction-delta tickets-reduced)
+(defun gptel-auto-workflow--calculate-production-risk-score (error-delta satisfaction-delta tickets-reduced)
   "Calculate risk score for approval threshold.
 ERROR-DELTA: change in error rate.
 SATISFACTION-DELTA: change in user satisfaction.
@@ -235,7 +237,7 @@ Returns plist with production metrics or default values if unavailable."
 (defun gptel-auto-workflow--approval-threshold (experiment)
   "Determine approval type based on EXPERIMENT risk score.
 Returns :auto (risk < 0.3), :recommend (0.3-0.7), or :required (> 0.7)."
-  (let ((risk (or (and experiment (plist-get experiment :risk-score)) 0.0)))
+  (let ((risk (or (and experiment (ignore-errors (plist-get experiment :risk-score))) 0.0)))
     (cond
      ((< risk 0.3) :auto)
      ((< risk 0.7) :recommend)

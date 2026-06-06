@@ -831,8 +831,124 @@ Returns 0.0-1.0 where 1.0 = simple code (≤2 branches per function avg)."
        ((<= avg-complexity 2.0) 0.9)
        ((<= avg-complexity 3.0) 0.7)
        ((<= avg-complexity 5.0) 0.5)
-       ((<= avg-complexity 8.0) 0.3)
-       (t 0.1)))))
+        ((<= avg-complexity 8.0) 0.3)
+        (t 0.1)))))
+
+(defun gptel-benchmark--complexity-penalty (complexity-before complexity-after)
+  "Calculate complexity penalty for grading.
+Returns a penalty factor (0.0-1.0) based on complexity increase.
+- ≤10% increase: no penalty (1.0)
+- >10% increase: penalty = max(0, 1 - (delta - 0.1) * 2)
+- Decrease or no change: bonus (1.0)"
+  (let ((delta (if (and complexity-before (> complexity-before 0))
+                   (/ (- complexity-after complexity-before) (float complexity-before))
+                 0)))
+    (cond
+     ;; Complexity decreased or stayed same: bonus
+     ((<= delta 0) 1.0)
+     ;; Small increase (≤10%): no penalty
+     ((<= delta 0.1) 1.0)
+     ;; Moderate increase (10-30%): linear penalty
+     ((<= delta 0.3)
+      (max 0.0 (- 1.0 (* (- delta 0.1) 2.0))))
+     ;; Large increase (>30%): severe penalty
+     (t 0.0))))
+
+(defun gptel-benchmark--calculate-complexity (code)
+  "Calculate cyclomatic complexity for CODE.
+Returns estimated complexity based on conditionals count."
+  (with-temp-buffer
+    (insert code)
+    (goto-char (point-min))
+    (let ((count 0))
+      (while (re-search-forward
+              "(\\(if\\|cond\\|when\\|unless\\|pcase\\|cl-case\\|and\\|or\\)\\>"
+              nil t)
+        (cl-incf count))
+      count)))
+
+(defun gptel-benchmark--calculate-lines-removed (before-code after-code)
+  "Calculate net lines removed between BEFORE-CODE and AFTER-CODE.
+Returns positive number if lines were removed, negative if added."
+  (let ((before-lines (with-temp-buffer
+                        (insert before-code)
+                        (count-lines (point-min) (point-max))))
+        (after-lines (with-temp-buffer
+                       (insert after-code)
+                       (count-lines (point-min) (point-max)))))
+    (- before-lines after-lines)))
+
+(defun gptel-benchmark--generate-narrative (experiment)
+  "Generate human-readable narrative for EXPERIMENT.
+Returns a string explaining what changed and why."
+  (let* ((target (plist-get experiment :target))
+         (hypothesis (or (plist-get experiment :hypothesis) "No hypothesis stated"))
+         (score-before (or (plist-get experiment :score-before) 0))
+         (score-after (or (plist-get experiment :score-after) 0))
+         (complexity-before (or (plist-get experiment :complexity-before) 0))
+         (complexity-after (or (plist-get experiment :complexity-after) 0))
+         (decision (or (plist-get experiment :decision) "unknown"))
+         (lines-removed (or (plist-get experiment :lines-removed) 0)))
+    (format "## Experiment: %s\n\n**Target:** %s\n**Hypothesis:** %s\n**Decision:** %s\n**Score:** %.2f → %.2f (Δ %.2f)\n**Complexity:** %.2f → %.2f\n**Lines removed:** %d\n\n### Narrative\n\n%s"
+            (or (plist-get experiment :id) "unknown")
+            target
+            hypothesis
+            decision
+            score-before score-after (- score-after score-before)
+            complexity-before complexity-after
+            lines-removed
+            (if (string= decision "kept")
+                (format "This experiment was kept because it improves the codebase while maintaining or reducing complexity. %s"
+                        (if (> lines-removed 0)
+                            (format "It removed %d lines, demonstrating the subtractive engineering principle." lines-removed)
+                          "It maintains clarity while improving functionality."))
+              (format "This experiment was discarded. Reason: %s"
+                      (or (plist-get experiment :grader-reason)
+                          (plist-get experiment :comparator-reason)
+                          "Unknown"))))))
+
+(defun gptel-benchmark--calculate-complexity-before-after (experiment)
+  "Calculate complexity before and after for EXPERIMENT.
+Returns a plist with :complexity-before and :complexity-after."
+  (let* ((agent-output (or (plist-get experiment :agent-output) ""))
+         (target (plist-get experiment :target))
+         (target-file (and target (expand-file-name target)))
+         (before-code (if (and target-file (file-exists-p target-file))
+                          (with-temp-buffer
+                            (insert-file-contents target-file)
+                            (buffer-string))
+                        ""))
+         (before-complexity (gptel-benchmark--calculate-complexity before-code))
+         (after-complexity (gptel-benchmark--calculate-complexity agent-output)))
+    (list :complexity-before before-complexity
+          :complexity-after after-complexity)))
+
+(defun gptel-benchmark--update-experiment-complexity (experiment)
+  "Update EXPERIMENT plist with complexity metrics.
+Returns updated experiment plist."
+  (let* ((complexity-data (gptel-benchmark--calculate-complexity-before-after experiment))
+         (agent-output (or (plist-get experiment :agent-output) ""))
+         (target (plist-get experiment :target))
+         (target-file (and target (expand-file-name target)))
+         (before-code (if (and target-file (file-exists-p target-file))
+                          (with-temp-buffer
+                            (insert-file-contents target-file)
+                            (buffer-string))
+                        "")))
+    (plist-put experiment :complexity-before (plist-get complexity-data :complexity-before))
+    (plist-put experiment :complexity-after (plist-get complexity-data :complexity-after))
+    (plist-put experiment :lines-removed
+               (gptel-benchmark--calculate-lines-removed before-code agent-output))
+    experiment))
+
+(defun gptel-benchmark--complexity-gate (experiment)
+  "Evaluate complexity gate for EXPERIMENT.
+Returns t if experiment passes complexity gate, nil otherwise."
+  (let* ((complexity-data (gptel-benchmark--calculate-complexity-before-after experiment))
+         (before (plist-get complexity-data :complexity-before))
+         (after (plist-get complexity-data :complexity-after))
+         (penalty (gptel-benchmark--complexity-penalty before after)))
+    (>= penalty 0.5)))
 
 (defun gptel-benchmark--positive-patterns-score (code &optional func-data)
   "Score positive patterns in CODE.
