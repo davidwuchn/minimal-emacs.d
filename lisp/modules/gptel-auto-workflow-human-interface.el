@@ -193,8 +193,8 @@
 
 (defun gptel-auto-workflow--format-notification-text (alert)
   "Format ALERT as human-readable text."
-  (let* ((level (plist-get alert :level))
-         (message (plist-get alert :message))
+  (let* ((level (or (plist-get alert :level) :unknown))
+         (message (or (plist-get alert :message) "No message"))
          (experiment-id (plist-get alert :experiment-id))
          (target (plist-get alert :target)))
     (format "[%s] %s (ID: %s, Target: %s)"
