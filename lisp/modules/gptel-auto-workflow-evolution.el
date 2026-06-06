@@ -279,7 +279,7 @@ Caches when MAX-AGE-DAYS is nil for cycle-local reuse."
                                                             ((<= field-count 20) 20)
                                                             ((<= field-count 24) 24)
                                                             (t 27)))
-                                      (experiment-id (nth 0 fields))
+                                      (_experiment-id (nth 0 fields))
                                       (target (nth 1 fields))
                                      (hypothesis (nth 2 fields))
                                      (score-before (string-to-number (or (nth 3 fields) "0")))
