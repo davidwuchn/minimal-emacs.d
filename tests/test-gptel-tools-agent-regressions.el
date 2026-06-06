@@ -21086,8 +21086,9 @@ and allow experiment loop to continue instead of stalling."
       (should error-caught))))
 
 (ert-deftest regression/experiment-loop/aux-subagent-callback-recovery-writes-tsv ()
-  "When aux subagent callback fails, should write error to TSV.
-P0.8 FIX: Fallback path writes tool-error result to unblock experiment loop."
+  "When aux subagent callback fails, should not retry the broken callback.
+P0.8 FIX: Log error and let experiment loop timeout naturally instead of
+trying to call the broken callback again."
   (require 'gptel-tools-agent-benchmark)
   ;; This test verifies the recovery mechanism exists in the code
   (let ((code (with-temp-buffer
@@ -21095,10 +21096,12 @@ P0.8 FIX: Fallback path writes tool-error result to unblock experiment loop."
                  (expand-file-name "lisp/modules/gptel-tools-agent-benchmark.el"
                                    user-emacs-directory))
                 (buffer-string))))
-    ;; Verify the fallback doesn't try to call the broken callback again
-    (should (string-match-p "fallback callback also failed" code))
-    ;; Verify it logs the error
-    (should (string-match-p "callback error caught and recovered" code))))
+    ;; Verify the fix does NOT try to call the broken callback again
+    (should-not (string-match-p "fallback callback also failed" code))
+    ;; Verify it logs that the callback is broken
+    (should (string-match-p "callback is broken" code))
+    ;; Verify it mentions timeout or continue
+    (should (string-match-p "experiment will timeout or continue" code))))
 
 (ert-deftest regression/persist-status/handles-nil-status-file ()
   "persist-status should handle nil status file gracefully.
