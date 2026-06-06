@@ -204,6 +204,12 @@ else
     echo "WARNING: SKILL.md not found at ${SKILL_SRC}"
 fi
 
+# 7b. Write cowork instructions with runtime-specific paths
+if [[ -n "${COWORK_INSTRUCTIONS}" ]]; then
+    echo "${COWORK_INSTRUCTIONS}" > "${OPENCODE_SKILLS}/COWORK.md"
+    echo "Cowork instructions → ${OPENCODE_SKILLS}/COWORK.md"
+fi
+
 echo ""
 echo "=== Installation Complete ==="
 echo "Models: @maintainer→kimi-k2.6, delegate→deepseek-v4-pro, strong→gpt-5.4, gpt→gpt-5.5, opus→claude-opus-4.8, qwen→qwen3.7-max, creative→kimi-k2.6, fast→deepseek-v4-flash, implementer→glm-5.1"

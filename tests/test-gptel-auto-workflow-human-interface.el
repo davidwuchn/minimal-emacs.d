@@ -236,15 +236,19 @@
 (ert-deftest test-human-interface/generate-daily-report ()
   "Should generate daily summary report."
   (with-clean-human-interface-state
-   (setq gptel-auto-workflow--approval-history
-         '((:experiment-id "exp-001" :approval-type :auto-approved :timestamp "2026-06-06T10:00:00Z")
-           (:experiment-id "exp-002" :approval-type :recommend-confirm :timestamp "2026-06-06T11:00:00Z")
-           (:experiment-id "exp-003" :approval-type :require-review :timestamp "2026-06-06T12:00:00Z")))
-   (let ((report (gptel-auto-workflow--generate-daily-report)))
-     (should (plist-get report :date))
-     (should (plist-get report :total-experiments))
-     (should (plist-get report :breakdown))
-     (should (= 3 (plist-get report :total-experiments))))))
+   (let* ((today (format-time-string "%Y-%m-%d"))
+          (ts1 (concat today "T10:00:00Z"))
+          (ts2 (concat today "T11:00:00Z"))
+          (ts3 (concat today "T12:00:00Z")))
+     (setq gptel-auto-workflow--approval-history
+           (list (list :experiment-id "exp-001" :approval-type :auto-approved :timestamp ts1)
+                 (list :experiment-id "exp-002" :approval-type :recommend-confirm :timestamp ts2)
+                 (list :experiment-id "exp-003" :approval-type :require-review :timestamp ts3)))
+     (let ((report (gptel-auto-workflow--generate-daily-report)))
+       (should (plist-get report :date))
+       (should (plist-get report :total-experiments))
+       (should (plist-get report :breakdown))
+       (should (= 3 (plist-get report :total-experiments)))))))
 
 (ert-deftest test-human-interface/generate-weekly-report ()
   "Should generate weekly summary report."
