@@ -71,11 +71,86 @@ were misleading.
 >>>>>>> Stashed changes
 
 
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-nil
+The user wants me to "distill" some content. Let me analyze what's being presented:
+
+1. It's a research strategy output with "template-default"
+2. 169 experiments across various targets (lisp files and staging configs)
+3. There are "Kept hypotheses" - which include:
+   - No hypothesis stated
+   - Improving the function `gptel-auto-workflow-list-project-buffers`
+   - A nil-guard fix for `gptel-auto-workflow--allium-bdd-assert` returning non-boolean values
+   - A nil-guard fix for `--calculate-error-rate` when Sentry API returns data without `:data` key
+4. Discarded hypotheses:
+   - Removing something entirely might change semantics
+
+The user wants me to distill this. I should produce a concise summary of what's been learned from these experiments. The task seems to be research analysis - condensing 169 experiments into key findings.
+
+Let me think about what the actual content/insights are:
+
+The kept hypotheses are the surviving validated hypotheses from the research. The discarded one was rejected. The "No hypothesis stated" entries suggest many experiments didn't produce hypothesis statements (perhaps trivial or no-op experiments).
+
+Key insights to distill:
+1. Two nil-guard fixes that prevent crashes in FSM callback paths
+2. One function improvement (project-buffers)
+3. A discarded hypothesis about removal (semantics concern)
+4. Many experiments yielded no stated hypothesis (likely no-ops or routine changes)
+
+The targets span:
+- gptel benchmark/comparator/tooling modules
+- gptel auto-workflow modules (strategic, projects, production, beads, ontology, human-interface, research-benchmark, production-metrics)
+- gptel ext modules (tool-permits, core, retry)
+- gptel tools-agent modules
+- gptel monitoring
+- gptel token economics
+- gptel auto-experiment
+- staging configs (config, review, scope, merge, verification)
+
+I should produce a distillation that captures the essence efficiently. Let me think about how to format this. The user said "distill:" which is a verb command. So I need to produce the distilled version of this research output.
+
+A good distillation would:
+- State the high-level findings concisely
+- List the surviving hypotheses (the real signal)
+- Note the discarded one and why
+- Note the noise (no-hypothesis experiments)
+- Perhaps give a brief characterization
+
+I'll keep it tight. The user is clearly working on this codebase (gptel, an Emacs package) and is using some kind of research/agent system. They want me to condense this output.
+
+I should think about what makes a good distillation here. The key takeaways:
+
+1. **Volume**: 169 experiments run across ~30 targets
+2. **Signal vs noise**: Most yielded no hypothesis (noise); only 3 substantive kept hypotheses + 1 discarded
+3. **Kept hypotheses** (3 substantive):
+   - Nil-guard in allium-bdd-assert for FSM callback crash
+   - Nil-guard in calculate-error-rate for Sentry API resilience
+   - Improvement to gptel-auto-workflow-list-project-buffers
+4. **Discarded**: removal approach rejected (semantics risk)
+5. **Pattern**: Both kept fixes are defensive nil-guards for callback paths
+
+Let me write a concise distillation. I should probably keep it fairly compact since the user just said "distill" without specifying length. Given the nature of the content, a structured summary is appropriate.
+
+I should think about whether the discard has substance - "removing it entirely might change semantics slightly if someone relied on it" - this is a one-liner, very terse. I should preserve that.
+
+Let me draft:
+
+---
+
+**Distilled findings from 169 experiments (template-default strategy)**
+
+**Signal: 3 surviving hypotheses across 169 experiments**
+
+1. **Defensive nil-guard in FSM assertion path** — `(or ... 0)` around `(plist-get validation :pct)` in `gptel-auto-workflow--allium-bdd-assert` to prevent `wrong-type-argument number-or-marker-p nil` when the plist is malformed or returns non-boolean.
+
+2. **Defensive nil-guard in Sentry metric callback** — `(or ... '())` around `plist-get` in `gptel-auto-workflow--calculate-error-rate` to handle 
+-- ... truncated ...
 ```
 
