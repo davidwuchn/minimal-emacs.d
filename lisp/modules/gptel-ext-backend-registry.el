@@ -17,7 +17,7 @@
         :pricing-input 0.30 :pricing-output 1.20 :pricing-cache-hit 0.06
         :capabilities (code-generation tool-calls)
         :speed fast
-        :thinking-policy off)))
+        :thinking-policy off)))  ;; MiniMax puts <think> in content
 
     (DeepSeek
      :host "api.deepseek.com"
@@ -72,13 +72,13 @@
         :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
         :capabilities (code-generation tool-calls)
         :speed medium
-        :thinking-policy off)
+        :thinking-policy on)
        (qwen3.5-plus
         :context-window 131072
         :pricing-input 0.14 :pricing-output 0.57 :pricing-cache-hit 0.03
         :capabilities (code-generation)
         :speed fast
-        :thinking-policy off)))
+        :thinking-policy on)))
 
     (Z-AI
      :host "open.bigmodel.cn"
@@ -91,25 +91,25 @@
         :capabilities (code-generation tool-calls reasoning)
         :speed medium
         :max-output 128000
-        :thinking-policy off)
+        :thinking-policy on)
        (glm-5
         :context-window 131072
         :pricing-input 0.50 :pricing-output 1.50
         :capabilities (code-generation)
         :speed medium
-        :thinking-policy off)))
+        :thinking-policy on)))
 
     (Copilot
      :host "api.github.com"
      :models (gpt-5.4-mini gpt-5.4)
      :default-model gpt-5.4-mini
      :model-metadata
-      ((gpt-5.4-mini
-        :context-window 128000
-        :pricing-input 0.50 :pricing-output 1.50
-        :capabilities (code-generation)
-        :speed fast
-        :thinking-policy off)))
+       ((gpt-5.4-mini
+         :context-window 128000
+         :pricing-input 0.50 :pricing-output 1.50
+         :capabilities (code-generation)
+         :speed fast
+         :thinking-policy off)))
 
      (TokenPlan
       :host "token-plan.cn-beijing.maas.aliyuncs.com"
@@ -121,19 +121,19 @@
          :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
          :capabilities (reasoning code-generation)
          :speed medium
-         :thinking-policy off)
+         :thinking-policy on)
         (qwen3.6-plus
          :context-window 131072
          :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
          :capabilities (code-generation tool-calls)
          :speed medium
-         :thinking-policy off)
+         :thinking-policy on)
         (qwen3.6-flash
          :context-window 131072
          :pricing-input 0.14 :pricing-output 0.57 :pricing-cache-hit 0.03
          :capabilities (code-generation)
          :speed fast
-         :thinking-policy off)
+         :thinking-policy on)
         (deepseek-v4-pro
          :context-window 1000000
          :pricing-input 0.43 :pricing-output 0.86 :pricing-cache-hit 0.004
@@ -157,7 +157,7 @@
          :pricing-input 0.50 :pricing-output 2.00
          :capabilities (code-generation)
          :speed medium
-         :thinking-policy off))))
+         :thinking-policy on))))
   "Unified backend registry.
 Each entry: (BACKEND-NAME :host HOST :models (MODELS...) :default-model MODEL
              :model-metadata ((MODEL :context-window N :pricing-input X ...)))
@@ -332,7 +332,7 @@ Values: off, on, auto."
                     (model-entry (assoc model metadata)))
           (setq policy (plist-get (cdr model-entry) :thinking-policy))
           (throw 'found t))))
-    (or policy 'off)))
+    (or policy 'on)))  ;; Default to ON — reasoning_content keeps content clean
 
 (defun gptel-backend-registry--thinking-params (model)
   "Return request-params for MODEL's thinking mode based on self-evolving policy.
@@ -384,8 +384,8 @@ Minimum 5 experiments with each mode before making a decision."
         (let ((on-rate (if (> on-total 0) (/ (float on-kept) on-total) 0.0))
               (off-rate (if (> off-total 0) (/ (float off-kept) off-total) 0.0)))
           (if (> off-rate on-rate) 'off 'on))
-      ;; Insufficient data: default to 'off (safer for executor)
-      'off)))
+      ;; Insufficient data: default to 'on (reasoning_content keeps content clean)
+      'on)))
 
 (defun gptel-backend-registry--record-thinking-outcome (model thinking-enabled kept-p)
   "Record one thinking experiment outcome for MODEL.

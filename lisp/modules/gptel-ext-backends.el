@@ -63,14 +63,14 @@ ARGS are passed to `gptel-make-openai'."
     :stream t
     :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
     :models '((qwen3.6-plus
-               :request-params (:enable_thinking :json-false))
+               :request-params (:enable_thinking :json-true))
               (qwen3.5-plus
-               :request-params (:enable_thinking :json-false))
+               :request-params (:enable_thinking :json-true))
               qwen3-max-2026-01-23 qwen3-coder-next qwen3-coder-plus kimi-k2.5
               (glm-5
-               :request-params (:enable_thinking :json-false))
+               :request-params (:enable_thinking :json-true))
               (glm-4.7
-               :request-params (:enable_thinking :json-false)))))
+               :request-params (:enable_thinking :json-true)))))
 
 (defvar gptel--z-ai
   (gptel-make-openai "Z-AI"
@@ -80,13 +80,13 @@ ARGS are passed to `gptel-make-openai'."
     :stream t
     :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
     :models '((glm-5.1
-               :request-params (:thinking (:type "disabled")
+               :request-params (:thinking (:type "enabled")
                                 :max_tokens 65536))
               (glm-5
-               :request-params (:thinking (:type "disabled")
+               :request-params (:thinking (:type "enabled")
                                 :max_tokens 65536))
               (glm-4.7
-               :request-params (:thinking (:type "disabled")
+               :request-params (:thinking (:type "enabled")
                                 :max_tokens 65536)))))
 
 ;; Refresh the backend object on reload so long-lived workflow daemons pick up
@@ -127,18 +127,18 @@ ARGS are passed to `gptel-make-openai'."
     :stream t
     :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
     :models '((qwen3.7-max
-               :request-params (:enable_thinking :json-false))
+               :request-params (:enable_thinking :json-true))
               (qwen3.6-plus
-               :request-params (:enable_thinking :json-false))
+               :request-params (:enable_thinking :json-true))
               (qwen3.6-flash
-               :request-params (:enable_thinking :json-false))
+               :request-params (:enable_thinking :json-true))
               (deepseek-v4-pro
-               :request-params (:enable_thinking :json-false))
+               :request-params (:enable_thinking :json-true))
               (deepseek-v4-flash
-               :request-params (:enable_thinking :json-false))
+               :request-params (:enable_thinking :json-true))
               kimi-k2.6
               (glm-5.1
-               :request-params (:enable_thinking :json-false))
+               :request-params (:enable_thinking :json-true))
               MiniMax-M2.5)))
 
 (defvar gptel--cf-gateway
