@@ -205,28 +205,38 @@ or nil if no data."
 (defun gptel-auto-workflow--ontology-recommend-backend (strategy target)
   "Recommend backend based on ontology data for STRATEGY + TARGET combination.
 Returns backend name or nil if no data."
-  (ignore target)
-  ;; TODO: Track backend performance per strategy-target in ontology
-  ;; For now, use strategy-level backend performance
+  ;; Track backend performance per strategy-target in ontology
   (let ((results (gptel-auto-workflow--parse-all-results)))
     (catch 'found
       (let ((by-backend (make-hash-table :test 'equal)))
         (dolist (r results)
           (let ((s (plist-get r :strategy))
+                (tgt (plist-get r :target))
                 (backend (or (plist-get r :backend) "unknown"))
                 (decision (plist-get r :decision)))
+            ;; Track performance for this specific strategy+target combination
             (when (and (string= s strategy)
+                       (string= tgt target)
                        (equal decision "kept"))
               (puthash backend (1+ (gethash backend by-backend 0)) by-backend))))
-        ;; Return backend with most kept experiments for this strategy
+        ;; If no strategy+target matches, fall back to strategy-level performance
+        (when (= (hash-table-count by-backend) 0)
+          (dolist (r results)
+            (let ((s (plist-get r :strategy))
+                  (backend (or (plist-get r :backend) "unknown"))
+                  (decision (plist-get r :decision)))
+              (when (and (string= s strategy)
+                         (equal decision "kept"))
+                (puthash backend (1+ (gethash backend by-backend 0)) by-backend)))))
+        ;; Return backend with most kept experiments for this strategy-target
         (let ((best-backend nil) (best-count 0))
           (maphash (lambda (b c)
                      (when (> c best-count)
                        (setq best-backend b best-count c)))
                    by-backend)
           (when best-backend
-            (message "[onto-backend] Recommended %s for %s (%d kept)"
-                     best-backend strategy best-count)
+            (message "[onto-backend] Recommended %s for %s/%s (%d kept)"
+                     best-backend strategy target best-count)
             (throw 'found best-backend))))
       nil)))
 
