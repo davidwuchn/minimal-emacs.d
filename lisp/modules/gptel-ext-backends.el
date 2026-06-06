@@ -62,7 +62,15 @@ ARGS are passed to `gptel-make-openai'."
     :key (lambda () (my/gptel-api-key "coding.dashscope.aliyuncs.com"))
     :stream t
     :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
-    :models '(qwen3.6-plus qwen3.5-plus qwen3-max-2026-01-23 qwen3-coder-next qwen3-coder-plus kimi-k2.5 glm-5 glm-4.7)))
+    :models '((qwen3.6-plus
+               :request-params (:enable_thinking :json-false))
+              (qwen3.5-plus
+               :request-params (:enable_thinking :json-false))
+              qwen3-max-2026-01-23 qwen3-coder-next qwen3-coder-plus kimi-k2.5
+              (glm-5
+               :request-params (:enable_thinking :json-false))
+              (glm-4.7
+               :request-params (:enable_thinking :json-false)))))
 
 (defvar gptel--z-ai
   (gptel-make-openai "Z-AI"
@@ -71,7 +79,12 @@ ARGS are passed to `gptel-make-openai'."
     :key (lambda () (my/gptel-api-key "open.bigmodel.cn"))
     :stream t
     :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
-    :models '(glm-5.1 glm-5 glm-4.7)))
+    :models '((glm-5.1
+               :request-params (:enable_thinking :json-false))
+              (glm-5
+               :request-params (:enable_thinking :json-false))
+              (glm-4.7
+               :request-params (:enable_thinking :json-false)))))
 
 ;; Refresh the backend object on reload so long-lived workflow daemons pick up
 ;; contract changes like header callback arity.
@@ -110,8 +123,16 @@ ARGS are passed to `gptel-make-openai'."
     :key (lambda () (my/gptel-api-key "token-plan.cn-beijing.maas.aliyuncs.com"))
     :stream t
     :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
-    :models '(qwen3.7-max qwen3.6-plus qwen3.6-flash
-              deepseek-v4-pro deepseek-v4-flash kimi-k2.6 glm-5.1 MiniMax-M2.5)))
+    :models '((qwen3.7-max
+               :request-params (:enable_thinking :json-false))
+              (qwen3.6-plus
+               :request-params (:enable_thinking :json-false))
+              (qwen3.6-flash
+               :request-params (:enable_thinking :json-false))
+              deepseek-v4-pro deepseek-v4-flash kimi-k2.6
+              (glm-5.1
+               :request-params (:enable_thinking :json-false))
+              MiniMax-M2.5)))
 
 (defvar gptel--cf-gateway
   (gptel-make-openai "CF-Gateway"
