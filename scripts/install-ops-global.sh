@@ -207,5 +207,5 @@ fi
 echo ""
 echo "=== Installation Complete ==="
 echo "Models: @maintainer→kimi-k2.6, delegate→deepseek-v4-pro, strong→gpt-5.4, gpt→gpt-5.5, opus→claude-opus-4.8, qwen→qwen3.7-max, creative→kimi-k2.6, fast→deepseek-v4-flash, implementer→glm-5.1"
-echo "OV5 Cowork: OpenCode + Claude Code + Cursor configured"
+echo "OV5 Cowork: OpenCode configured"
 echo "Next: Restart OpenCode, select @maintainer agent"
