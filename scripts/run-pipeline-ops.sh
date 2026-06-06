@@ -13,13 +13,13 @@ TIMESTAMP=$(date '+%Y%m%d-%H%M%S')
 mkdir -p "$PLANS_DIR"
 
 # ─── Step 1: Create Plan ───
-# echo "[pipeline-ops] Creating plan..."
-# mkdir -p "$PLANS_DIR/run-$TIMESTAMP"
-# cat > "$PLANS_DIR/run-$TIMESTAMP/plan.md" <<EOF
+echo "[pipeline-ops] Creating plan..."
+mkdir -p "$PLANS_DIR/run-$TIMESTAMP"
+cat > "$PLANS_DIR/run-$TIMESTAMP/plan.md" <<EOF
 # Pipeline Run $TIMESTAMP
 
 ## Objective
-Run OV5 self-evolution pipeline with research → digestion → workflow.
+Run OV5 self-evolution pipeline with research -> digestion -> workflow.
 
 ## Requirements
 - Research findings digested before workflow
@@ -46,8 +46,8 @@ else
 fi
 
 # ─── Step 3: Update Plan ───
-# echo "[pipeline-ops] Updating plan..."
-# cat >> "$PLANS_DIR/run-$TIMESTAMP/plan.md" <<EOF
+echo "[pipeline-ops] Updating plan..."
+cat >> "$PLANS_DIR/run-$TIMESTAMP/plan.md" <<EOF
 
 ## Results
 
