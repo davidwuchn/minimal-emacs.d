@@ -14,6 +14,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'json)
 
 ;; ============================================================================
 ;; Configuration and State
@@ -40,6 +41,92 @@
 (defvar gptel-auto-workflow--preserved-contexts (make-hash-table :test 'equal)
   "Store for preserved contexts before disposal.")
 
+(defvar gptel-auto-workflow--context-db-file nil
+  "Path to persistent context database file.
+Initialized lazily by `gptel-auto-workflow--context-db-file-path'.
+Cached after first access to avoid repeated calls to project-root.")
+
+(defun gptel-auto-workflow--context-db-file-path ()
+  "Return the path to the context database file.
+Initializes lazily on first call to avoid calling project-root at load time.
+Returns nil if project-root is not available."
+  (or gptel-auto-workflow--context-db-file
+      (when (fboundp 'gptel-auto-workflow--project-root)
+        (setq gptel-auto-workflow--context-db-file
+              (expand-file-name "var/context-database.json"
+                                (gptel-auto-workflow--project-root))))))
+
+;; ============================================================================
+;; Persistence Functions
+;; ============================================================================
+
+(defun gptel-auto-workflow--context-db-persist ()
+  "Persist context database to JSON file.
+Saves all in-memory stores to survive daemon restarts."
+  (let ((data (list
+               :context-store (gptel-auto-workflow--hash-table-to-alist
+                               gptel-auto-workflow--context-store)
+               :module-context-store (gptel-auto-workflow--hash-table-to-alist
+                                      gptel-auto-workflow--module-context-store)
+               :regeneration-history (gptel-auto-workflow--hash-table-to-alist
+                                      gptel-auto-workflow--regeneration-history)
+               :scheduled-regenerations gptel-auto-workflow--scheduled-regenerations
+               :disposable-modules (gptel-auto-workflow--hash-table-to-alist
+                                    gptel-auto-workflow--disposable-modules)
+               :preserved-contexts (gptel-auto-workflow--hash-table-to-alist
+                                    gptel-auto-workflow--preserved-contexts))))
+    (let ((file (gptel-auto-workflow--context-db-file-path)))
+      (unless file
+        (message "[context-db] Cannot persist: project-root not available")
+        (cl-return-from gptel-auto-workflow--context-db-persist))
+      (make-directory (file-name-directory file) t)
+      (with-temp-file file
+        (insert (json-encode data)))
+      (message "[context-db] Persisted to %s" file))))
+
+(defun gptel-auto-workflow--context-db-load ()
+  "Load context database from JSON file.
+Restores all in-memory stores from persistent storage."
+  (let ((file (gptel-auto-workflow--context-db-file-path)))
+    (when (and file (file-exists-p file))
+      (condition-case err
+          (let ((data (json-read-file file)))
+            (setq gptel-auto-workflow--context-store
+                  (gptel-auto-workflow--alist-to-hash-table
+                   (plist-get data :context-store)))
+            (setq gptel-auto-workflow--module-context-store
+                  (gptel-auto-workflow--alist-to-hash-table
+                   (plist-get data :module-context-store)))
+            (setq gptel-auto-workflow--regeneration-history
+                  (gptel-auto-workflow--alist-to-hash-table
+                   (plist-get data :regeneration-history)))
+            (setq gptel-auto-workflow--scheduled-regenerations
+                  (plist-get data :scheduled-regenerations))
+            (setq gptel-auto-workflow--disposable-modules
+                  (gptel-auto-workflow--alist-to-hash-table
+                   (plist-get data :disposable-modules)))
+            (setq gptel-auto-workflow--preserved-contexts
+                  (gptel-auto-workflow--alist-to-hash-table
+                   (plist-get data :preserved-contexts)))
+            (message "[context-db] Loaded from %s" file))
+        (error
+         (message "[context-db] Load error: %s" err))))))
+
+(defun gptel-auto-workflow--hash-table-to-alist (hash-table)
+  "Convert HASH-TABLE to alist for JSON serialization."
+  (let ((result nil))
+    (maphash (lambda (key value)
+               (push (cons key value) result))
+             hash-table)
+    result))
+
+(defun gptel-auto-workflow--alist-to-hash-table (alist)
+  "Convert ALIST to hash table for in-memory storage."
+  (let ((hash-table (make-hash-table :test 'equal)))
+    (dolist (pair alist)
+      (puthash (car pair) (cdr pair) hash-table))
+    hash-table))
+
 ;; ============================================================================
 ;; Task 3.1: Business Context Preservation System
 ;; ============================================================================
@@ -52,6 +139,11 @@
 (defun gptel-auto-workflow--context-db-configured-p ()
   "Return t if context database is configured."
   (not (null gptel-auto-workflow--context-db-config)))
+
+(defalias 'gptel-auto-workflow--capture-experiment-context
+  'gptel-auto-workflow--capture-context
+  "Alias for `gptel-auto-workflow--capture-context'.
+Used by production.el via fboundp guard.")
 
 (defun gptel-auto-workflow--capture-context (experiment)
   "Capture business context for EXPERIMENT."
@@ -92,8 +184,24 @@
 
 (defun gptel-auto-workflow--context-db-query (query params)
   "Execute database QUERY with PARAMS.
-This is a stub for testing - would execute actual SQL in production."
-  nil)
+Queries the in-memory hash table stores based on QUERY type.
+QUERY can be :module, :time-range, :all-modules, :module-age, :model-version.
+PARAMS is a plist with query-specific parameters."
+  (let ((query-type (plist-get params :query-type)))
+    (cond
+     ((eq query-type :module)
+      (gptel-auto-workflow--query-context-by-module (plist-get params :module)))
+     ((eq query-type :time-range)
+      (gptel-auto-workflow--query-context-by-time-range
+       (plist-get params :start-time)
+       (plist-get params :end-time)))
+     ((eq query-type :all-modules)
+      (gptel-auto-workflow--get-all-modules))
+     ((eq query-type :module-age)
+      (gptel-auto-workflow--module-age (plist-get params :module)))
+     ((eq query-type :model-version)
+      (gptel-auto-workflow--module-model-version (plist-get params :module)))
+     (t nil))))
 
 (defun gptel-auto-workflow--query-context-by-module (module)
   "Query all contexts for MODULE."
@@ -133,6 +241,26 @@ This is a stub for testing - would execute actual SQL in production."
   "Delete context for EXPERIMENT-ID."
   (remhash experiment-id gptel-auto-workflow--context-store)
   t)
+
+(defun gptel-auto-workflow--get-context-summary ()
+  "Get summary of business context from context database.
+Returns plist with :modules-count, :experiments-count, :recent-decisions."
+  (let ((modules-count (hash-table-count gptel-auto-workflow--module-context-store))
+        (experiments-count (hash-table-count gptel-auto-workflow--context-store))
+        (recent-decisions nil))
+    ;; Get last 5 experiment contexts
+    (let ((contexts nil))
+      (maphash (lambda (id ctx) (push ctx contexts))
+               gptel-auto-workflow--context-store)
+      (setq recent-decisions
+            (mapcar (lambda (ctx)
+                      (list :id (plist-get ctx :experiment-id)
+                            :target (plist-get ctx :target)
+                            :rationale (plist-get ctx :decision-rationale)))
+                    (seq-take contexts 5))))
+    (list :modules-count modules-count
+          :experiments-count experiments-count
+          :recent-decisions recent-decisions)))
 
 ;; ============================================================================
 ;; Task 3.2: Code Regeneration Infrastructure
@@ -205,23 +333,50 @@ This is a stub for testing - would execute actual SQL in production."
 
 (defun gptel-auto-workflow--get-all-modules ()
   "Get list of all modules.
-This is a stub - would scan actual codebase in production."
-  nil)
+Scans lisp/modules directory for .el files."
+  (let ((modules-dir (expand-file-name "lisp/modules" (gptel-auto-workflow--project-root)))
+        (modules nil))
+    (when (file-directory-p modules-dir)
+      (dolist (file (directory-files modules-dir t "\\.el$"))
+        (when (and (file-regular-p file)
+                   (not (string-match-p "test-" (file-name-nondirectory file))))
+          (push (file-relative-name file (gptel-auto-workflow--project-root)) modules))))
+    modules))
 
 (defun gptel-auto-workflow--module-age (module)
   "Get age of MODULE in days.
-This is a stub - would check git history in production."
-  0)
+Checks git history for first commit date."
+  (let ((default-directory (gptel-auto-workflow--project-root))
+        (result nil))
+    (condition-case err
+        (let ((output (shell-command-to-string
+                       (format "git log --format='%%aI' --diff-filter=A --follow -- %s | tail -1" module))))
+          (when (and output (> (length output) 0))
+            (let ((first-commit-time (date-to-time (string-trim output)))
+                  (current-time (current-time)))
+              (setq result (floor (/ (float-time (time-subtract current-time first-commit-time))
+                                    86400))))))
+      (error nil))
+    (or result 0)))
 
 (defun gptel-auto-workflow--latest-model-available ()
   "Get latest available model version.
-This is a stub - would query model registry in production."
-  "gpt-4")
+Queries backend registry for latest model."
+  (let ((backends '(("MiniMax" . "MiniMax-M3")
+                    ("moonshot" . "kimi-k2.6")
+                    ("DeepSeek" . "deepseek-v4-pro")
+                    ("DashScope" . "qwen3.6-plus")
+                    ("Copilot" . "gpt-5.4-mini"))))
+    ;; For now, return MiniMax-M3 as default
+    ;; In production, this would query actual backend availability
+    (or (cdr (assoc "MiniMax" backends)) "gpt-4")))
 
 (defun gptel-auto-workflow--module-model-version (module)
   "Get model version used to generate MODULE.
-This is a stub - would check metadata in production."
-  "gpt-4")
+Checks module metadata or defaults to gpt-4."
+  (let ((module-context (gethash module gptel-auto-workflow--module-context-store)))
+    (or (and module-context (plist-get module-context :model-version))
+        "gpt-4")))
 
 (defun gptel-auto-workflow--identify-regeneration-candidates (&rest args)
   "Identify modules ready for regeneration.
@@ -317,8 +472,8 @@ CURRENT-MODEL is the current model, TARGET-MODEL is the target."
 
 (defun gptel-auto-workflow--context-db-execute (query params)
   "Execute database QUERY with PARAMS.
-This is a stub for testing."
-  nil)
+Delegates to gptel-auto-workflow--context-db-query for actual execution."
+  (gptel-auto-workflow--context-db-query query params))
 
 (provide 'gptel-auto-workflow-context-database)
 

@@ -423,6 +423,11 @@ Usage:
       (condition-case nil
           (gptel-auto-workflow--ensure-backend-preference-loaded)
         (error nil)))
+    ;; Load context database (Phase 3: Software as Consumable)
+    (when (fboundp 'gptel-auto-workflow--context-db-load)
+      (condition-case nil
+          (gptel-auto-workflow--context-db-load)
+        (error nil)))
     ;; Recover experiments stuck in staging-pending before starting new work.
     ;; Safe to call every run: already-merged branches are skipped.
     (when (and gptel-auto-workflow-use-staging

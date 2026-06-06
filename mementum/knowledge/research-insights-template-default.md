@@ -11,7 +11,7 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 185 experiments (4% keep rate).*
+*Consolidated from 188 experiments (4% keep rate).*
 
 **Performance:** 7 kept / 1 discarded / 10 failed (EXTRACTED — from TSV)
 
@@ -57,35 +57,6 @@ were misleading.
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Distillation: Template-Default Strategy Results
-
-## Summary
-
-| Metric | Count |
-|--------|-------|
-| Total experiments | 157 |
-| Targets explored | 25 |
-| **Kept hypotheses** | **2** |
-| Discarded hypotheses | 1 |
-
-## Kept Hypotheses (2)
-
-1. **No explicit hypothesis stated** — One experiment lacked an articulated hypothesis (passes through by default).
-2. **Improving `gptel-auto-workflow-list-project-buffers`** — The only substantive kept finding, targeting the `lisp/modules/` namespace.
-
-## Discarded Hypotheses (1)
-
-- *Removal would change semantics for users depending on the function* — Counterargument: re-evaluating scope; the referenced behavior is not load-bearing for the template-default strategy.
-
-## Observations
-
-- **Very low yield**: 157 experiments distilled to a single actionable signal (1.3% kept rate by unique hypothesis).
-- **Target concentration**: `lisp/modules/` files dominate (22 of 25 targets), with `staging-*` targets making up the remainder — none yielded kept hypotheses.
-- **Single actionable direction**: the function `gptel-auto-workflow-list-project-buffers` is the only concrete target for improvement.
-- The "no hypothesis" kept entry suggests the template-default strategy may be auto-accepting trivially-passing cases without requiring an explicit hypothesis statement.
-
-## Recommendation
-
-Given the thin output, consider tightening the strategy so experiments without an explicit hypothesis aren't auto-kept, and focus future runs on the `staging-*` targets which produced no kept signals.
+nil
 ```
 
