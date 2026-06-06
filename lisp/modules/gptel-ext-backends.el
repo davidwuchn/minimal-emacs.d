@@ -80,11 +80,14 @@ ARGS are passed to `gptel-make-openai'."
     :stream t
     :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
     :models '((glm-5.1
-               :request-params (:enable_thinking :json-false))
+               :request-params (:thinking (:type "disabled")
+                                :max_tokens 65536))
               (glm-5
-               :request-params (:enable_thinking :json-false))
+               :request-params (:thinking (:type "disabled")
+                                :max_tokens 65536))
               (glm-4.7
-               :request-params (:enable_thinking :json-false)))))
+               :request-params (:thinking (:type "disabled")
+                                :max_tokens 65536)))))
 
 ;; Refresh the backend object on reload so long-lived workflow daemons pick up
 ;; contract changes like header callback arity.

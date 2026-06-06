@@ -349,10 +349,17 @@ Looks up :thinking-policy from gptel-backend-registry.
       (if (eq effective 'off)
           '(:thinking (:type "disabled") :max_completion_tokens 8192)
         '(:thinking (:type "enabled") :max_completion_tokens 8192)))
+     ;; Z-AI (BigModel) uses :thinking object, not :enable_thinking
+     ((memq model '(glm-5.1 glm-5 glm-4.7))
+      (if (eq effective 'off)
+          '(:thinking (:type "disabled") :max_tokens 65536)
+        '(:thinking (:type "enabled") :max_tokens 65536)))
+     ;; kimi on moonshot uses :thinking/:reasoning directly
      ((memq model '(kimi-k2.6 \@cf/moonshotai/kimi-k2.6))
       (if (eq effective 'off)
           '(:enable_thinking :json-false)
         '(:enable_thinking :json-true)))
+     ;; Bailian/DashScope models use :enable_thinking
      (t
       (if (eq effective 'off)
           '(:enable_thinking :json-false)
