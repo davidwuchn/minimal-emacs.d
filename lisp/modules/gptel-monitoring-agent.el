@@ -81,7 +81,7 @@ Returns list of pattern plists with :pattern, :target, :evidence.
 Patterns detected:
 1. Grader fails 3+ times on similar code
 2. Backend X has <5% keep-rate on category Y with 20+ experiments
-3. Effort 'high' wastes tokens without improvement
+3. Effort \\='high wastes tokens without improvement
 4. Same target fails 5+ times"
   (let ((patterns nil))
     ;; Pattern 1: Grader failures

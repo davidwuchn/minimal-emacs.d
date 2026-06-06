@@ -590,12 +590,15 @@ OUTPUT:
 (defun gptel-benchmark--destructive-change-p (diff)
   "Return non-nil if DIFF deletes public Elisp definitions or important data.
 Detects deletion of:
-- Public functions: (defun NAME ...) where NAME doesn't start with \"gptel--\"
-- Public variables: (defvar NAME ...) or (defcustom NAME ...) where NAME doesn't start with \"gptel--\"
-- Backend registrations: Any deletion containing backend names (TokenPlan, DeepSeek, etc.)
+- Public functions: (defun NAME ...) where NAME doesn't start with
+  \\='gptel--\\='
+- Public variables: (defvar NAME ...) or (defcustom NAME ...) where NAME
+  doesn't start with \\='gptel--\\='
+- Backend registrations: Any deletion containing backend names
+  (TokenPlan, DeepSeek, etc.)
 
-Private definitions (starting with \"gptel--\" or containing \"--internal\")
-are considered safe to delete."
+Private definitions (starting with \\='gptel--\\=' or containing
+\\='--internal\\=) are considered safe to delete."
   (when (stringp diff)
     (let ((destructive-p nil))
       (with-temp-buffer

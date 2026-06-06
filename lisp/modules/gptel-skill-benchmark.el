@@ -65,7 +65,8 @@
 
 (defun gptel-skill-load-tests (skill-name)
   "Load test definitions for SKILL-NAME.
-Returns list of test plists with :id, :name, :prompt, :expected_behaviors, :forbidden_behaviors."
+Returns list of test plists with :id, :name, :prompt,
+:expected_behaviors, :forbidden_behaviors."
   (let ((test-file (expand-file-name (format "%s.json" skill-name) gptel-skill-tests-dir)))
     (if (file-exists-p test-file)
         (let* ((data (gptel-benchmark-read-json test-file))
@@ -530,7 +531,8 @@ Shows which elements (Water/Wood/Fire/Earth/Metal) need attention."
 
 (defun gptel-skill-benchmark-suggest-improvements (skill-name)
   "Suggest improvements for SKILL-NAME based on anti-pattern detection.
-Uses 相克 (controlling cycle) to identify problems and 相生 (generating cycle) for remedies."
+Uses 相克 (controlling cycle) to identify problems and 相生
+(generating cycle) for remedies."
   (interactive
    (list (completing-read "Skill: "
                           (directory-files gptel-skill-tests-dir nil "\\.json$"))))
