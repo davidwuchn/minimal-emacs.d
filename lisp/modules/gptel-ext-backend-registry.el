@@ -17,7 +17,7 @@
         :pricing-input 0.30 :pricing-output 1.20 :pricing-cache-hit 0.06
         :capabilities (code-generation tool-calls)
         :speed fast
-        :thinking-policy off)))  ;; MiniMax puts <think> in content
+        :thinking-policy on)))  ;; reasoning_split separates thinking from content
 
     (DeepSeek
      :host "api.deepseek.com"
@@ -348,8 +348,8 @@ Looks up :thinking-policy from gptel-backend-registry.
     (cond
      ((memq model '(MiniMax-M3))
       (if (eq effective 'off)
-          '(:thinking (:type "disabled") :max_completion_tokens 8192)
-        '(:thinking (:type "enabled") :max_completion_tokens 8192)))
+          '(:thinking (:type "disabled") :reasoning_split t :max_completion_tokens 8192)
+        '(:thinking (:type "adaptive") :reasoning_split t :max_completion_tokens 8192)))
      ;; Z-AI (BigModel) uses :thinking object, not :enable_thinking
      ((memq model '(glm-5.1 glm-5 glm-4.7))
       (if (eq effective 'off)

@@ -53,7 +53,8 @@ ARGS are passed to `gptel-make-openai'."
     :stream t
     :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
     :models '((MiniMax-M3
-               :request-params (:thinking (:type "disabled")
+               :request-params (:thinking (:type "adaptive")
+                               :reasoning_split t
                                :max_completion_tokens 8192)))))
 
 (defvar gptel--dashscope
