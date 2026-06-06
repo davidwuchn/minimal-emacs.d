@@ -7,32 +7,6 @@ Current backend: moonshot
 
 Format: timestamp | diagnosis | remedy | before | after | effective?
 
-- 1780693100 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780692791 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780692791 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780677043 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780677043 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780673447 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780673447 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780666304 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780666304 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780662652 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780662652 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780659187 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780659187 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780655448 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780655448 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780651856 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780651856 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780648567 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780648567 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780644646 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780644646 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780641053 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780641053 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780637436 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780637436 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780633832 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780633832 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780630451 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
-- 1780630451 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
+- 1780747232 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
+- 1780747226 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
+- 1780747226 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
