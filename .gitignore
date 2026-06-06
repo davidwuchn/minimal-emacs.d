@@ -84,3 +84,5 @@ mementum/knowledge/*REJECTED*
 __pycache__/
 *.pyc
 *.elc
+!.opencode/
+!.opencode/**/*.md
