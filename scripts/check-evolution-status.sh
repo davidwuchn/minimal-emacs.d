@@ -27,8 +27,9 @@ else
 fi
 
 # Check if knowledge reasoning is loaded in self-evolution knowledge
-if [ -f "var/tmp/experiments/main-baseline-5036/mementum/knowledge/self-evolution.md" ]; then
-    if grep -q "not loaded" "var/tmp/experiments/main-baseline-5036/mementum/knowledge/self-evolution.md"; then
+self_eval=$(find var/tmp/experiments -path "*/mementum/knowledge/self-evolution.md" 2>/dev/null | head -1)
+if [ -n "$self_eval" ]; then
+    if grep -q "not loaded" "$self_eval"; then
         echo "✗ Knowledge reasoning NOT loaded (self-evolution.md shows 'not loaded')"
     else
         echo "✓ Knowledge reasoning loaded (self-evolution.md shows active)"
@@ -42,37 +43,10 @@ echo ""
 echo "━━━ 2. Evolution Score Trend ━━━"
 if [ -f "var/tmp/evolution-scores.json" ]; then
     # Extract last 5 scores
-    scores=$(python3 -c "
-import json, sys
-with open('var/tmp/evolution-scores.json', 'r') as f:
-    data = json.load(f)
-scores = data.get('scores', [])[:5]
-for s in scores:
-    if isinstance(s, dict):
-        print(f\"{s.get('timestamp', 'N/A')}: {s.get('score', 0):.2%} ({s.get('total', 0)} total)\")
-    elif isinstance(s, list) and len(s) >= 2:
-        print(f\"{s[0]}: {s[1]:.2%} ({s[2] if len(s) > 2 else 0} total)\")
-" 2>/dev/null || echo "Failed to parse scores")
+    scores=$(jq -r '.scores[-5:] | .[] | if type == "object" then "\(.timestamp // "N/A"): \((.score * 100 | floor))% (\(.total // 0) total)" else "\(.[0] // "N/A"): \((.[1] * 100 | floor))% (\(.[2] // 0) total)" end' var/tmp/evolution-scores.json 2>/dev/null || echo "Failed to parse scores")
     
     # Calculate trend
-    trend=$(python3 -c "
-import json, sys
-with open('var/tmp/evolution-scores.json', 'r') as f:
-    data = json.load(f)
-scores = data.get('scores', [])[:10]
-if len(scores) >= 2:
-    first = scores[0]
-    last = scores[-1]
-    first_score = first.get('score', 0) if isinstance(first, dict) else first[1] if len(first) > 1 else 0
-    last_score = last.get('score', 0) if isinstance(last, dict) else last[1] if len(last) > 1 else 0
-    diff = last_score - first_score
-    if diff > 0.01:
-        print(f'↑ Improving (+{diff:.2%})')
-    elif diff < -0.01:
-        print(f'↓ Declining ({diff:.2%})')
-    else:
-        print(f'→ Stable ({diff:.2%})')
-" 2>/dev/null || echo "Failed to calculate trend")
+    trend=$(jq -r '.scores[-1].score as $last | .scores[0].score as $first | if ($last - $first) > 0.01 then "↑ Improving (+\((($last - $first) * 100 | floor))%)" elif ($last - $first) < -0.01 then "↓ Declining (\((($last - $first) * 100 | floor))%)" else "→ Stable (\((($last - $first) * 100 | floor))%)" end' var/tmp/evolution-scores.json 2>/dev/null || echo "Failed to calculate trend")
     
     echo ""
     echo "Latest score: $trend"
