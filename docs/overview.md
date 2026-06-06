@@ -1,25 +1,19 @@
 # OV5 Documentation
 
-> **Source of truth:** `mementum/` — this directory is a navigation layer.
+> **Source of truth:** `mementum/` — this file is a navigation layer.
 
 ## Quick Links
 
 | What | Where |
 |---|---|
 | **Architecture** | `mementum/knowledge/project-facts.md` |
-| **Patterns** | `mementum/knowledge/patterns.md` |
-| **Self-Evolution** | `mementum/knowledge/self-evolution.md` |
+| **Modules** | `mementum/knowledge/modules/` |
+| **Plans** | `mementum/knowledge/plans/` |
 | **State** | `mementum/state.md` |
 
 ## Module Index
 
-See `mementum/knowledge/project-facts.md` for the full module inventory.
-
-Key modules:
-- `lisp/modules/gptel-auto-workflow-evolution.el` — Self-evolution engine
-- `lisp/modules/gptel-auto-workflow-mementum.el` — Memory system
-- `lisp/modules/gptel-auto-workflow-production.el` — Pipeline orchestration
-- `lisp/modules/gptel-tools-agent-experiment-core.el` — Experiment loop
+See `mementum/knowledge/modules/` for module documentation.
 
 ## How to Use This with OPS
 
@@ -32,14 +26,14 @@ Key modules:
 
 See `scripts/install-ops-global.sh` for the full agent/model matrix.
 
-| Agent | Model |
-|---|---|
-| @maintainer | kimi-k2.6 |
-| delegate | deepseek-v4-pro |
-| delegate-strong | gpt-5.4 |
-| delegate-gpt | gpt-5.5 |
-| delegate-opus | claude-opus-4.8 |
-| delegate-qwen | qwen3.7-max |
-| delegate-creative | kimi-k2.6 |
-| delegate-fast | deepseek-v4-flash |
-| implementer | glm-5.1 |
+| Agent | Model | Role |
+|---|---|---|
+| @maintainer | kimi-k2.6 | Interactive orchestrator |
+| delegate | deepseek-v4-pro | General subagent |
+| delegate-strong | gpt-5.4 | Strong reasoning |
+| delegate-gpt | gpt-5.5 | Hardest problems |
+| delegate-opus | claude-opus-4.8 | Deep analysis |
+| delegate-qwen | qwen3.7-max | Second opinions |
+| delegate-creative | kimi-k2.6 | Creative work |
+| delegate-fast | deepseek-v4-flash | Quick lookups |
+| implementer | glm-5.1 | Gated code execution |
