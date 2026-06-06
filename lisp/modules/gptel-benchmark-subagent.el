@@ -469,13 +469,48 @@ Uses grader subagent - no local fallback (fail if subagent unavailable)."
     (if (and gptel-benchmark-use-subagents
              (fboundp 'gptel-agent--task)
              (> total 0))
-        (gptel-benchmark-call-subagent
-         'grader
-         "Grade output"
-         grading-prompt
-         (lambda (result)
-           (funcall callback (gptel-benchmark--parse-grade-response result expected forbidden)))
-         timeout)
+         (let ((attempt 0)
+               (max-attempts 2))
+           (cl-labels ((handle-result (result)
+                         ;; Validate grader response before parsing
+                         (let* ((result-str (if (stringp result) result (format "%S" result)))
+                                (min-length 100)
+                                (has-score-pattern (string-match-p "\\(?:SCORE\\|Total\\|score\\|Final\\)[:=]\\s-*[0-9]+" result-str))
+                                (is-truncated (and (< (length result-str) min-length)
+                                                   (not has-score-pattern))))
+                           (if (and is-truncated (< attempt max-attempts))
+                               ;; Retry with exponential backoff (2^attempt seconds)
+                               (let ((delay (expt 2 attempt)))
+                                 (message "[auto-exp] ⚠ Grader returned truncated response (length=%d, expected>=%d, no score pattern), retrying in %ds (attempt %d/%d): %s"
+                                          (length result-str)
+                                          min-length
+                                          delay
+                                          (1+ attempt)
+                                          max-attempts
+                                          (substring result-str 0 (min 200 (length result-str))))
+                                 (setq attempt (1+ attempt))
+                                 (run-with-timer delay nil
+                                                 (lambda ()
+                                                   (gptel-benchmark-call-subagent
+                                                    'grader
+                                                    "Grade output"
+                                                    grading-prompt
+                                                    #'handle-result
+                                                    timeout))))
+                             ;; Either success or max retries reached
+                             (progn
+                               (when is-truncated
+                                 (message "[auto-exp] ✗ Grader failed after %d attempts (final length=%d): %s"
+                                          max-attempts
+                                          (length result-str)
+                                          (substring result-str 0 (min 200 (length result-str)))))
+                               (funcall callback (gptel-benchmark--parse-grade-response result expected forbidden)))))))
+             (gptel-benchmark-call-subagent
+              'grader
+              "Grade output"
+              grading-prompt
+              #'handle-result
+              timeout)))
       ;; No local fallback - fail the grade
       (funcall callback (list :score 0 
                               :total total
@@ -592,6 +627,12 @@ Handles SCORE: X/Y format, JSON format, text-based PASS/FALL fallback,
 and positive-indicator detection for robust parsing.
 Passes if score >= 60% of total.  The caller-supplied EXPECTED+FORBIDDEN
 total is authoritative; grader self-reported totals are capped to it."
+  ;; Log response details for debugging empty/truncated responses
+  (let ((response-str (if (stringp response) response (format "%S" response))))
+    (when (< (length response-str) 200)
+      (message "[auto-exp] Parsing grader response (length=%d): %.200s..."
+               (length response-str)
+               response-str)))
   (let* ((score 0)
          (criteria-total (+ (length expected) (length forbidden)))
          (total criteria-total)

@@ -1130,6 +1130,9 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 			                                                         run-id exp-result log-fn callback)))
 		                                                      (gptel-auto-workflow--assert-main-untouched)
 		                                                      (message "[auto-experiment] ✓ Committing improvement for %s" target)
+		                                                      (message "[auto-exp] About to stage and commit (auto-push=%s, use-staging=%s)"
+		                                                               gptel-auto-experiment-auto-push
+		                                                               gptel-auto-workflow-use-staging)
 		                                                      (if (and (gptel-auto-workflow--stage-worktree-changes
 			                                                            (format "Stage experiment changes for %s" target)
 			                                                            60)
@@ -1150,8 +1153,9 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                         ;; π Synthesis: queue similar targets with inherited strategy
                                                         (when (fboundp 'gptel-auto-workflow--queue-cluster-experiments)
                                                           (gptel-auto-workflow--queue-cluster-experiments target))
-                                                        (setq gptel-auto-experiment--best-score score-after
-                                                              gptel-auto-experiment--no-improvement-count 0)
+                                                         (setq gptel-auto-experiment--best-score score-after
+                                                               gptel-auto-experiment--no-improvement-count 0)
+                                                         (message "[auto-exp] Commit successful, proceeding with push/staging")
 			                                                        (if gptel-auto-experiment-auto-push
 			                                                            (progn
 			                                                              (message "[auto-experiment] Pushing to %s" experiment-branch)

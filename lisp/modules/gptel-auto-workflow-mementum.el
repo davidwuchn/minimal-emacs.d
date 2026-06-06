@@ -189,37 +189,42 @@ RESEARCH-RESULT is a plist with :findings :targets :kept-count :total-count
   (when gptel-auto-workflow-mementum-enabled
     (when (not (proper-list-p research-result))
       (error "[mementum] RESEARCH-RESULT must be a proper plist, got: %S" research-result))
-    (let* ((strategy (or (plist-get research-result :strategy) "default"))
-           (findings (or (plist-get research-result :findings) ""))
-           (hash (or (plist-get research-result :hash)
-                     (when (and (fboundp 'sha1) (not (string-empty-p findings)))
-                       (sha1 findings))))
-           (hash-str (or hash "no-data"))
-           (slug (format "%s-%s"
-                         (if (string-prefix-p "research-" strategy)
-                             strategy
-                           (concat "research-" strategy))
-                         (substring hash-str 0 (min 8 (length hash-str)))))
-           (targets (plist-get research-result :targets))
-           (kept-count (or (plist-get research-result :kept-count) 0))
-           (total-count (or (plist-get research-result :total-count) 0))
-           (digested (or (plist-get research-result :digested) ""))
-           (keep-rate (if (> total-count 0)
-                          (/ (float kept-count) total-count)
-                        0.0)))
-      (gptel-auto-workflow--mementum-write-memory
-       '🔬 slug
-       (format "**Strategy:** %s\n**Findings hash:** %s\n**Targets:** %s\n**Outcome:** %d/%d kept (%.0f%%)\n\n**Raw Findings:**\n\n%s\n\n**Digested Insights:**\n\n%s\n\n**Meta-learning:** Research quality measured by downstream experiment success."
-               strategy
-               hash
-               (if targets (mapconcat #'identity targets ", ") "none")
-               kept-count
-               total-count
-               (* 100 keep-rate)
-               findings
-               (if (string-empty-p digested)
-                   "[No digestion performed]"
-                 digested))))))
+     (let* ((strategy (or (plist-get research-result :strategy) "default"))
+            (findings (or (plist-get research-result :findings) ""))
+            (hash (or (plist-get research-result :hash)
+                      (when (and (fboundp 'sha1) (not (string-empty-p findings)))
+                        (sha1 findings))))
+            (hash-str (or hash "no-data")))
+       ;; Skip recording when strategy is invalid (none, nil, unknown)
+       ;; These indicate missing research context, not actual research strategies
+       (when (and (stringp strategy)
+                  (not (string-empty-p strategy))
+                  (not (member (downcase strategy) '("none" "nil" "unknown"))))
+         (let* ((slug (format "%s-%s"
+                              (if (string-prefix-p "research-" strategy)
+                                  strategy
+                                (concat "research-" strategy))
+                              (substring hash-str 0 (min 8 (length hash-str)))))
+                (targets (plist-get research-result :targets))
+                (kept-count (or (plist-get research-result :kept-count) 0))
+                (total-count (or (plist-get research-result :total-count) 0))
+                (digested (or (plist-get research-result :digested) ""))
+                (keep-rate (if (> total-count 0)
+                               (/ (float kept-count) total-count)
+                             0.0)))
+           (gptel-auto-workflow--mementum-write-memory
+            '🔬 slug
+            (format "**Strategy:** %s\n**Findings hash:** %s\n**Targets:** %s\n**Outcome:** %d/%d kept (%.0f%%)\n\n**Raw Findings:**\n\n%s\n\n**Digested Insights:**\n\n%s\n\n**Meta-learning:** Research quality measured by downstream experiment success."
+                    strategy
+                    hash
+                    (if targets (mapconcat #'identity targets ", ") "none")
+                    kept-count
+                    total-count
+                    (* 100 keep-rate)
+                    findings
+                    (if (string-empty-p digested)
+                        "[No digestion performed]"
+                      digested))))))))
 
 ;; ─── Knowledge Synthesis ───
 
