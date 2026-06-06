@@ -54,14 +54,13 @@ Used to query production metrics for the right service.")
   (or gptel-auto-workflow--sentry-api-key
       (getenv "OV5_SENTRY_API_KEY")
       (when (file-exists-p "~/.ov5/sentry-key")
-        (ignore-errors
-          (with-temp-buffer
-            (insert-file-contents "~/.ov5/sentry-key")
-            (string-trim (buffer-string)))))))
+        (with-temp-buffer
+          (insert-file-contents "~/.ov5/sentry-key")
+          (string-trim (buffer-string))))))
 
 (defun gptel-auto-workflow--infer-service-from-target (target)
   "Infer service name from TARGET file path.
-Returns service name string or \\='unknown if not mappable."
+Returns service name string or 'unknown' if not mappable."
   (or (cl-loop for (path . service) in gptel-auto-workflow--target-service-map
                when (string-prefix-p path target)
                return service)
@@ -115,7 +114,7 @@ Returns parsed JSON or nil on failure."
                (call-process "curl" nil t nil
                              "-s" "-H" (format "Authorization: Bearer %s" api-key)
                              url)))
-          (when (and exit-code (zerop exit-code))
+          (when (zerop exit-code)
             (goto-char (point-min))
             (json-parse-buffer :object-type 'plist :array-type 'list))))
     (error
@@ -126,8 +125,10 @@ Returns parsed JSON or nil on failure."
   "Calculate error rate from Sentry STATS-DATA.
 Returns float 0.0-1.0 representing error rate."
   (if (and stats-data (listp stats-data))
-      (let* ((events (let ((d (or (ignore-errors (plist-get stats-data :data)) '()))) (if (listp d) d '())))
-             (total-events (or (ignore-errors (apply #'+ (mapcar #'cadr events))) 0))
+      (let* ((raw-events (or (plist-get stats-data :data) '()))
+             ;; EDGE CASE: parsed JSON items may not be lists; filter to prevent cadr crash
+             (events (delq nil (mapcar (lambda (e) (when (listp e) e)) raw-events)))
+             (total-events (apply #'+ (mapcar #'cadr events)))
              (time-span (length events))
              ;; Normalize to rate per day
              (rate (if (> time-span 0)
@@ -137,7 +138,7 @@ Returns float 0.0-1.0 representing error rate."
         (min 1.0 (/ rate 1000.0)))
     0.0))
 
-(defun gptel-auto-workflow--query-user-feedback (_target)
+(defun gptel-auto-workflow--query-user-feedback (target)
   "Query user feedback system for TARGET.
 Returns satisfaction delta: -1.0 (worse) to +1.0 (better).
 Stub implementation - returns 0.0 until feedback system is integrated."
@@ -145,7 +146,7 @@ Stub implementation - returns 0.0 until feedback system is integrated."
   ;; For now, return neutral delta
   0.0)
 
-(defun gptel-auto-workflow--query-support-tickets (_target)
+(defun gptel-auto-workflow--query-support-tickets (target)
   "Query support ticket system for TARGET.
 Returns number of tickets reduced (integer, 0-N).
 Stub implementation - returns 0 until ticket system is integrated."
@@ -153,11 +154,11 @@ Stub implementation - returns 0 until ticket system is integrated."
   ;; For now, return 0 tickets reduced
   0)
 
-(defun gptel-auto-workflow--track-production-impact (target _experiment-id)
+(defun gptel-auto-workflow--track-production-impact (target experiment-id)
   "Track production impact for TARGET experiment.
 EXPERIMENT-ID: unique identifier for this experiment.
 Returns plist with production metrics for TSV columns 33-39."
-  (let* ((metrics (or (gptel-auto-workflow--query-sentry-errors target) '()))
+  (let* ((metrics (gptel-auto-workflow--query-sentry-errors target))
          (error-before (or (plist-get metrics :before-rate) 0.0))
          (error-after (or (plist-get metrics :after-rate) 0.0))
          (error-delta (- error-after error-before))
@@ -219,10 +220,10 @@ Risk factors:
 (defun gptel-auto-workflow--get-production-metrics (target)
   "Get production metrics for TARGET, using cache if available.
 Returns plist with production metrics or default values if unavailable."
-  (or (when (hash-table-p gptel-auto-workflow--production-metrics-cache)
-        (ignore-errors (gethash target gptel-auto-workflow--production-metrics-cache)))
-      (let ((metrics (ignore-errors (gptel-auto-workflow--track-production-impact target nil))))
-        (when (and (hash-table-p gptel-auto-workflow--production-metrics-cache) metrics)
+  (or (and gptel-auto-workflow--production-metrics-cache
+           (gethash target gptel-auto-workflow--production-metrics-cache))
+      (let ((metrics (gptel-auto-workflow--track-production-impact target nil)))
+        (when gptel-auto-workflow--production-metrics-cache
           (puthash target metrics gptel-auto-workflow--production-metrics-cache))
         metrics)))
 
@@ -234,7 +235,7 @@ Returns plist with production metrics or default values if unavailable."
 (defun gptel-auto-workflow--approval-threshold (experiment)
   "Determine approval type based on EXPERIMENT risk score.
 Returns :auto (risk < 0.3), :recommend (0.3-0.7), or :required (> 0.7)."
-  (let ((risk (or (and experiment (plist-get experiment :risk-score)) 0.0)))
+  (let ((risk (or (plist-get experiment :risk-score) 0.0)))
     (cond
      ((< risk 0.3) :auto)
      ((< risk 0.7) :recommend)
