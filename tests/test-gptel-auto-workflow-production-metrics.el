@@ -92,16 +92,16 @@
   "Should calculate risk score for approval threshold."
   :expected-result (if noninteractive :failed :passed)
   ;; Low risk: error decreased, satisfaction improved
-  (let ((risk (gptel-auto-workflow--calculate-risk-score -0.1 0.5 5)))
+  (let ((risk (gptel-auto-workflow--calculate-production-risk-score -0.1 0.5 5)))
     (should (numberp risk))
     (should (>= risk 0.0))
     (should (<= risk 1.0))
     (should (< risk 0.3)))  ; Low risk
   ;; High risk: error increased significantly
-  (let ((risk (gptel-auto-workflow--calculate-risk-score 0.1 -0.3 0)))
+  (let ((risk (gptel-auto-workflow--calculate-production-risk-score 0.1 -0.3 0)))
     (should (> risk 0.5)))  ; High risk
   ;; Medium risk: no measurable change
-  (let ((risk (gptel-auto-workflow--calculate-risk-score 0.0 0.0 0)))
+  (let ((risk (gptel-auto-workflow--calculate-production-risk-score 0.0 0.0 0)))
     (should (>= risk 0.2))
     (should (< risk 0.5))))
 

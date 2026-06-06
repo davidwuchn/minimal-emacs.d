@@ -167,7 +167,7 @@ Returns plist with production metrics for TSV columns 33-39."
          (tickets-reduced (gptel-auto-workflow--query-support-tickets target))
          (business-value (gptel-auto-workflow--calculate-business-value
                           error-delta satisfaction-delta tickets-reduced))
-         (risk-score (gptel-auto-workflow--calculate-risk-score
+         (risk-score (gptel-auto-workflow--calculate-production-risk-score
                       error-delta satisfaction-delta tickets-reduced)))
     (list :prod-error-rate-before error-before
           :prod-error-rate-after error-after
@@ -191,7 +191,7 @@ Weights: error-reduction (40%), support-tickets (30%), satisfaction (30%)."
        (* 0.3 ticket-score)
        (* 0.3 satisfaction-score))))
 
-(defun gptel-auto-workflow--calculate-risk-score (error-delta satisfaction-delta tickets-reduced)
+(defun gptel-auto-workflow--calculate-production-risk-score (error-delta satisfaction-delta tickets-reduced)
   "Calculate risk score for approval threshold.
 ERROR-DELTA: change in error rate.
 SATISFACTION-DELTA: change in user satisfaction.
