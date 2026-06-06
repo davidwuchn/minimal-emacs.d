@@ -1,8 +1,35 @@
 # Mementum State
 
-> Last session: 2026-06-05 (Phase 1 External Sensors - TDD Complete)
+> Last session: 2026-06-05 (Mementum Cleanup - Garbage Files Removed)
 > Next pipeline: running
-> Status: 109/109 .el files, 2 new files this session, 0 byte-compile warnings
+> Status: 109/109 .el files, 0 byte-compile warnings
+
+## Session: Mementum Cleanup (2026-06-05)
+
+### ✅ Fixed: Useless research-research-none mementum files
+
+**Root cause:** `gptel-auto-workflow--mementum-record-research` was creating memory files even when the research strategy was `"none"`, `"nil"`, or `"unknown"` — values that indicate missing research context, not actual strategies.
+
+**The fix:** Added validation to skip recording when strategy is invalid:
+
+```elisp
+(when (and (stringp strategy)
+           (not (string-empty-p strategy))
+           (not (member (downcase strategy) '("none" "nil" "unknown"))))
+  ;; Only create memory file if strategy is valid
+  ...)
+```
+
+**Impact:**
+- Deleted 40 garbage `research-research-none-*.md` files (2,777 lines removed)
+- Future research runs with missing context won't create useless memory files
+- Mementum system stays clean and focused on actual learnings
+
+**Next steps:** The system will now only create research memory files when there's a meaningful strategy name (like `"template-default"`, `"persisted-findings"`, `"deep-external"`, etc.), preventing the accumulation of noise in the knowledge base.
+
+**Commit:** `6c373d718` - ⊘ fix: prevent useless research-research-none mementum files
+
+---
 
 ## Session: Phase 1 External Sensors Implementation (2026-06-05)
 
