@@ -19,6 +19,8 @@
 (require 'gptel-auto-workflow-research-integration nil t)
 ;; Soft require: research-benchmark provides load-research-traces
 (require 'gptel-auto-workflow-research-benchmark nil t)
+;; Soft require: knowledge-reasoning provides causal analysis and gap detection
+(require 'gptel-auto-workflow-knowledge-reasoning nil t)
 
 ;; External functions from other modules
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base" ())
