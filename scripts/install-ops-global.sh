@@ -88,35 +88,20 @@ update_model "$AGENTS_DIR/implementer.md"           "bailian-token-plan/glm-5.1"
 update_model "$AGENTS_DIR/implementer-safe.md"      "bailian-token-plan/glm-5.1"
 update_model "$AGENTS_DIR/legacy-curator.md"        "bailian-token-plan/deepseek-v4-pro"
 
-# 5. Enable thinking for DeepSeek models in opencode.json
-export OPENCODE_JSON="$HOME/.config/opencode/opencode.json"
-if [ -f "$OPENCODE_JSON" ] && command -v jq >/dev/null 2>&1; then
-    tmp_json="$(mktemp)"
-    jq '
-      .provider["bailian-token-plan"].models["deepseek-v4-pro"].options.thinking = {"type": "enabled", "budgetTokens": 16384} |
-      .provider["bailian-token-plan"].models["deepseek-v4-flash"].options.thinking = {"type": "enabled", "budgetTokens": 16384}
-    ' "$OPENCODE_JSON" > "$tmp_json" && mv "$tmp_json" "$OPENCODE_JSON"
-    echo "DeepSeek thinking enabled (via jq)"
-elif [ -f "$OPENCODE_JSON" ] && command -v python3 >/dev/null 2>&1; then
-    python3 -c "
-import json, sys, os
-path = os.environ.get('OPENCODE_JSON', '')
-with open(path, 'r') as f:
-    data = json.load(f)
-provider = data.get('provider', {}).get('bailian-token-plan', {})
-models = provider.get('models', {})
-for model_name in ['deepseek-v4-pro', 'deepseek-v4-flash']:
-    if model_name in models:
-        if 'options' not in models[model_name]:
-            models[model_name]['options'] = {}
-        models[model_name]['options']['thinking'] = {
-            'type': 'enabled',
-            'budgetTokens': 16384
-        }
-with open(path, 'w') as f:
-    json.dump(data, f, indent=2)
-print('DeepSeek thinking enabled (via python3)')
-" 2>/dev/null || true
+# 5. Enable thinking for DeepSeek models in opencode.json (pure jq, no python3)
+OPENCODE_JSON="$HOME/.config/opencode/opencode.json"
+if [ -f "$OPENCODE_JSON" ]; then
+    if command -v jq >/dev/null 2>&1; then
+        tmp_json="$(mktemp)"
+        jq '
+          .provider["bailian-token-plan"].models["deepseek-v4-pro"].options.thinking = {"type": "enabled", "budgetTokens": 16384} |
+          .provider["bailian-token-plan"].models["deepseek-v4-flash"].options.thinking = {"type": "enabled", "budgetTokens": 16384}
+        ' "$OPENCODE_JSON" > "$tmp_json" && mv "$tmp_json" "$OPENCODE_JSON"
+        echo "DeepSeek thinking enabled (via jq)"
+    else
+        echo "WARNING: jq not found — skip enabling DeepSeek thinking mode"
+        echo "Install jq or manually add thinking config to $OPENCODE_JSON"
+    fi
 fi
 
 echo ""
