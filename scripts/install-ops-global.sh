@@ -48,17 +48,52 @@ additional_implementers:
 EOF
 
 # 3. Ensure GNU sed on macOS (BSD sed is incompatible with install.sh)
-if [[ "$(uname)" == "Darwin" ]]; then
-    if ! command -v gsed >/dev/null 2>&1; then
-        if command -v brew >/dev/null 2>&1; then
-            echo "Installing gnu-sed for macOS compatibility..."
-            brew install gnu-sed || { echo "ERROR: Failed to install gnu-sed"; exit 1; }
-        else
-            echo "ERROR: macOS requires gnu-sed. Install with: brew install gnu-sed"
-            exit 1
+if [[ "$(uname)" == "Darwin" ]] && ! command -v gsed >/dev/null 2>&1; then
+    # Create a sed wrapper that handles GNU-only features
+    SED_WRAP_DIR="$(mktemp -d)"
+    cat > "$SED_WRAP_DIR/sed" <<'SEDWRAP'
+#!/usr/bin/env bash
+set -euo pipefail
+in_place=false
+script=""
+files=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -i) in_place=true; shift
+             if [[ $# -gt 0 && "$1" != -* && "$1" != /* && "$1" != s* ]]; then shift; fi ;;
+        -*) echo "sed-wrapper: unknown option: $1" >&2; exit 1 ;;
+        *)  if [[ -z "$script" ]]; then script="$1"; else files+=("$1"); fi; shift ;;
+    esac
+done
+
+# Handle GNU inline 'a' (append) command via awk
+if [[ "$script" =~ ^/(.+)/a[[:space:]](.+)$ ]]; then
+    pattern="${BASH_REMATCH[1]}"
+    text="${BASH_REMATCH[2]}"
+    for file in "${files[@]}"; do
+        if $in_place && [[ -n "$file" && -f "$file" ]]; then
+            tmpf="$(mktemp)"
+            awk -v t="$text" "/${pattern}/{print; print t; next}1" "$file" > "$tmpf" && mv "$tmpf" "$file"
+        elif [[ -n "$file" && -f "$file" ]]; then
+            awk -v t="$text" "/${pattern}/{print; print t; next}1" "$file"
         fi
-    fi
-    # Prepend gnu-sed gnubin so 'sed' resolves to GNU sed in all subprocesses
+    done
+    exit 0
+fi
+
+# Pass through to BSD sed (with -i '' fix)
+bsd_args=()
+$in_place && bsd_args+=("-i" "")
+[[ -n "$script" ]] && bsd_args+=("$script")
+bsd_args+=("${files[@]}")
+exec /usr/bin/sed "${bsd_args[@]}"
+SEDWRAP
+    chmod +x "$SED_WRAP_DIR/sed"
+    export PATH="$SED_WRAP_DIR:$PATH"
+    trap 'rm -rf "$SED_WRAP_DIR" "$TMPDIR"' EXIT
+    echo "Using BSD sed compatibility wrapper"
+elif [[ "$(uname)" == "Darwin" ]]; then
+    # gsed is available — prepend gnubin to use GNU sed everywhere
     GNUBIN="$(brew --prefix gnu-sed)/libexec/gnubin"
     export PATH="$GNUBIN:$PATH"
     echo "Using GNU sed ($GNUBIN)"
