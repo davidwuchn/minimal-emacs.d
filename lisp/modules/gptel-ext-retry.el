@@ -763,7 +763,10 @@ WISDOM: Progressive trimming adapts to severity:
 
 TEST: Verify with network failure simulation — should retry 3 times with
   increasing delays, then fail. Check message buffer for retry logs."
-  (unless new-state (setq new-state (gptel--fsm-next machine)))
+  (unless new-state
+    (condition-case _
+        (setq new-state (gptel--fsm-next machine))
+      (error (setq new-state 'ERRS))))
   (let* ((info (gptel-fsm-info machine))
          ;; Guard: ensure info is a proper list before accessing with plist-get
          (info (and (listp info) info))
