@@ -90,7 +90,7 @@
 ;; Test 5: Risk score calculation
 (ert-deftest test-production-metrics/calculate-risk-score ()
   "Should calculate risk score for approval threshold."
-  :expected-result (if noninteractive :failed :passed)
+  :expected-result (if noninteractive :passed :passed)
   ;; Low risk: error decreased, satisfaction improved
   (let ((risk (gptel-auto-workflow--calculate-production-risk-score -0.1 0.5 5)))
     (should (numberp risk))
@@ -108,7 +108,7 @@
 ;; Test 6: Production metrics tracking (with mocked API)
 (ert-deftest test-production-metrics/track-impact-with-mock ()
   "Should track production impact using mocked Sentry API."
-  :expected-result (if noninteractive :failed :passed)
+  :expected-result (if noninteractive :passed :passed)
   ;; Mock the Sentry query to return test data
   (cl-letf (((symbol-function 'gptel-auto-workflow--query-sentry-errors)
              (lambda (target &optional days-before days-after)
