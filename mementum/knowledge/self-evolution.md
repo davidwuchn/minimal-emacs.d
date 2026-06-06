@@ -14,7 +14,7 @@ Auto-generated from experiment history. Injected into researcher prompts.
 
 ## Experiment Gap Detection
 
-*36 gap(s) detected between experiment intervals:*
+*37 gap(s) detected between experiment intervals:*
 
 - Gap between exp nil and exp nil (56604s)
 - Gap between exp nil and exp nil (10659s)
