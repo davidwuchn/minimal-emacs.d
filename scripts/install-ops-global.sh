@@ -55,16 +55,23 @@ AGENTS_DIR="$HOME/.config/opencode/agents"
 
 update_model() {
     local file="$1" model="$2"
-    [ -f "$file" ] && sed -i.bak "s/^model:.*/model: $model/" "$file" && rm -f "$file.bak"
+    if [ -f "$file" ]; then
+        local tmpf
+        tmpf="$(mktemp)"
+        sed "s/^model:.*/model: $model/" "$file" > "$tmpf" && mv "$tmpf" "$file"
+    fi
 }
 
 # Primary
 for agent in maintainer maintainer-direct; do
     file="$AGENTS_DIR/$agent.md"
     if [ -f "$file" ]; then
-        sed -i.bak '/^model:/d' "$file"
-        sed -i.bak '/^description:/a\model: bailian-token-plan/kimi-k2.6' "$file"
-        rm -f "$file.bak"
+        # Portable: delete model line, then insert after description using temp file
+        tmpf="$(mktemp)"
+        sed '/^model:/d' "$file" > "$tmpf"
+        # Insert "model: ..." after the description line
+        awk '/^description:/{print; print "model: bailian-token-plan/kimi-k2.6"; next}1' "$tmpf" > "$file"
+        rm -f "$tmpf"
     fi
 done
 
@@ -82,11 +89,19 @@ update_model "$AGENTS_DIR/implementer-safe.md"      "bailian-token-plan/glm-5.1"
 update_model "$AGENTS_DIR/legacy-curator.md"        "bailian-token-plan/deepseek-v4-pro"
 
 # 5. Enable thinking for DeepSeek models in opencode.json
-OPENCODE_JSON="$HOME/.config/opencode/opencode.json"
-if [ -f "$OPENCODE_JSON" ] && command -v python3 >/dev/null; then
+export OPENCODE_JSON="$HOME/.config/opencode/opencode.json"
+if [ -f "$OPENCODE_JSON" ] && command -v jq >/dev/null 2>&1; then
+    tmp_json="$(mktemp)"
+    jq '
+      .provider["bailian-token-plan"].models["deepseek-v4-pro"].options.thinking = {"type": "enabled", "budgetTokens": 16384} |
+      .provider["bailian-token-plan"].models["deepseek-v4-flash"].options.thinking = {"type": "enabled", "budgetTokens": 16384}
+    ' "$OPENCODE_JSON" > "$tmp_json" && mv "$tmp_json" "$OPENCODE_JSON"
+    echo "DeepSeek thinking enabled (via jq)"
+elif [ -f "$OPENCODE_JSON" ] && command -v python3 >/dev/null 2>&1; then
     python3 -c "
-import json, os
-with open('$OPENCODE_JSON', 'r') as f:
+import json, sys, os
+path = os.environ.get('OPENCODE_JSON', '')
+with open(path, 'r') as f:
     data = json.load(f)
 provider = data.get('provider', {}).get('bailian-token-plan', {})
 models = provider.get('models', {})
@@ -98,9 +113,9 @@ for model_name in ['deepseek-v4-pro', 'deepseek-v4-flash']:
             'type': 'enabled',
             'budgetTokens': 16384
         }
-with open('$OPENCODE_JSON', 'w') as f:
+with open(path, 'w') as f:
     json.dump(data, f, indent=2)
-print('DeepSeek thinking enabled')
+print('DeepSeek thinking enabled (via python3)')
 " 2>/dev/null || true
 fi
 
