@@ -11,7 +11,7 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 192 experiments (4% keep rate).*
+*Consolidated from 181 experiments (4% keep rate).*
 
 **Performance:** 7 kept / 1 discarded / 10 failed (EXTRACTED — from TSV)
 
@@ -64,78 +64,99 @@ were misleading.
 
 
 
+<<<<<<< Updated upstream
+
+
+=======
+>>>>>>> Stashed changes
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.05). EXTRACTED from distill→check pipeline.*
 
 ```allium
-The user is asking me to "distill" research findings. They've provided a research strategy, experiments, and lists of kept and discarded hypotheses. I need to synthesize this into a clear, organized distillation.
+The user wants me to "distill" the research strategy and hypothesis information they've provided. Let me parse what they've given me:
 
-Let me analyze the kept hypotheses:
+**Research strategy**: template-default
+**Experiments**: 170 across many targets (test files and lisp modules related to gptel, a Lisp project)
+**Kept hypotheses**: 3 listed
+**Discarded hypotheses**: 1 listed
 
-1. Idempotency guard + symmetric disable function — Vitality + Clarity
-2. Fix misleading message + directory existence validation — bug fix
-3. Cache validation uses `eq` instead of `equal` for project list — Vitality + Clarity
-4. Extract buffer lookup with explicit nil guards — Clarity + Vitality
-5. Adaptive error recovery for invalid project paths + empty-projects edge case — Vitality + Clarity
-6. Replace `format-mode-line` with direct `mode-name` access + nil-safety guard — Clarity + Vitality
-7. Filter `not-applicable` symbols before sorting in benchmark scoring — Clarity + Vitality
+The user is asking me to distill this. This appears to be from an automated research/hypothesis generation system, likely from a tool like an AI research agent or code analysis system. My job is to summarize the state of the research.
 
-These are all about improvements to specific code areas, targeting two main values:
-- φ Vitality (progressive improvement, adapts to discovery, robust to edge cases)
-- fractal Clarity (explicit assumptions, testable, removes unnecessary complexity)
+Let me look at what's meaningful here:
 
-The discarded hypotheses section just says "No hypothesis stated" — so all the real findings are in the kept section.
+1. **Research strategy used**: `template-default` - a default template-based research approach
+2. **Scale**: 170 experiments across 30+ targets (mostly gptel Emacs Lisp modules, some staging configs and a test target)
+3. **Kept hypotheses** (3):
+   - First one: "No hypothesis stated" - this is a placeholder/empty
+   - Second: Improving `gptel-auto-workflow-list-project-buffers` function
+   - Third: A specific bug hypothesis about `(plist-get validation :pct)` returning nil causing a `wrong-type-argument` crash, fixable with nil-guard
+   - Fourth: Another nil-guard hypothesis for `--calculate-error-rate` to handle malformed Sentry API responses
+4. **Discarded hypotheses** (1):
+   - "removing it entirely might change semantics slightly if someone relied on it" - this looks like a half-formed/discarded idea
 
-Let me distill this into a clear summary that captures the patterns and themes. I should NOT add my own hypotheses — only synthesize what was provided.
+Wait, let me count again:
+- Kept: 4 entries (one is "No hypothesis stated" which is essentially empty)
+- Discarded: 1 entry
 
-The format should be a clean distillation. Let me think about what makes a good distillation:
-- Group by theme
-- Identify common patterns
-- Note the values being targeted
-- Preserve concrete actionable content
+So effective kept hypotheses = 3 actual + 1 empty placeholder
 
-Patterns I see:
-1. **Cache invalidation**: Move from identity to content comparison
-2. **Idempotency / symmetry**: Guards against re-adding, extract disable counterparts
-3. **Edge case handling**: nil guards, empty-list guards, ignore-errors around unsafe calls
-4. **Data filtering**: Remove sentinel values (like `not-applicable`) before processing
-5. **Simplification**: Replace complex calls with simpler direct ones (format-mode-line → mode-name)
-6. **Validation**: Directory existence, buffer state assumptions
-7. **Misleading messages**: Fix incorrect status/info messages
+The pattern I see:
+- 2 of the 3 real kept hypotheses are about adding nil-guards around `plist-get` calls to prevent crashes from malformed data
+- 1 is about improving/implementing a function
+- The discarded one is about removing something
 
-Common targets:
-- φ Vitality: adapt to actual usage, robust to edge cases, learn from discovered bugs
-- fractal Clarity: make assumptions explicit, simplify intent, testable
+The theme is: defensive programming for malformed/missing data, particularly around FSM (Finite State Machine) callbacks and JSON parsing from external APIs (Sentry).
 
-Let me write a clean distillation. I'll make it organized and actionable without adding new hypotheses.
+Targets of interest for kept hypotheses:
+- `lisp/modules/gptel-auto-workflow-production.el` (gptel-auto-workflow-list-project-buffers)
+- `lisp/modules/gptel-auto-workflow-ontology-strategy.el` (allium-bdd-assert)
+- `lisp/modules/gptel-auto-workflow-production-metrics.el` (calculate-error-rate)
+
+The user wants a "distill" - a concise summary. Let me produce a clean distillation of what we know.
 ```
 
 ### Check Issues
 
-I see the issue. What you pasted isn't a distillation — it's a **planning document** (an LLM's meta-reasoning *about* how to distill). The actual research material is missing.
+## Check on your distillation
 
-## What I can see in your message
+Mostly accurate, two issues worth fixing:
 
-- **7 kept hypotheses** (items 1–7), apparently from an Emacs Lisp codebase (references to `project-p`, `format-mode-line`, `mode-name`, `eq`/`equal`, `not-applicable` symbols)
-- **No discarded hypotheses** — the discarded section is empty
-- **No research strategy or experiments** — only the list of outcomes
-- **The rest is the planner's own scratchpad** (pattern analysis, formatting ideas, etc.) — not findings
+**1. Count is off.** You wrote "Kept hypotheses (3)" but listed four entries — the first one is an empty placeholder (`"No hypothesis stated"`), which is not a real hypothesis. Either:
+- Count it as 3 real kept hypotheses (excluding the placeholder), or
+- Count it as 4 with a footnote that one is empty.
 
-## What's missing to actually distill
+Don't present it as 3+1 — the placeholder contributes nothing.
 
-To produce the distillation, I'd need:
+**2. The "discarded" entry isn't a hypothesis.** `"removing it entirely might change semantics slightly if someone relied on it"` is a risk caveat, not a falsifiable claim. If the system is producing these, it may be misclassifying side-comments as hypotheses. Worth flagging upstream.
 
-1. The **research strategy / driving questions** that generated these hypotheses
-2. The **experiments or evidence** (tests run, cases exercised) backing each kept item
-3. The **discarded hypotheses with reasons** — the "No hypothesis stated" line suggests this wasn't filled in
-4. The **full text of each kept hypothesis**, not just one-line summaries
+**3. Pattern observation is correct and worth elevating.** Of the 3 real kept hypotheses:
+- 2/3 are defensive nil-guards around `plist-get` (one in FSM validation step, one in Sentry response parser)
+- 1/3 is an unimplemented/incomplete function (`gptel-auto-workflow-list-project-buffers`)
 
-## What I can offer right now
+So the dominant theme is **hardening the codebase against malformed input from external sources** (BDD validation pipeline, Sentry API), with one standalone TODO-style gap.
 
-- **Check the planner's reasoning** — the thematic grouping (cache invalidation, idempotency, nil-guards, sentinel filtering, simplification) is sound, and the Vitality/Clarity framing is applied consistently
-- **Check for gaps in the 7 kept items** — e.g., hypothesis #1 mixes two concerns (idempotency guard *and* symmetric disable), and #6 also bundles two changes; these should likely split if "distill" means *
+---
+
+### Tightened distillation
+
+- **Strategy:** `template-default`, 170 experiments, 30+ targets (predominantly `lisp/modules/gptel-auto-workflow-*.el`).
+- **Kept (3 real, 1 empty placeholder):**
+  1. `gptel-auto-workflow-list-project-buffers` is incomplete / needs implementation
+  2. `(plist-get validation :pc
 
 ... (truncated)
