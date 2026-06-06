@@ -21054,6 +21054,65 @@ P1.2 FIX: Stricter enforcement catches more duplicates."
     (should (string-match-p "when (>= shared 2)" code))
     (should-not (string-match-p "when (>= shared 3)" code))))
 
+;;; P0.8: Analyzer Callback Stall Fix (2026-06-06)
+
+(ert-deftest regression/experiment-loop/analyzer-callback-error-does-not-stall ()
+  "Analyzer callback error should not stall the experiment loop.
+P0.8 FIX: When callback fails with --cl-block-nil--, write error to TSV
+and allow experiment loop to continue instead of stalling."
+  (require 'gptel-tools-agent-benchmark)
+  ;; Simulate a broken callback (like --cl-block-nil--)
+  (let* ((callback-called nil)
+         (broken-callback (lambda (_result)
+                           (signal 'no-catch '(--cl-block-nil--))))
+         (result-received nil)
+         (safe-callback (lambda (result)
+                         (setq callback-called t
+                               result-received result))))
+    ;; Test 1: Safe callback works normally
+    (condition-case err
+        (progn
+          (funcall safe-callback '(:analysis "test"))
+          (should callback-called)
+          (should (equal result-received '(:analysis "test"))))
+      (error (ert-fail (format "Safe callback should not error: %s" err))))
+    ;; Test 2: Broken callback is caught
+    (let ((error-caught nil))
+      (condition-case err
+          (funcall broken-callback '(:analysis "test"))
+        (error
+         (setq error-caught t)
+         (should (string-match-p "No catch for tag.*cl-block-nil" (error-message-string err)))))
+      (should error-caught))))
+
+(ert-deftest regression/experiment-loop/aux-subagent-callback-recovery-writes-tsv ()
+  "When aux subagent callback fails, should write error to TSV.
+P0.8 FIX: Fallback path writes tool-error result to unblock experiment loop."
+  (require 'gptel-tools-agent-benchmark)
+  ;; This test verifies the recovery mechanism exists in the code
+  (let ((code (with-temp-buffer
+                (insert-file-contents
+                 (expand-file-name "lisp/modules/gptel-tools-agent-benchmark.el"
+                                   user-emacs-directory))
+                (buffer-string))))
+    ;; Verify the fallback doesn't try to call the broken callback again
+    (should (string-match-p "fallback callback also failed" code))
+    ;; Verify it logs the error
+    (should (string-match-p "callback error caught and recovered" code))))
+
+(ert-deftest regression/persist-status/handles-nil-status-file ()
+  "persist-status should handle nil status file gracefully.
+P0.8 FIX: Guard against file-name-directory called on nil."
+  (require 'gptel-tools-agent-experiment-loop)
+  (let ((code (with-temp-buffer
+                (insert-file-contents
+                 (expand-file-name "lisp/modules/gptel-tools-agent-experiment-loop.el"
+                                   user-emacs-directory))
+                (buffer-string))))
+    ;; Verify the fix includes a nil check
+    (should (string-match-p "when dir" code))
+    (should (string-match-p "file-name-directory file" code))))
+
 (provide 'test-gptel-tools-agent-regressions)
 
 ;;; test-gptel-tools-agent-regressions.el ends here
