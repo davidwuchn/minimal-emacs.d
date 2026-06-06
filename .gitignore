@@ -35,8 +35,10 @@ lisp/modules/*.elc
 !scripts/git-hooks/
 !scripts/git-hooks/*
 !lisp/init-org.el
-!docs/
-!docs/**/*.md
+!mementum/knowledge/modules/
+!mementum/knowledge/modules/*.md
+!mementum/knowledge/plans/
+!mementum/knowledge/plans/**/*.md
 !lisp/modules/gptel-skill-*.el
 !lisp/modules/gptel-benchmark*.el
 !lisp/modules/gptel-workflow-*.el
@@ -59,9 +61,7 @@ lisp/modules/*.elc
 !mementum/knowledge/*.md
 !mementum/knowledge/strategic-plans/
 !mementum/knowledge/strategic-plans/*.md
-!plans/
-!plans/**/
-!plans/**/*.md
+
 mementum/knowledge/*REJECTED*
 !mementum/memories/
 !mementum/memories/*.md
