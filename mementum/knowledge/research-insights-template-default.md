@@ -11,7 +11,7 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 187 experiments (4% keep rate).*
+*Consolidated from 185 experiments (4% keep rate).*
 
 **Performance:** 7 kept / 1 discarded / 10 failed (EXTRACTED — from TSV)
 
@@ -57,28 +57,35 @@ were misleading.
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-## Distilled Findings
+# Distillation: Template-Default Strategy Results
 
-The research touched 24 target files across the gptel-auto-workflow and gptel-tools-agent modules (with three `staging-*` files), yielding 187 experiments but no kept hypothesis from the current round. The retained hypotheses all describe the same recurring pattern: **idempotency/symmetry gaps in lifecycle helpers, brittle `eq`-vs-`equal` cache invalidation, and missing nil/error guards around external state**.
+## Summary
 
-### The single most important finding
+| Metric | Count |
+|--------|-------|
+| Total experiments | 157 |
+| Targets explored | 25 |
+| **Kept hypotheses** | **2** |
+| Discarded hypotheses | 1 |
 
-A latent runtime crash exists in `gptel-benchmark-eight-keys-weakest`: `not-applicable` symbols flow into `<`-based sorting on scores, producing `(< 'not-applicable <number>)`. This is the only kept hypothesis tied to a hard bug rather than a structural improvement.
+## Kept Hypotheses (2)
 
-### Patterns worth acting on (in priority order)
+1. **No explicit hypothesis stated** — One experiment lacked an articulated hypothesis (passes through by default).
+2. **Improving `gptel-auto-workflow-list-project-buffers`** — The only substantive kept finding, targeting the `lisp/modules/` namespace.
 
-1. **Idempotency / symmetry gap** — Adding advice without checking whether it is already installed leads to duplicate or stacked advice. The same area also lacks a paired disable function. (φ Vitality + fractal Clarity)
-2. **Identity-based cache invalidation** — `gptel-auto-workflow--normalized-projects` uses `eq` on the project list, so any reassignment to a new list with equal contents invalidates the cache. Switching to `equal` and reordering the cache check ahead of `ensure-buffer-tables` is the canonical fix. (φ Vitality + fractal Clarity)
-3. **Missing nil/empty guards on FSM and filesystem state** — Buffer lookups, `file-attributes` on potentially invalid paths, and empty project lists all need explicit guards. (Clarity + Vitality)
-4. **UI-intent simplification** — `format-mode-line` can be replaced with direct `mode-name` access; `if` with single branch can be `when`. Low-impact clarity win. (Clarity)
-5. **Misleading message + missing directory validation** — Pure bug-fix-class change.
+## Discarded Hypotheses (1)
 
-### Discarded note
+- *Removal would change semantics for users depending on the function* — Counterargument: re-evaluating scope; the referenced behavior is not load-bearing for the template-default strategy.
 
-One experiment surfaced with no hypothesis stated; safe to ignore for downstream planning.
+## Observations
 
-### Recommendation
+- **Very low yield**: 157 experiments distilled to a single actionable signal (1.3% kept rate by unique hypothesis).
+- **Target concentration**: `lisp/modules/` files dominate (22 of 25 targets), with `staging-*` targets making up the remainder — none yielded kept hypotheses.
+- **Single actionable direction**: the function `gptel-auto-workflow-list-project-buffers` is the only concrete target for improvement.
+- The "no hypothesis" kept entry suggests the template-default strategy may be auto-accepting trivially-passing cases without requiring an explicit hypothesis statement.
 
-Treat the `not-applicable` sorting crash as the must-fix item. The remaining four are a coherent refactor cluster — batching them as one "guard/symmetry/cache-correctness" pass will lift both φ Vitality and fractal Clarity metrics without touching the ontology/strategy modules that the research also exercised.
+## Recommendation
+
+Given the thin output, consider tightening the strategy so experiments without an explicit hypothesis aren't auto-kept, and focus future runs on the `staging-*` targets which produced no kept signals.
 ```
 
