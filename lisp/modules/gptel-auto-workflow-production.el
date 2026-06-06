@@ -4,6 +4,13 @@
 ;; It runs automatically when the auto-workflow daemon is active.
 
 (require 'cl-lib)
+(require 'gptel-auto-workflow-external-sensors nil t)
+(require 'gptel-auto-workflow-production-metrics nil t)
+(require 'gptel-monitoring-agent nil t)
+(require 'gptel-auto-workflow-human-interface nil t)
+(require 'gptel-token-economics nil t)
+(require 'gptel-auto-workflow-context-database nil t)
+(require 'gptel-auto-workflow-decision-classification nil t)
 (declare-function gptel-auto-workflow-evolution-run-cycle "gptel-auto-workflow-evolution")
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--bead-update-from-experiment "gptel-auto-workflow-beads")
@@ -69,6 +76,21 @@ Skips when a workflow or cron job is active to avoid preempting experiments."
       (condition-case nil
           (load "gptel-tools-agent-base" nil t)
         (error nil)))
+    ;; Load context database at start of cycle (Phase 3: Context Database)
+    (when (fboundp 'gptel-auto-workflow--context-db-load)
+      (condition-case nil
+          (gptel-auto-workflow--context-db-load)
+        (error nil)))
+    ;; Optimize token budget allocation based on category ROI (Phase 4: Token Economics)
+    (when (fboundp 'gptel-token-economics--optimize-allocation)
+      (condition-case nil
+          (gptel-token-economics--optimize-allocation)
+        (error nil)))
+    ;; Wire monitoring agent into evolution cycle (Phase 2: Monitoring Agent)
+    (when (fboundp 'gptel-monitoring-agent--analyze-failure-patterns)
+      (condition-case nil
+          (gptel-monitoring-agent--analyze-failure-patterns)
+        (error nil)))
     (condition-case err
         (progn
           (message "[auto-workflow] Running scheduled evolution cycle...")
@@ -84,7 +106,7 @@ Skips when a workflow or cron job is active to avoid preempting experiments."
        (let* ((frames (backtrace-frames))
               (bt (mapconcat (lambda (f) (format "  %S" f))
                              (seq-take frames 50) "\n"))
-               (log-file (expand-file-name "var/tmp/cron/evolution-backtrace.log"
+              (log-file (expand-file-name "var/tmp/cron/evolution-backtrace.log"
                                           (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
                                                    (gptel-auto-workflow--worktree-base-root))
                                               user-emacs-directory))))
