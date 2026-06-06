@@ -52,7 +52,8 @@ Returns :low-risk, :medium-risk, or :high-risk."
 
 (defun gptel-auto-workflow--calculate-risk-factors (experiment)
   "Calculate individual risk factors for EXPERIMENT.
-Returns plist with :scope-factor, :complexity-factor, :coverage-factor, :business-impact-factor."
+Returns plist with :scope-factor, :complexity-factor,
+:coverage-factor, :business-impact-factor."
   (let* ((files-changed (or (plist-get experiment :files-changed) 0))
          (lines-changed (or (plist-get experiment :lines-changed) 0))
          (test-coverage (or (plist-get experiment :test-coverage) 0.5))
@@ -160,7 +161,7 @@ Returns plist with :approval-type, :reason, :requires-human-input, etc."
 Returns t if essential risk factors are missing."
   (let ((files-changed (plist-get experiment :files-changed))
         (lines-changed (plist-get experiment :lines-changed))
-        (test-coverage (plist-get experiment :test-coverage)))
+        (_test-coverage (plist-get experiment :test-coverage)))
     ;; Require at least files-changed or lines-changed to make a decision
     (and (null files-changed)
          (null lines-changed))))
@@ -197,7 +198,8 @@ Supported filters: :approval-type, :experiment-id, :timestamp-range."
 
 (defun gptel-auto-workflow--calculate-approval-statistics ()
   "Calculate statistics from approval history.
-Returns plist with :auto-approval-rate, :recommend-rate, :review-rate, :total-count."
+Returns plist with :auto-approval-rate, :recommend-rate,
+:review-rate, :total-count."
   (let* ((history gptel-auto-workflow--approval-history)
          (total (length history))
          (auto-count (cl-count :auto-approved history
@@ -243,12 +245,12 @@ Analyzes history to identify common patterns and their risk levels."
     ;; Convert hash table to list and store
     (setq gptel-auto-workflow--risk-patterns
           (let ((result nil))
-            (maphash (lambda (key pattern)
+            (maphash (lambda (_key pattern)
                        (push pattern result))
                      patterns)
             (nreverse result)))))
 
-(defun gptel-auto-workflow--extract-pattern-key (target risk-factors)
+(defun gptel-auto-workflow--extract-pattern-key (target _risk-factors)
   "Extract pattern key from TARGET and RISK-FACTORS.
 Returns string key or nil if no pattern can be extracted."
   (when target

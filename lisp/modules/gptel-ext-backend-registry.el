@@ -338,8 +338,8 @@ Values: off, on, auto."
 (defun gptel-backend-registry--thinking-params (model)
   "Return request-params for MODEL's thinking mode based on self-evolving policy.
 Looks up :thinking-policy from gptel-backend-registry.
-- \\='off  → (:enable_thinking :json-false) or (:thinking (:type \"disabled\"))
-- \\='on   → (:enable_thinking :json-true) or (:thinking (:type \"enabled\"))
+- \\='off  → (:enable_thinking nil) or (:thinking (:type \"disabled\"))
+- \\='on   → (:enable_thinking t) or (:thinking (:type \"enabled\"))
 - \\='auto → checks experiment history; defaults to off for executor."
   (let* ((policy (gptel-backend-registry-thinking-policy model))
          (effective (if (eq policy 'auto)
@@ -355,16 +355,16 @@ Looks up :thinking-policy from gptel-backend-registry.
       (if (eq effective 'off)
           '(:thinking (:type "disabled") :max_tokens 65536)
         '(:thinking (:type "enabled") :max_tokens 65536)))
-     ;; kimi on moonshot uses :thinking/:reasoning directly
-     ((memq model '(kimi-k2.6 \@cf/moonshotai/kimi-k2.6))
-      (if (eq effective 'off)
-          '(:enable_thinking :json-false)
-        '(:enable_thinking :json-true)))
-     ;; Bailian/DashScope models use :enable_thinking
-     (t
-      (if (eq effective 'off)
-          '(:enable_thinking :json-false)
-        '(:enable_thinking :json-true))))))
+      ;; kimi on moonshot uses :thinking/:reasoning directly
+      ((memq model '(kimi-k2.6 \@cf/moonshotai/kimi-k2.6))
+       (if (eq effective 'off)
+           '(:enable_thinking nil)
+         '(:enable_thinking t)))
+      ;; Bailian/DashScope models use :enable_thinking
+      (t
+       (if (eq effective 'off)
+           '(:enable_thinking nil)
+         '(:enable_thinking t))))))
 
 (defvar gptel-backend-registry--thinking-history nil
   "Alist of (model . ((kept-on . N) (total-on . N) ...)).

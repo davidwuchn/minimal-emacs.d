@@ -21086,8 +21086,9 @@ and allow experiment loop to continue instead of stalling."
       (should error-caught))))
 
 (ert-deftest regression/experiment-loop/aux-subagent-callback-recovery-writes-tsv ()
-  "When aux subagent callback fails, should write error to TSV.
-P0.8 FIX: Fallback path writes tool-error result to unblock experiment loop."
+  "When aux subagent callback fails, should not retry the broken callback.
+P0.8 FIX: Log error and let experiment loop timeout naturally instead of
+trying to call the broken callback again."
   (require 'gptel-tools-agent-benchmark)
   ;; This test verifies the recovery mechanism exists in the code
   (let ((code (with-temp-buffer
@@ -21095,23 +21096,52 @@ P0.8 FIX: Fallback path writes tool-error result to unblock experiment loop."
                  (expand-file-name "lisp/modules/gptel-tools-agent-benchmark.el"
                                    user-emacs-directory))
                 (buffer-string))))
-    ;; Verify the fallback doesn't try to call the broken callback again
-    (should (string-match-p "fallback callback also failed" code))
-    ;; Verify it logs the error
-    (should (string-match-p "callback error caught and recovered" code))))
+    ;; Verify the fix does NOT try to call the broken callback again
+    (should-not (string-match-p "fallback callback also failed" code))
+    ;; Verify it logs that the callback is broken
+    (should (string-match-p "callback is broken" code))
+    ;; Verify it mentions timeout or continue
+    (should (string-match-p "experiment will timeout or continue" code))))
 
 (ert-deftest regression/persist-status/handles-nil-status-file ()
-  "persist-status should handle nil status file gracefully.
-P0.8 FIX: Guard against file-name-directory called on nil."
+  "gptel-auto-workflow--persist-status should handle nil status file path.
+This is a regression test for the wrong-type-argument stringp nil error
+that was firing every 10 seconds from the status refresh timer."
   (require 'gptel-tools-agent-experiment-loop)
+  ;; Verify the fix is in place: file-name-directory is guarded by (when file ...)
   (let ((code (with-temp-buffer
                 (insert-file-contents
                  (expand-file-name "lisp/modules/gptel-tools-agent-experiment-loop.el"
                                    user-emacs-directory))
                 (buffer-string))))
-    ;; Verify the fix includes a nil check
-    (should (string-match-p "when dir" code))
-    (should (string-match-p "file-name-directory file" code))))
+    ;; The fix: dir is set with (when file ...) instead of (file-name-directory file)
+    (should (string-match-p "(when file (file-name-directory file))" code))))
+
+;;; P0.9: json-true Fix (2026-06-06)
+
+(ert-deftest regression/json-true/no-json-true-in-backends ()
+  "Backend definitions should use Elisp boolean t/nil, not :json-true/:json-false.
+The json library does not recognize :json-true as a valid JSON value,
+causing 'Wrong type argument: json-value-p, :json-true' errors that
+block all subagent execution."
+  (let ((backends-code (with-temp-buffer
+                         (insert-file-contents
+                          (expand-file-name "lisp/modules/gptel-ext-backends.el"
+                                            user-emacs-directory))
+                         (buffer-string)))
+        (registry-code (with-temp-buffer
+                         (insert-file-contents
+                          (expand-file-name "lisp/modules/gptel-ext-backend-registry.el"
+                                            user-emacs-directory))
+                         (buffer-string))))
+    ;; No :json-true or :json-false in request-params
+    (should-not (string-match-p ":enable_thinking :json-true" backends-code))
+    (should-not (string-match-p ":enable_thinking :json-false" backends-code))
+    (should-not (string-match-p ":enable_thinking :json-true" registry-code))
+    (should-not (string-match-p ":enable_thinking :json-false" registry-code))
+    ;; Should use Elisp booleans instead
+    (should (string-match-p ":enable_thinking t" backends-code))
+    (should (string-match-p ":enable_thinking nil" registry-code))))
 
 (provide 'test-gptel-tools-agent-regressions)
 

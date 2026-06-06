@@ -18,6 +18,9 @@
 (require 'gptel-benchmark-memory)
 (require 'gptel-benchmark-daily)
 (require 'gptel-benchmark-evolution)
+
+(defvar gptel-benchmark-evolution-triggered nil
+  "Flag set when evolution cycle is triggered.")
 (require 'gptel-benchmark-auto-improve)
 (require 'gptel-benchmark-integrate)
 
@@ -194,7 +197,7 @@
    (let* ((results '(:overall-score 0.75
                                     :efficiency-score 0.6
                                     :completion-score 0.9)))
-     (condition-case err
+      (condition-case _err
          (progn
            (gptel-benchmark-evolve-with-improvement 'test-skill 'skill results)
            (should t))
@@ -202,7 +205,7 @@
 
 (ert-deftest gptel-benchmark-test-evolution-report-json ()
   "Test evolution report generation for CI."
-  (condition-case err
+  (condition-case _err
       (progn
         (gptel-benchmark-integrated-report)
         (should t))

@@ -61,7 +61,7 @@ Used to query production metrics for the right service.")
 
 (defun gptel-auto-workflow--infer-service-from-target (target)
   "Infer service name from TARGET file path.
-Returns service name string or 'unknown' if not mappable."
+Returns service name string or \\='unknown if not mappable."
   (or (cl-loop for (path . service) in gptel-auto-workflow--target-service-map
                when (string-prefix-p path target)
                return service)
@@ -137,7 +137,7 @@ Returns float 0.0-1.0 representing error rate."
         (min 1.0 (/ rate 1000.0)))
     0.0))
 
-(defun gptel-auto-workflow--query-user-feedback (target)
+(defun gptel-auto-workflow--query-user-feedback (_target)
   "Query user feedback system for TARGET.
 Returns satisfaction delta: -1.0 (worse) to +1.0 (better).
 Stub implementation - returns 0.0 until feedback system is integrated."
@@ -145,7 +145,7 @@ Stub implementation - returns 0.0 until feedback system is integrated."
   ;; For now, return neutral delta
   0.0)
 
-(defun gptel-auto-workflow--query-support-tickets (target)
+(defun gptel-auto-workflow--query-support-tickets (_target)
   "Query support ticket system for TARGET.
 Returns number of tickets reduced (integer, 0-N).
 Stub implementation - returns 0 until ticket system is integrated."
@@ -153,7 +153,7 @@ Stub implementation - returns 0 until ticket system is integrated."
   ;; For now, return 0 tickets reduced
   0)
 
-(defun gptel-auto-workflow--track-production-impact (target experiment-id)
+(defun gptel-auto-workflow--track-production-impact (target _experiment-id)
   "Track production impact for TARGET experiment.
 EXPERIMENT-ID: unique identifier for this experiment.
 Returns plist with production metrics for TSV columns 33-39."

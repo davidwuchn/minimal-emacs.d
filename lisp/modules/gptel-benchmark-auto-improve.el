@@ -38,6 +38,8 @@
 (require 'gptel-benchmark-llm)
 (require 'gptel-benchmark-instincts nil t)
 
+(declare-function gptel-benchmark-edit-workflow-config "gptel-benchmark-editor")
+
 ;;; Customization
 
 (defgroup gptel-benchmark-auto-improve nil
@@ -78,7 +80,7 @@ Returns skill markdown string or nil."
 
 (defun gptel-benchmark--parse-improvement-section (skill-content element section)
   "Parse improvement suggestions for ELEMENT and SECTION from SKILL-CONTENT.
-SECTION should be 'threshold, 'test, or 'prompt.
+SECTION should be \\='threshold, \\='test, or \\='prompt.
 Returns list of suggestion strings."
   (when skill-content
     (let* ((element-name (symbol-name element))
@@ -550,7 +552,8 @@ Returns the path to the appropriate protocol file in mementum/knowledge/."
 
 (defun gptel-benchmark--extract-eight-keys (results)
   "Extract Eight Keys plist from benchmark RESULTS.
-Returns plist with :vitality :clarity :purpose :wisdom :synthesis :directness :truth :vigilance."
+Returns plist with :vitality :clarity :purpose :wisdom :synthesis
+:directness :truth :vigilance."
   (list :vitality (or (plist-get results :vitality-score) 0.75)
         :clarity (or (plist-get results :clarity-score) 0.75)
         :purpose (or (plist-get results :purpose-score) 0.75)
@@ -560,7 +563,7 @@ Returns plist with :vitality :clarity :purpose :wisdom :synthesis :directness :t
         :truth (or (plist-get results :truth-score) 0.75)
         :vigilance (or (plist-get results :vigilance-score) 0.75)))
 
-(defun gptel-benchmark-auto-improve--record-instincts (name type improved-p eight-keys)
+(defun gptel-benchmark-auto-improve--record-instincts (_name type improved-p eight-keys)
   "Record Eight Keys evolution for NAME of TYPE based on IMPROVED-P outcome.
 EIGHT-KEYS is the full Eight Keys scores from benchmark."
   (when-let* ((protocol-file (gptel-benchmark-auto-improve--get-protocol-for-type type))

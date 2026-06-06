@@ -79,7 +79,7 @@ This combines:
          (capabilities (plist-get gptel-benchmark-evolution-state :capabilities))
          
          ;; Step 6: Feed forward
-         (fed-forward (gptel-benchmark--feed-forward-improvement
+          (_fed-forward (gptel-benchmark--feed-forward-improvement
                        name type anti-patterns (plist-get apply-result :applied) capabilities)))
     
     (list :name name

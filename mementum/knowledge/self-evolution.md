@@ -10,9 +10,9 @@ Auto-generated from experiment history. Injected into researcher prompts.
 
 ## Causal Chain Analysis
 
-*Knowledge reasoning module not loaded - causal analysis unavailable.*
+*Insufficient experiment data for causal chain analysis.*
 
 ## Experiment Gap Detection
 
-*Knowledge reasoning module not loaded - gap detection unavailable.*
+*Insufficient timestamped experiments for gap detection.*
 

@@ -50,7 +50,7 @@ CONFIG is a plist with :dsn and :environment."
   (and gptel-auto-workflow--sentry-config
        (plist-get gptel-auto-workflow--sentry-config :dsn)))
 
-(defun gptel-auto-workflow--sentry-api-call (endpoint params)
+(defun gptel-auto-workflow--sentry-api-call (_endpoint _params)
   "Make API call to Sentry ENDPOINT with PARAMS.
 This is a stub for testing - in production would make HTTP requests."
   ;; Stub implementation - tests will override this with cl-letf
@@ -120,7 +120,7 @@ Returns plist with :error-rate-before, :p50-latency-before, etc."
 ;; Task 1.2: Error Rate Tracking Before/After Experiments
 ;; ============================================================================
 
-(defun gptel-auto-workflow--collect-post-experiment-metrics (module &rest args)
+(defun gptel-auto-workflow--collect-post-experiment-metrics (module &rest _args)
   "Collect metrics after experiment for MODULE.
 ARGS may include :wait-hours to wait before collecting."
   (let* ((now (time-to-seconds))
@@ -170,8 +170,9 @@ Returns plist with :error-rate-improvement-pct, :errors-reduced, :direction."
 
 (defun gptel-auto-workflow--calculate-performance-impact (before after)
   "Calculate performance impact between BEFORE and AFTER metrics.
-BEFORE and AFTER are plists with :p50-latency, :p95-latency, :throughput.
-Returns plist with :latency-improvement-pct, :throughput-improvement-pct, :direction."
+BEFORE and AFTER are plists with :p50-latency, :p95-latency,
+:throughput.  Returns plist with :latency-improvement-pct,
+:throughput-improvement-pct, :direction."
   (let* ((before-metrics (if (listp (car before)) (car before) before))
          (after-metrics (if (listp (car after)) (car after) after))
          (before-latency (or (plist-get before-metrics :p50-latency) 0))
@@ -192,7 +193,7 @@ Returns plist with :latency-improvement-pct, :throughput-improvement-pct, :direc
           :throughput-improvement-pct throughput-improvement-pct
           :direction direction)))
 
-(defun gptel-auto-workflow--schedule-post-experiment-collection (module experiment-id)
+(defun gptel-auto-workflow--schedule-post-experiment-collection (module _experiment-id)
   "Schedule metrics collection 24 hours after experiment deployment.
 Returns timer object."
   (run-with-timer (* 24 3600) nil
@@ -214,7 +215,7 @@ CONFIG is a plist with :webhook-endpoint, :storage-backend, :retention-days."
   (and gptel-auto-workflow--feedback-config
        (plist-get gptel-auto-workflow--feedback-config :webhook-endpoint)))
 
-(defun gptel-auto-workflow--feedback-query (module start-time end-time)
+(defun gptel-auto-workflow--feedback-query (_module _start-time _end-time)
   "Query feedback for MODULE between START-TIME and END-TIME.
 This is a stub - tests override with cl-letf."
   nil)
@@ -243,7 +244,8 @@ ARGS may include :start-time and :end-time."
 (defun gptel-auto-workflow--calculate-feedback-impact (before after)
   "Calculate user satisfaction improvement from BEFORE to AFTER.
 BEFORE and AFTER are plists with :satisfaction-rate, :negative, etc.
-Returns plist with :satisfaction-improvement-pct, :complaints-reduced, :direction."
+Returns plist with :satisfaction-improvement-pct,
+:complaints-reduced, :direction."
   (let* ((before-metrics (if (listp (car before)) (car before) before))
          (after-metrics (if (listp (car after)) (car after) after))
          (satisfaction-before (or (plist-get before-metrics :satisfaction-rate) 0.0))
@@ -357,7 +359,7 @@ Returns weighted score 0.0-1.0."
   "Calculate business value ROI for EXPERIMENT.
 Returns plist with :roi-percentage and :value-per-dollar."
   (let* ((cost-usd (or (plist-get experiment :cost-usd) 0.0))
-         (business-value-score (or (plist-get experiment :business-value-score) 0.0))
+          (_business-value-score (or (plist-get experiment :business-value-score) 0.0))
          (errors-reduced (or (plist-get experiment :errors-reduced) 0))
          (support-tickets-reduced (or (plist-get experiment :support-tickets-reduced) 0))
          (development-hours-saved (or (plist-get experiment :development-hours-saved) 0))
@@ -412,7 +414,8 @@ Returns sorted list of experiments."
 
 (defun gptel-auto-workflow--generate-business-impact-report (experiments)
   "Generate business impact report for EXPERIMENTS.
-Returns plist with :total-business-value, :total-cost, :overall-roi, :top-performing-experiments."
+Returns plist with :total-business-value, :total-cost,
+:overall-roi, :top-performing-experiments."
   (let ((total-business-value 0.0)
         (total-cost 0.0)
         (sorted-experiments (sort (copy-sequence experiments)
