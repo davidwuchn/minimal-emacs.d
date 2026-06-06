@@ -11,7 +11,7 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 187 experiments (4% keep rate).*
+*Consolidated from 185 experiments (4% keep rate).*
 
 **Performance:** 7 kept / 1 discarded / 10 failed (EXTRACTED — from TSV)
 
@@ -50,87 +50,13 @@ were misleading.
 - Try combining with git history for recency bias.
 
 
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*4 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Distillation
-
-## Core Theme
-
-The research strategy employs a **"template-default"** approach across 187 experiments spanning staging concerns (merge, scope, review, config) and ~20 Emacs Lisp modules in a gptel-based auto-workflow and tool-agent ecosystem. Kept hypotheses cluster around a small set of recurring improvement patterns.
-
-## Recurring Patterns in Kept Hypotheses
-
-### 1. **Idempotency & Lifecycle Safety**
-- Adding idempotency guards to prevent re-adding already-active advice
-- Extracting symmetric disable functions
-- **Targets:** φ Vitality (progressive improvement) + fractal Clarity (explicit assumptions)
-
-### 2. **Bug Fixes with User-Facing Impact**
-- Fixing misleading messages
-- Adding directory existence validation
-- Preventing runtime crashes (e.g., `not-applicable` symbol sorting bug in `gptel-benchmark-eight-keys-weakest`)
-
-### 3. **Cache Coherence via Content-Based Comparison**
-- Replacing `eq` (identity) with `equal` (content) for project list comparison
-- Reordering cache checks to occur before side-effecting calls like `ensure-buffer-tables`
-- **Assumption:** Cache invalidation should reflect actual content changes, not pointer reassignment
-
-### 4. **Explicit Guard Rails & Edge Case Handling**
-- Extracting buffer lookup into a clear validation sequence with nil guards
-- Adding `ignore-errors` around fragile calls (e.g., `file-attributes`)
-- Early guards for empty project lists
-- Adapting gracefully to missing FSM state
-
-### 5. **Idiomatic Elisp Simplification**
-- Replacing `format-mode-line` with direct `mode-name` access
-- Preferring `when` over `if` where no else branch exists
-- Adding nil-safety for buffer iteration
-- **Intent:** Remove complexity, make code self-documenting
-
-## Cross-Cutting Principles
-
-All kept hypotheses consistently invoke two quality dimensions:
-- **φ Vitality** — adaptive, progressive, responsive to discovered edge cases and latent bugs
-- **fractal Clarity** — explicit assumptions, testable structure, self-evident intent
-
-The hypotheses are not speculative features; they are **localized refactors and defensive guards** applied to existing functions. No hypothesis was discarded with reasoning provided (all discarded entries were "No hypothesis stated").
-
-## Strategic Distillation
-
-The work is essentially **defensive refactoring of an already-complex system**: the experiment volume (187) across many modules suggests broad surface-area coverage, but the kept hypotheses are narrow, mechanical, and conservative—fixing identity-vs-content bugs, adding nil guards, extracting symmetric pairs, and stripping unnecessary indirection. This is a **stability-and-clarity pass**, not a feature-development pass.
+nil
 ```
 
-### Check Issues
-
-# Check of the Distillation
-
-## What's Accurate
-
-The core framing is sound:
-- 187 experiments, ~20 modules, gptel-based — plausible scale
-- φ Vitality and fractal Clarity as the two dimensions — consistent with what I'd expect from that framework
-- "Defensive refactoring / stability pass" rather than feature work — well-supported
-- "Localized refactors and defensive guards" as the character of changes — accurate summary
-
-## Issues and Gaps
-
-### 1. The "template-default" framing is introduced without grounding
-This phrase appears in the first sentence but is never defined, exemplified, or returned to. Either:
-- Define it (what template? what default?), or
-- Drop it — it reads as jargon that obscures rather than clarifies
-
-### 2. The "Strategic Distillation" paragraph quietly adds a claim the patterns section doesn't support
-It says kept hypotheses are "narrow, mechanical, and conservative." But:
-- Pattern 1 (idempotency guards + symmetric disable functions) is structural, not just mechanical
-- Pattern 3 (reordering cache checks before side-effecting calls) is an architectural ordering decision
-- Pattern 4 (extracting buffer lookup into a validation sequence) is a refactor that changes call shape
-
-Calling this all "mechanical" oversells the conservatism. A more honest phrasing: *mostly mechanical, occasionally structural, never speculative*.
-
-### 3. The "no hypothesis discarded with reasoning provided" line is half-true
-You note discarded entries are "No hypothesis stated" — but the user-
-
-... (truncated)

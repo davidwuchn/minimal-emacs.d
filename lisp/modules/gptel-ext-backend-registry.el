@@ -234,8 +234,9 @@ emergency use only.")
     (kimi-k2.6 . ((xhigh . "high") (high . "medium") (default . "low")))
     (glm-5.1 . ((xhigh . "high") (high . "medium") (default . "low"))))
   "Effort level mapping per backend/model.
-Maps logical effort levels (xhigh, high, default) to API-specific reasoning_effort values.
-Based on DeepSWE benchmark data: effort level dramatically affects pass@1 scores.")
+Maps logical effort levels (xhigh, high, default) to API-specific
+reasoning_effort values.  Based on DeepSWE benchmark data: effort
+level dramatically affects pass@1 scores.")
 
 (defconst gptel-task-type-effort-defaults
   '((executor . high)
@@ -245,12 +246,12 @@ Based on DeepSWE benchmark data: effort level dramatically affects pass@1 scores
     (researcher . default)
     (comparator . default))
   "Default effort level per task type.
-Executor/grader/reviewer use 'high for quality-critical tasks.
-Analyzer/researcher/comparator use 'default for speed/cost optimization.")
+Executor/grader/reviewer use \\='high for quality-critical tasks.
+Analyzer/researcher/comparator use \\='default for speed/cost optimization.")
 
-(defun gptel-backend-registry-effort-level (backend model &optional task-type)
+(defun gptel-backend-registry-effort-level (_backend model &optional task-type)
   "Return API-specific effort level for BACKEND/MODEL.
-TASK-TYPE defaults to 'executor if not provided.
+TASK-TYPE defaults to \\='executor if not provided.
 Returns the reasoning_effort value to send in API requests,
 or nil if the backend doesn't support effort levels."
   (let* ((effort (or task-type 'executor))
@@ -337,9 +338,9 @@ Values: off, on, auto."
 (defun gptel-backend-registry--thinking-params (model)
   "Return request-params for MODEL's thinking mode based on self-evolving policy.
 Looks up :thinking-policy from gptel-backend-registry.
-- 'off → (:enable_thinking :json-false) or (:thinking (:type \"disabled\"))
-- 'on  → (:enable_thinking :json-true) or (:thinking (:type \"enabled\"))
-- 'auto → checks experiment history; defaults to off for executor."
+- \\='off  → (:enable_thinking :json-false) or (:thinking (:type \"disabled\"))
+- \\='on   → (:enable_thinking :json-true) or (:thinking (:type \"enabled\"))
+- \\='auto → checks experiment history; defaults to off for executor."
   (let* ((policy (gptel-backend-registry-thinking-policy model))
          (effective (if (eq policy 'auto)
                         (gptel-backend-registry--auto-thinking model)
@@ -366,13 +367,14 @@ Looks up :thinking-policy from gptel-backend-registry.
         '(:enable_thinking :json-true))))))
 
 (defvar gptel-backend-registry--thinking-history nil
-  "Alist of (model . ((kept-on . N) (total-on . N) (kept-off . N) (total-off . N))).
-Populated by gptel-auto-experiment-ai-behaviors when experiments complete.
-Used by gptel-backend-registry--auto-thinking to decide thinking mode.")
+  "Alist of (model . ((kept-on . N) (total-on . N) ...)).
+Populated by gptel-auto-experiment-ai-behaviors when experiments
+complete.  Used by gptel-backend-registry--auto-thinking to
+decide thinking mode.")
 
 (defun gptel-backend-registry--auto-thinking (model)
   "Decide thinking mode for MODEL based on experiment history.
-Returns 'off if insufficient data or thinking-off wins; 'on otherwise.
+Returns \\='off if insufficient data or thinking-off wins; \\='on otherwise.
 Minimum 5 experiments with each mode before making a decision."
   (let* ((stats (cdr (assoc model gptel-backend-registry--thinking-history)))
          (on-kept (or (cdr (assoc 'kept-on stats)) 0))
