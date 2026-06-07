@@ -22,10 +22,10 @@
 ;; Soft require: knowledge-reasoning provides causal analysis and gap detection
 (require 'gptel-auto-workflow-knowledge-reasoning nil t)
 
-;; Forward declarations — defined in gptel-tools (loaded before this module
-;; via post-init's init-ai chain).  These silence the byte-compiler warning
-;; while preserving the runtime dependency contract.
-(declare-function gptel-auto-workflow--expand-workspace-path "gptel-tools" (path))
+;; Forward declarations — defined in gptel-tools-agent-base (loaded before
+;; this module via post-init's init-ai chain).  These silence the byte-compiler
+;; warning while preserving the runtime dependency contract.
+(declare-function gptel-auto-workflow--expand-workspace-path "gptel-tools-agent-base" (path &optional root))
 
 ;; External functions from other modules
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base" ())

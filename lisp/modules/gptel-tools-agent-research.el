@@ -648,11 +648,14 @@ Total length of returned strings <= MAX-BYTES."
         capped
       ;; Drop whole memories from the end until we fit
       (let ((result (reverse capped))
-            (running 0))
-        (while (and result (> (+ running (length (car result))) max-bytes))
-          (setq running (+ running (length (car result))))
-          (pop result))
-        (nreverse result)))))
+            (kept-total 0))
+        ;; Walk from newest to oldest, keeping memories until budget exhausted
+        (cl-loop for m in result
+                 if (<= (+ kept-total (length m)) max-bytes)
+                 do (setq kept-total (+ kept-total (length m)))
+                 and collect m into kept
+                 else do (cl-return (nreverse kept))
+                 finally (cl-return (nreverse kept)))))))
 
 (defun gptel-mementum--build-synthesis-prompt (topic memories)
   "Build prompt for LLM to synthesize MEMORIES into knowledge page for TOPIC."
