@@ -1,0 +1,1 @@
+Elisp `apply #'+` overflow: `(apply #'+ list)` crashes with large lists due to max-args limit (~4096). Use `(cl-reduce #'+ list :initial-value 0)` or `(cl-reduce (lambda (acc e) (+ acc (or (cadr e) 0))) events :initial-value 0)` for safe summation. The `:initial-value 0` also correctly handles empty lists (returns 0), matching `(apply #'+ nil)` behavior.

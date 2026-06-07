@@ -1,0 +1,1 @@
+In Emacs Lisp, `(= 0 nil)` throws `wrong-type-argument`, unlike `(cdr nil)` which safely returns nil. When a variable from `git-result` (returns `(output . exit-code)` or nil) is used as `(= 0 (cdr var))`, always guard with `(and var (= 0 (cdr var)))` to prevent crash on nil. Pattern found in gptel-tools-agent-staging-merge.el push-result sites.
