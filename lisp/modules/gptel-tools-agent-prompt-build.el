@@ -2218,8 +2218,12 @@ If :business-value-score is not set, computes from local signals."
             ;; Process any queued alerts
             (when (fboundp 'gptel-auto-workflow--process-alert-queue)
               (gptel-auto-workflow--process-alert-queue)))
-        (error
-         (message "[auto-workflow] Human interface error: %s" err))))
+(error
+          (message "[auto-workflow] Human interface error: %s" err))))
+    ;; Context database: capture causal/business context per experiment
+    (when (and gptel-auto-workflow-context-db-auto-capture
+               (fboundp 'gptel-auto-workflow-context-db-capture))
+      (gptel-auto-workflow-context-db-capture experiment))
     (gptel-auto-workflow--sync-live-kept-count run-id file)))
 
 (defun gptel-auto-experiment--make-kept-result-callback (run-id exp-result log-fn callback)
