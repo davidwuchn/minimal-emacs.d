@@ -1002,6 +1002,52 @@ mkdir -p "$DIGEST_DIR"
             }' | sort -k2 -n -r | head -10
     fi
     echo ""
+    echo "## Top Failure Modes by Target (last 7d)"
+    echo ""
+    # Per-target failure analysis: tells the human WHICH files are failing
+    # and WHY. The highest-value signal for debugging the keep-rate problem.
+    if compgen -G "$DIR/var/tmp/experiments/*/results.tsv" >/dev/null; then
+        find "$DIR/var/tmp/experiments" -maxdepth 2 -name "results.tsv" -mtime -7 -exec cat {} \; 2>/dev/null | \
+            awk -F'\t' 'NR>1 {
+                target = $2
+                decision = $8
+                reason = $12
+                # Skip non-target rows (staging-review, staging-merge, etc.)
+                if (target !~ /\.el$/) next
+                total[target]++
+                if (decision ~ /^(kept|grader-bypass|merged|staged)$/) kept[target]++
+                else fail[target]++
+                # Track failure reasons
+                if (reason != "" && reason != "repeated-focus-symbol") {
+                    key = target SUBSEP reason
+                    reason_count[key]++
+                }
+            } END {
+                # Find targets with most failures
+                for (t in fail) {
+                    if (fail[t] >= 3) {
+                        rate = (kept[t]+0) * 100 / total[t]
+                        printf "%s\t%d\t%d\t%d\n", t, total[t], kept[t]+0, fail[t]
+                    }
+                }
+            }' | sort -t$'\t' -k4 -n -r | head -10 | \
+        awk -F'\t' '{printf "- **%s**: %d attempts, %d kept, %d failed (%.0f%% keep)\n", $1, $2, $3, $4, ($3*100/$2)}'
+        # For the top failing target, show its failure reasons
+        top_failing=$(find "$DIR/var/tmp/experiments" -maxdepth 2 -name "results.tsv" -mtime -7 -exec cat {} \; 2>/dev/null | \
+            awk -F'\t' 'NR>1 {
+                if ($2 !~ /\.el$/) next
+                if ($8 !~ /^(kept|grader-bypass|merged|staged)$/) fail[$2]++
+            } END { for (t in fail) print fail[t] "\t" t }' | sort -n -r | head -1 | cut -f2)
+        if [ -n "$top_failing" ]; then
+            echo ""
+            echo "### Failure reasons for top target: \`$top_failing\`"
+            find "$DIR/var/tmp/experiments" -maxdepth 2 -name "results.tsv" -mtime -7 -exec cat {} \; 2>/dev/null | \
+                awk -F'\t' -v target="$top_failing" 'NR>1 && $2 == target && $8 !~ /^(kept|grader-bypass|merged|staged)$/ {reason[$12]++} END {
+                    for (r in reason) printf "  - %s: %d\n", r, reason[r]
+                }' | sort -k3 -n -r | head -5
+        fi
+    fi
+    echo ""
     echo "## Pipeline Run Status"
     echo ""
     echo "- Final status: $PIPELINE_FINAL_STATUS"

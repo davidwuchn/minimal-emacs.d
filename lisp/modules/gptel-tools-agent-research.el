@@ -595,10 +595,18 @@ In headless mode, respects `gptel-mementum-headless-auto-approve'."
       (let* ((extracted (gptel-mementum--extract-content result))
              (line-count (with-temp-buffer (insert extracted) (count-lines 1 (point-max))))
              (headless (bound-and-true-p gptel-auto-workflow--headless))
-             (auto-approve (and headless gptel-mementum-headless-auto-approve)))
+             (auto-approve (and headless gptel-mementum-headless-auto-approve))
+             ;; YC principle: a brief synthesis is better than no page at all.
+             ;; For research-derived topics (insight-proposal-*, mistake-failure-pattern-*)
+             ;; the LLM often returns 1 line "you have enough context". Rather
+             ;; than skip, we accept the brief page (≥3 lines) and tag it as
+             ;; 'partial'. This keeps the knowledge base growing.
+             (min-lines (if (string-match "^insight-proposal-\\|^mistake-failure-pattern-\\|^research-" topic)
+                          3
+                        15)))
         (cond
-         ((< line-count 15)
-          (message "[mementum] Skip '%s': only %d lines (need ≥15)" topic line-count))
+         ((< line-count min-lines)
+          (message "[mementum] Skip '%s': only %d lines (need ≥%d)" topic line-count min-lines))
          ((and headless (not auto-approve))
           (message "[mementum] Skip '%s': human approval required before saving in headless mode (%d lines)"
                    topic line-count))
