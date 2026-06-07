@@ -999,7 +999,7 @@ staging or main are deleted."
                       (gptel-auto-workflow--with-skipped-submodule-sync
                        (lambda ()
                          (gptel-auto-workflow--git-result delete-command 180)))))
-                (if (= 0 (cdr delete-result))
+                (if (= 0 (or (cdr delete-result) -1))
                     (cl-incf deleted (length batch))
                   (message "[auto-workflow] Failed to delete remote optimize branches %s: %s"
                            (mapconcat #'identity batch ", ")
@@ -1011,7 +1011,7 @@ staging or main are deleted."
                  (gptel-auto-workflow--git-result
                   (format "git remote prune %s" remote)
                   180)))
-            (if (= 0 (cdr prune-result))
+            (if (= 0 (or (cdr prune-result) -1))
                 (let* ((tracking-after
                         (length
                          (gptel-auto-workflow--remote-tracking-optimize-branches

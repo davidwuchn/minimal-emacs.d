@@ -9,8 +9,9 @@
 
 ;; TDD tests for Monitoring Agent Phase 1: failure pattern analysis.
 ;; Phase 2: proposal generation, scoring, validation, and persistence.
+;; Phase 3: auto-test & deploy, safe rollback, human-in-the-loop.
 ;; Tests classification, systemic detection, throttle, mementum persistence,
-;; and proposal generation pipeline.
+;; proposal generation pipeline, test-proposal, deploy-proposal, and rollback.
 
 ;;; Code:
 
@@ -30,7 +31,7 @@
      ,@body))
 
 (defmacro with-mocked-parse-and-mementum (records &rest body)
-  "Execute BODY with mocked parse and mementum.  Returns write-calls."
+  "Execute BODY with mocked parse, mementum, git-cmd, and staging-worktree.  Returns write-calls."
   (declare (indent 1))
   `(let* ((write-calls nil)
           (parsed-records ,records))
@@ -49,7 +50,12 @@
                     (slug (downcase (string-trim collapsed "-"))))
                (substring slug 0 (min 80 (length slug))))))
           ((symbol-function 'gptel-auto-workflow--worktree-base-root)
-           (lambda () "/tmp/mock-base")))
+(lambda () "/tmp/mock-base"))
+          ((symbol-function 'gptel-auto-workflow--git-cmd)
+           (lambda (cmd &optional _timeout)
+             "mock-git-output"))
+          ((symbol-function 'gptel-auto-workflow--with-staging-worktree)
+           (lambda (fn) (funcall fn))))
        (with-clean-monitoring-state ,@body)
        write-calls)))
 
@@ -407,6 +413,152 @@ Returns the result of the last form in BODY."
         (when (eq (nth 0 call) '❌) (setq has-mistake t)))
       (should has-insight)
       (should has-mistake))))
+
+
+;; ── Phase 3: Auto-Test & Deploy Tests ──
+
+(ert-deftest test-monitoring/test-proposal-high-success-rate ()
+  "Should mark proposal as 'pass' when test-success-rate >= deploy-threshold."
+  (let* ((proposal (list :description "Fix grader failures"
+                         :component "grader"
+                         :confidence 0.7
+                         :risk "medium"
+                         :impact-score 0.7
+                         :feasibility-score 0.7
+                         :pattern-type 'grader
+                         :pattern-target "lisp/foo.el"
+                         :validation-rate 0.8
+                         :status "validated"))
+         (records
+          (append
+           (make-list 8 (list :decision "rejected" :target "lisp/foo.el"
+                              :grader-reason "syntax error" :strategy "default"
+                              :prompt-chars 500))
+           (make-list 2 (list :decision "rejected" :target "lisp/other.el"
+                              :grader-reason "low quality" :strategy "default"
+                              :prompt-chars 500))))
+         (tested (gptel-auto-workflow--test-proposal proposal records)))
+    (should (>= (plist-get tested :test-success-rate) 0.6))
+    (should (equal (plist-get tested :test-status) "pass"))))
+
+(ert-deftest test-monitoring/test-proposal-low-success-rate ()
+  "Should mark proposal as 'fail' when test-success-rate < deploy-threshold."
+  (let* ((proposal (list :description "Fix grader failures"
+                         :component "grader"
+                         :confidence 0.7
+                         :risk "medium"
+                         :impact-score 0.7
+                         :feasibility-score 0.7
+                         :pattern-type 'grader
+                         :pattern-target "lisp/rare.el"
+                         :validation-rate 0.2
+                         :status "validated"))
+         (records
+          (append
+           (make-list 2 (list :decision "rejected" :target "lisp/rare.el"
+                              :grader-reason "syntax error" :strategy "default"
+                              :prompt-chars 500))
+           (make-list 8 (list :decision "rejected" :target "lisp/common.el"
+                              :grader-reason "low quality" :strategy "default"
+                              :prompt-chars 500))))
+         (tested (gptel-auto-workflow--test-proposal proposal records)))
+    (should (< (plist-get tested :test-success-rate) 0.6))
+    (should (equal (plist-get tested :test-status) "fail"))))
+
+(ert-deftest test-monitoring/test-proposal-zero-failures ()
+  "Should return test-success-rate 0.0 and 'fail' when no failures in records."
+  (let* ((proposal (list :description "Fix grader"
+                         :component "grader"
+                         :confidence 0.7
+                         :risk "medium"
+                         :pattern-type 'grader
+                         :pattern-target "lisp/none.el"
+                         :validation-rate 0.0
+                         :status "tentative"))
+         (records
+          (list (list :decision "kept" :target "lisp/none.el"
+                      :grader-reason "good" :strategy "default"
+                      :prompt-chars 500)))
+         (tested (gptel-auto-workflow--test-proposal proposal records)))
+    (should (= (plist-get tested :test-success-rate) 0.0))
+    (should (equal (plist-get tested :test-status) "fail"))))
+
+(ert-deftest test-monitoring/risk->deploy-action-mapping ()
+  "Should correctly map low/medium/high risk to deploy actions."
+  (with-clean-monitoring-state
+   (should (equal (gptel-auto-workflow--risk->deploy-action "low") "auto-deploy"))
+   (should (equal (gptel-auto-workflow--risk->deploy-action "medium") "notify"))
+   (should (equal (gptel-auto-workflow--risk->deploy-action "high") "approval-required"))
+   (should (equal (gptel-auto-workflow--risk->deploy-action "unknown") "unknown"))))
+
+(ert-deftest test-monitoring/deploy-low-risk-auto ()
+  "Should auto-deploy low-risk proposal and create rollback tag."
+  (let* ((tested-proposal (list :description "Fix general issue"
+                                :component "general"
+                                :confidence 0.6
+                                :risk "low"
+                                :test-success-rate 0.8
+                                :test-status "pass"
+                                :pattern-type 'unknown
+                                :pattern-target "misc"))
+         (deployed nil))
+    (let ((write-calls
+           (with-mocked-parse-and-mementum
+            nil
+            (setq deployed (gptel-auto-workflow--deploy-proposal tested-proposal)))))
+      (should (equal (plist-get deployed :deploy-action) "auto-deploy"))
+      (should (string-match-p "monitoring-rollback-general" (plist-get deployed :rollback-tag)))
+      (should (cl-find-if (lambda (call) (eq (nth 0 call) '✅)) write-calls)))))
+
+(ert-deftest test-monitoring/deploy-medium-risk-notify ()
+  "Should return 'notify' action for medium-risk proposal without git tag."
+  (let* ((tested-proposal (list :description "Fix grader issue"
+                                :component "grader"
+                                :confidence 0.7
+                                :risk "medium"
+                                :test-success-rate 0.7
+                                :test-status "pass"
+                                :pattern-type 'grader
+                                :pattern-target "lisp/foo.el"))
+         (deployed nil))
+    (let ((write-calls
+           (with-mocked-parse-and-mementum
+            nil
+            (setq deployed (gptel-auto-workflow--deploy-proposal tested-proposal)))))
+      (should (equal (plist-get deployed :deploy-action) "notify"))
+      (should (string-match-p "monitoring-rollback-grader" (plist-get deployed :rollback-tag)))
+      (should (cl-find-if (lambda (call) (eq (nth 0 call) '🎯)) write-calls)))))
+
+(ert-deftest test-monitoring/deploy-high-risk-approval-required ()
+  "Should return 'approval-required' action for high-risk proposal."
+  (let* ((tested-proposal (list :description "Fix strategy issue"
+                                :component "strategy-harness"
+                                :confidence 0.6
+                                :risk "high"
+                                :test-success-rate 0.7
+                                :test-status "pass"
+                                :pattern-type 'strategy
+                                :pattern-target "lisp/harness.el"))
+         (deployed nil))
+    (let ((write-calls
+           (with-mocked-parse-and-mementum
+            nil
+            (setq deployed (gptel-auto-workflow--deploy-proposal tested-proposal)))))
+      (should (equal (plist-get deployed :deploy-action) "approval-required"))
+      (should (string-match-p "monitoring-rollback-strategy-harness" (plist-get deployed :rollback-tag)))
+      (should (cl-find-if (lambda (call) (eq (nth 0 call) '‖)) write-calls)))))
+
+(ert-deftest test-monitoring/rollback-success ()
+  "Should execute rollback via git checkout and return success status."
+  (let* ((rollback-tag "monitoring-rollback-general-misc")
+         (result nil))
+    (let ((write-calls
+           (with-mocked-parse-and-mementum
+            nil
+            (setq result (gptel-auto-workflow--rollback-proposal rollback-tag)))))
+      (should (equal (plist-get result :rollback-tag) rollback-tag))
+      (should (equal (plist-get result :rollback-status) "success"))
+      (should (cl-find-if (lambda (call) (eq (nth 0 call) '❌)) write-calls)))))
 
 (provide 'test-gptel-auto-workflow-monitoring-agent)
 ;;; test-gptel-auto-workflow-monitoring-agent.el ends here

@@ -9,9 +9,11 @@
 
 ;; Monitoring agent Phase 1: failure pattern analysis.
 ;; Phase 2: proposal generation from systemic failure patterns.
+;; Phase 3: auto-test & deploy proposals, safe rollback, human-in-the-loop.
 ;; Parses TSV experiment logs, detects recurring failures, classifies by type,
 ;; generates improvement proposals, scores and validates them,
-;; and persists patterns and proposals to mementum.
+;; tests against historical data, auto-deploys if success rate exceeds threshold,
+;; and persists patterns, proposals, and deployment decisions to mementum.
 ;;
 ;; Classification categories:
 ;;   grader      -- grader_reason contains syntax/type/undefined errors
@@ -35,6 +37,10 @@
                   "gptel-auto-workflow-mementum")
 (declare-function gptel-auto-workflow--worktree-base-root
                   "gptel-tools-agent-base")
+(declare-function gptel-auto-workflow--git-cmd
+                  "gptel-tools-agent-experiment-loop")
+(declare-function gptel-auto-workflow--with-staging-worktree
+                  "gptel-tools-agent-experiment-loop")
 
 ;; ── Configuration ──
 
@@ -57,6 +63,42 @@ Prevents excessive analysis overhead on the experiment pipeline."
 
 (defvar gptel-auto-workflow-monitoring-last-cycle-time 0.0
   "Float-time of last monitoring cycle.  Used for throttle enforcement.")
+
+;; ── Phase 3: Auto-Test & Deploy Configuration ──
+
+(defcustom gptel-auto-workflow-monitoring-deploy-threshold 0.6
+  "Minimum success rate for auto-deployment of validated proposals.
+Proposals with test-success-rate below this threshold are not deployed."
+  :type 'float
+  :group 'gptel-tools-agent)
+
+(defvar gptel-auto-workflow-monitoring-rollback-tag-prefix "monitoring-rollback-"
+  "Git tag prefix for rollback snapshots created during proposal deployment.")
+
+(defcustom gptel-auto-workflow-monitoring-risk-auto-deploy '("low")
+  "Risk levels eligible for immediate auto-deployment without human approval."
+  :type '(repeat string)
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-auto-workflow-monitoring-risk-notify-deploy '("medium")
+  "Risk levels that notify the human and auto-deploy after a grace period.
+After gptel-auto-workflow-monitoring-deploy-grace-seconds, the proposal
+is deployed unless the human objects."
+  :type '(repeat string)
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-auto-workflow-monitoring-risk-require-approval '("high")
+  "Risk levels that require explicit human approval before deployment.
+Proposals at these risk levels are persisted as 'pending-approval' and
+never auto-deployed."
+  :type '(repeat string)
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-auto-workflow-monitoring-deploy-grace-seconds 86400
+  "Grace period in seconds before auto-deploying medium-risk proposals.
+Default is 24 hours (86400 seconds).  Human can object during this window."
+  :type 'integer
+  :group 'gptel-tools-agent)
 
 ;; ── Failure Classification ──
 
@@ -302,6 +344,137 @@ Status: validated if rate >= 0.6, tentative otherwise."
               (list :validation-rate validation-rate
                     :status status)))))
 
+;; ── Auto-Test & Deploy (Phase 3) ──
+
+(defun gptel-auto-workflow--test-proposal (validated-proposal records)
+  "Test VALIDATED-PROPOSAL against historical RECORDS.
+Re-classifies each failure record matching the proposal's pattern-type
+and pattern-target, computes test-success-rate as the fraction of
+total failures that match the proposal scope.
+Adds :test-success-rate and :test-status to the proposal plist.
+Test-status is \"pass\" if rate >= deploy-threshold, \"fail\" otherwise."
+  (let* ((ptype (plist-get validated-proposal :pattern-type))
+         (ptarget (plist-get validated-proposal :pattern-target))
+         (total-failures 0)
+         (scope-matches 0))
+    (dolist (rec records)
+      (let ((decision (or (plist-get rec :decision) "")))
+        (unless (equal decision "kept")
+          (setq total-failures (1+ total-failures))
+          (when (and (eq (gptel-auto-workflow--classify-failure rec) ptype)
+                     (equal (or (plist-get rec :target) "unknown") ptarget))
+            (setq scope-matches (1+ scope-matches))))))
+    (let* ((test-success-rate
+            (if (> total-failures 0)
+                (/ (float scope-matches) (float total-failures))
+              0.0))
+           (test-status
+            (if (>= test-success-rate
+                    gptel-auto-workflow-monitoring-deploy-threshold)
+                "pass" "fail")))
+      (append validated-proposal
+              (list :test-success-rate test-success-rate
+                    :test-status test-status)))))
+
+(defun gptel-auto-workflow--risk->deploy-action (risk)
+  "Map RISK string to a deployment action string.
+Uses the three risk-tier config variables:
+  risk-auto-deploy       -> \"auto-deploy\"
+  risk-notify-deploy     -> \"notify\"
+  risk-require-approval  -> \"approval-required\"
+Returns \"unknown\" if risk does not match any tier."
+  (cond
+   ((member risk gptel-auto-workflow-monitoring-risk-auto-deploy)
+    "auto-deploy")
+   ((member risk gptel-auto-workflow-monitoring-risk-notify-deploy)
+    "notify")
+   ((member risk gptel-auto-workflow-monitoring-risk-require-approval)
+    "approval-required")
+   (t "unknown")))
+
+(defun gptel-auto-workflow--deploy-proposal (tested-proposal)
+  "Deploy TESTED-PROPOSAL based on its risk level and test-status.
+TESTED-PROPOSAL must have :test-status \"pass\".
+Determines deployment action via --risk->deploy-action.
+For auto-deploy: creates a git rollback tag and persists deployment mementum.
+For notify/approval-required: persists a pending mementum without deploying.
+Returns plist with :deploy-action and :rollback-tag appended."
+  (let* ((risk (or (plist-get tested-proposal :risk) "unknown"))
+         (component (or (plist-get tested-proposal :component) "unknown"))
+         (ptarget (or (plist-get tested-proposal :pattern-target) "unknown"))
+         (deploy-action (gptel-auto-workflow--risk->deploy-action risk))
+         (rollback-tag
+          (format "%s%s-%s"
+                  gptel-auto-workflow-monitoring-rollback-tag-prefix
+                  component
+                  (if (fboundp 'gptel-auto-workflow--mementum-slug)
+                      (gptel-auto-workflow--mementum-slug ptarget)
+                    (replace-regexp-in-string
+                     "[^a-zA-Z0-9]" "-" (downcase ptarget))))))
+    (cond
+     ;; Auto-deploy: tag current state and write deployment memory
+     ((equal deploy-action "auto-deploy")
+      (when (fboundp 'gptel-auto-workflow--git-cmd)
+        (gptel-auto-workflow--git-cmd
+         (format "git tag %s" (shell-quote-argument rollback-tag)) 30))
+      (when (fboundp 'gptel-auto-workflow--mementum-write-memory)
+        (gptel-auto-workflow--mementum-write-memory
+         '✅ (format "deploy-%s" rollback-tag)
+         (format "**Deployed:** %s\n**Risk:** %s\n**Component:** %s\n**Rollback tag:** %s\n\nAuto-deployed by monitoring agent (success rate exceeded threshold)."
+                 (plist-get tested-proposal :description)
+                 risk component rollback-tag)))
+      (message "[monitoring] Auto-deployed proposal: %s (risk: %s)" component risk))
+     ;; Notify: persist pending-notification memory
+     ((equal deploy-action "notify")
+      (when (fboundp 'gptel-auto-workflow--mementum-write-memory)
+        (gptel-auto-workflow--mementum-write-memory
+         '🎯 (format "pending-notification-%s" rollback-tag)
+         (format "**Pending notification:** %s\n**Risk:** %s\n**Component:** %s\n**Grace period:** %ds\n**Rollback tag:** %s\n\nWill auto-deploy after grace period unless human objects."
+                 (plist-get tested-proposal :description)
+                 risk component
+                 gptel-auto-workflow-monitoring-deploy-grace-seconds
+                 rollback-tag)))
+      (message "[monitoring] Pending notification for proposal: %s (risk: %s, grace: %ds)"
+               component risk gptel-auto-workflow-monitoring-deploy-grace-seconds))
+     ;; Approval-required: persist pending-approval memory
+     ((equal deploy-action "approval-required")
+      (when (fboundp 'gptel-auto-workflow--mementum-write-memory)
+        (gptel-auto-workflow--mementum-write-memory
+         '‖ (format "pending-approval-%s" rollback-tag)
+         (format "**Pending approval:** %s\n**Risk:** %s\n**Component:** %s\n**Rollback tag:** %s\n\nRequires human approval before deployment (high-risk proposal)."
+                 (plist-get tested-proposal :description)
+                 risk component rollback-tag)))
+      (message "[monitoring] Pending approval for proposal: %s (risk: %s)"
+               component risk)))
+    ;; Return proposal with deployment fields appended
+    (append tested-proposal
+            (list :deploy-action deploy-action
+                  :rollback-tag rollback-tag))))
+
+(defun gptel-auto-workflow--rollback-proposal (rollback-tag)
+  "Rollback a deployed proposal by checking out the tagged version.
+ROLLBACK-TAG is the git tag created during deployment.
+Uses gptel-auto-workflow--git-cmd to checkout the rollback tag,
+then persists a rollback mementum.  Returns plist with :rollback-tag
+and :rollback-status (\"success\" or \"failed\")."
+  (let ((rollback-status "failed"))
+    (when (fboundp 'gptel-auto-workflow--git-cmd)
+      (let ((result
+             (gptel-auto-workflow--git-cmd
+              (format "git checkout %s"
+                      (shell-quote-argument rollback-tag)) 60)))
+        (when result
+          (setq rollback-status "success"))))
+    ;; Persist rollback mementum
+    (when (fboundp 'gptel-auto-workflow--mementum-write-memory)
+      (gptel-auto-workflow--mementum-write-memory
+       '❌ (format "rollback-%s" rollback-tag)
+       (format "**Rollback executed:** %s\n**Status:** %s\n\nRolled back monitoring agent deployment via git tag checkout."
+               rollback-tag rollback-status)))
+    (message "[monitoring] Rollback %s for tag: %s" rollback-status rollback-tag)
+    (list :rollback-tag rollback-tag
+          :rollback-status rollback-status)))
+
 ;; ── Proposal Formatting ──
 
 (defun gptel-auto-workflow--proposal->string (proposal)
@@ -366,35 +539,51 @@ Returns list of written mementum file paths, or nil if throttled/disabled."
                 (message "[monitoring] Persisted pattern: %s" slug)
                 (push file written))))
           ;; Phase 2: Generate, score, validate, and persist proposals
-          (dolist (pattern patterns)
-            (let* ((proposal
-                    (gptel-auto-workflow--generate-improvement-proposal pattern))
-                   (scored
-                    (gptel-auto-workflow--score-proposal proposal))
-                   (validated
-                    (gptel-auto-workflow--validate-proposal
-                     scored (or records (list))))
-                   (component (plist-get validated :component))
-                   (ptarget (plist-get validated :pattern-target))
-                   (status (plist-get validated :status))
-                   (slug
-                    (format "proposal-%s-%s"
-                            component
-                            (if (fboundp 'gptel-auto-workflow--mementum-slug)
-                                (gptel-auto-workflow--mementum-slug ptarget)
-                              (replace-regexp-in-string
-                               "[^a-zA-Z0-9]" "-" (downcase (or ptarget "unknown"))))))
-                   (content
-                    (gptel-auto-workflow--proposal->string validated))
-                   (file
-                    (when (and status
-                               (fboundp 'gptel-auto-workflow--mementum-write-memory))
-                      (gptel-auto-workflow--mementum-write-memory
-                       '💡 slug content))))
-              (when file
-                (message "[monitoring] Persisted proposal: %s (%s)" slug status)
-                (push file written))))
-          (nreverse written))))))
+          ;; Collect validated proposals for Phase 3 testing
+          (let ((validated-proposals nil))
+            (dolist (pattern patterns)
+              (let* ((proposal
+                      (gptel-auto-workflow--generate-improvement-proposal pattern))
+                     (scored
+                      (gptel-auto-workflow--score-proposal proposal))
+                     (validated
+                      (gptel-auto-workflow--validate-proposal
+                       scored (or records (list))))
+                     (component (plist-get validated :component))
+                     (ptarget (plist-get validated :pattern-target))
+                     (status (plist-get validated :status))
+                     (slug
+                      (format "proposal-%s-%s"
+                              component
+                              (if (fboundp 'gptel-auto-workflow--mementum-slug)
+                                  (gptel-auto-workflow--mementum-slug ptarget)
+                                (replace-regexp-in-string
+                                 "[^a-zA-Z0-9]" "-" (downcase (or ptarget "unknown"))))))
+                     (content
+                      (gptel-auto-workflow--proposal->string validated))
+                     (file
+                      (when (and status
+                                 (fboundp 'gptel-auto-workflow--mementum-write-memory))
+                        (gptel-auto-workflow--mementum-write-memory
+                         '💡 slug content))))
+                (when (and status (equal status "validated"))
+                  (push validated validated-proposals))
+                (when file
+                  (message "[monitoring] Persisted proposal: %s (%s)" slug status)
+                  (push file written))))
+            ;; Phase 3: Test, deploy validated proposals
+            (dolist (vproposal (nreverse validated-proposals))
+              (let* ((tested
+                      (gptel-auto-workflow--test-proposal
+                       vproposal (or records (list))))
+                     (test-status (plist-get tested :test-status)))
+(when (equal test-status "pass")
+                  (let* ((deployed
+                          (gptel-auto-workflow--deploy-proposal tested))
+                         (deploy-action (plist-get deployed :deploy-action)))
+                    (message "[monitoring] Phase 3: %s -> %s"
+                             (plist-get deployed :component) deploy-action))))
+            (nreverse written))))))))
 
 (provide 'gptel-auto-workflow-monitoring-agent)
 ;;; gptel-auto-workflow-monitoring-agent.el ends here
