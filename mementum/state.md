@@ -1,9 +1,9 @@
 # Mementum State
 
 > **Bootstrapped**: 2026-06-06
-> **Session**: Production metrics wired into grader scoring
-> **Status**: All P0+P1 priorities complete, self-heal + monitoring + token economics enabled
-> **Latest**: Production metrics → weighted grader scoring (business-value boost, risk penalty)
+> **Session**: Approval queue for high-risk monitoring agent proposals
+> **Status**: All P0+P1 complete, approval queue closes OV5 self-improving loop
+> **Latest**: Human approval queue — high-risk proposals wait for human review instead of auto-deploying
 > **Active Plan**: OV5 self-improving system — all YC phases complete
 
 ---
@@ -21,7 +21,7 @@
 | **P1** | Token Economics: ROI pre-flight in experiment core | @maintainer | **COMPLETE** |
 | **P1** | Production Metrics: Weighted grader scoring | @maintainer | **COMPLETE** |
 | **P1** | Refine remaining 97 module docs with OV5 ontology/AutoTTS | doc-explorer | **IN PROGRESS** |
-| **P2** | Human interface → pipeline (approval queue) | @maintainer | **PENDING** |
+| **P2** | Human interface → pipeline (approval queue) | @maintainer | **COMPLETE** |
 | **P2** | Submit PR for install.sh macOS sed | delegate-opus | **BLOCKED** (upstream) |
 | **P2** | Unified pipeline: consolidate scripts | @maintainer | **COMPLETE** |
 
@@ -92,6 +92,16 @@
 - Wired into main + refine experiment paths in `gptel-tools-agent-experiment-core.el`
 - 4 new ERT tests (14 total): boost, fallback, configurable, symmetry
 
+### Human Approval Queue (P2)
+
+**High-risk monitoring agent proposals now wait for human review:**
+- New module: `gptel-auto-workflow-approval-queue.el` (277 lines, 10 functions, 2 defcustoms)
+- `var/approval-queue/pending/` stores proposals as .sexp files
+- Interactive `review` command displays pending proposals; `approve`/`reject` archive them
+- 7-day auto-expiry with prune-on-read
+- Integration: `--deploy-proposal` routes `:required` risk to queue, returns `:queue-id`
+- 7 ERT tests: enqueue, list, approve, reject, expiry, summary, pending-p
+
 ## Active Patterns (from last 3 sessions)
 
 - **Workspace boundary violation**: Self-heal accessed `/Users/davidwu/lisp/modules` — fixed by `gptel-auto-workflow--expand-workspace-path`
@@ -103,6 +113,7 @@
 - **Monitoring agent integration**: Wired into experiment core via `after-experiment-hook`
 - **Token economics**: ROI threshold rejects low-value experiments before they waste tokens
 - **Production metrics**: Weighted grader scoring — business-value boosts, risk-score penalizes
+- **Approval queue**: High-risk proposals → human review gate, 7-day auto-expiry
 
 ## Model Routing Matrix (Static + Dynamic)
 
@@ -128,9 +139,9 @@ User Input → Detect Task Type → Route to Model → Self-Heal Diagnostic → 
 
 ## Next Steps (Suggested by Active Mementum)
 
-1. **Human interface → pipeline** (P2) — route high-risk experiments to approval queue
-2. **Refine remaining 87 module docs** (P1, low urgency)
-3. **Upstream PR** — install.sh macOS sed (blocked)
+1. **Refine remaining 87 module docs** (P1, low urgency)
+2. **Upstream PR** — install.sh macOS sed (blocked)
+3. **Approval queue executor** — consume approved proposals and execute deployment (future P3)
 
 ## Blockers
 
@@ -138,11 +149,12 @@ User Input → Detect Task Type → Route to Model → Self-Heal Diagnostic → 
 
 ## Context for Next Session
 
-- All P0+P1 priorities complete
+- All P0+P1+P2 priorities complete (approval queue closed the loop)
 - Self-heal enabled by default
-- Monitoring agent detects failures → generates proposals → auto-deploys
+- Monitoring agent detects failures → generates proposals → auto-deploys (low/med risk) or queues for human (high risk)
 - Token economics rejects low-ROI experiments before spending tokens
 - Production metrics weight grader scores (business value boosts, risk penalizes)
+- Approval queue persists high-risk proposals for human review
 - Unified pipeline: 4 scripts → 1 (`run-pipeline.sh`)
 
 ---
