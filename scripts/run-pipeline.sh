@@ -338,6 +338,18 @@ done
 git -C "$DIR" worktree prune 2>/dev/null || true
 log "Cleaned old experiment directories + stale worktree metadata"
 
+# ─── Clean old Emacs daemon logs (keep last 50, prevents unbounded growth) ───
+emacs_log_count=$(find "$DIR/var/log" -maxdepth 1 -name "emacs-*.log" -type f 2>/dev/null | wc -l)
+if [ "$emacs_log_count" -gt 50 ]; then
+    removed=$(find "$DIR/var/log" -maxdepth 1 -name "emacs-*.log" -type f -printf '%T@ %p\n' 2>/dev/null \
+              | sort -n | head -n -$((50)) | cut -d' ' -f2- | xargs rm -f 2>/dev/null \
+              | wc -l || echo "0")
+    actual_removed=$((emacs_log_count - 50))
+    if [ "$actual_removed" -gt 0 ]; then
+        log "Cleaned $actual_removed old Emacs daemon logs (kept 50 most recent)"
+    fi
+fi
+
 # ─── Clear stale byte-compiled files to force source reload ───
 find "$DIR/lisp/modules" -name "*.elc" -delete 2>/dev/null || true
 find "$DIR/var/eln-cache" -name "*.eln" -delete -maxdepth 3 2>/dev/null || true
