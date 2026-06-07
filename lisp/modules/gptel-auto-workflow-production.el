@@ -1012,5 +1012,166 @@ Returns plist with :findings-today :strategy-accuracy :pmf-signal."
                           (or (plist-get metrics :strategy-accuracy) "0%")
                           (or (plist-get metrics :pmf-signal) "0"))))))
 
+;; ─── Operational Metrics (YC Vision Evidence) ───
+
+(defun gptel-auto-workflow-operational-metrics ()
+  "Aggregate cross-cycle operational metrics from all OV5 subsystems.
+Returns a plist suitable for logging or dashboard display."
+  (let* ((root (or (when (fboundp 'gptel-auto-workflow--worktree-base-root)
+                     (gptel-auto-workflow--worktree-base-root))
+                   default-directory))
+         (root (file-name-as-directory root))
+         ;; ── Experiments ──
+         (results-files
+          (when (file-directory-p (concat root "var/tmp/experiments"))
+            (directory-files (concat root "var/tmp/experiments") t
+                             "results\\.tsv$" t)))
+         (exp-total 0) (exp-kept 0) (exp-failed 0)
+         (exp-decisions (make-hash-table :test 'equal))
+         (exp-backends (make-hash-table :test 'equal)))
+    (dolist (rf results-files)
+      (condition-case nil
+          (with-temp-buffer
+            (insert-file-contents rf)
+            (goto-char (point-min))
+            (forward-line) ;; skip header
+            (while (not (eobp))
+              (let ((line (buffer-substring (line-beginning-position)
+                                            (line-end-position))))
+                (when (string-match "\\`[0-9]" line)
+                  (let ((fields (split-string line "\t" t)))
+                    (when (>= (length fields) 8)
+                      (setq exp-total (1+ exp-total))
+                      (let ((decision (nth 7 fields))
+                            (backend (when (>= (length fields) 16)
+                                       (nth 15 fields))))
+                        (puthash decision (1+ (gethash decision exp-decisions 0))
+                                 exp-decisions)
+                        (when (member decision '("kept" "staged" "merged"))
+                          (setq exp-kept (1+ exp-kept)))
+                        (when (string-match "failed\\|error\\|timeout" decision)
+                          (setq exp-failed (1+ exp-failed)))
+                        (when backend
+                          (puthash backend
+                                   (1+ (gethash backend exp-backends 0))
+                                   exp-backends)))))))
+              (forward-line)))
+        (error nil)))
+    ;; ── Approval Queue ──
+    (let ((aq-pending 0) (aq-approved 0) (aq-rejected 0)
+          (aq-deployed 0) (aq-expired 0))
+      (dolist (subdir '("pending" "decisions"))
+        (let ((dir (concat root "var/approval-queue/" subdir "/")))
+          (when (file-directory-p dir)
+            (dolist (f (directory-files dir t "\\.sexp$"))
+              (let ((entry (condition-case nil
+                               (with-temp-buffer
+                                 (insert-file-contents f)
+                                 (goto-char (point-min))
+                                 (read (current-buffer)))
+                             (error nil))))
+                (when entry
+                  (pcase (plist-get entry :status)
+                    ("pending" (setq aq-pending (1+ aq-pending)))
+                    ("approved" (setq aq-approved (1+ aq-approved)))
+                    ("rejected" (setq aq-rejected (1+ aq-rejected)))
+                    ("deployed" (setq aq-deployed (1+ aq-deployed)))
+                    ("expired" (setq aq-expired (1+ aq-expired))))))))))
+      ;; ── Sensors ──
+      (let ((sentry-configured (and (getenv "OV5_SENTRY_API_KEY") t))
+            (feedback-configured (and (getenv "OV5_FEEDBACK_ENDPOINT") t)))
+        ;; ── Context DB ──
+        (let ((ctx-count
+               (length (when (file-directory-p (concat root "var/context"))
+                         (directory-files (concat root "var/context") t "\\.sexp$")))))
+          ;; ── Disposable ──
+          (let ((disp-count
+                 (length (when (file-directory-p (concat root "var/disposable"))
+                           (directory-files (concat root "var/disposable") t "\\.sexp$")))))
+            ;; ── Mementum ──
+            (let ((mem-count
+                   (length (when (file-directory-p (concat root "mementum/memories"))
+                             (directory-files (concat root "mementum/memories") t "\\.md$"))))
+                  (know-count
+                   (length (when (file-directory-p (concat root "mementum/knowledge"))
+                             (directory-files (concat root "mementum/knowledge") t "\\.md$")))))
+              ;; ── Build result ──
+              (list
+               :timestamp (format-time-string "%Y-%m-%dT%H:%M:%S")
+               :experiments (list :total exp-total
+                                  :kept exp-kept
+                                  :failed exp-failed
+                                  :keep-rate (if (> exp-total 0)
+                                                 (/ (float exp-kept) exp-total)
+                                               0.0)
+                                  :results-files (length results-files)
+                                  :decisions
+                                  (let ((r nil))
+                                    (maphash (lambda (k v) (push (cons k v) r))
+                                             exp-decisions)
+                                    (sort r (lambda (a b) (> (cdr a) (cdr b)))))
+                                  :backends
+                                  (let ((r nil))
+                                    (maphash (lambda (k v) (push (cons k v) r))
+                                             exp-backends)
+                                    (sort r (lambda (a b) (> (cdr a) (cdr b))))))
+               :approval-queue (list :pending aq-pending
+                                     :approved aq-approved
+                                     :rejected aq-rejected
+                                     :deployed aq-deployed
+                                     :expired aq-expired)
+               :sensors (list :sentry (if sentry-configured "configured" "not-configured")
+                              :feedback (if feedback-configured "configured" "not-configured"))
+               :context-db (list :entries ctx-count)
+               :disposable (list :candidates disp-count)
+               :mementum (list :memories mem-count
+                               :knowledge know-count)))))))))
+
+(defun gptel-auto-workflow-operational-metrics-report ()
+  "Log a human-readable operational metrics summary.
+Suitable for pipeline output and YC evidence."
+  (let ((m (gptel-auto-workflow-operational-metrics)))
+    (let ((exp (plist-get m :experiments))
+          (aq (plist-get m :approval-queue))
+          (sensors (plist-get m :sensors))
+          (ctx (plist-get m :context-db))
+          (disp (plist-get m :disposable))
+          (mem (plist-get m :mementum)))
+      (message "")
+      (message "=== OV5 Operational Metrics [%s] ===" (plist-get m :timestamp))
+      (message "  Experiments: %d total, %d kept (%.1f%%), %d failed, %d result files"
+               (plist-get exp :total)
+               (plist-get exp :kept)
+               (* 100 (plist-get exp :keep-rate))
+               (plist-get exp :failed)
+               (plist-get exp :results-files))
+      (let ((top-decisions (seq-take (plist-get exp :decisions) 5)))
+        (when top-decisions
+          (message "  Top decisions: %s"
+                   (mapconcat (lambda (d) (format "%s=%d" (car d) (cdr d)))
+                              top-decisions ", "))))
+      (let ((top-backends (seq-take (plist-get exp :backends) 5)))
+        (when top-backends
+          (message "  Top backends: %s"
+                   (mapconcat (lambda (b) (format "%s=%d" (car b) (cdr b)))
+                              top-backends ", "))))
+      (message "  Approval Queue: %d pending, %d approved, %d deployed, %d rejected, %d expired"
+               (plist-get aq :pending)
+               (plist-get aq :approved)
+               (plist-get aq :deployed)
+               (plist-get aq :rejected)
+               (plist-get aq :expired))
+      (message "  Sensors: Sentry=%s, Feedback=%s"
+               (plist-get sensors :sentry)
+               (plist-get sensors :feedback))
+      (message "  Context DB: %d entries | Disposable: %d candidates"
+               (plist-get ctx :entries)
+               (plist-get disp :candidates))
+      (message "  Mementum: %d memories, %d knowledge pages"
+               (plist-get mem :memories)
+               (plist-get mem :knowledge))
+      (message "============================================")
+      m)))
+
 (provide 'gptel-auto-workflow-production)
 ;;; gptel-auto-workflow-production.el ends here

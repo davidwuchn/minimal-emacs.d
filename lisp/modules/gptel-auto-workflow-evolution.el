@@ -2656,6 +2656,11 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
           (message "[skill-graph] Evolution complete"))
       (error (message "[skill-graph] Evolution error: %s" (error-message-string err)))))
   (message "[auto-workflow] Self-evolution cycle complete.")
+  ;; Operational metrics report (YC Vision evidence)
+  (when (fboundp 'gptel-auto-workflow-operational-metrics-report)
+    (condition-case nil
+        (gptel-auto-workflow-operational-metrics-report)
+      (error nil)))
   ;; Emit machine-parseable RESULT for this cycle (AutoGo protocol)
   (condition-case nil
       (let* ((rate (gptel-auto-workflow--overall-keep-rate))
