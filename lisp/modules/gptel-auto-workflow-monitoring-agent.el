@@ -616,22 +616,28 @@ Returns list of written mementum file paths, or nil if throttled/disabled."
                     (message "[monitoring] Phase 3: %s -> %s"
                              (plist-get deployed :component) deploy-action))))
             ;; Phase 4: Architectural analysis (strategy routing + hypothesis routing)
-            (when (fboundp 'gptel-auto-workflow--run-architectural-analysis)
+            (progn
+              (require 'gptel-auto-workflow-architectural-evolution nil t)
+              (when (fboundp 'gptel-auto-workflow--run-architectural-analysis)
               (let ((arch-result
                      (gptel-auto-workflow--run-architectural-analysis)))
                 (dolist (arch-file (plist-get arch-result :written))
                   (push arch-file written))
-                (message "[monitoring] Phase 4: %d architectural proposals"
-                         (length (plist-get arch-result :proposals)))))
+                 (message "[monitoring] Phase 4: %d architectural proposals"
+                          (length (plist-get arch-result :proposals))))))
             ;; Phase 5: External sensor collection (GitHub Issues)
-            (when (fboundp 'gptel-auto-workflow--github-sensor-collect)
+            (progn
+              (require 'gptel-auto-workflow-external-sensors nil t)
+              (when (fboundp 'gptel-auto-workflow--github-sensor-collect)
               (condition-case nil
                   (let ((gh-data (gptel-auto-workflow--github-sensor-collect)))
                     (when gh-data
                       (message "[monitoring] Phase 5: GitHub sensor collected")))
-                (error nil)))
+                 (error nil))))
             ;; Phase 6: Execute approved proposals + medium-risk grace-period deploy
-            (ignore-errors
+            (progn
+              (require 'gptel-auto-workflow-approval-queue nil t)
+              (ignore-errors
               ;; 6a: Auto-approve recurring proposals
               (when (fboundp 'gptel-auto-workflow-approval-queue-auto-approve-recurring)
                 (gptel-auto-workflow-approval-queue-auto-approve-recurring))
@@ -670,8 +676,8 @@ Returns list of written mementum file paths, or nil if throttled/disabled."
                                         "\\.md$" ""
                                         (replace-regexp-in-string
                                          "^pending-notification-" "grace-deploy-" basename))
-                                   (format "**Grace-period auto-deploy:** %s\n**Grace period:** %ds\n**Elapsed:** %ds\n\nDeployed after grace period with no human objection."
-                                           basename (truncate grace) (truncate age)))))))))))))
+                                    (format "**Grace-period auto-deploy:** %s\n**Grace period:** %ds\n**Elapsed:** %ds\n\nDeployed after grace period with no human objection."
+                                            basename (truncate grace) (truncate age))))))))))))))
             (ignore (nreverse written))))))))))
 
 (provide 'gptel-auto-workflow-monitoring-agent)

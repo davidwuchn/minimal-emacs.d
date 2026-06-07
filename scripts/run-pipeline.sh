@@ -819,8 +819,9 @@ fi
 
 # ─── Step 6.1: Operational Metrics ───
 log "=== Step 6.1: Operational Metrics ==="
-METRICS_ELISP="(when (fboundp (quote gptel-auto-workflow-operational-metrics-report))
-                  (gptel-auto-workflow-operational-metrics-report))"
+METRICS_ELISP="(progn (ignore-errors (require 'gptel-auto-workflow-production))
+                  (when (fboundp (quote gptel-auto-workflow-operational-metrics-report))
+                    (gptel-auto-workflow-operational-metrics-report)))"
 if emacsclient --socket-name="pmf-value-stream" --eval "$METRICS_ELISP" >/dev/null 2>&1; then
     log "  Metrics logged to daemon output"
 else
