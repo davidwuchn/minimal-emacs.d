@@ -181,7 +181,10 @@ Stub implementation - returns 0 until ticket system is integrated."
   "Track production impact for TARGET experiment.
 EXPERIMENT-ID: unique identifier for this experiment.
 Returns plist with production metrics for TSV columns 33-39.
-Uses external APIs when available, falls back to local signals."
+Uses external APIs when available, falls back to local signals.
+Local signals are ALWAYS tried when target resolves to an existing file —
+this is the YC principle of measuring business context from local reality,
+not just external Sentry/feedback APIs."
   (let* ((metrics (or (gptel-auto-workflow--query-sentry-errors target) '()))
          (error-before (or (plist-get metrics :before-rate) 0.0))
          (error-after (or (plist-get metrics :after-rate) 0.0))
@@ -190,10 +193,18 @@ Uses external APIs when available, falls back to local signals."
                         0.0))
          (satisfaction-delta (gptel-auto-workflow--query-user-feedback target))
          (tickets-reduced (gptel-auto-workflow--query-support-tickets target))
-         ;; When no external metrics available, compute from local signals
-         (local-metrics (when (and (= error-delta 0.0)
-                                   (= satisfaction-delta 0.0)
-                                   (= tickets-reduced 0))
+         ;; Try local-metrics whenever external signals are zero OR target is a real file.
+         ;; This makes business_value_score meaningful even without Sentry wiring.
+         (root (or (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
+                        (gptel-auto-workflow--expand-workspace-path ""))
+                   default-directory))
+         (abs-target (when (and target (stringp target))
+                       (if (file-name-absolute-p target) target
+                         (expand-file-name target root))))
+         (local-metrics (when (or (and (= error-delta 0.0)
+                                       (= satisfaction-delta 0.0)
+                                       (= tickets-reduced 0))
+                                   (and abs-target (file-exists-p abs-target)))
                           (gptel-auto-workflow--compute-local-business-value target)))
          (business-value (or (and local-metrics (plist-get local-metrics :business-value-score))
                              (gptel-auto-workflow--calculate-business-value
@@ -224,13 +235,22 @@ Business value heuristics:
   +0.1  Target is >500 lines (complexity reduction valuable)
   -0.3  Target has no known issues (change is low value)
   -0.2  Change is a trivial nil guard on already-safe code"
-  (when (and target (stringp target) (file-exists-p target))
-    (let* ((target-basename (file-name-nondirectory target))
+  (when (and target (stringp target))
+    ;; Resolve target to absolute path: try as-is, then relative to workspace root
+    (let* ((root (or (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
+                          (gptel-auto-workflow--expand-workspace-path ""))
+                     default-directory))
+           (abs-target (cond
+                        ((file-name-absolute-p target) target)
+                        ((file-exists-p target) (expand-file-name target))
+                        (t (expand-file-name target root))))
+           (file-exists (file-exists-p abs-target))
+           (target-basename (file-name-nondirectory target))
            (value 0.0)
            (risk 0.2)  ; baseline: no measurable improvement
 
            ;; Signal 1: Does this target appear in recent Emacs error logs?
-            (error-log-dir (expand-file-name "var/log/" (gptel-auto-workflow--expand-workspace-path "")))
+            (error-log-dir (expand-file-name "var/log/" root))
             (recent-logs (when (file-directory-p error-log-dir)
                            (sort (directory-files error-log-dir t "\\.log\\'")
                                  (lambda (a b)
@@ -248,18 +268,19 @@ Business value heuristics:
               nil))
 
            ;; Signal 2: Does the target have byte-compile warnings?
-           (bytecompile-output (ignore-errors
-                                 (with-temp-buffer
-                                   (call-process (expand-file-name invocation-name
-                                                                     invocation-directory)
-                                                 nil t nil
-                                                 "-Q" "--batch" "-f" "batch-byte-compile" target)
-                                   (buffer-string))))
+           (bytecompile-output (when file-exists
+                                 (ignore-errors
+                                   (with-temp-buffer
+                                     (call-process (expand-file-name invocation-name
+                                                                       invocation-directory)
+                                                   nil t nil
+                                                   "-Q" "--batch" "-f" "batch-byte-compile" abs-target)
+                                     (buffer-string)))))
            (has-warnings (and bytecompile-output
                               (string-match-p "Warning\\|warning" bytecompile-output)))
 
            ;; Signal 3: Does the target have ERT tests?
-           (test-dir (expand-file-name "tests/" (gptel-auto-workflow--expand-workspace-path "")))
+           (test-dir (expand-file-name "tests/" root))
            (has-tests (when (file-directory-p test-dir)
                         (cl-block find-test
                           (dolist (f (directory-files test-dir t "\\.el\\'"))
@@ -273,7 +294,9 @@ Business value heuristics:
                           nil)))
 
            ;; Signal 4: Target file size (complexity proxy)
-           (target-size (or (ignore-errors (file-attribute-size (file-attributes target))) 0))
+           (target-size (if file-exists
+                            (or (ignore-errors (file-attribute-size (file-attributes abs-target))) 0)
+                          0))
            (is-complex (> target-size 20000)))  ; >20KB
 
       ;; Accumulate business value

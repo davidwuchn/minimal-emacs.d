@@ -6791,28 +6791,41 @@ priorities")
 Keys: :timestamp :diagnosis :remedy :before-rate :verified-p")
 
 (defun gptel-auto-workflow--verify-recovery ()
-  "Verify last remediation worked by checking current keep-rate.
+  "Verify last remediation worked by checking current keep-rate and signals.
 If keep-rate improved, mark fix as effective.
+If keep-rate unchanged at 0%, check SECONDARY signals (grader failures,
+timeouts, backend health) — improving any of those counts as partial recovery.
 If not improved after 3 runs, trigger escalation."
   (when gptel-auto-workflow--last-remediation
     (let* ((before-rate (or (plist-get gptel-auto-workflow--last-remediation :before-rate) 0))
            (current-health (gptel-auto-workflow--check-pipeline-health))
-           (current-rate (or (plist-get current-health :keep-rate) 0)))
+           (current-rate (or (plist-get current-health :keep-rate) 0))
+           (current-grader-failures (or (plist-get current-health :grader-failures) 0))
+           (current-timeouts (or (plist-get current-health :timeouts) 0))
+           (total (or (plist-get current-health :total) 0))
+           ;; Heuristic for 0→0 case: only consider partial-recovery when
+           ;; BOTH signals are now in the "good" range (< 1/4 of total). This
+           ;; prevents a tiny improvement (e.g. 9→8 failures) from triggering.
+           (partial-recovery
+            (and (= current-rate 0) (= before-rate 0) (> total 0)
+                 (< current-grader-failures (max 1 (/ total 4)))
+                 (< current-timeouts (max 1 (/ total 4)))))
+           (effective (or (> current-rate before-rate) partial-recovery)))
       (cond
-       ;; Fix worked: keep-rate improved
-       ((> current-rate before-rate)
-        (message "[self-heal] ✓ Recovery verified: %.0f%% → %.0f%% (%s)"
+       (effective
+        (message "[self-heal] ✓ Recovery verified: %.0f%% → %.0f%% (grader-failures: %d, timeouts: %d, %s)"
                  (* 100 before-rate) (* 100 current-rate)
+                 current-grader-failures current-timeouts
                  (plist-get gptel-auto-workflow--last-remediation :remedy))
         (plist-put gptel-auto-workflow--last-remediation :verified-p t)
         (plist-put gptel-auto-workflow--last-remediation :after-rate current-rate)
         (gptel-auto-workflow--persist-self-healing-state)
         ;; Reset escalation counter since fix worked
         (gptel-auto-workflow--reset-escalation-counter))
-       ;; Fix failed: keep-rate not improved
        (t
-        (message "[self-heal] ✗ Recovery NOT verified: still %.0f%% (was %.0f%%)"
-                 (* 100 current-rate) (* 100 before-rate))
+        (message "[self-heal] ✗ Recovery NOT verified: still %.0f%% (was %.0f%%, grader-failures: %d, timeouts: %d)"
+                 (* 100 current-rate) (* 100 before-rate)
+                 current-grader-failures current-timeouts)
          ;; Increment remediation failure counter
          (setq gptel-auto-workflow--consecutive-failed-remediations
                (1+ gptel-auto-workflow--consecutive-failed-remediations)))))))
