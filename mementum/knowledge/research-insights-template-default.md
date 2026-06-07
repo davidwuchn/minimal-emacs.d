@@ -62,11 +62,32 @@ were misleading.
 
 
 
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-nil
+The user wants me to distill information from what appears to be a research strategy output. Let me parse what's been provided:
+
+1. Research strategy: template-default
+2. 175 experiments across many target files (mostly lisp modules related to gptel - a chat package for emacs)
+3. Kept hypotheses (3 of them)
+4. Discarded hypotheses (1)
+
+The kept hypotheses are:
+1. No hypothesis stated (empty)
+2. Improving the function `gptel-auto-workflow-list-project-buffers`
+3. `(plist-get validation :pct)` can return nil when the plist is malformed... (about nil-guard in FSM callback path)
+4. Adding `(or ... '())` nil-guard around `plist-get` in `--calculate-error-rate`...
+
+The discarded hypothesis is about removing something that might change semantics.
+
+The user said "distill:" - they want me to summarize/distill this information into a concise form.
+
+Let me provide a clean distillation.
 ```
 
