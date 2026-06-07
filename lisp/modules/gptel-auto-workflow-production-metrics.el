@@ -272,7 +272,7 @@ issues)
              (error-log-dir (expand-file-name "var/log/" root))
              (recent-errors 0))
         (when (and basename (file-directory-p error-log-dir))
-          (condition-case nil
+           (condition-case nil
               (cl-block count-errors
                 (dolist (log (seq-take (sort (directory-files error-log-dir t "\\.log\\'")
                                             (lambda (a b)
@@ -283,11 +283,19 @@ issues)
                     (with-temp-buffer
                       (insert-file-contents log nil 0 50000)
                       (goto-char (point-min))
-                      (when (re-search-forward (regexp-quote basename) nil t)
-                        (cl-incf recent-errors)
-                        (when (> recent-errors 50) (cl-return-from count-errors)))))))
+                      ;; Count ALL matches in the log, not just 1 per file.
+                      ;; Each error log entry mentioning the target is a
+                      ;; ticket proxy.  Cap at 50 internal iterations
+                      ;; (final result capped at 10).  Use a flag instead
+                      ;; of cl-return-from to avoid throw leakage when
+                      ;; this function is called inside another cl-block.
+                      (let ((done nil))
+                        (while (and (not done)
+                                    (re-search-forward (regexp-quote basename) nil t))
+                          (cl-incf recent-errors)
+                          (when (> recent-errors 50) (setq done t))))))))
             (error nil)))
-        ;; Each unique error log hit = 1 ticket proxy. Cap at 10 for sanity.
+        ;; Cap at 10 for sanity (each error log hit = 1 ticket proxy).
         (min 10 recent-errors))
       ;; 0 fallback
       0))
