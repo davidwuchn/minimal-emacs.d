@@ -6,7 +6,7 @@
 (require 'cl-lib)
 (require 'gptel-auto-workflow-external-sensors nil t)
 (require 'gptel-auto-workflow-production-metrics nil t)
-(require 'gptel-monitoring-agent nil t)
+(require 'gptel-auto-workflow-monitoring-agent nil t)
 (require 'gptel-auto-workflow-human-interface nil t)
 (require 'gptel-token-economics nil t)
 (require 'gptel-auto-workflow-context-database nil t)
@@ -84,12 +84,33 @@ Skips when a workflow or cron job is active to avoid preempting experiments."
     ;; Optimize token budget allocation based on category ROI (Phase 4: Token Economics)
     (when (fboundp 'gptel-token-economics--optimize-allocation)
       (condition-case nil
-          (gptel-token-economics--optimize-allocation)
+          (gptel-token-economics--optimize-allocation 100.0)
         (error nil)))
     ;; Wire monitoring agent into evolution cycle (Phase 2: Monitoring Agent)
-    (when (fboundp 'gptel-monitoring-agent--analyze-failure-patterns)
+    (when (fboundp 'gptel-auto-workflow--monitoring-cycle)
       (condition-case nil
-          (gptel-monitoring-agent--analyze-failure-patterns)
+          (gptel-auto-workflow--monitoring-cycle)
+        (error nil)))
+    ;; Execute approved proposals from approval queue (Layer 2 Policy: close the loop)
+    (when (fboundp 'gptel-auto-workflow-approval-queue-execute-approved)
+      (condition-case nil
+          (gptel-auto-workflow-approval-queue-execute-approved)
+        (error nil)))
+    ;; Trigger code regeneration for underperforming modules (Layer 5 Learning)
+    (when (fboundp 'gptel-auto-workflow-code-regeneration--identify-candidates)
+      (condition-case nil
+          (let ((candidates (gptel-auto-workflow-code-regeneration--identify-candidates)))
+            (when candidates
+              (let ((top (car candidates)))
+                (message "[regeneration] Top candidate: %s (delta: %.2f, history: %d)"
+                         (plist-get top :module)
+                         (or (plist-get top :best-delta) 0.0)
+                         (or (plist-get top :history-count) 0))
+                (when (fboundp 'gptel-auto-workflow-code-regeneration--full-workflow)
+                  (gptel-auto-workflow-code-regeneration--full-workflow
+                   (plist-get top :module)
+                   (plist-get top :current-best-model)
+                   nil)))))
         (error nil)))
     (condition-case err
         (progn
@@ -212,6 +233,13 @@ Records to mementum and triggers evolution if needed."
     (condition-case err
         (gptel-auto-workflow--update-pmf-dashboard-metrics)
       (error (message "[metrics] PMF dashboard update error: %s" err))))
+  
+  ;; Run monitoring cycle after each experiment (throttled internally to 15 min)
+  ;; Layer 1 Sensor: analyzes failures, generates proposals, triggers architectural evolution
+  (when (fboundp 'gptel-auto-workflow--monitoring-cycle)
+    (condition-case err
+        (gptel-auto-workflow--monitoring-cycle)
+      (error (message "[monitoring] Monitoring cycle error: %s" err))))
   
   ;; Run evolution every N experiments
   (let ((exp-id (or (plist-get experiment :id) 0)))
@@ -679,7 +707,17 @@ Returns the new item ID."
         ;; Insert after the header row
         (setq content
               (replace-regexp-in-string
-               "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n|----|--------|-----------|-----------------|--------|---------------|---------------|\n"
+               "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual
+Impact
+
+
+
+
+
+
+
+
+|\n|----|--------|-----------|-----------------|--------|---------------|---------------|\n"
                (concat "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n"
                        "|----|--------|-----------|-----------------|--------|---------------|---------------|\n"
                        entry)
@@ -709,7 +747,8 @@ ACTUAL-IMPACT: measured outcome after experiments"
         ;; Update the matching row
         (setq content
               (replace-regexp-in-string
-               (format "| %s | \\([^|]+\\) | \\([^|]+\\) | \\([^|]+\\) | \\([^|]+\\) | \\([^|]+\\) | \\([^|]+\\) |"
+               (format "| %s | \\([^|]+\\) | \\([^|]+\\) | \\([^|]+\\) | \\([^|]+\\) | \\([^|]+\\) |
+\\([^|]+\\) |"
                        (regexp-quote id))
                (lambda (match)
                  (let* ((parts (split-string match " | "))
@@ -860,12 +899,17 @@ Creates file if it doesn't exist."
     (insert "---\n\n")
     (insert "# Strategy Roadmap\n\n")
     (dolist (section '((current-focus . "JTBD Step 1: Market Definition")
-                       (research-strategy . "- Pattern: research-research-none\n- Sources: GitHub, Reddit, HackerNews\n- Depth: 3 turns max")
-                       (backend-prefs . "- Executor: moonshot → MiniMax → DeepSeek\n- Researcher: DeepSeek → moonshot → DashScope\n- Validator: DashScope → DeepSeek")
-                       (target-rules . "1. Prioritize files with TODOs/FIXMEs\n2. Skip files modified in last 24h\n3. Focus on modules with < 60% keep-rate")
-                       (experiment-strategy . "- Max experiments per run: 5\n- Timeout: 900s per experiment\n- Staging: enabled\n- Auto-merge: disabled")
+                       (research-strategy . "- Pattern: research-research-none\n- Sources: GitHub, Reddit, HackerNews\n-
+Depth: 3 turns max")
+                       (backend-prefs . "- Executor: moonshot → MiniMax → DeepSeek\n- Researcher: DeepSeek → moonshot →
+DashScope\n- Validator: DashScope → DeepSeek")
+                       (target-rules . "1. Prioritize files with TODOs/FIXMEs\n2. Skip files modified in last 24h\n3.
+Focus on modules with < 60% keep-rate")
+                       (experiment-strategy . "- Max experiments per run: 5\n- Timeout: 900s per experiment\n- Staging:
+enabled\n- Auto-merge: disabled")
                        (market-insights . "- None yet")
-                       (pmf-checklist . "- [ ] Can measure outcomes in code\n- [ ] Can close gaps with experiments\n- [ ] Can serve identified segments\n- [ ] Strategy has measurable milestones")
+                       (pmf-checklist . "- [ ] Can measure outcomes in code\n- [ ] Can close gaps with experiments\n- [
+] Can serve identified segments\n- [ ] Strategy has measurable milestones")
                        (next-review . "See GTM dashboard")))
       (let ((name (car section))
             (content (cdr section)))

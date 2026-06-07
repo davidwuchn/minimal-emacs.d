@@ -148,17 +148,17 @@ lambda vision(x).
 - **Sensor**: monitoring agent after each batch, throttled to **15-minute** cycles; production metrics weight scoring; **Sentry API** wired; support-ticket and feedback sensors still partial.
 - **Policy**: decision classification + file-based approval queue under `var/approval-queue/`; **7-day expiry**; high-risk proposals wait for human review.
 - **Tools**: knowledge reasoning, routing, compilers, and the **context database** with sidecar `.sexp` files in `var/context/`.
-- **Quality**: OV5 refuses to confuse motion with progress. The execution path now has **7 gates**:
+- **Quality**: OV5 refuses to confuse motion with progress. **4 enforced gates** block experiments in the hot path; **3 downstream checks** run post-experiment:
 
-| Gate | What it checks | What happens on failure |
-|------|---------------|------------------------|
-| **1. Category Routing** | Best backend for this target right now? | Routes to strongest current performer; unhealthy backends dropped |
-| **2. Test Execution** | Did **3,261 ERT tests** pass? | Experiment discarded, pattern learned |
-| **3. AI Grading** | Is the change well-structured and principled? | Scored 0.0-1.0, fed to analyzer |
-| **3.5 Complexity Gate** | Did complexity rise >10% without proportional quality gain? | Experiment rejected with explicit reason |
-| **4. AI Review** | Does it pass security, conventions, architecture? | Multi-agent review with feedback |
-| **5. pi Synthesis** | Which similar files should inherit this strategy? | Semantic cluster auto-queue |
-| **6. Champion League** | Does this strategy beat the current category champion? | Adopted or rejected with keep-rate evidence |
+| Gate | Type | What it checks | What happens on failure |
+|------|------|---------------|------------------------|
+| **1. Category Routing** | Enforced | Best backend for this target right now? | Routes to strongest current performer; unhealthy backends dropped |
+| **2. Test Execution** | Enforced | Did **3,261 ERT tests** pass? | Experiment discarded, pattern learned |
+| **3. AI Grading** | Enforced | Is the change well-structured and principled? | Scored 0.0-1.0, fed to analyzer |
+| **3.5 Complexity Gate** | Enforced | Did complexity rise >10% without proportional quality gain? | Experiment rejected with explicit reason |
+| **4. AI Review** | Downstream | Does it pass security, conventions, architecture? | Multi-agent review in staging path |
+| **5. pi Synthesis** | Downstream | Which similar files should inherit this strategy? | Semantic cluster auto-queue |
+| **6. Champion League** | Downstream | Does this strategy beat the current category champion? | Adopted or rejected with keep-rate evidence |
 
 - **Learning**: self-evolution, pattern synthesis, **architectural evolution**, and **code regeneration** consume the results of the first four layers. This is why the honest score is **~78%**, not 95%: the inner loops are alive; the outer-world sensor layer is still incomplete.
 

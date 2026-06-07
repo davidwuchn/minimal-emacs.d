@@ -161,7 +161,8 @@ Returns the number of entries pruned."
 ;; ── Interactive Review ──
 
 (defun gptel-auto-workflow-approval-queue-review ()
-  "Display pending approval queue entries in a temp buffer for interactive review."
+  "Display pending approval queue entries in a temp buffer for interactive
+review."
   (interactive)
   (gptel-auto-workflow-approval-queue-prune-expired)
   (let ((entries (gptel-auto-workflow-approval-queue-list t))
@@ -273,6 +274,56 @@ or 0.0 if none)."
     (list :pending pending-count
           :expired expired-count
           :oldest-created-at oldest-created)))
+
+;; ── Executor: Consume approved proposals ──
+
+(defun gptel-auto-workflow-approval-queue-execute-approved ()
+  "Process all approved proposals in the decisions directory.
+For each approved proposal:
+1. Create a git rollback tag (if :rollback-tag present)
+2. Write deployment memory to mementum
+3. Mark the proposal as :deployed with :deployed-at timestamp
+Returns list of executed proposal IDs."
+  (let ((decisions-dir
+         (expand-file-name
+          "decisions"
+          (expand-file-name gptel-auto-workflow-approval-queue-dir)))
+        (executed nil))
+    (when (file-directory-p decisions-dir)
+      (dolist (f (directory-files decisions-dir t "\\.sexp$"))
+        (let ((entry (gptel-auto-workflow-approval-queue--read-sexp-file f)))
+          (when (and entry
+                     (equal (plist-get entry :status) "approved")
+                     (not (plist-get entry :deployed-at)))
+            (let* ((proposal-id (plist-get entry :id))
+                   (rollback-tag (plist-get entry :rollback-tag))
+                   (component (or (plist-get entry :component) "unknown"))
+                   (risk (or (plist-get entry :risk) "unknown"))
+                   (description (or (plist-get entry :description) "No description")))
+              ;; Create git rollback tag
+              (when (and rollback-tag (fboundp 'gptel-auto-workflow--git-cmd))
+                (condition-case nil
+                    (gptel-auto-workflow--git-cmd
+                     (format "git tag %s" (shell-quote-argument rollback-tag)) 30)
+                  (error
+                   (message "[approval-queue] Failed to create rollback tag: %s" rollback-tag))))
+              ;; Write deployment memory
+              (when (fboundp 'gptel-auto-workflow--mementum-write-memory)
+                (condition-case nil
+                    (gptel-auto-workflow--mementum-write-memory
+                     '✅ (format "approved-deploy-%s" (or proposal-id "unknown"))
+                     (format "**Approved and deployed:** %s\n**Risk:** %s\n**Component:** %s\n**Rollback tag:** %s\n\nDeployed by approval queue executor after human approval."
+                             description risk component (or rollback-tag "none")))
+                  (error nil)))
+              ;; Mark as deployed
+              (let* ((updated (plist-put entry :status "deployed"))
+                    (updated (plist-put updated :deployed-at (float-time))))
+                (with-temp-file f
+                  (prin1 updated (current-buffer)))
+                (message "[approval-queue] Deployed approved proposal: %s (component: %s)"
+                         proposal-id component)
+                (push proposal-id executed)))))))
+    (nreverse executed)))
 
 (provide 'gptel-auto-workflow-approval-queue)
 ;;; gptel-auto-workflow-approval-queue.el ends here

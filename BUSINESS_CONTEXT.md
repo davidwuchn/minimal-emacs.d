@@ -1,8 +1,8 @@
 # Business Context: OV5 Implementation of YC Vision
 
 > **YC Vision**: Recursive self-improving AI loops that learn from every outcome
-> **OV5 Implementation**: ~78% complete (core phases operational, external sensors partial)
-> **Status**: Operational, self-evolution cycle running, monitoring agent active
+> **OV5 Implementation**: ~65% complete (core phases operational, monitoring wired, external sensors partial)
+> **Status**: Operational, self-evolution cycle running, monitoring agent wired into experiment lifecycle
 
 ---
 
@@ -113,16 +113,17 @@ All happens while employees sleep
 
 ## Current Assessment
 
-**OV5 completion level:** ~78% of YC vision (core phases operational, external sensors partial)
+**OV5 completion level:** ~65% of YC vision (monitoring wired, approval queue executor operational, regeneration triggered)
 - ✅ Strong tool layer and quality gates (knowledge reasoning with Floyd-Warshall, Allen interval, Horn SAT)
 - 🔄 External sensors — production metrics via Sentry API wired; user feedback and support tickets are stubs returning 0.0
-- ✅ Monitoring agent (analyzes failures, generates proposals, risk-tiered deployment, architectural evolution)
-- ✅ Approval queue (human review for high-risk proposals, 7-day expiry, file-based persistence)
-- ✅ Software as consumable (context database with sidecar .sexp persistence, code regeneration)
+- ✅ Monitoring agent (wired into experiment lifecycle via after-experiment-hook, throttled 15 min cycles)
+- ✅ Approval queue (enqueue + executor that deploys approved proposals automatically)
+- ✅ Software as consumable (context database with sidecar .sexp persistence, code regeneration triggered in evolution cycle)
 - ✅ Human positioning (risk-based decision classification, human interface layer, approval queue)
 - ✅ Token economics (token tracking, ROI analysis, budget allocation, business context correlation)
 - ✅ Good learning mechanism (self-evolution, pattern synthesis, feedback loops)
 - ✅ Knowledge reasoning module loaded and operational
+- **4 enforced gates** + 3 downstream quality checks (honest assessment: routing, tests, grading, complexity = enforced; review, π Synthesis, champion league = downstream)
 
 **Remaining work:** Wire real user feedback/support ticket APIs (Sentry operational, Slack/Zendesk stubs). Persist disposable module tracking across daemon restarts. Consume approved proposals from approval queue for auto-deploy.
 
@@ -143,19 +144,19 @@ OV5 now implements **subtractive engineering** — the principle that the best c
 | **Narrative Generation** | Human-readable experiment summaries with complexity rationale | ✅ **Implemented** |
 | **Understanding Cost** | Tracks human review time and understanding score | 🔄 **Planned** |
 
-### The 7 Gates
+### The 7 Quality Checks
 
-OV5's quality gates now include complexity as a first-class citizen:
+OV5's quality pipeline has **4 enforced gates** in the experiment hot path and **3 downstream quality checks** that run after experiments complete:
 
-| Gate | What It Checks | What Happens on Failure |
-|------|---------------|------------------------|
-| **1. Category Routing** | Best backend for this target RIGHT NOW? | Routes to strongest current performer |
-| **2. Test Execution** | Did 3261 ERT tests pass? | Experiment discarded |
-| **3. AI Grading** | Is the change well-structured and principled? | Scored 0.0-1.0, fed to analyzer |
-| **3.5 Complexity Gate** | Did complexity increase >10% without quality gain? | **Experiment rejected with reason** |
-| **4. AI Review** | Does it pass security, conventions, architecture? | Multi-agent review with feedback |
-| **5. π Synthesis** | Which similar files should inherit this strategy? | Semantic cluster auto-queue |
-| **6. Champion League** | Does this strategy beat the current category champion? | Adopted or rejected with keep-rate evidence |
+| Gate | Type | What It Checks | What Happens on Failure |
+|------|------|---------------|------------------------|
+| **1. Category Routing** | Enforced | Best backend for this target RIGHT NOW? | Routes to strongest current performer |
+| **2. Test Execution** | Enforced | Did 3261 ERT tests pass? | Experiment discarded |
+| **3. AI Grading** | Enforced | Is the change well-structured and principled? | Scored 0.0-1.0, fed to analyzer |
+| **3.5 Complexity Gate** | Enforced | Did complexity increase >10% without quality gain? | **Experiment rejected with reason** |
+| **4. AI Review** | Downstream | Does it pass security, conventions, architecture? | Multi-agent review in staging path |
+| **5. π Synthesis** | Downstream | Which similar files should inherit this strategy? | Semantic cluster auto-queue |
+| **6. Champion League** | Downstream | Does this strategy beat the current category champion? | Adopted or rejected with keep-rate evidence |
 
 ### Why This Matters
 
