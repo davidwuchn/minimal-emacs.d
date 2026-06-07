@@ -704,15 +704,23 @@ ORIG-FN is the original function to wrap."
 (ert-deftest agent/staging/tsv-replaces-staging-pending ()
   "TSV logger must replace staging-pending rows, not duplicate them."
   (require 'gptel-tools-agent-prompt-build)
+  (require 'gptel-tools-agent-base)  ; for gptel-auto-workflow--results-tsv-header
   (let* ((tsv-file (make-temp-file "test-staging" nil ".tsv"))
          ;; Write header + one staging-pending row
          (_ (with-temp-file tsv-file
               (insert gptel-auto-workflow--results-tsv-header)
               (insert "1\ttest.el\thypothesis\t0.40\t0.80\t0.50\t+0.40\tstaging-pending\t100\t9\tgraded\tstaging-pending\tpatterns\toutput\t100\tMiniMax\t1000\tall\t?\t?\ttemplate-default\tnone\thash\tnone\tnone\t?\tmodel\tscores\tskills\tnone\n")))
          (run-id "run-test")
+         ;; Pre-populate business metrics so log-tsv skips the slow
+         ;; gptel-auto-workflow--compute-local-business-value path
+         ;; (which scans 20+ log files and can throw via cl-block).
          (experiment (list :target "test.el" :id 1 :score-before 0.4
                            :score-after 0.8 :kept t :decision "kept"
-                           :comparator-reason "improvement")))
+                           :comparator-reason "improvement"
+                           :business-value-score 0.5
+                           :risk-score 0.3
+                           :user-satisfaction-delta 0.0
+                           :support-tickets-reduced 0)))
     ;; Mock results file path to use our temp file
     (cl-letf (((symbol-function 'gptel-auto-workflow--results-file-path)
                (lambda (&optional _run-id) tsv-file)))

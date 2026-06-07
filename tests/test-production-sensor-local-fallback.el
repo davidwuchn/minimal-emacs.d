@@ -68,11 +68,15 @@
     (unwind-protect
         (progn
           (make-directory log-dir t)
-          (with-temp-file (expand-file-name "emacs-test.log" log-dir)
-            (dotimes (i 50)
-              (insert (format "2026-06-07T10:%02d:00 [error] gptel-ext-retry: hit %d\n" i i))))
-          (let ((gptel-auto-workflow--expand-workspace-path
-                 (lambda (_) root)))
+          ;; Create 15 log files each mentioning the target — function
+          ;; counts one hit per file, so we get 15 hits before capping.
+          (dotimes (i 15)
+            (with-temp-file (expand-file-name (format "error-%02d.log" i) log-dir)
+              (insert (format "2026-06-07T10:%02d:00 [error] gptel-ext-retry: hit\n" i))))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--github-sensor-collect)
+                     (lambda () nil))  ;; Disable GitHub sensor
+                    ((symbol-function 'gptel-auto-workflow--expand-workspace-path)
+                     (lambda (_) root)))  ;; Point to temp directory
             (let ((result (gptel-auto-workflow--query-support-tickets
                            (expand-file-name target root))))
               (should (= result 10)))))

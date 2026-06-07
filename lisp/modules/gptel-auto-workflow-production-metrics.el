@@ -65,12 +65,14 @@ Set via environment variable OV5_SENTRY_API_KEY or configuration.")
 (defvar gptel-auto-workflow--external-user-feedback-fn nil
   "Optional function (lambda) returning satisfaction delta for a target.
 When non-nil, called with the target string and should return -1.0..1.0.
-Overrides the local gh-CLI fallback in `gptel-auto-workflow--query-user-feedback'.")
+Overrides the local gh-CLI fallback in
+`gptel-auto-workflow--query-user-feedback'.")
 
 (defvar gptel-auto-workflow--external-support-tickets-fn nil
   "Optional function (lambda) returning ticket count reduced for a target.
 When non-nil, called with the target string and should return an integer 0-N.
-Overrides the local error-log fallback in `gptel-auto-workflow--query-support-tickets'.")
+Overrides the local error-log fallback in
+`gptel-auto-workflow--query-support-tickets'.")
 
 (defvar gptel-auto-workflow--production-metrics-cache nil
   "Cache for production metrics queries.
@@ -182,7 +184,8 @@ Returns float 0.0-1.0 representing error rate."
 Returns satisfaction delta: -1.0 (worse) to +1.0 (better).
 
 Layered sensor approach (per YC Vision — local-first):
-1. External user hook (`gptel-auto-workflow--external-user-feedback-fn') if set
+1. External user hook (`gptel-auto-workflow--external-user-feedback-fn') if
+set
 2. Full-sensor-pipeline from gptel-auto-workflow-external-sensors
 3. Local gh CLI fallback (issues mentioning target)
 4. Neutral 0.0 fallback"
@@ -220,9 +223,8 @@ Layered sensor approach (per YC Vision — local-first):
                               "--limit" "50"
                               "--json" "createdAt")
                 (goto-char (point-min))
-                (let* ((json-array-type 'list)
-                       (json-object-type 'plist)
-                       (issues (ignore-errors (json-parse-buffer)))
+                (let* ((issues (ignore-errors
+                                  (json-parse-buffer :object-type 'plist)))
                        (total (length issues))
                        (open-count 0))
                   (dolist (issue issues)
@@ -245,8 +247,10 @@ Layered sensor approach (per YC Vision — local-first):
 Returns number of tickets reduced (integer, 0-N).
 
 Layered sensor approach (per YC Vision — local-first):
-1. External user hook (`gptel-auto-workflow--external-support-tickets-fn') if set
-2. Full-sensor-pipeline from gptel-auto-workflow-external-sensors (closed issues)
+1. External user hook (`gptel-auto-workflow--external-support-tickets-fn') if
+set
+2. Full-sensor-pipeline from gptel-auto-workflow-external-sensors (closed
+issues)
 3. Local error-log scan (count hits in var/log/)
 4. 0 fallback"
   (or (and (boundp 'gptel-auto-workflow--external-support-tickets-fn)
@@ -267,7 +271,7 @@ Layered sensor approach (per YC Vision — local-first):
              (error-log-dir (expand-file-name "var/log/" root))
              (recent-errors 0))
         (when (and basename (file-directory-p error-log-dir))
-          (condition-case nil
+           (condition-case nil
               (cl-block count-errors
                 (dolist (log (seq-take (sort (directory-files error-log-dir t "\\.log\\'")
                                             (lambda (a b)
@@ -278,11 +282,19 @@ Layered sensor approach (per YC Vision — local-first):
                     (with-temp-buffer
                       (insert-file-contents log nil 0 50000)
                       (goto-char (point-min))
-                      (when (re-search-forward (regexp-quote basename) nil t)
-                        (cl-incf recent-errors)
-                        (when (> recent-errors 50) (cl-return-from count-errors)))))))
+                      ;; Count ALL matches in the log, not just 1 per file.
+                      ;; Each error log entry mentioning the target is a
+                      ;; ticket proxy.  Cap at 50 internal iterations
+                      ;; (final result capped at 10).  Use a flag instead
+                      ;; of cl-return-from to avoid throw leakage when
+                      ;; this function is called inside another cl-block.
+                      (let ((done nil))
+                        (while (and (not done)
+                                    (re-search-forward (regexp-quote basename) nil t))
+                          (cl-incf recent-errors)
+                          (when (> recent-errors 50) (setq done t))))))))
             (error nil)))
-        ;; Each unique error log hit = 1 ticket proxy. Cap at 10 for sanity.
+        ;; Cap at 10 for sanity (each error log hit = 1 ticket proxy).
         (min 10 recent-errors))
       ;; 0 fallback
       0))

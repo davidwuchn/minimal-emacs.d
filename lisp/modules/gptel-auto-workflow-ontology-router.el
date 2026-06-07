@@ -2852,8 +2852,10 @@ When backends disagree on KIBC axis, flags as conflict."
         (let* ((backend (or (plist-get r :backend) "unknown"))
                (axis (or (plist-get r :kibcm-axis) "?"))
                (existing (assoc backend backend-axes)))
+          ;; `target-results' is OLDEST-first (built by pushing from
+          ;; newest-first `results'), so the LAST occurrence per backend
+          ;; in this loop is the most recent — overwrite to keep newest.
           (if existing
-              ;; Update if this experiment is newer (later in list = newer)
               (setcdr existing axis)
             (push (cons backend axis) backend-axes))))
       ;; Check consistency
@@ -2915,11 +2917,12 @@ Returns plist with :total :consistent :inconsistent :targets."
                    (cl-incf total)
                    (if (plist-get check :consistent)
                        (cl-incf consistent)
-                     (cl-incf inconsistent)
-                     (push (list :target target
-                                :ratio (plist-get check :agreement-ratio)
-                                :conflicts (plist-get check :conflicts))
-                           target-reports)))))
+                     (progn
+                       (cl-incf inconsistent)
+                       (push (list :target target
+                                   :ratio (plist-get check :agreement-ratio)
+                                   :conflicts (plist-get check :conflicts))
+                              target-reports))))))
              targets-seen)
     (message "[consistency] Checked %d targets: %d consistent, %d inconsistent"
              total consistent inconsistent)
@@ -4086,8 +4089,8 @@ Primary: unified graph skill-cooccur edges.  Fallback: skill graph edges."
             (if (> edge-count 0)
                 (* 0.10 (/ total-weight edge-count))
               0.0))
-        (error 0.0))
-    0.0))
+         (error 0.0))
+     0.0))
 
 (provide 'gptel-auto-workflow-ontology-router)
 ;;; gptel-auto-workflow-ontology-router.el ends here

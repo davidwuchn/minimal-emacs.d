@@ -265,26 +265,21 @@ This ensures the system can collect data for new strategy+target pairs."
   (let ((mock-ontology
          '(:classes ((:name "new-strat" :keep-rate 0.1))
            :instances ((:name "new-target" :keep-rate 0.1)))))
-    (cl-letf* ((original-random (symbol-function 'random))
-               ((symbol-function 'gptel-auto-workflow--generate-experiment-ontology)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--generate-experiment-ontology)
                 (lambda () mock-ontology))
                ((symbol-function 'gptel-auto-workflow--parse-all-results)
                 (lambda () nil))
                ((symbol-function 'gptel-auto-workflow--load-research-traces)
-                (lambda () nil))
-               ;; Deterministic: force exploration on first call, real random thereafter
-               ((symbol-function 'random)
-                (let ((call-count 0))
-                  (lambda (&optional n)
-                    (if (zerop (cl-incf call-count))
-                        5  ;; < 10 → exploration triggers on first call
-                      (funcall original-random (or n most-positive-fixnum)))))))
-      ;; With deterministic exploration on first call, at least 1 should run
+                (lambda () nil)))
+      ;; With 10% exploration rate, probability of 0 successes in 100 trials
+      ;; is (0.9)^100 ≈ 0.000027 — negligible flakiness.
       (let ((runs 0))
-        (dotimes (_ 20)
+        (dotimes (_ 100)
           (when (gptel-auto-workflow--should-run-experiment-p "new-strat" "new-target")
             (setq runs (1+ runs))))
-        (should (>= runs 1))))))
+        ;; Expect roughly 10 runs (10% of 100), allow 3-20 range
+        (should (>= runs 3))
+        (should (<= runs 20))))))
 
 (ert-deftest tdd/predict/exploration-does-not-block-high-prediction ()
   "High prediction experiments should always run, regardless of exploration."
