@@ -63,6 +63,8 @@ The pipeline had 1.4% keep-rate across 140+ runs because:
 - **Template diversity**: Prompt templates must offer HIGH/MEDIUM/LOW value change types, not just nil guards
 - **Git rebase > ff-only**: Pi5 frequently diverges; rebase handles this gracefully
 - **Run-level health**: Check across entire runs (not just experiments within a run)
+- **Perl over sed**: `perl -pi -e > sed -i` for cross-platform pipeline scripts (macOS/Linux compatible)
+- **Log cleanup**: var/log/ accumulates unboundedly — pipeline now keeps only 50 most recent
 
 ## Expected Impact
 
