@@ -617,17 +617,17 @@ concurrent pipeline pushes to staging don't cause non-fast-forward rejection."
       (gptel-auto-workflow--with-staging-worktree
        (lambda ()
          (setq gptel-auto-workflow--last-staging-push-output nil)
-         ;; Fetch remote staging first to refresh --force-with-lease ref.
-         (gptel-auto-workflow--git-result
-          (format "git fetch %s %s" remote (shell-quote-argument staging)) 30)
-         (let* ((push-result
-                 (gptel-auto-workflow--with-skipped-submodule-sync
-                  (lambda ()
-                    (gptel-auto-workflow--git-result
-                     (format "git push --force-with-lease %s %s"
-                             remote
-                             (shell-quote-argument staging))
-                     180)))))
+          ;; Fetch remote staging first, then push. Retry logic handles races.
+          (gptel-auto-workflow--git-result
+           (format "git fetch %s %s" remote (shell-quote-argument staging)) 30)
+          (let* ((push-result
+                  (gptel-auto-workflow--with-skipped-submodule-sync
+                   (lambda ()
+                     (gptel-auto-workflow--git-result
+                      (format "git push %s %s"
+                              remote
+                              (shell-quote-argument staging))
+                      180)))))
            (setq gptel-auto-workflow--last-staging-push-output (car push-result))
            (if (and push-result (= 0 (cdr push-result)))
                t
