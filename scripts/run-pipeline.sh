@@ -1140,6 +1140,35 @@ mkdir -p "$DIGEST_DIR"
     else
         echo "- No knowledge pages yet"
     fi
+    echo ""
+    echo "## Strategy Pool Visibility"
+    echo ""
+    # How many strategies exist? How many have been evaluated? How many
+    # are blind Bayesian guesses? YC principle: when 12-15/17 strategies
+    # are unevaluated, the system is still exploring — it can't have found
+    # a champion yet. The human should know this is a cold-start.
+    if [ -d "$DIR/assistant/strategies" ]; then
+        total_strategies=$(find "$DIR/assistant/strategies" -name "strategy-*.el" 2>/dev/null | wc -l)
+        # Count strategy hits in recent results (column 22 = strategy name)
+        if compgen -G "$DIR/var/tmp/experiments/*/results.tsv" >/dev/null; then
+            used_strategies=$(find "$DIR/var/tmp/experiments" -maxdepth 2 -name "results.tsv" -mtime -7 -exec cat {} \; 2>/dev/null | \
+                awk -F'\t' 'NR>1 && $22 != "" && $22 != "template-default" && $22 != "?" {print $22}' | sort -u | wc -l)
+        else
+            used_strategies=0
+        fi
+        unevaluated=$((total_strategies - used_strategies))
+        if [ "$total_strategies" -gt 0 ]; then
+            if [ "$unevaluated" -gt "$((total_strategies / 2))" ]; then
+                echo "- **$total_strategies strategies** total, **$used_strategies** evaluated in last 7d, **$unevaluated unevaluated** (cold-start phase)"
+                echo "- System is still exploring; no reliable champion yet"
+            else
+                echo "- **$total_strategies strategies** total, **$used_strategies** evaluated in last 7d, **$unevaluated unevaluated**"
+                echo "- System has signal on most strategies; champion selection meaningful"
+            fi
+        fi
+    else
+        echo "- No strategy directory found"
+    fi
 } > "$DIGEST_FILE"
 log "Daily digest written: $DIGEST_FILE"
 
