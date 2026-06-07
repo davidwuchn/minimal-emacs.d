@@ -10,6 +10,21 @@ ulimit -s 65532 2>/dev/null || true
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPT="$DIR/scripts/run-auto-workflow-cron.sh"
+
+# Bootstrap: ensure we're running the latest version of the script.
+# This prevents stale code when the local branch has diverged from origin.
+# Uses rebase to handle divergence gracefully.
+BOOTSTRAP_HEAD_BEFORE="$(git -C "$DIR" rev-parse HEAD 2>/dev/null)" || true
+(git -C "$DIR" fetch origin main 2>/dev/null && \
+ git -C "$DIR" stash -q 2>/dev/null || true && \
+ git -C "$DIR" checkout HEAD -- mementum/knowledge/ assistant/skills/ assistant/strategies/ 2>/dev/null || true && \
+ git -C "$DIR" rebase origin/main 2>/dev/null && \
+ git -C "$DIR" stash pop -q 2>/dev/null || true) || true
+# If HEAD moved (rebase succeeded), re-exec so we run the updated script.
+if [ -n "$BOOTSTRAP_HEAD_BEFORE" ] && [ "$BOOTSTRAP_HEAD_BEFORE" != "$(git -C "$DIR" rev-parse HEAD 2>/dev/null)" ]; then
+    echo "[pipeline] Bootstrap: HEAD updated, re-execing with latest code"
+    exec "$0" "$@"
+fi
 LOG_DIR="$DIR/var/tmp/cron"
 PIPELINE_LOG="$LOG_DIR/pipeline.log"
 LOCK_FILE="$LOG_DIR/pipeline.lock"
