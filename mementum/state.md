@@ -1,8 +1,8 @@
 # Mementum State
 
 > **Bootstrapped**: 2026-06-06
-> **Session**: Model routing optimization complete — all priorities addressed
-> **Status**: Workspace boundary, module docs, pipeline, and model routing all done
+> **Session**: Self-evolution hooks wired into experiment core
+> **Status**: All P0 priorities complete, self-heal enabled by default
 
 ---
 
@@ -14,7 +14,9 @@
 | **P0** | Refine top 20 auto-generated module docs | doc-explorer | **COMPLETE** |
 | **P0** | Test pipeline wrapper in production | pipeline-ops | **COMPLETE** |
 | **P0** | Optimize model routing based on task type | ov5-architect | **COMPLETE** |
+| **P0** | Wire self-heal hooks into experiment core | @maintainer | **COMPLETE** |
 | **P1** | Submit PR for install.sh macOS sed | delegate-opus | **BLOCKED** (upstream) |
+| **P2** | Refine remaining 87 module docs | doc-explorer | Pending |
 
 ## Completed Work
 
@@ -32,25 +34,27 @@
 
 ### Model Routing Optimization (P0)
 
-**New functions added to `lisp/modules/gptel-tools-agent-base.el`:**
-- `gptel-auto-workflow--detect-task-type`: Analyzes prompt keywords to detect task type
-- `gptel-auto-workflow--route-task-to-model`: Returns optimal agent/model for task type
+**Task type detection** — Prompts are auto-analyzed and routed to optimal model.
 
-**Task types supported:**
-- `code` → implementer / glm-5.1
-- `review` → delegate-opus / claude-opus-4.8
-- `research` → delegate / deepseek-v4-pro
-- `creative` → delegate-creative / minimax-m3
-- `orchestration` → @maintainer / kimi-k2.6
+### Self-Evolution Hooks (P0)
 
-**7 new TDD tests added.**
+**New in `lisp/modules/gptel-tools-agent-base.el`:**
+- `gptel-auto-workflow--self-heal-enabled` — defcustom (default: t)
+- `gptel-auto-workflow-before-experiment-hook` — Hook for pre-experiment diagnostics
+- `gptel-auto-workflow--run-bare-path-diagnostic` — Diagnostic helper
+- `gptel-auto-workflow--auto-route-prompt` — Combined detection + routing
+
+**Wired into `lisp/modules/gptel-tools-agent-main.el`:**
+- Self-heal runs before each experiment batch
+- Bare-path diagnostic runs automatically
+- Results logged to console
 
 ## Active Patterns (from last 3 sessions)
 
 - **Workspace boundary violation**: Self-heal accessed `/Users/davidwu/lisp/modules` — fixed by `gptel-auto-workflow--expand-workspace-path`
 - **Model routing**: Keywords in prompts now auto-detect task type and route to optimal model
+- **Self-evolution**: Pre-experiment diagnostics run automatically before each batch
 - **Pi5 auto-evolves**: `research-insights-template-default.md`, `strategy-guidance.json` — merge=theirs
-- **python3 regression**: Scripts should use `jq` not python3 — use `test-script-hygiene.el`
 
 ## Model Routing Matrix (Static + Dynamic)
 
@@ -63,11 +67,21 @@
 | Orchestration | `plan`, `coordinate`, `manage` | @maintainer | kimi-k2.6 |
 | Default (no match) | — | delegate | deepseek-v4-pro |
 
+## Self-Evolution Workflow
+
+```
+User Input → Detect Task Type → Route to Model → Self-Heal Diagnostic → Execute Experiment
+```
+
+**Self-Heal Diagnostic (runs before each experiment):**
+1. Bare-path scan (directory-files, with-temp-file, find-file, insert-file-contents)
+2. Boundary validation
+3. Report violations
+
 ## Next Steps (Suggested by Active Mementum)
 
-1. **Pattern synthesis** — >=3 similar issues → knowledge page candidate
-2. **Refine remaining 87 module docs** (20 done, 87 remaining)
-3. **Upstream PR** — install.sh macOS sed (blocked)
+1. **Refine remaining 87 module docs** (low priority)
+2. **Upstream PR** — install.sh macOS sed (blocked)
 
 ## Blockers
 
@@ -76,11 +90,12 @@
 ## Context for Next Session
 
 - All P0 priorities complete
+- Self-heal enabled by default (can be disabled via `gptel-auto-workflow--self-heal-enabled`)
 - Boundary validator, tool checks, self-heal diagnostic committed
 - 20 module docs refined
 - Pipeline wrapper tested
 - Model routing heuristics implemented
-- Next: pattern synthesis or remaining module docs
+- Self-evolution hooks wired into experiment core
 
 ---
 *Active Mementum v1.0 — auto-ranked priorities, pattern detection, model routing*
