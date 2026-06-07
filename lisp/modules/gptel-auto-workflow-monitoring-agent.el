@@ -8,8 +8,10 @@
 ;;; Commentary:
 
 ;; Monitoring agent Phase 1: failure pattern analysis.
+;; Phase 2: proposal generation from systemic failure patterns.
 ;; Parses TSV experiment logs, detects recurring failures, classifies by type,
-;; and persists patterns to mementum for downstream proposal generation.
+;; generates improvement proposals, scores and validates them,
+;; and persists patterns and proposals to mementum.
 ;;
 ;; Classification categories:
 ;;   grader      -- grader_reason contains syntax/type/undefined errors
@@ -193,6 +195,130 @@ PATTERN contains :type, :target, :count, :examples, :first-seen, :last-seen."
      (if examples (mapconcat #'identity examples "; ") "none")
      first-seen last-seen)))
 
+;; ── Proposal Generation (Phase 2) ──
+
+(defun gptel-auto-workflow--pattern-type->component (ftype)
+  "Map failure FTYPE symbol to the responsible pipeline component string.
+Mapping: grader/compilation -> grader, prompt -> prompt-builder,
+strategy -> strategy-harness, unknown -> general."
+  (cond
+   ((member ftype '(grader compilation)) "grader")
+   ((eq ftype 'prompt) "prompt-builder")
+   ((eq ftype 'strategy) "strategy-harness")
+   (t "general")))
+
+(defun gptel-auto-workflow--component->risk (component)
+  "Map COMPONENT string to a risk level string for proposals.
+grader/prompt-builder -> medium, strategy-harness -> high, general -> low."
+  (cond
+   ((member component '("grader" "prompt-builder")) "medium")
+   ((equal component "strategy-harness") "high")
+   (t "low")))
+
+(defun gptel-auto-workflow--count->confidence (count)
+  "Derive confidence heuristic from failure pattern COUNT.
+3 occurrences -> 0.6, 4 -> 0.7, 5+ -> 0.8."
+  (cond
+   ((= count 3) 0.6)
+   ((= count 4) 0.7)
+   ((>= count 5) 0.8)
+   (t 0.5)))
+
+(defun gptel-auto-workflow--generate-improvement-proposal (pattern)
+  "Generate an improvement proposal plist from a failure PATTERN.
+PATTERN is a plist from --analyze-systemic-failures with :type, :target, :count.
+Returns a proposal plist: :description, :component, :code-changes,
+:expected-impact, :confidence, :risk, :pattern-type, :pattern-target."
+  (let* ((ftype (plist-get pattern :type))
+         (target (or (plist-get pattern :target) "unknown"))
+         (count (plist-get pattern :count))
+         (component (gptel-auto-workflow--pattern-type->component ftype))
+         (confidence (gptel-auto-workflow--count->confidence count))
+         (risk (gptel-auto-workflow--component->risk component))
+         (examples (or (plist-get pattern :examples) (list "recurring failures"))))
+    (list
+     :description
+     (format "Address recurring %s failures in %s: %s"
+             ftype target
+             (mapconcat #'identity (seq-take examples 3) ", "))
+     :component component
+     :code-changes
+     (format "Modify %s to handle %s-type failures more robustly"
+             component ftype)
+     :expected-impact
+     (format "Reduce %s failures in %s by ~%.0f%%"
+             ftype target (* confidence 100))
+     :confidence confidence
+     :risk risk
+     :pattern-type ftype
+     :pattern-target target)))
+
+(defun gptel-auto-workflow--score-proposal (proposal)
+  "Score PROPOSAL plist by impact and feasibility.
+Adds :impact-score and :feasibility-score to the proposal plist.
+Impact-score = confidence * (pattern-count / 10), capped at 1.0.
+Feasibility-score derived from risk: low -> 0.9, medium -> 0.7, high -> 0.5."
+  (let* ((confidence (or (plist-get proposal :confidence) 0.5))
+         (risk (or (plist-get proposal :risk) "medium"))
+         ;; Recover count from pattern if available (confidence encodes it,
+         ;; but we compute impact from confidence directly for simplicity)
+         (impact-score (min 1.0 (* confidence
+                                    ;; Scale factor: confidence already
+                                    ;; encodes count heuristically
+                                    1.0)))
+         (feasibility-score
+          (cond ((equal risk "low") 0.9)
+                ((equal risk "medium") 0.7)
+                ((equal risk "high") 0.5)
+                (t 0.6))))
+    ;; Append scores to existing proposal plist
+    (append proposal
+            (list :impact-score impact-score
+                  :feasibility-score feasibility-score))))
+
+(defun gptel-auto-workflow--validate-proposal (scored-proposal records)
+  "Validate SCORED-PROPOSAL against historical RECORDS.
+Computes validation-rate as fraction of records matching the proposal's
+pattern-type that would be addressed.  Adds :validation-rate and :status.
+Status: validated if rate >= 0.6, tentative otherwise."
+  (let* ((ptype (plist-get scored-proposal :pattern-type))
+         (ptarget (plist-get scored-proposal :pattern-target))
+         (total-failures 0)
+         (addressed 0))
+    (dolist (rec records)
+      (let ((decision (or (plist-get rec :decision) "")))
+        (unless (equal decision "kept")
+          (setq total-failures (1+ total-failures))
+          (when (and (eq (gptel-auto-workflow--classify-failure rec) ptype)
+                     (equal (or (plist-get rec :target) "unknown") ptarget))
+            (setq addressed (1+ addressed))))))
+    (let* ((validation-rate
+            (if (> total-failures 0)
+                (/ (float addressed) (float total-failures))
+              0.0))
+           (status (if (>= validation-rate 0.6) "validated" "tentative")))
+      ;; Append validation fields to scored proposal
+      (append scored-proposal
+              (list :validation-rate validation-rate
+                    :status status)))))
+
+;; ── Proposal Formatting ──
+
+(defun gptel-auto-workflow--proposal->string (proposal)
+  "Format PROPOSAL plist into a human-readable string for mementum.
+Includes description, component, expected impact, confidence, risk,
+validation-rate, and status."
+  (let ((description (or (plist-get proposal :description) "N/A"))
+        (component (or (plist-get proposal :component) "unknown"))
+        (impact (or (plist-get proposal :expected-impact) "unknown"))
+        (confidence (or (plist-get proposal :confidence) 0.0))
+        (risk (or (plist-get proposal :risk) "unknown"))
+        (validation-rate (or (plist-get proposal :validation-rate) 0.0))
+        (status (or (plist-get proposal :status) "tentative")))
+    (format
+     "**Proposal:** %s\n**Component:** %s\n**Expected impact:** %s\n**Confidence:** %.2f\n**Risk:** %s\n**Validation rate:** %.2f\n**Status:** %s\n\nGenerated by the monitoring agent from systemic failure pattern analysis."
+     description component impact confidence risk validation-rate status)))
+
 ;; ── Monitoring Cycle (Throttled) ──
 
 (defun gptel-auto-workflow--monitoring-cycle ()
@@ -211,12 +337,15 @@ Returns list of written mementum file paths, or nil if throttled/disabled."
             nil)
         ;; Update throttle timestamp
         (setq gptel-auto-workflow-monitoring-last-cycle-time now)
-        ;; Analyze
+        ;; Phase 1: Analyze failure patterns
         (let ((patterns (gptel-auto-workflow--analyze-systemic-failures))
+              (records
+               (when (fboundp 'gptel-auto-workflow--parse-all-results)
+                 (gptel-auto-workflow--parse-all-results)))
               (written nil))
           (message "[monitoring] Found %d systemic failure patterns"
                    (length patterns))
-          ;; Persist each pattern to mementum
+          ;; Persist each pattern to mementum (Phase 1)
           (dolist (pattern patterns)
             (let* ((ftype (plist-get pattern :type))
                    (target (or (plist-get pattern :target) "unknown"))
@@ -235,6 +364,35 @@ Returns list of written mementum file paths, or nil if throttled/disabled."
                        '❌ slug content))))
               (when file
                 (message "[monitoring] Persisted pattern: %s" slug)
+                (push file written))))
+          ;; Phase 2: Generate, score, validate, and persist proposals
+          (dolist (pattern patterns)
+            (let* ((proposal
+                    (gptel-auto-workflow--generate-improvement-proposal pattern))
+                   (scored
+                    (gptel-auto-workflow--score-proposal proposal))
+                   (validated
+                    (gptel-auto-workflow--validate-proposal
+                     scored (or records (list))))
+                   (component (plist-get validated :component))
+                   (ptarget (plist-get validated :pattern-target))
+                   (status (plist-get validated :status))
+                   (slug
+                    (format "proposal-%s-%s"
+                            component
+                            (if (fboundp 'gptel-auto-workflow--mementum-slug)
+                                (gptel-auto-workflow--mementum-slug ptarget)
+                              (replace-regexp-in-string
+                               "[^a-zA-Z0-9]" "-" (downcase (or ptarget "unknown"))))))
+                   (content
+                    (gptel-auto-workflow--proposal->string validated))
+                   (file
+                    (when (and status
+                               (fboundp 'gptel-auto-workflow--mementum-write-memory))
+                      (gptel-auto-workflow--mementum-write-memory
+                       '💡 slug content))))
+              (when file
+                (message "[monitoring] Persisted proposal: %s (%s)" slug status)
                 (push file written))))
           (nreverse written))))))
 

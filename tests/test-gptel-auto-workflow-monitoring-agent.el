@@ -8,7 +8,9 @@
 ;;; Commentary:
 
 ;; TDD tests for Monitoring Agent Phase 1: failure pattern analysis.
-;; Tests classification, systemic detection, throttle, and mementum persistence.
+;; Phase 2: proposal generation, scoring, validation, and persistence.
+;; Tests classification, systemic detection, throttle, mementum persistence,
+;; and proposal generation pipeline.
 
 ;;; Code:
 
@@ -203,7 +205,7 @@ Returns the result of the last form in BODY."
 ;; ── Mementum Persistence Tests ──
 
 (ert-deftest test-monitoring/mementum-persistence ()
-  "Should persist each pattern to mementum with X symbol."
+  "Should persist patterns to mementum with X symbol."
   (let* ((records
           (list
            (list :decision "rejected" :target "lisp/comp.el"
@@ -215,14 +217,17 @@ Returns the result of the last form in BODY."
            (list :decision "rejected" :target "lisp/comp.el"
                  :grader-reason "compile error missing deps" :strategy "default"
                  :prompt-chars 500 :run-dir "run-3")))
-         (calls
-          (with-mocked-parse-and-mementum
-           records
-           (setq gptel-auto-workflow-monitoring-last-cycle-time 0.0)
-           (gptel-auto-workflow--monitoring-cycle))))
+          (calls
+           (with-mocked-parse-and-mementum
+            records
+            (setq gptel-auto-workflow-monitoring-last-cycle-time 0.0)
+            (gptel-auto-workflow--monitoring-cycle))))
     (should (>= (length calls) 1))
-    (dolist (call calls)
-      (should (eq (nth 0 call) '❌)))))
+    ;; At least one call must be a pattern (X symbol)
+    (let ((has-pattern nil))
+      (dolist (call calls)
+        (when (eq (nth 0 call) '❌) (setq has-pattern t)))
+      (should has-pattern))))
 
 ;; ── Pattern Formatting Tests ──
 
@@ -243,6 +248,165 @@ Returns the result of the last form in BODY."
     (should (string-match-p "syntax error in bar" str))
     (should (string-match-p "run-old" str))
     (should (string-match-p "run-new" str))))
+
+;; ── Phase 2: Proposal Generation Tests ──
+
+(ert-deftest test-monitoring/generate-proposal-from-pattern ()
+  "Should generate a proposal with correct component, confidence, risk from a grader pattern."
+  (let* ((pattern (list :type 'grader
+                        :target "lisp/modules/foo.el"
+                        :count 4
+                        :examples (list "syntax error in bar" "type mismatch in baz")))
+         (proposal (gptel-auto-workflow--generate-improvement-proposal pattern)))
+    (should (equal (plist-get proposal :component) "grader"))
+    (should (equal (plist-get proposal :confidence) 0.7))
+    (should (equal (plist-get proposal :risk) "medium"))
+    (should (string-match-p "grader" (plist-get proposal :description)))
+    (should (string-match-p "lisp/modules/foo.el" (plist-get proposal :description)))
+    (should (equal (plist-get proposal :pattern-type) 'grader))
+    (should (equal (plist-get proposal :pattern-target) "lisp/modules/foo.el"))))
+
+(ert-deftest test-monitoring/generate-proposal-compilation-pattern ()
+  "Should map compilation failure type to grader component."
+  (let* ((pattern (list :type 'compilation
+                        :target "lisp/core.el"
+                        :count 5
+                        :examples (list "compile error missing deps")))
+         (proposal (gptel-auto-workflow--generate-improvement-proposal pattern)))
+    (should (equal (plist-get proposal :component) "grader"))
+    (should (equal (plist-get proposal :confidence) 0.8))
+    (should (equal (plist-get proposal :risk) "medium"))))
+
+(ert-deftest test-monitoring/generate-proposal-strategy-pattern ()
+  "Should map strategy failure to strategy-harness component with high risk."
+  (let* ((pattern (list :type 'strategy
+                        :target "lisp/harness.el"
+                        :count 3
+                        :examples (list "no strategy selected")))
+         (proposal (gptel-auto-workflow--generate-improvement-proposal pattern)))
+    (should (equal (plist-get proposal :component) "strategy-harness"))
+    (should (equal (plist-get proposal :confidence) 0.6))
+    (should (equal (plist-get proposal :risk) "high"))))
+
+(ert-deftest test-monitoring/score-proposal-impact-feasibility ()
+  "Should compute impact-score and feasibility-score from proposal."
+  (let* ((proposal (list :description "Fix grader"
+                         :component "grader"
+                         :confidence 0.7
+                         :risk "medium"
+                         :pattern-type 'grader
+                         :pattern-target "lisp/foo.el"))
+         (scored (gptel-auto-workflow--score-proposal proposal)))
+    ;; impact-score = confidence * 1.0 = 0.7
+    (should (= (plist-get scored :impact-score) 0.7))
+    ;; feasibility-score: medium risk -> 0.7
+    (should (= (plist-get scored :feasibility-score) 0.7))))
+
+(ert-deftest test-monitoring/score-proposal-low-risk ()
+  "Should give feasibility 0.9 for low-risk proposal."
+  (let* ((proposal (list :description "Fix general"
+                         :component "general"
+                         :confidence 0.6
+                         :risk "low"
+                         :pattern-type 'unknown
+                         :pattern-target "misc"))
+         (scored (gptel-auto-workflow--score-proposal proposal)))
+    (should (= (plist-get scored :feasibility-score) 0.9))
+    (should (= (plist-get scored :impact-score) 0.6))))
+
+(ert-deftest test-monitoring/validate-proposal-high-rate ()
+  "Should validate proposal with high match rate as 'validated'."
+  (let* ((proposal (list :description "Fix grader failures"
+                         :component "grader"
+                         :confidence 0.7
+                         :risk "medium"
+                         :impact-score 0.7
+                         :feasibility-score 0.7
+                         :pattern-type 'grader
+                         :pattern-target "lisp/foo.el"))
+         ;; 10 total failures, 8 are grader on lisp/foo.el
+         (records
+          (append
+           (make-list 8 (list :decision "rejected" :target "lisp/foo.el"
+                              :grader-reason "syntax error" :strategy "default"
+                              :prompt-chars 500))
+           (make-list 2 (list :decision "rejected" :target "lisp/other.el"
+                              :grader-reason "low quality" :strategy "default"
+                              :prompt-chars 500))))
+         (validated (gptel-auto-workflow--validate-proposal proposal records)))
+    (should (>= (plist-get validated :validation-rate) 0.8))
+    (should (equal (plist-get validated :status) "validated"))))
+
+(ert-deftest test-monitoring/validate-proposal-low-rate ()
+  "Should mark proposal with low match rate as 'tentative'."
+  (let* ((proposal (list :description "Fix grader failures"
+                         :component "grader"
+                         :confidence 0.7
+                         :risk "medium"
+                         :impact-score 0.7
+                         :feasibility-score 0.7
+                         :pattern-type 'grader
+                         :pattern-target "lisp/rare.el"))
+         ;; 10 total failures, only 2 match
+         (records
+          (append
+           (make-list 2 (list :decision "rejected" :target "lisp/rare.el"
+                              :grader-reason "syntax error" :strategy "default"
+                              :prompt-chars 500))
+           (make-list 8 (list :decision "rejected" :target "lisp/common.el"
+                              :grader-reason "low quality" :strategy "default"
+                              :prompt-chars 500))))
+         (validated (gptel-auto-workflow--validate-proposal proposal records)))
+    (should (< (plist-get validated :validation-rate) 0.6))
+    (should (equal (plist-get validated :status) "tentative"))))
+
+(ert-deftest test-monitoring/proposal-string-format ()
+  "Should format proposal plist into readable string with all key fields."
+  (let* ((proposal (list :description "Address recurring grader failures"
+                         :component "grader"
+                         :expected-impact "Reduce grader failures by ~70%"
+                         :confidence 0.7
+                         :risk "medium"
+                         :validation-rate 0.8
+                         :status "validated"))
+         (str (gptel-auto-workflow--proposal->string proposal)))
+    (should (string-match-p "Proposal" str))
+    (should (string-match-p "Component" str))
+    (should (string-match-p "grader" str))
+    (should (string-match-p "Expected impact" str))
+    (should (string-match-p "Confidence" str))
+    (should (string-match-p "Risk" str))
+    (should (string-match-p "Validation rate" str))
+    (should (string-match-p "validated" str))))
+
+(ert-deftest test-monitoring/monitoring-cycle-generates-proposals ()
+  "Should persist proposals with insight symbol alongside patterns in monitoring cycle."
+  (let* ((records
+          (list
+           (list :decision "rejected" :target "lisp/test.el"
+                 :grader-reason "syntax error" :strategy "default"
+                 :prompt-chars 500 :run-dir "run-1")
+           (list :decision "rejected" :target "lisp/test.el"
+                 :grader-reason "syntax error" :strategy "default"
+                 :prompt-chars 500 :run-dir "run-2")
+           (list :decision "rejected" :target "lisp/test.el"
+                 :grader-reason "syntax error" :strategy "default"
+                 :prompt-chars 500 :run-dir "run-3")))
+         (calls
+          (with-mocked-parse-and-mementum
+           records
+           (setq gptel-auto-workflow-monitoring-last-cycle-time 0.0)
+           (gptel-auto-workflow--monitoring-cycle))))
+    ;; Should have at least 2 calls: 1 for pattern (X) + 1 for proposal (insight)
+    (should (>= (length calls) 2))
+    ;; Check that at least one call uses the insight symbol
+    (let ((has-insight nil)
+          (has-mistake nil))
+      (dolist (call calls)
+        (when (eq (nth 0 call) '💡) (setq has-insight t))
+        (when (eq (nth 0 call) '❌) (setq has-mistake t)))
+      (should has-insight)
+      (should has-mistake))))
 
 (provide 'test-gptel-auto-workflow-monitoring-agent)
 ;;; test-gptel-auto-workflow-monitoring-agent.el ends here
