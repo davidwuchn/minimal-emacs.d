@@ -60,6 +60,18 @@ Set via environment variable OV5_SENTRY_API_KEY or configuration.")
 (defvar gptel-auto-workflow--sentry-project nil
   "Sentry project slug. If nil, inferred from target file.")
 
+;; External sensor hooks (override local fallback). Set these to integrate
+;; with your own user feedback / support ticket systems.
+(defvar gptel-auto-workflow--external-user-feedback-fn nil
+  "Optional function (lambda) returning satisfaction delta for a target.
+When non-nil, called with the target string and should return -1.0..1.0.
+Overrides the local gh-CLI fallback in `gptel-auto-workflow--query-user-feedback'.")
+
+(defvar gptel-auto-workflow--external-support-tickets-fn nil
+  "Optional function (lambda) returning ticket count reduced for a target.
+When non-nil, called with the target string and should return an integer 0-N.
+Overrides the local error-log fallback in `gptel-auto-workflow--query-support-tickets'.")
+
 (defvar gptel-auto-workflow--production-metrics-cache nil
   "Cache for production metrics queries.
 Format: (hash-table target -> (before-rate . after-rate)).")
@@ -168,30 +180,112 @@ Returns float 0.0-1.0 representing error rate."
 (defun gptel-auto-workflow--query-user-feedback (target)
   "Query user feedback system for TARGET.
 Returns satisfaction delta: -1.0 (worse) to +1.0 (better).
-Uses external-sensors feedback webhook when configured, else returns 0.0."
-  (condition-case nil
-      (when (fboundp 'gptel-auto-workflow--feedback-configured-p)
-        (when (gptel-auto-workflow--feedback-configured-p)
-          (let* ((feedback (gptel-auto-workflow--collect-user-feedback
-                            (file-name-nondirectory (or target ""))))
-                 (satisfaction (and feedback (plist-get feedback :satisfaction-rate))))
-            (when (and satisfaction (> satisfaction 0.0))
-              ;; Normalize: 0.5 = neutral, above = positive, below = negative
-              (* 2.0 (- satisfaction 0.5))))))
-    (error 0.0))
-  0.0)
 
-(defun gptel-auto-workflow--query-support-tickets (_target)
-  "Query support ticket system via GitHub Issues sensor.
-Returns number of recently closed bug issues (proxy for tickets resolved).
-Uses gh CLI to query GitHub Issues when available, else returns 0."
-  (condition-case nil
-      (when (fboundp 'gptel-auto-workflow--github-sensor-collect)
-        (let ((gh-data (gptel-auto-workflow--github-sensor-collect)))
-          (when gh-data
-            (plist-get gh-data :closed-issues))))
-    (error 0))
-  0)
+Layered sensor approach (per YC Vision — local-first):
+1. External user hook (`gptel-auto-workflow--external-user-feedback-fn') if set
+2. Full-sensor-pipeline from gptel-auto-workflow-external-sensors
+3. Local gh CLI fallback (issues mentioning target)
+4. Neutral 0.0 fallback"
+  (or (and (boundp 'gptel-auto-workflow--external-user-feedback-fn)
+           (functionp gptel-auto-workflow--external-user-feedback-fn)
+           (ignore-errors
+             (funcall gptel-auto-workflow--external-user-feedback-fn target)))
+      (condition-case nil
+          (when (fboundp 'gptel-auto-workflow--feedback-configured-p)
+            (when (gptel-auto-workflow--feedback-configured-p)
+              (let* ((feedback (gptel-auto-workflow--collect-user-feedback
+                                (file-name-nondirectory (or target ""))))
+                     (satisfaction (and feedback (plist-get feedback :satisfaction-rate))))
+                (when (and satisfaction (> satisfaction 0.0))
+                  ;; Normalize: 0.5 = neutral, above = positive, below = negative
+                  (* 2.0 (- satisfaction 0.5))))))
+        (error 0.0))
+      ;; Local fallback: gh CLI for issue count
+      (let* ((basename (and (stringp target) (file-name-nondirectory target)))
+             (root (or (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
+                            (gptel-auto-workflow--expand-workspace-path ""))
+                       default-directory))
+             (delta 0.0))
+        (when (and basename (executable-find "gh") root)
+          (condition-case nil
+              (with-temp-buffer
+                ;; Count issues mentioning this target in last 30 days
+                (call-process "gh" nil t nil
+                              "issue" "list"
+                              "--repo" (or (and (boundp 'gptel-auto-workflow--github-repo)
+                                                 gptel-auto-workflow--github-repo)
+                                            "davidwuchn/minimal-emacs.d")
+                              "--search" basename
+                              "--state" "all"
+                              "--limit" "50"
+                              "--json" "createdAt")
+                (goto-char (point-min))
+                (let* ((json-array-type 'list)
+                       (json-object-type 'plist)
+                       (issues (ignore-errors (json-parse-buffer)))
+                       (total (length issues))
+                       (open-count 0))
+                  (dolist (issue issues)
+                    (let* ((state (plist-get issue :state))
+                           (created (plist-get issue :createdAt)))
+                      (when (and (string= state "OPEN") created)
+                        (setq open-count (1+ open-count)))))
+                  ;; Open issues = negative signal; many open = satisfaction drop
+                  (setq delta (if (> total 0)
+                                  (- (/ (float open-count) (max 1 total)) 0.5)
+                                0.0))
+                  (setq delta (max -1.0 (min 1.0 delta)))))
+            (error nil)))
+        delta)
+      ;; Neutral fallback
+      0.0))
+
+(defun gptel-auto-workflow--query-support-tickets (target)
+  "Query support ticket system for TARGET.
+Returns number of tickets reduced (integer, 0-N).
+
+Layered sensor approach (per YC Vision — local-first):
+1. External user hook (`gptel-auto-workflow--external-support-tickets-fn') if set
+2. Full-sensor-pipeline from gptel-auto-workflow-external-sensors (closed issues)
+3. Local error-log scan (count hits in var/log/)
+4. 0 fallback"
+  (or (and (boundp 'gptel-auto-workflow--external-support-tickets-fn)
+           (functionp gptel-auto-workflow--external-support-tickets-fn)
+           (ignore-errors
+             (funcall gptel-auto-workflow--external-support-tickets-fn target)))
+      (condition-case nil
+          (when (fboundp 'gptel-auto-workflow--github-sensor-collect)
+            (let ((gh-data (gptel-auto-workflow--github-sensor-collect)))
+              (when gh-data
+                (plist-get gh-data :closed-issues))))
+        (error 0))
+      ;; Local fallback: count error log hits
+      (let* ((basename (and (stringp target) (file-name-nondirectory target)))
+             (root (or (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
+                            (gptel-auto-workflow--expand-workspace-path ""))
+                       default-directory))
+             (error-log-dir (expand-file-name "var/log/" root))
+             (recent-errors 0))
+        (when (and basename (file-directory-p error-log-dir))
+          (condition-case nil
+              (cl-block count-errors
+                (dolist (log (seq-take (sort (directory-files error-log-dir t "\\.log\\'")
+                                            (lambda (a b)
+                                              (time-less-p (nth 5 (file-attributes b))
+                                                           (nth 5 (file-attributes a)))))
+                                      20))
+                  (ignore-errors
+                    (with-temp-buffer
+                      (insert-file-contents log nil 0 50000)
+                      (goto-char (point-min))
+                      (when (re-search-forward (regexp-quote basename) nil t)
+                        (cl-incf recent-errors)
+                        (when (> recent-errors 50) (cl-return-from count-errors)))))))
+            (error nil)))
+        ;; Each unique error log hit = 1 ticket proxy. Cap at 10 for sanity.
+        (min 10 recent-errors))
+      ;; 0 fallback
+      0))
 
 (defun gptel-auto-workflow--track-production-impact (target experiment-id)
   "Track production impact for TARGET experiment.

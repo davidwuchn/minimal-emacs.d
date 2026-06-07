@@ -365,14 +365,21 @@ pipeline_git_sync_latest() {
 
     pipeline_clear_auto_generated_unmerged_paths || return 0
 
-    stash_output="$(git -C "$DIR" stash push -m "${stash_label}-$(date +%s)" 2>&1 || true)"
+    # SAFER STASH: only stash changes inside auto-generated directories.
+    # This prevents accidentally destroying user work-in-progress outside those
+    # dirs if the stash pop fails after rebase. Auto-gen dirs are upstream-
+    # dominant per AGENTS.md — Pi5's version always wins on conflict.
+    stash_output="$(git -C "$DIR" stash push \
+        --include-untracked \
+        -m "${stash_label}-$(date +%s)" \
+        -- mementum/knowledge/ assistant/skills/ assistant/strategies/ mementum/memories/ 2>&1 || true)"
     case "$stash_output" in
         *"No local changes to save"*) stash_made=0 ;;
         *"Saved working directory"*) stash_made=1 ;;
         *"Saved working tree"*) stash_made=1 ;;
         "") stash_made=0 ;;
         *)
-            log "WARNING: git stash failed during $label; continuing without stash pop"
+            log "WARNING: git stash (auto-gen only) failed during $label; continuing without stash pop"
             printf '%s\n' "$stash_output" >> "$PIPELINE_LOG"
             stash_made=0
             ;;
@@ -385,8 +392,10 @@ pipeline_git_sync_latest() {
 
     if [ "$stash_made" -eq 1 ]; then
         if ! git -C "$DIR" stash pop 2>/dev/null; then
-            log "WARNING: $label stash pop failed, resetting to HEAD and dropping stash"
-            git -C "$DIR" reset --hard HEAD 2>/dev/null || true
+            # SAFER: only drop the stash we created (auto-gen scoped). Any
+            # user work outside auto-gen dirs stays untouched. Never reset
+            # --hard, which can destroy in-progress user work.
+            log "WARNING: $label stash pop failed; dropping only the auto-gen stash"
             git -C "$DIR" stash drop 2>/dev/null || true
         fi
     fi
@@ -989,25 +998,30 @@ done
 if [ "$has_auto_gen" -eq 1 ]; then
     log "Auto-generated changes detected, publishing to main..."
     
-    # Stash any non-auto-generated changes
-    stash_output="$(git -C "$DIR" stash push -m "pipeline-auto-sync-$(date +%s)" 2>&1 || true)"
+    # SAFER STASH: only stash changes inside auto-generated directories.
+    # This prevents accidentally destroying user work-in-progress outside those
+    # dirs if the stash pop fails after the publish pull.
+    stash_output="$(git -C "$DIR" stash push \
+        --include-untracked \
+        -m "pipeline-auto-sync-$(date +%s)" \
+        -- mementum/knowledge/ assistant/skills/ assistant/strategies/ mementum/memories/ 2>&1 || true)"
     stash_made=0
     case "$stash_output" in
         *"Saved working directory"*|*"Saved working tree"*) stash_made=1 ;;
     esac
-    
+
     # Pull latest to avoid conflicts
     git -C "$DIR" pull --rebase 2>/dev/null || log "WARNING: git pull failed before push"
-    
+
     # Stage auto-generated files
     git -C "$DIR" add mementum/ assistant/skills/ assistant/strategies/ 2>/dev/null || true
-    
+
     # Commit if there are staged changes
     if ! git -C "$DIR" diff --cached --quiet 2>/dev/null; then
         commit_msg="$(date '+🔄 Auto-evolved outcomes: %Y-%m-%d %H:%M')"
         if git -C "$DIR" commit -m "$commit_msg" 2>/dev/null; then
             log "  ✓ Committed auto-generated outcomes"
-            
+
             # Push to origin/main
             remote="$(git -C "$DIR" remote get-url origin 2>/dev/null || true)"
             if [ -n "$remote" ]; then
@@ -1025,12 +1039,12 @@ if [ "$has_auto_gen" -eq 1 ]; then
     else
         log "No staged changes to commit"
     fi
-    
-    # Restore stashed changes
+
+    # SAFER POP: only pop the auto-gen stash. If it fails, just drop it —
+    # never reset --hard, which could destroy user work outside auto-gen dirs.
     if [ "$stash_made" -eq 1 ]; then
         if ! git -C "$DIR" stash pop 2>/dev/null; then
-            log "WARNING: stash pop failed after auto-publish, resetting to HEAD and dropping stash"
-            git -C "$DIR" reset --hard HEAD 2>/dev/null || true
+            log "WARNING: stash pop failed after auto-publish; dropping the auto-gen stash only"
             git -C "$DIR" stash drop 2>/dev/null || true
         fi
     fi

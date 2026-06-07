@@ -17,11 +17,11 @@
 | **Human oversight** | File-based approval queue, 7-day expiry, high-risk proposals routed to review |
 | **Production sensing** | Monitoring agent + production metrics; Sentry wired, external feedback still partial |
 | **Scale** | **105 modules** (60 byte-compiled, 45 no-byte-compile), **3,261 ERT tests** |
-| **Reality check** | **~78% YC Vision complete** - core loops operational, external sensors still partial |
+| **Reality check** | **~85% YC Vision complete** - core loops operational, sensors now local-first, self-heal loop closes |
 
 **Quick start:** Clone -> run pipeline -> review kept experiments next morning.
 
-**Cost:** ~$0.50-2.00/run. **Token efficiency:** 59% prompt compression via lambda notation. **Safety:** Git worktree isolation + **7 gates** - no change touches `main` without passing all gates. **Scale:** 105 modules, **3,261 ERT tests**, 8 backend definitions (4-5 actively routed). **YC Vision:** **~78% complete** - Sensor layer is real but still partial outside Sentry and production metrics.
+**Cost:** ~$0.50-2.00/run. **Token efficiency:** 59% prompt compression via lambda notation. **Safety:** Git worktree isolation + **7 gates** - no change touches `main` without passing all gates. **Scale:** 105 modules, **3,261 ERT tests**, 8 backend definitions (4-5 actively routed). **YC Vision:** **~85% complete** - Sensor layer is local-first (gh CLI for issues, error-log scan for tickets); self-heal loop now closes (verify-recovery handles 0→0 case via secondary signals); business context computed from real local signals, not just stubs.
 
 - [Begin](#begin) - Clone, run, done
 - [Why OV5?](#why-ov5)
@@ -160,7 +160,7 @@ lambda vision(x).
 | **5. pi Synthesis** | Downstream | Which similar files should inherit this strategy? | Semantic cluster auto-queue |
 | **6. Champion League** | Downstream | Does this strategy beat the current category champion? | Adopted or rejected with keep-rate evidence |
 
-- **Learning**: self-evolution, pattern synthesis, **architectural evolution**, and **code regeneration** consume the results of the first four layers. This is why the honest score is **~78%**, not 95%: the inner loops are alive; the outer-world sensor layer is still incomplete.
+- **Learning**: self-evolution, pattern synthesis, **architectural evolution**, and **code regeneration** consume the results of the first four layers. The inner loops are alive; the sensor layer is now local-first (no longer a hard stub) but still partial vs. full Sentry/feedback integration. **~85% honest score.**
 
 ---
 

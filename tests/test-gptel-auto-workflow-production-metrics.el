@@ -215,13 +215,23 @@
 
 ;; Test 10: Stub implementations return safe defaults
 (ert-deftest test-production-metrics/stub-implementations-return-defaults ()
-  "Stub implementations should return safe default values."
-  ;; User feedback stub should return 0.0 (neutral)
-  (should (= 0.0 (gptel-auto-workflow--query-user-feedback
-                   "lisp/modules/test.el")))
-  ;; Support tickets stub should return 0
-  (should (= 0 (gptel-auto-workflow--query-support-tickets
-                 "lisp/modules/test.el"))))
+  "Sensor fallbacks return safe values when external hooks unavailable.
+Returns a number in safe range without raising errors."
+  ;; User feedback: no external hook, no gh CLI, returns 0.0 (neutral)
+  (let ((gptel-auto-workflow--external-user-feedback-fn nil))
+    (let ((result (gptel-auto-workflow--query-user-feedback
+                   "lisp/modules/nonexistent-target-zzz.el")))
+      ;; Returns a valid float in [-1.0, 1.0] (neutral 0.0 expected when gh missing)
+      (should (and (numberp result)
+                   (>= result -1.0)
+                   (<= result 1.0)))))
+  ;; Support tickets: no external hook, returns integer in [0, 10]
+  (let ((gptel-auto-workflow--external-support-tickets-fn nil))
+    (let ((result (gptel-auto-workflow--query-support-tickets
+                   "lisp/modules/nonexistent-target-zzz.el")))
+      (should (and (integerp result)
+                   (>= result 0)
+                   (<= result 10))))))
 
 ;; Test 11: Production-weighted scoring boosts effective-score
 (ert-deftest test-production-metrics/weight-score-boosts ()

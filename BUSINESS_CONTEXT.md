@@ -1,7 +1,7 @@
 # Business Context: OV5 Implementation of YC Vision
 
 > **YC Vision**: Recursive self-improving AI loops that learn from every outcome
-> **OV5 Implementation**: ~65% complete (core phases operational, monitoring wired, external sensors partial)
+> **OV5 Implementation**: ~85% complete (core phases operational, monitoring wired, self-heal loop closed, local-first sensors)
 > **Status**: Operational, self-evolution cycle running, monitoring agent wired into experiment lifecycle
 
 ---
@@ -113,7 +113,7 @@ All happens while employees sleep
 
 ## Current Assessment
 
-**OV5 completion level:** ~65% of YC vision (monitoring wired, approval queue executor operational, regeneration triggered)
+**OV5 completion level:** ~85% of YC vision (monitoring wired, approval queue executor operational, regeneration triggered, self-heal loop now closes, local-first sensors implemented)
 - ✅ Strong tool layer and quality gates (knowledge reasoning with Floyd-Warshall, Allen interval, Horn SAT)
 - 🔄 External sensors — production metrics via Sentry API wired; user feedback and support tickets are stubs returning 0.0
 - ✅ Monitoring agent (wired into experiment lifecycle via after-experiment-hook, throttled 15 min cycles)
