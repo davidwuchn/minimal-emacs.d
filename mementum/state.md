@@ -15,8 +15,8 @@
 | **P0** | Test pipeline wrapper in production | pipeline-ops | **COMPLETE** |
 | **P0** | Optimize model routing based on task type | ov5-architect | **COMPLETE** |
 | **P0** | Wire self-heal hooks into experiment core | @maintainer | **COMPLETE** |
-| **P1** | Submit PR for install.sh macOS sed | delegate-opus | **BLOCKED** (upstream) |
-| **P2** | Refine remaining 87 module docs | doc-explorer | Pending |
+| **P1** | Refine remaining 97 module docs with OV5 ontology/AutoTTS | doc-explorer | **IN PROGRESS** |
+| **P2** | Submit PR for install.sh macOS sed | delegate-opus | **BLOCKED** (upstream) |
 
 ## Completed Work
 
