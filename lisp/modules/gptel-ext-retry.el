@@ -902,10 +902,18 @@ When a backend appears in the headless fallback chain, its model
 is replaced with the cheaper variant listed here (if any).
 Backends not listed use their default fallback model.")
 
+(defvar my/gptel-auto-compact--extra-backends
+  '(("Z-AI" . "glm-4.7")
+    ("MiniMax" . "minimax-m2.7-highspeed"))
+  "Extra backend/model pairs appended after the headless fallback chain.
+Tried only if all headless chain models fail.  Cheap and fast models
+preferred for compaction latency.")
+
 (defun my/gptel-auto-compact-models ()
   "Return the compact model fallback chain.
 Derives from `gptel-auto-workflow-headless-subagent-fallbacks',
-preferring cheap/fast model variants where available.
+preferring cheap/fast model variants where available.  Appends
+extra backends (glm-4.7, minimax-m2.7) as deeper fallbacks.
 Skips rate-limited backends."
   (let ((chain (if (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
                    gptel-auto-workflow-headless-subagent-fallbacks
@@ -915,11 +923,15 @@ Skips rate-limited backends."
         (excluded (if (boundp 'gptel-auto-workflow--rate-limited-backends)
                       gptel-auto-workflow--rate-limited-backends
                     nil)))
-    (cl-loop for (backend . model) in chain
-             unless (member backend excluded)
-             collect (cons backend
-                           (or (cdr (assoc backend my/gptel-auto-compact--cheap-overrides))
-                               model)))))
+    (append
+     (cl-loop for (backend . model) in chain
+              unless (member backend excluded)
+              collect (cons backend
+                            (or (cdr (assoc backend my/gptel-auto-compact--cheap-overrides))
+                                model)))
+     (cl-loop for (backend . model) in my/gptel-auto-compact--extra-backends
+              unless (member backend excluded)
+              collect (cons backend model)))))
 
 (defun my/gptel--run-compaction-pass (info pass-num bytes-limit bytes-var trimmed-total-var pass-var trim-fn &optional pass-msg)
   "Execute a single compaction pass in `my/gptel--compact-payload'.
