@@ -532,20 +532,20 @@ Returns the result of the last form in BODY."
 (ert-deftest test-monitoring/deploy-high-risk-approval-required ()
   "Should return 'approval-required' action for high-risk proposal."
   (let* ((tested-proposal (list :description "Fix strategy issue"
-                                :component "strategy-harness"
-                                :confidence 0.6
-                                :risk "high"
-                                :test-success-rate 0.7
-                                :test-status "pass"
-                                :pattern-type 'strategy
-                                :pattern-target "lisp/harness.el"))
+                                 :component "strategy-harness"
+                                 :confidence 0.6
+                                 :risk "high"
+                                 :test-success-rate 0.7
+                                 :test-status "pass"
+                                 :pattern-type 'strategy
+                                 :pattern-target "harness"))
          (deployed nil))
     (let ((write-calls
            (with-mocked-parse-and-mementum
             nil
             (setq deployed (gptel-auto-workflow--deploy-proposal tested-proposal)))))
       (should (equal (plist-get deployed :deploy-action) "approval-required"))
-      (should (string-match-p "monitoring-rollback-strategy-harness" (plist-get deployed :rollback-tag)))
+      (should (string-match-p "monitoring-rollback-strategy-harness-harness" (plist-get deployed :rollback-tag)))
       (should (cl-find-if (lambda (call) (eq (nth 0 call) '‖)) write-calls)))))
 
 (ert-deftest test-monitoring/rollback-success ()
