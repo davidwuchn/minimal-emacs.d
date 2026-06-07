@@ -2195,6 +2195,43 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   ;; Ensure required modules are loaded before evolution checks
   (mapc (lambda (m) (require m nil t))
         '(gptel-tools-agent-base gptel-tools-agent-main))
+  ;; ─── Production Cycle Pre-steps (monitoring → approval → disposable → regeneration) ───
+  ;; These run before the main evolution steps so the cycle has fresh monitoring data,
+  ;; approved proposals applied, and disposable modules identified for regeneration.
+  ;; Uses fboundp guards — safe no-ops when modules aren't loaded (e.g., interactive sessions).
+  ;; Wire monitoring agent into evolution cycle (Phase 2: Monitoring Agent)
+  (when (fboundp 'gptel-auto-workflow--monitoring-cycle)
+    (condition-case nil
+        (gptel-auto-workflow--monitoring-cycle)
+      (error nil)))
+  ;; Execute approved proposals from approval queue (Layer 2 Policy: close the loop)
+  (when (fboundp 'gptel-auto-workflow-approval-queue-execute-approved)
+    (condition-case nil
+        (gptel-auto-workflow-approval-queue-execute-approved)
+      (error nil)))
+  ;; Identify disposable modules from context database (Layer 5 Learning)
+  (when (fboundp 'gptel-auto-workflow-disposable-auto-detect)
+    (condition-case nil
+        (let ((candidates (gptel-auto-workflow-disposable-auto-detect)))
+          (when candidates
+            (message "[disposable] Auto-detected %d disposable modules" (length candidates))))
+      (error nil)))
+  ;; Trigger code regeneration for top underperforming module (Layer 5 Learning)
+  (when (fboundp 'gptel-auto-workflow-code-regeneration--identify-candidates)
+    (condition-case nil
+        (let ((candidates (gptel-auto-workflow-code-regeneration--identify-candidates)))
+          (when candidates
+            (let ((top (car candidates)))
+              (message "[regeneration] Top candidate: %s (delta: %.2f, history: %d)"
+                       (plist-get top :module)
+                       (or (plist-get top :best-delta) 0.0)
+                       (or (plist-get top :history-count) 0))
+              (when (fboundp 'gptel-auto-workflow-code-regeneration--full-workflow)
+                (gptel-auto-workflow-code-regeneration--full-workflow
+                 (plist-get top :module)
+                 (plist-get top :current-best-model)
+                nil)))))
+      (error nil)))
   (condition-case nil
       (let ((new-experiments (or (gptel-auto-workflow--evolution-count-new) 0))
             (has-research (and (getenv "PIPELINE_FINDINGS_FILE")

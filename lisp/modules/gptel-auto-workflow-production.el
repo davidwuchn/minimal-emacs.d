@@ -87,38 +87,8 @@ Skips when a workflow or cron job is active to avoid preempting experiments."
       (condition-case nil
           (gptel-token-economics--optimize-allocation 100.0)
         (error nil)))
-    ;; Wire monitoring agent into evolution cycle (Phase 2: Monitoring Agent)
-    (when (fboundp 'gptel-auto-workflow--monitoring-cycle)
-      (condition-case nil
-          (gptel-auto-workflow--monitoring-cycle)
-        (error nil)))
-    ;; Execute approved proposals from approval queue (Layer 2 Policy: close the loop)
-    (when (fboundp 'gptel-auto-workflow-approval-queue-execute-approved)
-      (condition-case nil
-          (gptel-auto-workflow-approval-queue-execute-approved)
-        (error nil)))
-    ;; Trigger code regeneration for underperforming modules (Layer 5 Learning)
-    (when (fboundp 'gptel-auto-workflow-disposable-auto-detect)
-      (condition-case nil
-          (let ((candidates (gptel-auto-workflow-disposable-auto-detect)))
-            (when candidates
-              (message "[disposable] Auto-detected %d disposable modules" (length candidates))))
-        (error nil)))
-    (when (fboundp 'gptel-auto-workflow-code-regeneration--identify-candidates)
-      (condition-case nil
-          (let ((candidates (gptel-auto-workflow-code-regeneration--identify-candidates)))
-            (when candidates
-              (let ((top (car candidates)))
-                (message "[regeneration] Top candidate: %s (delta: %.2f, history: %d)"
-                         (plist-get top :module)
-                         (or (plist-get top :best-delta) 0.0)
-                         (or (plist-get top :history-count) 0))
-                (when (fboundp 'gptel-auto-workflow-code-regeneration--full-workflow)
-                  (gptel-auto-workflow-code-regeneration--full-workflow
-                   (plist-get top :module)
-                   (plist-get top :current-best-model)
-                   nil)))))
-        (error nil)))
+    ;; Monitoring/approval/disposable/regeneration are now in
+    ;; gptel-auto-workflow-evolution-run-cycle itself — no need to call them here.
     (condition-case err
         (progn
           (message "[auto-workflow] Running scheduled evolution cycle...")
