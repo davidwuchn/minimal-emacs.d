@@ -3,17 +3,17 @@ title: Research Insights - template-default
 status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
-insight-quality: 0.3/10
-allium-issues: 0
+insight-quality: 0.4/10
+allium-issues: 4
 allium-severity: 0.00
-allium-status: coherent
+allium-status: ok
 ---
 
 # Research Strategy: template-default
 
-*Consolidated from 218 experiments (3% keep rate).*
+*Consolidated from 194 experiments (4% keep rate).*
 
-**Performance:** 7 kept / 1 discarded / 12 failed (EXTRACTED — from TSV)
+**Performance:** 7 kept / 1 discarded / 10 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
@@ -42,7 +42,12 @@ were misleading.
 - `lisp/modules/gptel-auto-workflow-projects.el` (6 kept / 2 failed)
 - `lisp/modules/gptel-benchmark-principles.el` (1 kept / 6 failed)
 - `lisp/modules/gptel-auto-workflow-mementum.el` (1 failed)
-- `lisp/modules/gptel-auto-workflow-production-metrics.el` (1 failed)
+
+## Allium Behavioral Coherence
+
+*4 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
+
+
 
 ## Meta-Learning Recommendations (INFERRED — from pattern analysis)
 
@@ -65,66 +70,457 @@ were misleading.
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Distilled Research Strategy
-
-## Scope
-**218 experiments** across 33 target files in the `gptel-auto-workflow`, `gptel-tools-agent`, `gptel-benchmark`, and `staging-*` modules.
-
-## Kept Hypotheses (6)
-
-| # | Hypothesis | Target Principle |
-|---|------------|------------------|
-| 1 | **Idempotency guard**: Prevent re-adding active advice + extract symmetric disable function | φ Vitality, fractal Clarity |
-| 2 | **Bug fix**: Fix misleading message + add directory existence validation | Bug fix |
-| 3 | **Cache validation**: Replace `eq` with `equal` for project list comparison; check cache before `ensure-buffer-tables` | φ Vitality, fractal Clarity |
-| 4 | **Buffer lookup**: Extract validation sequence with explicit nil guards | Clarity, Vitality |
-| 5 | **Error recovery**: Add `ignore-errors` around `file-attributes` + early guard for empty project lists | φ Vitality, fractal Clarity |
-| 6 | **Mode line**: Replace `format-mode-line` with direct `mode-name` access; use `when` instead of `if`; add nil-safety guard | fractal Clarity, φ Vitality |
-| 7 | **Benchmark crash fix**: Filter `not-applicable` entries before sorting in `gptel-benchmark-eight-keys-weakest` | Clarity, Vitality |
-
-## Discarded Hypotheses
-- None stated
-
-## Core Themes
-- **φ Vitality**: Adaptive error recovery, content-based caching, nil-safety guards
-- **fractal Clarity**: Explicit assumptions, simplified control flow, visible validation sequences
-- **Bug fixes**: Idempotency, misleading messages, runtime crashes from symbol comparison
+nil
 ```
 
-### Check Issues
-
-## Check Results
-
-**❌ Inconsistency Found**
-
-| Issue | Detail |
-|-------|--------|
-| **Count mismatch** | Header says **6** hypotheses, but table lists **7** (numbered 1–7) |
-
-### Quick Fix Options
-
-**Option A** — Update the header to match the table:
-```markdown
-## Kept Hypotheses (7)
-```
-
-**Option B** — If one hypothesis should be removed, clarify which one and renumber.
-
----
-
-### Other Observations
-
-| Check | Status |
-|-------|--------|
-| Numbering sequence | ✅ 1–7, no gaps |
-| Target principles referenced | ✅ Consistent use of φ Vitality / fractal Clarity |
-| Discarded section | ⚠️ "None stated" — consider explicitly listing what was evaluated and dropped, or remove the section |
-| Scope line | ✅ Clear module list |
-| Core themes | ✅ Map well to the hypotheses |
-
-**Recommendation:** Fix the count mismatch first. If all 7 are intentional, just update the header number.
