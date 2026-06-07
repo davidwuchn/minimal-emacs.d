@@ -29,7 +29,7 @@ Returns a list of violation plists."
                        (gptel-auto-workflow--expand-workspace-path "lisp/modules")))
          (violations nil)
          (dangerous-fn-names gptel-auto-workflow--bare-path-dangerous-functions))
-    (dolist (file (directory-files scan-dir t "\\.el\\'"))
+(dolist (file (directory-files scan-dir t "\\.el\\'"))
       (when (file-regular-p file)
         (with-temp-buffer
           (insert-file-contents file)
