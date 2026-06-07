@@ -125,8 +125,9 @@ Empty roots list returns nil (deny by default)."
   "Expand PATH relative to ROOT, then validate it is within allowed workspace roots.
 ROOT defaults to `gptel-auto-workflow--worktree-base-root' when nil.
 Returns the expanded absolute path on success.
-Signals an error when PATH is nil/empty or outside allowed roots."
-  (unless (gptel-auto-workflow--non-empty-string-p path)
+Signals an error when PATH is nil or outside allowed roots.
+Empty PATH returns the workspace root directory."
+  (unless (and path (stringp path))
     (error "[boundary] Invalid path: %S" path))
   (let* ((base (or root (gptel-auto-workflow--worktree-base-root)))
          (expanded (expand-file-name path base)))
