@@ -82,9 +82,16 @@ Saves all in-memory stores to survive daemon restarts."
         (message "[context-db] Cannot persist: project-root not available")
         (cl-return-from gptel-auto-workflow--context-db-persist))
       (make-directory (file-name-directory file) t)
-      (with-temp-file file
-        (insert (json-encode data)))
-      (message "[context-db] Persisted to %s" file))))
+      (condition-case err
+          (progn
+            (with-temp-file file
+              (insert (json-encode data)))
+            (message "[context-db] Persisted to %s" file))
+        (error
+         (message "[context-db] JSON encode error: %s" err)
+         (with-temp-file file
+           (insert "{}"))
+         (message "[context-db] Wrote empty JSON fallback to %s" file))))))
 
 (defun gptel-auto-workflow--context-db-load ()
   "Load context database from JSON file.
