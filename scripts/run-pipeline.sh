@@ -23,7 +23,7 @@ BOOTSTRAP_HEAD_BEFORE="$(git -C "$DIR" rev-parse HEAD 2>/dev/null)" || true
 # If HEAD moved (rebase succeeded), re-exec so we run the updated script.
 if [ -n "$BOOTSTRAP_HEAD_BEFORE" ] && [ "$BOOTSTRAP_HEAD_BEFORE" != "$(git -C "$DIR" rev-parse HEAD 2>/dev/null)" ]; then
     echo "[pipeline] Bootstrap: HEAD updated, re-execing with latest code"
-    exec "$0" "$@"
+    exec "$0" "${@:-}"
 fi
 LOG_DIR="$DIR/var/tmp/cron"
 PIPELINE_LOG="$LOG_DIR/pipeline.log"
