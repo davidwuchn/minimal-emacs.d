@@ -16,6 +16,7 @@
 (require 'cl-lib)
 (require 'gptel-tools-agent-base)
 (require 'gptel-auto-workflow-evolution)
+(require 'gptel-auto-workflow-bare-path-diagnostic)
 
 ;;; Mock implementations (for use with cl-letf)
 

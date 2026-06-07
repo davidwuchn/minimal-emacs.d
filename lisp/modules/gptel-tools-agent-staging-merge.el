@@ -503,7 +503,7 @@ ACTION is a short description used in failure messages."
               push-timeout))))
          (push-output (car push-result)))
     (cond
-     ((= 0 (cdr push-result))
+     ((and push-result (= 0 (cdr push-result)))
       t)
      ((and local-head
            (equal local-head
@@ -595,7 +595,7 @@ commits are preserved."
             ;; always a clean fast-forward.
             (let ((push-result (gptel-auto-workflow--git-result
                                 (format "git push %s main" remote) 180)))
-              (if (= 0 (cdr push-result))
+              (if (and push-result (= 0 (cdr push-result)))
                   (progn
                     (message "[auto-workflow] ✓ Staging promoted to main")
                     t)
@@ -629,7 +629,7 @@ concurrent pipeline pushes to staging don't cause non-fast-forward rejection."
                              (shell-quote-argument staging))
                      180)))))
            (setq gptel-auto-workflow--last-staging-push-output (car push-result))
-           (if (= 0 (cdr push-result))
+           (if (and push-result (= 0 (cdr push-result)))
                t
              (message "[auto-workflow] Push staging failed: %s"
                        (my/gptel--sanitize-for-logging (car push-result) 300))
