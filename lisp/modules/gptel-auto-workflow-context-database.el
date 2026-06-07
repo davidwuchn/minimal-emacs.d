@@ -20,6 +20,11 @@
 
 (require 'cl-lib)
 (require 'subr-x)
+;; gptel-auto-workflow--project-root is called unconditionally in multiple
+;; functions (--file-path, --ensure-dir, capture, --derive-dependencies).
+;; Require it so the function is actually defined at runtime, not just
+;; declared for the byte-compiler.
+(require 'gptel-tools-agent-benchmark nil t)
 
 (declare-function gptel-auto-workflow--plist-get "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--project-root "gptel-tools-agent-benchmark")
