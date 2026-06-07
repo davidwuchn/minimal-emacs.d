@@ -1950,7 +1950,10 @@ Called when the grader passed but the benchmark/validation failed."
     (target hypothesis grade-score grade-total _baseline
      experiment-id experiment-worktree experiment-branch
      provisional-commit-hash run-id exp-result log-fn callback)
-  "Commit+push a grader-bypassed experiment. Handles its own callbacks."
+  "Commit+push a grader-bypassed experiment. Handles its own callbacks.
+Includes retry logic: if the initial promote-provisional-commit fails
+(provisional hash mismatch from worktree changes), retries with a
+fresh stage+commit cycle before giving up."
   (message "[auto-experiment] ✓ grader-bypass committing %s (grade=%d/%d)" target grade-score grade-total)
   (let* ((default-directory experiment-worktree)
          (msg (format "◈ Optimize %s (grader bypass)\n\nGrade: %d/%d\n\nHYPOTHESIS: %s"
@@ -1959,36 +1962,46 @@ Called when the grader passed but the benchmark/validation failed."
          (finalize (gptel-auto-experiment--make-kept-result-callback
                     run-id exp-result log-fn callback)))
     (gptel-auto-workflow--assert-main-untouched)
-    (if (and (gptel-auto-workflow--stage-worktree-changes
-              (format "Stage bypass changes for %s" target) 60)
-             (gptel-auto-workflow--promote-provisional-commit
-              msg (format "Commit bypass changes for %s" target)
-              provisional-commit-hash commit-timeout))
+    (let ((commit-ok
+           (or
+            ;; Attempt 1: promote provisional commit (amend existing)
+            (and (gptel-auto-workflow--stage-worktree-changes
+                  (format "Stage bypass changes for %s" target) 60)
+                 (gptel-auto-workflow--promote-provisional-commit
+                  msg (format "Commit bypass changes for %s" target)
+                  provisional-commit-hash commit-timeout))
+            ;; Attempt 2: fresh stage + commit (provisional hash mismatch retry)
+            (progn
+              (message "[auto-experiment] Retrying bypass commit for %s with fresh stage" target)
+              (and (gptel-auto-workflow--stage-worktree-changes
+                    (format "Retry stage bypass for %s" target) 60)
+                   (gptel-auto-workflow--promote-provisional-commit
+                    msg (format "Retry commit bypass for %s" target)
+                    nil commit-timeout))))))
+      (if commit-ok
+          (progn
+            (setq provisional-commit-hash nil)
+            (gptel-auto-workflow--track-commit experiment-id target experiment-worktree)
+            (gptel-auto-experiment--maybe-log-staging-pending run-id exp-result log-fn)
+            (setq gptel-auto-experiment--no-improvement-count 0)
+            (if gptel-auto-experiment-auto-push
+                (if (gptel-auto-workflow--push-branch-with-lease
+                     experiment-branch (format "Push bypass branch %s" experiment-branch) 180)
+                    (if gptel-auto-workflow-use-staging
+                        (gptel-auto-workflow--staging-flow experiment-branch finalize)
+                      (funcall finalize))
+                  (let ((failed-result (plist-put (plist-put (copy-sequence exp-result) :comparator-reason "bypass-push-failed") :kept nil)))
+                    (funcall log-fn run-id failed-result)
+                    (when (fboundp 'gptel-token-economics--track-experiment)
+                      (gptel-token-economics--track-experiment failed-result))))
+              (funcall finalize)))
         (progn
-          (setq provisional-commit-hash nil)
-          (gptel-auto-workflow--track-commit experiment-id target experiment-worktree)
-          (gptel-auto-experiment--maybe-log-staging-pending run-id exp-result log-fn)
-          (setq gptel-auto-experiment--no-improvement-count 0)
-          (if gptel-auto-experiment-auto-push
-              (if (gptel-auto-workflow--push-branch-with-lease
-                   experiment-branch (format "Push bypass branch %s" experiment-branch) 180)
-                  (if gptel-auto-workflow-use-staging
-                      (gptel-auto-workflow--staging-flow experiment-branch finalize)
-                    (funcall finalize))
-                 (let ((failed-result (plist-put (plist-put (copy-sequence exp-result) :comparator-reason "bypass-push-failed") :kept nil)))
-                   (funcall log-fn run-id failed-result)
-                   ;; Track token economics for this experiment
-                   (when (fboundp 'gptel-token-economics--track-experiment)
-                     (gptel-token-economics--track-experiment failed-result))))
-            (funcall finalize)))
-      (progn
-        (gptel-auto-workflow--drop-provisional-commit
-         provisional-commit-hash (format "Drop bypass commit for %s" target))
-        (let ((failed-result (plist-put (plist-put (copy-sequence exp-result) :comparator-reason "bypass-commit-failed") :kept nil)))
-          (funcall log-fn run-id failed-result)
-          ;; Track token economics for this experiment
-          (when (fboundp 'gptel-token-economics--track-experiment)
-            (gptel-token-economics--track-experiment failed-result)))))))
+          (gptel-auto-workflow--drop-provisional-commit
+           provisional-commit-hash (format "Drop bypass commit for %s" target))
+          (let ((failed-result (plist-put (plist-put (copy-sequence exp-result) :comparator-reason "bypass-commit-failed") :kept nil)))
+            (funcall log-fn run-id failed-result)
+            (when (fboundp 'gptel-token-economics--track-experiment)
+              (gptel-token-economics--track-experiment failed-result))))))))
 
 (provide 'gptel-tools-agent-experiment-core)
 ;;; gptel-tools-agent-experiment-core.el ends here
