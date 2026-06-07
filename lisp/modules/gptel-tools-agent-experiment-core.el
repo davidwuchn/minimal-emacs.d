@@ -453,13 +453,22 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                    (gptel-auto-experiment--count-consecutive-strategy
                                                     target selected previous-results)))
                                              ;; Strategy rotation: if 0% keep-rate and same strategy
-                                             ;; used 3+ times, force rotation to next available
-                                             (if (and keep-rate (= keep-rate 0.0)
-                                                   (>= tries-with-strategy 3))
-                                                  (progn
-                                                    (message "[strategy-rotate] ⚠ %s: 0%% keep-rate after %d× with %s — forcing template-default"
-                                                             target tries-with-strategy selected)
-                                                    "template-default")
+                                              ;; used 3+ times, force rotation to NEXT strategy
+                                              ;; (not back to template-default — that creates a death spiral)
+                                              (if (and keep-rate (= keep-rate 0.0)
+                                                    (>= tries-with-strategy 3))
+                                                   (let* ((all-strategies (if (fboundp 'gptel-auto-workflow--discover-strategies)
+                                                                               (gptel-auto-workflow--discover-strategies)
+                                                                             '("template-default")))
+                                                          (other-strategies (cl-remove-if
+                                                                             (lambda (s) (equal s selected))
+                                                                             all-strategies))
+                                                          (next-strategy (if other-strategies
+                                                                             (nth (random (length other-strategies)) other-strategies)
+                                                                           "template-default")))
+                                                     (message "[strategy-rotate] ⚠ %s: 0%% keep-rate after %d× with %s — rotating to %s"
+                                                              target tries-with-strategy selected next-strategy)
+                                                     next-strategy)
                                                selected))
                                          "template-default"))
                         (strategy-prompt (when (and (fboundp 'gptel-auto-experiment-build-prompt-with-strategy)

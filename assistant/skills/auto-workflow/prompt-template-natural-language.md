@@ -1,7 +1,7 @@
 ---
 name: auto-workflow-prompt-natural-language
 description: Category-specific prompt for :natural-language targets
-version: 1.0
+version: 2.0
 ---
 
 λ experiment(id={{experiment-id}}/{{max-experiments}}, target={{target}}, budget={{time-budget}}min)
@@ -26,12 +26,21 @@ Preserve format structure. Improve clarity or safety.
 {{review-feedback}}
 {{category-instructions}}
 
-## WHAT TO IMPROVE
-- Add fallback handler for missing template variable
-- Clarify ambiguous instruction
-- Add format validation before output
+## CHANGE TYPES (pick ONE — prioritize by business impact)
+### HIGH VALUE (do these first)
+- **Fix misleading instruction**: Find text that could confuse the AI or user. Make it accurate.
+- **Add missing fallback**: Find a template variable with no default. Add a sensible fallback.
+- **Improve clarity**: Find ambiguous phrasing. Make it specific and testable.
 
-## VERIFY (run these, results outside <think>)
+### MEDIUM VALUE
+- Add format validation before output
+- Deduplicate repeated instructions
+- Remove obsolete instructions
+
+### LOW VALUE (avoid unless no other option)
+- Cosmetic rewording without functional change
+
+## VERIFY (run these, results outside  ##)
 1. Syntax: {{sexp-check-command}}
 2. Compile: emacs -Q --batch -f batch-byte-compile {{target-full-path}}
 

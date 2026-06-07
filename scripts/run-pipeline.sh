@@ -288,7 +288,7 @@ pipeline_git_sync_latest() {
     git -C "$DIR" merge --abort 2>/dev/null || true
     git -C "$DIR" checkout HEAD -- mementum/knowledge/ assistant/skills/ assistant/strategies/ 2>/dev/null || true
     git -C "$DIR" clean -fd -- mementum/knowledge/ assistant/skills/ assistant/strategies/ 2>/dev/null || true
-    git -C "$DIR" pull --ff-only 2>&1 || log "WARNING: $label git pull failed"
+    git -C "$DIR" pull --rebase 2>&1 || log "WARNING: $label git pull failed"
 
     if [ "$stash_made" -eq 1 ]; then
         git -C "$DIR" stash pop 2>/dev/null || log "WARNING: $label stash pop failed"
@@ -754,7 +754,7 @@ if [ "$has_auto_gen" -eq 1 ]; then
     esac
     
     # Pull latest to avoid conflicts
-    git -C "$DIR" pull --ff-only 2>/dev/null || log "WARNING: git pull failed before push"
+    git -C "$DIR" pull --rebase 2>/dev/null || log "WARNING: git pull failed before push"
     
     # Stage auto-generated files
     git -C "$DIR" add mementum/ assistant/skills/ assistant/strategies/ 2>/dev/null || true

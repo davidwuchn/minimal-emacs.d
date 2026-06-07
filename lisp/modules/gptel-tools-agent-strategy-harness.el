@@ -495,32 +495,30 @@ preferring the active strategy when it has no evaluations yet."
              (best (car sorted))
              (best-perf (gptel-auto-workflow--get-strategy-performance best))
              (best-success (plist-get best-perf :success-rate)))
-         (let* ((default-perf (gptel-auto-workflow--get-strategy-performance "template-default"))
-                (default-success (plist-get default-perf :success-rate))
-                (default-avg (plist-get default-perf :avg-score))
-                (default-total (plist-get default-perf :total))
-                (best-total (plist-get best-perf :total))
-                 ;; Require >=5 experiments OR >=25% of template-default's count
-                 (sufficient-sample
-                  (or (>= best-total 5)
-                      (>= (* 4 best-total) default-total)))
-                 ;; Exploration: small-sample strategies get 50% random chance
-                 (explore (and (< best-total 5)
-                               (< (random 100) 50)))
-                 (chosen (if (and (not (equal best "template-default"))
-                                (not explore)
-                                (not sufficient-sample)
-                                (< best-success default-success)
-                                (< (round (* 100 (- (plist-get best-perf :avg-score) default-avg)))
-                                   (round (* 100 0.15))))
-                           (progn
-                             (message "[strategy] %s underperforms template-default (%.0f%% < %.0f%% success, n=%d %s); falling back"
-                                      best (* 100 best-success) (* 100 default-success)
-                                      best-total
-                                      (if sufficient-sample
-                                          (format "avg diff %.2f < 0.15" (- (plist-get best-perf :avg-score) default-avg))
-                                        "insufficient sample"))
-                            "template-default")
+          (let* ((default-perf (gptel-auto-workflow--get-strategy-performance "template-default"))
+                 (default-success (plist-get default-perf :success-rate))
+                 (default-avg (plist-get default-perf :avg-score))
+          (best-total (plist-get best-perf :total))
+                  ;; Minimum exploration budget: every strategy gets at least 5 trials
+                  ;; before being compared to template-default. This prevents the
+                  ;; "1-try-and-out" death spiral where new strategies are discarded
+                  ;; after a single failed experiment.
+                  (sufficient-sample (>= best-total 5))
+                  ;; Exploration: strategies with <5 trials get 70% random chance
+                  ;; (increased from 50%) to ensure diverse exploration
+                  (explore (and (< best-total 5)
+                                (< (random 100) 70)))
+                  (chosen (if (and (not (equal best "template-default"))
+                                 (not explore)
+                                 (not sufficient-sample)
+                                 (< best-success default-success)
+                                 (< (round (* 100 (- (plist-get best-perf :avg-score) default-avg)))
+                                    (round (* 100 0.15))))
+                            (progn
+                              (message "[strategy] %s underperforms template-default (%.0f%% < %.0f%% success, n=%d/%d needed); exploring anyway"
+                                       best (* 100 best-success) (* 100 default-success)
+                                       best-total 5)
+                             best)
                         best)))
           (let ((chosen-perf (gptel-auto-workflow--get-strategy-performance chosen)))
             (message "[strategy] Selected %s (success %.0f%%, avg score %.2f)"
