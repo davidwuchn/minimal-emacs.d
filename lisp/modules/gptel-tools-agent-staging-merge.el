@@ -167,6 +167,53 @@ When CACHED-STATE is provided, uses it instead of querying git again."
          (diff (and result (= 0 (cdr result)) (car result))))
     (and diff (string-match-p "^\\+<<<<<<< " diff))))
 
+(defun gptel-auto-workflow--try-autoresolve-conflicts (unmerged-files optimize-branch merge-message commit-timeout)
+  "Try to auto-resolve cherry-pick conflicts in UNMERGED-FILES.
+For SAFE file types (.md docs, knowledge pages), use --theirs (the
+optimize branch's version is the source of truth for synthesized content).
+For .el source code files, require manual review (do not auto-resolve).
+Aborts the cherry-pick first, then for SAFE files runs git checkout
+--theirs + git add. If all conflicts are SAFE, commits the result.
+Returns cons cell (auto-resolved-count . manual-required-count):
+  - car = count of files auto-resolved
+  - cdr = count of files requiring manual review
+Returns nil if the cherry-pick is not aborted cleanly."
+  (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
+  (let ((auto-resolved-files '())
+        (manual-required-files '()))
+    (dolist (file (split-string unmerged-files "\n" t))
+      (cond
+       ((string-match-p "\\.md$" file)
+        ;; Knowledge pages / docs: optimize is source of truth
+        (gptel-auto-workflow--git-cmd
+         (format "git checkout --theirs %s"
+                 (shell-quote-argument file)) 30)
+        (gptel-auto-workflow--git-cmd "git add" 30)
+        (push file auto-resolved-files))
+       (t
+        ;; Source code: require human review (safe default)
+        (push file manual-required-files))))
+    (if (and auto-resolved-files (null manual-required-files))
+        (let* ((commit-result
+                (gptel-auto-workflow--git-result
+                 (format "%s git commit -m %s"
+                         gptel-auto-workflow--skip-submodule-sync-env
+                         (shell-quote-argument
+                          (concat merge-message " (auto-resolved .md conflicts)")))
+                 commit-timeout)))
+          (if (= 0 (cdr commit-result))
+              (progn
+                (message "[auto-workflow] Auto-resolved %d .md conflict(s) for %s: %s"
+                         (length auto-resolved-files)
+                         optimize-branch
+                         (mapconcat #'identity auto-resolved-files ", "))
+                (cons (length auto-resolved-files) 0))
+            (progn
+              (message "[auto-workflow] Auto-resolve commit failed: %s"
+                       (my/gptel--sanitize-for-logging (car commit-result) 160))
+              (cons 0 (length manual-required-files)))))
+      (cons (length auto-resolved-files) (length manual-required-files)))))
+
 (defun gptel-auto-workflow--merge-to-staging (optimize-branch)
   "Merge OPTIMIZE-BRANCH to staging using cherry-pick.
 Cherry-pick the tip commit of OPTIMIZE-BRANCH onto staging.
@@ -266,19 +313,30 @@ Uses the staging worktree instead of switching branches in the root repo."
                    (message "[auto-workflow] Cherry-pick empty (already in staging)")
                    (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
                    :already-integrated)
-                  (t
-                   (let ((unmerged-files
-                          (progn
-                            (unless git-state
-                              (setq git-state (gptel-auto-workflow--cached-cherry-pick-state)))
-                            (gptel-auto-workflow--cached-unmerged-files git-state))))
-                     (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
+                   (t
+                    (let ((unmerged-files
+                           (progn
+                             (unless git-state
+                               (setq git-state (gptel-auto-workflow--cached-cherry-pick-state)))
+                             (gptel-auto-workflow--cached-unmerged-files git-state))))
                       (if (gptel-auto-workflow--non-empty-string-p unmerged-files)
-                          (progn
-                            (message "[auto-workflow] Cherry-pick conflicted; refusing merge fallback. Conflicted files: %s"
-                                     (my/gptel--sanitize-for-logging unmerged-files 160))
-                            (gptel-auto-workflow--prepare-staging-merge-base reset-target)
-                            nil)
+                          (let ((auto-resolved (gptel-auto-workflow--try-autoresolve-conflicts
+                                                unmerged-files optimize-branch
+                                                merge-message commit-timeout)))
+                            (if (and (car-safe auto-resolved) (null (cdr-safe auto-resolved)))
+                                t
+                              (if (cdr-safe auto-resolved)
+                                  (progn
+                                    (message "[auto-workflow] Cherry-pick conflicted; %d auto-resolved, %d need manual review: %s"
+                                             (car auto-resolved) (cdr auto-resolved)
+                                             (my/gptel--sanitize-for-logging unmerged-files 160))
+                                    (gptel-auto-workflow--prepare-staging-merge-base reset-target)
+                                    nil)
+                                (progn
+                                  (message "[auto-workflow] Cherry-pick conflicted; refusing merge fallback. Conflicted files: %s"
+                                           (my/gptel--sanitize-for-logging unmerged-files 160))
+                                  (gptel-auto-workflow--prepare-staging-merge-base reset-target)
+                                  nil))))
                         (message "[auto-workflow] Cherry-pick failed, falling back to merge: %s"
                                  (my/gptel--sanitize-for-logging cherry-output 160))
                         (if (not (and (gptel-auto-workflow--prepare-staging-merge-base reset-target)
