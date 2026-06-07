@@ -812,7 +812,7 @@ workflow_action_elisp() {
                               (load-prefer-newer t))
                           (let ((inhibit-message t) (load-verbose nil))
                             (ignore-errors (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root)))
-                            (dolist (module (list "gptel-tools-agent-prompt-build.el" "gptel-tools-agent-error.el" "gptel-benchmark-subagent.el" "gptel-tools-agent-main.el" "gptel-auto-workflow-evolution.el" "gptel-auto-experiment-ai-behaviors.el" "gptel-tools-agent-base.el"))
+                            (dolist (module (list "gptel-tools-agent-prompt-build.el" "gptel-tools-agent-error.el" "gptel-benchmark-subagent.el" "gptel-tools-agent-main.el" "gptel-auto-workflow-evolution.el" "gptel-auto-experiment-ai-behaviors.el" "gptel-tools-agent-base.el" "gptel-auto-workflow-research-benchmark.el" "gptel-auto-workflow-ontology-router.el" "gptel-auto-workflow-context-database.el" "gptel-auto-workflow-knowledge-reasoning.el" "gptel-auto-workflow-production-metrics.el"))
                               (ignore-errors (load-file (expand-file-name (concat "lisp/modules/" module) root))))
                             (ignore-errors (when (fboundp (quote gptel-auto-workflow--activate-live-root))
                                              (gptel-auto-workflow--activate-live-root root)))
