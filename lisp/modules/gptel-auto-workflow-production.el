@@ -11,6 +11,7 @@
 (require 'gptel-token-economics nil t)
 (require 'gptel-auto-workflow-context-database nil t)
 (require 'gptel-auto-workflow-decision-classification nil t)
+(require 'gptel-auto-workflow-disposable-tracker nil t)
 (declare-function gptel-auto-workflow-evolution-run-cycle "gptel-auto-workflow-evolution")
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--bead-update-from-experiment "gptel-auto-workflow-beads")
@@ -97,6 +98,12 @@ Skips when a workflow or cron job is active to avoid preempting experiments."
           (gptel-auto-workflow-approval-queue-execute-approved)
         (error nil)))
     ;; Trigger code regeneration for underperforming modules (Layer 5 Learning)
+    (when (fboundp 'gptel-auto-workflow-disposable-auto-detect)
+      (condition-case nil
+          (let ((candidates (gptel-auto-workflow-disposable-auto-detect)))
+            (when candidates
+              (message "[disposable] Auto-detected %d disposable modules" (length candidates))))
+        (error nil)))
     (when (fboundp 'gptel-auto-workflow-code-regeneration--identify-candidates)
       (condition-case nil
           (let ((candidates (gptel-auto-workflow-code-regeneration--identify-candidates)))

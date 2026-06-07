@@ -50,11 +50,63 @@ CONFIG is a plist with :dsn and :environment."
   (and gptel-auto-workflow--sentry-config
        (plist-get gptel-auto-workflow--sentry-config :dsn)))
 
-(defun gptel-auto-workflow--sentry-api-call (_endpoint _params)
+(defun gptel-auto-workflow--sentry-api-call (endpoint params)
   "Make API call to Sentry ENDPOINT with PARAMS.
-This is a stub for testing - in production would make HTTP requests."
-  ;; Stub implementation - tests will override this with cl-letf
-  nil)
+Uses curl via call-process. Returns parsed JSON plist or nil on failure.
+Requires OV5_SENTRY_API_KEY env var or `gptel-auto-workflow--sentry-api-key'."
+  (let ((api-key (or (getenv "OV5_SENTRY_API_KEY")
+                     (bound-and-true-p gptel-auto-workflow--sentry-api-key)))
+        (base-url (or (and gptel-auto-workflow--sentry-config
+                           (plist-get gptel-auto-workflow--sentry-config :base-url))
+                      "https://sentry.io/api/0"))
+        (org-slug (or (and gptel-auto-workflow--sentry-config
+                           (plist-get gptel-auto-workflow--sentry-config :org))
+                      (getenv "OV5_SENTRY_ORG")))
+        (project-slug (or (and gptel-auto-workflow--sentry-config
+                                (plist-get gptel-auto-workflow--sentry-config :project))
+                          (getenv "OV5_SENTRY_PROJECT"))))
+    (when (and api-key (not (string-empty-p api-key)))
+      (let* ((url (cond
+                   ;; Full URL already
+                   ((string-prefix-p "http" endpoint) endpoint)
+                   ;; Project-scoped endpoint
+                   ((and org-slug project-slug)
+                    (format "%s/projects/%s/%s%s" base-url org-slug project-slug endpoint))
+                   ;; Org-scoped endpoint
+                   (org-slug
+                    (format "%s/organizations/%s%s" base-url org-slug endpoint))
+                   ;; Bare endpoint (no org/project)
+                   (t (format "%s%s" base-url endpoint))))
+             (query-string
+              (when params
+                (let ((parts nil))
+                  (when (plist-get params :start)
+                    (push (format "since=%d" (plist-get params :start)) parts))
+                  (when (plist-get params :end)
+                    (push (format "until=%d" (plist-get params :end)) parts))
+                  (when (plist-get params :filter)
+                    (push (format "query=%s" (plist-get params :filter)) parts))
+                  (when (plist-get params :stat)
+                    (push (format "stat=%s" (plist-get params :stat)) parts))
+                  (when parts
+                    (concat "?" (string-join (nreverse parts) "&"))))))
+             (full-url (if query-string (concat url query-string) url)))
+        (condition-case err
+            (with-temp-buffer
+              (let ((exit-code
+                     (call-process "curl" nil t nil
+                                   "-s" "-f" "-H" (format "Authorization: Bearer %s" api-key)
+                                   full-url)))
+                (if (and exit-code (zerop exit-code))
+                    (progn
+                      (goto-char (point-min))
+                      (json-parse-buffer :object-type 'plist :array-type 'list))
+                  (message "[external-sensors] Sentry API call failed (exit %d): %s %s"
+                           (or exit-code -1) endpoint (or query-string ""))
+                  nil)))
+          (error
+           (message "[external-sensors] Sentry API error: %s" (error-message-string err))
+           nil))))))
 
 (defun gptel-auto-workflow--query-error-rate (&rest args)
   "Query error rate for time window or module.
@@ -215,10 +267,31 @@ CONFIG is a plist with :webhook-endpoint, :storage-backend, :retention-days."
   (and gptel-auto-workflow--feedback-config
        (plist-get gptel-auto-workflow--feedback-config :webhook-endpoint)))
 
-(defun gptel-auto-workflow--feedback-query (_module _start-time _end-time)
+(defun gptel-auto-workflow--feedback-query (module start-time end-time)
   "Query feedback for MODULE between START-TIME and END-TIME.
-This is a stub - tests override with cl-letf."
-  nil)
+Uses configured webhook endpoint if available, otherwise returns nil.
+Webhook endpoint is set via OV5_FEEDBACK_ENDPOINT env var or feedback config."
+  (let ((endpoint (or (and gptel-auto-workflow--feedback-config
+                           (plist-get gptel-auto-workflow--feedback-config :webhook-endpoint))
+                      (getenv "OV5_FEEDBACK_ENDPOINT"))))
+    (when (and endpoint (not (string-empty-p endpoint)))
+      (let* ((req-url (format "%s?module=%s&start=%d&end=%d"
+                              endpoint
+                              (shell-quote-argument (or module ""))
+                              (round start-time)
+                              (round end-time)))
+             (result (condition-case err
+                         (with-temp-buffer
+                           (let ((exit-code (call-process "curl" nil t nil "-s" "-f" req-url)))
+                             (if (and exit-code (zerop exit-code))
+                                 (progn
+                                   (goto-char (point-min))
+                                   (json-parse-buffer :object-type 'plist :array-type 'list))
+                               nil)))
+                       (error
+                        (message "[external-sensors] Feedback query error: %s" (error-message-string err))
+                        nil))))
+        result))))
 
 (defun gptel-auto-workflow--collect-user-feedback (module &rest args)
   "Collect user feedback for MODULE.
