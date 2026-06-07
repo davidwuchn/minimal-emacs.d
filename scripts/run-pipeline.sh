@@ -138,6 +138,38 @@ if [ -f "$LOCK_FILE" ]; then
     fi
 fi
 
+# ─── Cross-machine coordination ───
+# YC pattern: avoid duplicate work between Pi5 and local. If another machine
+# (per git-tracked "active-runs" file) ran within the last 4 hours, skip.
+# Auto-generated file, never push to remote (Pi5 ignores it via .gitignore).
+ACTIVE_RUNS_FILE="$DIR/var/tmp/active-runs"
+mkdir -p "$(dirname "$ACTIVE_RUNS_FILE")"
+HOSTNAME_SHORT="$(hostname -s 2>/dev/null || hostname || echo 'unknown')"
+RECENT_THRESHOLD=$((4 * 3600))  # 4 hours
+
+# Prune stale entries (>12h old, just a safety bound)
+if [ -f "$ACTIVE_RUNS_FILE" ]; then
+    cutoff_prune=$(($(date +%s) - 43200))
+    tmp_active="$(mktemp)"
+    awk -F'|' -v cutoff="$cutoff_prune" '$2 > cutoff' "$ACTIVE_RUNS_FILE" > "$tmp_active" 2>/dev/null || true
+    mv "$tmp_active" "$ACTIVE_RUNS_FILE" 2>/dev/null || true
+fi
+
+# Check if another machine ran recently
+if [ -f "$ACTIVE_RUNS_FILE" ]; then
+    now=$(date +%s)
+    other_recent=$(awk -F'|' -v now="$now" -v thresh="$RECENT_THRESHOLD" \
+        'NF >= 2 && $1 != "" {
+            age = now - $2
+            if (age < thresh && $1 != "'"$HOSTNAME_SHORT"'") print $1 ":" int(age/60) "min"
+        }' "$ACTIVE_RUNS_FILE")
+    if [ -n "$other_recent" ]; then
+        log "Cross-machine coordination: recent runs on other host(s): $other_recent"
+        log "  Skipping pipeline to avoid duplicate work; threshold ${RECENT_THRESHOLD}s"
+        exit 0
+    fi
+fi
+
 wait_for_idle() {
     local action="$1"
     local max_wait="${2:-900}"
@@ -572,14 +604,28 @@ PRIORITIES_FILE="$DIR/var/tmp/approval-priorities.el"
 APPROVED_COUNT=0
 if [ -d "$DIR/var/approval-queue/decisions" ]; then
     APPROVED_COUNT=$(find "$DIR/var/approval-queue/decisions" -name "*.sexp" -exec grep -l ':status "approved"' {} \; 2>/dev/null | wc -l)
-    if [ "$APPROVED_COUNT" -gt 0 ]; then
-        log "  Found $APPROVED_COUNT approved proposals; refreshing priorities"
-        rm -f "$PRIORITIES_FILE"
-    else
-        log "  No approved proposals pending; priorities unchanged"
-    fi
+fi
+
+# ─── Step 0.7: Prune stale mementum memories ───
+# Prevents unbounded growth: 379+ memories in mementum/memories/ would bloat
+# prompts and slow mementum synthesis. Keep last N per topic, drop older than
+# max-age-days. Cheap operation, no LLM calls.
+log "=== Step 0.7: Prune mementum memories ==="
+PRUNE_RESULT="$(emacsclient --socket-name=pmf-value-stream --eval '(condition-case err
+  (let ((result (and (fboundp (quote gptel-auto-workflow--mementum-prune-run))
+                     (gptel-auto-workflow--mementum-prune-run))))
+    (if result (format "kept=%d pruned=%d topics=%d"
+                       (or (plist-get result :kept-count) 0)
+                       (or (plist-get result :pruned-count) 0)
+                       (or (plist-get result :topics-affected) 0))
+      "skipped"))
+  (error (format "prune-error: %s" (error-message-string err))))' 2>/dev/null || echo "skipped")"
+log "Mementum prune: $PRUNE_RESULT"
+if [ "$APPROVED_COUNT" -gt 0 ]; then
+    log "  Found $APPROVED_COUNT approved proposals; refreshing priorities"
+    rm -f "$PRIORITIES_FILE"
 else
-    log "  No decisions directory yet; skipping priority refresh"
+    log "  No approved proposals pending; priorities unchanged"
 fi
 
 # Verify findings were produced
@@ -808,13 +854,37 @@ fi
 # ─── Step 6: Report results ───
 log "=== Pipeline Complete ==="
 RESULTS_PATTERN="$DIR/var/tmp/experiments/$(date +%F)*/results.tsv"
+ZERO_RUN_DETECTED=0
 if compgen -G "$RESULTS_PATTERN" >/dev/null; then
     latest_result=$(ls -t $RESULTS_PATTERN | head -1)
     result_count=$(wc -l < "$latest_result")
-    log "Results: $latest_result ($((result_count - 1)) experiments)"
+    data_count=$((result_count - 1))
+    log "Results: $latest_result ($data_count experiments)"
     verify_research_feedback_loop "$latest_result" || true
+    # YC principle: a 0-experiment run is a SIGNAL, not a benign no-op.
+    # Log it explicitly and append to pipeline-health so self-heal can react.
+    if [ "$data_count" -eq 0 ]; then
+        ZERO_RUN_DETECTED=1
+        log "  ⚠ ZERO-EXPERIMENT RUN: workflow completed but no targets ran"
+        log "  This usually means analyzer failed and all fallbacks returned empty."
+        log "  Possible causes: backend misconfigured, rate-limited, or filter rejected all targets."
+        # Append a 0-run event to pipeline-health.md for self-heal / digest consumption
+        HEALTH_FILE="$DIR/mementum/knowledge/pipeline-health.md"
+        if [ -f "$HEALTH_FILE" ]; then
+            zero_ts=$(date +%s)
+            printf -- "- %s | zero-experiment-run | target-selection-empty | — | — | pending\n" "$zero_ts" >> "$HEALTH_FILE"
+            log "  Appended zero-run event to pipeline-health.md"
+        fi
+    fi
 else
     log "No results file found for today"
+    ZERO_RUN_DETECTED=1
+    log "  ⚠ NO RESULTS FILE: auto-workflow produced no results.tsv at all"
+fi
+
+# Track in PIPELINE_FINAL_STATUS
+if [ "$ZERO_RUN_DETECTED" -eq 1 ]; then
+    PIPELINE_FINAL_STATUS="zero-run"
 fi
 
 # ─── Step 6.1: Operational Metrics ───
@@ -1065,5 +1135,15 @@ fi
 update_pipeline_plan "$PIPELINE_FINAL_STATUS"
 update_mementum_state "$PIPELINE_FINAL_STATUS"
 log_pipeline_patterns "$PIPELINE_FINAL_STATUS"
+
+# ─── Cross-machine coordination: record this run for other machines to see ───
+# Format: hostname|timestamp|status
+# This file is local-only (var/tmp/); the next machine pulls it via git pull
+# and decides whether to skip its own run.
+if [ -f "$ACTIVE_RUNS_FILE" ] || [ "$PIPELINE_FINAL_STATUS" != "ok" ]; then
+    printf '%s|%s|%s\n' "$HOSTNAME_SHORT" "$(date +%s)" "$PIPELINE_FINAL_STATUS" \
+        >> "$ACTIVE_RUNS_FILE"
+    log "Recorded this run for cross-machine coordination: $HOSTNAME_SHORT $PIPELINE_FINAL_STATUS"
+fi
 
 exit 0
