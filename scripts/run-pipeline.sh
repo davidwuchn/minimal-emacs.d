@@ -36,6 +36,84 @@ log() {
     printf '%s\n' "$line"
 }
 
+# ─── Pipeline Operations (merged from run-pipeline-ops.sh) ───
+
+PLAN_DIR="$DIR/mementum/knowledge/plans/pipeline-runs"
+TIMESTAMP=$(date '+%Y%m%d-%H%M%S')
+
+# Pre-pipeline: Create plan and update state
+create_pipeline_plan() {
+    log "Creating pipeline plan..."
+    mkdir -p "$PLAN_DIR/run-$TIMESTAMP"
+    cat > "$PLAN_DIR/run-$TIMESTAMP/plan.md" <<EOF
+# Pipeline Run $TIMESTAMP
+
+## Objective
+Run OV5 self-evolution pipeline with research -> digestion -> workflow.
+
+## Requirements
+- Research findings digested before workflow
+- Quota-aware scheduling
+- Results tracked in mementum
+
+## DoD
+- [ ] Pipeline completes without error
+- [ ] Results stored in mementum/memories/
+- [ ] State updated in mementum/state.md
+
+## Changelog
+- **$(date '+%Y-%m-%d')**: Plan created
+EOF
+    log "Plan created: $PLAN_DIR/run-$TIMESTAMP/"
+}
+
+# Post-pipeline: Update plan with results
+update_pipeline_plan() {
+    local status="$1"
+    log "Updating pipeline plan..."
+    cat >> "$PLAN_DIR/run-$TIMESTAMP/plan.md" <<EOF
+
+## Results
+
+- **Status**: $status
+- **Timestamp**: $TIMESTAMP
+
+EOF
+    log "Plan updated with status: $status"
+}
+
+# Post-pipeline: Update mementum state
+update_mementum_state() {
+    local status="$1"
+    log "Updating mementum/state.md..."
+    if [ -f "$DIR/mementum/state.md" ]; then
+        local tmp
+        tmp=$(mktemp)
+        {
+            echo "# Mementum State"
+            echo ""
+            echo "> **Last pipeline**: $(date '+%Y-%m-%d') ($status)"
+            echo "> **Next pipeline**: scheduled"
+            echo "> **Plan**: $PLAN_DIR/run-$TIMESTAMP/"
+            echo ""
+            # Append rest of existing state (skip first line)
+            tail -n +2 "$DIR/mementum/state.md" 2>/dev/null || true
+        } > "$tmp"
+        mv "$tmp" "$DIR/mementum/state.md"
+        log "State updated"
+    fi
+}
+
+# Post-pipeline: Log patterns for analysis
+log_pipeline_patterns() {
+    local status="$1"
+    log "Logging pipeline patterns..."
+    if [ -f "$DIR/mementum/state.md" ]; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') | Pipeline $status | Plan: $PLAN_DIR/run-$TIMESTAMP/" >> "$DIR/mementum/.pipeline-log"
+        log "Patterns logged to mementum/.pipeline-log"
+    fi
+}
+
 # Prevent overlapping runs
 if [ -f "$LOCK_FILE" ]; then
     lock_pid=$(cat "$LOCK_FILE" 2>/dev/null || echo "")
@@ -443,6 +521,9 @@ PIPELINE_START_TIME="$(date +%s)"
 # Verify findings were produced
 RESEARCH_QUALITY="none"
 
+# ─── Pipeline Ops: Create plan for this run ───
+create_pipeline_plan
+
 # ─── Step 0: Researcher fetches files on demand (no batch prefetch) ───
 log "=== Step 0: Researcher will fetch specific files on demand via gh CLI ==="
 
@@ -823,5 +904,10 @@ if [ "$has_auto_gen" -eq 1 ]; then
 else
     log "No auto-generated changes to publish"
 fi
+
+# ─── Pipeline Ops: Update plan, state, and log patterns ───
+update_pipeline_plan
+update_mementum_state
+log_pipeline_patterns
 
 exit 0

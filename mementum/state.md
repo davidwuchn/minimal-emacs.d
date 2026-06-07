@@ -1,87 +1,113 @@
 # Mementum State
 
 > **Bootstrapped**: 2026-06-06
-> **Session**: 2026-06-07 — OV5 pipeline overhaul: strategy diversity, business value, run-level health
-> **Status**: All 6 phases pushed, 53 tests pass, pipeline reformed
+> **Session**: Self-evolution hooks wired into experiment core
+> **Status**: All P0 priorities complete, self-heal enabled by default
+> **Latest**: Unified pipeline — consolidated 4 scripts into 1
 
 ---
 
-## Current Priorities
+## Current Priorities (Auto-ranked)
 
-| Priority | Item | Status |
-|---|---|---|
-| **DONE** | Phase 1: Break nil-guard death spiral (strategy + templates) | ✅ |
-| **DONE** | Phase 2: Wire business_value_score to local signals | ✅ |
-| **DONE** | Phase 3: Fix git pull --ff-only divergence | ✅ |
-| **DONE** | Phase 5: Run-level 0% keep-rate detector | ✅ |
-| **P1** | Monitor next 3 pipeline runs for keep-rate improvement | 🔄 |
-| **P2** | Production metrics as real sensor (wire error logs, load times) | 📋 |
+| Priority | Item | Model | Status |
+|---|---|---|---|
+| **P0** | OV5 self-heal: fix workspace boundary violations | @maintainer | **COMPLETE** |
+| **P0** | Refine top 20 auto-generated module docs | doc-explorer | **COMPLETE** |
+| **P0** | Test pipeline wrapper in production | pipeline-ops | **COMPLETE** |
+| **P0** | Optimize model routing based on task type | ov5-architect | **COMPLETE** |
+| **P0** | Wire self-heal hooks into experiment core | @maintainer | **COMPLETE** |
+| **P1** | Refine remaining 97 module docs with OV5 ontology/AutoTTS | doc-explorer | **IN PROGRESS** |
+| **P2** | Submit PR for install.sh macOS sed | delegate-opus | **BLOCKED** (upstream) |
+| **P2** | Unified pipeline: consolidate scripts | @maintainer | **COMPLETE** |
 
-## What Changed Today
+## Completed Work
 
-### Root Cause: The Nil-Guard Death Spiral
-The pipeline had 1.4% keep-rate across 140+ runs because:
-1. All experiments were "add ONE safety guard" (template-default dominated)
-2. Strategy selection had a 1-try-and-out trap (new strategies discarded after 1 failure)
-3. Strategy rotation always fell back to template-default
-4. Business value scores were all 0.00 (production metrics module never loaded)
-5. Git pull --ff-only always failed on Pi5 (stale code running)
+### Workspace Boundary Validator (P0)
 
-### Fixes Applied (2 commits pushed to origin/main)
+**Phase 1-4 complete** — See previous mementum entries for details.
 
-**Commit `8f446711` — Break the nil-guard death spiral:**
-- `strategy-harness.el`: min 5 trials before comparing to template-default, 70% exploration rate
-- `experiment-core.el`: rotate to random alternative (not always template-default)
-- All 4 prompt templates (agentic, programming, tool-calls, natural-language): v1→v2
-  - "ADD ONE SAFETY GUARD" → "MAKE ONE HIGH-VALUE IMPROVEMENT"
-  - Prioritized: fix bugs > improve errors > add tests > fix docs > nil guards
-  - Added "already-safe code" as forbidden
-- `run-pipeline.sh`: `git pull --ff-only` → `git pull --rebase` (fixes Pi5 divergence)
+### Module Docs Refinement (P0)
 
-**Commit `5999723e` — Business value + run-level health:**
-- `production-metrics.el`: local business value from error logs, byte-compile warnings, test coverage
-- `prompt-build.el`: auto-inject business metrics into TSV when missing
-- `evolution.el`: run-level consecutive 0% keep-rate detector (3 runs → strategy review, 5 runs → target reset)
-- Wired into `maybe-self-heal` (called after every experiment run)
+**20 critical module docs refined** — All TODOs replaced with meaningful content.
 
-### Files Changed This Session
+### Pipeline Wrapper Test (P0)
 
-| File | Change |
-|------|--------|
-| `scripts/run-pipeline.sh` | git pull --rebase (was --ff-only) |
-| `lisp/modules/gptel-tools-agent-strategy-harness.el` | Min 5 trials, 70% exploration |
-| `lisp/modules/gptel-tools-agent-experiment-core.el` | Rotate to random alternative |
-| `lisp/modules/gptel-auto-workflow-production-metrics.el` | Local business value computation |
-| `lisp/modules/gptel-auto-workflow-evolution.el` | Run-level streak detector |
-| `lisp/modules/gptel-tools-agent-prompt-build.el` | Auto-inject business metrics |
-| `assistant/skills/auto-workflow/prompt-template-*.md` | v2 templates (all 4) |
+**Tested successfully** — Pipeline completed research -> self-evolution -> auto-workflow.
 
-## Active Patterns
+### Model Routing Optimization (P0)
 
-- **Strategy death spiral**: New strategies need min 5 trials before comparison — don't let 1 failure kill them
-- **Business value from local signals**: Error logs, byte-compile warnings, test coverage — no Sentry needed
-- **Template diversity**: Prompt templates must offer HIGH/MEDIUM/LOW value change types, not just nil guards
-- **Git rebase > ff-only**: Pi5 frequently diverges; rebase handles this gracefully
-- **Run-level health**: Check across entire runs (not just experiments within a run)
-- **Perl over sed**: `perl -pi -e > sed -i` for cross-platform pipeline scripts (macOS/Linux compatible)
-- **Log cleanup**: var/log/ accumulates unboundedly — pipeline now keeps only 50 most recent
+**Task type detection** — Prompts are auto-analyzed and routed to optimal model.
 
-## Expected Impact
+### Self-Evolution Hooks (P0)
 
-Next Pi5 pipeline run (scheduled every 4h) should:
-1. Successfully pull latest code via rebase (was failing before)
-2. Use new v2 templates with diverse change types
-3. Score business value from local signals (no longer all 0.00)
-4. Give new strategies 5+ trials before judging them
-5. Auto-detect if 3+ consecutive runs have 0% keep-rate
+**New in `lisp/modules/gptel-tools-agent-base.el`:**
+- `gptel-auto-workflow--self-heal-enabled` — defcustom (default: t)
+- `gptel-auto-workflow-before-experiment-hook` — Hook for pre-experiment diagnostics
+- `gptel-auto-workflow--run-bare-path-diagnostic` — Diagnostic helper
+- `gptel-auto-workflow--auto-route-prompt` — Combined detection + routing
+
+**Wired into `lisp/modules/gptel-tools-agent-main.el`:**
+- Self-heal runs before each experiment batch
+- Bare-path diagnostic runs automatically
+- Results logged to console
+
+### Unified Pipeline (P2)
+
+**Consolidated 4 scripts into 1:**
+- Deleted: `run-pipeline-ops.sh`, `refine-module-docs-with-ov5.sh`, `refine-module-docs-batch.sh`
+- Merged `create_pipeline_plan`, `update_pipeline_plan`, `update_mementum_state`, `log_pipeline_patterns` into `run-pipeline.sh`
+- Plan creation runs at pipeline start; state + pattern updates run at pipeline end
+- `bash -n` validates syntax
+
+## Active Patterns (from last 3 sessions)
+
+- **Workspace boundary violation**: Self-heal accessed `/Users/davidwu/lisp/modules` — fixed by `gptel-auto-workflow--expand-workspace-path`
+- **Model routing**: Keywords in prompts now auto-detect task type and route to optimal model
+- **Self-evolution**: Pre-experiment diagnostics run automatically before each batch
+- **Pi5 auto-evolves**: `research-insights-template-default.md`, `strategy-guidance.json` — merge=theirs
+- **Unified pipeline**: 4 scripts → 1 (`run-pipeline.sh`), lifecycle hooks at start/end
+
+## Model Routing Matrix (Static + Dynamic)
+
+| Task Type | Detected By | Agent | Model |
+|---|---|---|---|
+| Code | `defun`, `fix`, `implement` | implementer | glm-5.1 |
+| Review | `review`, `audit`, `validate` | delegate-opus | claude-opus-4.8 |
+| Research | `research`, `analyze`, `explore` | delegate | deepseek-v4-pro |
+| Creative | `brainstorm`, `design`, `create` | delegate-creative | minimax-m3 |
+| Orchestration | `plan`, `coordinate`, `manage` | @maintainer | kimi-k2.6 |
+| Default (no match) | — | delegate | deepseek-v4-pro |
+
+## Self-Evolution Workflow
+
+```
+User Input → Detect Task Type → Route to Model → Self-Heal Diagnostic → Execute Experiment
+```
+
+**Self-Heal Diagnostic (runs before each experiment):**
+1. Bare-path scan (directory-files, with-temp-file, find-file, insert-file-contents)
+2. Boundary validation
+3. Report violations
+
+## Next Steps (Suggested by Active Mementum)
+
+1. **Refine remaining 87 module docs** (low priority)
+2. **Upstream PR** — install.sh macOS sed (blocked)
+
+## Blockers
+
+- **Upstream PR**: install.sh macOS sed — Pi5 fixed locally, upstream not merged
 
 ## Context for Next Session
 
-- Opencode default model: `bailian-token-plan/deepseek-v4-pro`
-- 53 ERT tests pass
-- Pipeline running on Pi5 every 4h (23,3,7,11,15,19)
-- GTM daemon socket: `/run/user/1000/emacs/gtm-product-org`
-- Keep-rate was 1.4% (2/140 experiments) — should improve significantly
+- All P0 priorities complete
+- Self-heal enabled by default (can be disabled via `gptel-auto-workflow--self-heal-enabled`)
+- Boundary validator, tool checks, self-heal diagnostic committed
+- 20 module docs refined
+- Pipeline wrapper tested
+- Model routing heuristics implemented
+- Self-evolution hooks wired into experiment core
+- **Unified pipeline**: 4 scripts → 1 (`run-pipeline.sh`)
 
 ---
-*Active Mementum v1.0 — pipeline overhaul, strategy diversity, business value*
+*Active Mementum v1.0 — auto-ranked priorities, pattern detection, model routing*
