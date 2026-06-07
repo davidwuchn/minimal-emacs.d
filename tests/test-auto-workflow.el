@@ -475,5 +475,64 @@ HYPOTHESIS: [your hypothesis here]"
             (should (= (length violations) 0))))
       (delete-directory test-dir t))))
 
+;;; Model Routing Tests
+
+(ert-deftest auto-workflow/model-routing/detects-code-task ()
+  "Should detect code tasks from keywords."
+  (should (eq (gptel-auto-workflow--detect-task-type "defun my-function ()") 'code))
+  (should (eq (gptel-auto-workflow--detect-task-type "fix this bug") 'code))
+  (should (eq (gptel-auto-workflow--detect-task-type "implement a new module") 'code)))
+
+(ert-deftest auto-workflow/model-routing/detects-review-task ()
+  "Should detect review tasks from keywords."
+  (should (eq (gptel-auto-workflow--detect-task-type "review my code") 'review))
+  (should (eq (gptel-auto-workflow--detect-task-type "audit the security") 'review))
+  (should (eq (gptel-auto-workflow--detect-task-type "validate changes") 'review)))
+
+(ert-deftest auto-workflow/model-routing/detects-research-task ()
+  "Should detect research tasks from keywords."
+  (should (eq (gptel-auto-workflow--detect-task-type "research the topic") 'research))
+  (should (eq (gptel-auto-workflow--detect-task-type "analyze data") 'research))
+  (should (eq (gptel-auto-workflow--detect-task-type "explore options") 'research)))
+
+(ert-deftest auto-workflow/model-routing/detects-creative-task ()
+  "Should detect creative tasks from keywords."
+  (should (eq (gptel-auto-workflow--detect-task-type "brainstorm ideas") 'creative))
+  (should (eq (gptel-auto-workflow--detect-task-type "design a new feature") 'creative))
+  (should (eq (gptel-auto-workflow--detect-task-type "create a prototype") 'creative)))
+
+(ert-deftest auto-workflow/model-routing/detects-orchestration-task ()
+  "Should detect orchestration tasks from keywords."
+  (should (eq (gptel-auto-workflow--detect-task-type "plan the workflow") 'orchestration))
+  (should (eq (gptel-auto-workflow--detect-task-type "coordinate tasks") 'orchestration))
+  (should (eq (gptel-auto-workflow--detect-task-type "manage the pipeline") 'orchestration)))
+
+(ert-deftest auto-workflow/model-routing/returns-nil-for-empty-prompt ()
+  "Should return nil for empty or unmatched prompts."
+  (should (null (gptel-auto-workflow--detect-task-type "")))
+  (should (null (gptel-auto-workflow--detect-task-type nil)))
+  (should (null (gptel-auto-workflow--detect-task-type "hello world"))))
+
+(ert-deftest auto-workflow/model-routing/routes-to-correct-model ()
+  "Should route task types to correct agents/models."
+  (let ((code-route (gptel-auto-workflow--route-task-to-model 'code))
+        (review-route (gptel-auto-workflow--route-task-to-model 'review))
+        (research-route (gptel-auto-workflow--route-task-to-model 'research))
+        (creative-route (gptel-auto-workflow--route-task-to-model 'creative))
+        (orchestration-route (gptel-auto-workflow--route-task-to-model 'orchestration))
+        (default-route (gptel-auto-workflow--route-task-to-model nil)))
+    (should (string= (plist-get code-route :agent) "implementer"))
+    (should (string= (plist-get code-route :model) "glm-5.1"))
+    (should (string= (plist-get review-route :agent) "delegate-opus"))
+    (should (string= (plist-get review-route :model) "claude-opus-4.8"))
+    (should (string= (plist-get research-route :agent) "delegate"))
+    (should (string= (plist-get research-route :model) "deepseek-v4-pro"))
+    (should (string= (plist-get creative-route :agent) "delegate-creative"))
+    (should (string= (plist-get creative-route :model) "minimax-m3"))
+    (should (string= (plist-get orchestration-route :agent) "@maintainer"))
+    (should (string= (plist-get orchestration-route :model) "kimi-k2.6"))
+    (should (string= (plist-get default-route :agent) "delegate"))
+    (should (string= (plist-get default-route :model) "deepseek-v4-pro"))))
+
 (provide 'test-auto-workflow)
 ;;; test-auto-workflow.el ends here

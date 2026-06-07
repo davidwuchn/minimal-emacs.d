@@ -145,6 +145,71 @@ Signals an error if PATH is outside the allowed workspace roots."
     `(let ((,path-var (gptel-auto-workflow--expand-workspace-path ,path ,root)))
        ,@body)))
 
+;;; ─── Model Routing Heuristics ───
+
+(defconst gptel-auto-workflow--task-type-keywords
+  '((code . ("defun" "defvar" "lambda" "require" "provide" "ert-deftest"
+             "implement" "function" "module" "elisp" "refactor" "fix" "bug"
+             "test" "debug" "compile" "byte-compile" "macro" "hook" "advice"))
+    (review . ("review" "audit" "check" "validate" "verify" "inspect"
+               "assess" "evaluate" "critique" "feedback" "quality" "standards"))
+    (research . ("research" "investigate" "explore" "discover" "find" "search"
+                 "analyze" "study" "survey" "benchmark" "compare" "evaluate"))
+    (creative . ("brainstorm" "ideate" "design" "create" "generate" "invent"
+                 "prototype" "sketch" "draft" "imagine" "concept" "vision"))
+    (orchestration . ("plan" "coordinate" "organize" "manage" "delegate"
+                       "schedule" "prioritize" "route" "dispatch" "orchestrate"
+                       "workflow" "pipeline" "sync")))
+  "Alist mapping task types to lists of indicative keywords.
+Keywords are matched case-insensitively against user prompts.
+
+Task types (and preferred models):
+  code          → implementer (glm-5.1) or delegate (deepseek-v4-pro)
+  review        → delegate-opus (claude-opus-4.8) or delegate-strong (gpt-5.4)
+  research      → delegate (deepseek-v4-pro) or delegate-qwen (qwen3.7-max)
+  creative      → delegate-creative (minimax-m3)
+  orchestration → @maintainer (kimi-k2.6)")
+
+(defun gptel-auto-workflow--detect-task-type (prompt)
+  "Analyze PROMPT and return the most likely task type symbol.
+Returns one of: code, review, research, creative, orchestration, or nil.
+Uses keyword frequency matching against `gptel-auto-workflow--task-type-keywords'."
+  (when (stringp prompt)
+    (let* ((downcase-prompt (downcase prompt))
+           (scores nil))
+      (dolist (entry gptel-auto-workflow--task-type-keywords)
+        (let* ((task-type (car entry))
+               (keywords (cdr entry))
+               (score 0))
+          (dolist (kw keywords)
+            (when (string-match-p (regexp-quote kw) downcase-prompt)
+              (setq score (1+ score))))
+          (when (> score 0)
+            (push (cons task-type score) scores))))
+      (if scores
+          (car (car (sort scores
+                           (lambda (a b) (> (cdr a) (cdr b))))))
+        nil))))
+
+(defun gptel-auto-workflow--route-task-to-model (task-type)
+  "Return the recommended agent/model for TASK-TYPE.
+Returns a plist with :agent and :model keys, or nil for unknown types.
+
+Task type → Agent mapping:
+  code          → :agent implementer     :model glm-5.1
+  review        → :agent delegate-opus  :model claude-opus-4.8
+  research      → :agent delegate        :model deepseek-v4-pro
+  creative      → :agent delegate-creative :model minimax-m3
+  orchestration → :agent @maintainer      :model kimi-k2.6
+  nil (default) → :agent delegate        :model deepseek-v4-pro"
+  (pcase task-type
+    ('code         '(:agent "implementer" :model "glm-5.1"))
+    ('review       '(:agent "delegate-opus" :model "claude-opus-4.8"))
+    ('research     '(:agent "delegate" :model "deepseek-v4-pro"))
+    ('creative     '(:agent "delegate-creative" :model "minimax-m3"))
+    ('orchestration '(:agent "@maintainer" :model "kimi-k2.6"))
+    (_            '(:agent "delegate" :model "deepseek-v4-pro"))))
+
 
 (defun gptel-auto-workflow--plist-get (plist key &optional default)
   "Get value from PLIST for KEY.
