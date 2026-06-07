@@ -4593,8 +4593,13 @@ ISSUE-COUNT, SEVERITY, SCORE are from allium-quality-score."
               (insert "\n```\n\n")
               (when (and (stringp issues) (> (length issues) 5))
                 (insert "### Check Issues\n\n")
-                (insert (truncate-string-to-width issues 1500 nil nil "\n\n... (truncated)"))
-                (insert "\n"))
+                ;; Sanitize: skip raw tool-results (Lisp structs) that are not human-readable
+                (let ((sanitized-issues
+                       (if (string-match-p "(tool-result\\|(#s(gptel-tool" issues)
+                           (format "(%d issues — raw tool output suppressed)" issue-count)
+                         issues)))
+                  (insert (truncate-string-to-width sanitized-issues 1500 nil nil "\n\n... (truncated)"))
+                  (insert "\n")))
                (write-region (point-min) (point-max) knowledge-file))
           (error
            (message "[allium-persist] Failed to update knowledge page for %s" safe-strategy))))
