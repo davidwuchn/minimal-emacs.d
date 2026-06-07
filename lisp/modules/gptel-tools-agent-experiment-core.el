@@ -1798,7 +1798,8 @@ Safe to call multiple times: already-merged branches are skipped."
                                           (float-time
                                            (date-to-time (match-string 1 run-id)))))
                              (age (if exp-ts (/ (- now exp-ts) 3600.0) 0)))
-                        (when (and (string= decision "staging-pending")
+                        (when (and (stringp decision)
+                                   (string= decision "staging-pending")
                                    (stringp experiment-id)
                                    (> age 1.0))
                           (if (>= age gptel-auto-experiment--staging-recovery-max-age-hours)
