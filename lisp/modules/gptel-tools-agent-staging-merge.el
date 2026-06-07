@@ -176,7 +176,7 @@ Uses the staging worktree instead of switching branches in the root repo."
   (let* ((staging (gptel-auto-workflow--configured-staging-branch))
          (optimize-ref (gptel-auto-workflow--ensure-merge-source-ref optimize-branch))
          (merge-message (format "Merge %s for verification" optimize-branch))
-         (commit-timeout (max 300 gptel-auto-workflow-git-timeout)))
+         (commit-timeout (max 300 (or gptel-auto-workflow-git-timeout 300))))
     (if (not (gptel-auto-workflow--ensure-staging-branch-exists))
         nil
       (if (not optimize-ref)
