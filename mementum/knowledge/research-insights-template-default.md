@@ -158,28 +158,133 @@ were misleading.
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Distilled Research Strategy
-
-**Scope**: 195 experiments across ~35 gptel-auto-workflow, gptel-tools-agent, gptel-benchmark, and staging modules.
-
-## Kept Hypotheses (7)
-
-| # | Target | Change | Rationale |
-|---|--------|--------|-----------|
-| 1 | Advice management | Add idempotency guard + extract symmetric disable | Prevents duplicate advice; φ Vitality + Clarity |
-| 2 | Path validation | Fix misleading message + add directory existence check | Bug fix |
-| 3 | `--normalized-projects` cache | `eq` → `equal` for list comparison; check cache before `ensure-buffer-tables` | Prevents unnecessary invalidation; content-based not identity-based |
-| 4 | Buffer lookup | Extract into validation sequence with explicit nil guards | Graceful FSM state handling; Clarity + Vitality |
-| 5 | Project path handling | `ignore-errors` around `file-attributes`; early guard for empty lists | Edge-case resilience; Vitality + Clarity |
-| 6 | Mode line display | `format-mode-line` → direct `mode-name`; `if` → `when`; nil-safety on buffer iteration | Removes unnecessary complexity; robustness |
-| 7 | `gptel-benchmark-eight-keys-weakest` | Filter `not-applicable` entries before sorting | Prevents runtime crash from symbol/number comparison; Clarity + Vitality |
-
-## Discarded
-None stated.
+nil
 ```
 
