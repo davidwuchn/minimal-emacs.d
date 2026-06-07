@@ -4,6 +4,7 @@
 > **Session**: Self-evolution hooks wired into experiment core
 > **Status**: All P0 priorities complete, self-heal enabled by default
 > **Latest**: Unified pipeline — consolidated 4 scripts into 1
+> **Active Plan**: [Monitoring Agent](knowledge/plans/monitoring-agent/plan.md) — YC Phase 2 ("Holy Shit Moment")
 
 ---
 
