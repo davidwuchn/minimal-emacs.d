@@ -1,10 +1,10 @@
 # Mementum State
 
 > **Bootstrapped**: 2026-06-06
-> **Session**: Architectural evolution — structural pipeline proposals
-> **Status**: YC Phases 1(partial), 2(done), 3(started), 4(done) — OV5 ~65% complete
-> **Latest**: Architectural evolution detects module retirement, routing, regressions — Phase 2.3 complete
-> **Active Plan**: OV5 self-improving system — YC vision ~65% complete
+> **Session**: Code regeneration + architectural evolution — YC Phases 2.3 and 3.2
+> **Status**: YC Phases 1(partial), 2(done), 3(~40%), 4(done) — OV5 ~70% complete
+> **Latest**: Code regeneration consumes context DB — discard old code, regenerate from business context
+> **Active Plan**: OV5 self-improving system — YC vision ~70% complete
 
 ---
 
@@ -23,6 +23,7 @@
 | **P1** | Refine remaining 97 module docs with OV5 ontology/AutoTTS | doc-explorer | **IN PROGRESS** |
 | **P2** | Human interface → pipeline (approval queue) | @maintainer | **COMPLETE** |
 | **P2** | Context database (causal/business memory) | @maintainer | **COMPLETE** |
+| **P2** | Code regeneration system | @maintainer | **COMPLETE** |
 | **P2** | Submit PR for install.sh macOS sed | delegate-opus | **BLOCKED** (upstream) |
 | **P2** | Unified pipeline: consolidate scripts | @maintainer | **COMPLETE** |
 
@@ -75,7 +76,17 @@
 - Risk classification: investigation→auto, routing→notify, module change→required
 - Legacy keys for score-proposal compatibility
 
-YC Phase 2 now complete: failure patterns + proposals + architectural evolution
+### Code Regeneration (P2 → YC Phase 3.2)
+
+**Regenerate modules from business context, discarding old code:**
+- New module: `gptel-auto-workflow-code-regeneration.el` (4 public functions)
+- Context aggregation: purpose, decisions, failures, successes, constraints from sidecar DB
+- Prompt override mechanism in experiment core (one-shot, cleared after use)
+- Candidate identification via context DB summary + evolution model stats
+- 4 backward-compat aliases from context-database.el stubs
+- 7 ERT tests
+
+YC Phase 3.2: code regeneration from business context
 
 **3-phase implementation complete:**
 - **Phase 1**: Failure pattern analysis (classify, analyze, persist)
@@ -139,6 +150,8 @@ YC Phase 2 now complete: failure patterns + proposals + architectural evolution
 - **Production metrics**: Weighted grader scoring — business-value boosts, risk-score penalizes
 - **Approval queue**: High-risk proposals → human review gate, 7-day auto-expiry
 - **Context database**: Per-experiment causal/business memory — captures 'why' not 'what'
+- **Code regeneration**: Discard old code, regenerate from business context with better models
+- **Architectural evolution**: Structural pipeline proposals (module retirement, routing, regressions)
 
 ## Model Routing Matrix (Static + Dynamic)
 
@@ -164,9 +177,9 @@ User Input → Detect Task Type → Route to Model → Self-Heal Diagnostic → 
 
 ## Next Steps (Suggested by Active Mementum)
 
-1. **Code regeneration** — consume context database to regenerate modules with better models (Phase 3.2)
+1. **Disposable code mindset** — operationalize regeneration in pipeline schedule (Phase 3.3)
 2. **Production API integration** — wire real Sentry/DataDog endpoints (Phase 1.1 remaining)
-3. **Refine remaining 87 module docs** (P1, low urgency)
+3. **Human dashboards/alerts** — approval queue review interface (Phase 4.3)
 4. **Upstream PR** — install.sh macOS sed (blocked)
 
 ## Blockers
