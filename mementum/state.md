@@ -72,6 +72,16 @@
 - Module: `lisp/modules/gptel-auto-workflow-monitoring-agent.el` (~650 lines)
 - Tests: `tests/test-gptel-auto-workflow-monitoring-agent.el` (30 tests)
 - Memories: `mementum/memories/monitoring-agent-*.md` (3 files)
+- **Integration**: Wired into experiment core via `after-experiment-hook`
+
+### Token Economics (P1 — YC Phase 4)
+
+**Wired into experiment pre-flight:**
+- `gptel-token-economics-roi-threshold` defcustom (default 1.0)
+- `gptel-token-economics--predict-roi` (historical category ROI prediction)
+- Pre-flight check rejects experiments with predicted ROI < threshold
+- 4 new tests (20/20 passing)
+- See: `mementum/knowledge/strategic-plans/implementation-roadmap.md` Phase 4
 
 ## Active Patterns (from last 3 sessions)
 
@@ -82,6 +92,7 @@
 - **Unified pipeline**: 4 scripts → 1 (`run-pipeline.sh`), lifecycle hooks at start/end
 - **Monitoring agent**: Meta-improvement layer — detects failures, generates proposals, auto-deploys fixes
 - **Monitoring agent integration**: Wired into experiment core via `after-experiment-hook`
+- **Token economics**: ROI threshold rejects low-value experiments before they waste tokens
 
 ## Model Routing Matrix (Static + Dynamic)
 
@@ -107,11 +118,10 @@ User Input → Detect Task Type → Route to Model → Self-Heal Diagnostic → 
 
 ## Next Steps (Suggested by Active Mementum)
 
-1. **Token economics → pre-flight decisions** (P1) — wire ROI threshold into experiment pre-flight
-2. **Production metrics → grader scoring** (P1) — weight production impact in grader
-3. **Human interface → pipeline** (P2) — route high-risk experiments to approval queue
-4. **Refine remaining 87 module docs** (low priority)
-5. **Upstream PR** — install.sh macOS sed (blocked)
+1. **Production metrics → grader scoring** (P1) — weight production impact in grader
+2. **Human interface → pipeline** (P2) — route high-risk experiments to approval queue
+3. **Refine remaining 87 module docs** (low priority)
+4. **Upstream PR** — install.sh macOS sed (blocked)
 
 ## Blockers
 
