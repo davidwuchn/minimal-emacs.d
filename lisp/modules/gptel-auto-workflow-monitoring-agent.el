@@ -45,6 +45,9 @@
 (declare-function gptel-auto-workflow-approval-queue-enqueue
                   "gptel-auto-workflow-approval-queue")
 
+(declare-function gptel-auto-workflow--run-architectural-analysis
+                  "gptel-auto-workflow-architectural-evolution")
+
 ;; ── Configuration ──
 
 (defcustom gptel-auto-workflow-monitoring-enabled t
@@ -605,6 +608,14 @@ Returns list of written mementum file paths, or nil if throttled/disabled."
                          (deploy-action (plist-get deployed :deploy-action)))
                     (message "[monitoring] Phase 3: %s -> %s"
                              (plist-get deployed :component) deploy-action))))
+            ;; Phase 4: Architectural analysis (strategy routing + hypothesis routing)
+            (when (fboundp 'gptel-auto-workflow--run-architectural-analysis)
+              (let ((arch-result
+                     (gptel-auto-workflow--run-architectural-analysis)))
+                (dolist (arch-file (plist-get arch-result :written))
+                  (push arch-file written))
+                (message "[monitoring] Phase 4: %d architectural proposals"
+                         (length (plist-get arch-result :proposals)))))
             (nreverse written))))))))
 
 (provide 'gptel-auto-workflow-monitoring-agent)
