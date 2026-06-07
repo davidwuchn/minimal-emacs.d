@@ -5,10 +5,10 @@ valid-from: 2026-06-07T20:22
 # Mistake: 2026-06-07 20:22
 
 **Failure type:** strategy
-**Target:** lisp/modules/gptel-auto-workflow-strategic.el
-**Occurrences:** 9
+**Target:** lisp/modules/gptel-tools-agent-strategy-harness.el
+**Occurrences:** 3
 **Example reasons:** none
-**Trend:** 2026-05-30T190626Z-bfd5 -> 2026-06-03T231639Z-16fc
+**Trend:** 2026-06-03T151204Z-db9e -> 2026-06-03T151204Z-db9e
 
 This pattern was detected by the monitoring agent as a systemic failure requiring investigation.
 

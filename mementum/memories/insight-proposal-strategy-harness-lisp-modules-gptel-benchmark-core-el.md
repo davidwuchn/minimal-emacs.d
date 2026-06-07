@@ -4,9 +4,9 @@ valid-from: 2026-06-07T20:22
 
 # Insight: 2026-06-07 20:22
 
-**Proposal:** Address recurring strategy failures in lisp/modules/gptel-benchmark-principles.el: recurring failures
+**Proposal:** Address recurring strategy failures in lisp/modules/gptel-benchmark-core.el: recurring failures
 **Component:** strategy-harness
-**Expected impact:** Reduce strategy failures in lisp/modules/gptel-benchmark-principles.el by ~60%
+**Expected impact:** Reduce strategy failures in lisp/modules/gptel-benchmark-core.el by ~60%
 **Confidence:** 0.60
 **Risk:** high
 **Validation rate:** 0.02

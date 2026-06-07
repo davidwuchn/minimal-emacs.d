@@ -4,9 +4,9 @@ valid-from: 2026-06-07T20:22
 
 # Insight: 2026-06-07 20:22
 
-**Proposal:** Address recurring strategy failures in lisp/modules/gptel-tools-agent-benchmark.el: recurring failures
+**Proposal:** Address recurring strategy failures in lisp/modules/treesit-agent-tools-workspace.el: recurring failures
 **Component:** strategy-harness
-**Expected impact:** Reduce strategy failures in lisp/modules/gptel-tools-agent-benchmark.el by ~80%
+**Expected impact:** Reduce strategy failures in lisp/modules/treesit-agent-tools-workspace.el by ~80%
 **Confidence:** 0.80
 **Risk:** high
 **Validation rate:** 0.04

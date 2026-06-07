@@ -1,14 +1,14 @@
 ---
-valid-from: 2026-06-07T14:12
+valid-from: 2026-06-07T20:22
 ---
 
-# Mistake: 2026-06-07 14:12
+# Mistake: 2026-06-07 20:22
 
 **Failure type:** strategy
 **Target:** lisp/modules/gptel-tools-agent-experiment-core.el
-**Occurrences:** 11
+**Occurrences:** 13
 **Example reasons:** none
-**Trend:** 2026-06-02T185924Z-38af -> 2026-06-04T102526Z-e266
+**Trend:** 2026-06-02T110754Z-37b1 -> 2026-06-03T231639Z-16fc
 
 This pattern was detected by the monitoring agent as a systemic failure requiring investigation.
 

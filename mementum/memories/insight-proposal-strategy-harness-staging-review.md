@@ -1,8 +1,8 @@
 ---
-valid-from: 2026-06-07T14:12
+valid-from: 2026-06-07T20:22
 ---
 
-# Insight: 2026-06-07 14:12
+# Insight: 2026-06-07 20:22
 
 **Proposal:** Address recurring strategy failures in staging-review: recurring failures
 **Component:** strategy-harness

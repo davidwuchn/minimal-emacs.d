@@ -1,14 +1,14 @@
 ---
-valid-from: 2026-06-07T14:12
+valid-from: 2026-06-07T20:22
 ---
 
-# Mistake: 2026-06-07 14:12
+# Mistake: 2026-06-07 20:22
 
 **Failure type:** strategy
 **Target:** lisp/modules/gptel-auto-workflow-ontology-router.el
 **Occurrences:** 6
 **Example reasons:** none
-**Trend:** 2026-06-03T012555Z-fd6f -> 2026-06-03T181508Z-dfa5
+**Trend:** 2026-06-04T150808Z-3e01 -> 2026-06-07T173446Z-a09a
 
 This pattern was detected by the monitoring agent as a systemic failure requiring investigation.
 
