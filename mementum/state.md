@@ -1,80 +1,85 @@
 # Mementum State
 
 > **Bootstrapped**: 2026-06-06
-> **Session**: 2026-06-07 — staging flow fix, test fixes, sed fix, opencode config, pipeline running
-> **Status**: All local fixes pushed, 53 tests pass, opencode config updated, pipeline completed
+> **Session**: 2026-06-07 — OV5 pipeline overhaul: strategy diversity, business value, run-level health
+> **Status**: All 6 phases pushed, 53 tests pass, pipeline reformed
 
 ---
 
-## Current Priorities (Auto-ranked)
+## Current Priorities
 
-| Priority | Item | Model | Status |
-|---|---|---|---|
-| **P0** | Propagate staging flow failure reasons | @maintainer | **COMPLETE** |
-| **P0** | Fix bare-path diagnostic infinite loop | @maintainer | **COMPLETE** (Pi5 version) |
-| **P0** | Fix test shadowing (make-temp-file) | @maintainer | **COMPLETE** |
-| **P0** | Fix json-true/json-false serialization | @maintainer | **COMPLETE** |
-| **P0** | Switch opencode to deepseek-v4-flash | @maintainer | **COMPLETE** |
-| **P0** | OV5 self-heal: fix workspace boundary violations | @maintainer | **COMPLETE** |
-| **P0** | Refine top 20 auto-generated module docs | doc-explorer | **COMPLETE** |
-| **P0** | Test pipeline wrapper in production | pipeline-ops | **COMPLETE** |
-| **P0** | Optimize model routing based on task type | ov5-architect | **COMPLETE** |
-| **P0** | Wire self-heal hooks into experiment core | @maintainer | **COMPLETE** |
-| **P0** | Fix sed -i '' → sed -i (Linux compat) in pipeline scripts | @maintainer | **COMPLETE** |
-| **P0** | Set opencode main model to kimi-k2.6 | @maintainer | **COMPLETE** |
-| **P1** | Monitor keep-rate after fixes | pipeline-ops | **IN PROGRESS** |
-| **P1** | Refine remaining 97 module docs with OV5 ontology/AutoTTS | doc-explorer | **IN PROGRESS** |
-| **P2** | Submit PR for install.sh macOS sed | delegate-opus | **BLOCKED** (upstream) |
+| Priority | Item | Status |
+|---|---|---|
+| **DONE** | Phase 1: Break nil-guard death spiral (strategy + templates) | ✅ |
+| **DONE** | Phase 2: Wire business_value_score to local signals | ✅ |
+| **DONE** | Phase 3: Fix git pull --ff-only divergence | ✅ |
+| **DONE** | Phase 5: Run-level 0% keep-rate detector | ✅ |
+| **P1** | Monitor next 3 pipeline runs for keep-rate improvement | 🔄 |
+| **P2** | Production metrics as real sensor (wire error logs, load times) | 📋 |
 
-## Completed Work (2026-06-07)
+## What Changed Today
 
-### Staging Flow Failure Reason Propagation
-- All 11 `(funcall finish nil)` calls in `gptel-tools-agent-staging-merge.el` now pass specific reason strings
-- Committed at `37d3a25a`, merged+pushed to `origin/main` at `46367c14`
+### Root Cause: The Nil-Guard Death Spiral
+The pipeline had 1.4% keep-rate across 140+ runs because:
+1. All experiments were "add ONE safety guard" (template-default dominated)
+2. Strategy selection had a 1-try-and-out trap (new strategies discarded after 1 failure)
+3. Strategy rotation always fell back to template-default
+4. Business value scores were all 0.00 (production metrics module never loaded)
+5. Git pull --ff-only always failed on Pi5 (stale code running)
 
-### OpenCode Config Update
+### Fixes Applied (2 commits pushed to origin/main)
 
-**Main model**: `bailian-token-plan/kimi-k2.6`
-**Small model**: `bailian-token-plan/deepseek-v4-flash` (title generation)
-**Compaction**: auto + prune enabled
+**Commit `8f446711` — Break the nil-guard death spiral:**
+- `strategy-harness.el`: min 5 trials before comparing to template-default, 70% exploration rate
+- `experiment-core.el`: rotate to random alternative (not always template-default)
+- All 4 prompt templates (agentic, programming, tool-calls, natural-language): v1→v2
+  - "ADD ONE SAFETY GUARD" → "MAKE ONE HIGH-VALUE IMPROVEMENT"
+  - Prioritized: fix bugs > improve errors > add tests > fix docs > nil guards
+  - Added "already-safe code" as forbidden
+- `run-pipeline.sh`: `git pull --ff-only` → `git pull --rebase` (fixes Pi5 divergence)
 
-### Pipeline sed Fix (P0)
+**Commit `5999723e` — Business value + run-level health:**
+- `production-metrics.el`: local business value from error logs, byte-compile warnings, test coverage
+- `prompt-build.el`: auto-inject business metrics into TSV when missing
+- `evolution.el`: run-level consecutive 0% keep-rate detector (3 runs → strategy review, 5 runs → target reset)
+- Wired into `maybe-self-heal` (called after every experiment run)
 
-**Fixed**: `sed -i ''` → `sed -i` in `run-auto-workflow-cron.sh` and `refine-module-docs-batch.sh` (macOS → Linux compat)
+### Files Changed This Session
 
-### Workspace Boundary Validator (P0)
-
-**Phase 1-4 complete** — See previous mementum entries for details.
-
-### Bare-path Diagnostic Fix
-- Pi5 rewrote diagnostic to use `split-string`/`dotimes` (avoids `forward-line` hang)
-- Added `file-regular-p` guard
-- 8 bare-path diagnostic tests pass
-
-### Test Fixes
-- Renamed `test-make-temp-dir` → `test-auto-workflow--make-temp-dir` (avoid shadowing built-in `make-temp-file`)
-- Created standalone `tests/test-bare-path-diagnostic.el`
-- 53 tests total, all pass
-
-### Previous Work (2026-06-06)
+| File | Change |
+|------|--------|
+| `scripts/run-pipeline.sh` | git pull --rebase (was --ff-only) |
+| `lisp/modules/gptel-tools-agent-strategy-harness.el` | Min 5 trials, 70% exploration |
+| `lisp/modules/gptel-tools-agent-experiment-core.el` | Rotate to random alternative |
+| `lisp/modules/gptel-auto-workflow-production-metrics.el` | Local business value computation |
+| `lisp/modules/gptel-auto-workflow-evolution.el` | Run-level streak detector |
+| `lisp/modules/gptel-tools-agent-prompt-build.el` | Auto-inject business metrics |
+| `assistant/skills/auto-workflow/prompt-template-*.md` | v2 templates (all 4) |
 
 ## Active Patterns
 
-- **Staging failure reason**: Always pass specific reason string to `(funcall finish ...)` — enables debugging via `comparator_reason` field
-- **Bare-path diagnostic**: Pi5 uses `split-string`/`dotimes` approach (index-based, no forward-line hang risk)
-- **Test naming**: Use `test-auto-workflow--` prefix for test helpers, not `test-` (avoids shadowing built-in `make-temp-file`)
-- **Opencode model**: `kimi-k2.6` for main, `deepseek-v4-flash` for title generation
-- **Pipeline sed**: Use `sed -i` (Linux) not `sed -i ''` (macOS)
+- **Strategy death spiral**: New strategies need min 5 trials before comparison — don't let 1 failure kill them
+- **Business value from local signals**: Error logs, byte-compile warnings, test coverage — no Sentry needed
+- **Template diversity**: Prompt templates must offer HIGH/MEDIUM/LOW value change types, not just nil guards
+- **Git rebase > ff-only**: Pi5 frequently diverges; rebase handles this gracefully
+- **Run-level health**: Check across entire runs (not just experiments within a run)
+
+## Expected Impact
+
+Next Pi5 pipeline run (scheduled every 4h) should:
+1. Successfully pull latest code via rebase (was failing before)
+2. Use new v2 templates with diverse change types
+3. Score business value from local signals (no longer all 0.00)
+4. Give new strategies 5+ trials before judging them
+5. Auto-detect if 3+ consecutive runs have 0% keep-rate
 
 ## Context for Next Session
 
-- Staging flow fix pushed to `origin/main` (`46367c14`)
-- 53 tests pass (bare-path + auto-workflow)
-- Pi5 continues auto-evolution (bare-path diagnostic already rewritten upstream)
-- Keep-rate needs monitoring over next pipeline runs
-- Opencode uses `kimi-k2.6` as main model, `deepseek-v4-flash` for title generation
-- Pipeline completed with 1 experiment (exp1 failed due to worktree cleanup race, exp2 in progress when daemon OOM killed)
+- Opencode default model: `bailian-token-plan/deepseek-v4-pro`
+- 53 ERT tests pass
+- Pipeline running on Pi5 every 4h (23,3,7,11,15,19)
 - GTM daemon socket: `/run/user/1000/emacs/gtm-product-org`
+- Keep-rate was 1.4% (2/140 experiments) — should improve significantly
 
 ---
-*Active Mementum v1.0 — auto-ranked priorities, pattern detection, model routing*
+*Active Mementum v1.0 — pipeline overhaul, strategy diversity, business value*
