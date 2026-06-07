@@ -526,44 +526,45 @@ were misleading.
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-The user wants me to distill the provided research strategy text. Let me analyze what's here:
-
-1. It's a research strategy with template-default
-2. 190 experiments across many target files (mostly lisp/modules/gptel-*.el files)
-3. Several kept hypotheses about code improvements
-4. Many blank/discarded hypothesis sections
-5. A note at the end about "[what changes & why]" (NEVER leave blank)
-
-The kept hypotheses are:
-1. Simplify lambda-prompt extraction by removing redundant `if apply-lines` check and adding early nil guard for `english-findings`
-2. Adding explicit nil/empty-string guard for `allium-spec` and removing redundant callback check
-3. Adding explicit `(symbolp backend)` branch before fallback `t` case
-4. Adding secondary `buffer-live-p` guard and nil check in lambda
-5. Extracting provider selection logic from `gptel-benchmark-call-subagent` into dedicated function
-6. Adding error recovery and making assumptions explicit
-7. Adding defensive coding
-8. Adding timeout sentinel value in `gptel-benchmark-call-subagent-sync`
-9. Add explicit nil guard on `where` parameter and wrap overlay creation in `condition-case`
-10. Wrapping `gptel--fsm-next` in `condition-case` prevents crash in `my/gptel-auto-retry`
-
-The user wants me to "distill" this - meaning summarize/condense the key points. Let me provide a concise summary of the research strategy and the kept hypotheses.
-
-I don't need to read any files for this - the user is asking me to distill/summarize the text they provided.
+nil
 ```
 
-### Check Issues
-
-I'd be happy to help, but I'm not sure what you'd like me to check. Your message starts with "check:" but then contains analysis notes about distilling a research strategy.
-
-Could you clarify what you need? For example:
-
-1. **Check a specific file?** — If so, please provide the file path
-2. **Verify the distillation/summary you outlined?** — I can review the 10 kept hypotheses and the research strategy structure
-3. **Something else?** — Let me know what you're looking for
-
-Please let me know what you'd like me to check and I'll help right away.
