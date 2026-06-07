@@ -5071,10 +5071,16 @@ effective +0.10, promising +0.05, underperforming -0.05."
                         (t (format "Try %s x %s" (plist-get alt-target :name) (plist-get alt-strategy :name)))))))
 
 ;; 7. VSM ACTIONS → REPAIR: consumer for stored vsm-actions
+(defun gptel-auto-workflow--ensure-list (val)
+  "Return VAL as a list if it's a vector, otherwise return VAL unchanged.
+Fixes listp errors when JSON arrays are read as vectors."
+  (if (vectorp val) (append val nil) val))
+
 (defun gptel-auto-workflow--consume-vsm-actions ()
   "Read stored VSM actions from evolution-next-cycle-hints and trigger repairs."
   (when (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
-    (let ((actions (plist-get gptel-auto-workflow--evolution-next-cycle-hints :vsm-actions)))
+    (let ((actions (gptel-auto-workflow--ensure-list
+                    (plist-get gptel-auto-workflow--evolution-next-cycle-hints :vsm-actions))))
       (dolist (action actions)
         (pcase (car action)
           ('increase-strategy-evolution
@@ -5426,14 +5432,14 @@ Uncategorized targets pass through (counted against :other quota)."
           (plist-put gptel-auto-workflow--evolution-next-cycle-hints
                      :vsm-actions (append (plist-get vsm-actions :actions)
                                           expanded-actions)))
-    ;; Log
-    (dolist (change champion-changes)
-      (message "[feedback] %s: %s (%.1f%%) [%s]"
-               (plist-get change :category) (plist-get change :strategy)
-               (* 100 (or (plist-get change :rate) 0)) (plist-get change :action)))
-    (message "[budget] Categories: %s"
-             (mapconcat (lambda (b) (format "%s:%d" (car b) (cdr b))) budget " "))
-    (dolist (action (plist-get vsm-actions :actions))
+;; Log
+   (dolist (change (gptel-auto-workflow--ensure-list champion-changes))
+     (message "[feedback] %s: %s (%.1f%%) [%s]"
+              (plist-get change :category) (plist-get change :strategy)
+              (* 100 (or (plist-get change :rate) 0)) (plist-get change :action)))
+   (message "[budget] Categories: %s"
+            (mapconcat (lambda (b) (format "%s:%d" (car b) (cdr b))) budget " "))
+   (dolist (action (gptel-auto-workflow--ensure-list (plist-get vsm-actions :actions)))
       (message "[vsm-action] %s: %s" (car action) (cdr action)))
     ;; Persist to disk so hints survive daemon restarts
     (gptel-auto-workflow--persist-next-cycle-hints)
