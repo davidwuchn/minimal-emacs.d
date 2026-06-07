@@ -24,6 +24,8 @@
 
 (require 'cl-lib)
 
+(declare-function gptel-auto-workflow--expand-workspace-path "gptel-tools-agent-base")
+
 ;;; Customization
 (defgroup gptel-auto-workflow-production-metrics nil
   "Production metrics weighting for experiment scoring."
@@ -72,11 +74,12 @@ Used to query production metrics for the right service.")
   "Get Sentry API key from environment or configuration."
   (or gptel-auto-workflow--sentry-api-key
       (getenv "OV5_SENTRY_API_KEY")
-      (when (file-exists-p "~/.ov5/sentry-key")
-        (ignore-errors
-          (with-temp-buffer
-            (insert-file-contents "~/.ov5/sentry-key")
-            (string-trim (buffer-string)))))))
+      (let ((key-file (expand-file-name "~/.ov5/sentry-key")))
+        (when (file-exists-p key-file)
+          (ignore-errors
+            (with-temp-buffer
+              (insert-file-contents key-file)
+              (string-trim (buffer-string))))))))
 
 (defun gptel-auto-workflow--infer-service-from-target (target)
   "Infer service name from TARGET file path.
@@ -226,11 +229,12 @@ Business value heuristics:
            (risk 0.2)  ; baseline: no measurable improvement
 
            ;; Signal 1: Does this target appear in recent Emacs error logs?
-           (error-log-dir (expand-file-name "var/log/" (gptel-auto-workflow--expand-workspace-path "")))
-           (recent-logs (when (file-directory-p error-log-dir)
-                          (directory-files error-log-dir t "\\.log\\'"
-                                           nil (lambda (a b) (time-less-p (nth 5 (file-attributes b))
-                                                                            (nth 5 (file-attributes a)))))))
+            (error-log-dir (expand-file-name "var/log/" (gptel-auto-workflow--expand-workspace-path "")))
+            (recent-logs (when (file-directory-p error-log-dir)
+                           (sort (directory-files error-log-dir t "\\.log\\'")
+                                 (lambda (a b)
+                                   (time-less-p (nth 5 (file-attributes b))
+                                                (nth 5 (file-attributes a)))))))
            (target-in-errors
             (cl-block check-logs
               (dolist (log (seq-take (or recent-logs '()) 20))  ; Check 20 most recent logs
@@ -366,7 +370,7 @@ Returns weighted score, or original SCORE if production metrics unavailable."
             (risk (plist-get metrics :risk-score)))
       (let ((boost (* bv gptel-auto-workflow-production-weight-business-value))
             (penalty (* risk gptel-auto-workflow-production-weight-risk-penalty)))
-        (+ score boost (- penalty)))
+        (max 0.0 (min 1.0 (+ score boost (- penalty)))))
     score))
 
 (provide 'gptel-auto-workflow-production-metrics)

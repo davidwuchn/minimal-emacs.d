@@ -129,12 +129,21 @@ at least equal cost."
 
 (defun gptel-token-economics--predict-roi (category)
   "Predict ROI for a new experiment in CATEGORY.
-Uses historical category-roi as the predictor. Returns 1.0
-(break-even) when CATEGORY has no historical data, allowing
-experiments to run and collect data for future predictions."
+Uses historical category-roi as the predictor. Returns nil
+when CATEGORY has no historical data (unknown, nil, or no records).
+A nil return means 'no prediction' — the pre-flight check should
+allow the experiment through rather than blocking new categories.
+Returns 0.0 for categories with records but all-discarded experiments
+(since that is a real measurement, not missing data)."
   (if (or (null category) (equal category :unknown))
-      1.0
-    (gptel-token-economics--category-roi category)))
+      nil
+    (let ((category-records (cl-remove-if-not
+                             (lambda (r) (equal (plist-get r :category) category))
+                             gptel-token-economics--records)))
+      ;; If no records exist for this category, return nil (no prediction)
+      (if (null category-records)
+          nil
+        (gptel-token-economics--category-roi category)))))
 
 ;; ============================================================================
 ;; Task 3.3: Budget Allocation
@@ -236,19 +245,23 @@ Returns plist with :total-cost, :total-roi, :category-breakdown,
 ;; ============================================================================
 
 (defun gptel-token-economics--persist-data (file)
-  "Persist economics data to FILE."
+  "Persist economics data to FILE as JSON."
   (with-temp-file file
-    (insert (json-encode
-             (mapcar (lambda (r)
-                       (list :id (plist-get r :id)
-                             :category (symbol-name (plist-get r :category))
-                             :input-tokens (plist-get r :input-tokens)
-                             :output-tokens (plist-get r :output-tokens)
-                             :cost (plist-get r :cost)
-                             :score-before (plist-get r :score-before)
-                             :score-after (plist-get r :score-after)
-                             :decision (plist-get r :decision)))
-                     gptel-token-economics--records)))))
+    (insert "[")
+    (let ((first t))
+      (dolist (r gptel-token-economics--records)
+        (unless first (insert ","))
+        (setq first nil)
+        (insert (json-encode
+                 `((id . ,(plist-get r :id))
+                   (category . ,(symbol-name (plist-get r :category)))
+                   (input-tokens . ,(plist-get r :input-tokens))
+                   (output-tokens . ,(plist-get r :output-tokens))
+                   (cost . ,(plist-get r :cost))
+                   (score-before . ,(plist-get r :score-before))
+                   (score-after . ,(plist-get r :score-after))
+                   (decision . ,(plist-get r :decision)))))))
+    (insert "]")))
 
 (defun gptel-token-economics--load-data (file)
   "Load economics data from FILE."
@@ -257,18 +270,22 @@ Returns plist with :total-cost, :total-roi, :category-breakdown,
         (with-temp-buffer
           (insert-file-contents file)
           (let ((raw (json-read-from-string (buffer-string))))
-            (when (listp raw)
-              (setq gptel-token-economics--records
-                    (mapcar (lambda (r)
-                              (list :id (plist-get r :id)
-                                    :category (intern (plist-get r :category))
-                                    :input-tokens (plist-get r :input-tokens)
-                                    :output-tokens (plist-get r :output-tokens)
-                                    :cost (plist-get r :cost)
-                                    :score-before (plist-get r :score-before)
-                                    :score-after (plist-get r :score-after)
-                                    :decision (plist-get r :decision)))
-                            raw)))))
+            ;; json-read-from-string returns a vector for JSON arrays
+            (when (or (listp raw) (vectorp raw))
+              (let ((items (if (vectorp raw) (append raw nil) raw)))
+                (setq gptel-token-economics--records
+                      (mapcar (lambda (r)
+                                ;; json-read-from-string returns alist pairs with symbol keys
+                                (let ((get (lambda (key) (alist-get key r))))
+                                  (list :id (funcall get 'id)
+                                        :category (intern (or (funcall get 'category) "unknown"))
+                                        :input-tokens (funcall get 'input-tokens)
+                                        :output-tokens (funcall get 'output-tokens)
+                                        :cost (funcall get 'cost)
+                                        :score-before (funcall get 'score-before)
+                                        :score-after (funcall get 'score-after)
+                                        :decision (funcall get 'decision))))
+                              items))))))
       (error (message "gptel-token-economics: failed to load %s: %s" file err)))))
 
 (provide 'gptel-token-economics)

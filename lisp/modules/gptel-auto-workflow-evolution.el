@@ -1517,7 +1517,7 @@ Writes to var/tmp/evolution/findings.md."
                                     ;; Strip LLM thinking/meta-commentary blocks
                                     ;; These pollute findings with raw agent reasoning
                                     (goto-char (point-min))
-                                    (while (re-search-forward "^The user is \\|^Looking at the \\|^I need to \\|^But wait \\|^Actually,? \\|^Let me \\(?:carefully\\|think about\\|re-?read\\) \\|^Hmm,? \\|^Wait,? \\|^OK,? \\|^So (?:the \\|I\\)\\|I'm (?:going to\\|not sure\\|going\\)\\|^This (?:is\\|means\\|would\\|approach\\) " nil t)
+                                    (while (re-search-forward "^\\(?:The user is \\|Looking at the \\|I need to \\|But wait \\|Actually,? \\|Let me \\(?:carefully\\|think about\\|re-?read\\) \\|Hmm,? \\|Wait,? \\|OK,? \\|So \\(?:the \\|I\\)\\|I'm \\(?:going to\\|not sure\\|going\\)\\|This \\(?:is\\|means\\|would\\|approach\\) \\)" nil t)
                                       (delete-region (line-beginning-position) (line-beginning-position 2)))
                                     ;; Strip lines that are clearly agent self-talk
                                     (goto-char (point-min))

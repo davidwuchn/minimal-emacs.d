@@ -473,16 +473,17 @@ For approval-required proposals, also appends :queue-status and :queue-id."
         base-result))))
 
 (defun gptel-auto-workflow--rollback-proposal (rollback-tag)
-  "Rollback a deployed proposal by checking out the tagged version.
+  "Rollback a deployed proposal by resetting to the tagged version.
 ROLLBACK-TAG is the git tag created during deployment.
-Uses gptel-auto-workflow--git-cmd to checkout the rollback tag,
-then persists a rollback mementum.  Returns plist with :rollback-tag
-and :rollback-status (\"success\" or \"failed\")."
+Uses git checkout main + git reset --hard TAG to avoid detaching HEAD.
+Returns plist with :rollback-tag and :rollback-status (\"success\" or \"failed\")."
   (let ((rollback-status "failed"))
     (when (fboundp 'gptel-auto-workflow--git-cmd)
+      ;; First ensure we're on main (not detached HEAD)
+      (gptel-auto-workflow--git-cmd "git checkout main" 30)
       (let ((result
              (gptel-auto-workflow--git-cmd
-              (format "git checkout %s"
+              (format "git reset --hard %s"
                       (shell-quote-argument rollback-tag)) 60)))
         (when result
           (setq rollback-status "success"))))
@@ -490,7 +491,7 @@ and :rollback-status (\"success\" or \"failed\")."
     (when (fboundp 'gptel-auto-workflow--mementum-write-memory)
       (gptel-auto-workflow--mementum-write-memory
        '❌ (format "rollback-%s" rollback-tag)
-       (format "**Rollback executed:** %s\n**Status:** %s\n\nRolled back monitoring agent deployment via git tag checkout."
+       (format "**Rollback executed:** %s\n**Status:** %s\n\nRolled back monitoring agent deployment via git reset --hard tag."
                rollback-tag rollback-status)))
     (message "[monitoring] Rollback %s for tag: %s" rollback-status rollback-tag)
     (list :rollback-tag rollback-tag
@@ -520,9 +521,9 @@ validation-rate, and status."
 Throttled to max 1 cycle per cycle-interval seconds.
 Returns list of written mementum file paths, or nil if throttled/disabled."
   (when gptel-auto-workflow-monitoring-enabled
-    (let ((now (float-time))
-          (elapsed (- (float-time)
-                      gptel-auto-workflow-monitoring-last-cycle-time)))
+    (let* ((now (float-time))
+           (elapsed (- now
+                       gptel-auto-workflow-monitoring-last-cycle-time)))
       (if (< elapsed gptel-auto-workflow-monitoring-cycle-interval)
           (progn
             (message "[monitoring] Throttled: %ds since last cycle, need %ds"
@@ -598,7 +599,7 @@ Returns list of written mementum file paths, or nil if throttled/disabled."
                       (gptel-auto-workflow--test-proposal
                        vproposal (or records (list))))
                      (test-status (plist-get tested :test-status)))
-(when (equal test-status "pass")
+                (when (equal test-status "pass")
                   (let* ((deployed
                           (gptel-auto-workflow--deploy-proposal tested))
                          (deploy-action (plist-get deployed :deploy-action)))

@@ -2,7 +2,9 @@
 ;; Part of gptel-tools-agent split
 
 (require 'cl-lib)
-(require 'gptel-auto-workflow-monitoring-agent)
+;; Optional: monitoring-agent may not be available in all environments
+;; If it fails to load, monitoring-cycle is silently skipped via fboundp guards
+(ignore-errors (require 'gptel-auto-workflow-monitoring-agent))
 
 (declare-function gptel-auto-workflow--plist-get "gptel-tools-agent-base")
 (declare-function gptel-knowledge--frontier-select-targets "gptel-auto-workflow-knowledge-reasoning")
@@ -1333,13 +1335,14 @@ into staging or main."
                                    (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
 (message "[dialectic] Forced backend swap for next target")))))
                             ;; After-experiment hook: monitoring agent and post-batch analysis
-                            (run-hooks 'gptel-auto-workflow-after-experiment-hook)
-                            (when (fboundp 'gptel-auto-workflow--monitoring-cycle)
-                              (condition-case err
-                                  (gptel-auto-workflow--monitoring-cycle)
-                                (error
-                                 (message "[monitoring] Post-batch cycle error: %s"
-                                          (error-message-string err)))))
+                            ;; Monitoring agent registers itself in this hook via:
+                            ;; (add-hook 'gptel-auto-workflow-after-experiment-hook
+                            ;;           #'gptel-auto-workflow--monitoring-cycle)
+                            (condition-case err
+                                (run-hooks 'gptel-auto-workflow-after-experiment-hook)
+                              (error
+                               (message "[monitoring] Post-batch hook error: %s"
+                                        (error-message-string err))))
                             (gptel-auto-workflow--persist-status)
                            (if gptel-auto-experiment--quota-exhausted
                                  (progn

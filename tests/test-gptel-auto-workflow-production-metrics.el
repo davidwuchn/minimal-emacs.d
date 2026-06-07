@@ -282,6 +282,28 @@
       (setq gptel-auto-workflow-production-weight-business-value orig-bv)
       (setq gptel-auto-workflow-production-weight-risk-penalty orig-risk))))
 
+;; Test 15: Weighted score should never go negative even with extreme risk
+(ert-deftest test-production-metrics/weight-score-clamped-non-negative ()
+  "Weighted score should be clamped to [0.0, 1.0] — never negative."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--get-production-metrics)
+             (lambda (_target)
+               (list :business-value-score 0.0 :risk-score 1.0))))
+    ;; Low score + max risk + no business value → would be -0.5 without clamp
+    (let ((weighted (gptel-auto-workflow--weight-score-with-production-metrics 0.1 "test-target")))
+      (should (>= weighted 0.0))
+      (should (<= weighted 1.0)))))
+
+;; Test 16: Weighted score should not exceed 1.0
+(ert-deftest test-production-metrics/weight-score-clamped-max-1 ()
+  "Weighted score should be clamped to [0.0, 1.0] — never above 1.0."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--get-production-metrics)
+             (lambda (_target)
+               (list :business-value-score 1.0 :risk-score 0.0))))
+    ;; 0.9 score + max boost → would be 1.2 without clamp
+    (let ((weighted (gptel-auto-workflow--weight-score-with-production-metrics 0.9 "test-target")))
+      (should (>= weighted 0.0))
+      (should (<= weighted 1.0)))))
+
 (provide 'test-gptel-auto-workflow-production-metrics)
 
 ;;; test-gptel-auto-workflow-production-metrics.el ends here

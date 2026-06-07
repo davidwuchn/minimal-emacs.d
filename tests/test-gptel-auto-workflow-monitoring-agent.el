@@ -549,16 +549,24 @@ Returns the result of the last form in BODY."
       (should (cl-find-if (lambda (call) (eq (nth 0 call) '‖)) write-calls)))))
 
 (ert-deftest test-monitoring/rollback-success ()
-  "Should execute rollback via git checkout and return success status."
+  "Should execute rollback via git reset --hard (not checkout) and return success status."
   (let* ((rollback-tag "monitoring-rollback-general-misc")
+         (git-calls nil)
          (result nil))
-    (let ((write-calls
-           (with-mocked-parse-and-mementum
-            nil
-            (setq result (gptel-auto-workflow--rollback-proposal rollback-tag)))))
-      (should (equal (plist-get result :rollback-tag) rollback-tag))
-      (should (equal (plist-get result :rollback-status) "success"))
-      (should (cl-find-if (lambda (call) (eq (nth 0 call) '❌)) write-calls)))))
+    ;; Mock git-cmd to capture what commands are run
+    (cl-letf (((symbol-function 'gptel-auto-workflow--git-cmd)
+               (lambda (cmd timeout)
+                 (push cmd git-calls)
+                 "mocked output"))
+              ((symbol-function 'gptel-auto-workflow--mementum-write-memory)
+               (lambda (&rest args) nil)))
+      (setq result (gptel-auto-workflow--rollback-proposal rollback-tag)))
+    ;; Should use git reset --hard, NOT git checkout TAG (which detaches HEAD)
+    (should (cl-find-if (lambda (c) (string-match-p "git reset --hard" c)) git-calls))
+    ;; Should first checkout main to ensure we're on a branch
+    (should (cl-find-if (lambda (c) (string-match-p "git checkout main" c)) git-calls))
+    (should (equal (plist-get result :rollback-tag) rollback-tag))
+    (should (equal (plist-get result :rollback-status) "success"))))
 
 (provide 'test-gptel-auto-workflow-monitoring-agent)
 ;;; test-gptel-auto-workflow-monitoring-agent.el ends here
