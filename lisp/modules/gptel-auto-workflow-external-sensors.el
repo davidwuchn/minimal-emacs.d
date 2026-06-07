@@ -567,6 +567,150 @@ Returns plist or nil if file doesn't exist."
         (json-read-from-string (buffer-string))))))
 
 ;; ============================================================================
+;; Task 1.3: GitHub Issues Sensor (external user feedback)
+;; ============================================================================
+
+(defcustom gptel-auto-workflow-github-repo nil
+  "GitHub repo for issue sensing in OWNER/REPO format.
+When nil, attempts auto-detection from git remote.
+Set to a string like \"davidwu/minimal-emacs.d\" to override."
+  :type '(choice (const nil) string)
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-auto-workflow-github-issues-days 7
+  "Number of days to look back for GitHub issues."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
+(defun gptel-auto-workflow--github-detect-repo ()
+  "Auto-detect GitHub repo from git remote.
+Returns OWNER/REPO string or nil."
+  (let ((remote-url (condition-case nil
+                        (with-temp-buffer
+                          (call-process "git" nil t nil
+                                        "remote" "get-url" "origin")
+                          (goto-char (point-min))
+                          (buffer-substring (point-min) (line-end-position)))
+                      (error nil))))
+    (when (stringp remote-url)
+      (cond
+       ;; SSH: git@github.com:OWNER/REPO.git
+       ((string-match "github\\.com:\\(.+?\\)\\(\\.git\\)?$" remote-url)
+        (match-string 1 remote-url))
+       ;; HTTPS: https://github.com/OWNER/REPO.git
+       ((string-match "github\\.com/\\(.+?\\)\\(\\.git\\)?$" remote-url)
+        (match-string 1 remote-url))
+       (t nil)))))
+
+(defun gptel-auto-workflow--github-repo ()
+  "Return the GitHub repo to query, or nil if unavailable."
+  (or gptel-auto-workflow-github-repo
+      (gptel-auto-workflow--github-detect-repo)))
+
+(defun gptel-auto-workflow--github-fetch-issues (repo &optional days)
+  "Fetch recent GitHub issues for REPO via gh CLI.
+DAYS is the lookback window (default: `github-issues-days').
+Returns a plist with :open-issues, :closed-issues, :labels,
+:top-issues (list of plists), :error-count, :bug-count,
+:enhancement-count, :fetched-at, or nil on failure."
+  (let* ((days (or days gptel-auto-workflow-github-issues-days))
+         (since (format-time-string "%Y-%m-%dT%H:%M:%SZ"
+                                    (time-subtract
+                                     (current-time)
+                                     (days-to-time days))))
+         (output (condition-case nil
+                     (with-temp-buffer
+                       (let ((rc (call-process
+                                  "gh" nil t nil
+                                  "issue" "list"
+                                  "--repo" repo
+                                  "--state" "all"
+                                  "--limit" "50"
+                                  "--json"
+                                  "number,title,labels,state,createdAt,closedAt,comments"
+                                  "--search" (format "updated:>=%s" since))))
+                         (when (and (numberp rc) (= rc 0))
+                           (goto-char (point-min))
+                           (buffer-string))))
+                   (error nil))))
+    (when (and output (> (length output) 10))
+      (condition-case nil
+          (let* ((json-object-type 'plist)
+                 (json-array-type 'list)
+                 (issues (json-read-from-string output))
+                 (open-issues 0)
+                 (closed-issues 0)
+                 (bug-count 0)
+                 (enhancement-count 0)
+                 (label-counts (make-hash-table :test 'equal))
+                 (top-issues nil))
+            (dolist (issue issues)
+              (if (equal (plist-get issue :state) "OPEN")
+                  (setq open-issues (1+ open-issues))
+                (setq closed-issues (1+ closed-issues)))
+              (dolist (label (plist-get issue :labels))
+                (let ((name (downcase (or (plist-get label :name) ""))))
+                  (puthash name (1+ (gethash name label-counts 0))
+                           label-counts)
+                  (cond ((member name '("bug" "error" "crash" "regression"))
+                         (setq bug-count (1+ bug-count)))
+                        ((member name '("enhancement" "feature" "improvement"))
+                         (setq enhancement-count (1+ enhancement-count))))))
+              (when (< (length top-issues) 10)
+                (push (list :number (plist-get issue :number)
+                            :title (plist-get issue :title)
+                            :state (plist-get issue :state)
+                            :labels (mapcar (lambda (l) (plist-get l :name))
+                                            (plist-get issue :labels))
+                            :comments (length (plist-get issue :comments)))
+                      top-issues)))
+            (list :open-issues open-issues
+                  :closed-issues closed-issues
+                  :total (length issues)
+                  :bug-count bug-count
+                  :enhancement-count enhancement-count
+                  :label-distribution
+                  (let ((r nil))
+                    (maphash (lambda (k v) (push (cons k v) r)) label-counts)
+                    (sort r (lambda (a b) (> (cdr a) (cdr b)))))
+                  :top-issues (nreverse top-issues)
+                  :repo repo
+                  :window-days days
+                  :fetched-at (format-time-string "%Y-%m-%dT%H:%M:%S")))
+        (error nil)))))
+
+(defun gptel-auto-workflow--github-sensor-collect ()
+  "Collect GitHub Issues sensor data for the evolution cycle.
+Returns the issues plist from --github-fetch-issues, or nil.
+Auto-detects repo from git remote."
+  (let ((repo (gptel-auto-workflow--github-repo)))
+    (when repo
+      (message "[github-sensor] Fetching issues for %s (last %d days)"
+               repo gptel-auto-workflow-github-issues-days)
+      (let ((data (gptel-auto-workflow--github-fetch-issues
+                   repo gptel-auto-workflow-github-issues-days)))
+        (when data
+          (message "[github-sensor] %d open, %d closed, %d bugs, %d enhancements"
+                   (plist-get data :open-issues)
+                   (plist-get data :closed-issues)
+                   (plist-get data :bug-count)
+                   (plist-get data :enhancement-count))
+          data)))))
+
+(defun gptel-auto-workflow--github-sensor-summary ()
+  "Return a concise summary string for the metrics dashboard."
+  (let ((data (gptel-auto-workflow--github-sensor-collect)))
+    (if data
+        (format "GitHub Issues [%s]: %d open, %d closed, %d bugs, %d enhancements (last %dd)"
+                (plist-get data :repo)
+                (plist-get data :open-issues)
+                (plist-get data :closed-issues)
+                (plist-get data :bug-count)
+                (plist-get data :enhancement-count)
+                (plist-get data :window-days))
+      "GitHub Issues: not configured (no gh CLI or repo detected)")))
+
+;; ============================================================================
 ;; Edge Cases
 ;; ============================================================================
 

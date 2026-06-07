@@ -1161,10 +1161,14 @@ Suitable for pipeline output and YC evidence."
                (plist-get aq :deployed)
                (plist-get aq :rejected)
                (plist-get aq :expired))
-      (message "  Sensors: Sentry=%s, Feedback=%s"
-               (plist-get sensors :sentry)
-               (plist-get sensors :feedback))
-      (message "  Context DB: %d entries | Disposable: %d candidates"
+       (message "  Sensors: Sentry=%s, Feedback=%s"
+                (plist-get sensors :sentry)
+                (plist-get sensors :feedback))
+       (when (fboundp (quote gptel-auto-workflow--github-sensor-summary))
+         (condition-case nil
+             (message "  %s" (gptel-auto-workflow--github-sensor-summary))
+           (error nil)))
+       (message "  Context DB: %d entries | Disposable: %d candidates"
                (plist-get ctx :entries)
                (plist-get disp :candidates))
       (message "  Mementum: %d memories, %d knowledge pages"

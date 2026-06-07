@@ -95,7 +95,7 @@ is deployed unless the human objects."
 
 (defcustom gptel-auto-workflow-monitoring-risk-require-approval '("high")
   "Risk levels that require explicit human approval before deployment.
-Proposals at these risk levels are persisted as 'pending-approval' and
+Proposals at these risk levels are persisted as pending-approval and
 never auto-deployed."
   :type '(repeat string)
   :group 'gptel-tools-agent)
@@ -623,7 +623,14 @@ Returns list of written mementum file paths, or nil if throttled/disabled."
                   (push arch-file written))
                 (message "[monitoring] Phase 4: %d architectural proposals"
                          (length (plist-get arch-result :proposals)))))
-            (nreverse written))))))))
+            ;; Phase 5: External sensor collection (GitHub Issues)
+            (when (fboundp 'gptel-auto-workflow--github-sensor-collect)
+              (condition-case nil
+                  (let ((gh-data (gptel-auto-workflow--github-sensor-collect)))
+                    (when gh-data
+                      (message "[monitoring] Phase 5: GitHub sensor collected")))
+                (error nil)))
+            (ignore (nreverse written)))))))))
 
 (provide 'gptel-auto-workflow-monitoring-agent)
 ;;; gptel-auto-workflow-monitoring-agent.el ends here
