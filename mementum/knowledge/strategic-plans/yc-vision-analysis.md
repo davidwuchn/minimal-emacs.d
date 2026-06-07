@@ -122,16 +122,31 @@ All happens while employees sleep
 - No cost-per-experiment tracking
 - No ROI analysis per token spent
 
-## Current Assessment
+## Current Assessment (Updated 2026-06-07)
 
-**OV5 completion level:** ~40% of YC vision
-- Strong tool layer and quality gates
-- Good learning mechanism (but missing external feedback)
-- Missing external sensors (biggest gap)
-- No monitoring agent for meta-improvement
-- Software not treated as consumable
-- Human role not redefined
-- Token economics not optimized
+**OV5 completion level:** ~60% of YC vision (up from ~40%)
+- ✓ Strong tool layer and quality gates
+- ✓ Good learning mechanism (monitoring agent provides meta-improvement)
+- ✓ Monitoring agent for meta-improvement (detect → propose → deploy)
+- ✓ Token economics optimized (ROI pre-flight + production-weighted scoring)
+- ✓ Human role redefined for high-risk decisions (approval queue)
+- ✓ Context database preserves business rationale (Phase 3 foundation)
+- Partial: External sensors (production metrics stubs exist, real API integration pending)
+- Pending: Software as consumable (context DB foundation laid, regeneration system not built)
+- Pending: Architectural evolution (monitoring agent doesn't propose structural changes)
+
+### What Changed Since 40% Assessment
+
+| Gap | Before | Now |
+|-----|--------|-----|
+| Monitoring Agent | Missing | Done (3 phases + approval queue) |
+| Token Economics | Not optimized | Done (ROI pre-flight + weighted scoring) |
+| Human Positioning | Not redefined | Done (risk-tiered deployment + approval queue) |
+| Business Value Metrics | Missing | Done (local signals + weighted grader) |
+| Context Preservation | Missing | Done (sidecar causal/business memory) |
+| External Sensors (Production) | Missing | Partial (stubs for Sentry/DataDog) |
+| Code Regeneration | Missing | Pending (context DB foundation exists) |
+| Architectural Evolution | Missing | Pending |
 
 ## Next Steps
 

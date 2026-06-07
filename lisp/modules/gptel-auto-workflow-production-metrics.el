@@ -24,6 +24,31 @@
 
 (require 'cl-lib)
 
+(declare-function gptel-auto-workflow--expand-workspace-path "gptel-tools-agent-base")
+(declare-function gptel-auto-workflow--feedback-configured-p "gptel-auto-workflow-external-sensors")
+(declare-function gptel-auto-workflow--collect-user-feedback "gptel-auto-workflow-external-sensors")
+(declare-function gptel-auto-workflow--github-sensor-collect "gptel-auto-workflow-external-sensors")
+(declare-function gptel-auto-workflow--full-sensor-pipeline "gptel-auto-workflow-external-sensors")
+
+;;; Customization
+(defgroup gptel-auto-workflow-production-metrics nil
+  "Production metrics weighting for experiment scoring."
+  :group 'gptel-auto-workflow)
+
+(defcustom gptel-auto-workflow-production-weight-business-value 0.3
+  "Weight multiplier for business-value-score boost on effective-score.
+Higher values give more weight to experiments with demonstrated business value.
+Range 0.0–1.0. Set to 0.0 to disable business-value boosting."
+  :type 'float
+  :group 'gptel-auto-workflow-production-metrics)
+
+(defcustom gptel-auto-workflow-production-weight-risk-penalty 0.5
+  "Weight multiplier for risk-score penalty on effective-score.
+Higher values penalize risky experiments more aggressively.
+Range 0.0–1.0. Set to 0.0 to disable risk-based penalty."
+  :type 'float
+  :group 'gptel-auto-workflow-production-metrics)
+
 ;; API configuration
 (defvar gptel-auto-workflow--sentry-api-key nil
   "Sentry API key for production metrics.
@@ -34,6 +59,18 @@ Set via environment variable OV5_SENTRY_API_KEY or configuration.")
 
 (defvar gptel-auto-workflow--sentry-project nil
   "Sentry project slug. If nil, inferred from target file.")
+
+;; External sensor hooks (override local fallback). Set these to integrate
+;; with your own user feedback / support ticket systems.
+(defvar gptel-auto-workflow--external-user-feedback-fn nil
+  "Optional function (lambda) returning satisfaction delta for a target.
+When non-nil, called with the target string and should return -1.0..1.0.
+Overrides the local gh-CLI fallback in `gptel-auto-workflow--query-user-feedback'.")
+
+(defvar gptel-auto-workflow--external-support-tickets-fn nil
+  "Optional function (lambda) returning ticket count reduced for a target.
+When non-nil, called with the target string and should return an integer 0-N.
+Overrides the local error-log fallback in `gptel-auto-workflow--query-support-tickets'.")
 
 (defvar gptel-auto-workflow--production-metrics-cache nil
   "Cache for production metrics queries.
@@ -53,11 +90,12 @@ Used to query production metrics for the right service.")
   "Get Sentry API key from environment or configuration."
   (or gptel-auto-workflow--sentry-api-key
       (getenv "OV5_SENTRY_API_KEY")
-      (when (file-exists-p "~/.ov5/sentry-key")
-        (ignore-errors
-          (with-temp-buffer
-            (insert-file-contents "~/.ov5/sentry-key")
-            (string-trim (buffer-string)))))))
+      (let ((key-file (expand-file-name "~/.ov5/sentry-key")))
+        (when (file-exists-p key-file)
+          (ignore-errors
+            (with-temp-buffer
+              (insert-file-contents key-file)
+              (string-trim (buffer-string))))))))
 
 (defun gptel-auto-workflow--infer-service-from-target (target)
   "Infer service name from TARGET file path.
@@ -139,60 +177,187 @@ Returns float 0.0-1.0 representing error rate."
         (min 1.0 (/ rate 1000.0)))
     0.0))
 
-(defun gptel-auto-workflow--query-user-feedback (_target)
+(defun gptel-auto-workflow--query-user-feedback (target)
   "Query user feedback system for TARGET.
 Returns satisfaction delta: -1.0 (worse) to +1.0 (better).
-Stub implementation - returns 0.0 until feedback system is integrated."
-  ;; TODO: Integrate with Slack, GitHub issues, or custom feedback API
-  ;; For now, return neutral delta
-  0.0)
 
-(defun gptel-auto-workflow--query-support-tickets (_target)
+Layered sensor approach (per YC Vision — local-first):
+1. External user hook (`gptel-auto-workflow--external-user-feedback-fn') if set
+2. Full-sensor-pipeline from gptel-auto-workflow-external-sensors
+3. Local gh CLI fallback (issues mentioning target)
+4. Neutral 0.0 fallback"
+  (or (and (boundp 'gptel-auto-workflow--external-user-feedback-fn)
+           (functionp gptel-auto-workflow--external-user-feedback-fn)
+           (ignore-errors
+             (funcall gptel-auto-workflow--external-user-feedback-fn target)))
+      (condition-case nil
+          (when (fboundp 'gptel-auto-workflow--feedback-configured-p)
+            (when (gptel-auto-workflow--feedback-configured-p)
+              (let* ((feedback (gptel-auto-workflow--collect-user-feedback
+                                (file-name-nondirectory (or target ""))))
+                     (satisfaction (and feedback (plist-get feedback :satisfaction-rate))))
+                (when (and satisfaction (> satisfaction 0.0))
+                  ;; Normalize: 0.5 = neutral, above = positive, below = negative
+                  (* 2.0 (- satisfaction 0.5))))))
+        (error 0.0))
+      ;; Local fallback: gh CLI for issue count
+      (let* ((basename (and (stringp target) (file-name-nondirectory target)))
+             (root (or (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
+                            (gptel-auto-workflow--expand-workspace-path ""))
+                       default-directory))
+             (delta 0.0))
+        (when (and basename (executable-find "gh") root)
+          (condition-case nil
+              (with-temp-buffer
+                ;; Count issues mentioning this target in last 30 days
+                (call-process "gh" nil t nil
+                              "issue" "list"
+                              "--repo" (or (and (boundp 'gptel-auto-workflow--github-repo)
+                                                 gptel-auto-workflow--github-repo)
+                                            "davidwuchn/minimal-emacs.d")
+                              "--search" basename
+                              "--state" "all"
+                              "--limit" "50"
+                              "--json" "createdAt")
+                (goto-char (point-min))
+                (let* ((json-array-type 'list)
+                       (json-object-type 'plist)
+                       (issues (ignore-errors (json-parse-buffer)))
+                       (total (length issues))
+                       (open-count 0))
+                  (dolist (issue issues)
+                    (let* ((state (plist-get issue :state))
+                           (created (plist-get issue :createdAt)))
+                      (when (and (string= state "OPEN") created)
+                        (setq open-count (1+ open-count)))))
+                  ;; Open issues = negative signal; many open = satisfaction drop
+                  (setq delta (if (> total 0)
+                                  (- (/ (float open-count) (max 1 total)) 0.5)
+                                0.0))
+                  (setq delta (max -1.0 (min 1.0 delta)))))
+            (error nil)))
+        delta)
+      ;; Neutral fallback
+      0.0))
+
+(defun gptel-auto-workflow--query-support-tickets (target)
   "Query support ticket system for TARGET.
 Returns number of tickets reduced (integer, 0-N).
-Stub implementation - returns 0 until ticket system is integrated."
-  ;; TODO: Integrate with Zendesk, Freshdesk, or custom ticket API
-  ;; For now, return 0 tickets reduced
-  0)
 
-(defun gptel-auto-workflow--track-production-impact (target _experiment-id)
+Layered sensor approach (per YC Vision — local-first):
+1. External user hook (`gptel-auto-workflow--external-support-tickets-fn') if set
+2. Full-sensor-pipeline from gptel-auto-workflow-external-sensors (closed issues)
+3. Local error-log scan (count hits in var/log/)
+4. 0 fallback"
+  (or (and (boundp 'gptel-auto-workflow--external-support-tickets-fn)
+           (functionp gptel-auto-workflow--external-support-tickets-fn)
+           (ignore-errors
+             (funcall gptel-auto-workflow--external-support-tickets-fn target)))
+      (condition-case nil
+          (when (fboundp 'gptel-auto-workflow--github-sensor-collect)
+            (let ((gh-data (gptel-auto-workflow--github-sensor-collect)))
+              (when gh-data
+                (plist-get gh-data :closed-issues))))
+        (error 0))
+      ;; Local fallback: count error log hits
+      (let* ((basename (and (stringp target) (file-name-nondirectory target)))
+             (root (or (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
+                            (gptel-auto-workflow--expand-workspace-path ""))
+                       default-directory))
+             (error-log-dir (expand-file-name "var/log/" root))
+             (recent-errors 0))
+        (when (and basename (file-directory-p error-log-dir))
+          (condition-case nil
+              (cl-block count-errors
+                (dolist (log (seq-take (sort (directory-files error-log-dir t "\\.log\\'")
+                                            (lambda (a b)
+                                              (time-less-p (nth 5 (file-attributes b))
+                                                           (nth 5 (file-attributes a)))))
+                                      20))
+                  (ignore-errors
+                    (with-temp-buffer
+                      (insert-file-contents log nil 0 50000)
+                      (goto-char (point-min))
+                      (when (re-search-forward (regexp-quote basename) nil t)
+                        (cl-incf recent-errors)
+                        (when (> recent-errors 50) (cl-return-from count-errors)))))))
+            (error nil)))
+        ;; Each unique error log hit = 1 ticket proxy. Cap at 10 for sanity.
+        (min 10 recent-errors))
+      ;; 0 fallback
+      0))
+
+(defun gptel-auto-workflow--track-production-impact (target experiment-id)
   "Track production impact for TARGET experiment.
 EXPERIMENT-ID: unique identifier for this experiment.
 Returns plist with production metrics for TSV columns 33-39.
-Uses external APIs when available, falls back to local signals."
-  (let* ((metrics (or (gptel-auto-workflow--query-sentry-errors target) '()))
-         (error-before (or (plist-get metrics :before-rate) 0.0))
-         (error-after (or (plist-get metrics :after-rate) 0.0))
-         (error-delta (if (plist-get metrics :before-rate)
-                          (- error-after error-before)
-                        0.0))
-         (satisfaction-delta (gptel-auto-workflow--query-user-feedback target))
-         (tickets-reduced (gptel-auto-workflow--query-support-tickets target))
-         ;; When no external metrics available, compute from local signals
-         (local-metrics (when (and (= error-delta 0.0)
-                                   (= satisfaction-delta 0.0)
-                                   (= tickets-reduced 0))
-                          (gptel-auto-workflow--compute-local-business-value target)))
-         (business-value (or (and local-metrics (plist-get local-metrics :business-value-score))
-                             (gptel-auto-workflow--calculate-business-value
-                              error-delta satisfaction-delta tickets-reduced)))
-         (risk-score (or (and local-metrics (plist-get local-metrics :risk-score))
-                         (gptel-auto-workflow--calculate-production-risk-score
-                          error-delta satisfaction-delta tickets-reduced))))
-    (list :prod-error-rate-before error-before
-          :prod-error-rate-after error-after
-          :prod-error-rate-delta error-delta
-          :user-satisfaction-delta (or (and local-metrics (plist-get local-metrics :user-satisfaction-delta))
-                                       satisfaction-delta)
-          :support-tickets-reduced (or (and local-metrics (plist-get local-metrics :support-tickets-reduced))
-                                       tickets-reduced)
-          :business-value-score business-value
-          :risk-score risk-score)))
+Prefers full-sensor-pipeline from external-sensors when available
+(richer data: Sentry errors + performance + feedback + business value),
+falls back to individual queries, then to local signals.
+Local signals are ALWAYS tried when target resolves to an existing file."
+  (let* ((sensor-result
+          (condition-case nil
+              (when (fboundp 'gptel-auto-workflow--full-sensor-pipeline)
+                (gptel-auto-workflow--full-sensor-pipeline
+                 (file-name-nondirectory (or target "")) experiment-id))
+            (error nil)))
+         (sensor-bv (and sensor-result (plist-get sensor-result :business-value-score))))
+    (if (and sensor-result (> (or sensor-bv 0.0) 0.0))
+        ;; Rich path: full sensor pipeline returned real data
+        (let* ((error-impact (plist-get sensor-result :error-rate-impact))
+               (feedback (plist-get sensor-result :user-feedback))
+               (error-delta (or (plist-get error-impact :error-rate-improvement-pct) 0.0))
+               (satisfaction-delta (or (plist-get feedback :satisfaction-rate) 0.0)))
+          (list :prod-error-rate-before (or (plist-get error-impact :before-rate) 0.0)
+                :prod-error-rate-after (or (plist-get error-impact :after-rate) 0.0)
+                :prod-error-rate-delta error-delta
+                :user-satisfaction-delta satisfaction-delta
+                :support-tickets-reduced 0
+                :business-value-score (or sensor-bv 0.0)
+                :risk-score (gptel-auto-workflow--calculate-production-risk-score
+                             error-delta satisfaction-delta 0)))
+      ;; Fallback path: individual queries + local signals
+      ;; Local signals always tried when target is a real file (Pi5 evolution)
+      (let* ((metrics (or (gptel-auto-workflow--query-sentry-errors target) '()))
+             (error-before (or (plist-get metrics :before-rate) 0.0))
+             (error-after (or (plist-get metrics :after-rate) 0.0))
+             (error-delta (if (plist-get metrics :before-rate)
+                              (- error-after error-before)
+                            0.0))
+             (satisfaction-delta (gptel-auto-workflow--query-user-feedback target))
+             (tickets-reduced (gptel-auto-workflow--query-support-tickets target))
+             (root (or (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
+                            (gptel-auto-workflow--expand-workspace-path ""))
+                       default-directory))
+             (abs-target (when (and target (stringp target))
+                           (if (file-name-absolute-p target) target
+                             (expand-file-name target root))))
+             (local-metrics (when (or (and (= error-delta 0.0)
+                                           (= satisfaction-delta 0.0)
+                                           (= tickets-reduced 0))
+                                      (and abs-target (file-exists-p abs-target)))
+                              (gptel-auto-workflow--compute-local-business-value target)))
+             (business-value (or (and local-metrics (plist-get local-metrics :business-value-score))
+                                 (gptel-auto-workflow--calculate-business-value
+                                  error-delta satisfaction-delta tickets-reduced)))
+             (risk-score (or (and local-metrics (plist-get local-metrics :risk-score))
+                             (gptel-auto-workflow--calculate-production-risk-score
+                              error-delta satisfaction-delta tickets-reduced))))
+        (list :prod-error-rate-before error-before
+              :prod-error-rate-after error-after
+              :prod-error-rate-delta error-delta
+              :user-satisfaction-delta (or (and local-metrics (plist-get local-metrics :user-satisfaction-delta))
+                                           satisfaction-delta)
+              :support-tickets-reduced (or (and local-metrics (plist-get local-metrics :support-tickets-reduced))
+                                           tickets-reduced)
+              :business-value-score business-value
+              :risk-score risk-score)))))
 
 (defun gptel-auto-workflow--compute-local-business-value (target)
   "Compute business value from LOCAL signals when external APIs are unavailable.
 Analyzes Emacs error logs, byte-compile warnings, and test results for TARGET.
-Returns plist with :business-value-score, :risk-score, :user-satisfaction-delta, :support-tickets-reduced.
+Returns plist with :business-value-score, :risk-score,
+:user-satisfaction-delta, :support-tickets-reduced.
 
 Business value heuristics:
   +0.3  Fix for a function that appears in recent error logs
@@ -201,17 +366,27 @@ Business value heuristics:
   +0.1  Target is >500 lines (complexity reduction valuable)
   -0.3  Target has no known issues (change is low value)
   -0.2  Change is a trivial nil guard on already-safe code"
-  (when (and target (stringp target) (file-exists-p target))
-    (let* ((target-basename (file-name-nondirectory target))
+  (when (and target (stringp target))
+    ;; Resolve target to absolute path: try as-is, then relative to workspace root
+    (let* ((root (or (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
+                          (gptel-auto-workflow--expand-workspace-path ""))
+                     default-directory))
+           (abs-target (cond
+                        ((file-name-absolute-p target) target)
+                        ((file-exists-p target) (expand-file-name target))
+                        (t (expand-file-name target root))))
+           (file-exists (file-exists-p abs-target))
+           (target-basename (file-name-nondirectory target))
            (value 0.0)
            (risk 0.2)  ; baseline: no measurable improvement
 
            ;; Signal 1: Does this target appear in recent Emacs error logs?
-           (error-log-dir (expand-file-name "var/log/" (gptel-auto-workflow--expand-workspace-path "")))
-           (recent-logs (when (file-directory-p error-log-dir)
-                          (directory-files error-log-dir t "\\.log\\'"
-                                           nil (lambda (a b) (time-less-p (nth 5 (file-attributes b))
-                                                                            (nth 5 (file-attributes a)))))))
+            (error-log-dir (expand-file-name "var/log/" root))
+            (recent-logs (when (file-directory-p error-log-dir)
+                           (sort (directory-files error-log-dir t "\\.log\\'")
+                                 (lambda (a b)
+                                   (time-less-p (nth 5 (file-attributes b))
+                                                (nth 5 (file-attributes a)))))))
            (target-in-errors
             (cl-block check-logs
               (dolist (log (seq-take (or recent-logs '()) 20))  ; Check 20 most recent logs
@@ -224,18 +399,19 @@ Business value heuristics:
               nil))
 
            ;; Signal 2: Does the target have byte-compile warnings?
-           (bytecompile-output (ignore-errors
-                                 (with-temp-buffer
-                                   (call-process (expand-file-name invocation-name
-                                                                     invocation-directory)
-                                                 nil t nil
-                                                 "-Q" "--batch" "-f" "batch-byte-compile" target)
-                                   (buffer-string))))
+           (bytecompile-output (when file-exists
+                                 (ignore-errors
+                                   (with-temp-buffer
+                                     (call-process (expand-file-name invocation-name
+                                                                       invocation-directory)
+                                                   nil t nil
+                                                   "-Q" "--batch" "-f" "batch-byte-compile" abs-target)
+                                     (buffer-string)))))
            (has-warnings (and bytecompile-output
                               (string-match-p "Warning\\|warning" bytecompile-output)))
 
            ;; Signal 3: Does the target have ERT tests?
-           (test-dir (expand-file-name "tests/" (gptel-auto-workflow--expand-workspace-path "")))
+           (test-dir (expand-file-name "tests/" root))
            (has-tests (when (file-directory-p test-dir)
                         (cl-block find-test
                           (dolist (f (directory-files test-dir t "\\.el\\'"))
@@ -249,7 +425,9 @@ Business value heuristics:
                           nil)))
 
            ;; Signal 4: Target file size (complexity proxy)
-           (target-size (or (ignore-errors (file-attribute-size (file-attributes target))) 0))
+           (target-size (if file-exists
+                            (or (ignore-errors (file-attribute-size (file-attributes abs-target))) 0)
+                          0))
            (is-complex (> target-size 20000)))  ; >20KB
 
       ;; Accumulate business value
@@ -336,6 +514,19 @@ Returns :auto (risk < 0.3), :recommend (0.3-0.7), or :required (> 0.7)."
      ((< risk 0.3) :auto)
      ((< risk 0.7) :recommend)
      (t :required))))
+
+(defun gptel-auto-workflow--weight-score-with-production-metrics (score target)
+  "Weight SCORE with production metrics for TARGET.
+Business-value-score boosts effective-score; risk-score penalizes it.
+Formula: effective = score + (business-value * weight) - (risk * weight)
+Returns weighted score, or original SCORE if production metrics unavailable."
+  (if-let* ((metrics (gptel-auto-workflow--get-production-metrics target))
+            (bv (plist-get metrics :business-value-score))
+            (risk (plist-get metrics :risk-score)))
+      (let ((boost (* bv gptel-auto-workflow-production-weight-business-value))
+            (penalty (* risk gptel-auto-workflow-production-weight-risk-penalty)))
+        (max 0.0 (min 1.0 (+ score boost (- penalty)))))
+    score))
 
 (provide 'gptel-auto-workflow-production-metrics)
 

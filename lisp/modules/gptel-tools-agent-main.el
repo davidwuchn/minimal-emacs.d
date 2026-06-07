@@ -2,6 +2,9 @@
 ;; Part of gptel-tools-agent split
 
 (require 'cl-lib)
+;; Optional: monitoring-agent may not be available in all environments
+;; If it fails to load, monitoring-cycle is silently skipped via fboundp guards
+(ignore-errors (require 'gptel-auto-workflow-monitoring-agent))
 
 (declare-function gptel-auto-workflow--plist-get "gptel-tools-agent-base")
 (declare-function gptel-knowledge--frontier-select-targets "gptel-auto-workflow-knowledge-reasoning")
@@ -999,7 +1002,7 @@ staging or main are deleted."
                       (gptel-auto-workflow--with-skipped-submodule-sync
                        (lambda ()
                          (gptel-auto-workflow--git-result delete-command 180)))))
-                (if (= 0 (cdr delete-result))
+                (if (= 0 (or (cdr delete-result) -1))
                     (cl-incf deleted (length batch))
                   (message "[auto-workflow] Failed to delete remote optimize branches %s: %s"
                            (mapconcat #'identity batch ", ")
@@ -1011,7 +1014,7 @@ staging or main are deleted."
                  (gptel-auto-workflow--git-result
                   (format "git remote prune %s" remote)
                   180)))
-            (if (= 0 (cdr prune-result))
+            (if (= 0 (or (cdr prune-result) -1))
                 (let* ((tracking-after
                         (length
                          (gptel-auto-workflow--remote-tracking-optimize-branches
@@ -1330,8 +1333,17 @@ into staging or main."
                                           (plist-get dialectic :forced-action))
                                  (when (eq (plist-get dialectic :forced-action) :backend-swap)
                                    (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
-                                   (message "[dialectic] Forced backend swap for next target")))))
-                           (gptel-auto-workflow--persist-status)
+(message "[dialectic] Forced backend swap for next target")))))
+                            ;; After-experiment hook: monitoring agent and post-batch analysis
+                            ;; Monitoring agent registers itself in this hook via:
+                            ;; (add-hook 'gptel-auto-workflow-after-experiment-hook
+                            ;;           #'gptel-auto-workflow--monitoring-cycle)
+                            (condition-case err
+                                (run-hooks 'gptel-auto-workflow-after-experiment-hook)
+                              (error
+                               (message "[monitoring] Post-batch hook error: %s"
+                                        (error-message-string err))))
+                            (gptel-auto-workflow--persist-status)
                            (if gptel-auto-experiment--quota-exhausted
                                  (progn
                                    (message "[auto-workflow] Provider quota exhausted for %s; continuing with remaining targets"

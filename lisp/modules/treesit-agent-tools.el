@@ -16,7 +16,8 @@
 
 (defun treesit-agent--get-defun-regexp ()
   "Get the appropriate defun type regexp for the current buffer.
-Provides fallback regexps for languages that don't set treesit-defun-type-regexp."
+Provides fallback regexps for languages that don't set
+treesit-defun-type-regexp."
   (or (bound-and-true-p treesit-defun-type-regexp)
       ;; Fallback for Elisp (regexp matches node type string, not a query)
       (and (derived-mode-p 'emacs-lisp-mode 'emacs-lisp-ts-mode)
@@ -35,10 +36,12 @@ Provides fallback regexps for languages that don't set treesit-defun-type-regexp
            "\\(?:class\\|method\\|constructor\\|enum\\|interface\\|record\\)_declaration")
       ;; Fallback for C (function, struct, enum, union, type_definition)
       (and (treesit-agent--has-parser-language-p 'c)
-           "\\(?:function_definition\\|struct_specifier\\|enum_specifier\\|union_specifier\\|type_definition\\)")
+           "
+\\(?:function_definition\\|struct_specifier\\|enum_specifier\\|union_specifier\\|type_definition\\)")
       ;; Fallback for C++ (adds class_specifier and namespace_definition)
       (and (treesit-agent--has-parser-language-p 'cpp)
-           "\\(?:function_definition\\|class_specifier\\|struct_specifier\\|enum_specifier\\|union_specifier\\|namespace_definition\\|type_definition\\)")
+           "
+\\(?:function_definition\\|class_specifier\\|struct_specifier\\|enum_specifier\\|union_specifier\\|namespace_definition\\|type_definition\\)")
       ;; Fallback for Lua (function_declaration only — name field handles extraction)
       (and (treesit-agent--has-parser-language-p 'lua)
            "function_declaration")))
@@ -163,7 +166,8 @@ Throws an error if the replacement results in invalid syntax."
             (when (and root (treesit-node-check root 'has-error))
               ;; Emacs tree-sitter will automatically update the tree upon buffer edit.
               ;; If the new tree has an error, we signal it.
-              (error "AST Replacement rejected: The new code introduced a syntax error (unbalanced parentheses or invalid grammar)")))
+              (error "AST Replacement rejected: The new code introduced a syntax error (unbalanced
+parentheses or invalid grammar)")))
           t)
       nil)))
 

@@ -215,13 +215,104 @@
 
 ;; Test 10: Stub implementations return safe defaults
 (ert-deftest test-production-metrics/stub-implementations-return-defaults ()
-  "Stub implementations should return safe default values."
-  ;; User feedback stub should return 0.0 (neutral)
-  (should (= 0.0 (gptel-auto-workflow--query-user-feedback
-                  "lisp/modules/test.el")))
-  ;; Support tickets stub should return 0
-  (should (= 0 (gptel-auto-workflow--query-support-tickets
-                "lisp/modules/test.el"))))
+  "Sensor fallbacks return safe values when external hooks unavailable.
+Returns a number in safe range without raising errors."
+  ;; User feedback: no external hook, no gh CLI, returns 0.0 (neutral)
+  (let ((gptel-auto-workflow--external-user-feedback-fn nil))
+    (let ((result (gptel-auto-workflow--query-user-feedback
+                   "lisp/modules/nonexistent-target-zzz.el")))
+      ;; Returns a valid float in [-1.0, 1.0] (neutral 0.0 expected when gh missing)
+      (should (and (numberp result)
+                   (>= result -1.0)
+                   (<= result 1.0)))))
+  ;; Support tickets: no external hook, returns integer in [0, 10]
+  (let ((gptel-auto-workflow--external-support-tickets-fn nil))
+    (let ((result (gptel-auto-workflow--query-support-tickets
+                   "lisp/modules/nonexistent-target-zzz.el")))
+      (should (and (integerp result)
+                   (>= result 0)
+                   (<= result 10))))))
+
+;; Test 11: Production-weighted scoring boosts effective-score
+(ert-deftest test-production-metrics/weight-score-boosts ()
+  "Business-value-score should boost effective-score above raw score."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--get-production-metrics)
+             (lambda (_target)
+               (list :business-value-score 0.8 :risk-score 0.1))))
+    (let ((weighted (gptel-auto-workflow--weight-score-with-production-metrics 0.5 "test-target")))
+      (should (> weighted 0.5))
+      ;; Boost = 0.8 * 0.3 = 0.24, Penalty = 0.1 * 0.5 = 0.05, Net = +0.19
+      (should (< (abs (- weighted 0.69)) 0.001))))
+
+  ;; When risk dominates, score should decrease
+  (cl-letf (((symbol-function 'gptel-auto-workflow--get-production-metrics)
+             (lambda (_target)
+               (list :business-value-score 0.1 :risk-score 0.8))))
+    (let ((weighted (gptel-auto-workflow--weight-score-with-production-metrics 0.5 "test-target")))
+      (should (< weighted 0.5))
+      ;; Boost = 0.1 * 0.3 = 0.03, Penalty = 0.8 * 0.5 = 0.40, Net = -0.37
+      (should (< (abs (- weighted 0.13)) 0.001)))))
+
+;; Test 12: Production-weighted scoring fallback when no metrics
+(ert-deftest test-production-metrics/weight-score-fallback-no-metrics ()
+  "Should return raw score unchanged when production metrics unavailable."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--get-production-metrics)
+             (lambda (_target) nil)))
+    (should (= 0.7 (gptel-auto-workflow--weight-score-with-production-metrics 0.7 "test-target")))))
+
+;; Test 13: Production-weighted scoring configurable weights
+(ert-deftest test-production-metrics/weight-score-configurable ()
+  "Zero weights should result in no adjustment to effective-score."
+  (let ((orig-bv gptel-auto-workflow-production-weight-business-value)
+        (orig-risk gptel-auto-workflow-production-weight-risk-penalty))
+    (unwind-protect
+        (progn
+          (setq gptel-auto-workflow-production-weight-business-value 0.0)
+          (setq gptel-auto-workflow-production-weight-risk-penalty 0.0)
+          (cl-letf (((symbol-function 'gptel-auto-workflow--get-production-metrics)
+                     (lambda (_target)
+                       (list :business-value-score 0.8 :risk-score 0.8))))
+            (should (= 0.5 (gptel-auto-workflow--weight-score-with-production-metrics 0.5 "test-target")))))
+      (setq gptel-auto-workflow-production-weight-business-value orig-bv)
+      (setq gptel-auto-workflow-production-weight-risk-penalty orig-risk))))
+
+;; Test 14: Production-weighted scoring symmetrical at equal weights
+(ert-deftest test-production-metrics/weight-score-symmetry ()
+  "Equal business-value and risk at equal weights should cancel out."
+  (let ((orig-bv gptel-auto-workflow-production-weight-business-value)
+        (orig-risk gptel-auto-workflow-production-weight-risk-penalty))
+    (unwind-protect
+        (progn
+          (setq gptel-auto-workflow-production-weight-business-value 0.5)
+          (setq gptel-auto-workflow-production-weight-risk-penalty 0.5)
+          (cl-letf (((symbol-function 'gptel-auto-workflow--get-production-metrics)
+                     (lambda (_target)
+                       (list :business-value-score 0.5 :risk-score 0.5))))
+            (should (= 0.5 (gptel-auto-workflow--weight-score-with-production-metrics 0.5 "test-target")))))
+      (setq gptel-auto-workflow-production-weight-business-value orig-bv)
+      (setq gptel-auto-workflow-production-weight-risk-penalty orig-risk))))
+
+;; Test 15: Weighted score should never go negative even with extreme risk
+(ert-deftest test-production-metrics/weight-score-clamped-non-negative ()
+  "Weighted score should be clamped to [0.0, 1.0] — never negative."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--get-production-metrics)
+             (lambda (_target)
+               (list :business-value-score 0.0 :risk-score 1.0))))
+    ;; Low score + max risk + no business value → would be -0.5 without clamp
+    (let ((weighted (gptel-auto-workflow--weight-score-with-production-metrics 0.1 "test-target")))
+      (should (>= weighted 0.0))
+      (should (<= weighted 1.0)))))
+
+;; Test 16: Weighted score should not exceed 1.0
+(ert-deftest test-production-metrics/weight-score-clamped-max-1 ()
+  "Weighted score should be clamped to [0.0, 1.0] — never above 1.0."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--get-production-metrics)
+             (lambda (_target)
+               (list :business-value-score 1.0 :risk-score 0.0))))
+    ;; 0.9 score + max boost → would be 1.2 without clamp
+    (let ((weighted (gptel-auto-workflow--weight-score-with-production-metrics 0.9 "test-target")))
+      (should (>= weighted 0.0))
+      (should (<= weighted 1.0)))))
 
 (provide 'test-gptel-auto-workflow-production-metrics)
 

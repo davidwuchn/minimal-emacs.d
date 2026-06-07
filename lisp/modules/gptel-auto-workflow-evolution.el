@@ -22,6 +22,11 @@
 ;; Soft require: knowledge-reasoning provides causal analysis and gap detection
 (require 'gptel-auto-workflow-knowledge-reasoning nil t)
 
+;; Forward declarations — defined in gptel-tools-agent-base (loaded before
+;; this module via post-init's init-ai chain).  These silence the byte-compiler
+;; warning while preserving the runtime dependency contract.
+(declare-function gptel-auto-workflow--expand-workspace-path "gptel-tools-agent-base" (path &optional root))
+
 ;; External functions from other modules
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base" ())
 (declare-function gptel-auto-workflow--json-encode-plist "gptel-auto-workflow-ontology-router" (plist))
@@ -53,8 +58,8 @@
      :location "var/tmp/evolution/" :persistence nil :max-items 50)
     (:layer "long-term" :description "Vector similarity search (git-embed)"
      :location "git-embed index" :persistence t :backend "git-embed")
-    (:layer "structured" :description "Knowledge pages + Allium specs"
-     :location "mementum/knowledge/" :persistence t :format "markdown + allium")
+    (:layer "structured" :description "Knowledge pages + Allium specs + research insights"
+     :location "mementum/knowledge/ + var/knowledge/" :persistence t :format "markdown + allium")
     (:layer "temporal" :description "Git-based timeline, experiment TSV history"
      :location "git log + var/tmp/experiments/" :persistence t :format "git + tsv"))
   "Four-layer AgentMemory architecture.
@@ -91,6 +96,23 @@ Layer 4: temporal git and experiment index.")
 (declare-function gptel-auto-experiment--kibcm-axis "gptel-tools-agent-prompt-build" (hypothesis))
 
 ;; ─── Helpers ───
+
+(defun gptel-auto-workflow--sanitize-llm-output (text &optional summary)
+  "Sanitize TEXT from raw LLM output before inserting into prompts or files.
+Detects raw tool-result Lisp structs (e.g. from gptel callbacks) and
+replaces them with a readable SUMMARY string (default: count-based).
+Returns sanitized TEXT."
+  (if (not (stringp text))
+      (or summary "")
+    (if (string-match-p "(tool-result\\|(#s(gptel-tool\\|#s(" text)
+        (let* ((issue-count 0)
+               (_ (with-temp-buffer
+                    (insert text)
+                    (goto-char (point-min))
+                    (while (re-search-forward "(tool-result\\|(#s(gptel-tool" nil t)
+                      (cl-incf issue-count)))))
+          (or summary (format "(%d raw tool outputs suppressed)" issue-count)))
+      text)))
 
 (defvar gptel-auto-workflow--allium-audit-last-run nil
   "Timestamp of last allium-audit run. Throttles API calls to 1/15min.")
@@ -1282,6 +1304,12 @@ Returns list of (file-path . cohesion-score) sorted by score ascending."
 
 ;; ─── Knowledge Synthesis ───
 
+(defun gptel-auto-workflow--research-insights-dir ()
+  "Return the directory for auto-generated research-insights files.
+Uses var/knowledge/ (gitignored) to avoid cross-machine merge conflicts.
+Each machine generates insights from its own TSV experiment data."
+  (expand-file-name "var/knowledge" (gptel-auto-workflow--worktree-base-root)))
+
 (defun gptel-auto-workflow--synthesize-research-knowledge (strategy results)
   "Synthesize knowledge page for research STRATEGY from RESULTS.
 Returns t if page created."
@@ -1295,8 +1323,7 @@ Returns t if page created."
          (failed (cl-count-if (lambda (r) (equal (plist-get r :decision) "validation-failed")) results))
          (keep-rate (if (> total 0) (/ (float kept) total) 0.0))
          (safe-strategy (gptel-auto-workflow--sanitize-strategy-name-for-filename strategy-name))
-         (knowledge-dir (expand-file-name "mementum/knowledge"
-                                            (gptel-auto-workflow--worktree-base-root)))
+         (knowledge-dir (gptel-auto-workflow--research-insights-dir))
          (knowledge-file (expand-file-name
                           (format "research-insights-%s.md" safe-strategy)
                           knowledge-dir))
@@ -1445,8 +1472,7 @@ Creates/updates knowledge pages per research strategy."
 Writes to var/tmp/evolution/findings.md."
   (let* ((evolution-dir (expand-file-name "var/tmp/evolution"
                                           (gptel-auto-workflow--worktree-base-root)))
-         (knowledge-dir (expand-file-name "mementum/knowledge"
-                                         (gptel-auto-workflow--worktree-base-root)))
+         (knowledge-dir (gptel-auto-workflow--research-insights-dir))
          (skill-file (expand-file-name "findings.md" evolution-dir))
          (knowledge-files (when (file-directory-p knowledge-dir)
                             (directory-files knowledge-dir t "research-insights-.+\\.md$")))
@@ -1517,7 +1543,7 @@ Writes to var/tmp/evolution/findings.md."
                                     ;; Strip LLM thinking/meta-commentary blocks
                                     ;; These pollute findings with raw agent reasoning
                                     (goto-char (point-min))
-                                    (while (re-search-forward "^The user is \\|^Looking at the \\|^I need to \\|^But wait \\|^Actually,? \\|^Let me \\(?:carefully\\|think about\\|re-?read\\) \\|^Hmm,? \\|^Wait,? \\|^OK,? \\|^So (?:the \\|I\\)\\|I'm (?:going to\\|not sure\\|going\\)\\|^This (?:is\\|means\\|would\\|approach\\) " nil t)
+                                    (while (re-search-forward "^\\(?:The user is \\|Looking at the \\|I need to \\|But wait \\|Actually,? \\|Let me \\(?:carefully\\|think about\\|re-?read\\) \\|Hmm,? \\|Wait,? \\|OK,? \\|So \\(?:the \\|I\\)\\|I'm \\(?:going to\\|not sure\\|going\\)\\|This \\(?:is\\|means\\|would\\|approach\\) \\)" nil t)
                                       (delete-region (line-beginning-position) (line-beginning-position 2)))
                                     ;; Strip lines that are clearly agent self-talk
                                     (goto-char (point-min))
@@ -2169,6 +2195,58 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   ;; Ensure required modules are loaded before evolution checks
   (mapc (lambda (m) (require m nil t))
         '(gptel-tools-agent-base gptel-tools-agent-main))
+  ;; ─── Production Cycle Pre-steps (monitoring → approval → disposable → regeneration) ───
+  ;; These run before the main evolution steps so the cycle has fresh monitoring data,
+  ;; approved proposals applied, and disposable modules identified for regeneration.
+  ;; Uses fboundp guards — safe no-ops when modules aren't loaded (e.g., interactive sessions).
+  ;; Wire monitoring agent into evolution cycle (Phase 2: Monitoring Agent)
+  (when (fboundp 'gptel-auto-workflow--monitoring-cycle)
+    (condition-case nil
+        (gptel-auto-workflow--monitoring-cycle)
+      (error nil)))
+  ;; Execute approved proposals from approval queue (Layer 2 Policy: close the loop)
+  ;; First: auto-approve recurring proposals (>3 duplicates for same target)
+  (when (fboundp 'gptel-auto-workflow-approval-queue-auto-approve-recurring)
+    (condition-case nil
+        (let ((auto-approved
+               (gptel-auto-workflow-approval-queue-auto-approve-recurring)))
+          (when auto-approved
+            (message "[approval-queue] Auto-approved %d recurring proposals"
+                     (length auto-approved))))
+      (error nil)))
+  ;; Then: dedup remaining pending proposals (keep newest per target)
+  (when (fboundp 'gptel-auto-workflow-approval-queue-dedup)
+    (condition-case nil
+        (gptel-auto-workflow-approval-queue-dedup)
+      (error nil)))
+  ;; Finally: execute any approved proposals (from auto-approve or human review)
+  (when (fboundp 'gptel-auto-workflow-approval-queue-execute-approved)
+    (condition-case nil
+        (gptel-auto-workflow-approval-queue-execute-approved)
+      (error nil)))
+  ;; Identify disposable modules from context database (Layer 5 Learning)
+  (when (fboundp 'gptel-auto-workflow-disposable-auto-detect)
+    (condition-case nil
+        (let ((candidates (gptel-auto-workflow-disposable-auto-detect)))
+          (when candidates
+            (message "[disposable] Auto-detected %d disposable modules" (length candidates))))
+      (error nil)))
+  ;; Trigger code regeneration for top underperforming module (Layer 5 Learning)
+  (when (fboundp 'gptel-auto-workflow-code-regeneration--identify-candidates)
+    (condition-case nil
+        (let ((candidates (gptel-auto-workflow-code-regeneration--identify-candidates)))
+          (when candidates
+            (let ((top (car candidates)))
+              (message "[regeneration] Top candidate: %s (delta: %.2f, history: %d)"
+                       (plist-get top :module)
+                       (or (plist-get top :best-delta) 0.0)
+                       (or (plist-get top :history-count) 0))
+               (when (fboundp 'gptel-auto-workflow-code-regeneration--full-workflow)
+                 (gptel-auto-workflow-code-regeneration--full-workflow
+                  (plist-get top :module)
+                  nil
+                  (plist-get top :current-best-model))))))
+      (error nil)))
   (condition-case nil
       (let ((new-experiments (or (gptel-auto-workflow--evolution-count-new) 0))
             (has-research (and (getenv "PIPELINE_FINDINGS_FILE")
@@ -2471,7 +2549,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
     (error (message "[knowledge-diff] Diff failed: %s" (error-message-string err))))
   ;; Structural validation of knowledge pages (Semantica OntologyValidator)
   (condition-case nil
-      (let* ((kd (expand-file-name "mementum/knowledge" (gptel-auto-workflow--worktree-base-root)))
+      (let* ((kd (gptel-auto-workflow--research-insights-dir))
              (files (when (file-directory-p kd)
                       (directory-files kd t "research-insights-.+\\.md$"))))
         (when files
@@ -2578,6 +2656,11 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
           (message "[skill-graph] Evolution complete"))
       (error (message "[skill-graph] Evolution error: %s" (error-message-string err)))))
   (message "[auto-workflow] Self-evolution cycle complete.")
+  ;; Operational metrics report (YC Vision evidence)
+  (when (fboundp 'gptel-auto-workflow-operational-metrics-report)
+    (condition-case nil
+        (gptel-auto-workflow-operational-metrics-report)
+      (error nil)))
   ;; Emit machine-parseable RESULT for this cycle (AutoGo protocol)
   (condition-case nil
       (let* ((rate (gptel-auto-workflow--overall-keep-rate))
@@ -2893,7 +2976,7 @@ Returns plist with :name, :sections (list of heading names),
   "Diff knowledge pages against the last cycle snapshot.
 Returns plist with :added, :removed, :changed."
   (let* ((root (gptel-auto-workflow--worktree-base-root))
-         (kd (expand-file-name "mementum/knowledge" root))
+         (kd (gptel-auto-workflow--research-insights-dir))
          (snap-file (expand-file-name "var/tmp/evolution/knowledge-snapshot.el" root))
          (current-pages (when (file-directory-p kd)
                           (directory-files kd t "research-insights-.+\\.md$")))
@@ -3971,7 +4054,7 @@ Source repos are extracted from prefetched content patterns."
 (defun gptel-auto-workflow--build-inverted-file ()
   "Build inverted file from knowledge pages. Returns hash of token→page-ids."
   (clrhash gptel-auto-workflow--pattern-inverted-file)
-  (let* ((kd (expand-file-name "mementum/knowledge" (gptel-auto-workflow--worktree-base-root)))
+  (let* ((kd (gptel-auto-workflow--research-insights-dir))
          (files (when (file-directory-p kd) (directory-files kd t "research-insights-.+\\.md$"))))
     (dolist (f files)
       (let ((name (file-name-nondirectory f)))
@@ -4064,7 +4147,7 @@ signal)."
             (unless (string-match-p "^Research\|^Pre-Fetched\|^Source\|^Dynamic\|^Local\|Technique Name" technique)
               (push technique new-concepts))))
         ;; Check against existing knowledge pages for novelty
-        (let ((kd (expand-file-name "mementum/knowledge" root))
+        (let ((kd (gptel-auto-workflow--research-insights-dir))
               (novel nil))
           (when (file-directory-p kd)
             (let ((existing (mapconcat (lambda (f)
@@ -4555,7 +4638,7 @@ ISSUE-COUNT, SEVERITY, SCORE are from allium-quality-score."
                             (replace-regexp-in-string "[^[:alnum:]_-]" "-" strategy)))
            (specs-dir (expand-file-name "var/tmp/evolution/allium-specs" root))
            (issues-dir (expand-file-name "var/tmp/evolution/allium-issues" root))
-           (knowledge-dir (expand-file-name "mementum/knowledge" root))
+           (knowledge-dir (gptel-auto-workflow--research-insights-dir))
            (knowledge-file (expand-file-name
                             (format "research-insights-%s.md" safe-strategy)
                             knowledge-dir)))
@@ -4574,7 +4657,8 @@ ISSUE-COUNT, SEVERITY, SCORE are from allium-quality-score."
         (insert (format "**Issues:** %d | **Severity:** %.2f | **Score:** %.2f (lower=better)\n\n" issue-count severity score))
         (when (and (stringp issues) (> (length issues) 5))
           (insert "## Issue Details\n\n")
-          (insert issues)))
+          (insert (gptel-auto-workflow--sanitize-llm-output
+                   issues (format "(%d issues — raw tool output suppressed)" issue-count)))))
       ;; Append Allium spec appendix to knowledge page if it exists
       (when (file-exists-p knowledge-file)
         (condition-case nil
@@ -4593,8 +4677,12 @@ ISSUE-COUNT, SEVERITY, SCORE are from allium-quality-score."
               (insert "\n```\n\n")
               (when (and (stringp issues) (> (length issues) 5))
                 (insert "### Check Issues\n\n")
-                (insert (truncate-string-to-width issues 1500 nil nil "\n\n... (truncated)"))
-                (insert "\n"))
+                ;; Sanitize: skip raw tool-results (Lisp structs) that are not human-readable
+                (let ((sanitized-issues
+                       (gptel-auto-workflow--sanitize-llm-output
+                        issues (format "(%d issues — raw tool output suppressed)" issue-count))))
+                  (insert (truncate-string-to-width sanitized-issues 1500 nil nil "\n\n... (truncated)"))
+                  (insert "\n")))
                (write-region (point-min) (point-max) knowledge-file))
           (error
            (message "[allium-persist] Failed to update knowledge page for %s" safe-strategy))))
@@ -4621,7 +4709,8 @@ Returns markdown grouped by strategy, or an empty string."
                     (when (time-less-p
                            (time-subtract (current-time) (days-to-time 7))
                            mtime)
-                      (let ((content (buffer-string)))
+                      (let* ((raw-content (buffer-string))
+                             (content (gptel-auto-workflow--sanitize-llm-output raw-content)))
                         (when (and content (> (length content) 20))
                           (push content result))))))
               (error nil))))
@@ -5046,10 +5135,10 @@ effective +0.10, promising +0.05, underperforming -0.05."
             :class-count (hash-table-count classes) :instance-count (hash-table-count instances) :weighted t))))
 
 (defun gptel-auto-workflow--mementum-confidence-factor (strategy-name)
-  "Read mementum knowledge page confidence for STRATEGY-NAME."
-  (let* ((root (gptel-auto-workflow--worktree-base-root))
-         (page (and root (expand-file-name (format "research-insights-%s.md" strategy-name)
-                                           (expand-file-name "mementum/knowledge" root)))))
+  "Read research-insights confidence for STRATEGY-NAME."
+  (let* ((insights-dir (gptel-auto-workflow--research-insights-dir))
+         (page (expand-file-name (format "research-insights-%s.md" strategy-name)
+                                 insights-dir)))
     (if (and page (file-readable-p page))
         (with-temp-buffer (insert-file-contents page) (goto-char (point-min))
           (if (re-search-forward "^confidence:\\s-*\\([0-9.]+\\)" nil t)
@@ -5071,10 +5160,16 @@ effective +0.10, promising +0.05, underperforming -0.05."
                         (t (format "Try %s x %s" (plist-get alt-target :name) (plist-get alt-strategy :name)))))))
 
 ;; 7. VSM ACTIONS → REPAIR: consumer for stored vsm-actions
+(defun gptel-auto-workflow--ensure-list (val)
+  "Return VAL as a list if it's a vector, otherwise return VAL unchanged.
+Fixes listp errors when JSON arrays are read as vectors."
+  (if (vectorp val) (append val nil) val))
+
 (defun gptel-auto-workflow--consume-vsm-actions ()
   "Read stored VSM actions from evolution-next-cycle-hints and trigger repairs."
   (when (boundp 'gptel-auto-workflow--evolution-next-cycle-hints)
-    (let ((actions (plist-get gptel-auto-workflow--evolution-next-cycle-hints :vsm-actions)))
+    (let ((actions (gptel-auto-workflow--ensure-list
+                    (plist-get gptel-auto-workflow--evolution-next-cycle-hints :vsm-actions))))
       (dolist (action actions)
         (pcase (car action)
           ('increase-strategy-evolution
@@ -5426,14 +5521,14 @@ Uncategorized targets pass through (counted against :other quota)."
           (plist-put gptel-auto-workflow--evolution-next-cycle-hints
                      :vsm-actions (append (plist-get vsm-actions :actions)
                                           expanded-actions)))
-    ;; Log
-    (dolist (change champion-changes)
-      (message "[feedback] %s: %s (%.1f%%) [%s]"
-               (plist-get change :category) (plist-get change :strategy)
-               (* 100 (or (plist-get change :rate) 0)) (plist-get change :action)))
-    (message "[budget] Categories: %s"
-             (mapconcat (lambda (b) (format "%s:%d" (car b) (cdr b))) budget " "))
-    (dolist (action (plist-get vsm-actions :actions))
+;; Log
+   (dolist (change (gptel-auto-workflow--ensure-list champion-changes))
+     (message "[feedback] %s: %s (%.1f%%) [%s]"
+              (plist-get change :category) (plist-get change :strategy)
+              (* 100 (or (plist-get change :rate) 0)) (plist-get change :action)))
+   (message "[budget] Categories: %s"
+            (mapconcat (lambda (b) (format "%s:%d" (car b) (cdr b))) budget " "))
+   (dolist (action (gptel-auto-workflow--ensure-list (plist-get vsm-actions :actions)))
       (message "[vsm-action] %s: %s" (car action) (cdr action)))
     ;; Persist to disk so hints survive daemon restarts
     (gptel-auto-workflow--persist-next-cycle-hints)
@@ -5701,8 +5796,7 @@ Simple keyword-based opposition detection."
 
 (defun gptel-auto-workflow--score-knowledge-pages ()
   "Score knowledge pages by coverage, completeness, and relation."
-  (let* ((dir (expand-file-name "mementum/knowledge"
-                                (gptel-auto-workflow--worktree-base-root)))
+  (let* ((dir (gptel-auto-workflow--research-insights-dir))
          (files (when (file-directory-p dir)
                   (directory-files dir t "research-insights-.+\\.md$")))
          (coverage-score 0) (completeness-score 0) (relation-score 0)
@@ -6506,7 +6600,8 @@ Returns plist with :healthy-p and :diagnosis."
              :confidence 0.85
              :keep-rate keep-rate
              :total total
-             :remedy "Review hypothesis generation strategy; consider narrowing target selection or using research-first mode"))
+             :remedy "Review hypothesis generation strategy; consider narrowing target selection or
+using research-first mode"))
 
       ;; Healthy
       (t (list :healthy-p t
@@ -6516,11 +6611,13 @@ Returns plist with :healthy-p and :diagnosis."
 
 (defun gptel-auto-workflow--detect-run-level-keep-rate-streak ()
   "Detect consecutive runs with 0% keep-rate across ALL targets.
-Scans the last N run directories for 0% keep-rate and returns the streak count.
+Scans the last N run directories for 0% keep-rate and returns the streak
+count.
 This catches the pattern where the pipeline runs but produces nothing useful
 run after run — a sign of systemic strategy failure.
 
-Returns plist with :streak (count), :runs-checked, :total-experiments, :total-kept,
+Returns plist with :streak (count), :runs-checked, :total-experiments,
+:total-kept,
 :action (one of :none, :strategy-review, :target-reset)."
   (let* ((exp-dir (expand-file-name "var/tmp/experiments/"
                                      (or (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
@@ -6605,7 +6702,8 @@ Returns the action taken, or nil if no action needed."
                gptel-auto-workflow--self-healing-log))
        :strategy-review)
       (:target-reset
-       (message "[pipeline-health] 🔴 Critical: 5+ runs at 0%% keep-rate — resetting target priorities")
+       (message "[pipeline-health] 🔴 Critical: 5+ runs at 0%% keep-rate — resetting target
+priorities")
        ;; Clear the target priority cache to force re-ranking
        (when (boundp 'gptel-auto-workflow--target-priority-cache)
          (setq gptel-auto-workflow--target-priority-cache nil))
@@ -6693,28 +6791,41 @@ Returns the action taken, or nil if no action needed."
 Keys: :timestamp :diagnosis :remedy :before-rate :verified-p")
 
 (defun gptel-auto-workflow--verify-recovery ()
-  "Verify last remediation worked by checking current keep-rate.
+  "Verify last remediation worked by checking current keep-rate and signals.
 If keep-rate improved, mark fix as effective.
+If keep-rate unchanged at 0%, check SECONDARY signals (grader failures,
+timeouts, backend health) — improving any of those counts as partial recovery.
 If not improved after 3 runs, trigger escalation."
   (when gptel-auto-workflow--last-remediation
     (let* ((before-rate (or (plist-get gptel-auto-workflow--last-remediation :before-rate) 0))
            (current-health (gptel-auto-workflow--check-pipeline-health))
-           (current-rate (or (plist-get current-health :keep-rate) 0)))
+           (current-rate (or (plist-get current-health :keep-rate) 0))
+           (current-grader-failures (or (plist-get current-health :grader-failures) 0))
+           (current-timeouts (or (plist-get current-health :timeouts) 0))
+           (total (or (plist-get current-health :total) 0))
+           ;; Heuristic for 0→0 case: only consider partial-recovery when
+           ;; BOTH signals are now in the "good" range (< 1/4 of total). This
+           ;; prevents a tiny improvement (e.g. 9→8 failures) from triggering.
+           (partial-recovery
+            (and (= current-rate 0) (= before-rate 0) (> total 0)
+                 (< current-grader-failures (max 1 (/ total 4)))
+                 (< current-timeouts (max 1 (/ total 4)))))
+           (effective (or (> current-rate before-rate) partial-recovery)))
       (cond
-       ;; Fix worked: keep-rate improved
-       ((> current-rate before-rate)
-        (message "[self-heal] ✓ Recovery verified: %.0f%% → %.0f%% (%s)"
+       (effective
+        (message "[self-heal] ✓ Recovery verified: %.0f%% → %.0f%% (grader-failures: %d, timeouts: %d, %s)"
                  (* 100 before-rate) (* 100 current-rate)
+                 current-grader-failures current-timeouts
                  (plist-get gptel-auto-workflow--last-remediation :remedy))
         (plist-put gptel-auto-workflow--last-remediation :verified-p t)
         (plist-put gptel-auto-workflow--last-remediation :after-rate current-rate)
         (gptel-auto-workflow--persist-self-healing-state)
         ;; Reset escalation counter since fix worked
         (gptel-auto-workflow--reset-escalation-counter))
-       ;; Fix failed: keep-rate not improved
        (t
-        (message "[self-heal] ✗ Recovery NOT verified: still %.0f%% (was %.0f%%)"
-                 (* 100 current-rate) (* 100 before-rate))
+        (message "[self-heal] ✗ Recovery NOT verified: still %.0f%% (was %.0f%%, grader-failures: %d, timeouts: %d)"
+                 (* 100 current-rate) (* 100 before-rate)
+                 current-grader-failures current-timeouts)
          ;; Increment remediation failure counter
          (setq gptel-auto-workflow--consecutive-failed-remediations
                (1+ gptel-auto-workflow--consecutive-failed-remediations)))))))
@@ -6831,7 +6942,8 @@ Called every 5th run or when predictive warning triggers."
 (defun gptel-auto-workflow--maybe-self-heal ()
   "Check pipeline health and auto-remediate if broken.
 Call this after each experiment run or batch.
-Phase 8: Predictive health checks + Phase 6: Escalation + Run-level streak detection.
+Phase 8: Predictive health checks + Phase 6: Escalation + Run-level streak
+detection.
 Records health snapshot, checks predictive warnings, analyzes patterns."
   (when (fboundp 'gptel-auto-workflow--check-pipeline-health)
     (let ((health (gptel-auto-workflow--check-pipeline-health)))
@@ -7688,7 +7800,8 @@ Returns t if balanced, nil if unmatched."
       (nth 0 (parse-partial-sexp (point-min) (line-end-position))))))
 
 (defun gptel-auto-workflow--fix-let-needs-let* (file)
-  "Fix \\=`let\\=' that should be \\=`let*\\=' where later bindings reference earlier ones.
+  "Fix \\=`let\\=' that should be \\=`let*\\=' where later bindings reference
+earlier ones.
 Scans byte-compiler warnings for \\='reference to free variable\\=' that are
 actually in the same let form.  Returns number of fixes."
   (let ((fixes 0)
@@ -7716,7 +7829,8 @@ actually in the same let form.  Returns number of fixes."
     fixes))
 
 (defun gptel-auto-workflow--fix-let-empty-body (file)
-  "Fix \\=`let\\=' with empty body by detecting byte-compiler \\='unused lexical variable\\='
+  "Fix \\=`let\\=' with empty body by detecting byte-compiler \\='unused lexical
+variable\\='
 warnings where ALL bindings in a let form are unused — indicating the let
 has no body.  Removes the extra closing paren.  Returns number of fixes."
   (let ((fixes 0)
@@ -7749,10 +7863,12 @@ has no body.  Removes the extra closing paren.  Returns number of fixes."
 (defun gptel-auto-workflow--run-fixer-with-rollback (file fixer-fn)
   "Run FIXER-FN on FILE.  If parens break after the fix, revert and return 0.
 Each fixer must preserve paren balance.  If it does not, the file is
-reverted to its state before the fixer ran.  Returns fix count or 0."
+reverted to its state before the fixer ran.  Returns fix count or 0.
+FIXER-FN is called with FILE as its single argument; closures that
+capture FILE are also supported via the (file) signature."
   (let ((before-content (with-current-buffer (find-file-noselect file)
                           (buffer-string))))
-    (let ((fixes (funcall fixer-fn)))
+    (let ((fixes (funcall fixer-fn file)))
       (if (gptel-auto-workflow--check-parens file)
           fixes
         (message "[self-heal] ROLLBACK: %s broke parens in %s, reverting"
@@ -7789,11 +7905,11 @@ paren balance, its changes are reverted.  Returns (FIX-COUNT . REMAINING)."
       (dolist (fixer (list
                       #'gptel-auto-workflow--fix-docstring-width
                       #'gptel-auto-workflow--fix-unescaped-quotes
-                      (lambda () (gptel-auto-workflow--fix-unused-variables file warnings))
-                      (lambda () (gptel-auto-workflow--fix-free-variables file warnings))
-                      (lambda () (gptel-auto-workflow--fix-unknown-functions file warnings))
-                      (lambda () (gptel-auto-workflow--fix-condition-case-no-handlers file warnings))
-                      (lambda () (gptel-auto-workflow--fix-arg-mismatch file warnings))
+                      (lambda (_file) (gptel-auto-workflow--fix-unused-variables file warnings))
+                      (lambda (_file) (gptel-auto-workflow--fix-free-variables file warnings))
+                      (lambda (_file) (gptel-auto-workflow--fix-unknown-functions file warnings))
+                      (lambda (_file) (gptel-auto-workflow--fix-condition-case-no-handlers file warnings))
+                      (lambda (_file) (gptel-auto-workflow--fix-arg-mismatch file warnings))
                       #'gptel-auto-workflow--fix-let-needs-let*))
         (cl-incf fix-count
                  (gptel-auto-workflow--run-fixer-with-rollback file fixer))))

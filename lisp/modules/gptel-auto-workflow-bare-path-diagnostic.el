@@ -21,7 +21,8 @@ Rules for flagging a string literal as a bare path violation:
   - The string is quoted (appears as double-quoted text in the source)
   - The string is NOT absolute (does not start with / or ~)
   - The call is NOT already wrapped in expand-file-name with a root
-  - The call is NOT already wrapped in gptel-auto-workflow--expand-workspace-path
+- The call is NOT already wrapped in
+gptel-auto-workflow--expand-workspace-path
   - The line is NOT a comment (does not start with ; in column 0)
 
 Returns a list of violation plists."

@@ -11,11 +11,26 @@
       (should result))))
 
 (ert-deftest ontology-predict/below-threshold ()
-  "Predicted values below threshold should be skipped."
-  (cl-letf (((symbol-function 'gptel-auto-workflow--predict-outcome)
-             (lambda (_strategy _target) 0.05)))
-    (let ((result (gptel-auto-workflow--should-run-experiment-p "test-strategy" "test-target")))
-      (should-not result))))
+  "Predicted values below threshold should be skipped most of the time,
+but exploration allows some through to prevent cold-start death spiral."
+  (let ((counter 0))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--predict-outcome)
+               (lambda (_strategy _target) 0.05))
+              ;; Mock random: first 3 calls return 0 (explore → run),
+              ;; rest return most-positive-fixnum (skip).
+              ((symbol-function 'random)
+               (lambda (&rest _)
+                 (setq counter (1+ counter))
+                 (if (<= counter 3) 0 most-positive-fixnum))))
+      ;; With 15% exploration, most should be skipped but some run
+      (let ((runs 0))
+        (dotimes (_ 20)
+          (when (gptel-auto-workflow--should-run-experiment-p "test-strategy" "test-target")
+            (setq runs (1+ runs))))
+        ;; At least 1 out of 20 should run with 15% exploration
+        (should (>= runs 1))
+        ;; But most should be skipped (at least 10 out of 20)
+        (should (>= (- 20 runs) 10))))))
 
 (ert-deftest ontology-predict/precision-near-threshold ()
   "Predicted values near threshold should not be incorrectly skipped."

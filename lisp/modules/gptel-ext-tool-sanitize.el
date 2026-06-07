@@ -357,7 +357,8 @@ each unserializable call gets a unique fingerprint."
     updated-info))
 
 (cl-defun my/gptel--detect-doom-loop (fsm)
-  "Abort FSM when the same tool call repeats `my/gptel-doom-loop-threshold' times.
+  "Abort FSM when the same tool call repeats `my/gptel-doom-loop-threshold'
+times.
 
 Checks the fingerprint of each tool call in the current :tool-use list against
 the rolling history stored in :doom-loop-fingerprints.  When the last N
@@ -387,9 +388,11 @@ This mirrors OpenCode's doom_loop detection (same tool + same args × N)."
                   (when (>= current-run n)
                     (let ((error-message
                            (format "gptel: doom-loop aborted — tool \"%s\" called %d consecutive times \
- with identical arguments.  Try a different approach or break the task into smaller steps."
+with identical arguments. Try a different approach or break the task into
+smaller steps."
                                    (car (split-string fp ":" t)) current-run)))
-                      (message "gptel: doom-loop detected — \"%s\" called %d times with identical args, aborting turn"
+                      (message "gptel: doom-loop detected — \"%s\" called %d times with identical args,
+aborting turn"
                                (car (split-string fp ":" t)) current-run)
                        (setq info (plist-put info :doom-loop-run-counts run-counts))
                        (setq info (my/gptel--abort-sanitized-turn fsm info error-message))
@@ -473,7 +476,8 @@ to a write-capable tool."
 ;; name), the API receives duplicate function entries and returns 400.
 ;; Guard against this at serialization time by deduplicating by name.
 (defun my/gptel--dedup-tools-before-parse (orig backend tools)
-  "Around-advice on `gptel--parse-tools': remove duplicate tool names before parsing.
+  "Around-advice on `gptel--parse-tools': remove duplicate tool names before
+parsing.
 Uses last-wins so the most recently registered struct takes precedence."
   (funcall orig backend
            (if (null tools)

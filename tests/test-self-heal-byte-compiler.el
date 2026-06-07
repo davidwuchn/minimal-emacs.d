@@ -386,7 +386,7 @@
           (write-region "(defun foo () (+ 1 2))\n" nil f)
           (let ((before (with-current-buffer (find-file-noselect f) (buffer-string))))
             (gptel-auto-workflow--run-fixer-with-rollback
-             f (lambda ()
+             f (lambda (_file)
                  (with-current-buffer (find-file-noselect f)
                    (goto-char (point-max))
                    (insert ")))")
@@ -401,7 +401,7 @@
         (progn
           (write-region "(defun foo () (+ 1 2))\n" nil f)
           (gptel-auto-workflow--run-fixer-with-rollback
-           f (lambda ()
+           f (lambda (_file)
                (with-current-buffer (find-file-noselect f)
                  (goto-char (point-max))
                  (insert ";; comment\n")

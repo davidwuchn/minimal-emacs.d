@@ -35,7 +35,8 @@
 (defvar gptel-auto-experiment-min-quality-gain-on-score-tie)
 (defvar gptel-auto-experiment-use-subagents)
 (defvar gptel-auto-workflow--current-target)
-(defvar gptel-auto-workflow--project-root-override)
+(defvar gptel-auto-workflow--project-root-override nil
+  "Override for project root when running from non-git directory.")
 (defvar gptel-auto-workflow-use-staging)
 
 (defun gptel-auto-workflow--project-root ()

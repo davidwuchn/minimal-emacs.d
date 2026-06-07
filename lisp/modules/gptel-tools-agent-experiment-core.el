@@ -63,7 +63,9 @@
 (declare-function my/gptel--run-agent-tool-with-timeout "gptel-tools-agent-subagent")
 (declare-function gptel-auto-experiment--validate-code "gptel-tools-agent-validation")
 (declare-function gptel-auto-workflow--assert-main-untouched "gptel-tools-agent-worktree")
+(declare-function gptel-token-economics--predict-roi "gptel-token-economics")
 (declare-function gptel-auto-workflow-create-worktree "gptel-tools-agent-worktree")
+(declare-function gptel-auto-workflow--weight-score-with-production-metrics "gptel-auto-workflow-production-metrics")
 ;;; gptel-tools-agent-experiment-core.el --- Single experiment execution -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
@@ -100,6 +102,14 @@ Cleared at experiment start by gptel-auto-experiment-run.")
   "Dynamic variable. Molecule recommended by skill graph for current target.
 Set by gptel-auto-experiment-build-prompt, used in prompt WORKFLOW: line.
 List of atom symbol names, e.g. (elisp-discover elisp-expert elisp-validator).")
+
+(defvar gptel-auto-workflow--experiment-prompt-override nil
+  "When non-nil, this string overrides the experiment prompt entirely.
+Set by the regeneration workflow to inject a regeneration-specific prompt.
+Cleared after each experiment run.  Must be a non-empty string to take effect.
+Defined also in gptel-auto-workflow-code-regeneration.el — both definitions
+are equivalent; this one ensures the var exists even when that module is not
+loaded.")
 
 (defun gptel-auto-experiment--pre-existing-breakage-p (target)
   "Return non-nil if TARGET was already broken before this experiment.
@@ -229,6 +239,32 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
       (when (functionp callback)
         (funcall callback result)))
     (cl-return-from gptel-auto-experiment-run))
+  ;; ROI pre-flight check — reject experiments where predicted ROI < threshold
+  ;; Categories with no history or zero ROI get 1.0 (break-even default),
+  ;; which passes the default threshold of 1.0 and allows data collection.
+  (when (fboundp 'gptel-token-economics--predict-roi)
+    (let* ((category (when (and target
+                                (fboundp 'gptel-auto-workflow--categorize-target))
+                       (gptel-auto-workflow--categorize-target target)))
+           (predicted-roi (gptel-token-economics--predict-roi category))
+           (threshold (if (boundp 'gptel-token-economics-roi-threshold)
+                          gptel-token-economics-roi-threshold 1.0)))
+      (when (and predicted-roi (< predicted-roi threshold))
+        (message "[auto-experiment] ⏹ ROI pre-flight rejected: category %s predicted ROI %.2f <
+threshold %.2f — aborting experiment %d/%d for %s"
+                 (or category "unknown") predicted-roi threshold
+                 experiment-id max-experiments target)
+        (let ((result (list :target target :id experiment-id :kept nil
+                            :error "roi-below-threshold"
+                            :category category
+                            :predicted-roi predicted-roi
+                            :roi-threshold threshold)))
+          (gptel-auto-experiment-log-tsv gptel-auto-workflow--run-id result)
+          (when (fboundp 'gptel-token-economics--track-experiment)
+            (gptel-token-economics--track-experiment result))
+          (when (functionp callback)
+            (funcall callback result)))
+        (cl-return-from gptel-auto-experiment-run))))
   (message "[auto-experiment] Starting %d/%d for %s" experiment-id max-experiments target)
   (setq gptel-auto-experiment--loaded-skills nil)
   (setq gptel-auto-experiment--suggested-workflow nil)
@@ -475,7 +511,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                    (not (equal strategy-name "template-default")))
                                               (gptel-auto-experiment-build-prompt-with-strategy
                                                strategy-name target experiment-id max-experiments analysis baseline previous-results)))
-                        (prompt (or (and (stringp strategy-prompt)
+                        (prompt (or gptel-auto-workflow--experiment-prompt-override
+                                    (and (stringp strategy-prompt)
                                          (> (length strategy-prompt) 0)
                                          strategy-prompt)
                                     (gptel-auto-experiment-build-prompt
@@ -491,6 +528,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                      (and (boundp 'gptel-auto-workflow--last-prompt-sections)
                           (split-string gptel-auto-workflow--last-prompt-sections ","))))
                    (setq executor-prompt prompt)
+                    ;; Clear prompt override after consumption (one-shot mechanism)
+                    (setq gptel-auto-workflow--experiment-prompt-override nil)
                    (unless (and (stringp prompt) (> (length prompt) 0))
                      (message "[auto-exp] ⚠ Empty prompt for %s experiment %d — skipping" target experiment-id)
                      (setq finished t)
@@ -1031,13 +1070,17 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                   ;; When the grader passed but the structural eight-keys score
                                                   ;; is nil or near-zero, use the normalized grader score instead.
                                                   ;; This prevents valid changes from being rejected because
-                                                  ;; the structural scorer failed to compute.
-                                                  (effective-score
-                                                   (if (and grade-passed
-                                                            (or (null score-after) (< score-after 0.1))
-                                                            grade-score grade-total (> grade-total 0))
-                                                       (/ (float grade-score) grade-total)
-                                                     (or score-after 0))))
+                                                   ;; the structural scorer failed to compute.
+                                                   (effective-score
+                                                    (let ((raw-score
+                                                           (if (and grade-passed
+                                                                    (or (null score-after) (< score-after 0.1))
+                                                                    grade-score grade-total (> grade-total 0))
+                                                               (/ (float grade-score) grade-total)
+                                                             (or score-after 0))))
+                                                      (if (fboundp 'gptel-auto-workflow--weight-score-with-production-metrics)
+                                                          (gptel-auto-workflow--weight-score-with-production-metrics raw-score target)
+                                                        raw-score))))
                                                    (message "[auto-experiment] DEBUG benchmark: passed=%s tests-passed=%s validation-error=%s nucleus-passed=%s debug=%s eight-keys=%s→%s"
                                                              passed tests-passed validation-error (plist-get bench :nucleus-passed) (plist-get bench :debug-info)
                                                              score-after effective-score)
@@ -1080,7 +1123,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                       (keep (if complexity-passed keep nil))
                                                       (reasoning (if complexity-passed
                                                                      reasoning
-                                                                   (concat reasoning "\n[Complexity Gate] Experiment rejected: complexity increased beyond threshold.")))
+                                                                   (concat reasoning "\n[Complexity Gate] Experiment rejected: complexity increased beyond
+threshold.")))
                                                       (exp-result
 												    (list :target target :id experiment-id :hypothesis
 												          hypothesis :score-before baseline :score-after
@@ -1135,7 +1179,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                ;; BEHAVIOR: generate traceable fallback hash so AutoTTS can link
                                                ;; EDGE CASE: hash is always non-empty so feedback loop is preserved
                                                (prog1 (sha1 (format "pipeline-defect-%s-%s" target (format-time-string "%s")))
-                                                 (message "[auto-workflow] WARNING: pipeline defect - no research context for %s, using fallback hash" (or target "unknown")))))
+                                                 (message "[auto-workflow] WARNING: pipeline defect - no research context for %s, using
+fallback hash" (or target "unknown")))))
                             :research-quality (or (and (boundp 'gptel-auto-workflow--current-research-context)
                                                        (plist-get gptel-auto-workflow--current-research-context :source))
                                                    "none")
@@ -1570,7 +1615,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                                                       (gptel-auto-workflow--current-head-hash))
                                                                                                     provisional-commit-hash))))))
                                                                (when (and (not promote-ok) stage-ok commit-ok)
-                                                                 (message "[auto-experiment] ⚠ Commit step reported failure but HEAD changed (%s → %s), treating as success"
+                                                                 (message "[auto-experiment] ⚠ Commit step reported failure but HEAD changed (%s → %s),
+treating as success"
                                                                           (gptel-auto-workflow--truncate-hash provisional-commit-hash)
                                                                           (gptel-auto-workflow--truncate-hash (gptel-auto-workflow--current-head-hash))))
                                                                (if commit-ok
@@ -1849,12 +1895,16 @@ Called when the grader passed but the benchmark/validation failed."
                          (grade-score (plist-get refine-grade :score))
                          (grade-total (plist-get refine-grade :total))
                          (effective-score
-                          (if (and (plist-get refine-grade :passed)
-                                   (or (null score-after) (< score-after 0.1))
-                                   grade-score grade-total (> grade-total 0))
-                              (/ (float grade-score) grade-total)
-                            (or score-after 0)))
-                         (quality (or (gptel-auto-experiment--code-quality-score) 0.5))
+                           (let ((raw-score
+                                  (if (and (plist-get refine-grade :passed)
+                                           (or (null score-after) (< score-after 0.1))
+                                           grade-score grade-total (> grade-total 0))
+                                      (/ (float grade-score) grade-total)
+                                    (or score-after 0))))
+                             (if (fboundp 'gptel-auto-workflow--weight-score-with-production-metrics)
+                                 (gptel-auto-workflow--weight-score-with-production-metrics raw-score target)
+                               raw-score)))
+                          (quality (or (gptel-auto-experiment--code-quality-score) 0.5))
                          (exp-result
                           (list :target target :id experiment-id
                                 :hypothesis hypothesis
@@ -1900,7 +1950,10 @@ Called when the grader passed but the benchmark/validation failed."
     (target hypothesis grade-score grade-total _baseline
      experiment-id experiment-worktree experiment-branch
      provisional-commit-hash run-id exp-result log-fn callback)
-  "Commit+push a grader-bypassed experiment. Handles its own callbacks."
+  "Commit+push a grader-bypassed experiment. Handles its own callbacks.
+Includes retry logic: if the initial promote-provisional-commit fails
+(provisional hash mismatch from worktree changes), retries with a
+fresh stage+commit cycle before giving up."
   (message "[auto-experiment] ✓ grader-bypass committing %s (grade=%d/%d)" target grade-score grade-total)
   (let* ((default-directory experiment-worktree)
          (msg (format "◈ Optimize %s (grader bypass)\n\nGrade: %d/%d\n\nHYPOTHESIS: %s"
@@ -1909,36 +1962,46 @@ Called when the grader passed but the benchmark/validation failed."
          (finalize (gptel-auto-experiment--make-kept-result-callback
                     run-id exp-result log-fn callback)))
     (gptel-auto-workflow--assert-main-untouched)
-    (if (and (gptel-auto-workflow--stage-worktree-changes
-              (format "Stage bypass changes for %s" target) 60)
-             (gptel-auto-workflow--promote-provisional-commit
-              msg (format "Commit bypass changes for %s" target)
-              provisional-commit-hash commit-timeout))
+    (let ((commit-ok
+           (or
+            ;; Attempt 1: promote provisional commit (amend existing)
+            (and (gptel-auto-workflow--stage-worktree-changes
+                  (format "Stage bypass changes for %s" target) 60)
+                 (gptel-auto-workflow--promote-provisional-commit
+                  msg (format "Commit bypass changes for %s" target)
+                  provisional-commit-hash commit-timeout))
+            ;; Attempt 2: fresh stage + commit (provisional hash mismatch retry)
+            (progn
+              (message "[auto-experiment] Retrying bypass commit for %s with fresh stage" target)
+              (and (gptel-auto-workflow--stage-worktree-changes
+                    (format "Retry stage bypass for %s" target) 60)
+                   (gptel-auto-workflow--promote-provisional-commit
+                    msg (format "Retry commit bypass for %s" target)
+                    nil commit-timeout))))))
+      (if commit-ok
+          (progn
+            (setq provisional-commit-hash nil)
+            (gptel-auto-workflow--track-commit experiment-id target experiment-worktree)
+            (gptel-auto-experiment--maybe-log-staging-pending run-id exp-result log-fn)
+            (setq gptel-auto-experiment--no-improvement-count 0)
+            (if gptel-auto-experiment-auto-push
+                (if (gptel-auto-workflow--push-branch-with-lease
+                     experiment-branch (format "Push bypass branch %s" experiment-branch) 180)
+                    (if gptel-auto-workflow-use-staging
+                        (gptel-auto-workflow--staging-flow experiment-branch finalize)
+                      (funcall finalize))
+                  (let ((failed-result (plist-put (plist-put (copy-sequence exp-result) :comparator-reason "bypass-push-failed") :kept nil)))
+                    (funcall log-fn run-id failed-result)
+                    (when (fboundp 'gptel-token-economics--track-experiment)
+                      (gptel-token-economics--track-experiment failed-result))))
+              (funcall finalize)))
         (progn
-          (setq provisional-commit-hash nil)
-          (gptel-auto-workflow--track-commit experiment-id target experiment-worktree)
-          (gptel-auto-experiment--maybe-log-staging-pending run-id exp-result log-fn)
-          (setq gptel-auto-experiment--no-improvement-count 0)
-          (if gptel-auto-experiment-auto-push
-              (if (gptel-auto-workflow--push-branch-with-lease
-                   experiment-branch (format "Push bypass branch %s" experiment-branch) 180)
-                  (if gptel-auto-workflow-use-staging
-                      (gptel-auto-workflow--staging-flow experiment-branch finalize)
-                    (funcall finalize))
-                 (let ((failed-result (plist-put (plist-put (copy-sequence exp-result) :comparator-reason "bypass-push-failed") :kept nil)))
-                   (funcall log-fn run-id failed-result)
-                   ;; Track token economics for this experiment
-                   (when (fboundp 'gptel-token-economics--track-experiment)
-                     (gptel-token-economics--track-experiment failed-result))))
-            (funcall finalize)))
-      (progn
-        (gptel-auto-workflow--drop-provisional-commit
-         provisional-commit-hash (format "Drop bypass commit for %s" target))
-        (let ((failed-result (plist-put (plist-put (copy-sequence exp-result) :comparator-reason "bypass-commit-failed") :kept nil)))
-          (funcall log-fn run-id failed-result)
-          ;; Track token economics for this experiment
-          (when (fboundp 'gptel-token-economics--track-experiment)
-            (gptel-token-economics--track-experiment failed-result)))))))
+          (gptel-auto-workflow--drop-provisional-commit
+           provisional-commit-hash (format "Drop bypass commit for %s" target))
+          (let ((failed-result (plist-put (plist-put (copy-sequence exp-result) :comparator-reason "bypass-commit-failed") :kept nil)))
+            (funcall log-fn run-id failed-result)
+            (when (fboundp 'gptel-token-economics--track-experiment)
+              (gptel-token-economics--track-experiment failed-result))))))))
 
 (provide 'gptel-tools-agent-experiment-core)
 ;;; gptel-tools-agent-experiment-core.el ends here

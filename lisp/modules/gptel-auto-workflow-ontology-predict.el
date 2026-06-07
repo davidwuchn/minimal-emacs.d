@@ -30,6 +30,11 @@ Args: strategy target predicted threshold tokens."
   :type 'string
   :group 'gptel-auto-workflow)
 
+(defvar gptel-auto-workflow--ontology-reorder-exploration-rate 0.1
+  "Exploration rate for reorder decisions (0.0-1.0).
+When a strategy/target would normally be skipped by prediction,
+there is [rate]% chance it runs anyway to prevent cold-start death spirals.")
+
 ;; ─── Prediction Core ───
 
 (defun gptel-auto-workflow--research-quality-for-target (target)
@@ -142,7 +147,10 @@ Returns float 0.0-1.0 based on:
 
 (defun gptel-auto-workflow--should-run-experiment-p (strategy target)
   "Return t if experiment for STRATEGY + TARGET should run.
-Checks predicted outcome against threshold."
+Checks predicted outcome against threshold with exploration.
+High prediction always runs; low prediction runs with exploration rate
+to prevent cold-start death spiral where no experiments run because
+there's no data to predict from."
   (let* ((predicted (gptel-auto-workflow--predict-outcome strategy target))
          ;; Round to avoid floating-point precision issues near threshold
          (predicted-rounded (/ (round (* predicted 100)) 100.0))
@@ -153,11 +161,19 @@ Checks predicted outcome against threshold."
                    strategy target predicted-rounded
                    threshold-rounded)
           t)
-      (message gptel-auto-workflow--prediction-skip-message
-               strategy target predicted-rounded
-               threshold-rounded
-               15000)  ; ~15K tokens saved per skipped experiment
-      nil)))
+      ;; Below threshold — allow with exploration rate to collect data
+      (if (< (random 100)
+             (round (* gptel-auto-workflow--ontology-reorder-exploration-rate 100)))
+          (progn
+            (message "[onto-predict] %s/%s: predicted %.2f < threshold %.2f → RUN (exploration)"
+                     strategy target predicted-rounded
+                     threshold-rounded)
+            t)
+        (message gptel-auto-workflow--prediction-skip-message
+                 strategy target predicted-rounded
+                 threshold-rounded
+                 15000)  ; ~15K tokens saved per skipped experiment
+        nil))))
 
 ;; ─── Anti-Pattern Blocking ───
 

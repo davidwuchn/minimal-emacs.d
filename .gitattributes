@@ -7,5 +7,4 @@ assistant/strategies/metadata/* merge=theirs
 mementum/knowledge/allium-trends.md merge=theirs
 mementum/knowledge/backend-comparison.md merge=theirs
 mementum/knowledge/model-comparison.md merge=theirs
-mementum/knowledge/research-insights-*.md merge=theirs
 mementum/knowledge/conflicted-review.md merge=theirs

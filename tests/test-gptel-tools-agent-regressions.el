@@ -21143,6 +21143,46 @@ block all subagent execution."
     (should (string-match-p ":enable_thinking t" backends-code))
     (should (string-match-p ":enable_thinking nil" registry-code))))
 
+(ert-deftest regression/mementum/synthesis-truncates-oversized-memories ()
+  "Synthesis prompt should truncate memories that exceed the byte limit.
+Regression: 38 memories × 25KB = 988KB, exceeding the 781KB API limit.
+Fix: `gptel-mementum--truncate-memories' caps total size, with at most
+one memory per slot surviving truncation.  Each surviving memory is
+individually capped to fit within the limit."
+  (let* ((big-memory (make-string 50000 ?x))
+         (memories (list "short-1" big-memory "short-2" big-memory big-memory))
+         (truncated (gptel-mementum--truncate-memories memories 100000)))
+    ;; Total length must fit within limit
+    (should (<= (apply #'+ (mapcar #'length truncated)) 100000))
+    ;; Some content preserved (we don't drop everything)
+    (should (cl-some (lambda (m) (string-match-p "short" m)) truncated))
+    ;; The huge memory got capped, not whole
+    (should-not (cl-some (lambda (m) (= (length m) 50000)) truncated))))
+
+(ert-deftest regression/mementum/truncate-drops-overflow-memories ()
+  "When total capped memories exceed max-bytes, truncate-memories must drop memories.
+Regression: overflow loop tracked dropped bytes instead of kept bytes,
+so the while condition `(+ running (length (car result))) > max-bytes' was
+always false for the first element (running=0, first element < max-bytes),
+meaning nothing was ever dropped and the function returned an oversized list."
+  ;; 10 memories × 6000 chars = 60,000 total.  max-bytes = 15,000.
+  ;; per-memory-cap = max(1000, 15000/4) = 3750, so each gets capped to 3750.
+  ;; After capping: 10 × 3750 = 37,500 > 15,000.  Must drop from the tail.
+  (let* ((memories (make-list 10 (make-string 6000 ?A)))
+         (max-bytes 15000)
+         (truncated (gptel-mementum--truncate-memories memories max-bytes))
+         (total (apply #'+ (mapcar #'length truncated))))
+    (should (<= total max-bytes))
+    ;; Should keep at least some memories (not drop everything)
+    (should (> (length truncated) 0))))
+
+(ert-deftest regression/mementum/truncate-keeps-all-when-under-limit ()
+  "When capped total is under max-bytes, all memories are preserved."
+  (let* ((memories '("aaa" "bbb" "ccc"))
+         (truncated (gptel-mementum--truncate-memories memories 1000)))
+    (should (= (length truncated) 3))
+    (should (equal truncated '("aaa" "bbb" "ccc")))))
+
 (provide 'test-gptel-tools-agent-regressions)
 
 ;;; test-gptel-tools-agent-regressions.el ends here

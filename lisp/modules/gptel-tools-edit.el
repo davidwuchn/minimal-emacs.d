@@ -73,12 +73,14 @@ This prevents path traversal via crafted diff headers."
 ;;; Edit Mode Tracking
 
 (defvar gptel-tools-edit--mode-used nil
-  "Dynamic variable. Set to the edit mode that succeeded: 'hashline, 'patch, 'string.
+  "Dynamic variable. Set to the edit mode that succeeded: 'hashline, 'patch,
+'string.
 Read by experiment logging to track edit tool effectiveness.")
 
 (defvar gptel-tools-read-hashline-default nil
   "Dynamic variable. When non-nil, Read tool returns hashline format by default.
-Set by executor when entering edit mode so subsequent reads are content-addressed.")
+Set by executor when entering edit mode so subsequent reads are
+content-addressed.")
 
 ;;; Edit Tool Implementation
 
@@ -170,7 +172,8 @@ to prevent callers from hanging indefinitely."
 
 (defun my/gptel--agent-edit-hashline (file_path old_str new_str)
   "Edit FILE_PATH using hashline mode.
-OLD_STR is hashline tag: \"line-num:hash\" or \"start-hash:end-hash\" for range.
+OLD_STR is hashline tag: \"line-num:hash\" or \"start-hash:end-hash\" for
+range.
 NEW_STR is replacement text.
 Returns success message or error string."
   (let ((target (expand-file-name file_path)))

@@ -6,11 +6,12 @@
 (require 'cl-lib)
 (require 'gptel-auto-workflow-external-sensors nil t)
 (require 'gptel-auto-workflow-production-metrics nil t)
-(require 'gptel-monitoring-agent nil t)
+(require 'gptel-auto-workflow-monitoring-agent nil t)
 (require 'gptel-auto-workflow-human-interface nil t)
 (require 'gptel-token-economics nil t)
 (require 'gptel-auto-workflow-context-database nil t)
 (require 'gptel-auto-workflow-decision-classification nil t)
+(require 'gptel-auto-workflow-disposable-tracker nil t)
 (declare-function gptel-auto-workflow-evolution-run-cycle "gptel-auto-workflow-evolution")
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--bead-update-from-experiment "gptel-auto-workflow-beads")
@@ -84,13 +85,10 @@ Skips when a workflow or cron job is active to avoid preempting experiments."
     ;; Optimize token budget allocation based on category ROI (Phase 4: Token Economics)
     (when (fboundp 'gptel-token-economics--optimize-allocation)
       (condition-case nil
-          (gptel-token-economics--optimize-allocation)
+          (gptel-token-economics--optimize-allocation 100.0)
         (error nil)))
-    ;; Wire monitoring agent into evolution cycle (Phase 2: Monitoring Agent)
-    (when (fboundp 'gptel-monitoring-agent--analyze-failure-patterns)
-      (condition-case nil
-          (gptel-monitoring-agent--analyze-failure-patterns)
-        (error nil)))
+    ;; Monitoring/approval/disposable/regeneration are now in
+    ;; gptel-auto-workflow-evolution-run-cycle itself — no need to call them here.
     (condition-case err
         (progn
           (message "[auto-workflow] Running scheduled evolution cycle...")
@@ -212,6 +210,13 @@ Records to mementum and triggers evolution if needed."
     (condition-case err
         (gptel-auto-workflow--update-pmf-dashboard-metrics)
       (error (message "[metrics] PMF dashboard update error: %s" err))))
+  
+  ;; Run monitoring cycle after each experiment (throttled internally to 15 min)
+  ;; Layer 1 Sensor: analyzes failures, generates proposals, triggers architectural evolution
+  (when (fboundp 'gptel-auto-workflow--monitoring-cycle)
+    (condition-case err
+        (gptel-auto-workflow--monitoring-cycle)
+      (error (message "[monitoring] Monitoring cycle error: %s" err))))
   
   ;; Run evolution every N experiments
   (let ((exp-id (or (plist-get experiment :id) 0)))
@@ -679,7 +684,17 @@ Returns the new item ID."
         ;; Insert after the header row
         (setq content
               (replace-regexp-in-string
-               "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n|----|--------|-----------|-----------------|--------|---------------|---------------|\n"
+               "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual
+Impact
+
+
+
+
+
+
+
+
+|\n|----|--------|-----------|-----------------|--------|---------------|---------------|\n"
                (concat "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n"
                        "|----|--------|-----------|-----------------|--------|---------------|---------------|\n"
                        entry)
@@ -709,7 +724,8 @@ ACTUAL-IMPACT: measured outcome after experiments"
         ;; Update the matching row
         (setq content
               (replace-regexp-in-string
-               (format "| %s | \\([^|]+\\) | \\([^|]+\\) | \\([^|]+\\) | \\([^|]+\\) | \\([^|]+\\) | \\([^|]+\\) |"
+               (format "| %s | \\([^|]+\\) | \\([^|]+\\) | \\([^|]+\\) | \\([^|]+\\) | \\([^|]+\\) |
+\\([^|]+\\) |"
                        (regexp-quote id))
                (lambda (match)
                  (let* ((parts (split-string match " | "))
@@ -860,12 +876,17 @@ Creates file if it doesn't exist."
     (insert "---\n\n")
     (insert "# Strategy Roadmap\n\n")
     (dolist (section '((current-focus . "JTBD Step 1: Market Definition")
-                       (research-strategy . "- Pattern: research-research-none\n- Sources: GitHub, Reddit, HackerNews\n- Depth: 3 turns max")
-                       (backend-prefs . "- Executor: moonshot → MiniMax → DeepSeek\n- Researcher: DeepSeek → moonshot → DashScope\n- Validator: DashScope → DeepSeek")
-                       (target-rules . "1. Prioritize files with TODOs/FIXMEs\n2. Skip files modified in last 24h\n3. Focus on modules with < 60% keep-rate")
-                       (experiment-strategy . "- Max experiments per run: 5\n- Timeout: 900s per experiment\n- Staging: enabled\n- Auto-merge: disabled")
+                       (research-strategy . "- Pattern: research-research-none\n- Sources: GitHub, Reddit, HackerNews\n-
+Depth: 3 turns max")
+                       (backend-prefs . "- Executor: moonshot → MiniMax → DeepSeek\n- Researcher: DeepSeek → moonshot →
+DashScope\n- Validator: DashScope → DeepSeek")
+                       (target-rules . "1. Prioritize files with TODOs/FIXMEs\n2. Skip files modified in last 24h\n3.
+Focus on modules with < 60% keep-rate")
+                       (experiment-strategy . "- Max experiments per run: 5\n- Timeout: 900s per experiment\n- Staging:
+enabled\n- Auto-merge: disabled")
                        (market-insights . "- None yet")
-                       (pmf-checklist . "- [ ] Can measure outcomes in code\n- [ ] Can close gaps with experiments\n- [ ] Can serve identified segments\n- [ ] Strategy has measurable milestones")
+                       (pmf-checklist . "- [ ] Can measure outcomes in code\n- [ ] Can close gaps with experiments\n- [
+] Can serve identified segments\n- [ ] Strategy has measurable milestones")
                        (next-review . "See GTM dashboard")))
       (let ((name (car section))
             (content (cdr section)))
@@ -990,6 +1011,188 @@ Returns plist with :findings-today :strategy-accuracy :pmf-signal."
                           (or (plist-get metrics :findings-today) 0)
                           (or (plist-get metrics :strategy-accuracy) "0%")
                           (or (plist-get metrics :pmf-signal) "0"))))))
+
+;; ─── Operational Metrics (YC Vision Evidence) ───
+
+(defun gptel-auto-workflow-operational-metrics ()
+  "Aggregate cross-cycle operational metrics from all OV5 subsystems.
+Returns a plist suitable for logging or dashboard display."
+  (let* ((root (or (when (fboundp 'gptel-auto-workflow--worktree-base-root)
+                     (gptel-auto-workflow--worktree-base-root))
+                   default-directory))
+         (root (file-name-as-directory root))
+         ;; ── Experiments ──
+         (results-files
+          (when (file-directory-p (concat root "var/tmp/experiments"))
+            (directory-files (concat root "var/tmp/experiments") t
+                             "results\\.tsv$" t)))
+         (exp-total 0) (exp-kept 0) (exp-failed 0)
+         (exp-decisions (make-hash-table :test 'equal))
+         (exp-backends (make-hash-table :test 'equal)))
+    (dolist (rf results-files)
+      (condition-case nil
+          (with-temp-buffer
+            (insert-file-contents rf)
+            (goto-char (point-min))
+            (forward-line) ;; skip header
+            (while (not (eobp))
+              (let ((line (buffer-substring (line-beginning-position)
+                                            (line-end-position))))
+                (when (string-match "\\`[0-9]" line)
+                  (let ((fields (split-string line "\t" t)))
+                    (when (>= (length fields) 8)
+                      (setq exp-total (1+ exp-total))
+                      (let ((decision (nth 7 fields))
+                            (backend (when (>= (length fields) 16)
+                                       (nth 15 fields))))
+                        (puthash decision (1+ (gethash decision exp-decisions 0))
+                                 exp-decisions)
+                        (when (member decision '("kept" "staged" "merged"))
+                          (setq exp-kept (1+ exp-kept)))
+                        (when (string-match "failed\\|error\\|timeout" decision)
+                          (setq exp-failed (1+ exp-failed)))
+                        (when backend
+                          (puthash backend
+                                   (1+ (gethash backend exp-backends 0))
+                                   exp-backends)))))))
+              (forward-line)))
+        (error nil)))
+    ;; ── Approval Queue ──
+    (let ((aq-pending 0) (aq-approved 0) (aq-rejected 0)
+          (aq-deployed 0) (aq-expired 0))
+      (dolist (subdir '("pending" "decisions"))
+        (let ((dir (concat root "var/approval-queue/" subdir "/")))
+          (when (file-directory-p dir)
+            (dolist (f (directory-files dir t "\\.sexp$"))
+              (let ((entry (condition-case nil
+                               (with-temp-buffer
+                                 (insert-file-contents f)
+                                 (goto-char (point-min))
+                                 (read (current-buffer)))
+                             (error nil))))
+                (when entry
+                  (pcase (plist-get entry :status)
+                    ("pending" (setq aq-pending (1+ aq-pending)))
+                    ("approved" (setq aq-approved (1+ aq-approved)))
+                    ("rejected" (setq aq-rejected (1+ aq-rejected)))
+                    ("deployed" (setq aq-deployed (1+ aq-deployed)))
+                    ("expired" (setq aq-expired (1+ aq-expired))))))))))
+      ;; ── Sensors ──
+      (let ((sentry-configured (and (getenv "OV5_SENTRY_API_KEY") t))
+            (feedback-configured (and (getenv "OV5_FEEDBACK_ENDPOINT") t)))
+        ;; ── Context DB ──
+        (let ((ctx-count
+               (length (when (file-directory-p (concat root "var/context"))
+                         (directory-files (concat root "var/context") t "\\.sexp$")))))
+          ;; ── Disposable ──
+          (let ((disp-count
+                 (length (when (file-directory-p (concat root "var/disposable"))
+                           (directory-files (concat root "var/disposable") t "\\.sexp$")))))
+            ;; ── Mementum ──
+            (let ((mem-count
+                   (length (when (file-directory-p (concat root "mementum/memories"))
+                             (directory-files (concat root "mementum/memories") t "\\.md$"))))
+                  (know-count
+                   (length (when (file-directory-p (concat root "mementum/knowledge"))
+                             (directory-files (concat root "mementum/knowledge") t "\\.md$")))))
+              ;; ── Build result ──
+              (list
+               :timestamp (format-time-string "%Y-%m-%dT%H:%M:%S")
+               :experiments (list :total exp-total
+                                  :kept exp-kept
+                                  :failed exp-failed
+                                  :keep-rate (if (> exp-total 0)
+                                                 (/ (float exp-kept) exp-total)
+                                               0.0)
+                                  :results-files (length results-files)
+                                  :decisions
+                                  (let ((r nil))
+                                    (maphash (lambda (k v) (push (cons k v) r))
+                                             exp-decisions)
+                                    (sort r (lambda (a b) (> (cdr a) (cdr b)))))
+                                  :backends
+                                  (let ((r nil))
+                                    (maphash (lambda (k v) (push (cons k v) r))
+                                             exp-backends)
+                                    (sort r (lambda (a b) (> (cdr a) (cdr b))))))
+               :approval-queue (list :pending aq-pending
+                                     :approved aq-approved
+                                     :rejected aq-rejected
+                                     :deployed aq-deployed
+                                     :expired aq-expired)
+               :sensors (list :sentry (if sentry-configured "configured" "not-configured")
+                              :feedback (if feedback-configured "configured" "not-configured"))
+               :context-db (list :entries ctx-count)
+               :disposable (list :candidates disp-count)
+               :mementum (list :memories mem-count
+                               :knowledge know-count)))))))))
+
+(defun gptel-auto-workflow-operational-metrics-report ()
+  "Log a human-readable operational metrics summary.
+Suitable for pipeline output and YC evidence.
+Also persists the full report to var/metrics/ for historical tracking."
+  (let ((m (gptel-auto-workflow-operational-metrics)))
+    (let ((exp (plist-get m :experiments))
+          (aq (plist-get m :approval-queue))
+          (sensors (plist-get m :sensors))
+          (ctx (plist-get m :context-db))
+          (disp (plist-get m :disposable))
+          (mem (plist-get m :mementum)))
+      (message "")
+      (message "=== OV5 Operational Metrics [%s] ===" (plist-get m :timestamp))
+      (message "  Experiments: %d total, %d kept (%.1f%%), %d failed, %d result files"
+               (plist-get exp :total)
+               (plist-get exp :kept)
+               (* 100 (plist-get exp :keep-rate))
+               (plist-get exp :failed)
+               (plist-get exp :results-files))
+      (let ((top-decisions (seq-take (plist-get exp :decisions) 5)))
+        (when top-decisions
+          (message "  Top decisions: %s"
+                   (mapconcat (lambda (d) (format "%s=%d" (car d) (cdr d)))
+                              top-decisions ", "))))
+      (let ((top-backends (seq-take (plist-get exp :backends) 5)))
+        (when top-backends
+          (message "  Top backends: %s"
+                   (mapconcat (lambda (b) (format "%s=%d" (car b) (cdr b)))
+                              top-backends ", "))))
+      (message "  Approval Queue: %d pending, %d approved, %d deployed, %d rejected, %d expired"
+               (plist-get aq :pending)
+               (plist-get aq :approved)
+               (plist-get aq :deployed)
+               (plist-get aq :rejected)
+               (plist-get aq :expired))
+       (message "  Sensors: Sentry=%s, Feedback=%s"
+                (plist-get sensors :sentry)
+                (plist-get sensors :feedback))
+       (when (fboundp 'gptel-auto-workflow--github-sensor-summary)
+         (condition-case nil
+             (message "  %s" (gptel-auto-workflow--github-sensor-summary))
+           (error nil)))
+       (message "  Context DB: %d entries | Disposable: %d candidates"
+               (plist-get ctx :entries)
+               (plist-get disp :candidates))
+      (message "  Mementum: %d memories, %d knowledge pages"
+               (plist-get mem :memories)
+               (plist-get mem :knowledge))
+      (message "============================================")
+      ;; Persist to var/metrics/ for historical tracking
+      (condition-case nil
+          (let* ((root (or (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
+                                (gptel-auto-workflow--expand-workspace-path ""))
+                           default-directory))
+                 (metrics-dir (expand-file-name "var/metrics/" root))
+                 (ts (format-time-string "%Y%m%dT%H%M%S")))
+            (make-directory metrics-dir t)
+            (with-temp-file (expand-file-name (concat ts "-metrics.sexp") metrics-dir)
+              (prin1 m (current-buffer)))
+            ;; Keep only last 30 metric snapshots
+            (let ((files (sort (directory-files metrics-dir t "-metrics\\.sexp$")
+                               (lambda (a b) (string< a b)))))
+              (dolist (f (seq-take files (- (length files) 30)))
+                (ignore-errors (delete-file f)))))
+        (error nil))
+      m)))
 
 (provide 'gptel-auto-workflow-production)
 ;;; gptel-auto-workflow-production.el ends here

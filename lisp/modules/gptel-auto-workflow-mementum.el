@@ -13,6 +13,7 @@
 (require 'cl-lib)
 (require 'subr-x)
 (declare-function gptel-auto-workflow--categorize-hypothesis "gptel-auto-workflow-evolution")
+(declare-function gptel-auto-workflow--sanitize-llm-output "gptel-auto-workflow-evolution")
 (declare-function gptel-auto-workflow--memory-schema-extract-from-file "gptel-auto-workflow-memory-schema")
 (declare-function gptel-auto-workflow--git-compute-category-stats "gptel-auto-workflow-git-learning")
 (declare-function gptel-auto-workflow--git-compute-target-stats "gptel-auto-workflow-git-learning")
@@ -221,10 +222,12 @@ RESEARCH-RESULT is a plist with :findings :targets :kept-count :total-count
                     kept-count
                     total-count
                     (* 100 keep-rate)
-                    findings
+                    (gptel-auto-workflow--sanitize-llm-output
+                     findings "(raw findings suppressed — contained tool output)")
                     (if (string-empty-p digested)
                         "[No digestion performed]"
-                      digested))))))))
+                      (gptel-auto-workflow--sanitize-llm-output
+                       digested "(digested insights suppressed — contained tool output)")))))))))
 
 ;; ─── Knowledge Synthesis ───
 

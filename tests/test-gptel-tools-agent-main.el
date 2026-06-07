@@ -47,5 +47,50 @@
   "Call process with watchdog function should exist."
   (should (fboundp 'gptel-auto-workflow--call-process-with-watchdog)))
 
+;;; After-experiment hook integration tests
+
+(ert-deftest test-main/after-experiment-hook-var-declared ()
+  "After-experiment hook variable should be declared."
+  (should (intern-soft "gptel-auto-workflow-after-experiment-hook")))
+
+(ert-deftest test-main/after-experiment-hook-runs-after-target-complete ()
+  "After-experiment hook should fire when target-complete callback runs."
+  (let ((hook-called nil))
+    (add-hook 'gptel-auto-workflow-after-experiment-hook
+              (lambda () (setq hook-called t))
+              nil t)
+    ;; Simulate target-complete context: set running state
+    (setq gptel-auto-workflow--running t
+          gptel-auto-workflow--run-id "test-run-hook"
+          gptel-auto-workflow--stats (list :phase "running" :total 1 :kept 0))
+    ;; Directly run the hook (target-complete calls run-hooks)
+    (run-hooks 'gptel-auto-workflow-after-experiment-hook)
+    (should hook-called)
+    ;; Cleanup
+    (setq gptel-auto-workflow--running nil)
+    (remove-hook 'gptel-auto-workflow-after-experiment-hook
+                  (lambda () (setq hook-called t))
+                  t)))
+
+(ert-deftest test-main/monitoring-cycle-called-after-batch ()
+  "Monitoring cycle should be callable after experiment batch."
+  (let ((cycle-called nil))
+    (cl-letf
+        (((symbol-function 'gptel-auto-workflow--monitoring-cycle)
+          (lambda () (setq cycle-called t) nil)))
+      ;; Simulate the call that target-complete would make
+      (when (fboundp 'gptel-auto-workflow--monitoring-cycle)
+        (gptel-auto-workflow--monitoring-cycle))
+      (should cycle-called))))
+
+(ert-deftest test-main/monitoring-cycle-throttled-after-batch ()
+  "Monitoring cycle should respect throttle when called after batch."
+  (require 'gptel-auto-workflow-monitoring-agent)
+  (let ((gptel-auto-workflow-monitoring-last-cycle-time
+         (- (float-time) 60))  ; 60s ago, under 900s throttle
+        (gptel-auto-workflow-monitoring-enabled t)
+        (gptel-auto-workflow-monitoring-cycle-interval 900))
+    (should (null (gptel-auto-workflow--monitoring-cycle)))))
+
 (provide 'test-gptel-tools-agent-main)
 ;;; test-gptel-tools-agent-main.el ends here

@@ -729,7 +729,7 @@ CALLBACK receives the Turtle string or nil."
 (defvar gptel-auto-workflow--ab-test-sections
   '(suggestions self-evolution topic-specific git-history
                 axis-performance cross-target-patterns failure-patterns
-                research-findings)
+                research-findings context-db)
   "Prompt sections that can be individually included/excluded for A/B testing.")
 
 (defvar gptel-auto-workflow--ab-test-omit-rate 0.2
@@ -1105,7 +1105,8 @@ Returns a compact lambda-notation string ready for the LLM."
              (rejection-feedback (cdr (assoc 'rejection-feedback vars)))
              (success-feedback (cdr (assoc 'success-feedback vars)))
              (keep-rate (cdr (assoc 'keep-rate vars)))
-             (uni-d (cdr (assoc 'unified-directive vars))))
+             (uni-d (cdr (assoc 'unified-directive vars)))
+              (context-db (cdr (assoc 'context-db-context vars))))
     (concat
       ;; KV CACHE PREFIX — STATIC sections first (shared across experiments)
       ;; These tokens are identical for every experiment → high cache-hit rate.
@@ -1171,8 +1172,9 @@ Returns a compact lambda-notation string ready for the LLM."
                      (if mut-str (concat "\n" mut-str) "")
                      (if evol (concat " " evol) "") "\n"))
          "")
-      (if research (concat "RESEARCH: " research "\n") "")
-      (if git-hist (concat "GIT: " git-hist "\n") "")
+       (if research (concat "RESEARCH: " research "\n") "")
+       (if context-db (concat context-db "\n") "")
+       (if git-hist (concat "GIT: " git-hist "\n") "")
       (if axis-g (concat "AXIS: " axis-g "\n") "")
       (if axis-p (concat "AXIS-PERF: " axis-p "\n") "")
       (if frontier (concat "FRONTIER: " frontier "\n") "")
@@ -1279,6 +1281,37 @@ Uses ontology category to select the best template for TARGET."
 
         CRITICAL: code quality delta MUST be >= 0. Breaking tests or decreasing readability = REJECTED.")))
 
+(defun gptel-auto-experiment--context-db-for-prompt (target)
+  "Build context-db learnings string for TARGET module.
+Queries past experiments on the same target from the context database.
+Returns formatted string with up to 5 most recent learnings, or nil."
+  (when (and target
+             (fboundp 'gptel-auto-workflow--query-context-by-module))
+    (let* ((experiments (gptel-auto-workflow--query-context-by-module target)))
+      (when experiments
+        (let ((recent (seq-take (sort experiments
+                                      (lambda (a b)
+                                        (string> (or (plist-get a :timestamp) "")
+                                                 (or (plist-get b :timestamp) ""))))
+                                5)))
+          (concat
+           "## Past Experiment Learnings (from context-db)\n"
+           (string-join
+            (mapcar
+             (lambda (exp)
+               (format "- %s: %s (%s, %s)"
+                       (or (plist-get exp :id)
+                           (plist-get exp :experiment-id)
+                           "unknown")
+                       (or (plist-get exp :decision-rationale)
+                           (plist-get exp :learnings)
+                           (plist-get exp :hypothesis)
+                           "no details")
+                       (or (plist-get exp :decision) "no status")
+                       (or (plist-get exp :delta) "no score")))
+             recent)
+            "\n")))))))
+
 (defun gptel-auto-experiment-build-prompt (target experiment-id max-experiments analysis baseline
                                                   &optional previous-results)
   "Build prompt for experiment EXPERIMENT-ID on TARGET.
@@ -1320,7 +1353,7 @@ Implements section-level A/B testing to identify effective prompt components."
                             (gptel-auto-workflow--project-root)))
          (worktree-quoted (shell-quote-argument worktree-path))
          (git-history (shell-command-to-string
-                       (format "cd %s && git log --oneline -20 2>/dev/null || echo 'no history'"
+                       (format "cd %s && git log --oneline -5 2>/dev/null || echo 'no history'"
                                worktree-quoted)))
           (patterns (when (proper-list-p analysis) (plist-get analysis :patterns)))
           (suggestions (when (proper-list-p analysis) (plist-get analysis :recommendations)))
@@ -1610,9 +1643,10 @@ Read ONE function. Edit ONE line. Verify. Done."))))
                                                    (gptel-auto-experiment--research-for-prompt findings target)
                                                  "No recent external research available."))
                                           ""))
-               (memory-context . ,(if (fboundp 'gptel-auto-workflow--memory-schema-experiment-context)
-                                      (or (gptel-auto-workflow--memory-schema-experiment-context target) "")))
-               (time-budget . ,(/ gptel-auto-experiment-time-budget 60))
+                (memory-context . ,(if (fboundp 'gptel-auto-workflow--memory-schema-experiment-context)
+                                       (or (gptel-auto-workflow--memory-schema-experiment-context target) "")))
+                (context-db-context . ,(gptel-auto-experiment--context-db-for-prompt target))
+                (time-budget . ,(/ gptel-auto-experiment-time-budget 60))
               (focus-line . ,focus-line)
               (sexp-check-command . ,sexp-check-command))))
       ;; Try category-specific template first; fall back to EDN resolve
@@ -2218,8 +2252,12 @@ If :business-value-score is not set, computes from local signals."
             ;; Process any queued alerts
             (when (fboundp 'gptel-auto-workflow--process-alert-queue)
               (gptel-auto-workflow--process-alert-queue)))
-        (error
-         (message "[auto-workflow] Human interface error: %s" err))))
+(error
+          (message "[auto-workflow] Human interface error: %s" err))))
+    ;; Context database: capture causal/business context per experiment
+    (when (and gptel-auto-workflow-context-db-auto-capture
+               (fboundp 'gptel-auto-workflow-context-db-capture))
+      (gptel-auto-workflow-context-db-capture experiment))
     (gptel-auto-workflow--sync-live-kept-count run-id file)))
 
 (defun gptel-auto-experiment--make-kept-result-callback (run-id exp-result log-fn callback)

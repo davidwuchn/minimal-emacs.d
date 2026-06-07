@@ -10,6 +10,21 @@ ulimit -s 65532 2>/dev/null || true
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPT="$DIR/scripts/run-auto-workflow-cron.sh"
+
+# Bootstrap: ensure we're running the latest version of the script.
+# This prevents stale code when the local branch has diverged from origin.
+# Uses rebase to handle divergence gracefully.
+BOOTSTRAP_HEAD_BEFORE="$(git -C "$DIR" rev-parse HEAD 2>/dev/null)" || true
+(git -C "$DIR" fetch origin main 2>/dev/null && \
+ git -C "$DIR" stash -q 2>/dev/null || true && \
+ git -C "$DIR" checkout HEAD -- mementum/knowledge/ assistant/skills/ assistant/strategies/ 2>/dev/null || true && \
+ git -C "$DIR" rebase origin/main 2>/dev/null && \
+ git -C "$DIR" stash pop -q 2>/dev/null || true) || true
+# If HEAD moved (rebase succeeded), re-exec so we run the updated script.
+if [ -n "$BOOTSTRAP_HEAD_BEFORE" ] && [ "$BOOTSTRAP_HEAD_BEFORE" != "$(git -C "$DIR" rev-parse HEAD 2>/dev/null)" ]; then
+    echo "[pipeline] Bootstrap: HEAD updated, re-execing with latest code"
+    exec "$0" "${@:-}"
+fi
 LOG_DIR="$DIR/var/tmp/cron"
 PIPELINE_LOG="$LOG_DIR/pipeline.log"
 LOCK_FILE="$LOG_DIR/pipeline.lock"
@@ -34,6 +49,84 @@ log() {
 
     line="[pipeline $(date '+%H:%M:%S')] $*"
     printf '%s\n' "$line"
+}
+
+# ─── Pipeline Operations (merged from run-pipeline-ops.sh) ───
+
+PLAN_DIR="$DIR/mementum/knowledge/plans/pipeline-runs"
+TIMESTAMP=$(date '+%Y%m%d-%H%M%S')
+
+# Pre-pipeline: Create plan and update state
+create_pipeline_plan() {
+    log "Creating pipeline plan..."
+    mkdir -p "$PLAN_DIR/run-$TIMESTAMP"
+    cat > "$PLAN_DIR/run-$TIMESTAMP/plan.md" <<EOF
+# Pipeline Run $TIMESTAMP
+
+## Objective
+Run OV5 self-evolution pipeline with research -> digestion -> workflow.
+
+## Requirements
+- Research findings digested before workflow
+- Quota-aware scheduling
+- Results tracked in mementum
+
+## DoD
+- [ ] Pipeline completes without error
+- [ ] Results stored in mementum/memories/
+- [ ] State updated in mementum/state.md
+
+## Changelog
+- **$(date '+%Y-%m-%d')**: Plan created
+EOF
+    log "Plan created: $PLAN_DIR/run-$TIMESTAMP/"
+}
+
+# Post-pipeline: Update plan with results
+update_pipeline_plan() {
+    local status="$1"
+    log "Updating pipeline plan..."
+    cat >> "$PLAN_DIR/run-$TIMESTAMP/plan.md" <<EOF
+
+## Results
+
+- **Status**: $status
+- **Timestamp**: $TIMESTAMP
+
+EOF
+    log "Plan updated with status: $status"
+}
+
+# Post-pipeline: Update mementum state
+update_mementum_state() {
+    local status="$1"
+    log "Updating mementum/state.md..."
+    if [ -f "$DIR/mementum/state.md" ]; then
+        local tmp
+        tmp=$(mktemp)
+        {
+            echo "# Mementum State"
+            echo ""
+            echo "> **Last pipeline**: $(date '+%Y-%m-%d') ($status)"
+            echo "> **Next pipeline**: scheduled"
+            echo "> **Plan**: $PLAN_DIR/run-$TIMESTAMP/"
+            echo ""
+            # Append rest of existing state (skip first line)
+            tail -n +2 "$DIR/mementum/state.md" 2>/dev/null || true
+        } > "$tmp"
+        mv "$tmp" "$DIR/mementum/state.md"
+        log "State updated"
+    fi
+}
+
+# Post-pipeline: Log patterns for analysis
+log_pipeline_patterns() {
+    local status="$1"
+    log "Logging pipeline patterns..."
+    if [ -f "$DIR/mementum/state.md" ]; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') | Pipeline $status | Plan: $PLAN_DIR/run-$TIMESTAMP/" >> "$DIR/mementum/.pipeline-log"
+        log "Patterns logged to mementum/.pipeline-log"
+    fi
 }
 
 # Prevent overlapping runs
@@ -272,14 +365,21 @@ pipeline_git_sync_latest() {
 
     pipeline_clear_auto_generated_unmerged_paths || return 0
 
-    stash_output="$(git -C "$DIR" stash push -m "${stash_label}-$(date +%s)" 2>&1 || true)"
+    # SAFER STASH: only stash changes inside auto-generated directories.
+    # This prevents accidentally destroying user work-in-progress outside those
+    # dirs if the stash pop fails after rebase. Auto-gen dirs are upstream-
+    # dominant per AGENTS.md — Pi5's version always wins on conflict.
+    stash_output="$(git -C "$DIR" stash push \
+        --include-untracked \
+        -m "${stash_label}-$(date +%s)" \
+        -- mementum/knowledge/ assistant/skills/ assistant/strategies/ mementum/memories/ 2>&1 || true)"
     case "$stash_output" in
         *"No local changes to save"*) stash_made=0 ;;
         *"Saved working directory"*) stash_made=1 ;;
         *"Saved working tree"*) stash_made=1 ;;
         "") stash_made=0 ;;
         *)
-            log "WARNING: git stash failed during $label; continuing without stash pop"
+            log "WARNING: git stash (auto-gen only) failed during $label; continuing without stash pop"
             printf '%s\n' "$stash_output" >> "$PIPELINE_LOG"
             stash_made=0
             ;;
@@ -292,8 +392,10 @@ pipeline_git_sync_latest() {
 
     if [ "$stash_made" -eq 1 ]; then
         if ! git -C "$DIR" stash pop 2>/dev/null; then
-            log "WARNING: $label stash pop failed, resetting to HEAD and dropping stash"
-            git -C "$DIR" reset --hard HEAD 2>/dev/null || true
+            # SAFER: only drop the stash we created (auto-gen scoped). Any
+            # user work outside auto-gen dirs stays untouched. Never reset
+            # --hard, which can destroy in-progress user work.
+            log "WARNING: $label stash pop failed; dropping only the auto-gen stash"
             git -C "$DIR" stash drop 2>/dev/null || true
         fi
     fi
@@ -440,8 +542,51 @@ log "Cleared stale findings files"
 # Capture start time AFTER clearing stale files so mtime check is reliable
 PIPELINE_START_TIME="$(date +%s)"
 
+# ─── Step 0.5: Self-heal preflight (cheap, runs before any daemon work) ───
+# Read last self-healing state from disk and decide whether to escalate.
+# Catches PENDING remediations that verify-recovery should have closed.
+log "=== Step 0.5: Self-heal preflight ==="
+HEALTH_FILE="$DIR/mementum/knowledge/pipeline-health.md"
+if [ -f "$HEALTH_FILE" ]; then
+    PENDING_COUNT=$(grep -c '| PENDING' "$HEALTH_FILE" 2>/dev/null || echo 0)
+    CONSECUTIVE=$(grep -E '^Consecutive failures:' "$HEALTH_FILE" 2>/dev/null | awk '{print $NF}' || echo 0)
+    log "  pipeline-health: $PENDING_COUNT pending remediations, $CONSECUTIVE consecutive failures"
+    if [ "$PENDING_COUNT" -ge 5 ] || [ "${CONSECUTIVE:-0}" -ge 3 ]; then
+        log "  ⚠ Self-heal threshold reached: forcing backend rotation"
+        # Clear backend rate-limit cache so onto-router considers alternatives
+        if [ -f "$DIR/var/tmp/rate-limited-backends.txt" ]; then
+            log "  Clearing stale rate-limited-backend cache"
+            rm -f "$DIR/var/tmp/rate-limited-backends.txt"
+        fi
+    fi
+else
+    log "  pipeline-health: not yet initialized (first run)"
+fi
+
+# ─── Step 0.6: Refresh approval-queue priorities ───
+# Approved (human-reviewed) proposals should bias next experiment selection
+# toward their target files. This closes the human-in-the-loop → next-cycle
+# feedback gap.
+log "=== Step 0.6: Refresh approval priorities ==="
+PRIORITIES_FILE="$DIR/var/tmp/approval-priorities.el"
+APPROVED_COUNT=0
+if [ -d "$DIR/var/approval-queue/decisions" ]; then
+    APPROVED_COUNT=$(find "$DIR/var/approval-queue/decisions" -name "*.sexp" -exec grep -l ':status "approved"' {} \; 2>/dev/null | wc -l)
+    if [ "$APPROVED_COUNT" -gt 0 ]; then
+        log "  Found $APPROVED_COUNT approved proposals; refreshing priorities"
+        rm -f "$PRIORITIES_FILE"
+    else
+        log "  No approved proposals pending; priorities unchanged"
+    fi
+else
+    log "  No decisions directory yet; skipping priority refresh"
+fi
+
 # Verify findings were produced
 RESEARCH_QUALITY="none"
+
+# ─── Pipeline Ops: Create plan for this run ───
+create_pipeline_plan
 
 # ─── Step 0: Researcher fetches files on demand (no batch prefetch) ───
 log "=== Step 0: Researcher will fetch specific files on demand via gh CLI ==="
@@ -672,6 +817,84 @@ else
     log "No results file found for today"
 fi
 
+# ─── Step 6.1: Operational Metrics ───
+log "=== Step 6.1: Operational Metrics ==="
+METRICS_ELISP="(when (fboundp (quote gptel-auto-workflow-operational-metrics-report))
+                  (gptel-auto-workflow-operational-metrics-report))"
+if emacsclient --socket-name="pmf-value-stream" --eval "$METRICS_ELISP" >/dev/null 2>&1; then
+    log "  Metrics logged to daemon output"
+else
+    log "  Daemon not available for metrics (non-fatal)"
+fi
+
+# ─── Step 6.4: Daily digest — surface kept experiments to mementum ───
+# YC principle: humans see "what kept last night" in one place. The pipeline
+# already merges to git; this writes a human-readable summary that morning-sync
+# can read without git log archaeology.
+log "=== Step 6.4: Daily digest ==="
+DIGEST_DIR="$DIR/mementum/knowledge/digests"
+DIGEST_FILE="$DIGEST_DIR/$(date +%F).md"
+mkdir -p "$DIGEST_DIR"
+{
+    echo "# Daily Pipeline Digest — $(date '+%Y-%m-%d')"
+    echo ""
+    echo "> Auto-generated by run-pipeline.sh. Human-readable summary of kept"
+    echo "> experiments, backend performance, and self-heal state."
+    echo ""
+    echo "## Kept Experiments (last 24h)"
+    echo ""
+    if compgen -G "$DIR/var/tmp/experiments/*/results.tsv" >/dev/null; then
+        # Find results.tsv files modified in last 24h
+        recent_results=$(find "$DIR/var/tmp/experiments" -maxdepth 2 -name "results.tsv" -mtime -1 2>/dev/null | sort)
+        if [ -n "$recent_results" ]; then
+            # Use awk to aggregate kept experiments across all recent files
+            for rf in $recent_results; do
+                awk -F'\t' 'NR>1 && $8 ~ /^(kept|grader-bypass|merged|staged)$/ {
+                    printf "- **%s** (exp %s, decision: %s)\n", $2, $1, $8
+                }' "$rf" 2>/dev/null
+            done
+        else
+            echo "- No experiments in last 24h"
+        fi
+    else
+        echo "- No results files found"
+    fi
+    echo ""
+    echo "## Backend Performance (last 24h)"
+    echo ""
+    if compgen -G "$DIR/var/tmp/experiments/*/results.tsv" >/dev/null; then
+        # Aggregate by backend from last 24h
+        find "$DIR/var/tmp/experiments" -maxdepth 2 -name "results.tsv" -mtime -1 -exec cat {} \; 2>/dev/null | \
+            awk -F'\t' 'NR>1 && $15 != "" && $15 != "unknown" {
+                backends[$15]++; if ($8 ~ /^(kept|grader-bypass|merged|staged)$/) kept[$15]++
+            } END {
+                for (b in backends) {
+                    rate = (kept[b]+0) * 100 / backends[b]
+                    printf "- **%s**: %d kept / %d total (%.0f%%)\n", b, kept[b]+0, backends[b], rate
+                }
+            }' | sort -k4 -n -r || echo "- No backend data"
+    else
+        echo "- No results files found"
+    fi
+    echo ""
+    echo "## Self-Heal State"
+    echo ""
+    if [ -f "$DIR/mementum/knowledge/pipeline-health.md" ]; then
+        # Pull out the most recent 5 entries
+        grep -E "^[0-9]" "$DIR/mementum/knowledge/pipeline-health.md" 2>/dev/null | tail -5 | \
+            sed 's/^/  - /' || echo "  - No remediations recorded"
+    else
+        echo "- pipeline-health.md not yet created"
+    fi
+    echo ""
+    echo "## Pipeline Run Status"
+    echo ""
+    echo "- Final status: $PIPELINE_FINAL_STATUS"
+    echo "- Pipeline log: $PIPELINE_LOG"
+    echo "- Last run timestamp: $(date '+%Y-%m-%d %H:%M:%S')"
+} > "$DIGEST_FILE"
+log "Daily digest written: $DIGEST_FILE"
+
 # ─── Step 6.5: Merge kept experiment branches to main ───
 log "=== Step 6.5: Merge kept experiments ==="
 kept_count=0
@@ -775,25 +998,30 @@ done
 if [ "$has_auto_gen" -eq 1 ]; then
     log "Auto-generated changes detected, publishing to main..."
     
-    # Stash any non-auto-generated changes
-    stash_output="$(git -C "$DIR" stash push -m "pipeline-auto-sync-$(date +%s)" 2>&1 || true)"
+    # SAFER STASH: only stash changes inside auto-generated directories.
+    # This prevents accidentally destroying user work-in-progress outside those
+    # dirs if the stash pop fails after the publish pull.
+    stash_output="$(git -C "$DIR" stash push \
+        --include-untracked \
+        -m "pipeline-auto-sync-$(date +%s)" \
+        -- mementum/knowledge/ assistant/skills/ assistant/strategies/ mementum/memories/ 2>&1 || true)"
     stash_made=0
     case "$stash_output" in
         *"Saved working directory"*|*"Saved working tree"*) stash_made=1 ;;
     esac
-    
+
     # Pull latest to avoid conflicts
     git -C "$DIR" pull --rebase 2>/dev/null || log "WARNING: git pull failed before push"
-    
+
     # Stage auto-generated files
     git -C "$DIR" add mementum/ assistant/skills/ assistant/strategies/ 2>/dev/null || true
-    
+
     # Commit if there are staged changes
     if ! git -C "$DIR" diff --cached --quiet 2>/dev/null; then
         commit_msg="$(date '+🔄 Auto-evolved outcomes: %Y-%m-%d %H:%M')"
         if git -C "$DIR" commit -m "$commit_msg" 2>/dev/null; then
             log "  ✓ Committed auto-generated outcomes"
-            
+
             # Push to origin/main
             remote="$(git -C "$DIR" remote get-url origin 2>/dev/null || true)"
             if [ -n "$remote" ]; then
@@ -811,17 +1039,30 @@ if [ "$has_auto_gen" -eq 1 ]; then
     else
         log "No staged changes to commit"
     fi
-    
-    # Restore stashed changes
+
+    # SAFER POP: only pop the auto-gen stash. If it fails, just drop it —
+    # never reset --hard, which could destroy user work outside auto-gen dirs.
     if [ "$stash_made" -eq 1 ]; then
         if ! git -C "$DIR" stash pop 2>/dev/null; then
-            log "WARNING: stash pop failed after auto-publish, resetting to HEAD and dropping stash"
-            git -C "$DIR" reset --hard HEAD 2>/dev/null || true
+            log "WARNING: stash pop failed after auto-publish; dropping the auto-gen stash only"
             git -C "$DIR" stash drop 2>/dev/null || true
         fi
     fi
 else
     log "No auto-generated changes to publish"
 fi
+
+# ─── Pipeline Ops: Update plan, state, and log patterns ───
+# Determine status: ok if no warnings, warn otherwise
+PIPELINE_FINAL_STATUS="ok"
+if grep -qE "WARNING:" "$PIPELINE_LOG" 2>/dev/null; then
+    PIPELINE_FINAL_STATUS="warn"
+fi
+if grep -qE "load-error|all backends exhausted" "$PIPELINE_LOG" 2>/dev/null; then
+    PIPELINE_FINAL_STATUS="err"
+fi
+update_pipeline_plan "$PIPELINE_FINAL_STATUS"
+update_mementum_state "$PIPELINE_FINAL_STATUS"
+log_pipeline_patterns "$PIPELINE_FINAL_STATUS"
 
 exit 0

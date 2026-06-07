@@ -263,8 +263,10 @@ Checks for control characters, private-use chars, and non-characters."
 
 (defun my/gptel--sanitize-string-for-json (string)
   "Sanitize STRING for JSON serialization.
-Removes control characters, private-use chars, and non-characters that break json-serialize.
-Also removes supplementary private-use area chars (U+F0000-U+FFFFD, U+100000-U+10FFFD)."
+Removes control characters, private-use chars, and non-characters that break
+json-serialize.
+Also removes supplementary private-use area chars (U+F0000-U+FFFFD,
+U+100000-U+10FFFD)."
   (when (stringp string)
     (apply #'string (seq-filter (lambda (c) (not (my/gptel--char-problematic-p c)))
                                 (string-to-list string)))))
@@ -311,7 +313,8 @@ requires string values. Recursively processes nested :properties and :items."
              (my/gptel--sanitize-tool-props nested-props))))
 
 (defun my/gptel--pre-serialize-sanitize-messages (info _uuid _include-headers)
-  "Ensure no message has nil :content and sanitize all content for JSON serialization.
+  "Ensure no message has nil :content and sanitize all content for JSON
+serialization.
 
 nil :content is encoded as {} by json-serialize, causing a 400 Bad Request.
 Also sanitizes ALL content strings that may contain problematic Unicode

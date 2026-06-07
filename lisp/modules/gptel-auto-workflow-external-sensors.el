@@ -21,6 +21,8 @@
 
 (require 'cl-lib)
 (require 'json)
+(require 'subr-x)
+(require 'url-util)
 
 ;; ============================================================================
 ;; Configuration
@@ -50,11 +52,72 @@ CONFIG is a plist with :dsn and :environment."
   (and gptel-auto-workflow--sentry-config
        (plist-get gptel-auto-workflow--sentry-config :dsn)))
 
-(defun gptel-auto-workflow--sentry-api-call (_endpoint _params)
+(defun gptel-auto-workflow--sentry-api-call (endpoint params)
   "Make API call to Sentry ENDPOINT with PARAMS.
-This is a stub for testing - in production would make HTTP requests."
-  ;; Stub implementation - tests will override this with cl-letf
-  nil)
+Uses curl via call-process. Returns parsed JSON plist or nil on failure.
+Requires OV5_SENTRY_API_KEY env var or `gptel-auto-workflow--sentry-api-key'."
+  (let ((api-key (or (getenv "OV5_SENTRY_API_KEY")
+                     (bound-and-true-p gptel-auto-workflow--sentry-api-key)))
+        (base-url (or (and gptel-auto-workflow--sentry-config
+                           (plist-get gptel-auto-workflow--sentry-config :base-url))
+                      "https://sentry.io/api/0"))
+        (org-slug (or (and gptel-auto-workflow--sentry-config
+                           (plist-get gptel-auto-workflow--sentry-config :org))
+                      (getenv "OV5_SENTRY_ORG")))
+        (project-slug (or (and gptel-auto-workflow--sentry-config
+                                (plist-get gptel-auto-workflow--sentry-config :project))
+                          (getenv "OV5_SENTRY_PROJECT"))))
+    (when (and api-key (not (string-empty-p api-key)))
+       (let* ((url (cond
+                    ;; Full URL already
+                    ((string-prefix-p "http" endpoint) endpoint)
+                    ;; Strip redundant /api/0 prefix (base-url already includes it)
+                    ((string-prefix-p "/api/0" endpoint)
+                     (let ((clean-endpoint (substring endpoint 6)))
+                       (cond
+                        ((and org-slug project-slug)
+                         (format "%s/projects/%s/%s%s" base-url org-slug project-slug clean-endpoint))
+                        (org-slug
+                         (format "%s/organizations/%s%s" base-url org-slug clean-endpoint))
+                        (t (format "%s%s" base-url clean-endpoint)))))
+                    ;; Project-scoped endpoint
+                    ((and org-slug project-slug)
+                     (format "%s/projects/%s/%s%s" base-url org-slug project-slug endpoint))
+                    ;; Org-scoped endpoint
+                    (org-slug
+                     (format "%s/organizations/%s%s" base-url org-slug endpoint))
+                    ;; Bare endpoint (no org/project)
+                    (t (format "%s%s" base-url endpoint))))
+              (query-string
+               (when params
+                 (let ((parts nil))
+                   (when (plist-get params :start)
+                     (push (format "since=%d" (plist-get params :start)) parts))
+                   (when (plist-get params :end)
+                     (push (format "until=%d" (plist-get params :end)) parts))
+                   (when (plist-get params :filter)
+                     (push (format "query=%s" (url-hexify-string (plist-get params :filter))) parts))
+                   (when (plist-get params :stat)
+                     (push (format "stat=%s" (url-hexify-string (plist-get params :stat))) parts))
+                   (when parts
+                     (concat "?" (string-join (nreverse parts) "&"))))))
+             (full-url (if query-string (concat url query-string) url)))
+        (condition-case err
+            (with-temp-buffer
+              (let ((exit-code
+                     (call-process "curl" nil t nil
+                                   "-s" "-f" "-H" (format "Authorization: Bearer %s" api-key)
+                                   full-url)))
+                (if (and exit-code (zerop exit-code))
+                    (progn
+                      (goto-char (point-min))
+                      (json-parse-buffer :object-type 'plist :array-type 'list))
+                  (message "[external-sensors] Sentry API call failed (exit %d): %s %s"
+                           (or exit-code -1) endpoint (or query-string ""))
+                  nil)))
+          (error
+           (message "[external-sensors] Sentry API error: %s" (error-message-string err))
+           nil))))))
 
 (defun gptel-auto-workflow--query-error-rate (&rest args)
   "Query error rate for time window or module.
@@ -215,10 +278,31 @@ CONFIG is a plist with :webhook-endpoint, :storage-backend, :retention-days."
   (and gptel-auto-workflow--feedback-config
        (plist-get gptel-auto-workflow--feedback-config :webhook-endpoint)))
 
-(defun gptel-auto-workflow--feedback-query (_module _start-time _end-time)
+(defun gptel-auto-workflow--feedback-query (module start-time end-time)
   "Query feedback for MODULE between START-TIME and END-TIME.
-This is a stub - tests override with cl-letf."
-  nil)
+Uses configured webhook endpoint if available, otherwise returns nil.
+Webhook endpoint is set via OV5_FEEDBACK_ENDPOINT env var or feedback config."
+  (let ((endpoint (or (and gptel-auto-workflow--feedback-config
+                           (plist-get gptel-auto-workflow--feedback-config :webhook-endpoint))
+                      (getenv "OV5_FEEDBACK_ENDPOINT"))))
+    (when (and endpoint (not (string-empty-p endpoint)))
+       (let* ((req-url (format "%s?module=%s&start=%d&end=%d"
+                               endpoint
+                               (url-hexify-string (or module ""))
+                               (round start-time)
+                               (round end-time)))
+             (result (condition-case err
+                         (with-temp-buffer
+                           (let ((exit-code (call-process "curl" nil t nil "-s" "-f" req-url)))
+                             (if (and exit-code (zerop exit-code))
+                                 (progn
+                                   (goto-char (point-min))
+                                   (json-parse-buffer :object-type 'plist :array-type 'list))
+                               nil)))
+                       (error
+                        (message "[external-sensors] Feedback query error: %s" (error-message-string err))
+                        nil))))
+        result))))
 
 (defun gptel-auto-workflow--collect-user-feedback (module &rest args)
   "Collect user feedback for MODULE.
@@ -492,6 +576,150 @@ Returns plist or nil if file doesn't exist."
       (let ((json-object-type 'plist)
             (json-array-type 'list))
         (json-read-from-string (buffer-string))))))
+
+;; ============================================================================
+;; Task 1.3: GitHub Issues Sensor (external user feedback)
+;; ============================================================================
+
+(defcustom gptel-auto-workflow-github-repo nil
+  "GitHub repo for issue sensing in OWNER/REPO format.
+When nil, attempts auto-detection from git remote.
+Set to a string like \"davidwu/minimal-emacs.d\" to override."
+  :type '(choice (const nil) string)
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-auto-workflow-github-issues-days 7
+  "Number of days to look back for GitHub issues."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
+(defun gptel-auto-workflow--github-detect-repo ()
+  "Auto-detect GitHub repo from git remote.
+Returns OWNER/REPO string or nil."
+  (let ((remote-url (condition-case nil
+                        (with-temp-buffer
+                          (call-process "git" nil t nil
+                                        "remote" "get-url" "origin")
+                          (goto-char (point-min))
+                          (buffer-substring (point-min) (line-end-position)))
+                      (error nil))))
+    (when (stringp remote-url)
+      (cond
+       ;; SSH: git@github.com:OWNER/REPO.git
+       ((string-match "github\\.com:\\(.+?\\)\\(\\.git\\)?$" remote-url)
+        (match-string 1 remote-url))
+       ;; HTTPS: https://github.com/OWNER/REPO.git
+       ((string-match "github\\.com/\\(.+?\\)\\(\\.git\\)?$" remote-url)
+        (match-string 1 remote-url))
+       (t nil)))))
+
+(defun gptel-auto-workflow--github-repo ()
+  "Return the GitHub repo to query, or nil if unavailable."
+  (or gptel-auto-workflow-github-repo
+      (gptel-auto-workflow--github-detect-repo)))
+
+(defun gptel-auto-workflow--github-fetch-issues (repo &optional days)
+  "Fetch recent GitHub issues for REPO via gh CLI.
+DAYS is the lookback window (default: `github-issues-days').
+Returns a plist with :open-issues, :closed-issues, :labels,
+:top-issues (list of plists), :error-count, :bug-count,
+:enhancement-count, :fetched-at, or nil on failure."
+  (let* ((days (or days gptel-auto-workflow-github-issues-days))
+         (since (format-time-string "%Y-%m-%dT%H:%M:%SZ"
+                                    (time-subtract
+                                     (current-time)
+                                     (days-to-time days))))
+         (output (condition-case nil
+                     (with-temp-buffer
+                       (let ((rc (call-process
+                                  "gh" nil t nil
+                                  "issue" "list"
+                                  "--repo" repo
+                                  "--state" "all"
+                                  "--limit" "50"
+                                  "--json"
+                                  "number,title,labels,state,createdAt,closedAt,comments"
+                                  "--search" (format "updated:>=%s" since))))
+                         (when (and (numberp rc) (= rc 0))
+                           (goto-char (point-min))
+                           (buffer-string))))
+                   (error nil))))
+    (when (and output (> (length output) 10))
+      (condition-case nil
+          (let* ((json-object-type 'plist)
+                 (json-array-type 'list)
+                 (issues (json-read-from-string output))
+                 (open-issues 0)
+                 (closed-issues 0)
+                 (bug-count 0)
+                 (enhancement-count 0)
+                 (label-counts (make-hash-table :test 'equal))
+                 (top-issues nil))
+            (dolist (issue issues)
+              (if (equal (plist-get issue :state) "OPEN")
+                  (setq open-issues (1+ open-issues))
+                (setq closed-issues (1+ closed-issues)))
+              (dolist (label (plist-get issue :labels))
+                (let ((name (downcase (or (plist-get label :name) ""))))
+                  (puthash name (1+ (gethash name label-counts 0))
+                           label-counts)
+                  (cond ((member name '("bug" "error" "crash" "regression"))
+                         (setq bug-count (1+ bug-count)))
+                        ((member name '("enhancement" "feature" "improvement"))
+                         (setq enhancement-count (1+ enhancement-count))))))
+              (when (< (length top-issues) 10)
+                (push (list :number (plist-get issue :number)
+                            :title (plist-get issue :title)
+                            :state (plist-get issue :state)
+                            :labels (mapcar (lambda (l) (plist-get l :name))
+                                            (plist-get issue :labels))
+                            :comments (length (plist-get issue :comments)))
+                      top-issues)))
+            (list :open-issues open-issues
+                  :closed-issues closed-issues
+                  :total (length issues)
+                  :bug-count bug-count
+                  :enhancement-count enhancement-count
+                  :label-distribution
+                  (let ((r nil))
+                    (maphash (lambda (k v) (push (cons k v) r)) label-counts)
+                    (sort r (lambda (a b) (> (cdr a) (cdr b)))))
+                  :top-issues (nreverse top-issues)
+                  :repo repo
+                  :window-days days
+                  :fetched-at (format-time-string "%Y-%m-%dT%H:%M:%S")))
+        (error nil)))))
+
+(defun gptel-auto-workflow--github-sensor-collect ()
+  "Collect GitHub Issues sensor data for the evolution cycle.
+Returns the issues plist from --github-fetch-issues, or nil.
+Auto-detects repo from git remote."
+  (let ((repo (gptel-auto-workflow--github-repo)))
+    (when repo
+      (message "[github-sensor] Fetching issues for %s (last %d days)"
+               repo gptel-auto-workflow-github-issues-days)
+      (let ((data (gptel-auto-workflow--github-fetch-issues
+                   repo gptel-auto-workflow-github-issues-days)))
+        (when data
+          (message "[github-sensor] %d open, %d closed, %d bugs, %d enhancements"
+                   (plist-get data :open-issues)
+                   (plist-get data :closed-issues)
+                   (plist-get data :bug-count)
+                   (plist-get data :enhancement-count))
+          data)))))
+
+(defun gptel-auto-workflow--github-sensor-summary ()
+  "Return a concise summary string for the metrics dashboard."
+  (let ((data (gptel-auto-workflow--github-sensor-collect)))
+    (if data
+        (format "GitHub Issues [%s]: %d open, %d closed, %d bugs, %d enhancements (last %dd)"
+                (plist-get data :repo)
+                (plist-get data :open-issues)
+                (plist-get data :closed-issues)
+                (plist-get data :bug-count)
+                (plist-get data :enhancement-count)
+                (plist-get data :window-days))
+      "GitHub Issues: not configured (no gh CLI or repo detected)")))
 
 ;; ============================================================================
 ;; Edge Cases

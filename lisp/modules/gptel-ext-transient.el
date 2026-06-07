@@ -25,7 +25,8 @@
 (declare-function gptel--crowdsourced-prompts "gptel-transient")
 
 (defun my/gptel--suffix-system-message-in-buffer (orig &optional cancel)
-  "Around-advice for `gptel--suffix-system-message': use originating gptel buffer.
+  "Around-advice for `gptel--suffix-system-message': use originating gptel
+buffer.
 Also ensures the system message is applied buffer-locally, not globally."
   (if cancel
       (funcall orig cancel)
@@ -64,8 +65,10 @@ Used to show different directive menus for gptel-agent vs regular gptel.")
 (defvar gptel-directives)
 
 (defun my/gptel--filter-directive-menu (orig sym msg &optional external)
-  "Around-advice: filter directives based on whether we're in gptel-agent or regular gptel.
-For gptel-agent/gptel-plan buffers: show only nucleus-gptel-agent and nucleus-gptel-plan.
+  "Around-advice: filter directives based on whether we're in gptel-agent or
+regular gptel.
+For gptel-agent/gptel-plan buffers: show only nucleus-gptel-agent and
+nucleus-gptel-plan.
 For regular gptel buffers: show all directives except hidden ones."
   (let* ((is-agent-buffer (memq my/gptel--transient-origin-preset '(gptel-plan gptel-agent)))
          (filtered

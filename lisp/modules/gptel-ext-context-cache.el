@@ -90,14 +90,16 @@ Prevents unbounded memory growth from repeated partial-match lookups.")
 
 (defvar my/gptel--alist-match-cache-size 0
   "Counter tracking `my/gptel--alist-partial-match-cache' entry count.
-Used to prevent cache from exceeding max-size by checking count before insertion.")
+Used to prevent cache from exceeding max-size by checking count before
+insertion.")
 
 (defvar my/gptel--token-estimate-cache (make-hash-table :test 'equal)
   "Hash table caching token estimates for (chars . extension) pairs.")
 
 (defvar my/gptel--token-estimate-cache-size 0
   "Atomic counter tracking `my/gptel--token-estimate-cache' entry count.
-Used to prevent cache from exceeding max-size by checking count before insertion.")
+Used to prevent cache from exceeding max-size by checking count before
+insertion.")
 
 (defvar my/gptel--context-window-cache-last-refresh nil
   "Time (as a float) when the cache was last refreshed.")
@@ -188,7 +190,8 @@ Sources:
 - Claude: https://openrouter.ai/models/anthropic/claude-sonnet-4
 - DeepSeek: https://api-docs.deepseek.com/zh-cn/quick_start/pricing
 - MiniMax: https://openrouter.ai/models/minimax/minimax-m2.7-highspeed
-- Cloudflare Workers AI Kimi K2.6: https://developers.cloudflare.com/workers-ai/models/kimi-k2.6/")
+- Cloudflare Workers AI Kimi K2.6:
+https://developers.cloudflare.com/workers-ai/models/kimi-k2.6/")
 
 (defvar my/gptel--known-model-metadata
   '(;; Qwen (Alibaba via DashScope) - VISION ENABLED
@@ -282,7 +285,8 @@ Sources:
      :pricing-input 0.35 :pricing-output 0.75
      :max-output 16384
      :features (streaming tools reasoning)
-     :description "Cloudflare Workers AI GPT-OSS 120B - fast open-weight reasoning model, 128k context")
+     :description "Cloudflare Workers AI GPT-OSS 120B - fast open-weight reasoning model, 128k
+context")
     ("gpt-4o"
      :context-window 128000
      :pricing-input 2.5 :pricing-output 10.0
@@ -298,7 +302,8 @@ Sources:
      :context-window 262144
      :pricing-input 0.95 :pricing-cached-input 0.16 :pricing-output 4.00
      :features (streaming tools reasoning vision)
-     :description "Cloudflare Workers AI Kimi K2.6 - 262k context, reasoning, function calling, vision")
+     :description "Cloudflare Workers AI Kimi K2.6 - 262k context, reasoning, function calling,
+vision")
     ("kimi-k2.5"
      :context-window 262144
      :pricing-input 0.45 :pricing-output 2.20
@@ -337,7 +342,8 @@ Distinguishes 'not cached' from 'cached nil' without using plain nil.")
 Returns the value from hash table if found and valid, otherwise searches ALIST
 for a partial match (case-insensitive).  Returns nil if not found.
 Handles negative cache hits when KEY maps to a miss sentinel.
-Validates that cached values are positive integers or normalizable numbers before returning."
+Validates that cached values are positive integers or normalizable numbers
+before returning."
   (when (and (stringp key) (not (string-empty-p key)))
     (if (and (hash-table-p hash-table) (proper-list-p alist))
         (let ((hash-value (gethash key hash-table my/gptel--cache-sentinel)))
@@ -365,7 +371,8 @@ Validates that cached values are positive integers or normalizable numbers befor
 (defun my/gptel--cache-or-alist-fallback (hash-table alist key)
   "Look up KEY in ALIST and cache the result in HASH-TABLE.
 Returns the alist match result or nil if not found.
-Uses sentinel comparison to distinguish \"no match\" (sentinel) from \"match with nil\"."
+Uses sentinel comparison to distinguish \"no match\" (sentinel) from \"match
+with nil\"."
   (let ((result (my/gptel--alist-partial-match alist key)))
     (if (eq result my/gptel--alist-match-sentinel)
         (progn
@@ -381,10 +388,12 @@ Uses sentinel comparison to distinguish \"no match\" (sentinel) from \"match wit
 Maps (alist-hash . search-str) to match result for O(1) repeated lookups.")
 
 (defun my/gptel--alist-partial-match (alist search-str)
-  "Find best matching entry in ALIST where key partially matches SEARCH-STR (case-insensitive).
+  "Find best matching entry in ALIST where key partially matches SEARCH-STR
+(case-insensitive).
 Returns the cdr (value) of the matching entry, or nil if no match.
 Matches if the alist key is a prefix of SEARCH-STR.
-When multiple entries match, returns the one with the longest key for most specific match.
+When multiple entries match, returns the one with the longest key for most
+specific match.
 Results are cached in `my/gptel--alist-partial-match-cache' for performance."
   (when (and alist (proper-list-p alist) (stringp search-str) (not (string-empty-p search-str)))
     (let* ((alist-id (sxhash alist))
@@ -436,8 +445,10 @@ Avoids redundant lookups when model is known to be absent from gptel tables.")
 (defun my/gptel--lookup-context-window-in-gptel-tables (model)
   "Look up context window for MODEL in gptel's built-in model tables.
 Returns the context window in tokens, or nil if not found.
-Handles both symbol and string model identifiers with case-insensitive fallback.
-Caches results in `my/gptel--gptel-tables-cw-cache' and `my/gptel--context-window-cache'
+Handles both symbol and string model identifiers with case-insensitive
+fallback.
+Caches results in `my/gptel--gptel-tables-cw-cache' and
+`my/gptel--context-window-cache'
 to avoid repeated table scans and redundant lookups."
   (when (or (stringp model) (symbolp model))
     (let ((model-str (if (stringp model) model (symbol-name model))))
@@ -473,7 +484,8 @@ to avoid repeated table scans and redundant lookups."
 (defun my/gptel--normalize-context-window (n)
   "Normalize gptel context-window value N to tokens.
 
-Some gptel model tables encode context windows in *thousands* of tokens as floats
+Some gptel model tables encode context windows in *thousands* of tokens as
+floats
 (e.g. 8.192 for 8192 tokens). OpenRouter's `context_length' is in raw tokens."
   (cond
    ((not (numberp n)) nil)
@@ -665,7 +677,8 @@ KEY is the API key for authorization."
   "Fetch from OpenRouter API URL and call CALLBACK with parsed JSON data.
 
 URL is the API endpoint.
-CALLBACK is a function called with (data) where data is the parsed 'data field.
+CALLBACK is a function called with (data) where data is the parsed 'data
+field.
 PROCESS-NAME defaults to \"gptel-openrouter-fetch\".
 CONNECT-TIMEOUT and MAX-TIME default to 10 and 120 seconds.
 
@@ -719,7 +732,7 @@ Returns nil if curl is unavailable or a fetch is already in flight."
                              (with-current-buffer buf
                                (goto-char (point-min))
                                (condition-case err
-                                   (let ((obj (json-parse-buffer :object-type 'alist :array-type 'list :null-object nil :false-object nil))
+                                   (let* ((obj (json-parse-buffer :object-type 'alist :array-type 'list :null-object nil :false-object nil))
                                          (data (alist-get 'data obj)))
                                      (funcall callback data))
                                  (error
@@ -981,8 +994,10 @@ Fallback order:
 3. Known model metadata (from cache or known list)
 4. my/gptel-default-context-window (128k default)
 
-Note: We do NOT use gptel-max-tokens as it's for response length, not context window.
-Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-window-cache'."
+Note: We do NOT use gptel-max-tokens as it's for response length, not context
+window.
+Note: OpenRouter fetch is NOT triggered here - use
+`my/gptel-refresh-context-window-cache'."
   (require 'gptel)
   (let ((model-id (my/gptel--model-id-string gptel-model)))
     (cond

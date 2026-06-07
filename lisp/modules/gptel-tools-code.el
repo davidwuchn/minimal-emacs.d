@@ -235,7 +235,9 @@ Reports which backend was used."
               (setq usages git-result))
           (let ((grepper (executable-find "rg")))
             (if (not grepper)
-                (setq usages (list (format "Error: ripgrep (rg) not found in PATH.\nInstall with: brew install ripgrep  (macOS)\n                 apt install ripgrep    (Ubuntu)\n                 winget install BurntSushi.ripgrep.MSVC  (Windows)")))
+                (setq usages (list (format "Error: ripgrep (rg) not found in PATH.\nInstall with: brew install ripgrep
+(macOS)\n apt install ripgrep (Ubuntu)\n winget install
+BurntSushi.ripgrep.MSVC (Windows)")))
               (with-timeout (my/gptel-search-timeout
                              (setq usages (list (format "Error: Search timed out after %d seconds" my/gptel-search-timeout))))
                 (with-temp-buffer
@@ -266,7 +268,8 @@ Reports which backend was used."
                     (format "No usages found for '%s' in %s" symbol-name root))))
       (if (> (length result) my/gptel-find-usages-max-chars)
           (let ((cache-file (my/gptel--usages-cache-write symbol-name root usages backend)))
-            (format "Found %d usages of '%s' (via %s).\nResult too large, cached to: %s\n\nUse `Read' tool with file_path to view specific sections."
+            (format "Found %d usages of '%s' (via %s).\nResult too large, cached to: %s\n\nUse
+`Read' tool with file_path to view specific sections."
                     (length usages) symbol-name backend cache-file))
         result))))
 
@@ -333,7 +336,8 @@ Uses call-process instead of shell commands for security."
       (concat "Note: No standard project files found (package.json, pyproject.toml, Cargo.toml, *.el).\n"
               "Searched for: JavaScript (package.json), Python (pyproject.toml/setup.py/*.py), "
               "Rust (Cargo.toml), Emacs Lisp (*.el).\n"
-              "If this is a different language, configure a linter or use LSP for diagnostics.")))))
+              "If this is a different language, configure a linter or use LSP for
+diagnostics.")))))
 
 (defun my/gptel--detect-treesit-language (file-path)
   "Detect tree-sitter language for FILE-PATH from extension.
@@ -616,7 +620,10 @@ Syncs buffer with disk, validates parser, guards against truncation."
                            (> my/gptel-code-replace-truncation-ratio 0)
                            (> (length old-code) my/gptel-code-replace-min-old-chars)
                            (< (length new_code) (* my/gptel-code-replace-truncation-ratio (length old-code))))
-                      (format "Error: Replacement rejected — new code (%d chars) is suspiciously shorter than original (%d chars).\nThis usually means the function body was truncated.\n\nACTION: Provide the COMPLETE replacement including the full function body."
+                      (format "Error: Replacement rejected — new code (%d chars) is suspiciously shorter than
+original (%d chars).\nThis usually means the function body was
+truncated.\n\nACTION: Provide the COMPLETE replacement including the full
+function body."
                               (length new_code) (length old-code))
                     (if (treesit-agent-replace-node node_name new_code)
                         (progn
@@ -635,7 +642,8 @@ Syncs buffer with disk, validates parser, guards against truncation."
                     (t (format "Error executing Code_Replace on %s: %s\n\nACTION: Check function name and new code syntax, then try again." abs-path msg)))))))))
 
 (defun gptel-tools-code--format-diagnostic (d)
-  "Format a single flymake diagnostic D as a string with file, line, type, and context."
+  "Format a single flymake diagnostic D as a string with file, line, type, and
+context."
   (let ((buf (flymake-diagnostic-buffer d))
         (text (flymake-diagnostic-text d))
         (type (flymake-diagnostic-type d))
@@ -672,7 +680,8 @@ For .el files, uses checkdoc/byte-compile/package-lint instead of LSP."
       (gptel-tools-code--elisp-diagnostics file-path)
     ;; Non-elisp files: use LSP or CLI fallback
     (if (not (fboundp 'flymake--project-diagnostics))
-        "Error: flymake--project-diagnostics not available.\n\nThis usually means Flymake is not initialized. Try opening a source file first."
+        "Error: flymake--project-diagnostics not available.\n\nThis usually means
+Flymake is not initialized. Try opening a source file first."
       (let* ((proj (project-current))
              (dir (if proj (project-root proj) default-directory))
              (lsp-active (my/gptel--lsp-active-p))
@@ -687,7 +696,8 @@ For .el files, uses checkdoc/byte-compile/package-lint instead of LSP."
                diags)))
         (if (not filtered)
             (if lsp-active
-                "No compiler or LSP diagnostics found for the current project. (LSP server is running, code is clean)."
+                "No compiler or LSP diagnostics found for the current project. (LSP server is
+running, code is clean)."
               (concat "Note: No LSP server running for this project.\nFalling back to CLI linter:\n\n"
                       (my/gptel--run-fallback-linter dir file-path)))
           (let* ((formatted (mapcar #'gptel-tools-code--format-diagnostic filtered))
@@ -774,11 +784,13 @@ Examples:
       :args (list '(:name "file_path"
                           :type string
                           :optional t
-                          :description "Path to check. If omitted, checks entire project. For .el files, runs checkdoc/byte-compile/package-lint.")
+                          :description "Path to check. If omitted, checks entire project. For .el files, runs
+checkdoc/byte-compile/package-lint.")
                   '(:name "all"
                           :type boolean
                           :optional t
-                          :description "When true, also collect notes and low-severity diagnostics. Default: only errors and warnings.")
+                          :description "When true, also collect notes and low-severity diagnostics. Default: only
+errors and warnings.")
                   '(:name "max_answer_chars"
                           :type integer
                           :optional t

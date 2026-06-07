@@ -187,7 +187,8 @@ CALLBACK receives non-nil for approval and nil for rejection."
 
 (defun my/gptel--confirm-tool-calls-minibuffer (tool-calls info)
   "Confirm TOOL-CALLS via minibuffer with per-tool permit support.
-Shows each tool call with arguments, offering inspect (i) and permit (p) actions."
+Shows each tool call with arguments, offering inspect (i) and permit (p)
+actions."
   (let* ((minibuffer-allow-text-properties t)
          (backend-name (gptel-auto-workflow--safe-backend-name (plist-get info :backend)))
          (programmaticp (plist-get info :programmatic-confirm))
@@ -399,7 +400,8 @@ Returns (callback . is-programmatic) where callback is the function or nil."
 
 (defun my/gptel--handle-programmatic-callback (orig &optional response ov approved)
   "Helper for Programmatic tool confirm/reject handling.
-If the tool call is Programmatic, invokes the callback with APPROVED (t or nil)
+If the tool call is Programmatic, invokes the callback with APPROVED (t or
+nil)
 and cleans up the overlay.  Otherwise calls ORIG with RESPONSE and OV.
 APPROVED should be t for accept, nil for reject."
   (pcase-let ((`(,cb . ,programmaticp) (my/gptel--extract-programmatic-callback response ov)))

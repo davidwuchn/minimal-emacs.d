@@ -31,12 +31,14 @@
 (defvar-local my/gptel--tool-reasoning-alist nil
   "Alist of (TOOL-CALL-ID . REASONING-STRING) for the current gptel buffer.
 Populated by `my/gptel--capture-tool-reasoning' after each tool call turn
-so that `my/gptel--parse-buffer-inject-reasoning' can recover reasoning_content
+so that `my/gptel--parse-buffer-inject-reasoning' can recover
+reasoning_content
 when re-serializing the conversation for APIs that require it (e.g. Moonshot).")
 
 (defun my/gptel--reasoning-key-for-model (model &optional backend)
   "Return the reasoning field keyword for MODEL on BACKEND, or nil.
-Returns :reasoning_content for models with :thinking param (Moonshot, DeepSeek V4),
+Returns :reasoning_content for models with :thinking param (Moonshot, DeepSeek
+V4),
 :reasoning for legacy models that still use :reasoning request params.
 When BACKEND is non-nil, only returns a key for gptel-openai backends."
   (when (stringp model)
@@ -50,7 +52,8 @@ When BACKEND is non-nil, only returns a key for gptel-openai backends."
          (t nil))))))
 
 (defun my/gptel--thinking-model-p ()
-  "Return the reasoning field keyword if current model has thinking/reasoning enabled.
+  "Return the reasoning field keyword if current model has thinking/reasoning
+enabled.
 Returns :reasoning_content for models with :thinking enabled,
 :reasoning for legacy models that still use :reasoning, nil otherwise."
   (my/gptel--reasoning-key-for-model gptel-model))
@@ -124,7 +127,8 @@ Returns the number of messages repaired."
     repaired))
 
 (defun my/gptel--parse-buffer-inject-reasoning (orig backend &optional max-entries)
-  "Around-advice on `gptel--parse-buffer': inject reasoning_content into tool-call messages.
+  "Around-advice on `gptel--parse-buffer': inject reasoning_content into
+tool-call messages.
 For backends where thinking is enabled (e.g. Moonshot/Kimi), every assistant
 message with tool_calls must carry reasoning_content or the API returns 400.
 The field is injected even as empty string when no reasoning was captured for
@@ -148,9 +152,11 @@ that turn — the API requires presence, not a non-empty value."
 
 
 (defun my/gptel--pre-serialize-inject-noop (info _uuid _include-headers)
-  "Before-advice on `gptel-curl--get-args': inject dummy _noop tool for LiteLLM/Anthropic.
+  "Before-advice on `gptel-curl--get-args': inject dummy _noop tool for
+LiteLLM/Anthropic.
 If tool_calls are present in message history but no active tools are selected,
-many proxies crash with 400 Bad Request. We inject a dummy to satisfy validation."
+many proxies crash with 400 Bad Request. We inject a dummy to satisfy
+validation."
   (when-let* ((data  (plist-get info :data))
               (msgs  (plist-get data :messages)))
     (let* ((tools (plist-get data :tools))
@@ -173,9 +179,11 @@ many proxies crash with 400 Bad Request. We inject a dummy to satisfy validation
                (plist-put info :data (plist-put data :tools (vector noop-tool))))))))))
 
 (defun my/gptel--pre-serialize-inject-reasoning (info _uuid _include-headers)
-  "Before-advice on `gptel-curl--get-args': ensure reasoning_content on tool-call messages.
+  "Before-advice on `gptel-curl--get-args': ensure reasoning_content on tool-call
+messages.
 For Moonshot (and any model with :thinking/:reasoning request-params), every
-assistant message that contains tool_calls must carry a reasoning_content field."
+assistant message that contains tool_calls must carry a reasoning_content
+field."
   (let* ((model   (plist-get info :model))
          (backend (plist-get info :backend))
          (reasoning-key (my/gptel--reasoning-key-for-model model backend)))
@@ -241,7 +249,8 @@ OpenRouter/Anthropic when the model emits a tool call with a nil function name
 ;; Immediate patch: stamp reasoning_content right when the message is injected
 ;; into data :messages so it never travels without the field.
 (defun my/gptel--inject-prompt-patch-reasoning (backend data new-prompt &rest _)
-  "After-advice on `gptel--inject-prompt': stamp reasoning_content on tool-call messages."
+  "After-advice on `gptel--inject-prompt': stamp reasoning_content on tool-call
+messages."
   (let* ((model-name (plist-get data :model))
          (model (and model-name
                      (if (symbolp model-name) model-name (intern model-name))))

@@ -7,7 +7,8 @@
 (defun treesit-local-xref-backend ()
   "Tree-sitter file-local xref backend.
 Provides file-local navigation using tree-sitter AST nodes.
-Returns 'treesit-local only if the symbol at point is defined in the local file,
+Returns 'treesit-local only if the symbol at point is defined in the local
+file,
 allowing graceful fallback to dumb-jump for external definitions."
   (when (and (treesit-available-p)
              (treesit-parser-list)

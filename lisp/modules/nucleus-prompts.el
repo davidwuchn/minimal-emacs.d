@@ -86,7 +86,8 @@
     (completion          . "inline_completion.md")
     (rewrite             . "rewrite.md"))
   "Prompt file map for utility prompts loaded from `nucleus-prompts-dir'.
-Agent prompts (code_agent.md, plan_agent.md) are loaded separately from `nucleus-agents-dir'.")
+Agent prompts (code_agent.md, plan_agent.md) are loaded separately from
+`nucleus-agents-dir'.")
 
 (defconst nucleus-tool-prompt-files
   '((Bash                . "bash.md")
@@ -339,8 +340,10 @@ Idempotent: only registers and logs once per session."
           (setf (alist-get 'compact
                            gptel-directives nil nil #'eq)
                 "Summarize this conversation history for LLM context continuity.
-Keep all key information: decisions made, files modified, commands run, errors encountered.
-Format as a structured brief with: [progress] [decisions] [next_steps] [tech_details]")
+Keep all key information: decisions made, files modified, commands run, errors
+encountered.
+Format as a structured brief with: [progress] [decisions] [next_steps]
+[tech_details]")
           (nucleus--log "Registered %d directives"
                         (length gptel-directives))
           (setq nucleus--directives-registered t))))))
@@ -350,13 +353,17 @@ Format as a structured brief with: [progress] [decisions] [next_steps] [tech_det
   '((:memory
      . "## Memory Tools
 
-You have access to persistent memory tools (read_memory, write_memory, list_memories).
-Use them to store insights, patterns, and project knowledge that should survive across sessions.
+You have access to persistent memory tools (read_memory, write_memory,
+list_memories).
+Use them to store insights, patterns, and project knowledge that should
+survive across sessions.
 - read_memory: Recall previously stored insights by querying with keywords
-- write_memory: Store new insights (requires confirmation) — use for non-trivial discoveries
+- write_memory: Store new insights (requires confirmation) — use for
+non-trivial discoveries
 - list_memories: Browse all stored memories
 
-Prefer storing insights that would help a future AI session avoid re-deriving the same knowledge.")
+Prefer storing insights that would help a future AI session avoid re-deriving
+the same knowledge.")
     (:web
      . "## Web Tools
 
@@ -365,7 +372,8 @@ You have access to web search and fetch tools. Use them to:
 - Find solutions to unfamiliar error messages
 - Verify library versions or compatibility
 
-Prefer local code exploration over web search when the answer is likely in the codebase."))
+Prefer local code exploration over web search when the answer is likely in the
+codebase."))
   "Alist of marker → conditional prompt text.
 Each entry is included in the system prompt only when the marker has
 at least one registered tool available.")

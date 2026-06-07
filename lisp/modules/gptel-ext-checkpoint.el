@@ -443,7 +443,8 @@ Checks for active checkpoint with RUNNING or CHECKPOINTED state."
 (defun gptel-checkpoint-recover ()
   "Recover from checkpoint on disk.
 Returns recovery context plist:
-  (:checkpoint-data :can-recover :resume-targets :resume-exp-id :partial-results)
+(:checkpoint-data :can-recover :resume-targets :resume-exp-id
+:partial-results)
 Returns nil if no recoverable checkpoint.
 Uses advisory lock to prevent concurrent recovery race."
   (let* ((data (gptel-checkpoint--load)))

@@ -51,7 +51,8 @@ Uses ripgrep to find candidate files, then extracts the exact AST blocks.
 ;; EDGE CASE: nil/empty symbol-name signals user-error
 ;; EDGE CASE: Timeout returns partial results found so far
 ;; EDGE CASE: Files that error during parsing are reported in output
-;; TEST: (treesit-agent-find-workspace \"treesit-agent-find-workspace\") should return AST nodes
+;; TEST: (treesit-agent-find-workspace \"treesit-agent-find-workspace\")
+should return AST nodes
 ;; TEST: Large projects should not hang due to candidate limit and timeout"
   (unless (and (stringp symbol-name) (> (length symbol-name) 0))
     (user-error "symbol-name must be a non-empty string, got: %S" symbol-name))

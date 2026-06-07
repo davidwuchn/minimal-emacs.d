@@ -104,7 +104,8 @@ Helper for validation in callback-based functions."
 ;;; Workspace Boundary Validation
 
 (defun gptel-auto-workflow--path-within-workspace-p (path)
-  "Return t if PATH is within any root in `gptel-auto-workflow--allowed-workspace-roots'.
+  "Return t if PATH is within any root in
+`gptel-auto-workflow--allowed-workspace-roots'.
 Handles nil input, relative paths, .. escapes, and symlinks.
 Uses `file-truename' on both the candidate path and each root to resolve
 symlinks and .. components.  Path exactly equal to a root directory returns t.
@@ -122,14 +123,18 @@ Empty roots list returns nil (deny by default)."
                roots))))
 
 (defun gptel-auto-workflow--expand-workspace-path (path &optional root)
-  "Expand PATH relative to ROOT, then validate it is within allowed workspace roots.
+  "Expand PATH relative to ROOT, then validate it is within allowed workspace
+roots.
 ROOT defaults to `gptel-auto-workflow--worktree-base-root' when nil.
 Returns the expanded absolute path on success.
-Signals an error when PATH is nil/empty or outside allowed roots."
-  (unless (gptel-auto-workflow--non-empty-string-p path)
+Signals an error when PATH is nil or outside allowed roots.
+Empty string PATH resolves to ROOT (the workspace root itself)."
+  (unless (and path (stringp path))
     (error "[boundary] Invalid path: %S" path))
   (let* ((base (or root (gptel-auto-workflow--worktree-base-root)))
-         (expanded (expand-file-name path base)))
+         (expanded (if (string-empty-p path)
+                       (file-name-as-directory base)
+                     (expand-file-name path base))))
     (unless (gptel-auto-workflow--path-within-workspace-p expanded)
       (error "[boundary] Path %S resolves outside allowed workspace roots: %S"
              expanded gptel-auto-workflow--allowed-workspace-roots))
@@ -173,7 +178,8 @@ Task types (and preferred models):
 (defun gptel-auto-workflow--detect-task-type (prompt)
   "Analyze PROMPT and return the most likely task type symbol.
 Returns one of: code, review, research, creative, orchestration, or nil.
-Uses keyword frequency matching against `gptel-auto-workflow--task-type-keywords'."
+Uses keyword frequency matching against
+`gptel-auto-workflow--task-type-keywords'."
   (when (stringp prompt)
     (let* ((downcase-prompt (downcase prompt))
            (scores nil))
@@ -229,6 +235,15 @@ Example:
             #'gptel-auto-workflow--self-heal-byte-compiler)
   (add-hook 'gptel-auto-workflow-before-experiment-hook
             #'gptel-auto-workflow--run-bare-path-diagnostic)")
+
+(defvar gptel-auto-workflow-after-experiment-hook nil
+  "Hook run after each target batch completes.
+Functions are called with no arguments.
+Useful for monitoring agent, logging, and post-experiment analysis.
+
+Example:
+  (add-hook 'gptel-auto-workflow-after-experiment-hook
+            #'gptel-auto-workflow--monitoring-cycle)")
 
 (defun gptel-auto-workflow--run-bare-path-diagnostic ()
   "Run bare-path diagnostic and log results.
@@ -397,7 +412,7 @@ Signals user-error if either dependency fails to load."
   "Ensure repo-local ELPA transient shadows the built-in library.
 When the live worker inherits Emacs's built-in transient, newer Magit or
 evil-collection packages can fail on missing internals like
-`transient--set-layout'.  Prefer the repo-local ELPA transient package and load
+`transient--set-layout'. Prefer the repo-local ELPA transient package and load
 it when the current transient implementation is too old."
   (let* ((root (file-name-as-directory
                 (expand-file-name
@@ -779,7 +794,8 @@ allowed for compatibility with isolated tests."
 (defconst gptel-auto-workflow--results-tsv-header
   "experiment_id\ttarget\thypothesis\tscore_before\tscore_after\tcode_quality\tdelta\tdecision\tduration\tgrader_quality\tgrader_reason\tcomparator_reason\tanalyzer_patterns\tagent_output\toutput_chars\tbackend\tprompt_chars\tsections_included\texploration_axis\tcandidate_scores\tstrategy\tresearch_strategy\tresearch_hash\tresearch_quality\tcontroller_decision\tkibcm_axis\tmodel\teight_key_scores\tskills\tedit_mode\tcost_usd\teffort_level\tprod_error_rate_before\tprod_error_rate_after\tprod_error_rate_delta\tuser_satisfaction_delta\tsupport_tickets_reduced\tbusiness_value_score\trisk_score\tcomplexity_before\tcomplexity_after\tlines_removed\tunderstanding_score\n"
   "Header row written to auto-workflow results.tsv artifacts.
-32 core columns + 7 production metrics columns (33-39) + 4 complexity columns (40-43).")
+32 core columns + 7 production metrics columns (33-39) + 4 complexity columns
+(40-43).")
 
 (defun gptel-auto-experiment--extract-axis (agent-output)
   "Extract exploration axis (A-F) from AGENT-OUTPUT.
@@ -1094,7 +1110,8 @@ Stale or already-integrated hashes are compacted out of the ledgers."
 
 (defun gptel-auto-workflow--recover-orphans ()
   "Check for tracked commits that are not yet preserved by recovery refs.
-An orphan is a tracked commit that exists, is not already integrated, and could
+An orphan is a tracked commit that exists, is not already integrated, and
+could
 not be pinned under a private `refs/auto-workflow/kept/*' ref.
 Returns list of (hash exp-id target) for truly unpreserved commits."
   (interactive)
