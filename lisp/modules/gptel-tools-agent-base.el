@@ -230,6 +230,15 @@ Example:
   (add-hook 'gptel-auto-workflow-before-experiment-hook
             #'gptel-auto-workflow--run-bare-path-diagnostic)")
 
+(defvar gptel-auto-workflow-after-experiment-hook nil
+  "Hook run after each target batch completes.
+Functions are called with no arguments.
+Useful for monitoring agent, logging, and post-experiment analysis.
+
+Example:
+  (add-hook 'gptel-auto-workflow-after-experiment-hook
+            #'gptel-auto-workflow--monitoring-cycle)")
+
 (defun gptel-auto-workflow--run-bare-path-diagnostic ()
   "Run bare-path diagnostic and log results.
 This is a convenience wrapper for use in hooks."
