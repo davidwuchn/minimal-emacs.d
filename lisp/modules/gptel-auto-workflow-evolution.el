@@ -2205,6 +2205,21 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
         (gptel-auto-workflow--monitoring-cycle)
       (error nil)))
   ;; Execute approved proposals from approval queue (Layer 2 Policy: close the loop)
+  ;; First: auto-approve recurring proposals (>3 duplicates for same target)
+  (when (fboundp 'gptel-auto-workflow-approval-queue-auto-approve-recurring)
+    (condition-case nil
+        (let ((auto-approved
+               (gptel-auto-workflow-approval-queue-auto-approve-recurring)))
+          (when auto-approved
+            (message "[approval-queue] Auto-approved %d recurring proposals"
+                     (length auto-approved))))
+      (error nil)))
+  ;; Then: dedup remaining pending proposals (keep newest per target)
+  (when (fboundp 'gptel-auto-workflow-approval-queue-dedup)
+    (condition-case nil
+        (gptel-auto-workflow-approval-queue-dedup)
+      (error nil)))
+  ;; Finally: execute any approved proposals (from auto-approve or human review)
   (when (fboundp 'gptel-auto-workflow-approval-queue-execute-approved)
     (condition-case nil
         (gptel-auto-workflow-approval-queue-execute-approved)

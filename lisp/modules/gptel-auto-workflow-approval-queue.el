@@ -48,6 +48,30 @@ decisions/ for archived approved/rejected/expired proposals."
    (concat "decisions/" proposal-id ".sexp")
    (expand-file-name gptel-auto-workflow-approval-queue-dir)))
 
+;; ── Find Existing Pending ──
+
+(defun gptel-auto-workflow-approval-queue--find-pending-by-target (component pattern-target)
+  "Return list of pending entries matching COMPONENT and PATTERN-TARGET.
+Returns nil if no matching pending entries exist."
+  (let* ((pending-dir
+          (expand-file-name
+           "pending"
+           (expand-file-name gptel-auto-workflow-approval-queue-dir)))
+         (files (when (file-directory-p pending-dir)
+                  (directory-files pending-dir t "\\.sexp$")))
+         (matches nil))
+    (dolist (f files)
+      (let ((entry (gptel-auto-workflow-approval-queue--read-sexp-file f)))
+        (when (and entry
+                   (equal (plist-get entry :component) component)
+                   (equal (plist-get entry :pattern-target) pattern-target))
+          (push entry matches))))
+    matches))
+
+(defun gptel-auto-workflow-approval-queue--count-pending-by-target (component pattern-target)
+  "Return count of pending entries matching COMPONENT and PATTERN-TARGET."
+  (length (gptel-auto-workflow-approval-queue--find-pending-by-target component pattern-target)))
+
 ;; ── Enqueue ──
 
 (defun gptel-auto-workflow-approval-queue-enqueue (tested-proposal rollback-tag)
@@ -55,39 +79,48 @@ decisions/ for archived approved/rejected/expired proposals."
 ROLLBACK-TAG is the git rollback tag for emergency recovery.
 Generates a stable proposal-id slug, writes a .sexp file to the
 pending directory, and returns the full queue-entry plist.
+Skips enqueue if an identical proposal (same component+target) already
+exists in the pending queue (deduplication).
 Queue-entry plist keys: :id, :created-at, :expires-at, :status,
 :source, :proposal, :risk, :component, :pattern-target, :rollback-tag."
   (let* ((risk (or (plist-get tested-proposal :risk) "unknown"))
          (component (or (plist-get tested-proposal :component) "unknown"))
          (ptarget (or (plist-get tested-proposal :pattern-target) "unknown"))
-         (now (float-time))
-         (timestamp (format-time-string "%Y%m%dT%H%M%S" now))
-         (component-slug (replace-regexp-in-string
-                          "[^a-zA-Z0-9]" "-" (downcase component)))
-         (ptarget-slug (replace-regexp-in-string
-                        "[^a-zA-Z0-9]" "-" (downcase ptarget)))
-         (proposal-id (format "proposal-%s-%s-%s" timestamp component-slug ptarget-slug))
-         (expires-at (+ now gptel-auto-workflow-approval-queue-expiry-seconds))
-         (queue-entry
-          (list :id proposal-id
-                :created-at now
-                :expires-at expires-at
-                :status "pending"
-                :source "monitoring-agent"
-                :proposal tested-proposal
-                :risk risk
-                :component component
-                :pattern-target ptarget
-                :rollback-tag rollback-tag))
-         (pending-dir
-          (expand-file-name
-           "pending"
-           (expand-file-name gptel-auto-workflow-approval-queue-dir)))
-         (filepath (gptel-auto-workflow-approval-queue-file proposal-id)))
-    (make-directory pending-dir t)
-    (with-temp-file filepath
-      (prin1 queue-entry (current-buffer)))
-    queue-entry))
+         ;; Dedup: skip if identical proposal already pending
+         (existing-count (gptel-auto-workflow-approval-queue--count-pending-by-target
+                          component ptarget)))
+    (when (> existing-count 0)
+      (message "[approval-queue] Skipping duplicate: %s/%s (%d already pending)"
+               component ptarget existing-count)
+      (cl-return-from gptel-auto-workflow-approval-queue-enqueue nil))
+    (let* ((now (float-time))
+           (timestamp (format-time-string "%Y%m%dT%H%M%S" now))
+           (component-slug (replace-regexp-in-string
+                            "[^a-zA-Z0-9]" "-" (downcase component)))
+           (ptarget-slug (replace-regexp-in-string
+                          "[^a-zA-Z0-9]" "-" (downcase ptarget)))
+           (proposal-id (format "proposal-%s-%s-%s" timestamp component-slug ptarget-slug))
+           (expires-at (+ now gptel-auto-workflow-approval-queue-expiry-seconds))
+           (queue-entry
+            (list :id proposal-id
+                  :created-at now
+                  :expires-at expires-at
+                  :status "pending"
+                  :source "monitoring-agent"
+                  :proposal tested-proposal
+                  :risk risk
+                  :component component
+                  :pattern-target ptarget
+                  :rollback-tag rollback-tag))
+           (pending-dir
+            (expand-file-name
+             "pending"
+             (expand-file-name gptel-auto-workflow-approval-queue-dir)))
+           (filepath (gptel-auto-workflow-approval-queue-file proposal-id)))
+      (make-directory pending-dir t)
+      (with-temp-file filepath
+        (prin1 queue-entry (current-buffer)))
+      queue-entry)))
 
 ;; ── Read Helpers ──
 
@@ -236,6 +269,150 @@ Returns the updated plist, or nil if the proposal was not found."
           (prin1 updated (current-buffer)))
         (delete-file filepath)
         updated))))
+
+;; ── Auto-approve Recurring Proposals ──
+
+(defcustom gptel-auto-workflow-approval-queue-auto-approve-threshold 3
+  "Number of duplicate pending proposals before auto-approving the oldest.
+When the same component+target has more than this many pending proposals,
+the oldest is auto-approved and the rest are rejected as duplicates.
+This closes the loop for recurring patterns without human intervention."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
+(defun gptel-auto-workflow-approval-queue-auto-approve-recurring ()
+  "Auto-approve oldest pending proposal when duplicates exceed threshold.
+For each component+target pair with > auto-approve-threshold pending:
+1. Keep the oldest, approve it (move to decisions as approved)
+2. Reject all others as duplicates (move to decisions as rejected)
+Returns list of auto-approved proposal IDs."
+  (let* ((pending-dir
+          (expand-file-name
+           "pending"
+           (expand-file-name gptel-auto-workflow-approval-queue-dir)))
+         (decisions-dir
+          (expand-file-name
+           "decisions"
+           (expand-file-name gptel-auto-workflow-approval-queue-dir)))
+         (files (when (file-directory-p pending-dir)
+                  (directory-files pending-dir t "\\.sexp$")))
+         ;; Group by component+target
+         (groups (make-hash-table :test 'equal))
+         (auto-approved nil))
+    ;; Group all pending entries by (component . pattern-target)
+    (dolist (f files)
+      (let ((entry (gptel-auto-workflow-approval-queue--read-sexp-file f)))
+        (when entry
+          (let ((key (cons (or (plist-get entry :component) "")
+                          (or (plist-get entry :pattern-target) ""))))
+            (push (cons f entry) (gethash key groups))))))
+    ;; Process groups exceeding threshold
+    (make-directory decisions-dir t)
+    (maphash
+     (lambda (key entries)
+       (when (> (length entries) gptel-auto-workflow-approval-queue-auto-approve-threshold)
+         ;; Sort by :created-at ascending (oldest first)
+         (setq entries (sort entries
+                             (lambda (a b)
+                               (< (or (plist-get (cdr a) :created-at) 0.0)
+                                  (or (plist-get (cdr b) :created-at) 0.0)))))
+         ;; Approve oldest
+         (let* ((oldest-pair (car entries))
+                (oldest-file (car oldest-pair))
+                (oldest-entry (cdr oldest-pair))
+                (oldest-id (plist-get oldest-entry :id))
+                (approved-entry
+                 (let ((e (copy-sequence oldest-entry)))
+                   (setq e (plist-put e :status "approved"))
+                   (setq e (plist-put e :decision-at (float-time)))
+                   (setq e (plist-put e :decision-by "auto-approve-recurring"))
+                   (plist-put e :decision-note
+                              (format "Auto-approved: %d duplicate proposals for %s"
+                                      (length entries) key))))
+                (dest (gptel-auto-workflow-approval-queue-decisions-file oldest-id)))
+           (with-temp-file dest
+             (prin1 approved-entry (current-buffer)))
+           (delete-file oldest-file)
+           (message "[approval-queue] Auto-approved recurring proposal: %s (%d duplicates)"
+                    oldest-id (1- (length entries)))
+           (push oldest-id auto-approved))
+         ;; Reject all others as duplicates
+          (dolist (pair (cdr entries))
+            (let* ((entry (cdr pair))
+                   (f (car pair))
+                   (id (plist-get entry :id))
+                   (rejected-entry
+                    (let ((e (copy-sequence entry)))
+                      (setq e (plist-put e :status "rejected"))
+                      (setq e (plist-put e :decision-at (float-time)))
+                      (setq e (plist-put e :decision-by "auto-approve-dedup"))
+                      (plist-put e :decision-note
+                                 (format "Duplicate of auto-approved proposal for %s" key))))
+                   (dest (gptel-auto-workflow-approval-queue-decisions-file id)))
+             (with-temp-file dest
+               (prin1 rejected-entry (current-buffer)))
+             (delete-file f)))))
+     groups)
+    (nreverse auto-approved)))
+
+;; ── Dedup Cleanup ──
+
+(defun gptel-auto-workflow-approval-queue-dedup ()
+  "Collapse duplicate pending proposals, keeping only the newest per target.
+For each component+target pair with multiple pending proposals:
+keep only the newest, reject all older ones.
+Returns count of proposals removed."
+  (interactive)
+  (let* ((pending-dir
+          (expand-file-name
+           "pending"
+           (expand-file-name gptel-auto-workflow-approval-queue-dir)))
+         (decisions-dir
+          (expand-file-name
+           "decisions"
+           (expand-file-name gptel-auto-workflow-approval-queue-dir)))
+         (files (when (file-directory-p pending-dir)
+                  (directory-files pending-dir t "\\.sexp$")))
+         (groups (make-hash-table :test 'equal))
+         (removed 0))
+    ;; Group by component+target
+    (dolist (f files)
+      (let ((entry (gptel-auto-workflow-approval-queue--read-sexp-file f)))
+        (when entry
+          (let ((key (cons (or (plist-get entry :component) "")
+                          (or (plist-get entry :pattern-target) ""))))
+            (push (cons f entry) (gethash key groups))))))
+    ;; For each group with >1 entry, keep newest, reject rest
+    (make-directory decisions-dir t)
+    (maphash
+     (lambda (key entries)
+       (when (> (length entries) 1)
+         ;; Sort by :created-at descending (newest first)
+         (setq entries (sort entries
+                             (lambda (a b)
+                               (> (or (plist-get (cdr a) :created-at) 0.0)
+                                  (or (plist-get (cdr b) :created-at) 0.0)))))
+         ;; Keep newest, reject older ones
+          (dolist (pair (cdr entries))
+            (let* ((entry (cdr pair))
+                   (f (car pair))
+                   (id (plist-get entry :id))
+                   (rejected-entry
+                    (let ((e (copy-sequence entry)))
+                      (setq e (plist-put e :status "rejected"))
+                      (setq e (plist-put e :decision-at (float-time)))
+                      (setq e (plist-put e :decision-by "dedup-cleanup"))
+                      (plist-put e :decision-note
+                                 (format "Duplicate removed by dedup cleanup for %s" key))))
+                   (dest (gptel-auto-workflow-approval-queue-decisions-file id)))
+             (with-temp-file dest
+               (prin1 rejected-entry (current-buffer)))
+             (delete-file f)
+             (setq removed (1+ removed))))))
+     groups)
+    (when (> removed 0)
+      (message "[approval-queue] Dedup cleanup: removed %d duplicate proposals" removed))
+    removed))
 
 ;; ── Pending Check ──
 
