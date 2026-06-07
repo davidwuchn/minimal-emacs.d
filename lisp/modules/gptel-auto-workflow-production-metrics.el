@@ -65,12 +65,14 @@ Set via environment variable OV5_SENTRY_API_KEY or configuration.")
 (defvar gptel-auto-workflow--external-user-feedback-fn nil
   "Optional function (lambda) returning satisfaction delta for a target.
 When non-nil, called with the target string and should return -1.0..1.0.
-Overrides the local gh-CLI fallback in `gptel-auto-workflow--query-user-feedback'.")
+Overrides the local gh-CLI fallback in
+`gptel-auto-workflow--query-user-feedback'.")
 
 (defvar gptel-auto-workflow--external-support-tickets-fn nil
   "Optional function (lambda) returning ticket count reduced for a target.
 When non-nil, called with the target string and should return an integer 0-N.
-Overrides the local error-log fallback in `gptel-auto-workflow--query-support-tickets'.")
+Overrides the local error-log fallback in
+`gptel-auto-workflow--query-support-tickets'.")
 
 (defvar gptel-auto-workflow--production-metrics-cache nil
   "Cache for production metrics queries.
@@ -182,7 +184,8 @@ Returns float 0.0-1.0 representing error rate."
 Returns satisfaction delta: -1.0 (worse) to +1.0 (better).
 
 Layered sensor approach (per YC Vision — local-first):
-1. External user hook (`gptel-auto-workflow--external-user-feedback-fn') if set
+1. External user hook (`gptel-auto-workflow--external-user-feedback-fn') if
+set
 2. Full-sensor-pipeline from gptel-auto-workflow-external-sensors
 3. Local gh CLI fallback (issues mentioning target)
 4. Neutral 0.0 fallback"
@@ -245,8 +248,10 @@ Layered sensor approach (per YC Vision — local-first):
 Returns number of tickets reduced (integer, 0-N).
 
 Layered sensor approach (per YC Vision — local-first):
-1. External user hook (`gptel-auto-workflow--external-support-tickets-fn') if set
-2. Full-sensor-pipeline from gptel-auto-workflow-external-sensors (closed issues)
+1. External user hook (`gptel-auto-workflow--external-support-tickets-fn') if
+set
+2. Full-sensor-pipeline from gptel-auto-workflow-external-sensors (closed
+issues)
 3. Local error-log scan (count hits in var/log/)
 4. 0 fallback"
   (or (and (boundp 'gptel-auto-workflow--external-support-tickets-fn)

@@ -98,8 +98,9 @@ Switching to confirm-all clears all per-tool permits."
   ;; ASSUMPTION: Hash keys should be strings (tool names)
   ;; EDGE CASE: Non-string keys from corrupted state are filtered out
   ;; TEST: Call with normal permits and verify display
-  (let ((tools (cl-loop for k being the hash-keys of my/gptel-permitted-tools
-                        when (stringp k) collect k)))
+  (let ((tools (when (hash-table-p my/gptel-permitted-tools)
+                 (cl-loop for k being the hash-keys of my/gptel-permitted-tools
+                          when (stringp k) collect k))))
     (if (null tools)
         (message "No tools permitted (mode: %s)" my/gptel-confirm-mode)
       (message "Permitted tools: %s (mode: %s)"
