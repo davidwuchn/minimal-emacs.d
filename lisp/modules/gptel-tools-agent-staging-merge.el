@@ -164,7 +164,7 @@ When CACHED-STATE is provided, uses it instead of querying git again."
 (defun gptel-auto-workflow--staging-has-conflict-markers-p ()
   "Return non-nil if any staged file contains unresolved conflict markers."
   (let* ((result (gptel-auto-workflow--git-result "git diff --cached" 30))
-         (diff (and (= 0 (cdr result)) (car result))))
+         (diff (and result (= 0 (cdr result)) (car result))))
     (and diff (string-match-p "^\\+<<<<<<< " diff))))
 
 (defun gptel-auto-workflow--merge-to-staging (optimize-branch)
