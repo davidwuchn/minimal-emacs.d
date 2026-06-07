@@ -181,13 +181,13 @@ Also fails if NO files were modified (agent made no actual edits)."
                      (not (string-suffix-p "-autoloads.el" file)))
             (let ((full-path (expand-file-name file worktree)))
               (when (file-exists-p full-path)
-                (let ((error (gptel-auto-experiment--validate-code full-path)))
-                  (when error
+                (let ((validation-err (gptel-auto-experiment--validate-code full-path)))
+                  (when validation-err
                     (message "[auto-exp] ✗ Validation failed for %s: %s"
                              file
-                             (my/gptel--sanitize-for-logging error 120))
+                             (my/gptel--sanitize-for-logging validation-err 120))
                     (throw 'validation-error
-                           (format "%s in %s" error file))))))))))))
+                           (format "%s in %s" validation-err file))))))))))))
 
 (defun gptel-auto-experiment--maybe-failover-main-backend ()
   "Switch `gptel-backend' to a fallback if the current one is rate-limited.
