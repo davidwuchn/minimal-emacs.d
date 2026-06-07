@@ -1,10 +1,10 @@
 # Mementum State
 
 > **Bootstrapped**: 2026-06-06
-> **Session**: Self-evolution hooks wired into experiment core
-> **Status**: All P0 priorities complete, self-heal enabled by default
-> **Latest**: Unified pipeline — consolidated 4 scripts into 1
-> **Active Plan**: [Monitoring Agent](knowledge/plans/monitoring-agent/plan.md) — YC Phase 2 ("Holy Shit Moment")
+> **Session**: Production metrics wired into grader scoring
+> **Status**: All P0+P1 priorities complete, self-heal + monitoring + token economics enabled
+> **Latest**: Production metrics → weighted grader scoring (business-value boost, risk penalty)
+> **Active Plan**: OV5 self-improving system — all YC phases complete
 
 ---
 
@@ -17,12 +17,13 @@
 | **P0** | Test pipeline wrapper in production | pipeline-ops | **COMPLETE** |
 | **P0** | Optimize model routing based on task type | ov5-architect | **COMPLETE** |
 | **P0** | Wire self-heal hooks into experiment core | @maintainer | **COMPLETE** |
-| **P1** | Refine remaining 97 module docs with OV5 ontology/AutoTTS | doc-explorer | **IN PROGRESS** |
 | **P1** | Monitoring Agent: Complete (Phases 1-3) | @maintainer | **COMPLETE** |
-| **P2** | Submit PR for install.sh macOS sed | delegate-opus | **BLOCKED** (upstream) |
+| **P1** | Token Economics: ROI pre-flight in experiment core | @maintainer | **COMPLETE** |
+| **P1** | Production Metrics: Weighted grader scoring | @maintainer | **COMPLETE** |
+| **P1** | Refine remaining 97 module docs with OV5 ontology/AutoTTS | doc-explorer | **IN PROGRESS** |
+| **P2** | Human interface → pipeline (approval queue) | @maintainer | **PENDING** |
 | **P2** | Submit PR for install.sh macOS sed | delegate-opus | **BLOCKED** (upstream) |
 | **P2** | Unified pipeline: consolidate scripts | @maintainer | **COMPLETE** |
-| **P1** | Monitoring Agent: Failure pattern analysis (Phase 1) | @maintainer | **COMPLETE** |
 
 ## Completed Work
 
@@ -83,6 +84,14 @@
 - 4 new tests (20/20 passing)
 - See: `mementum/knowledge/strategic-plans/implementation-roadmap.md` Phase 4
 
+### Production Metrics → Grader Scoring (P1)
+
+**Weighted scoring wired into both experiment paths:**
+- `weight-score-with-production-metrics`: business-value boosts, risk penalizes
+- Configurable weights: `production-weight-business-value` (0.3), `production-weight-risk-penalty` (0.5)
+- Wired into main + refine experiment paths in `gptel-tools-agent-experiment-core.el`
+- 4 new ERT tests (14 total): boost, fallback, configurable, symmetry
+
 ## Active Patterns (from last 3 sessions)
 
 - **Workspace boundary violation**: Self-heal accessed `/Users/davidwu/lisp/modules` — fixed by `gptel-auto-workflow--expand-workspace-path`
@@ -93,6 +102,7 @@
 - **Monitoring agent**: Meta-improvement layer — detects failures, generates proposals, auto-deploys fixes
 - **Monitoring agent integration**: Wired into experiment core via `after-experiment-hook`
 - **Token economics**: ROI threshold rejects low-value experiments before they waste tokens
+- **Production metrics**: Weighted grader scoring — business-value boosts, risk-score penalizes
 
 ## Model Routing Matrix (Static + Dynamic)
 
@@ -118,10 +128,9 @@ User Input → Detect Task Type → Route to Model → Self-Heal Diagnostic → 
 
 ## Next Steps (Suggested by Active Mementum)
 
-1. **Production metrics → grader scoring** (P1) — weight production impact in grader
-2. **Human interface → pipeline** (P2) — route high-risk experiments to approval queue
-3. **Refine remaining 87 module docs** (low priority)
-4. **Upstream PR** — install.sh macOS sed (blocked)
+1. **Human interface → pipeline** (P2) — route high-risk experiments to approval queue
+2. **Refine remaining 87 module docs** (P1, low urgency)
+3. **Upstream PR** — install.sh macOS sed (blocked)
 
 ## Blockers
 
@@ -129,14 +138,12 @@ User Input → Detect Task Type → Route to Model → Self-Heal Diagnostic → 
 
 ## Context for Next Session
 
-- All P0 priorities complete
-- Self-heal enabled by default (can be disabled via `gptel-auto-workflow--self-heal-enabled`)
-- Boundary validator, tool checks, self-heal diagnostic committed
-- 20 module docs refined
-- Pipeline wrapper tested
-- Model routing heuristics implemented
-- Self-evolution hooks wired into experiment core
-- **Unified pipeline**: 4 scripts → 1 (`run-pipeline.sh`)
+- All P0+P1 priorities complete
+- Self-heal enabled by default
+- Monitoring agent detects failures → generates proposals → auto-deploys
+- Token economics rejects low-ROI experiments before spending tokens
+- Production metrics weight grader scores (business value boosts, risk penalizes)
+- Unified pipeline: 4 scripts → 1 (`run-pipeline.sh`)
 
 ---
 *Active Mementum v1.0 — auto-ranked priorities, pattern detection, model routing*
