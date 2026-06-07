@@ -227,7 +227,7 @@ RESEARCH-RESULT is a plist with :findings :targets :kept-count :total-count
                     (if (string-empty-p digested)
                         "[No digestion performed]"
                       (gptel-auto-workflow--sanitize-llm-output
-                       digested "(digested insights suppressed — contained tool output)"))))))))
+                       digested "(digested insights suppressed — contained tool output)")))))))))
 
 ;; ─── Knowledge Synthesis ───
 

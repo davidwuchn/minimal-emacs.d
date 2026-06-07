@@ -74,7 +74,21 @@
 ;; ============================================================================
 
 (ert-deftest test-regen/fboundp-guard-evolution ()
-  (should-not (fboundp 'gptel-auto-workflow--evolution-model-stats)))
+  "Code-regen should use `fboundp' guard, not direct call, for evolution stats.
+Test passes if `gptel-auto-workflow--evolution-model-stats' is referenced
+in code-regen source via `fboundp' — meaning code-regen can load without
+evolution being present.  We don't assert the function is undefined
+(other tests may load it)."
+  ;; Indirect verification: the function is referenced with fboundp
+  (let ((code (with-temp-buffer
+                (insert-file-contents
+                 (expand-file-name
+                  "lisp/modules/gptel-auto-workflow-code-regeneration.el"
+                  user-emacs-directory))
+                (buffer-string))))
+    (should (string-match-p
+             "(fboundp 'gptel-auto-workflow--evolution-model-stats)"
+             code))))
 
 (provide 'test-gptel-auto-workflow-code-regeneration)
 

@@ -108,7 +108,8 @@ List of atom symbol names, e.g. (elisp-discover elisp-expert elisp-validator).")
 Set by the regeneration workflow to inject a regeneration-specific prompt.
 Cleared after each experiment run.  Must be a non-empty string to take effect.
 Defined also in gptel-auto-workflow-code-regeneration.el — both definitions
-are equivalent; this one ensures the var exists even when that module is not loaded.")
+are equivalent; this one ensures the var exists even when that module is not
+loaded.")
 
 (defun gptel-auto-experiment--pre-existing-breakage-p (target)
   "Return non-nil if TARGET was already broken before this experiment.
@@ -249,7 +250,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
            (threshold (if (boundp 'gptel-token-economics-roi-threshold)
                           gptel-token-economics-roi-threshold 1.0)))
       (when (and predicted-roi (< predicted-roi threshold))
-        (message "[auto-experiment] ⏹ ROI pre-flight rejected: category %s predicted ROI %.2f < threshold %.2f — aborting experiment %d/%d for %s"
+        (message "[auto-experiment] ⏹ ROI pre-flight rejected: category %s predicted ROI %.2f <
+threshold %.2f — aborting experiment %d/%d for %s"
                  (or category "unknown") predicted-roi threshold
                  experiment-id max-experiments target)
         (let ((result (list :target target :id experiment-id :kept nil
@@ -1121,7 +1123,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                       (keep (if complexity-passed keep nil))
                                                       (reasoning (if complexity-passed
                                                                      reasoning
-                                                                   (concat reasoning "\n[Complexity Gate] Experiment rejected: complexity increased beyond threshold.")))
+                                                                   (concat reasoning "\n[Complexity Gate] Experiment rejected: complexity increased beyond
+threshold.")))
                                                       (exp-result
 												    (list :target target :id experiment-id :hypothesis
 												          hypothesis :score-before baseline :score-after
@@ -1176,7 +1179,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                ;; BEHAVIOR: generate traceable fallback hash so AutoTTS can link
                                                ;; EDGE CASE: hash is always non-empty so feedback loop is preserved
                                                (prog1 (sha1 (format "pipeline-defect-%s-%s" target (format-time-string "%s")))
-                                                 (message "[auto-workflow] WARNING: pipeline defect - no research context for %s, using fallback hash" (or target "unknown")))))
+                                                 (message "[auto-workflow] WARNING: pipeline defect - no research context for %s, using
+fallback hash" (or target "unknown")))))
                             :research-quality (or (and (boundp 'gptel-auto-workflow--current-research-context)
                                                        (plist-get gptel-auto-workflow--current-research-context :source))
                                                    "none")
@@ -1611,7 +1615,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                                                       (gptel-auto-workflow--current-head-hash))
                                                                                                     provisional-commit-hash))))))
                                                                (when (and (not promote-ok) stage-ok commit-ok)
-                                                                 (message "[auto-experiment] ⚠ Commit step reported failure but HEAD changed (%s → %s), treating as success"
+                                                                 (message "[auto-experiment] ⚠ Commit step reported failure but HEAD changed (%s → %s),
+treating as success"
                                                                           (gptel-auto-workflow--truncate-hash provisional-commit-hash)
                                                                           (gptel-auto-workflow--truncate-hash (gptel-auto-workflow--current-head-hash))))
                                                                (if commit-ok
