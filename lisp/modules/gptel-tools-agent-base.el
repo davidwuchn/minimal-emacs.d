@@ -210,6 +210,51 @@ Task type → Agent mapping:
     ('orchestration '(:agent "@maintainer" :model "kimi-k2.6"))
     (_            '(:agent "delegate" :model "deepseek-v4-pro"))))
 
+;;; ─── Self-Evolution Configuration ───
+
+(defcustom gptel-auto-workflow--self-heal-enabled t
+  "Whether to enable self-healing before experiments.
+When non-nil, the system will run the self-heal byte-compiler
+diagnostic before starting experiments."
+  :type 'boolean
+  :group 'gptel-tools-agent)
+
+(defvar gptel-auto-workflow-before-experiment-hook nil
+  "Hook run before each experiment.
+Functions are called with no arguments.
+Useful for adding self-heal checks, logging, or validation.
+
+Example:
+  (add-hook 'gptel-auto-workflow-before-experiment-hook
+            #'gptel-auto-workflow--self-heal-byte-compiler)
+  (add-hook 'gptel-auto-workflow-before-experiment-hook
+            #'gptel-auto-workflow--run-bare-path-diagnostic)")
+
+(defun gptel-auto-workflow--run-bare-path-diagnostic ()
+  "Run bare-path diagnostic and log results.
+This is a convenience wrapper for use in hooks."
+  (when (fboundp 'gptel-auto-workflow--self-heal-bare-paths)
+    (condition-case err
+        (let ((result (gptel-auto-workflow--self-heal-bare-paths)))
+          (message "[self-heal] Bare-path diagnostic: %d violations found"
+                   (plist-get result :violations-found))
+          result)
+      (error
+       (message "[self-heal] Bare-path diagnostic failed: %s" (error-message-string err))
+       nil))))
+
+;;; ─── Model Routing Auto-Detection ───
+
+(defun gptel-auto-workflow--auto-route-prompt (prompt)
+  "Auto-detect task type from PROMPT and return routing plist.
+This is a convenience function that combines detection and routing.
+Returns a plist with :task-type :agent :model keys."
+  (let* ((task-type (gptel-auto-workflow--detect-task-type prompt))
+         (routing (gptel-auto-workflow--route-task-to-model task-type)))
+    (list :task-type task-type
+          :agent (plist-get routing :agent)
+          :model (plist-get routing :model))))
+
 
 (defun gptel-auto-workflow--plist-get (plist key &optional default)
   "Get value from PLIST for KEY.

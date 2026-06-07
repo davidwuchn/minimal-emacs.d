@@ -536,6 +536,10 @@ Usage:
           gptel-auto-workflow--stats (list :phase "selecting" :total 0 :kept 0)
           gptel-auto-workflow--last-progress-time (current-time))
     (gptel-auto-workflow--ensure-results-file gptel-auto-workflow--run-id)
+    ;; Phase 0: Self-heal diagnostics (if enabled)
+    (when gptel-auto-workflow--self-heal-enabled
+      (message "[self-heal] Running pre-experiment diagnostics...")
+      (run-hooks 'gptel-auto-workflow-before-experiment-hook))
     (unless gptel-auto-workflow--cron-job-running
       (gptel-auto-workflow--mark-messages-start))
     (gptel-auto-workflow--start-status-refresh-timer)

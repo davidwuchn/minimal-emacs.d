@@ -534,5 +534,22 @@ HYPOTHESIS: [your hypothesis here]"
     (should (string= (plist-get default-route :agent) "delegate"))
     (should (string= (plist-get default-route :model) "deepseek-v4-pro"))))
 
+(ert-deftest auto-workflow/auto-route-prompt/returns-full-routing ()
+  "Should return complete routing plist with task type, agent, and model."
+  (let ((routing (gptel-auto-workflow--auto-route-prompt "implement a new function")))
+    (should (eq (plist-get routing :task-type) 'code))
+    (should (string= (plist-get routing :agent) "implementer"))
+    (should (string= (plist-get routing :model) "glm-5.1"))
+    (should (plist-get routing :task-type))
+    (should (plist-get routing :agent))
+    (should (plist-get routing :model))))
+
+(ert-deftest auto-workflow/auto-route-prompt/handles-nil ()
+  "Should handle nil prompts gracefully."
+  (let ((routing (gptel-auto-workflow--auto-route-prompt nil)))
+    (should (null (plist-get routing :task-type)))
+    (should (string= (plist-get routing :agent) "delegate"))
+    (should (string= (plist-get routing :model) "deepseek-v4-pro"))))
+
 (provide 'test-auto-workflow)
 ;;; test-auto-workflow.el ends here
