@@ -82,91 +82,13 @@ were misleading.
 
 
 
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*3 check issues (severity 0.30). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Distillation: 193 Experiments Across 36 gptel Modules
-
-## Strategy Performance Assessment
-
-`template-default` produced a large volume of hypotheses (193 experiments) but with shallow analytical depth — multiple kept hypotheses are near-duplicates (e.g., "adding defensive coding" vs. "adding error recovery and making assumptions explicit"), and discarded hypotheses were never analyzed (template placeholder left blank). The strategy is high-throughput but lacks discrimination pressure.
-
-## Clustering of Kept Hypotheses
-
-The surviving hypotheses collapse into **five recurring motifs**:
-
-### 1. Redundancy Elimination
-Remove guards that duplicate guarantees already provided by the underlying primitive.
-- `if apply-lines` before `mapconcat` (mapconcat on empty list → "")
-- Redundant callback existence checks before invocation
-- **Pattern**: Caller adds defensive checks that are subsumed by callee semantics.
-
-### 2. Defensive Guards (nil/empty/type)
-Insert explicit early returns for invalid inputs that currently fall through.
-- `english-findings` nil guard
-- `allium-spec` nil/empty-string guard
-- `(symbolp backend)` type branch
-- `where` nil guard before overlay creation
-- `buffer-live-p` check inside async lambdas
-- **Pattern**: Edge cases that currently rely on incidental behavior get explicit handling.
-
-### 3. Explicit Error Signaling
-Convert silent failures into distinguishable outcomes.
-- Timeout sentinel value (vs. ambiguous nil)
-- **Pattern**: Confusing success/failure signal (nil) becomes typed outcome.
-
-### 4. Containment via `condition-case`
-Isolate a single function's failure so the surrounding machinery survives.
-- `gptel--fsm-next` wrapped → defaults to `ERRS`
-- Overlay creation wrapped → task execution survives
-- **Pattern**: One bad call shouldn't cascade into aborting the parent workflow.
-
-### 5. Decomposition for Independent Evolution
-Extract a subroutine so it can be improved without touching the dispatcher.
-- `gptel-benchmark--select-provider` extracted from `gptel-benchmark-call-subagent`
-- **Pattern**: The φ Vitality win comes from *isolation*, not from the extraction itself.
-
-## Meta-Observations
-
-1. **The two metrics correlate by construction.** Every kept hypothesis justifies itself as improving *both* φ Vitality (adapts to previously-implicit edge cases) *and* fractal Clarity (makes assumptions explicit). This is not an independent signal — it's a *restatement* of "the code got more defensive." Treat the dual-axis scoring as a single axis in practice.
-
-2. **No hypothesis changed the algorithm.** All kept hypotheses are local, structural, defensive. None propose new selection strategies, new provider-isolation mechanics, or new benchmarking methodology. The strategy defaults to safe refactoring.
-
-3. **"Defensive coding" appears as a hypothesis at least 3 times** without further specification. This is a smell — it means the strategy is producing vague, non-falsifiable proposals that pass review on rhetoric alone.
-
-4. **Discarded hypotheses are wasted signal.** 193 experiments × ~3 hypotheses each ≈ 500+ proposals. The discarded bucket is unanalyzed, so we cannot learn from the failures. A future strategy should require a *reason for rejection* (even one sentence) to convert discarded items into a negative-evidence dataset.
-
-## Recommended Action
-
-**Triage the 36 targets by highest-leverage overlap.** The five motifs above will appear in nearly every Emacs-Lisp file in the codebase. Rather than applying them mechanically across 36 files:
-
-- **Prioritize targets with async callbacks, FSM transitions, and external IO** — these are where containment (`condition-case`) and explicit error signals pay off.
-- **Defer targets that are pure data transformations** — defensive guards add noise without value when the callee already validates.
-- **Re-run with `hypothesis-rejection-reason` required**, to recover the discarded bucket as useful signal.
-- **Score on a single axis** until the φ/Clarity definitions are formally separated; right now they measure the same thing twice.
+nil
 ```
 
-### Check Issues
-
-# Review of the Distillation Document
-
-Overall, this is a strong, well-structured analysis with sharp methodological observations. The critique is mostly sound. Below: what works, what needs verification, and what's missing.
-
----
-
-## What Works Well
-
-### 1. The five-motif clustering is clean
-The clusters are non-overlapping in intent and the **bolded "Pattern:" lines** do real work — they convert specific findings into transferable lessons. Motif #1 (redundancy elimination) and Motif #4 (`condition-case` containment) are the most actionable, and they're correctly identified as distinct.
-
-### 2. Meta-observation #1 (φ/Clarity collapse) is the strongest finding
-If every kept hypothesis improves both axes simultaneously, those axes aren't two dimensions — they're one dimension with a fancy name. This is a genuine methodological bug, not just a presentation issue. The "single axis in practice" claim is correct and understates the problem: the dual scoring is actively *misleading* because it gives the appearance of multidimensional evaluation.
-
-### 3. Meta-observation #2 ("no algorithm change") is the strategic finding
-This is the most important *process* insight. 193 experiments that never once propose a new selection strategy, new provider-isolation mechanic, or new benchmarking method isn't exploration — it's local search around the current implementation. The "safe refactoring" diagnosis is accurate and the opportunity cost is real.
-
-### 4. The `hypothesis-rejection-reason` reco
-
-... (truncated)
