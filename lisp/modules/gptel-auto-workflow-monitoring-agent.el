@@ -42,6 +42,9 @@
 (declare-function gptel-auto-workflow--with-staging-worktree
                   "gptel-tools-agent-experiment-loop")
 
+(declare-function gptel-auto-workflow-approval-queue-enqueue
+                  "gptel-auto-workflow-approval-queue")
+
 ;; ── Configuration ──
 
 (defcustom gptel-auto-workflow-monitoring-enabled t
@@ -397,8 +400,10 @@ Returns \"unknown\" if risk does not match any tier."
 TESTED-PROPOSAL must have :test-status \"pass\".
 Determines deployment action via --risk->deploy-action.
 For auto-deploy: creates a git rollback tag and persists deployment mementum.
-For notify/approval-required: persists a pending mementum without deploying.
-Returns plist with :deploy-action and :rollback-tag appended."
+For notify: persists a pending-notification mementum without deploying.
+For approval-required: enqueues in the approval queue for human review.
+Returns plist with :deploy-action and :rollback-tag appended.
+For approval-required proposals, also appends :queue-status and :queue-id."
   (let* ((risk (or (plist-get tested-proposal :risk) "unknown"))
          (component (or (plist-get tested-proposal :component) "unknown"))
          (ptarget (or (plist-get tested-proposal :pattern-target) "unknown"))
@@ -410,7 +415,8 @@ Returns plist with :deploy-action and :rollback-tag appended."
                   (if (fboundp 'gptel-auto-workflow--mementum-slug)
                       (gptel-auto-workflow--mementum-slug ptarget)
                     (replace-regexp-in-string
-                     "[^a-zA-Z0-9]" "-" (downcase ptarget))))))
+                     "[^a-zA-Z0-9]" "-" (downcase ptarget)))))
+         (queue-entry nil))
     (cond
      ;; Auto-deploy: tag current state and write deployment memory
      ((equal deploy-action "auto-deploy")
@@ -436,20 +442,35 @@ Returns plist with :deploy-action and :rollback-tag appended."
                  rollback-tag)))
       (message "[monitoring] Pending notification for proposal: %s (risk: %s, grace: %ds)"
                component risk gptel-auto-workflow-monitoring-deploy-grace-seconds))
-     ;; Approval-required: persist pending-approval memory
+     ;; Approval-required: enqueue in approval queue for human review
      ((equal deploy-action "approval-required")
+      (setq queue-entry
+            (when (fboundp 'gptel-auto-workflow-approval-queue-enqueue)
+              (gptel-auto-workflow-approval-queue-enqueue
+               tested-proposal rollback-tag)))
       (when (fboundp 'gptel-auto-workflow--mementum-write-memory)
         (gptel-auto-workflow--mementum-write-memory
          '‖ (format "pending-approval-%s" rollback-tag)
-         (format "**Pending approval:** %s\n**Risk:** %s\n**Component:** %s\n**Rollback tag:** %s\n\nRequires human approval before deployment (high-risk proposal)."
+         (format "**Pending approval:** %s\n**Risk:** %s\n**Component:** %s\n**Rollback tag:** %s\n**Queue ID:** %s\n\nRequires human approval before deployment (high-risk proposal). Enqueued in approval queue."
                  (plist-get tested-proposal :description)
-                 risk component rollback-tag)))
-      (message "[monitoring] Pending approval for proposal: %s (risk: %s)"
-               component risk)))
+                 risk component rollback-tag
+                 (when queue-entry (plist-get queue-entry :id)))))
+      (message "[monitoring] Pending approval for proposal: %s (risk: %s, queue-id: %s)"
+               component risk
+               (when queue-entry (plist-get queue-entry :id))))
+     ;; Unknown action: log warning
+     (t (message "[monitoring] Unknown deploy action for proposal: %s (risk: %s)"
+                 component risk)))
     ;; Return proposal with deployment fields appended
-    (append tested-proposal
-            (list :deploy-action deploy-action
-                  :rollback-tag rollback-tag))))
+    (let ((base-result
+           (append tested-proposal
+                   (list :deploy-action deploy-action
+                         :rollback-tag rollback-tag))))
+      (if (equal deploy-action "approval-required")
+          (append base-result
+                  (list :queue-status "pending"
+                        :queue-id (when queue-entry (plist-get queue-entry :id))))
+        base-result))))
 
 (defun gptel-auto-workflow--rollback-proposal (rollback-tag)
   "Rollback a deployed proposal by checking out the tagged version.
