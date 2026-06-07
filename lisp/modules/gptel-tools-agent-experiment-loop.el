@@ -1297,12 +1297,21 @@ Force-stops when:
                                   (hash-table-count my/gptel--agent-task-state))))
             (let ((rss-kb (and (fboundp 'gptel-auto-workflow--process-rss-kb)
                                (gptel-auto-workflow--process-rss-kb))))
-              (cond
-               ;; RSS exceeds 2.5GB — memory leak or accumulation, force-stop to prevent OOM
-               ((and rss-kb (> rss-kb 2621440))  ; 2.5GB in KB
-                (let ((rss-mb (/ rss-kb 1024.0)))
-                  (message "[auto-workflow] WATCHDOG: RSS %.0fMB exceeds 2.5GB threshold, force-stopping" rss-mb)
-                  (gptel-auto-workflow--force-stop)))
+               (cond
+                ;; RSS exceeds 1.5GB — memory leak or accumulation, force-stop to prevent OOM
+                ;; Pi5 has 8GB total; 1.5GB gives headroom for OS + other processes
+                ((and rss-kb (> rss-kb 1572864))  ; 1.5GB in KB
+                 (let ((rss-mb (/ rss-kb 1024.0)))
+                   (message "[auto-workflow] WATCHDOG: RSS %.0fMB exceeds 1.5GB threshold, force-stopping" rss-mb)
+                   (gptel-auto-workflow--force-stop)))
+                ;; RSS exceeds 1GB — trigger aggressive GC to reclaim memory
+                ((and rss-kb (> rss-kb 1048576))  ; 1GB in KB
+                 (let ((rss-mb (/ rss-kb 1024.0)))
+                   (message "[auto-workflow] WATCHDOG: RSS %.0fMB — triggering aggressive GC" rss-mb)
+                   (garbage-collect)
+                   (garbage-collect)
+                   (setq gc-cons-threshold (* 50 1024 1024))  ; 50MB threshold
+                   (run-with-timer 10 nil (lambda () (setq gc-cons-threshold (* 16 1024 1024))))))  ; restore after 10s
                ;; Total budget exceeded — workflow ran too long overall
             ((and (numberp elapsed-minutes) (> elapsed-minutes gptel-auto-workflow--total-budget-minutes))
              (message "[auto-workflow] WATCHDOG: Workflow exceeded total budget (%.0f > %d min), force-stopping"
@@ -1362,7 +1371,7 @@ Force-stops when:
   (when (or gptel-auto-workflow--running
             gptel-auto-workflow--cron-job-running)
     (setq gptel-auto-workflow--watchdog-timer
-          (run-with-timer 300 300 #'gptel-auto-workflow--watchdog-check))))
+          (run-with-timer 60 60 #'gptel-auto-workflow--watchdog-check))))
 
 (provide 'gptel-tools-agent-experiment-loop)
 ;;; gptel-tools-agent-experiment-loop.el ends here

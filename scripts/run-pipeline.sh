@@ -402,6 +402,14 @@ pipeline_git_sync_latest "pre-workflow" "auto-workflow-pre-pull"
 
 # ─── Stop any existing daemons to ensure fresh code is loaded ───
 log "Stopping any existing daemons to load latest code..."
+# Check if auto-workflow is already running experiments — preserve its worktrees
+workflow_running=0
+if [ -f "$DIR/var/tmp/cron/auto-workflow-status.sexp" ]; then
+    if grep -q ':running t' "$DIR/var/tmp/cron/auto-workflow-status.sexp" 2>/dev/null; then
+        workflow_running=1
+        log "Auto-workflow already running experiments — preserving worktrees"
+    fi
+fi
 kill_ov5_daemons "pre-cleanup"
 # Also try socket-based stop as fallback (handles edge cases)
 "$SCRIPT" stop >/dev/null 2>&1 || true
@@ -410,10 +418,15 @@ AUTO_WORKFLOW_EMACS_SERVER=gtm-product-org "$SCRIPT" stop >/dev/null 2>&1 || tru
 rm -f "$DIR/var/tmp/cron/auto-workflow-status.sexp" 2>/dev/null || true
 # Force-remove stale staging worktree so auto-workflow recreates from latest main
 rm -rf "$DIR/var/tmp/experiments/staging-verify" 2>/dev/null || true
-rm -rf "$DIR/var/tmp/experiments/optimize" 2>/dev/null || true
+# Only clean optimize worktrees if no workflow was running (avoid race)
+if [ "$workflow_running" -eq 0 ]; then
+    rm -rf "$DIR/var/tmp/experiments/optimize" 2>/dev/null || true
+    log "Cleaned stale staging + experiment worktrees"
+else
+    log "Preserved active experiment worktrees (workflow was running)"
+fi
 # Keep only the 3 most recent baseline worktrees; delete older ones
 ls -dt "$DIR/var/tmp/experiments/main-baseline-"* 2>/dev/null | tail -n +4 | xargs -r rm -rf 2>/dev/null || true
-log "Cleaned stale staging + experiment worktrees"
 sleep 2
 
 # ─── Clear stale findings to ensure fresh research ───
