@@ -14,11 +14,11 @@ Auto-generated from experiment history. Injected into researcher prompts.
 
 ## Experiment Gap Detection
 
-*46 gap(s) detected between experiment intervals:*
+*43 gap(s) detected between experiment intervals:*
 
-- Gap between exp nil and exp nil (10659s)
-- Gap between exp nil and exp nil (3594s)
-- Gap between exp nil and exp nil (8220s)
-- Gap between exp nil and exp nil (1549s)
-- Gap between exp nil and exp nil (5299s)
+- Gap between exp nil and exp nil (14341s)
+- Gap between exp nil and exp nil (14032s)
+- Gap between exp nil and exp nil (14340s)
+- Gap between exp nil and exp nil (14519s)
+- Gap between exp nil and exp nil (187357s)
 

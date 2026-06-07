@@ -327,41 +327,41 @@ Default tolerance is 0.0001."
 
 (ert-deftest test-token-economics/predict-roi-unknown-category ()
   "Should return 1.0 (break-even) for unknown or nil categories.
-This allows experiments to run and collect data for future predictions."
+This allows experiments to run and collect data for new categories."
   (test-token-economics--with-clean-state
-   ;; No history for :unknown category → 1.0 (break-even default)
+   ;; No history for :unknown category → 1.0 (break-even, allow through)
    (should (= 1.0 (gptel-token-economics--predict-roi :unknown)))
    (should (= 1.0 (gptel-token-economics--predict-roi nil)))))
 
 (ert-deftest test-token-economics/pre-flight-rejects-below-threshold ()
   "Pre-flight should reject when predicted ROI is below threshold.
-With Pi5's cold-start fix, zero-ROI categories return 1.0 (break-even),
-so they pass the default threshold of 1.0.  Only high thresholds reject."
+Categories with real history showing zero ROI return 1.0 (break-even),
+so rejection only happens when threshold > 1.0."
   (test-token-economics--with-clean-state
    (let ((experiments '((:id "exp-001" :category :research :input-tokens 2000 :output-tokens 1000
                          :score-before 0.60 :score-after 0.55 :decision "discarded"))))
      (dolist (exp experiments)
        (gptel-token-economics--track-experiment exp))
-     ;; :research has 0.0 ROI (all discarded) → cold-start returns 1.0
+     ;; :research has records with 0.0 ROI (all discarded) → returns 1.0 (break-even)
      (let ((predicted (gptel-token-economics--predict-roi :research)))
        (should (= 1.0 predicted))
        ;; With threshold 5.0, should be rejected (1.0 < 5.0)
        (let ((gptel-token-economics-roi-threshold 5.0))
          (should (< predicted gptel-token-economics-roi-threshold)))
-       ;; With default threshold 1.0, passes (1.0 is NOT < 1.0)
-       (should (not (< predicted gptel-token-economics-roi-threshold)))))))
+       ;; With threshold 0.5, should pass (1.0 >= 0.5)
+       (let ((gptel-token-economics-roi-threshold 0.5))
+         (should (>= predicted gptel-token-economics-roi-threshold)))))))
 
 (ert-deftest test-token-economics/predict-roi-new-category-allows-through ()
   "Pre-flight should allow new categories with no historical data.
-Pi5's cold-start fix returns 1.0 (break-even) for unknown categories,
-which passes the default threshold of 1.0 (1.0 is NOT < 1.0)."
+Returns 1.0 (break-even) which is >= default threshold 1.0, so experiments run."
   (test-token-economics--with-clean-state
-   ;; No experiments tracked → cold-start returns 1.0
+   ;; No experiments tracked at all → 1.0 (break-even, allow through)
    (should (= 1.0 (gptel-token-economics--predict-roi :brand-new-category)))
-   ;; 1.0 passes default threshold 1.0 (not less than)
+   ;; 1.0 >= default threshold 1.0, so pre-flight would allow through
    (let ((gptel-token-economics-roi-threshold 1.0))
-     (should (not (< (gptel-token-economics--predict-roi :brand-new-category)
-                     gptel-token-economics-roi-threshold))))))
+     (should (>= (gptel-token-economics--predict-roi :brand-new-category)
+                 gptel-token-economics-roi-threshold)))))
 
 (ert-deftest test-token-economics/pre-flight-passes-above-threshold ()
   "Pre-flight should pass when predicted ROI exceeds threshold."

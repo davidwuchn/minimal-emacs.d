@@ -179,7 +179,8 @@
         (should (string-match-p "saturated" (plist-get result :reason)))))))
 
 (ert-deftest regression/ontology-predict/preflight-blocks-low-prediction ()
-  "Pre-flight should block low prediction."
+  "Pre-flight should not always block low prediction — exploration allows some through.
+With 15% exploration rate, some low-prediction experiments should run."
   (let ((mock-ontology
          '(:classes ((:name "bad-strat" :keep-rate 0.05))
            :instances ((:name "bad-target" :total 5 :keep-rate 0.05)))))
@@ -189,9 +190,14 @@
                 (lambda () nil))
                ((symbol-function 'gptel-auto-workflow--load-research-traces)
                 (lambda () nil)))
-      (let ((result (gptel-auto-workflow--experiment-preflight "bad-strat" "bad-target")))
-        (should-not (plist-get result :run))
-         (should (string-match-p "predicted failure" (plist-get result :reason)))))))
+      ;; With exploration, some low-prediction experiments should run
+      (let ((runs 0))
+        (dotimes (_ 20)
+          (let ((result (gptel-auto-workflow--experiment-preflight "bad-strat" "bad-target")))
+            (when (plist-get result :run)
+              (setq runs (1+ runs)))))
+        ;; At least 1 out of 20 should run with 15% exploration
+        (should (>= runs 1))))))
 
 ;; ─── Research Quality Signal (AutoTTS → Preflight) ───
 
@@ -231,6 +237,76 @@
       (let ((pred (gptel-auto-workflow--predict-outcome "s" "t")))
         (should (>= pred 0.0))
         (should (<= pred 1.0))))))
+
+(ert-deftest tdd/predict/exploration-allows-low-prediction-when-no-data ()
+  "When no historical data exists, exploration should allow experiments to run.
+This prevents the cold-start death spiral where no experiments run because
+there's no data to predict from."
+  (let ((mock-ontology '(:classes () :instances ()))
+        (mock-results nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--generate-experiment-ontology)
+                (lambda () mock-ontology))
+               ((symbol-function 'gptel-auto-workflow--parse-all-results)
+                (lambda () mock-results))
+               ((symbol-function 'gptel-auto-workflow--load-research-traces)
+                (lambda () nil)))
+      ;; With no data, prediction is 0.5, but exploration should still allow it
+      (should (gptel-auto-workflow--should-run-experiment-p "any-strat" "any-target")))))
+
+(ert-deftest tdd/predict/exploration-allows-some-low-prediction ()
+  "Even with low prediction, exploration should allow some experiments to run.
+This ensures the system can collect data for new strategy+target pairs."
+  (let ((mock-ontology
+         '(:classes ((:name "new-strat" :keep-rate 0.1))
+           :instances ((:name "new-target" :keep-rate 0.1)))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--generate-experiment-ontology)
+                (lambda () mock-ontology))
+               ((symbol-function 'gptel-auto-workflow--parse-all-results)
+                (lambda () nil))
+               ((symbol-function 'gptel-auto-workflow--load-research-traces)
+                (lambda () nil)))
+      ;; With low prediction but exploration, some experiments should run
+      ;; The exploration rate is 15%, so at least some should be allowed
+      (let ((runs 0))
+        (dotimes (_ 20)
+          (when (gptel-auto-workflow--should-run-experiment-p "new-strat" "new-target")
+            (setq runs (1+ runs))))
+        ;; At least 1 out of 20 should run with 15% exploration
+        (should (>= runs 1))))))
+
+(ert-deftest tdd/predict/exploration-does-not-block-high-prediction ()
+  "High prediction experiments should always run, regardless of exploration."
+  (let ((mock-ontology
+         '(:classes ((:name "good-strat" :keep-rate 0.9))
+           :instances ((:name "good-target" :keep-rate 0.9)))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--generate-experiment-ontology)
+                (lambda () mock-ontology))
+               ((symbol-function 'gptel-auto-workflow--parse-all-results)
+                (lambda () nil))
+               ((symbol-function 'gptel-auto-workflow--load-research-traces)
+                (lambda () nil)))
+      ;; High prediction should always run
+      (dotimes (_ 10)
+        (should (gptel-auto-workflow--should-run-experiment-p "good-strat" "good-target"))))))
+
+(ert-deftest tdd/predict/exploration-respects-anti-pattern ()
+  "Exploration should NOT override anti-pattern blocking."
+  (let ((mock-ontology
+         '(:classes ((:name "strat" :keep-rate 0.9))
+           :instances ((:name "target" :total 5 :keep-rate 0.9))))
+        (mock-results
+         (list
+          (list :strategy "strat" :target "target" :decision "discarded" :timestamp 3)
+          (list :strategy "strat" :target "target" :decision "discarded" :timestamp 2)
+          (list :strategy "strat" :target "target" :decision "discarded" :timestamp 1))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--generate-experiment-ontology)
+                (lambda () mock-ontology))
+               ((symbol-function 'gptel-auto-workflow--parse-all-results)
+                (lambda () mock-results)))
+      ;; Anti-pattern should block regardless of exploration
+      (let ((result (gptel-auto-workflow--experiment-preflight "strat" "target")))
+        (should-not (plist-get result :run))
+        (should (string-match-p "anti-pattern" (plist-get result :reason)))))))
 
 (provide 'test-gptel-auto-workflow-ontology-predict)
 ;;; test-gptel-auto-workflow-ontology-predict.el ends here
