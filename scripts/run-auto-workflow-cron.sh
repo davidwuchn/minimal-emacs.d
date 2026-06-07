@@ -578,8 +578,8 @@ rewrite_status_idle() {
         return 0
     fi
 
-    sed -i 's/:running[[:space:]][[:space:]]*t/:running nil/' "$STATUS_FILE"
-    sed -i 's/:phase "[^"]*"/:phase "idle"/' "$STATUS_FILE"
+    perl -i -pe 's/:running\s+t/:running nil/' "$STATUS_FILE"
+    perl -i -pe 's/:phase "[^"]*"/:phase "idle"/' "$STATUS_FILE"
     # Ensure trailing newline (use if/else to survive set -e)
     if [ -n "$(tail -c1 "$STATUS_FILE")" ]; then
         echo >> "$STATUS_FILE"
@@ -812,7 +812,7 @@ workflow_action_elisp() {
                               (load-prefer-newer t))
                           (let ((inhibit-message t) (load-verbose nil))
                             (ignore-errors (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root)))
-                            (dolist (module (list "gptel-tools-agent-prompt-build.el" "gptel-tools-agent-error.el" "gptel-benchmark-subagent.el" "gptel-tools-agent-main.el" "gptel-auto-workflow-evolution.el" "gptel-auto-experiment-ai-behaviors.el" "gptel-tools-agent-base.el"))
+                            (dolist (module (list "gptel-tools-agent-prompt-build.el" "gptel-tools-agent-error.el" "gptel-benchmark-subagent.el" "gptel-tools-agent-main.el" "gptel-auto-workflow-evolution.el" "gptel-auto-experiment-ai-behaviors.el" "gptel-tools-agent-base.el" "gptel-auto-workflow-research-benchmark.el" "gptel-auto-workflow-ontology-router.el" "gptel-auto-workflow-context-database.el" "gptel-auto-workflow-knowledge-reasoning.el" "gptel-auto-workflow-production-metrics.el"))
                               (ignore-errors (load-file (expand-file-name (concat "lisp/modules/" module) root))))
                             (ignore-errors (when (fboundp (quote gptel-auto-workflow--activate-live-root))
                                              (gptel-auto-workflow--activate-live-root root)))
@@ -1003,6 +1003,8 @@ ensure_worker_daemon() {
     hydrate_missing_worktree_submodules
     seed_worker_daemon_shared_var
     # Disable native compilation for workflow daemon to avoid stale cache issues
+    # Set virtual memory limit to 4GB to prevent OOM kills on 8GB Pi5
+    # Aggressive GC tuning: 50MB threshold (vs default 800KB) reduces GC frequency
     if command -v setsid >/dev/null 2>&1; then
         setsid env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
             EMACSNATIVELOADPATH= \
@@ -1010,7 +1012,7 @@ ensure_worker_daemon() {
             MINIMAL_EMACS_WORKFLOW_ROLE="$ACTION" \
             MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
             MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
-            bash -c 'ulimit -s 65532 2>/dev/null; exec "$0" --init-directory="$1" --daemon="$2" --eval "(setq native-comp-jit-compilation nil)" </dev/null >>"$3" 2>&1' \
+            bash -c 'ulimit -s 65532 2>/dev/null; ulimit -v 4194304 2>/dev/null; exec "$0" --init-directory="$1" --daemon="$2" --eval "(setq native-comp-jit-compilation nil gc-cons-threshold (* 50 1024 1024))" </dev/null >>"$3" 2>&1' \
             "$EMACS" "$DIR" "$SERVER_NAME" "$DAEMON_LOG" &
     else
         env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
@@ -1019,7 +1021,7 @@ ensure_worker_daemon() {
             MINIMAL_EMACS_WORKFLOW_ROLE="$ACTION" \
             MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
             MINIMAL_EMACS_WORKFLOW_DAEMON=1 \
-            bash -c 'ulimit -s 65532 2>/dev/null; exec "$0" --init-directory="$1" --daemon="$2" --eval "(setq native-comp-jit-compilation nil)" </dev/null >>"$3" 2>&1' \
+            bash -c 'ulimit -s 65532 2>/dev/null; ulimit -v 4194304 2>/dev/null; exec "$0" --init-directory="$1" --daemon="$2" --eval "(setq native-comp-jit-compilation nil gc-cons-threshold (* 50 1024 1024))" </dev/null >>"$3" 2>&1' \
             "$EMACS" "$DIR" "$SERVER_NAME" "$DAEMON_LOG" &
     fi
     for _ in $(seq 1 150); do

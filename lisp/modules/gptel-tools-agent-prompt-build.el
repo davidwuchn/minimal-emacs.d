@@ -1836,8 +1836,24 @@ Returns cost as a float, or 0.0 if pricing unavailable."
 (defun gptel-auto-experiment-log-tsv (run-id experiment)
   "Append EXPERIMENT to results.tsv for RUN-ID.
 Captures executor reasoning from the dynamic variable
-`gptel-auto-experiment--executor-reasoning' when available."
-  (let* ((file (gptel-auto-workflow--ensure-results-file run-id))
+`gptel-auto-experiment--executor-reasoning' when available.
+If :business-value-score is not set, computes from local signals."
+  ;; Compute local business metrics if not already provided
+  (let* ((target (gptel-auto-workflow--plist-get experiment :target nil))
+         (has-business-score (and (plist-get experiment :business-value-score)
+                                  (> (plist-get experiment :business-value-score) 0.0)))
+         (experiment (if (and target (not has-business-score)
+                              (fboundp 'gptel-auto-workflow--compute-local-business-value))
+                         (let ((local-metrics (gptel-auto-workflow--compute-local-business-value target)))
+                           (if local-metrics
+                               (append experiment
+                                       (list :business-value-score (plist-get local-metrics :business-value-score)
+                                             :risk-score (plist-get local-metrics :risk-score)
+                                             :user-satisfaction-delta (plist-get local-metrics :user-satisfaction-delta)
+                                             :support-tickets-reduced (plist-get local-metrics :support-tickets-reduced)))
+                             experiment))
+                       experiment))
+         (file (gptel-auto-workflow--ensure-results-file run-id))
          (experiment-id (gptel-auto-workflow--plist-get experiment :id "?"))
          (target (gptel-auto-workflow--plist-get experiment :target "?"))
          (decision (gptel-auto-experiment--tsv-decision-label experiment))

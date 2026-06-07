@@ -809,16 +809,18 @@ Also logs agent-output snippet for debugging when category is :unknown."
     (cons :grader-failed "Grader returned no output"))
    ((gptel-auto-experiment--aborted-agent-output-p agent-output)
     (cons :tool-error "Subagent aborted"))
-   (t
-    (let ((case-fold-search t))
-      (cl-loop for entry in gptel-auto-experiment--error-categories
-               when (string-match-p (car entry) agent-output)
-               return (cons (nth 1 entry)
-                            (let ((detail (nth 2 entry)))
-                              (if (functionp detail)
-                                  (funcall detail agent-output)
-                                detail)))
-               finally (cl-return (cons :ok nil)))))))
+(t
+     (catch 'categorize-done
+       (let ((case-fold-search t))
+         (dolist (entry gptel-auto-experiment--error-categories)
+           (when (string-match-p (car entry) agent-output)
+             (throw 'categorize-done
+                    (cons (nth 1 entry)
+                          (let ((detail (nth 2 entry)))
+                            (if (functionp detail)
+                                (funcall detail agent-output)
+                              detail))))))
+         (cons :ok nil))))))
 
 (defun gptel-auto-experiment--should-reduce-experiments-p ()
   "Check if we should reduce experiment count due to API issues."

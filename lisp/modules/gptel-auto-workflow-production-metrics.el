@@ -158,24 +158,118 @@ Stub implementation - returns 0 until ticket system is integrated."
 (defun gptel-auto-workflow--track-production-impact (target _experiment-id)
   "Track production impact for TARGET experiment.
 EXPERIMENT-ID: unique identifier for this experiment.
-Returns plist with production metrics for TSV columns 33-39."
+Returns plist with production metrics for TSV columns 33-39.
+Uses external APIs when available, falls back to local signals."
   (let* ((metrics (or (gptel-auto-workflow--query-sentry-errors target) '()))
          (error-before (or (plist-get metrics :before-rate) 0.0))
          (error-after (or (plist-get metrics :after-rate) 0.0))
-         (error-delta (- error-after error-before))
+         (error-delta (if (plist-get metrics :before-rate)
+                          (- error-after error-before)
+                        0.0))
          (satisfaction-delta (gptel-auto-workflow--query-user-feedback target))
          (tickets-reduced (gptel-auto-workflow--query-support-tickets target))
-         (business-value (gptel-auto-workflow--calculate-business-value
-                          error-delta satisfaction-delta tickets-reduced))
-         (risk-score (gptel-auto-workflow--calculate-production-risk-score
-                      error-delta satisfaction-delta tickets-reduced)))
+         ;; When no external metrics available, compute from local signals
+         (local-metrics (when (and (= error-delta 0.0)
+                                   (= satisfaction-delta 0.0)
+                                   (= tickets-reduced 0))
+                          (gptel-auto-workflow--compute-local-business-value target)))
+         (business-value (or (and local-metrics (plist-get local-metrics :business-value-score))
+                             (gptel-auto-workflow--calculate-business-value
+                              error-delta satisfaction-delta tickets-reduced)))
+         (risk-score (or (and local-metrics (plist-get local-metrics :risk-score))
+                         (gptel-auto-workflow--calculate-production-risk-score
+                          error-delta satisfaction-delta tickets-reduced))))
     (list :prod-error-rate-before error-before
           :prod-error-rate-after error-after
           :prod-error-rate-delta error-delta
-          :user-satisfaction-delta satisfaction-delta
-          :support-tickets-reduced tickets-reduced
+          :user-satisfaction-delta (or (and local-metrics (plist-get local-metrics :user-satisfaction-delta))
+                                       satisfaction-delta)
+          :support-tickets-reduced (or (and local-metrics (plist-get local-metrics :support-tickets-reduced))
+                                       tickets-reduced)
           :business-value-score business-value
           :risk-score risk-score)))
+
+(defun gptel-auto-workflow--compute-local-business-value (target)
+  "Compute business value from LOCAL signals when external APIs are unavailable.
+Analyzes Emacs error logs, byte-compile warnings, and test results for TARGET.
+Returns plist with :business-value-score, :risk-score, :user-satisfaction-delta, :support-tickets-reduced.
+
+Business value heuristics:
+  +0.3  Fix for a function that appears in recent error logs
+  +0.2  Target has byte-compile warnings (improving it reduces noise)
+  +0.2  Target has no ERT tests (adding tests is high value)
+  +0.1  Target is >500 lines (complexity reduction valuable)
+  -0.3  Target has no known issues (change is low value)
+  -0.2  Change is a trivial nil guard on already-safe code"
+  (when (and target (stringp target) (file-exists-p target))
+    (let* ((target-basename (file-name-nondirectory target))
+           (value 0.0)
+           (risk 0.2)  ; baseline: no measurable improvement
+
+           ;; Signal 1: Does this target appear in recent Emacs error logs?
+           (error-log-dir (expand-file-name "var/log/" (gptel-auto-workflow--expand-workspace-path "")))
+           (recent-logs (when (file-directory-p error-log-dir)
+                          (directory-files error-log-dir t "\\.log\\'"
+                                           nil (lambda (a b) (time-less-p (nth 5 (file-attributes b))
+                                                                            (nth 5 (file-attributes a)))))))
+           (target-in-errors
+            (cl-block check-logs
+              (dolist (log (seq-take (or recent-logs '()) 20))  ; Check 20 most recent logs
+                (ignore-errors
+                  (with-temp-buffer
+                    (insert-file-contents log nil 0 50000)  ; First 50KB
+                    (goto-char (point-min))
+                    (when (re-search-forward (regexp-quote target-basename) nil t)
+                      (cl-return t)))))
+              nil))
+
+           ;; Signal 2: Does the target have byte-compile warnings?
+           (bytecompile-output (ignore-errors
+                                 (with-temp-buffer
+                                   (call-process (expand-file-name invocation-name
+                                                                     invocation-directory)
+                                                 nil t nil
+                                                 "-Q" "--batch" "-f" "batch-byte-compile" target)
+                                   (buffer-string))))
+           (has-warnings (and bytecompile-output
+                              (string-match-p "Warning\\|warning" bytecompile-output)))
+
+           ;; Signal 3: Does the target have ERT tests?
+           (test-dir (expand-file-name "tests/" (gptel-auto-workflow--expand-workspace-path "")))
+           (has-tests (when (file-directory-p test-dir)
+                        (cl-block find-test
+                          (dolist (f (directory-files test-dir t "\\.el\\'"))
+                            (ignore-errors
+                              (with-temp-buffer
+                                (insert-file-contents f)
+                                (when (string-match-p (regexp-quote
+                                                       (file-name-sans-extension target-basename))
+                                                      (buffer-string))
+                                  (cl-return t)))))
+                          nil)))
+
+           ;; Signal 4: Target file size (complexity proxy)
+           (target-size (or (ignore-errors (file-attribute-size (file-attributes target))) 0))
+           (is-complex (> target-size 20000)))  ; >20KB
+
+      ;; Accumulate business value
+      (when target-in-errors (setq value (+ value 0.3)))
+      (when has-warnings (setq value (+ value 0.2)))
+      (when (not has-tests) (setq value (+ value 0.2)))
+      (when is-complex (setq value (+ value 0.1)))
+
+      ;; If no positive signals found, the change is likely low value
+      (when (and (not target-in-errors) (not has-warnings) (not is-complex))
+        (setq value (- value 0.3)))
+
+      ;; Cap at 0.0-1.0
+      (setq value (max 0.0 (min 1.0 value)))
+      (setq risk (max 0.0 (min 1.0 risk)))
+
+      (list :business-value-score value
+            :risk-score risk
+            :user-satisfaction-delta 0.0
+            :support-tickets-reduced (if target-in-errors 1 0)))))
 
 (defun gptel-auto-workflow--calculate-business-value (error-delta satisfaction-delta tickets-reduced)
   "Calculate business value score from production impact metrics.

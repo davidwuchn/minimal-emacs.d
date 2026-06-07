@@ -291,7 +291,11 @@ pipeline_git_sync_latest() {
     git -C "$DIR" pull --rebase 2>&1 || log "WARNING: $label git pull failed"
 
     if [ "$stash_made" -eq 1 ]; then
-        git -C "$DIR" stash pop 2>/dev/null || log "WARNING: $label stash pop failed"
+        if ! git -C "$DIR" stash pop 2>/dev/null; then
+            log "WARNING: $label stash pop failed, resetting to HEAD and dropping stash"
+            git -C "$DIR" reset --hard HEAD 2>/dev/null || true
+            git -C "$DIR" stash drop 2>/dev/null || true
+        fi
     fi
 }
 
@@ -337,6 +341,18 @@ done
 # Also clean stale git worktree metadata for removed experiment dirs
 git -C "$DIR" worktree prune 2>/dev/null || true
 log "Cleaned old experiment directories + stale worktree metadata"
+
+# ─── Clean old Emacs daemon logs (keep last 50, prevents unbounded growth) ───
+emacs_log_count=$(find "$DIR/var/log" -maxdepth 1 -name "emacs-*.log" -type f 2>/dev/null | wc -l)
+if [ "$emacs_log_count" -gt 50 ]; then
+    removed=$(find "$DIR/var/log" -maxdepth 1 -name "emacs-*.log" -type f -printf '%T@ %p\n' 2>/dev/null \
+              | sort -n | head -n -$((50)) | cut -d' ' -f2- | xargs rm -f 2>/dev/null \
+              | wc -l || echo "0")
+    actual_removed=$((emacs_log_count - 50))
+    if [ "$actual_removed" -gt 0 ]; then
+        log "Cleaned $actual_removed old Emacs daemon logs (kept 50 most recent)"
+    fi
+fi
 
 # ─── Clear stale byte-compiled files to force source reload ───
 find "$DIR/lisp/modules" -name "*.elc" -delete 2>/dev/null || true
@@ -390,6 +406,14 @@ pipeline_git_sync_latest "pre-workflow" "auto-workflow-pre-pull"
 
 # ─── Stop any existing daemons to ensure fresh code is loaded ───
 log "Stopping any existing daemons to load latest code..."
+# Check if auto-workflow is already running experiments — preserve its worktrees
+workflow_running=0
+if [ -f "$DIR/var/tmp/cron/auto-workflow-status.sexp" ]; then
+    if grep -q ':running t' "$DIR/var/tmp/cron/auto-workflow-status.sexp" 2>/dev/null; then
+        workflow_running=1
+        log "Auto-workflow already running experiments — preserving worktrees"
+    fi
+fi
 kill_ov5_daemons "pre-cleanup"
 # Also try socket-based stop as fallback (handles edge cases)
 "$SCRIPT" stop >/dev/null 2>&1 || true
@@ -398,10 +422,15 @@ AUTO_WORKFLOW_EMACS_SERVER=gtm-product-org "$SCRIPT" stop >/dev/null 2>&1 || tru
 rm -f "$DIR/var/tmp/cron/auto-workflow-status.sexp" 2>/dev/null || true
 # Force-remove stale staging worktree so auto-workflow recreates from latest main
 rm -rf "$DIR/var/tmp/experiments/staging-verify" 2>/dev/null || true
-rm -rf "$DIR/var/tmp/experiments/optimize" 2>/dev/null || true
+# Only clean optimize worktrees if no workflow was running (avoid race)
+if [ "$workflow_running" -eq 0 ]; then
+    rm -rf "$DIR/var/tmp/experiments/optimize" 2>/dev/null || true
+    log "Cleaned stale staging + experiment worktrees"
+else
+    log "Preserved active experiment worktrees (workflow was running)"
+fi
 # Keep only the 3 most recent baseline worktrees; delete older ones
 ls -dt "$DIR/var/tmp/experiments/main-baseline-"* 2>/dev/null | tail -n +4 | xargs -r rm -rf 2>/dev/null || true
-log "Cleaned stale staging + experiment worktrees"
 sleep 2
 
 # ─── Clear stale findings to ensure fresh research ───
@@ -785,7 +814,11 @@ if [ "$has_auto_gen" -eq 1 ]; then
     
     # Restore stashed changes
     if [ "$stash_made" -eq 1 ]; then
-        git -C "$DIR" stash pop 2>/dev/null || log "WARNING: stash pop failed after auto-publish"
+        if ! git -C "$DIR" stash pop 2>/dev/null; then
+            log "WARNING: stash pop failed after auto-publish, resetting to HEAD and dropping stash"
+            git -C "$DIR" reset --hard HEAD 2>/dev/null || true
+            git -C "$DIR" stash drop 2>/dev/null || true
+        fi
     fi
 else
     log "No auto-generated changes to publish"

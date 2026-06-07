@@ -81,7 +81,7 @@ for ((i=0; i<${#MODULES_TO_PROCESS[@]}; i+=BATCH_SIZE)); do
     module_path="$MODULES_DIR/$module"
     if [[ -f "$module_path" ]]; then
       # Replace TODO description with actual one
-      sed -i "s/TODO: Add description/$description/" "$module_path" 2>/dev/null || true
+      perl -pi -e "s/TODO: Add description/$description/" "$module_path" 2>/dev/null || true
       echo "[batch-refine]     Updated: $module"
     fi
     

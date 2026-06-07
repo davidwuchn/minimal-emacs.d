@@ -143,16 +143,19 @@ Returns float 0.0-1.0 based on:
 (defun gptel-auto-workflow--should-run-experiment-p (strategy target)
   "Return t if experiment for STRATEGY + TARGET should run.
 Checks predicted outcome against threshold."
-  (let ((predicted (gptel-auto-workflow--predict-outcome strategy target)))
-    (if (>= predicted gptel-auto-workflow--prediction-threshold)
+  (let* ((predicted (gptel-auto-workflow--predict-outcome strategy target))
+         ;; Round to avoid floating-point precision issues near threshold
+         (predicted-rounded (/ (round (* predicted 100)) 100.0))
+         (threshold-rounded (/ (round (* gptel-auto-workflow--prediction-threshold 100)) 100.0)))
+    (if (>= predicted-rounded threshold-rounded)
         (progn
           (message "[onto-predict] %s/%s: predicted %.2f ≥ threshold %.2f → RUN"
-                   strategy target predicted
-                   gptel-auto-workflow--prediction-threshold)
+                   strategy target predicted-rounded
+                   threshold-rounded)
           t)
       (message gptel-auto-workflow--prediction-skip-message
-               strategy target predicted
-               gptel-auto-workflow--prediction-threshold
+               strategy target predicted-rounded
+               threshold-rounded
                15000)  ; ~15K tokens saved per skipped experiment
       nil)))
 

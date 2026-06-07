@@ -1514,6 +1514,15 @@ Writes to var/tmp/evolution/findings.md."
                                         (when (re-search-forward "}
 " nil t)
                                           (delete-region start (point)))))
+                                    ;; Strip LLM thinking/meta-commentary blocks
+                                    ;; These pollute findings with raw agent reasoning
+                                    (goto-char (point-min))
+                                    (while (re-search-forward "^The user is \\|^Looking at the \\|^I need to \\|^But wait \\|^Actually,? \\|^Let me \\(?:carefully\\|think about\\|re-?read\\) \\|^Hmm,? \\|^Wait,? \\|^OK,? \\|^So (?:the \\|I\\)\\|I'm (?:going to\\|not sure\\|going\\)\\|^This (?:is\\|means\\|would\\|approach\\) " nil t)
+                                      (delete-region (line-beginning-position) (line-beginning-position 2)))
+                                    ;; Strip lines that are clearly agent self-talk
+                                    (goto-char (point-min))
+                                    (while (re-search-forward "^\\(?:The most recent\\|The previous run\\|The controller\\|The prompt contains\\|I can see\\)" nil t)
+                                      (delete-region (line-beginning-position) (line-beginning-position 2)))
                                     ;; Collapse multiple blank lines
                                     (goto-char (point-min))
                                     (while (re-search-forward "\n\\{3,\\}" nil t)
@@ -6505,6 +6514,113 @@ Returns plist with :healthy-p and :diagnosis."
                :diagnosis nil
                :total total)))))
 
+(defun gptel-auto-workflow--detect-run-level-keep-rate-streak ()
+  "Detect consecutive runs with 0% keep-rate across ALL targets.
+Scans the last N run directories for 0% keep-rate and returns the streak count.
+This catches the pattern where the pipeline runs but produces nothing useful
+run after run — a sign of systemic strategy failure.
+
+Returns plist with :streak (count), :runs-checked, :total-experiments, :total-kept,
+:action (one of :none, :strategy-review, :target-reset)."
+  (let* ((exp-dir (expand-file-name "var/tmp/experiments/"
+                                     (or (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
+                                              (gptel-auto-workflow--expand-workspace-path ""))
+                                         default-directory)))
+         (runs (when (file-directory-p exp-dir)
+                 (sort
+                  (cl-remove-if-not
+                   (lambda (d) (string-match-p "^20[0-9]\\{6\\}T[0-9]\\{6\\}" d))
+                   (directory-files exp-dir nil "^[^.]" t))
+                  #'string>)))  ; Most recent first
+         (runs-to-check (seq-take runs 10))
+         (streak 0)
+         (total-experiments 0)
+         (total-kept 0))
+    (dolist (run runs-to-check)
+      (let* ((tsv-file (expand-file-name (concat run "/results.tsv") exp-dir))
+             (rows (when (file-exists-p tsv-file)
+                     (with-temp-buffer
+                       (insert-file-contents tsv-file)
+                       (goto-char (point-min))
+                       (forward-line 1)  ; Skip header
+                       (let (rows)
+                         (while (not (eobp))
+                           (let ((line (buffer-substring-no-properties
+                                        (line-beginning-position) (line-end-position))))
+                             (when (and line (not (string-blank-p line)))
+                               (push line rows))
+                             (forward-line 1)))
+                         (nreverse rows)))))
+             (data-rows (cl-remove-if
+                         (lambda (r) (or (string-match-p "^experiment_id" r)
+                                         (string-match-p "^staging" r)))
+                         rows))
+             (run-kept (cl-count-if
+                        (lambda (r)
+                          (let ((fields (split-string r "\t" t)))
+                            (and (> (length fields) 7)
+                                 (string= (nth 7 fields) "kept"))))
+                        data-rows))
+             (run-total (length data-rows)))
+        (setq total-experiments (+ total-experiments run-total))
+        (setq total-kept (+ total-kept run-kept))
+        (when (> run-total 0)
+          (if (= run-kept 0)
+              (setq streak (1+ streak))
+            ;; Streak broken — stop counting
+            (cl-return)))))
+    ;; Determine action based on streak
+    (let ((action
+           (cond
+            ((>= streak 5) :target-reset)     ; 5+ runs with 0%: reset target priorities
+            ((>= streak 3) :strategy-review)  ; 3+ runs: trigger strategy review
+            (t :none))))
+      (when (>= streak 3)
+        (message "[pipeline-health] ⚠ %d consecutive runs with 0%% keep-rate (%d experiments, %d kept) — action: %s"
+                 streak total-experiments total-kept action))
+      (list :streak streak
+            :runs-checked (length runs-to-check)
+            :total-experiments total-experiments
+            :total-kept total-kept
+            :action action))))
+
+(defun gptel-auto-workflow--handle-run-level-streak ()
+  "Handle a detected run-level 0% keep-rate streak.
+Triggers strategy review or target reset depending on streak severity.
+Returns the action taken, or nil if no action needed."
+  (let ((detection (gptel-auto-workflow--detect-run-level-keep-rate-streak)))
+    (pcase (plist-get detection :action)
+      (:none nil)
+      (:strategy-review
+       (message "[pipeline-health] 🔄 Triggering strategy review — resetting active strategy")
+       ;; Force the strategy harness to re-evaluate all strategies
+       (when (boundp 'gptel-auto-workflow--active-strategy)
+         (setq gptel-auto-workflow--active-strategy "template-default"))
+       ;; Log the intervention
+       (when (boundp 'gptel-auto-workflow--self-healing-log)
+         (push (list :timestamp (float-time)
+                     :diagnosis "consecutive-zero-keep-rate"
+                     :remedy "strategy-review-forced"
+                     :streak (plist-get detection :streak))
+               gptel-auto-workflow--self-healing-log))
+       :strategy-review)
+      (:target-reset
+       (message "[pipeline-health] 🔴 Critical: 5+ runs at 0%% keep-rate — resetting target priorities")
+       ;; Clear the target priority cache to force re-ranking
+       (when (boundp 'gptel-auto-workflow--target-priority-cache)
+         (setq gptel-auto-workflow--target-priority-cache nil))
+       ;; Force strategy reset
+       (when (boundp 'gptel-auto-workflow--active-strategy)
+         (setq gptel-auto-workflow--active-strategy "template-default"))
+       ;; Log the intervention
+       (when (boundp 'gptel-auto-workflow--self-healing-log)
+         (push (list :timestamp (float-time)
+                     :diagnosis "critical-consecutive-zero-keep-rate"
+                     :remedy "target-priority-reset+strategy-reset"
+                     :streak (plist-get detection :streak))
+               gptel-auto-workflow--self-healing-log))
+       :target-reset))))
+
 (defun gptel-auto-workflow--auto-remediate (diagnosis)
   "Apply automatic fix for DIAGNOSIS.  Returns t if fix applied."
   (let ((diagnosis-str (plist-get diagnosis :diagnosis))
@@ -6715,7 +6831,7 @@ Called every 5th run or when predictive warning triggers."
 (defun gptel-auto-workflow--maybe-self-heal ()
   "Check pipeline health and auto-remediate if broken.
 Call this after each experiment run or batch.
-Phase 8: Predictive health checks + Phase 6: Escalation.
+Phase 8: Predictive health checks + Phase 6: Escalation + Run-level streak detection.
 Records health snapshot, checks predictive warnings, analyzes patterns."
   (when (fboundp 'gptel-auto-workflow--check-pipeline-health)
     (let ((health (gptel-auto-workflow--check-pipeline-health)))
@@ -6727,6 +6843,9 @@ Records health snapshot, checks predictive warnings, analyzes patterns."
           (gptel-auto-workflow--predictive-intervention prediction)))
       ;; Run cross-run pattern analysis
       (gptel-auto-workflow--maybe-analyze-patterns)
+      ;; Run-level streak detection: check if consecutive runs have 0% keep-rate
+      (when (fboundp 'gptel-auto-workflow--handle-run-level-streak)
+        (gptel-auto-workflow--handle-run-level-streak))
       (if (plist-get health :healthy-p)
           (progn
              ;; Reset escalation counter on healthy pipeline
