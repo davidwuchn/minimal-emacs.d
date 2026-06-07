@@ -92,6 +92,23 @@ Layer 4: temporal git and experiment index.")
 
 ;; ─── Helpers ───
 
+(defun gptel-auto-workflow--sanitize-llm-output (text &optional summary)
+  "Sanitize TEXT from raw LLM output before inserting into prompts or files.
+Detects raw tool-result Lisp structs (e.g. from gptel callbacks) and
+replaces them with a readable SUMMARY string (default: count-based).
+Returns sanitized TEXT."
+  (if (not (stringp text))
+      (or summary "")
+    (if (string-match-p "(tool-result\\|(#s(gptel-tool\\|#s(" text)
+        (let* ((issue-count 0)
+               (_ (with-temp-buffer
+                    (insert text)
+                    (goto-char (point-min))
+                    (while (re-search-forward "(tool-result\\|(#s(gptel-tool" nil t)
+                      (cl-incf issue-count)))))
+          (or summary (format "(%d raw tool outputs suppressed)" issue-count)))
+      text)))
+
 (defvar gptel-auto-workflow--allium-audit-last-run nil
   "Timestamp of last allium-audit run. Throttles API calls to 1/15min.")
 (defvar gptel-auto-workflow--evolution-last-run nil
@@ -4574,7 +4591,8 @@ ISSUE-COUNT, SEVERITY, SCORE are from allium-quality-score."
         (insert (format "**Issues:** %d | **Severity:** %.2f | **Score:** %.2f (lower=better)\n\n" issue-count severity score))
         (when (and (stringp issues) (> (length issues) 5))
           (insert "## Issue Details\n\n")
-          (insert issues)))
+          (insert (gptel-auto-workflow--sanitize-llm-output
+                   issues (format "(%d issues — raw tool output suppressed)" issue-count)))))
       ;; Append Allium spec appendix to knowledge page if it exists
       (when (file-exists-p knowledge-file)
         (condition-case nil
@@ -4595,9 +4613,8 @@ ISSUE-COUNT, SEVERITY, SCORE are from allium-quality-score."
                 (insert "### Check Issues\n\n")
                 ;; Sanitize: skip raw tool-results (Lisp structs) that are not human-readable
                 (let ((sanitized-issues
-                       (if (string-match-p "(tool-result\\|(#s(gptel-tool" issues)
-                           (format "(%d issues — raw tool output suppressed)" issue-count)
-                         issues)))
+                       (gptel-auto-workflow--sanitize-llm-output
+                        issues (format "(%d issues — raw tool output suppressed)" issue-count))))
                   (insert (truncate-string-to-width sanitized-issues 1500 nil nil "\n\n... (truncated)"))
                   (insert "\n")))
                (write-region (point-min) (point-max) knowledge-file))
@@ -4626,7 +4643,8 @@ Returns markdown grouped by strategy, or an empty string."
                     (when (time-less-p
                            (time-subtract (current-time) (days-to-time 7))
                            mtime)
-                      (let ((content (buffer-string)))
+                      (let* ((raw-content (buffer-string))
+                             (content (gptel-auto-workflow--sanitize-llm-output raw-content)))
                         (when (and content (> (length content) 20))
                           (push content result))))))
               (error nil))))

@@ -735,7 +735,10 @@ Synthesis verification:
                             (mapconcat #'identity (plist-get verification :warnings) ", ")
                           "none")
                         (if (plist-get verification :valid) "yes (passed)" "yes (flagged)"))))
-      (insert content))
+      (insert (if (fboundp 'gptel-auto-workflow--sanitize-llm-output)
+                  (gptel-auto-workflow--sanitize-llm-output
+                   content "(LLM synthesis suppressed — contained raw tool output)")
+                content)))
     (message "[mementum] %s '%s' (%d lines)%s"
              (if draft "Drafted" "Created")
              (file-relative-name know-file base-dir)
