@@ -223,9 +223,8 @@ set
                               "--limit" "50"
                               "--json" "createdAt")
                 (goto-char (point-min))
-                (let* ((json-array-type 'list)
-                       (json-object-type 'plist)
-                       (issues (ignore-errors (json-parse-buffer)))
+                (let* ((issues (ignore-errors
+                                  (json-parse-buffer :object-type 'plist)))
                        (total (length issues))
                        (open-count 0))
                   (dolist (issue issues)

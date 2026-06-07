@@ -2922,7 +2922,7 @@ Returns plist with :total :consistent :inconsistent :targets."
                        (push (list :target target
                                    :ratio (plist-get check :agreement-ratio)
                                    :conflicts (plist-get check :conflicts))
-                             target-reports)))))
+                              target-reports))))))
              targets-seen)
     (message "[consistency] Checked %d targets: %d consistent, %d inconsistent"
              total consistent inconsistent)
@@ -4089,8 +4089,8 @@ Primary: unified graph skill-cooccur edges.  Fallback: skill graph edges."
             (if (> edge-count 0)
                 (* 0.10 (/ total-weight edge-count))
               0.0))
-        (error 0.0))
-    0.0))
+         (error 0.0))
+     0.0))
 
 (provide 'gptel-auto-workflow-ontology-router)
 ;;; gptel-auto-workflow-ontology-router.el ends here
