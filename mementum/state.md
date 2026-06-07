@@ -18,6 +18,8 @@
 | **P0** | Optimize model routing based on task type | ov5-architect | **COMPLETE** |
 | **P0** | Wire self-heal hooks into experiment core | @maintainer | **COMPLETE** |
 | **P1** | Refine remaining 97 module docs with OV5 ontology/AutoTTS | doc-explorer | **IN PROGRESS** |
+| **P1** | Monitoring Agent: Complete (Phases 1-3) | @maintainer | **COMPLETE** |
+| **P2** | Submit PR for install.sh macOS sed | delegate-opus | **BLOCKED** (upstream) |
 | **P2** | Submit PR for install.sh macOS sed | delegate-opus | **BLOCKED** (upstream) |
 | **P2** | Unified pipeline: consolidate scripts | @maintainer | **COMPLETE** |
 | **P1** | Monitoring Agent: Failure pattern analysis (Phase 1) | @maintainer | **COMPLETE** |
@@ -61,6 +63,16 @@
 - Plan creation runs at pipeline start; state + pattern updates run at pipeline end
 - `bash -n` validates syntax
 
+### Monitoring Agent (P1 — YC Phase 2 "Holy Shit Moment")
+
+**3-phase implementation complete:**
+- **Phase 1**: Failure pattern analysis (classify, analyze, persist)
+- **Phase 2**: Proposal generation (generate, score, validate)
+- **Phase 3**: Auto-test & deploy (test, deploy, rollback, human-in-the-loop)
+- Module: `lisp/modules/gptel-auto-workflow-monitoring-agent.el` (~650 lines)
+- Tests: `tests/test-gptel-auto-workflow-monitoring-agent.el` (30 tests)
+- Memories: `mementum/memories/monitoring-agent-*.md` (3 files)
+
 ## Active Patterns (from last 3 sessions)
 
 - **Workspace boundary violation**: Self-heal accessed `/Users/davidwu/lisp/modules` — fixed by `gptel-auto-workflow--expand-workspace-path`
@@ -68,6 +80,7 @@
 - **Self-evolution**: Pre-experiment diagnostics run automatically before each batch
 - **Pi5 auto-evolves**: `research-insights-template-default.md`, `strategy-guidance.json` — merge=theirs
 - **Unified pipeline**: 4 scripts → 1 (`run-pipeline.sh`), lifecycle hooks at start/end
+- **Monitoring agent**: Meta-improvement layer — detects failures, generates proposals, auto-deploys fixes
 
 ## Model Routing Matrix (Static + Dynamic)
 
