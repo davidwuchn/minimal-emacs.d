@@ -330,7 +330,8 @@ Updates auto-workflow-evolution.md with patterns from recent experiments."
         (insert "---\n\n")
 
         (insert "# Auto-Workflow Evolution Patterns\n\n")
-        (insert "*This page is automatically synthesized from experiment results and git history.*\n\n")
+        (insert "*This page is automatically synthesized from experiment results and git
+history.*\n\n")
 
         ;; Section 1: Success Patterns by Change Type
         (insert "## Change Type Success Rates\n\n")
@@ -453,6 +454,118 @@ Call this from a cron job or timer."
   (message "[auto-workflow] Running weekly mementum synthesis...")
   (gptel-auto-workflow--mementum-synthesize-knowledge)
   (message "[auto-workflow] Mementum synthesis complete."))
+
+;; ─── Memory Pruning ───
+
+(defcustom gptel-auto-workflow-mementum-prune-max-age-days 30
+  "Memories older than this many days are candidates for pruning.
+Pruning keeps the most recent MAX-PER-TOPIC memories per topic and
+discards older superseded ones. Memories newer than this are never
+pruned regardless of count."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-auto-workflow-mementum-prune-max-per-topic 5
+  "Maximum number of memories to keep per topic after pruning.
+Older memories beyond this count are removed (within max-age constraint).
+Prevents single-topic memory explosion (e.g. 37 insight-proposal-strategy-
+harness memories cluttering the prompt)."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
+(defun gptel-auto-workflow--mementum-prune-stale ()
+  "Prune stale memories: too old, or too many per topic.
+Returns plist with :pruned-count, :kept-count, :topics-affected.
+
+Strategy:
+  1. Group memories by topic (extracted from filename)
+  2. For each topic, keep newest MAX-PER-TOPIC memories
+  3. Among the kept, also discard any older than MAX-AGE-DAYS
+  4. Never delete memories referenced in active knowledge pages (TODO: future)
+
+This runs cheaply: O(N) in number of memories, no LLM calls.
+Called by `gptel-auto-workflow--mementum-prune-run' from cron."
+  (let* ((memories-dir
+          (let ((ws-fn (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
+                            (symbol-function 'gptel-auto-workflow--expand-workspace-path))))
+            (if (functionp ws-fn)
+                (expand-file-name
+                 gptel-auto-workflow-mementum-memory-dir
+                 (funcall ws-fn ""))
+              (expand-file-name gptel-auto-workflow-mementum-memory-dir
+                                default-directory))))
+         (cutoff-time (float-time (time-subtract (current-time)
+                                                 (days-to-time gptel-auto-workflow-mementum-prune-max-age-days))))
+         (by-topic (make-hash-table :test 'equal))
+         (pruned 0)
+         (kept 0)
+         (topics-affected 0))
+    (when (file-directory-p memories-dir)
+      ;; Group memory files by topic (slug before .md)
+      (dolist (file (directory-files memories-dir t "\\.md$"))
+        (let* ((basename (file-name-nondirectory file))
+               (mod-time (float-time (nth 5 (file-attributes file))))
+               ;; Topic = slug before the trailing discriminator + .md.
+               ;; e.g. "insight-proposal-strategy-harness-abc123.md"
+               ;;   -> "insight-proposal-strategy-harness"
+               (stripped (if (string-match "\\.md$" basename)
+                             (substring basename 0 (match-beginning 0))
+                           basename))
+               ;; Strip trailing -<hex-hash> (4-40 hex chars) or -<number>
+               (topic (cond
+                       ((string-match "\\-[a-f0-9]\\{4,40\\}$" stripped)
+                        (substring stripped 0 (match-beginning 0)))
+                       ((string-match "\\-[0-9]+$" stripped)
+                        (substring stripped 0 (match-beginning 0)))
+                       (t stripped))))
+          (when (stringp topic)
+            (push (cons file mod-time) (gethash topic by-topic)))))
+      ;; For each topic, decide what to keep
+      (maphash
+       (lambda (topic files)
+         (setq files (cl-sort (copy-sequence files)
+                              (lambda (a b) (> (cdr a) (cdr b)))))
+         (let* ((total (length files))
+                (keep-newest (seq-take files gptel-auto-workflow-mementum-prune-max-per-topic))
+                (cutoff-keep (cl-remove-if (lambda (pair)
+                                             (< (cdr pair) cutoff-time))
+                                           keep-newest))
+                (keep-keys (mapcar #'car cutoff-keep))
+                (to-delete (cl-remove-if (lambda (pair)
+                                           (member (car pair) keep-keys))
+                                         files)))
+           (when to-delete
+             (setq topics-affected (1+ topics-affected))
+             (dolist (pair to-delete)
+               (ignore-errors (delete-file (car pair)))
+               (setq pruned (1+ pruned))))
+           (setq kept (+ kept (length cutoff-keep)))))
+       by-topic))
+    (list :pruned-count pruned
+          :kept-count kept
+          :topics-affected topics-affected
+          :cutoff-days gptel-auto-workflow-mementum-prune-max-age-days)))
+
+(defun gptel-auto-workflow--mementum-prune-run ()
+  "Run mementum memory pruning and write a memory about the result.
+Called from `gptel-auto-workflow-cron' or manually."
+  (interactive)
+  (let* ((result (gptel-auto-workflow--mementum-prune-stale))
+         (pruned (plist-get result :pruned-count))
+         (kept (plist-get result :kept-count))
+         (topics (plist-get result :topics-affected)))
+    (message "[mementum] Prune: kept %d, pruned %d across %d topics"
+             kept pruned topics)
+    (when (> pruned 0)
+      (when (fboundp 'gptel-auto-workflow--mementum-write-memory)
+        (ignore-errors
+          (gptel-auto-workflow--mementum-write-memory
+           '✅ (format "mementum-prune-%s" (format-time-string "%Y%m%d"))
+           (format "**Mementum pruned %d stale memories** (kept %d across %d topics, max-age=%d days, max-per-topic=%d).\n\nKeeps memory bank bounded; old or over-represented memories removed."
+                   pruned kept topics
+                   (plist-get result :cutoff-days)
+                    gptel-auto-workflow-mementum-prune-max-per-topic))))))
+    result)
 
 (provide 'gptel-auto-workflow-mementum)
 ;;; gptel-auto-workflow-mementum.el ends here
