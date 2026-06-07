@@ -927,15 +927,17 @@ or test commands in reasoning sections.  Returns a formatted string or nil."
     (and (gptel-auto-workflow--non-empty-string-p resolved-target)
          (gptel-auto-workflow--non-empty-string-p resolved-worktree)
          (file-directory-p resolved-worktree)
-         (let* ((default-directory resolved-worktree)
-                (status-result
-                 (gptel-auto-workflow--git-result
-                  (format "git status --short -- %s"
-                          (shell-quote-argument resolved-target))
-                  30))
-                (status-output (string-trim (car status-result))))
-           (and (= (cdr status-result) 0)
-                (not (string-empty-p status-output)))))))
+         (condition-case nil
+             (let* ((default-directory resolved-worktree)
+                    (status-result
+                     (gptel-auto-workflow--git-result
+                      (format "git status --short -- %s"
+                              (shell-quote-argument resolved-target))
+                      30))
+                    (status-output (string-trim (car status-result))))
+               (and (= (cdr status-result) 0)
+                    (not (string-empty-p status-output))))
+           (error nil)))))
 
 (defun gptel-auto-experiment--executor-timeout-p (error-output)
   "Return non-nil when ERROR-OUTPUT reports an explicit executor timeout."
