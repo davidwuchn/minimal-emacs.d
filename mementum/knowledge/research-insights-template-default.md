@@ -3,17 +3,17 @@ title: Research Insights - template-default
 status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
-insight-quality: 0.4/10
-allium-issues: 4
+insight-quality: 0.3/10
+allium-issues: 0
 allium-severity: 0.00
-allium-status: ok
+allium-status: coherent
 ---
 
 # Research Strategy: template-default
 
-*Consolidated from 194 experiments (4% keep rate).*
+*Consolidated from 218 experiments (3% keep rate).*
 
-**Performance:** 7 kept / 1 discarded / 10 failed (EXTRACTED — from TSV)
+**Performance:** 7 kept / 1 discarded / 12 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
@@ -42,12 +42,7 @@ were misleading.
 - `lisp/modules/gptel-auto-workflow-projects.el` (6 kept / 2 failed)
 - `lisp/modules/gptel-benchmark-principles.el` (1 kept / 6 failed)
 - `lisp/modules/gptel-auto-workflow-mementum.el` (1 failed)
-
-## Allium Behavioral Coherence
-
-*4 behavioral issues (severity 0.00). EXTRACTED from Allium v3 pipeline.*
-
-
+- `lisp/modules/gptel-auto-workflow-production-metrics.el` (1 failed)
 
 ## Meta-Learning Recommendations (INFERRED — from pattern analysis)
 
@@ -70,494 +65,66 @@ were misleading.
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-Based on the 191 experiments across 38 target files and the kept hypotheses, here is the distilled research strategy:
+# Distilled Research Strategy
 
----
+## Scope
+**218 experiments** across 33 target files in the `gptel-auto-workflow`, `gptel-tools-agent`, `gptel-benchmark`, and `staging-*` modules.
 
-## Distilled Research Strategy
+## Kept Hypotheses (6)
 
-**Template**: template-default  
-**Scope**: 191 experiments across 38 files in `lisp/modules/` (agent tools, benchmark, auto-workflow, extensions)
+| # | Hypothesis | Target Principle |
+|---|------------|------------------|
+| 1 | **Idempotency guard**: Prevent re-adding active advice + extract symmetric disable function | φ Vitality, fractal Clarity |
+| 2 | **Bug fix**: Fix misleading message + add directory existence validation | Bug fix |
+| 3 | **Cache validation**: Replace `eq` with `equal` for project list comparison; check cache before `ensure-buffer-tables` | φ Vitality, fractal Clarity |
+| 4 | **Buffer lookup**: Extract validation sequence with explicit nil guards | Clarity, Vitality |
+| 5 | **Error recovery**: Add `ignore-errors` around `file-attributes` + early guard for empty project lists | φ Vitality, fractal Clarity |
+| 6 | **Mode line**: Replace `format-mode-line` with direct `mode-name` access; use `when` instead of `if`; add nil-safety guard | fractal Clarity, φ Vitality |
+| 7 | **Benchmark crash fix**: Filter `not-applicable` entries before sorting in `gptel-benchmark-eight-keys-weakest` | Clarity, Vitality |
 
-### What Changes & Why
+## Discarded Hypotheses
+- None stated
 
-**Core Theme**: Defensive hardening + explicit assumption surfacing across the subagent dispatch, prompt building, and retry/error-handling layers.
-
-| # | Change | Target | Why (Fractal Axes) |
-|---|--------|--------|-------------------|
-| 1 | Remove redundant `if apply-lines` check; add early nil guard for `english-findings` | `gptel-tools-agent-prompt-build.el` | φ Vitality: robust to edge cases; Clarity: removes unnecessary branching (mapconcat on `()` already returns `""`) |
-| 2 | Add explicit nil/empty-string guard for `allium-spec`; remove redundant callback check in lambda | `gptel-tools-agent-prompt-build.el` | Clarity: prevents wasted LLM calls on invalid input; Safety: fails fast on bad spec |
-| 3 | Add explicit `(symbolp backend)` branch before fallback `t` case | `gptel-benchmark-subagent.el` | Clarity: makes type assumptions explicit/testable; Vitality: handles non-keyword symbols that previously fell through to struct handling |
-| 4 | Add secondary `buffer-live-p` guard + nil check in lambda | `gptel-tools-agent-*.el` | Vitality: adapts to async buffer lifecycle; Clarity: explicit assumptions about buffer state |
-| 5 | Extract provider selection logic into `gptel-benchmark--select-provider` | `gptel-benchmark-subagent.el` | Clarity: selection logic becomes explicit and independently testable; Vitality: enables progressive improvement of selection algorithm without touching main dispatch |
-| 6 | Add timeout sentinel value in `gptel-benchmark-call-subagent-sync` | `gptel-benchmark-subagent.el` | Axis A (Error Handling): timeout failures now distinguishable from successful nil responses; Axis D (Safety): edge cases made explicit |
-| 7 | Add explicit nil guard on `where` parameter; wrap overlay creation in `condition-case` | `gptel-tools-agent-*.el` | Safety: overlay failures no longer break task execution; Error Handling: graceful degradation |
-| 8 | Wrap `gptel--fsm-next` in `condition-case` in `my/gptel-auto-retry` | `gptel-ext-retry.el` | Error Handling: FSM invalid-state crashes no longer abort retry machinery; defaults to `ERRS` so original transition path handles failure |
-
-### Pattern Summary
-
-**Three recurring mutation patterns** across all kept hypotheses:
-
-1. **Nil/empty guards** — Early returns on invalid input prevent cascading failures and wasted LLM calls (hypotheses 1, 2, 4, 7)
-2. **Explicit type branches** — Replace implicit fallthrough with explicit `(symbolp ...)` / `(keywordp ...)` checks, making assumptions testable (hypothesis 3)
-3. **`condition-case` wrapping** — Catch errors at boundary points (overlay creation, FSM transitions) so failures degrade gracefully rather than aborting the entire pipeline (hypotheses 7, 8)
-
-**Architectural extraction** (hypothesis 5) is the only structural refactoring: pulling ~80 lines of provider-selection logic out of `gptel-benchmark-call-subagent` into a dedicated function, enabling independent testing and iterative improvement of the selection algorithm.
-
-### Discarded Hypotheses
-
-*(None retained in this distillation — all discarded hypotheses were either redundant with kept ones, too speculative, or failed validation.)*
+## Core Themes
+- **φ Vitality**: Adaptive error recovery, content-based caching, nil-safety guards
+- **fractal Clarity**: Explicit assumptions, simplified control flow, visible validation sequences
+- **Bug fixes**: Idempotency, misleading messages, runtime crashes from symbol comparison
 ```
 
 ### Check Issues
 
-Now I need to find the `my/gptel-auto-retry` function. Let me search for it in the earlier part of the file.
+## Check Results
+
+**❌ Inconsistency Found**
+
+| Issue | Detail |
+|-------|--------|
+| **Count mismatch** | Header says **6** hypotheses, but table lists **7** (numbered 1–7) |
+
+### Quick Fix Options
+
+**Option A** — Update the header to match the table:
+```markdown
+## Kept Hypotheses (7)
+```
+
+**Option B** — If one hypothesis should be removed, clarify which one and renumber.
+
+---
+
+### Other Observations
+
+| Check | Status |
+|-------|--------|
+| Numbering sequence | ✅ 1–7, no gaps |
+| Target principles referenced | ✅ Consistent use of φ Vitality / fractal Clarity |
+| Discarded section | ⚠️ "None stated" — consider explicitly listing what was evaluated and dropped, or remove the section |
+| Scope line | ✅ Clear module list |
+| Core themes | ✅ Map well to the hypotheses |
+
+**Recommendation:** Fix the count mismatch first. If all 7 are intentional, just update the header number.
