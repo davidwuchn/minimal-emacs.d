@@ -85,7 +85,10 @@
                ((symbol-function 'gptel-auto-workflow--parse-all-results)
                 (lambda () nil))
                ((symbol-function 'gptel-auto-workflow--load-research-traces)
-                (lambda () nil)))
+                (lambda () nil))
+               ;; Lock exploration rate to 0 to prevent random flaky passes
+               ((symbol-function 'random)
+                (lambda (&rest _) most-positive-fixnum)))
       (should-not (gptel-auto-workflow--should-run-experiment-p "bad-strat" "bad-target")))))
 
 ;; ─── Anti-Pattern Tests ───
