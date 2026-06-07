@@ -916,7 +916,7 @@ Cache behavior:
                              syms)))
           (cl-progv syms vals
             (gptel--apply-preset preset)
-            (let* ((request-tools (and gptel-use-tools (copy-sequence gptel-tools)))
+            (let* ((request-tools (and gptel-use-tools (listp gptel-tools) (copy-sequence gptel-tools)))
                    (parent-fsm (and (fboundp 'my/gptel--coerce-fsm)
                                     (my/gptel--coerce-fsm gptel--fsm-last)))
                    (fsm-info (ignore-errors
