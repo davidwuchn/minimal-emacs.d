@@ -703,6 +703,8 @@ ORIG-FN is the original function to wrap."
 
 (ert-deftest agent/staging/tsv-replaces-staging-pending ()
   "TSV logger must replace staging-pending rows, not duplicate them."
+  (require 'gptel-tools-agent-base)
+  (require 'gptel-tools-agent-prompt-analyze)
   (require 'gptel-tools-agent-prompt-build)
   (require 'gptel-tools-agent-base)  ; for gptel-auto-workflow--results-tsv-header
   (let* ((tsv-file (make-temp-file "test-staging" nil ".tsv"))
@@ -722,8 +724,12 @@ ORIG-FN is the original function to wrap."
                            :user-satisfaction-delta 0.0
                            :support-tickets-reduced 0)))
     ;; Mock results file path to use our temp file
+    ;; Also mock compute-local-business-value: it uses cl-return-from inside
+    ;; ignore-errors which causes non-local exits that abort ert batch mode.
     (cl-letf (((symbol-function 'gptel-auto-workflow--results-file-path)
-               (lambda (&optional _run-id) tsv-file)))
+               (lambda (&optional _run-id) tsv-file))
+              ((symbol-function 'gptel-auto-workflow--compute-local-business-value)
+               (lambda (&rest _args) nil)))
       ;; Log the kept result
       (gptel-auto-experiment-log-tsv run-id experiment))
     ;; Verify only one row exists (staging-pending was replaced)
