@@ -503,7 +503,7 @@ the shared run-wide API counter or stopping the rest of the workflow."
            (hard-quota (gptel-auto-experiment--hard-quota-exhausted-p error-source)))
       (if escalate-run-pressure
           (progn
-            (setq gptel-auto-experiment--api-error-count (1+ gptel-auto-experiment--api-error-count))
+            (setq gptel-auto-experiment--api-error-count (1+ (or gptel-auto-experiment--api-error-count 0)))
             (message "[auto-workflow] API error #%d: %s"
                      gptel-auto-experiment--api-error-count error-category)
             (when hard-quota
