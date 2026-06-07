@@ -1,9 +1,10 @@
 # Mementum State
 
 > **Bootstrapped**: 2026-06-06
-> **Session**: Pipeline reliability fixes — worktree race, OOM, ROI cold-start, boundary
-> **Status**: All critical pipeline bugs fixed, daemon stable at ~417MB RSS
-> **Latest**: ROI cold-start (1.0 default), empty path → workspace root, worktree preservation
+> **Session**: Context database — causal/business memory sidecar
+> **Status**: YC Phases 1(partial), 2(done), 3(started), 4(done) — OV5 self-improving loop closed
+> **Latest**: Context database captures 'why' not 'what' per experiment — Phase 3 foundation
+> **Active Plan**: OV5 self-improving system — YC vision 60%+ complete
 
 ---
 
@@ -11,15 +12,19 @@
 
 | Priority | Item | Model | Status |
 |---|---|---|---|
-| **P0** | Fix worktree race (preserve active experiments) | @maintainer | **COMPLETE** |
-| **P0** | Fix OOM (4GB ulimit, 60s watchdog, 1.5GB RSS threshold) | @maintainer | **COMPLETE** |
-| **P0** | Fix ROI cold-start (1.0 default for unknown/zero categories) | @maintainer | **COMPLETE** |
-| **P0** | Fix boundary error (empty path → workspace root) | @maintainer | **COMPLETE** |
-| **P0** | Fix sed -i '' → sed -i (Linux compat) | @maintainer | **COMPLETE** |
+| **P0** | OV5 self-heal: fix workspace boundary violations | @maintainer | **COMPLETE** |
+| **P0** | Refine top 20 auto-generated module docs | doc-explorer | **COMPLETE** |
+| **P0** | Test pipeline wrapper in production | pipeline-ops | **COMPLETE** |
+| **P0** | Optimize model routing based on task type | ov5-architect | **COMPLETE** |
+| **P0** | Wire self-heal hooks into experiment core | @maintainer | **COMPLETE** |
 | **P1** | Monitoring Agent: Complete (Phases 1-3) | @maintainer | **COMPLETE** |
 | **P1** | Token Economics: ROI pre-flight in experiment core | @maintainer | **COMPLETE** |
 | **P1** | Production Metrics: Weighted grader scoring | @maintainer | **COMPLETE** |
+| **P1** | Refine remaining 97 module docs with OV5 ontology/AutoTTS | doc-explorer | **IN PROGRESS** |
+| **P2** | Human interface → pipeline (approval queue) | @maintainer | **COMPLETE** |
+| **P2** | Context database (causal/business memory) | @maintainer | **COMPLETE** |
 | **P2** | Submit PR for install.sh macOS sed | delegate-opus | **BLOCKED** (upstream) |
+| **P2** | Unified pipeline: consolidate scripts | @maintainer | **COMPLETE** |
 
 ## Completed Work
 
@@ -98,6 +103,19 @@
 - Integration: `--deploy-proposal` routes `:required` risk to queue, returns `:queue-id`
 - 7 ERT tests: enqueue, list, approve, reject, expiry, summary, pending-p
 
+### Context Database — Causal/Business Memory (P2 → Phase 3 foundation)
+
+**Per-experiment sidecar captures 'why' not 'what':**
+- `gptel-auto-workflow-context-database.el` (691 lines, 8 public functions)
+- Sidecar `.sexp` files in `var/context/<experiment-id>.sexp`
+- Derived narrative: business-rationale, causal-chain, learned, decision-rationale
+- Business rationale from hypothesis/strategy/category pattern matching
+- Dependency analysis via `require` statement parsing (blast radius)
+- Query, search, summary, dependencies, all-ids functions
+- Integration at TSV logging boundary (single canonical capture path)
+- 12 backward-compat aliases for existing callers
+- 17 ERT tests
+
 ## Active Patterns (from last 3 sessions)
 
 - **Workspace boundary violation**: Self-heal accessed `/Users/davidwu/lisp/modules` — fixed by `gptel-auto-workflow--expand-workspace-path`
@@ -110,6 +128,7 @@
 - **Token economics**: ROI threshold rejects low-value experiments before they waste tokens
 - **Production metrics**: Weighted grader scoring — business-value boosts, risk-score penalizes
 - **Approval queue**: High-risk proposals → human review gate, 7-day auto-expiry
+- **Context database**: Per-experiment causal/business memory — captures 'why' not 'what'
 
 ## Model Routing Matrix (Static + Dynamic)
 
@@ -135,9 +154,10 @@ User Input → Detect Task Type → Route to Model → Self-Heal Diagnostic → 
 
 ## Next Steps (Suggested by Active Mementum)
 
-1. **Refine remaining 87 module docs** (P1, low urgency)
-2. **Upstream PR** — install.sh macOS sed (blocked)
-3. **Approval queue executor** — consume approved proposals and execute deployment (future P3)
+1. **Architectural evolution** — extend monitoring agent to propose structural pipeline changes (Phase 2.3 remaining)
+2. **Code regeneration** — consume context database to regenerate modules with better models (Phase 3.2)
+3. **Refine remaining 87 module docs** (P1, low urgency)
+4. **Upstream PR** — install.sh macOS sed (blocked)
 
 ## Blockers
 
