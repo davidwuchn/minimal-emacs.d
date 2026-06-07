@@ -1,10 +1,10 @@
 # Mementum State
 
 > **Bootstrapped**: 2026-06-06
-> **Session**: Code regeneration + architectural evolution — YC Phases 2.3 and 3.2
-> **Status**: YC Phases 1(partial), 2(done), 3(~40%), 4(done) — OV5 ~70% complete
-> **Latest**: Code regeneration consumes context DB — discard old code, regenerate from business context
-> **Active Plan**: OV5 self-improving system — YC vision ~70% complete
+> **Session**: Close critical loops: approval→deploy, sensor→scoring, GitHub Issues
+> **Status**: YC Phases 1(~55%), 2(~90%), 3(done), 4(done) — OV5 ~80% complete
+> **Latest**: Approval queue executor wired into monitoring cycle Phase 6; external sensors wired into experiment scoring via full-sensor-pipeline; GitHub Issues sensor collecting real data
+> **Active Plan**: OV5 self-improving system — YC vision ~80% complete
 
 ---
 
@@ -177,9 +177,9 @@ User Input → Detect Task Type → Route to Model → Self-Heal Diagnostic → 
 
 ## Next Steps (Suggested by Active Mementum)
 
-1. **Disposable code mindset** — operationalize regeneration in pipeline schedule (Phase 3.3)
-2. **Production API integration** — wire real Sentry/DataDog endpoints (Phase 1.1 remaining)
-3. **Human dashboards/alerts** — approval queue review interface (Phase 4.3)
+1. **Pi5 soak time** — let closed loops (approval→deploy, sensor→scoring, commit retry) run for a week
+2. **Slack/Zendesk integration** — L1 Sensors still weakest layer (~55%)
+3. **Human dashboards/alerts** — approval queue review UI (Phase 4.3)
 4. **Upstream PR** — install.sh macOS sed (blocked)
 
 ## Blockers
@@ -188,13 +188,17 @@ User Input → Detect Task Type → Route to Model → Self-Heal Diagnostic → 
 
 ## Context for Next Session
 
-- All P0+P1+P2 priorities complete (approval queue closed the loop)
-- Self-heal enabled by default
-- Monitoring agent detects failures → generates proposals → auto-deploys (low/med risk) or queues for human (high risk)
-- Token economics rejects low-ROI experiments before spending tokens
-- Production metrics weight grader scores (business value boosts, risk penalizes)
-- Approval queue persists high-risk proposals for human review
-- Unified pipeline: 4 scripts → 1 (`run-pipeline.sh`)
+- All P0+P1+P2 priorities complete; two critical loops closed this session
+- **Approval→deploy loop CLOSED**: `execute-approved` now called in monitoring cycle Phase 6
+- **Sensor→scoring loop CLOSED**: external sensors (Sentry, feedback webhook, GitHub Issues) wired into `track-production-impact` via `full-sensor-pipeline` rich path
+- **Medium-risk grace period**: proposals past `deploy-grace-seconds` auto-deployed in Phase 6c
+- Monitoring agent runs 6 phases: analyze→propose→test/deploy→architectural→GitHub sensor→execute approved
+- Production metrics: real feedback webhook + GitHub Issues replace stubs; local signals always tried for real files (Pi5 evolution)
+- Approval queue: dedup + auto-approve recurring + executor = fully closed loop
+- Commit retry for grader-bypass: attempt 2 uses fresh stage+commit
+- YC Vision completion: ~80% (Sensor ~55%, Policy ~90%, Tools ~95%, Quality ~95%, Learning ~85%)
+- All .el files compile clean with `byte-compile-error-on-warn t`
 
 ---
+
 *Active Mementum v1.0 — auto-ranked priorities, pattern detection, model routing*

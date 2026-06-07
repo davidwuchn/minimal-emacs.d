@@ -631,50 +631,48 @@ Returns list of written mementum file paths, or nil if throttled/disabled."
                       (message "[monitoring] Phase 5: GitHub sensor collected")))
                 (error nil)))
             ;; Phase 6: Execute approved proposals + medium-risk grace-period deploy
-            (condition-case nil
-                (progn
-                  ;; 6a: Auto-approve recurring proposals
-                  (when (fboundp 'gptel-auto-workflow-approval-queue-auto-approve-recurring)
-                    (gptel-auto-workflow-approval-queue-auto-approve-recurring))
-                  ;; 6b: Execute all approved-but-undeployed proposals
-                  (when (fboundp 'gptel-auto-workflow-approval-queue-execute-approved)
-                    (let ((executed (gptel-auto-workflow-approval-queue-execute-approved)))
-                      (when executed
-                        (message "[monitoring] Phase 6: Deployed %d approved proposals"
-                                 (length executed)))))
-                  ;; 6c: Deploy medium-risk proposals past grace period
-                  (let ((grace gptel-auto-workflow-monitoring-deploy-grace-seconds))
-                    (when (> grace 0)
-                      (let ((mementum-dir
-                             (expand-file-name
-                              "mementum/memories"
-                              (expand-file-name default-directory))))
-                        (when (file-directory-p mementum-dir)
-                          (dolist (f (directory-files mementum-dir t
-                                                      "^pending-notification-.*\\.md$"))
-                            (let* ((attrs (file-attributes f))
-                                   (mtime (float-time (nth 5 attrs)))
-                                   (age (- (float-time) mtime)))
-                              (when (> age grace)
-                                (let ((basename (file-name-nondirectory f)))
-                                  (message "[monitoring] Phase 6: Grace period elapsed for %s (%ds > %ds)"
-                                           basename (truncate age) grace)
-                                  (let ((deploy-name
-                                         (replace-regexp-in-string
-                                          "^pending-notification-" "grace-deployed-" basename)))
-                                    (rename-file f
-                                                 (expand-file-name deploy-name mementum-dir)
-                                                 t)
-                                    (when (fboundp 'gptel-auto-workflow--mementum-write-memory)
-                                      (gptel-auto-workflow--mementum-write-memory
-                                       '✅ (replace-regexp-in-string
-                                            "\\.md$" ""
-                                            (replace-regexp-in-string
-                                             "^pending-notification-" "grace-deploy-" basename))
-                                       (format "**Grace-period auto-deploy:** %s\n**Grace period:** %ds\n**Elapsed:** %ds\n\nDeployed after grace period with no human objection."
-                                               basename (truncate grace) (truncate age)))))))))))))
-              (error nil))
-             (ignore (nreverse written))))))))))
+            (ignore-errors
+              ;; 6a: Auto-approve recurring proposals
+              (when (fboundp 'gptel-auto-workflow-approval-queue-auto-approve-recurring)
+                (gptel-auto-workflow-approval-queue-auto-approve-recurring))
+              ;; 6b: Execute all approved-but-undeployed proposals
+              (when (fboundp 'gptel-auto-workflow-approval-queue-execute-approved)
+                (let ((executed (gptel-auto-workflow-approval-queue-execute-approved)))
+                  (when executed
+                    (message "[monitoring] Phase 6: Deployed %d approved proposals"
+                             (length executed)))))
+              ;; 6c: Deploy medium-risk proposals past grace period
+              (let ((grace gptel-auto-workflow-monitoring-deploy-grace-seconds))
+                (when (and (numberp grace) (> grace 0) (stringp default-directory))
+                  (let ((mementum-dir
+                         (expand-file-name
+                          "mementum/memories"
+                          (expand-file-name default-directory))))
+                    (when (file-directory-p mementum-dir)
+                      (dolist (f (directory-files mementum-dir t
+                                                  "^pending-notification-.*\\.md$"))
+                        (let* ((attrs (file-attributes f))
+                               (mtime (when attrs (float-time (nth 5 attrs))))
+                               (age (when mtime (- (float-time) mtime))))
+                          (when (and age (> age grace))
+                            (let ((basename (file-name-nondirectory f)))
+                              (message "[monitoring] Phase 6: Grace period elapsed for %s (%ds > %ds)"
+                                       basename (truncate age) grace)
+                              (let ((deploy-name
+                                     (replace-regexp-in-string
+                                      "^pending-notification-" "grace-deployed-" basename)))
+                                (rename-file f
+                                             (expand-file-name deploy-name mementum-dir)
+                                             t)
+                                (when (fboundp 'gptel-auto-workflow--mementum-write-memory)
+                                  (gptel-auto-workflow--mementum-write-memory
+                                   '✅ (replace-regexp-in-string
+                                        "\\.md$" ""
+                                        (replace-regexp-in-string
+                                         "^pending-notification-" "grace-deploy-" basename))
+                                   (format "**Grace-period auto-deploy:** %s\n**Grace period:** %ds\n**Elapsed:** %ds\n\nDeployed after grace period with no human objection."
+                                           basename (truncate grace) (truncate age)))))))))))))
+            (ignore (nreverse written))))))))))
 
 (provide 'gptel-auto-workflow-monitoring-agent)
 ;;; gptel-auto-workflow-monitoring-agent.el ends here

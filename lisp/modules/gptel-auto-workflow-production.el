@@ -1129,7 +1129,8 @@ Returns a plist suitable for logging or dashboard display."
 
 (defun gptel-auto-workflow-operational-metrics-report ()
   "Log a human-readable operational metrics summary.
-Suitable for pipeline output and YC evidence."
+Suitable for pipeline output and YC evidence.
+Also persists the full report to var/metrics/ for historical tracking."
   (let ((m (gptel-auto-workflow-operational-metrics)))
     (let ((exp (plist-get m :experiments))
           (aq (plist-get m :approval-queue))
@@ -1164,7 +1165,7 @@ Suitable for pipeline output and YC evidence."
        (message "  Sensors: Sentry=%s, Feedback=%s"
                 (plist-get sensors :sentry)
                 (plist-get sensors :feedback))
-       (when (fboundp (quote gptel-auto-workflow--github-sensor-summary))
+       (when (fboundp 'gptel-auto-workflow--github-sensor-summary)
          (condition-case nil
              (message "  %s" (gptel-auto-workflow--github-sensor-summary))
            (error nil)))
@@ -1175,6 +1176,22 @@ Suitable for pipeline output and YC evidence."
                (plist-get mem :memories)
                (plist-get mem :knowledge))
       (message "============================================")
+      ;; Persist to var/metrics/ for historical tracking
+      (condition-case nil
+          (let* ((root (or (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
+                                (gptel-auto-workflow--expand-workspace-path ""))
+                           default-directory))
+                 (metrics-dir (expand-file-name "var/metrics/" root))
+                 (ts (format-time-string "%Y%m%dT%H%M%S")))
+            (make-directory metrics-dir t)
+            (with-temp-file (expand-file-name (concat ts "-metrics.sexp") metrics-dir)
+              (prin1 m (current-buffer)))
+            ;; Keep only last 30 metric snapshots
+            (let ((files (sort (directory-files metrics-dir t "-metrics\\.sexp$")
+                               (lambda (a b) (string< a b)))))
+              (dolist (f (seq-take files (- (length files) 30)))
+                (ignore-errors (delete-file f)))))
+        (error nil))
       m)))
 
 (provide 'gptel-auto-workflow-production)
