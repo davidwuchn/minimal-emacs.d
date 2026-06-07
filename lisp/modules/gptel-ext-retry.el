@@ -879,6 +879,33 @@ tend to reset connections around 250-300KB."
   :type '(choice (const :tag "Disabled" nil) integer)
   :group 'gptel)
 
+(defcustom my/gptel-auto-compact-models
+  '(("DeepSeek" . "deepseek-v4-flash")
+    ("DashScope" . "qwen3.5-plus")
+    ("TokenPlan" . "deepseek-v4-flash")
+    ("TokenPlan" . "qwen3.7-max"))
+  "Fallback chain of cheap LLM models for system prompt auto-compaction.
+Each entry is (BACKEND . MODEL). Tried in order; first success wins.
+Models should be fast, cheap, and have sufficient context window.
+Uses synchronous curl call — does not block Emacs event loop."
+  :type '(repeat (cons string string))
+  :group 'gptel)
+
+(defcustom my/gptel-auto-compact-target-ratio 0.4
+  "Target compression ratio for LLM auto-compact.
+The compacted system prompt should be approximately this fraction
+of the original size. 0.4 means aim for ~40% of original."
+  :type 'number
+  :group 'gptel)
+
+(defcustom my/gptel-auto-compact-enabled t
+  "Whether to use LLM-based compaction when normal passes fail.
+When non-nil, after all 9 compaction passes fail to bring the payload
+under the limit, the system prompt is sent to a cheap LLM for
+intelligent compression."
+  :type 'boolean
+  :group 'gptel)
+
 (defun my/gptel--run-compaction-pass (info pass-num bytes-limit bytes-var trimmed-total-var pass-var trim-fn &optional pass-msg)
   "Execute a single compaction pass in `my/gptel--compact-payload'.
 
@@ -1027,7 +1054,143 @@ Returns a string or nil if no model can be determined."
   "Ordered list of compaction passes for `my/gptel--compact-payload'.
 Each entry is (PASS-NUM TRIM-FN LOG-FMT).
 Passes execute sequentially until payload drops below limit.
-ASSUMPTION: Passes are ordered from least to most destructive.")
+ASSUMPTION: Passes are ordered from least to most destructive.
+NOTE: Pass 10 (LLM-based system prompt compaction) runs separately
+after passes 1-9, via `my/gptel--compact-system-message-llm'.")
+
+(defun my/gptel--extract-system-message (data)
+  "Extract the system message string from DATA plist's :messages vector.
+Returns (TEXT . INDEX) or nil if no system message found."
+  (let ((messages (and (listp data) (plist-get data :messages))))
+    (when (vectorp messages)
+      (cl-dotimes (i (length messages))
+        (let* ((msg (aref messages i))
+               (role (and (listp msg) (plist-get msg :role)))
+               (content (and (listp msg) (plist-get msg :content))))
+          (when (and role (stringp role) (string= role "system") (stringp content))
+            (cl-return (cons content i))))))))
+
+(defun my/gptel--replace-system-message (data index new-text)
+  "Replace system message at INDEX in DATA's :messages with NEW-TEXT."
+  (let ((messages (plist-get data :messages)))
+    (when (and (vectorp messages) (< index (length messages)))
+      (let ((msg (aref messages index)))
+        (plist-put msg :content new-text)))))
+
+(defun my/gptel--call-compact-llm-sync (text backend-name model)
+  "Synchronously call BACKEND-NAME/MODEL to compact TEXT.
+Returns compacted string or nil on failure."
+  (let* ((backend-obj (and (fboundp 'gptel-get-backend)
+                           (gptel-get-backend backend-name)))
+         (url (when backend-obj
+                (let ((raw-url (gptel-backend-url backend-obj)))
+                  (if (functionp raw-url) (funcall raw-url nil) raw-url))))
+         (key-raw (when backend-obj (gptel-backend-key backend-obj)))
+         (key (cond
+               ((functionp key-raw) (funcall key-raw))
+               ((stringp key-raw) key-raw)
+               (t nil)))
+         (endpoint (when (and url backend-obj)
+                     (let ((raw-endpoint (gptel-backend-endpoint backend-obj)))
+                       (if (functionp raw-endpoint) (funcall raw-endpoint nil) raw-endpoint))))
+         (full-url (when (and url endpoint)
+                     (concat url endpoint))))
+    (when (and full-url key (stringp key) (not (string-empty-p key)))
+      (let* ((compact-system
+              "You are a prompt compression assistant. Compress the user's text to ~40% of its original length while preserving ALL essential information: targets, constraints, findings, patterns, anti-patterns. Remove meta-commentary, hedging, repetition, verbose descriptions. Keep section headers. Output ONLY the compressed text.")
+             (request-payload
+              `((model . ,model)
+                (messages . [((role . "system")
+                             (content . ,compact-system))
+                            ((role . "user")
+                             (content . ,(format "Compress this prompt to ~40%% of its size (%dKB -> target ~%dKB):\n\n%s"
+                                                 (/ (string-bytes text) 1024)
+                                                 (/ (* (string-bytes text) my/gptel-auto-compact-target-ratio) 1024)
+                                                 text)))])
+                (max_tokens . 8192)
+                (temperature . 0.1)
+                (stream . :json-false)))
+             (request-json (gptel--json-encode request-payload))
+             (temp-input (make-temp-file "gptel-compact-in" nil ".json"))
+             (output-buffer (generate-new-buffer " *gptel-compact-out*"))
+             (result nil))
+        (unwind-protect
+            (condition-case err
+                (progn
+                  (with-temp-file temp-input (insert request-json))
+                  (let ((exit-code
+                         (apply #'call-process
+                                (gptel--curl-path) nil
+                                output-buffer nil
+                                "-s" "--show-error"
+                                (format "--max-time=%d" 30)
+                                "-H" "Content-Type: application/json"
+                                "-H" (format "Authorization: Bearer %s" key)
+                                "-d" (concat "@" temp-input)
+                                (list full-url))))
+                    (if (not (eq exit-code 0))
+                        (message "[auto-compact] curl exited %d for %s/%s"
+                                 exit-code backend-name model)
+                      (with-current-buffer output-buffer
+                        (goto-char (point-min))
+                        (condition-case json-err
+                            (let* ((json-obj (json-parse-buffer
+                                              :object-type 'plist
+                                              :array-type 'vector))
+                                   (choices (plist-get json-obj :choices))
+                                   (msg (and (vectorp choices)
+                                             (> (length choices) 0)
+                                             (plist-get (aref choices 0) :message)))
+                                   (content (and msg (plist-get msg :content))))
+                              (when (and (stringp content)
+                                         (> (length content) 200)
+                                         (< (string-bytes content)
+                                            (* (string-bytes text)
+                                               (+ my/gptel-auto-compact-target-ratio 0.2))))
+                                (setq result content)))
+                          (error
+                           (message "[auto-compact] JSON parse error for %s/%s: %s"
+                                    backend-name model
+                                    (error-message-string json-err))))))))
+              (error
+               (message "[auto-compact] %s/%s sync call failed: %s"
+                        backend-name model (error-message-string err))))
+          (when (file-exists-p temp-input) (delete-file temp-input))
+          (when (buffer-live-p output-buffer) (kill-buffer output-buffer)))
+        result))))
+
+(defun my/gptel--compact-system-message-llm (info)
+  "Compact the system message in INFO using a cheap LLM.
+Tries models from `my/gptel-auto-compact-models' in order.
+Returns number of bytes saved, or 0 if compaction failed."
+  (if (not my/gptel-auto-compact-enabled)
+      0
+    (let* ((data (my/gptel--info-data info))
+           (sys-result (and data (my/gptel--extract-system-message data))))
+      (if (not sys-result)
+          0
+        (let ((original-text (car sys-result))
+              (index (cdr sys-result))
+              (saved 0))
+          (if (< (string-bytes original-text) 10000)
+              0  ;; System message is already small, no point compacting
+            (cl-block try-chain
+              (dolist (entry my/gptel-auto-compact-models)
+                (let* ((backend-name (car entry))
+                       (model (cdr entry))
+                       (compacted (my/gptel--call-compact-llm-sync
+                                   original-text backend-name model)))
+                  (when compacted
+                    (let ((orig-bytes (string-bytes original-text))
+                          (new-bytes (string-bytes compacted)))
+                      (setq saved (- orig-bytes new-bytes))
+                      (my/gptel--replace-system-message data index compacted)
+                      (message "[auto-compact] System prompt compacted with %s/%s: %dKB -> %dKB (saved %dKB)"
+                               backend-name model
+                               (/ orig-bytes 1024) (/ new-bytes 1024) (/ saved 1024))
+                      (cl-return-from try-chain saved)))))
+              (message "[auto-compact] All models failed, system prompt unchanged")
+              0)))))))
 
 (defun my/gptel--compact-payload (fsm)
   "Proactively trim FSM's payload if it exceeds byte limits.
@@ -1037,15 +1200,16 @@ Only runs on the first attempt (retries=0) — retry trimming handles
 subsequent attempts via `my/gptel-auto-retry'.
 
 Applies trimming progressively until under limit or nothing left to trim:
-  1. Trim old OpenAI-style tool results
-  2. Trim old Gemini-style function responses
-  3. Strip reasoning_content
-  4. Reduce tools array to only used tools
-  5. Trim context images (oldest first)
-  6. Aggressive OpenAI-style tool result trim
-  7. Aggressive Gemini-style function response trim
-  8. Truncate old user/assistant messages
-  9. Strip images from multimodal messages (last resort)
+   1. Trim old OpenAI-style tool results
+   2. Trim old Gemini-style function responses
+   3. Strip reasoning_content
+   4. Reduce tools array to only used tools
+   5. Trim context images (oldest first)
+   6. Aggressive OpenAI-style tool result trim
+   7. Aggressive Gemini-style function response trim
+   8. Truncate old user/assistant messages
+   9. Strip images from multimodal messages (last resort)
+  10. LLM-based system prompt compaction (last resort, after passes 1-9)
 
 ASSUMPTION: Payload estimation via json-serialize is accurate enough for
   compaction decisions. Estimation errors are logged but don't block.
@@ -1068,10 +1232,11 @@ EDGE CASE: Pass 5 (context images) requires my/gptel--trim-context-images
   from gptel-ext-context-images — gracefully skips if unavailable.
 
 WISDOM: 9-pass progressive approach minimizes context loss:
-  - Pass 1-4: Remove redundant data (old results, unused tools)
-  - Pass 5-7: Remove expensive media and remaining tool outputs
-  - Pass 8-9: Nuclear option (truncate conversation, strip all images)
-  Each pass re-estimates size, stopping early if under limit.
+   - Pass 1-4: Remove redundant data (old results, unused tools)
+   - Pass 5-7: Remove expensive media and remaining tool outputs
+   - Pass 8-9: Nuclear option (truncate conversation, strip all images)
+   - Pass 10: LLM-based system prompt compaction (when passes 1-9 insufficient)
+   Each pass re-estimates size, stopping early if under limit.
 
 TEST: Create payload >200KB, verify compaction runs and reduces size.
   Check message log for pass-by-pass progress reports."
@@ -1095,17 +1260,24 @@ TEST: Create payload >200KB, verify compaction runs and reduces size.
               (let ((my/gptel-retry-keep-recent-tool-results
                      (if (null my/gptel-retry-keep-recent-tool-results)
                          2
-                       my/gptel-retry-keep-recent-tool-results)))
+                        my/gptel-retry-keep-recent-tool-results)))
                 (cl-loop for (pass-num trim-fn log-fmt) in my/gptel--compaction-passes
                          while (> bytes limit)
                          do (my/gptel--run-compaction-pass
                              info pass-num limit 'bytes 'trimmed-total 'pass
                              trim-fn log-fmt)))
+              ;; Pass 10: LLM-based system prompt compaction (when still over limit)
+              (when (and (> bytes limit) my/gptel-auto-compact-enabled)
+                (let ((llm-saved (my/gptel--compact-system-message-llm info)))
+                  (when (> llm-saved 0)
+                    (cl-incf trimmed-total (ceiling (/ llm-saved 1024.0)))
+                    (setq bytes (my/gptel--estimate-payload-bytes info))
+                    (setq pass 10))))
               (if (> bytes limit)
-                  (message "gptel: WARNING: Payload still %dKB after %d passes of compaction (limit %dKB)"
+                  (message "gptel: WARNING: Payload still %dKB after %d pass(es) of compaction (limit %dKB)"
                            (/ bytes 1024) pass (/ limit 1024))
                 (message "gptel: Compaction complete: %d items trimmed across %d pass(es), payload now %dKB"
-                          trimmed-total pass (/ bytes 1024))))))))))
+                         trimmed-total pass (/ bytes 1024))))))))))
 
 (advice-add 'gptel-curl-get-response :before #'my/gptel--compact-payload)
 

@@ -1353,7 +1353,7 @@ Implements section-level A/B testing to identify effective prompt components."
                             (gptel-auto-workflow--project-root)))
          (worktree-quoted (shell-quote-argument worktree-path))
          (git-history (shell-command-to-string
-                       (format "cd %s && git log --oneline -20 2>/dev/null || echo 'no history'"
+                       (format "cd %s && git log --oneline -5 2>/dev/null || echo 'no history'"
                                worktree-quoted)))
           (patterns (when (proper-list-p analysis) (plist-get analysis :patterns)))
           (suggestions (when (proper-list-p analysis) (plist-get analysis :recommendations)))
