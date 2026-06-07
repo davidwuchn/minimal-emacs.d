@@ -578,8 +578,8 @@ rewrite_status_idle() {
         return 0
     fi
 
-    sed -i 's/:running[[:space:]][[:space:]]*t/:running nil/' "$STATUS_FILE"
-    sed -i 's/:phase "[^"]*"/:phase "idle"/' "$STATUS_FILE"
+    perl -i -pe 's/:running\s+t/:running nil/' "$STATUS_FILE"
+    perl -i -pe 's/:phase "[^"]*"/:phase "idle"/' "$STATUS_FILE"
     # Ensure trailing newline (use if/else to survive set -e)
     if [ -n "$(tail -c1 "$STATUS_FILE")" ]; then
         echo >> "$STATUS_FILE"
