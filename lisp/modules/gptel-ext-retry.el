@@ -879,18 +879,6 @@ tend to reset connections around 250-300KB."
   :type '(choice (const :tag "Disabled" nil) integer)
   :group 'gptel)
 
-(defcustom my/gptel-auto-compact-models
-  '(("DeepSeek" . "deepseek-v4-flash")
-    ("DashScope" . "qwen3.5-plus")
-    ("TokenPlan" . "deepseek-v4-flash")
-    ("TokenPlan" . "qwen3.7-max"))
-  "Fallback chain of cheap LLM models for system prompt auto-compaction.
-Each entry is (BACKEND . MODEL). Tried in order; first success wins.
-Models should be fast, cheap, and have sufficient context window.
-Uses synchronous curl call — does not block Emacs event loop."
-  :type '(repeat (cons string string))
-  :group 'gptel)
-
 (defcustom my/gptel-auto-compact-target-ratio 0.4
   "Target compression ratio for LLM auto-compact.
 The compacted system prompt should be approximately this fraction
@@ -905,6 +893,33 @@ under the limit, the system prompt is sent to a cheap LLM for
 intelligent compression."
   :type 'boolean
   :group 'gptel)
+
+(defvar my/gptel-auto-compact--cheap-overrides
+  '(("DeepSeek" . "deepseek-v4-flash")
+    ("DashScope" . "qwen3.5-plus"))
+  "Cheap model overrides per backend for auto-compact.
+When a backend appears in the headless fallback chain, its model
+is replaced with the cheaper variant listed here (if any).
+Backends not listed use their default fallback model.")
+
+(defun my/gptel-auto-compact-models ()
+  "Return the compact model fallback chain.
+Derives from `gptel-auto-workflow-headless-subagent-fallbacks',
+preferring cheap/fast model variants where available.
+Skips rate-limited backends."
+  (let ((chain (if (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
+                   gptel-auto-workflow-headless-subagent-fallbacks
+                 ;; Fallback if headless chain not loaded
+                 '(("DeepSeek" . "deepseek-v4-flash")
+                   ("DashScope" . "qwen3.5-plus"))))
+        (excluded (if (boundp 'gptel-auto-workflow--rate-limited-backends)
+                      gptel-auto-workflow--rate-limited-backends
+                    nil)))
+    (cl-loop for (backend . model) in chain
+             unless (member backend excluded)
+             collect (cons backend
+                           (or (cdr (assoc backend my/gptel-auto-compact--cheap-overrides))
+                               model)))))
 
 (defun my/gptel--run-compaction-pass (info pass-num bytes-limit bytes-var trimmed-total-var pass-var trim-fn &optional pass-msg)
   "Execute a single compaction pass in `my/gptel--compact-payload'.
@@ -1097,7 +1112,11 @@ Returns compacted string or nil on failure."
                      (concat url endpoint))))
     (when (and full-url key (stringp key) (not (string-empty-p key)))
       (let* ((compact-system
-              "You are a prompt compression assistant. Compress the user's text to ~40% of its original length while preserving ALL essential information: targets, constraints, findings, patterns, anti-patterns. Remove meta-commentary, hedging, repetition, verbose descriptions. Keep section headers. Output ONLY the compressed text.")
+              "You are a prompt compression assistant. Compress the user's text to ~40% of
+its original length while preserving ALL essential information: targets,
+constraints, findings, patterns, anti-patterns. Remove meta-commentary,
+hedging, repetition, verbose descriptions. Keep section headers. Output ONLY
+the compressed text.")
              (request-payload
               `((model . ,model)
                 (messages . [((role . "system")
@@ -1161,7 +1180,7 @@ Returns compacted string or nil on failure."
 
 (defun my/gptel--compact-system-message-llm (info)
   "Compact the system message in INFO using a cheap LLM.
-Tries models from `my/gptel-auto-compact-models' in order.
+Derives model chain from `my/gptel-auto-compact-models' (headless fallback).
 Returns number of bytes saved, or 0 if compaction failed."
   (if (not my/gptel-auto-compact-enabled)
       0
@@ -1175,7 +1194,7 @@ Returns number of bytes saved, or 0 if compaction failed."
           (if (< (string-bytes original-text) 10000)
               0  ;; System message is already small, no point compacting
             (cl-block try-chain
-              (dolist (entry my/gptel-auto-compact-models)
+              (dolist (entry (my/gptel-auto-compact-models))
                 (let* ((backend-name (car entry))
                        (model (cdr entry))
                        (compacted (my/gptel--call-compact-llm-sync
@@ -1235,7 +1254,7 @@ WISDOM: 9-pass progressive approach minimizes context loss:
    - Pass 1-4: Remove redundant data (old results, unused tools)
    - Pass 5-7: Remove expensive media and remaining tool outputs
    - Pass 8-9: Nuclear option (truncate conversation, strip all images)
-   - Pass 10: LLM-based system prompt compaction (when passes 1-9 insufficient)
+- Pass 10: LLM-based system prompt compaction (when passes 1-9 insufficient)
    Each pass re-estimates size, stopping early if under limit.
 
 TEST: Create payload >200KB, verify compaction runs and reduces size.
@@ -1274,7 +1293,8 @@ TEST: Create payload >200KB, verify compaction runs and reduces size.
                     (setq bytes (my/gptel--estimate-payload-bytes info))
                     (setq pass 10))))
               (if (> bytes limit)
-                  (message "gptel: WARNING: Payload still %dKB after %d pass(es) of compaction (limit %dKB)"
+                  (message "gptel: WARNING: Payload still %dKB after %d pass(es) of compaction (limit
+%dKB)"
                            (/ bytes 1024) pass (/ limit 1024))
                 (message "gptel: Compaction complete: %d items trimmed across %d pass(es), payload now %dKB"
                          trimmed-total pass (/ bytes 1024))))))))))
