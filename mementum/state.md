@@ -81,6 +81,7 @@
 - **Pi5 auto-evolves**: `research-insights-template-default.md`, `strategy-guidance.json` — merge=theirs
 - **Unified pipeline**: 4 scripts → 1 (`run-pipeline.sh`), lifecycle hooks at start/end
 - **Monitoring agent**: Meta-improvement layer — detects failures, generates proposals, auto-deploys fixes
+- **Monitoring agent integration**: Wired into experiment core via `after-experiment-hook`
 
 ## Model Routing Matrix (Static + Dynamic)
 
@@ -106,8 +107,11 @@ User Input → Detect Task Type → Route to Model → Self-Heal Diagnostic → 
 
 ## Next Steps (Suggested by Active Mementum)
 
-1. **Refine remaining 87 module docs** (low priority)
-2. **Upstream PR** — install.sh macOS sed (blocked)
+1. **Token economics → pre-flight decisions** (P1) — wire ROI threshold into experiment pre-flight
+2. **Production metrics → grader scoring** (P1) — weight production impact in grader
+3. **Human interface → pipeline** (P2) — route high-risk experiments to approval queue
+4. **Refine remaining 87 module docs** (low priority)
+5. **Upstream PR** — install.sh macOS sed (blocked)
 
 ## Blockers
 
