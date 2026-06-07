@@ -600,33 +600,44 @@ QUERY is ignored; PARAMS :query-type determines behavior."
   "Backward-compat: get regeneration history for MODULE."
   (gethash module gptel-auto-workflow--regeneration-history))
 
-(defun gptel-auto-workflow--prepare-regeneration-context (module model-version)
-  "Backward-compat: prepare regeneration context for MODULE with MODEL-VERSION."
-  (let* ((module-context (gethash module gptel-auto-workflow--module-context-store))
-         (historical-contexts (gptel-auto-workflow-context-db-query :target module))
-         (historical-learnings (mapcar (lambda (ctx) (plist-get ctx :learnings))
-                                       historical-contexts)))
-    (list :module module
-          :target-model model-version
-          :purpose (and module-context (plist-get module-context :purpose))
-          :key-decisions (and module-context (plist-get module-context :key-decisions))
-          :historical-learnings historical-learnings
-          :constraints (and module-context (plist-get module-context :constraints)))))
+;; Forward declarations for code-regeneration module (defalias targets)
+(declare-function gptel-auto-workflow-code-regeneration--prepare-context
+  "gptel-auto-workflow-code-regeneration" (module model-version))
+(declare-function gptel-auto-workflow-code-regeneration--generate-prompt
+  "gptel-auto-workflow-code-regeneration" (regen-context))
+(declare-function gptel-auto-workflow-code-regeneration--identify-candidates
+  "gptel-auto-workflow-code-regeneration" (&optional _args))
+(declare-function gptel-auto-workflow-code-regeneration--full-workflow
+  "gptel-auto-workflow-code-regeneration" (module _current-model target-model))
 
-(defun gptel-auto-workflow--generate-regeneration-prompt (regen-context)
-  "Backward-compat: generate prompt for regeneration."
-  (let ((module (plist-get regen-context :module))
-        (model (plist-get regen-context :target-model))
-        (purpose (plist-get regen-context :purpose))
-        (decisions (plist-get regen-context :key-decisions))
-        (learnings (plist-get regen-context :historical-learnings))
-        (constraints (plist-get regen-context :constraints)))
-    (format "Regenerate module: %s\nTarget model: %s\n\nPurpose:\n%s\n\nKey Decisions:\n%s\n\nHistorical Learnings:\n%s\n\nConstraints:\n%s"
-            module model
-            (or purpose "No purpose specified")
-            (or (mapconcat #'identity decisions "\n") "No decisions recorded")
-            (or (mapconcat #'identity learnings "\n") "No learnings recorded")
-            (or (mapconcat #'identity constraints "\n") "No constraints recorded"))))
+;; Regeneration functions now live in gptel-auto-workflow-code-regeneration.el
+;; These defaliases preserve the old names for backward compatibility.
+;; The defalias optional docstring preserves the original documentation.
+
+(defalias 'gptel-auto-workflow--prepare-regeneration-context
+  'gptel-auto-workflow-code-regeneration--prepare-context
+  "Prepare regeneration context plist for MODULE targeting MODEL-VERSION.
+Reads sidecar context data, derives business rationale, key decisions,
+and historical learnings.  Now delegates to code-regeneration module.")
+
+(defalias 'gptel-auto-workflow--generate-regeneration-prompt
+  'gptel-auto-workflow-code-regeneration--generate-prompt
+  "Generate a regeneration prompt string from REGEN-CONTEXT plist.
+Incorporates business rationale, decisions, learnings, and model stats.
+Now delegates to code-regeneration module.")
+
+(defalias 'gptel-auto-workflow--identify-regeneration-candidates
+  'gptel-auto-workflow-code-regeneration--identify-candidates
+  "Identify modules that would benefit from regeneration with a better model.
+Scans context-database sidecar data for targets with sufficient history
+and below-threshold improvement.  Returns nil if context-database is
+not available.  Now delegates to code-regeneration module.")
+
+(defalias 'gptel-auto-workflow--full-regeneration-workflow
+  'gptel-auto-workflow-code-regeneration--full-workflow
+  "Execute full regeneration workflow for MODULE to TARGET-MODEL.
+Prepares context, generates prompt, sets experiment-prompt-override.
+Now delegates to code-regeneration module.")
 
 (defun gptel-auto-workflow--compare-regeneration-versions (version1 version2)
   "Backward-compat: compare two regeneration versions."
@@ -652,9 +663,7 @@ QUERY is ignored; PARAMS :query-type determines behavior."
   "Backward-compat: get scheduled regenerations."
   gptel-auto-workflow--scheduled-regenerations)
 
-(defun gptel-auto-workflow--identify-regeneration-candidates (&rest _args)
-  "Backward-compat stub: returns nil (no module scanning in sidecar arch)."
-  nil)
+;; (identify-regeneration-candidates now a defalias above)
 
 (defun gptel-auto-workflow--estimate-regeneration-value (_module current-metrics expected-improvements)
   "Backward-compat: estimate regeneration value."
@@ -668,12 +677,7 @@ QUERY is ignored; PARAMS :query-type determines behavior."
           :maintainability-gain maint-gain
           :overall-value-score (/ (+ perf-gain maint-gain) 2.0))))
 
-(defun gptel-auto-workflow--full-regeneration-workflow (module _current-model target-model)
-  "Backward-compat: full regeneration workflow stub."
-  (let* ((regen-context (gptel-auto-workflow--prepare-regeneration-context
-                         module target-model))
-         (prompt (gptel-auto-workflow--generate-regeneration-prompt regen-context)))
-    (list :success t :module module :new-model target-model :prompt prompt)))
+;; (full-regeneration-workflow now a defalias above)
 
 (defun gptel-auto-workflow--get-all-modules ()
   "Backward-compat stub: returns nil."

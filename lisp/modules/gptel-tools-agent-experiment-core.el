@@ -103,6 +103,13 @@ Cleared at experiment start by gptel-auto-experiment-run.")
 Set by gptel-auto-experiment-build-prompt, used in prompt WORKFLOW: line.
 List of atom symbol names, e.g. (elisp-discover elisp-expert elisp-validator).")
 
+(defvar gptel-auto-workflow--experiment-prompt-override nil
+  "When non-nil, this string overrides the experiment prompt entirely.
+Set by the regeneration workflow to inject a regeneration-specific prompt.
+Cleared after each experiment run.  Must be a non-empty string to take effect.
+Defined also in gptel-auto-workflow-code-regeneration.el — both definitions
+are equivalent; this one ensures the var exists even when that module is not loaded.")
+
 (defun gptel-auto-experiment--pre-existing-breakage-p (target)
   "Return non-nil if TARGET was already broken before this experiment.
 Uses the cached target state to detect pre-existing breakage.
@@ -502,7 +509,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                    (not (equal strategy-name "template-default")))
                                               (gptel-auto-experiment-build-prompt-with-strategy
                                                strategy-name target experiment-id max-experiments analysis baseline previous-results)))
-                        (prompt (or (and (stringp strategy-prompt)
+                        (prompt (or gptel-auto-workflow--experiment-prompt-override
+                                    (and (stringp strategy-prompt)
                                          (> (length strategy-prompt) 0)
                                          strategy-prompt)
                                     (gptel-auto-experiment-build-prompt
@@ -518,6 +526,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                      (and (boundp 'gptel-auto-workflow--last-prompt-sections)
                           (split-string gptel-auto-workflow--last-prompt-sections ","))))
                    (setq executor-prompt prompt)
+                    ;; Clear prompt override after consumption (one-shot mechanism)
+                    (setq gptel-auto-workflow--experiment-prompt-override nil)
                    (unless (and (stringp prompt) (> (length prompt) 0))
                      (message "[auto-exp] ⚠ Empty prompt for %s experiment %d — skipping" target experiment-id)
                      (setq finished t)
