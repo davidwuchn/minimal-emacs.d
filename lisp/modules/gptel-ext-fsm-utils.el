@@ -213,7 +213,8 @@ SIGNAL: Explicit assumptions - Uses lazy predicate resolution."
 (defun my/gptel--fsm-valid-p (object)
   "Return non-nil when OBJECT is a valid FSM.
 
-ASSUMPTION: Uses lazy predicate resolution from my/gptel--fsm-predicate-resolve.
+ASSUMPTION: Uses lazy predicate resolution from
+my/gptel--fsm-predicate-resolve.
 BEHAVIOR: Returns t if OBJECT is non-nil and passes predicate check.
 BEHAVIOR: Returns nil if OBJECT is nil or fails predicate check.
 EDGE CASE: Nil OBJECT returns nil.
@@ -356,11 +357,13 @@ consistent behavior across all FSM collection operations."
 
 (defun my/gptel--fsm-collect-list (object)
   "Collect all FSMs from OBJECT into a list.
-Returns (LIST . MOST-RECENT) dotted pair where MOST-RECENT is the last FSM found.
+Returns (LIST . MOST-RECENT) dotted pair where MOST-RECENT is the last FSM
+found.
 Uses single traversal pass for performance optimization.
 
 ASSUMPTION: OBJECT may be atom, cons cell, or nested structure.
-ASSUMPTION: SEEN is a pre-allocated hash table with eq test (for internal use).
+ASSUMPTION: SEEN is a pre-allocated hash table with eq test (for internal
+use).
 BEHAVIOR: Returns (FSMS . LAST-FSM) dotted pair.
 EDGE CASE: No FSMs returns (nil . nil)."
   (let ((seen (make-hash-table :test 'eq))
@@ -435,7 +438,8 @@ ADAPTS TO: Provides quantitative measure of nesting for decision making.
 PROACTIVE MITIGATION: Enables detection of nested scenarios before
 wrong FSM selection occurs.
 
-SIGNAL: Explicit assumptions - Uses dedicated counter instead of building list."
+SIGNAL: Explicit assumptions - Uses dedicated counter instead of building
+list."
   (my/gptel--fsm-count object))
 
 ;;; Registry Validation

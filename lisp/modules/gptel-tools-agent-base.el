@@ -104,7 +104,8 @@ Helper for validation in callback-based functions."
 ;;; Workspace Boundary Validation
 
 (defun gptel-auto-workflow--path-within-workspace-p (path)
-  "Return t if PATH is within any root in `gptel-auto-workflow--allowed-workspace-roots'.
+  "Return t if PATH is within any root in
+`gptel-auto-workflow--allowed-workspace-roots'.
 Handles nil input, relative paths, .. escapes, and symlinks.
 Uses `file-truename' on both the candidate path and each root to resolve
 symlinks and .. components.  Path exactly equal to a root directory returns t.
@@ -122,7 +123,8 @@ Empty roots list returns nil (deny by default)."
                roots))))
 
 (defun gptel-auto-workflow--expand-workspace-path (path &optional root)
-  "Expand PATH relative to ROOT, then validate it is within allowed workspace roots.
+  "Expand PATH relative to ROOT, then validate it is within allowed workspace
+roots.
 ROOT defaults to `gptel-auto-workflow--worktree-base-root' when nil.
 Returns the expanded absolute path on success.
 Signals an error when PATH is nil or outside allowed roots.
@@ -176,7 +178,8 @@ Task types (and preferred models):
 (defun gptel-auto-workflow--detect-task-type (prompt)
   "Analyze PROMPT and return the most likely task type symbol.
 Returns one of: code, review, research, creative, orchestration, or nil.
-Uses keyword frequency matching against `gptel-auto-workflow--task-type-keywords'."
+Uses keyword frequency matching against
+`gptel-auto-workflow--task-type-keywords'."
   (when (stringp prompt)
     (let* ((downcase-prompt (downcase prompt))
            (scores nil))
@@ -409,7 +412,7 @@ Signals user-error if either dependency fails to load."
   "Ensure repo-local ELPA transient shadows the built-in library.
 When the live worker inherits Emacs's built-in transient, newer Magit or
 evil-collection packages can fail on missing internals like
-`transient--set-layout'.  Prefer the repo-local ELPA transient package and load
+`transient--set-layout'. Prefer the repo-local ELPA transient package and load
 it when the current transient implementation is too old."
   (let* ((root (file-name-as-directory
                 (expand-file-name
@@ -791,7 +794,8 @@ allowed for compatibility with isolated tests."
 (defconst gptel-auto-workflow--results-tsv-header
   "experiment_id\ttarget\thypothesis\tscore_before\tscore_after\tcode_quality\tdelta\tdecision\tduration\tgrader_quality\tgrader_reason\tcomparator_reason\tanalyzer_patterns\tagent_output\toutput_chars\tbackend\tprompt_chars\tsections_included\texploration_axis\tcandidate_scores\tstrategy\tresearch_strategy\tresearch_hash\tresearch_quality\tcontroller_decision\tkibcm_axis\tmodel\teight_key_scores\tskills\tedit_mode\tcost_usd\teffort_level\tprod_error_rate_before\tprod_error_rate_after\tprod_error_rate_delta\tuser_satisfaction_delta\tsupport_tickets_reduced\tbusiness_value_score\trisk_score\tcomplexity_before\tcomplexity_after\tlines_removed\tunderstanding_score\n"
   "Header row written to auto-workflow results.tsv artifacts.
-32 core columns + 7 production metrics columns (33-39) + 4 complexity columns (40-43).")
+32 core columns + 7 production metrics columns (33-39) + 4 complexity columns
+(40-43).")
 
 (defun gptel-auto-experiment--extract-axis (agent-output)
   "Extract exploration axis (A-F) from AGENT-OUTPUT.
@@ -1106,7 +1110,8 @@ Stale or already-integrated hashes are compacted out of the ledgers."
 
 (defun gptel-auto-workflow--recover-orphans ()
   "Check for tracked commits that are not yet preserved by recovery refs.
-An orphan is a tracked commit that exists, is not already integrated, and could
+An orphan is a tracked commit that exists, is not already integrated, and
+could
 not be pinned under a private `refs/auto-workflow/kept/*' ref.
 Returns list of (hash exp-id target) for truly unpreserved commits."
   (interactive)

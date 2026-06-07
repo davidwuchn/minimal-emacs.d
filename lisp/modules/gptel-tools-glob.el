@@ -33,7 +33,8 @@ first 50 lines are returned with a reference to the full content."
 (defun my/gptel--agent-glob--maybe-truncate (text)
   "Return TEXT, truncating and persisting to a temp file if needed.
 
-If TEXT exceeds `my/gptel-glob-result-limit' bytes, it's saved to a temp file and only
+If TEXT exceeds `my/gptel-glob-result-limit' bytes, it's saved to a temp file
+and only
 the first 50 lines are returned with a reference to the full content."
   (if (<= (length text) my/gptel-glob-result-limit)
       text

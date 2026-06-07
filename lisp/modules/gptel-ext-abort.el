@@ -43,8 +43,10 @@ Analyzer/grader/comparator are smaller (30-60s)."
 
 (defun my/gptel--install-fast-curl-timeouts ()
   "Set `gptel-curl-extra-args' for fast failure on stalls.
-NOTE: Low-speed timeout (-y/-Y) removed - caused false positives for subagents.
-Backend-specific timeouts (DashScope 900s, Moonshot 900s) handle long-running calls."
+NOTE: Low-speed timeout (-y/-Y) removed - caused false positives for
+subagents.
+Backend-specific timeouts (DashScope 900s, Moonshot 900s) handle long-running
+calls."
   (setq gptel-curl-extra-args
         (list
          "--connect-timeout" (number-to-string my/gptel-curl-connect-timeout)

@@ -214,7 +214,8 @@ Uses external APIs when available, falls back to local signals."
 (defun gptel-auto-workflow--compute-local-business-value (target)
   "Compute business value from LOCAL signals when external APIs are unavailable.
 Analyzes Emacs error logs, byte-compile warnings, and test results for TARGET.
-Returns plist with :business-value-score, :risk-score, :user-satisfaction-delta, :support-tickets-reduced.
+Returns plist with :business-value-score, :risk-score,
+:user-satisfaction-delta, :support-tickets-reduced.
 
 Business value heuristics:
   +0.3  Fix for a function that appears in recent error logs

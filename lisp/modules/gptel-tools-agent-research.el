@@ -400,6 +400,10 @@ REQUEST-BUFFER is removed from direct-LLM tracking after delivery."
    (t
     (gptel-mementum--synthesis-agent))))
 
+(defvar gptel-mementum--max-prompt-bytes 600000
+  "Maximum bytes of memory content to include in a single synthesis prompt.
+Below the 781KB API limit (with margin) to allow for prompt template + response.")
+
 (defun gptel-mementum-synthesize-candidate (candidate &optional synchronous synthesis-backend callback-run-id)
   "Synthesize CANDIDATE into knowledge page with human approval.
 CANDIDATE is plist with :topic :count :files.
@@ -424,6 +428,19 @@ Note: Call `gptel-mementum-ensure-agents' first for batch processing."
       (let ((content (gptel-auto-workflow--read-file-contents file)))
         (when content
           (push content memories-content))))
+    ;; Truncate oversized memories to fit within API payload limit.
+    ;; 38 memories × 25KB = 988KB would exceed the 781KB limit and
+    ;; trigger 9 passes of compaction that cannot reduce the prompt.
+    (when memories-content
+      (let ((before-total (apply #'+ (mapcar #'length memories-content))))
+        (when (> before-total gptel-mementum--max-prompt-bytes)
+          (setq memories-content
+                (gptel-mementum--truncate-memories
+                 memories-content gptel-mementum--max-prompt-bytes))
+          (let ((after-total (apply #'+ (mapcar #'length memories-content))))
+            (message "[mementum] Truncated %d memories: %dKB → %dKB"
+                     (length memories-content)
+                     (/ before-total 1024) (/ after-total 1024))))))
     (if (< (length memories-content) 3)
         (progn
           (message "[mementum] Skip synthesis: only %d memories for '%s'" (length memories-content) topic)
@@ -610,8 +627,32 @@ In headless mode, respects `gptel-mementum-headless-auto-approve'."
                (display-buffer preview-buffer)
                 (when (y-or-n-p (format "Create knowledge page for '%s'? (%d lines) " topic line-count))
                   (gptel-mementum--save-knowledge-page topic files extracted)))))))
-    (error
-     (message "[mementum] Error handling synthesis for '%s': %s" topic (error-message-string err)))))
+     (error
+      (message "[mementum] Error handling synthesis for '%s': %s" topic (error-message-string err)))))
+
+(defun gptel-mementum--truncate-memories (memories max-bytes)
+  "Truncate MEMORIES to fit within MAX-BYTES total length.
+Each memory is capped individually to MAX-BYTES/4 so a single huge memory
+cannot starve the others.  Returns list of (possibly truncated) strings.
+Total length of returned strings <= MAX-BYTES."
+  (let* ((per-memory-cap (max 1000 (/ max-bytes 4)))
+         (capped (mapcar (lambda (m)
+                           (if (> (length m) per-memory-cap)
+                               (concat (substring m 0 per-memory-cap)
+                                       (format "\n... [truncated %d bytes]"
+                                               (- (length m) per-memory-cap)))
+                             m))
+                         memories))
+         (total (apply #'+ (mapcar #'length capped))))
+    (if (<= total max-bytes)
+        capped
+      ;; Drop whole memories from the end until we fit
+      (let ((result (reverse capped))
+            (running 0))
+        (while (and result (> (+ running (length (car result))) max-bytes))
+          (setq running (+ running (length (car result))))
+          (pop result))
+        (nreverse result)))))
 
 (defun gptel-mementum--build-synthesis-prompt (topic memories)
   "Build prompt for LLM to synthesize MEMORIES into knowledge page for TOPIC."

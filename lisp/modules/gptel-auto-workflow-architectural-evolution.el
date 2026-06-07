@@ -197,8 +197,10 @@ Each plist: :category, :strategy, :total, :kept, :kept-rate, :change-type."
 
 (defun gptel-auto-workflow--generate-architectural-proposal (routing-group)
   "Generate an architectural proposal plist from ROUTING-GROUP.
-ROUTING-GROUP has :category, :strategy, :total, :kept, :kept-rate, :change-type.
-Adds legacy keys (:confidence :risk :component) so --score-proposal can process it.
+ROUTING-GROUP has :category, :strategy, :total, :kept, :kept-rate,
+:change-type.
+Adds legacy keys (:confidence :risk :component) so --score-proposal can
+process it.
 Returns proposal plist compatible with monitoring-agent pipeline."
   (let* ((category (plist-get routing-group :category))
          (strategy (plist-get routing-group :strategy))
@@ -234,7 +236,8 @@ Returns proposal plist compatible with monitoring-agent pipeline."
 (defun gptel-auto-workflow--architectural-slug (change-type identifier)
   "Generate a mementum slug for an architectural proposal.
 CHANGE-TYPE is a symbol (routing-change, investigation, etc).
-IDENTIFIER is a string describing the target (strategy name, category+strategy).
+IDENTIFIER is a string describing the target (strategy name,
+category+strategy).
 Uses mementum-slug when available, falls back to manual sanitization."
   (format "architectural-%s-%s"
           change-type
@@ -249,7 +252,8 @@ Uses mementum-slug when available, falls back to manual sanitization."
 
 (defun gptel-auto-workflow--architectural-proposal->string (proposal)
   "Format PROPOSAL plist into a human-readable string for mementum.
-Includes change-type, affected strategy, category, confidence, risk, and impact."
+Includes change-type, affected strategy, category, confidence, risk, and
+impact."
   (let ((description (or (plist-get proposal :description) "N/A"))
         (component (or (plist-get proposal :component) "unknown"))
         (change-type (or (plist-get proposal :change-type) "unknown"))

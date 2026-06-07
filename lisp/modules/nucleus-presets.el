@@ -108,7 +108,8 @@ Updates `nucleus-agent-default' so new buffers use the same preset."
       (force-mode-line-update))))
 
 (defun nucleus--override-preset (preset-name system-symbol description toolset model backend)
-  "Override PRESET-NAME with nucleus SYSTEM-SYMBOL, DESCRIPTION, TOOLSET, MODEL, BACKEND.
+  "Override PRESET-NAME with nucleus SYSTEM-SYMBOL, DESCRIPTION, TOOLSET, MODEL,
+BACKEND.
 
 Only override :model and :backend if the preset doesn't already have a model
 (allowing YAML model: to take priority).
@@ -243,7 +244,8 @@ Signals an error if any agent has incorrect tools."
 (defun nucleus--around-apply-preset (orig preset &optional setter)
   "Around advice: redirect preset names and ensure `gptel--preset' is set.
 
-Redirects gptel-agent → nucleus-gptel-agent and gptel-plan → nucleus-gptel-plan
+Redirects gptel-agent → nucleus-gptel-agent and gptel-plan →
+nucleus-gptel-plan
 when nucleus presets are available.
 
 Also handles the case where `gptel--transform-apply-preset' passes a plist
@@ -268,13 +270,15 @@ normally sets `gptel--preset'."
     (funcall orig effective-preset setter)))
 
 (defun nucleus--after-transform-apply-preset (&rest args)
-  "After advice on `gptel--transform-apply-preset': sync gptel--preset from header.
+  "After advice on `gptel--transform-apply-preset': sync gptel--preset from
+header.
 
 Fallback for when the plist eq-lookup in `nucleus--around-apply-preset'
 fails (e.g. plist was re-consed between registration and send).  Reads
 `gptel-backend' and `gptel-tools' to infer the active preset by checking
 which nucleus preset's tool list matches the buffer-local tools.
-It also updates the original chat buffer so the header-line reflects the new mode."
+It also updates the original chat buffer so the header-line reflects the new
+mode."
   (let* ((fsm (car args))
          (orig-buf (and fsm (fboundp 'gptel-fsm-info) (plist-get (gptel-fsm-info fsm) :buffer))))
     (when (and (boundp 'gptel--known-presets)

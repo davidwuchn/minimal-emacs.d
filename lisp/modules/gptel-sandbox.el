@@ -459,7 +459,8 @@ supports a small, explicit whitelist of pure operations."
       ('if
           (let ((args (cdr expr)))
             (unless (>= (length args) 2)
-              (error "Programmatic if requires at least 2 arguments (condition and then-form), got: %d" (length args)))
+              (error "Programmatic if requires at least 2 arguments (condition and then-form), got:
+%d" (length args)))
             (let ((cond-result (gptel-sandbox--eval-expr (car args) env)))
               (if cond-result
                   (gptel-sandbox--eval-expr (cadr args) env)
@@ -799,7 +800,8 @@ CALLBACK receives non-nil when approved and nil when rejected."
      (format "Error: %s" (error-message-string err)))))
 
 (defun gptel-sandbox--error-plist-p (plist)
-  "Return non-nil if PLIST is an error plist with :error, :violated, or :reason keys."
+  "Return non-nil if PLIST is an error plist with :error, :violated, or :reason
+keys."
   (and (proper-list-p plist)
        (or (plist-member plist :error)
            (plist-member plist :violated)

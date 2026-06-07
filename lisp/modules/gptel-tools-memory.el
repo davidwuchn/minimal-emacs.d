@@ -33,7 +33,8 @@ SIGNALS an error if no valid root can be determined."
                          (project-root (project-current)))
                     default-directory)))
       (unless (stringp root)
-        (error "gptel-tools-memory: Could not determine project root; all fallback methods returned nil"))
+        (error "gptel-tools-memory: Could not determine project root; all fallback methods
+returned nil"))
       (when (string= root "")
         (error "gptel-tools-memory: Project root resolved to empty string"))
       (setq gptel-tools-memory--cached-root root)
@@ -175,7 +176,8 @@ that were stored in previous sessions. You can infer relevance from the memory n
      :function #'gptel-tools-memory--read
      :args (list '(:name "slug"
                           :type string
-                          :description "Memory name/slug (e.g., 'serena-architecture-lessons' or 'project-facts'). Add 'knowledge/' prefix for knowledge pages.")
+                          :description "Memory name/slug (e.g., 'serena-architecture-lessons' or 'project-facts'). Add
+'knowledge/' prefix for knowledge pages.")
                  '(:name "knowledge"
                           :type boolean
                           :optional t
@@ -191,10 +193,12 @@ a future AI session working on this project. Keep memories atomic (<200 words)."
      :function #'gptel-tools-memory--write
      :args (list '(:name "slug"
                         :type string
-                        :description "Memory name/slug (e.g., 'nil-safety-pattern'). Use '/' for topics: 'auth/login-flow'.")
+                        :description "Memory name/slug (e.g., 'nil-safety-pattern'). Use '/' for topics:
+'auth/login-flow'.")
                  '(:name "content"
                         :type string
-                        :description "The memory content in markdown format. Keep under 200 words. One insight per memory.")
+                        :description "The memory content in markdown format. Keep under 200 words. One insight per
+memory.")
                  '(:name "knowledge"
                         :type boolean
                         :optional t

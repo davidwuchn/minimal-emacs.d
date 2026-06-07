@@ -78,7 +78,8 @@ When enabled, validates:
 :delegates     — Tool delegates to sub-agents
 :requires-project — Tool needs an active project context
 :plan-excluded — Tool excluded from plan/readonly mode even though read-only
-:sandbox-excluded — Tool excluded from all sandbox profiles (escapes sandbox or
+:sandbox-excluded — Tool excluded from all sandbox profiles (escapes sandbox
+or
                     requires user interaction incompatible with Programmatic)
 :file-inspector  — Tool inspects file content at granularity that can cause
                     same-file inspection thrash
@@ -110,7 +111,8 @@ A tool may carry multiple markers. Markers enable:
 (defun nucleus-toolset-from-markers (include exclude)
   "Derive a toolset from marker specifications.
 
-INCLUDE is a list of markers — tools carrying ANY included marker are candidates.
+INCLUDE is a list of markers — tools carrying ANY included marker are
+candidates.
 EXCLUDE is a list of markers — tools carrying ANY excluded marker are removed.
 Either may be nil.
 
@@ -725,7 +727,8 @@ CONSTRAINTS may include :pattern, :minLength, :maxLength, :enum."
 
 (defun nucleus-tools--validate-number (val arg-name constraints)
   "Validate number VAL against CONSTRAINTS.
-CONSTRAINTS may include :minimum, :maximum, :exclusiveMinimum, :exclusiveMaximum."
+CONSTRAINTS may include :minimum, :maximum, :exclusiveMinimum,
+:exclusiveMaximum."
   (unless (numberp val)
     (nucleus-tools--validation-error arg-name :type "a number" val))
   

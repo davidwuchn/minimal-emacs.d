@@ -192,7 +192,10 @@ With 15% exploration rate, some low-prediction experiments should run."
                ((symbol-function 'gptel-auto-workflow--parse-all-results)
                 (lambda () nil))
                ((symbol-function 'gptel-auto-workflow--load-research-traces)
-                (lambda () nil)))
+                (lambda () nil))
+               ;; Mock random to always allow exploration through
+               ((symbol-function 'random)
+                (lambda (&rest _) 0)))
       ;; With exploration, some low-prediction experiments should run
       (let ((runs 0))
         (dotimes (_ 20)

@@ -22,6 +22,11 @@
 ;; Soft require: knowledge-reasoning provides causal analysis and gap detection
 (require 'gptel-auto-workflow-knowledge-reasoning nil t)
 
+;; Forward declarations — defined in gptel-tools (loaded before this module
+;; via post-init's init-ai chain).  These silence the byte-compiler warning
+;; while preserving the runtime dependency contract.
+(declare-function gptel-auto-workflow--expand-workspace-path "gptel-tools" (path))
+
 ;; External functions from other modules
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base" ())
 (declare-function gptel-auto-workflow--json-encode-plist "gptel-auto-workflow-ontology-router" (plist))
@@ -6535,7 +6540,8 @@ Returns plist with :healthy-p and :diagnosis."
              :confidence 0.85
              :keep-rate keep-rate
              :total total
-             :remedy "Review hypothesis generation strategy; consider narrowing target selection or using research-first mode"))
+             :remedy "Review hypothesis generation strategy; consider narrowing target selection or
+using research-first mode"))
 
       ;; Healthy
       (t (list :healthy-p t
@@ -6545,11 +6551,13 @@ Returns plist with :healthy-p and :diagnosis."
 
 (defun gptel-auto-workflow--detect-run-level-keep-rate-streak ()
   "Detect consecutive runs with 0% keep-rate across ALL targets.
-Scans the last N run directories for 0% keep-rate and returns the streak count.
+Scans the last N run directories for 0% keep-rate and returns the streak
+count.
 This catches the pattern where the pipeline runs but produces nothing useful
 run after run — a sign of systemic strategy failure.
 
-Returns plist with :streak (count), :runs-checked, :total-experiments, :total-kept,
+Returns plist with :streak (count), :runs-checked, :total-experiments,
+:total-kept,
 :action (one of :none, :strategy-review, :target-reset)."
   (let* ((exp-dir (expand-file-name "var/tmp/experiments/"
                                      (or (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
@@ -6634,7 +6642,8 @@ Returns the action taken, or nil if no action needed."
                gptel-auto-workflow--self-healing-log))
        :strategy-review)
       (:target-reset
-       (message "[pipeline-health] 🔴 Critical: 5+ runs at 0%% keep-rate — resetting target priorities")
+       (message "[pipeline-health] 🔴 Critical: 5+ runs at 0%% keep-rate — resetting target
+priorities")
        ;; Clear the target priority cache to force re-ranking
        (when (boundp 'gptel-auto-workflow--target-priority-cache)
          (setq gptel-auto-workflow--target-priority-cache nil))
@@ -6860,7 +6869,8 @@ Called every 5th run or when predictive warning triggers."
 (defun gptel-auto-workflow--maybe-self-heal ()
   "Check pipeline health and auto-remediate if broken.
 Call this after each experiment run or batch.
-Phase 8: Predictive health checks + Phase 6: Escalation + Run-level streak detection.
+Phase 8: Predictive health checks + Phase 6: Escalation + Run-level streak
+detection.
 Records health snapshot, checks predictive warnings, analyzes patterns."
   (when (fboundp 'gptel-auto-workflow--check-pipeline-health)
     (let ((health (gptel-auto-workflow--check-pipeline-health)))
@@ -7717,7 +7727,8 @@ Returns t if balanced, nil if unmatched."
       (nth 0 (parse-partial-sexp (point-min) (line-end-position))))))
 
 (defun gptel-auto-workflow--fix-let-needs-let* (file)
-  "Fix \\=`let\\=' that should be \\=`let*\\=' where later bindings reference earlier ones.
+  "Fix \\=`let\\=' that should be \\=`let*\\=' where later bindings reference
+earlier ones.
 Scans byte-compiler warnings for \\='reference to free variable\\=' that are
 actually in the same let form.  Returns number of fixes."
   (let ((fixes 0)
@@ -7745,7 +7756,8 @@ actually in the same let form.  Returns number of fixes."
     fixes))
 
 (defun gptel-auto-workflow--fix-let-empty-body (file)
-  "Fix \\=`let\\=' with empty body by detecting byte-compiler \\='unused lexical variable\\='
+  "Fix \\=`let\\=' with empty body by detecting byte-compiler \\='unused lexical
+variable\\='
 warnings where ALL bindings in a let form are unused — indicating the let
 has no body.  Removes the extra closing paren.  Returns number of fixes."
   (let ((fixes 0)
@@ -7778,10 +7790,12 @@ has no body.  Removes the extra closing paren.  Returns number of fixes."
 (defun gptel-auto-workflow--run-fixer-with-rollback (file fixer-fn)
   "Run FIXER-FN on FILE.  If parens break after the fix, revert and return 0.
 Each fixer must preserve paren balance.  If it does not, the file is
-reverted to its state before the fixer ran.  Returns fix count or 0."
+reverted to its state before the fixer ran.  Returns fix count or 0.
+FIXER-FN is called with FILE as its single argument; closures that
+capture FILE are also supported via the (file) signature."
   (let ((before-content (with-current-buffer (find-file-noselect file)
                           (buffer-string))))
-    (let ((fixes (funcall fixer-fn)))
+    (let ((fixes (funcall fixer-fn file)))
       (if (gptel-auto-workflow--check-parens file)
           fixes
         (message "[self-heal] ROLLBACK: %s broke parens in %s, reverting"
@@ -7818,11 +7832,11 @@ paren balance, its changes are reverted.  Returns (FIX-COUNT . REMAINING)."
       (dolist (fixer (list
                       #'gptel-auto-workflow--fix-docstring-width
                       #'gptel-auto-workflow--fix-unescaped-quotes
-                      (lambda () (gptel-auto-workflow--fix-unused-variables file warnings))
-                      (lambda () (gptel-auto-workflow--fix-free-variables file warnings))
-                      (lambda () (gptel-auto-workflow--fix-unknown-functions file warnings))
-                      (lambda () (gptel-auto-workflow--fix-condition-case-no-handlers file warnings))
-                      (lambda () (gptel-auto-workflow--fix-arg-mismatch file warnings))
+                      (lambda (_file) (gptel-auto-workflow--fix-unused-variables file warnings))
+                      (lambda (_file) (gptel-auto-workflow--fix-free-variables file warnings))
+                      (lambda (_file) (gptel-auto-workflow--fix-unknown-functions file warnings))
+                      (lambda (_file) (gptel-auto-workflow--fix-condition-case-no-handlers file warnings))
+                      (lambda (_file) (gptel-auto-workflow--fix-arg-mismatch file warnings))
                       #'gptel-auto-workflow--fix-let-needs-let*))
         (cl-incf fix-count
                  (gptel-auto-workflow--run-fixer-with-rollback file fixer))))

@@ -245,7 +245,8 @@ Uses backend-specific thresholds (lower for DashScope)."
          (threshold (nth 3 threshold-values))
          (needed (and buffer-ready (>= tokens threshold))))
     (when buffer-ready
-      (message "[compact] Check: %d tokens vs %d threshold (window: %d, %.0f%%, backend: %s) -> %s"
+      (message "[compact] Check: %d tokens vs %d threshold (window: %d, %.0f%%, backend: %s)
+-> %s"
                (round tokens)
                (round threshold) window
                (* 100 threshold-fraction)
@@ -329,7 +330,8 @@ Computes chars-after and tokens-after from current buffer state."
 
 (defun my/gptel--do-compact (&optional force-preview)
   "Perform compaction on current gptel buffer.
-If FORCE-PREVIEW is non-nil, use preview mode regardless of `my/gptel-auto-compact-preview'.
+If FORCE-PREVIEW is non-nil, use preview mode regardless of
+`my/gptel-auto-compact-preview'.
 Returns non-nil if compaction was initiated."
   (let ((system (my/gptel--directive-text 'compact))
         (buf (current-buffer))

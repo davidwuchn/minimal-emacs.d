@@ -274,7 +274,8 @@ grader/prompt-builder -> medium, strategy-harness -> high, general -> low."
 
 (defun gptel-auto-workflow--generate-improvement-proposal (pattern)
   "Generate an improvement proposal plist from a failure PATTERN.
-PATTERN is a plist from --analyze-systemic-failures with :type, :target, :count.
+PATTERN is a plist from --analyze-systemic-failures with :type, :target,
+:count.
 Returns a proposal plist: :description, :component, :code-changes,
 :expected-impact, :confidence, :risk, :pattern-type, :pattern-target."
   (let* ((ftype (plist-get pattern :type))
@@ -429,7 +430,8 @@ For approval-required proposals, also appends :queue-status and :queue-id."
       (when (fboundp 'gptel-auto-workflow--mementum-write-memory)
         (gptel-auto-workflow--mementum-write-memory
          '✅ (format "deploy-%s" rollback-tag)
-         (format "**Deployed:** %s\n**Risk:** %s\n**Component:** %s\n**Rollback tag:** %s\n\nAuto-deployed by monitoring agent (success rate exceeded threshold)."
+         (format "**Deployed:** %s\n**Risk:** %s\n**Component:** %s\n**Rollback tag:**
+%s\n\nAuto-deployed by monitoring agent (success rate exceeded threshold)."
                  (plist-get tested-proposal :description)
                  risk component rollback-tag)))
       (message "[monitoring] Auto-deployed proposal: %s (risk: %s)" component risk))
@@ -438,7 +440,9 @@ For approval-required proposals, also appends :queue-status and :queue-id."
       (when (fboundp 'gptel-auto-workflow--mementum-write-memory)
         (gptel-auto-workflow--mementum-write-memory
          '🎯 (format "pending-notification-%s" rollback-tag)
-         (format "**Pending notification:** %s\n**Risk:** %s\n**Component:** %s\n**Grace period:** %ds\n**Rollback tag:** %s\n\nWill auto-deploy after grace period unless human objects."
+         (format "**Pending notification:** %s\n**Risk:** %s\n**Component:** %s\n**Grace
+period:** %ds\n**Rollback tag:** %s\n\nWill auto-deploy after grace period
+unless human objects."
                  (plist-get tested-proposal :description)
                  risk component
                  gptel-auto-workflow-monitoring-deploy-grace-seconds
@@ -454,7 +458,9 @@ For approval-required proposals, also appends :queue-status and :queue-id."
       (when (fboundp 'gptel-auto-workflow--mementum-write-memory)
         (gptel-auto-workflow--mementum-write-memory
          '‖ (format "pending-approval-%s" rollback-tag)
-         (format "**Pending approval:** %s\n**Risk:** %s\n**Component:** %s\n**Rollback tag:** %s\n**Queue ID:** %s\n\nRequires human approval before deployment (high-risk proposal). Enqueued in approval queue."
+         (format "**Pending approval:** %s\n**Risk:** %s\n**Component:** %s\n**Rollback tag:**
+%s\n**Queue ID:** %s\n\nRequires human approval before deployment (high-risk
+proposal). Enqueued in approval queue."
                  (plist-get tested-proposal :description)
                  risk component rollback-tag
                  (when queue-entry (plist-get queue-entry :id)))))
@@ -479,7 +485,8 @@ For approval-required proposals, also appends :queue-status and :queue-id."
   "Rollback a deployed proposal by resetting to the tagged version.
 ROLLBACK-TAG is the git tag created during deployment.
 Uses git checkout main + git reset --hard TAG to avoid detaching HEAD.
-Returns plist with :rollback-tag and :rollback-status (\"success\" or \"failed\")."
+Returns plist with :rollback-tag and :rollback-status (\"success\" or
+\"failed\")."
   (let ((rollback-status "failed"))
     (when (fboundp 'gptel-auto-workflow--git-cmd)
       ;; First ensure we're on main (not detached HEAD)

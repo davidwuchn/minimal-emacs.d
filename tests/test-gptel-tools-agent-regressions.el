@@ -21143,6 +21143,22 @@ block all subagent execution."
     (should (string-match-p ":enable_thinking t" backends-code))
     (should (string-match-p ":enable_thinking nil" registry-code))))
 
+(ert-deftest regression/mementum/synthesis-truncates-oversized-memories ()
+  "Synthesis prompt should truncate memories that exceed the byte limit.
+Regression: 38 memories × 25KB = 988KB, exceeding the 781KB API limit.
+Fix: `gptel-mementum--truncate-memories' caps total size, with at most
+one memory per slot surviving truncation.  Each surviving memory is
+individually capped to fit within the limit."
+  (let* ((big-memory (make-string 50000 ?x))
+         (memories (list "short-1" big-memory "short-2" big-memory big-memory))
+         (truncated (gptel-mementum--truncate-memories memories 100000)))
+    ;; Total length must fit within limit
+    (should (<= (apply #'+ (mapcar #'length truncated)) 100000))
+    ;; Some content preserved (we don't drop everything)
+    (should (cl-some (lambda (m) (string-match-p "short" m)) truncated))
+    ;; The huge memory got capped, not whole
+    (should-not (cl-some (lambda (m) (= (length m) 50000)) truncated))))
+
 (provide 'test-gptel-tools-agent-regressions)
 
 ;;; test-gptel-tools-agent-regressions.el ends here

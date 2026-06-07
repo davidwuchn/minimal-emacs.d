@@ -88,7 +88,8 @@ Set to 0 for unlimited."
 Preview is a safety net for mutating operations.  It should normally
 ALWAYS show.  Only bypass when:
 1. `gptel-tools-preview-enabled' is nil (global disable)
-2. `gptel-tools-preview--never-ask-again' is t (deprecated, for backward compat)
+2. `gptel-tools-preview--never-ask-again' is t (deprecated, for backward
+compat)
 3. `gptel-auto-workflow--headless' is t (auto-workflow mode)
 
 Permits are NOT checked here - they control the tool confirm UI,

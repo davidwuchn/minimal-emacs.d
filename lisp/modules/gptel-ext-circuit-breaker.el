@@ -322,7 +322,8 @@ Use for manual intervention after resolving root cause."
   "Execute BODY only if COMPONENT circuit allows requests.
 BODY should return (success . result) where success is non-nil on success.
 On circuit OPEN, returns (nil . \"circuit open\") without executing BODY.
-On success, records success. On failure, records failure with ERROR-MSG from BODY."
+On success, records success. On failure, records failure with ERROR-MSG from
+BODY."
   (declare (indent 1))
   `(let* ((state (gptel-circuit-state ,component)))
      (if (eq state 'open)
