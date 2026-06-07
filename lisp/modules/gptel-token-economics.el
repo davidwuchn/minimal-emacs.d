@@ -129,21 +129,13 @@ at least equal cost."
 
 (defun gptel-token-economics--predict-roi (category)
   "Predict ROI for a new experiment in CATEGORY.
-Uses historical category-roi as the predictor. Returns nil
-when CATEGORY has no historical data (unknown, nil, or no records).
-A nil return means 'no prediction' — the pre-flight check should
-allow the experiment through rather than blocking new categories.
-Returns 0.0 for categories with records but all-discarded experiments
-(since that is a real measurement, not missing data)."
-  (if (or (null category) (equal category :unknown))
-      nil
-    (let ((category-records (cl-remove-if-not
-                             (lambda (r) (equal (plist-get r :category) category))
-                             gptel-token-economics--records)))
-      ;; If no records exist for this category, return nil (no prediction)
-      (if (null category-records)
-          nil
-        (gptel-token-economics--category-roi category)))))
+Uses historical category-roi as the predictor. Returns 1.0
+(break-even) when CATEGORY has no historical data or zero ROI,
+allowing experiments to run and collect data for future predictions."
+  (let ((roi (gptel-token-economics--category-roi category)))
+    (if (or (null category) (equal category :unknown) (<= roi 0.0))
+        1.0
+      roi)))
 
 ;; ============================================================================
 ;; Task 3.3: Budget Allocation
