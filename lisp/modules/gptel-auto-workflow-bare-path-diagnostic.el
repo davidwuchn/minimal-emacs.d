@@ -30,43 +30,41 @@ Returns a list of violation plists."
          (violations nil)
          (dangerous-fn-names gptel-auto-workflow--bare-path-dangerous-functions))
     (dolist (file (directory-files scan-dir t "\\.el\\'"))
-      (with-temp-buffer
-        (insert-file-contents file)
-        (goto-char (point-min))
-        (let ((line-num 0))
-          (while (not (eobp))
-            (setq line-num (1+ line-num))
-            (let ((line (buffer-substring-no-properties
-                         (line-beginning-position) (line-end-position))))
-              ;; Skip comment lines (leading ;)
-              (unless (string-match-p "\\`[;]" line)
-                (dolist (fn-name dangerous-fn-names)
-                  ;; Match: (fn-name "bare-string" ...)
-                  (let ((pattern (concat "(" fn-name "[ \\t\\n]+\"\\([^\"]+\\)\"")))
-                    (when (string-match pattern line)
-                      (let ((raw-path (match-string 1 line)))
-                        ;; Only flag if: not absolute AND not already wrapped
-                        (when (and raw-path
-                                   (not (string-match-p "\\`[/~]" raw-path))
-                                   ;; Not wrapped in expand-file-name with root
-                                   (not (string-match-p
-                                         (concat "expand-file-name[ \\t\\n]+\""
-                                                 (regexp-quote raw-path) "\"")
-                                         line))
-                                   ;; Not wrapped in --expand-workspace-path
-                                   (not (string-match-p
-                                         (concat "gptel-auto-workflow--expand-workspace-path[ \\t\\n]+\""
-                                                 (regexp-quote raw-path) "\"")
-                                         line)))
-                                 (push (list :file (file-name-nondirectory file)
-                                      :line line-num
-                                      :function fn-name
-                                      :raw-path raw-path
-                                      :suggested-fix
-                                      (format "(gptel-auto-workflow--expand-workspace-path \"%s\")"
-                                              raw-path))
-                                violations)))))))))
-            (forward-line 1))))
+      (when (file-regular-p file)
+        (with-temp-buffer
+          (insert-file-contents file)
+          (let ((lines (split-string (buffer-string) "\n" t)))
+            (dotimes (i (length lines))
+              (let* ((line-num (1+ i))
+                     (line (nth i lines)))
+                ;; Skip comment lines (leading ;)
+                (unless (string-match-p "\\`[;]" line)
+                  (dolist (fn-name dangerous-fn-names)
+                    ;; Match: (fn-name "bare-string" ...)
+                    (let ((pattern (concat "(" fn-name "[ \\t\\n]+\"\\([^\"]+\\)\"")))
+                      (when (string-match pattern line)
+                        (let ((raw-path (match-string 1 line)))
+                          ;; Only flag if: not absolute AND not already wrapped
+                          (when (and raw-path
+                                     (not (string-match-p "\\`[/~]" raw-path))
+                                     ;; Not wrapped in expand-file-name with root
+                                     (not (string-match-p
+                                           (concat "expand-file-name[ \\t\\n]+\""
+                                                   (regexp-quote raw-path) "\"")
+                                           line))
+                                     ;; Not wrapped in --expand-workspace-path
+                                     (not (string-match-p
+                                           (concat "gptel-auto-workflow--expand-workspace-path[ \\t\\n]+\""
+                                                   (regexp-quote raw-path) "\"")
+                                           line)))
+                            (push (list :file (file-name-nondirectory file)
+                                        :line line-num
+                                        :function fn-name
+                                        :raw-path raw-path
+                                        :suggested-fix
+                                        (format "(gptel-auto-workflow--expand-workspace-path \"%s\")"
+                                                raw-path))
+                                  violations)))))))))))))
     (nreverse violations)))
 
 (defun gptel-auto-workflow--self-heal-bare-paths ()
@@ -91,9 +89,6 @@ This function is designed to be called as Phase 0 of self-heal."
     (list :violations-found count
           :fixes-applied 0
           :violations violations)))
-
-(provide 'gptel-auto-workflow-bare-path-diagnostic)
-;;; gptel-auto-workflow-bare-path-diagnostic.el ends here
 
 (provide 'gptel-auto-workflow-bare-path-diagnostic)
 ;;; gptel-auto-workflow-bare-path-diagnostic.el ends here
