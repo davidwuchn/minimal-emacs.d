@@ -58,8 +58,8 @@
      :location "var/tmp/evolution/" :persistence nil :max-items 50)
     (:layer "long-term" :description "Vector similarity search (git-embed)"
      :location "git-embed index" :persistence t :backend "git-embed")
-    (:layer "structured" :description "Knowledge pages + Allium specs"
-     :location "mementum/knowledge/" :persistence t :format "markdown + allium")
+    (:layer "structured" :description "Knowledge pages + Allium specs + research insights"
+     :location "mementum/knowledge/ + var/knowledge/" :persistence t :format "markdown + allium")
     (:layer "temporal" :description "Git-based timeline, experiment TSV history"
      :location "git log + var/tmp/experiments/" :persistence t :format "git + tsv"))
   "Four-layer AgentMemory architecture.
@@ -1304,6 +1304,12 @@ Returns list of (file-path . cohesion-score) sorted by score ascending."
 
 ;; ─── Knowledge Synthesis ───
 
+(defun gptel-auto-workflow--research-insights-dir ()
+  "Return the directory for auto-generated research-insights files.
+Uses var/knowledge/ (gitignored) to avoid cross-machine merge conflicts.
+Each machine generates insights from its own TSV experiment data."
+  (expand-file-name "var/knowledge" (gptel-auto-workflow--worktree-base-root)))
+
 (defun gptel-auto-workflow--synthesize-research-knowledge (strategy results)
   "Synthesize knowledge page for research STRATEGY from RESULTS.
 Returns t if page created."
@@ -1317,8 +1323,7 @@ Returns t if page created."
          (failed (cl-count-if (lambda (r) (equal (plist-get r :decision) "validation-failed")) results))
          (keep-rate (if (> total 0) (/ (float kept) total) 0.0))
          (safe-strategy (gptel-auto-workflow--sanitize-strategy-name-for-filename strategy-name))
-         (knowledge-dir (expand-file-name "mementum/knowledge"
-                                            (gptel-auto-workflow--worktree-base-root)))
+         (knowledge-dir (gptel-auto-workflow--research-insights-dir))
          (knowledge-file (expand-file-name
                           (format "research-insights-%s.md" safe-strategy)
                           knowledge-dir))
@@ -1467,8 +1472,7 @@ Creates/updates knowledge pages per research strategy."
 Writes to var/tmp/evolution/findings.md."
   (let* ((evolution-dir (expand-file-name "var/tmp/evolution"
                                           (gptel-auto-workflow--worktree-base-root)))
-         (knowledge-dir (expand-file-name "mementum/knowledge"
-                                         (gptel-auto-workflow--worktree-base-root)))
+         (knowledge-dir (gptel-auto-workflow--research-insights-dir))
          (skill-file (expand-file-name "findings.md" evolution-dir))
          (knowledge-files (when (file-directory-p knowledge-dir)
                             (directory-files knowledge-dir t "research-insights-.+\\.md$")))
@@ -2493,7 +2497,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
     (error (message "[knowledge-diff] Diff failed: %s" (error-message-string err))))
   ;; Structural validation of knowledge pages (Semantica OntologyValidator)
   (condition-case nil
-      (let* ((kd (expand-file-name "mementum/knowledge" (gptel-auto-workflow--worktree-base-root)))
+      (let* ((kd (gptel-auto-workflow--research-insights-dir))
              (files (when (file-directory-p kd)
                       (directory-files kd t "research-insights-.+\\.md$"))))
         (when files
@@ -2915,7 +2919,7 @@ Returns plist with :name, :sections (list of heading names),
   "Diff knowledge pages against the last cycle snapshot.
 Returns plist with :added, :removed, :changed."
   (let* ((root (gptel-auto-workflow--worktree-base-root))
-         (kd (expand-file-name "mementum/knowledge" root))
+         (kd (gptel-auto-workflow--research-insights-dir))
          (snap-file (expand-file-name "var/tmp/evolution/knowledge-snapshot.el" root))
          (current-pages (when (file-directory-p kd)
                           (directory-files kd t "research-insights-.+\\.md$")))
@@ -3993,7 +3997,7 @@ Source repos are extracted from prefetched content patterns."
 (defun gptel-auto-workflow--build-inverted-file ()
   "Build inverted file from knowledge pages. Returns hash of token→page-ids."
   (clrhash gptel-auto-workflow--pattern-inverted-file)
-  (let* ((kd (expand-file-name "mementum/knowledge" (gptel-auto-workflow--worktree-base-root)))
+  (let* ((kd (gptel-auto-workflow--research-insights-dir))
          (files (when (file-directory-p kd) (directory-files kd t "research-insights-.+\\.md$"))))
     (dolist (f files)
       (let ((name (file-name-nondirectory f)))
@@ -4086,7 +4090,7 @@ signal)."
             (unless (string-match-p "^Research\|^Pre-Fetched\|^Source\|^Dynamic\|^Local\|Technique Name" technique)
               (push technique new-concepts))))
         ;; Check against existing knowledge pages for novelty
-        (let ((kd (expand-file-name "mementum/knowledge" root))
+        (let ((kd (gptel-auto-workflow--research-insights-dir))
               (novel nil))
           (when (file-directory-p kd)
             (let ((existing (mapconcat (lambda (f)
@@ -4577,7 +4581,7 @@ ISSUE-COUNT, SEVERITY, SCORE are from allium-quality-score."
                             (replace-regexp-in-string "[^[:alnum:]_-]" "-" strategy)))
            (specs-dir (expand-file-name "var/tmp/evolution/allium-specs" root))
            (issues-dir (expand-file-name "var/tmp/evolution/allium-issues" root))
-           (knowledge-dir (expand-file-name "mementum/knowledge" root))
+           (knowledge-dir (gptel-auto-workflow--research-insights-dir))
            (knowledge-file (expand-file-name
                             (format "research-insights-%s.md" safe-strategy)
                             knowledge-dir)))
@@ -5074,10 +5078,10 @@ effective +0.10, promising +0.05, underperforming -0.05."
             :class-count (hash-table-count classes) :instance-count (hash-table-count instances) :weighted t))))
 
 (defun gptel-auto-workflow--mementum-confidence-factor (strategy-name)
-  "Read mementum knowledge page confidence for STRATEGY-NAME."
-  (let* ((root (gptel-auto-workflow--worktree-base-root))
-         (page (and root (expand-file-name (format "research-insights-%s.md" strategy-name)
-                                           (expand-file-name "mementum/knowledge" root)))))
+  "Read research-insights confidence for STRATEGY-NAME."
+  (let* ((insights-dir (gptel-auto-workflow--research-insights-dir))
+         (page (expand-file-name (format "research-insights-%s.md" strategy-name)
+                                 insights-dir)))
     (if (and page (file-readable-p page))
         (with-temp-buffer (insert-file-contents page) (goto-char (point-min))
           (if (re-search-forward "^confidence:\\s-*\\([0-9.]+\\)" nil t)
@@ -5735,8 +5739,7 @@ Simple keyword-based opposition detection."
 
 (defun gptel-auto-workflow--score-knowledge-pages ()
   "Score knowledge pages by coverage, completeness, and relation."
-  (let* ((dir (expand-file-name "mementum/knowledge"
-                                (gptel-auto-workflow--worktree-base-root)))
+  (let* ((dir (gptel-auto-workflow--research-insights-dir))
          (files (when (file-directory-p dir)
                   (directory-files dir t "research-insights-.+\\.md$")))
          (coverage-score 0) (completeness-score 0) (relation-score 0)

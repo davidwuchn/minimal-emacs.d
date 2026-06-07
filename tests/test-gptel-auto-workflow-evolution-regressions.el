@@ -102,7 +102,7 @@
                   '(:decision "discarded" :target "c.el"))))
           (with-temp-buffer
             (insert-file-contents
-             (expand-file-name "mementum/knowledge/research-insights-test-strategy.md" root))
+             (expand-file-name "var/knowledge/research-insights-test-strategy.md" root))
             (should-not (string-match-p "\n\n\\'" (buffer-string)))))
       (delete-directory root t))))
 
@@ -121,7 +121,7 @@
                   '(:decision "kept" :target "b.el"))))
           (with-temp-buffer
             (insert-file-contents
-             (expand-file-name "mementum/knowledge/research-insights-test-strategy.md" root))
+             (expand-file-name "var/knowledge/research-insights-test-strategy.md" root))
             (should (string-match-p "`a\\.el` (1 kept / 1 discarded / 1 failed)"
                                     (buffer-string)))))
       (delete-directory root t))))
@@ -636,7 +636,7 @@ to the async LLM path (tested implicitly by the real pipeline)."
   (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
              #'ert--allium-ff-root))
     (let ((knowledge-dir (expand-file-name "mementum/knowledge" (ert--allium-ff-root)))
-          (knowledge-file (expand-file-name "mementum/knowledge/research-insights-test-strategy.md" (ert--allium-ff-root))))
+          (knowledge-file (expand-file-name "var/knowledge/research-insights-test-strategy.md" (ert--allium-ff-root))))
       (make-directory knowledge-dir t)
       (with-temp-file knowledge-file
         (insert "# Research Insights: test-strategy\n\n## Summary\n\nOriginal content.\n"))
