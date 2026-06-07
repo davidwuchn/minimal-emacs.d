@@ -21,6 +21,8 @@
 
 (require 'cl-lib)
 (require 'json)
+(require 'subr-x)
+(require 'url-util)
 
 ;; ============================================================================
 ;; Configuration
@@ -66,30 +68,39 @@ Requires OV5_SENTRY_API_KEY env var or `gptel-auto-workflow--sentry-api-key'."
                                 (plist-get gptel-auto-workflow--sentry-config :project))
                           (getenv "OV5_SENTRY_PROJECT"))))
     (when (and api-key (not (string-empty-p api-key)))
-      (let* ((url (cond
-                   ;; Full URL already
-                   ((string-prefix-p "http" endpoint) endpoint)
-                   ;; Project-scoped endpoint
-                   ((and org-slug project-slug)
-                    (format "%s/projects/%s/%s%s" base-url org-slug project-slug endpoint))
-                   ;; Org-scoped endpoint
-                   (org-slug
-                    (format "%s/organizations/%s%s" base-url org-slug endpoint))
-                   ;; Bare endpoint (no org/project)
-                   (t (format "%s%s" base-url endpoint))))
-             (query-string
-              (when params
-                (let ((parts nil))
-                  (when (plist-get params :start)
-                    (push (format "since=%d" (plist-get params :start)) parts))
-                  (when (plist-get params :end)
-                    (push (format "until=%d" (plist-get params :end)) parts))
-                  (when (plist-get params :filter)
-                    (push (format "query=%s" (plist-get params :filter)) parts))
-                  (when (plist-get params :stat)
-                    (push (format "stat=%s" (plist-get params :stat)) parts))
-                  (when parts
-                    (concat "?" (string-join (nreverse parts) "&"))))))
+       (let* ((url (cond
+                    ;; Full URL already
+                    ((string-prefix-p "http" endpoint) endpoint)
+                    ;; Strip redundant /api/0 prefix (base-url already includes it)
+                    ((string-prefix-p "/api/0" endpoint)
+                     (let ((clean-endpoint (substring endpoint 6)))
+                       (cond
+                        ((and org-slug project-slug)
+                         (format "%s/projects/%s/%s%s" base-url org-slug project-slug clean-endpoint))
+                        (org-slug
+                         (format "%s/organizations/%s%s" base-url org-slug clean-endpoint))
+                        (t (format "%s%s" base-url clean-endpoint)))))
+                    ;; Project-scoped endpoint
+                    ((and org-slug project-slug)
+                     (format "%s/projects/%s/%s%s" base-url org-slug project-slug endpoint))
+                    ;; Org-scoped endpoint
+                    (org-slug
+                     (format "%s/organizations/%s%s" base-url org-slug endpoint))
+                    ;; Bare endpoint (no org/project)
+                    (t (format "%s%s" base-url endpoint))))
+              (query-string
+               (when params
+                 (let ((parts nil))
+                   (when (plist-get params :start)
+                     (push (format "since=%d" (plist-get params :start)) parts))
+                   (when (plist-get params :end)
+                     (push (format "until=%d" (plist-get params :end)) parts))
+                   (when (plist-get params :filter)
+                     (push (format "query=%s" (url-hexify-string (plist-get params :filter))) parts))
+                   (when (plist-get params :stat)
+                     (push (format "stat=%s" (url-hexify-string (plist-get params :stat))) parts))
+                   (when parts
+                     (concat "?" (string-join (nreverse parts) "&"))))))
              (full-url (if query-string (concat url query-string) url)))
         (condition-case err
             (with-temp-buffer
@@ -275,11 +286,11 @@ Webhook endpoint is set via OV5_FEEDBACK_ENDPOINT env var or feedback config."
                            (plist-get gptel-auto-workflow--feedback-config :webhook-endpoint))
                       (getenv "OV5_FEEDBACK_ENDPOINT"))))
     (when (and endpoint (not (string-empty-p endpoint)))
-      (let* ((req-url (format "%s?module=%s&start=%d&end=%d"
-                              endpoint
-                              (shell-quote-argument (or module ""))
-                              (round start-time)
-                              (round end-time)))
+       (let* ((req-url (format "%s?module=%s&start=%d&end=%d"
+                               endpoint
+                               (url-hexify-string (or module ""))
+                               (round start-time)
+                               (round end-time)))
              (result (condition-case err
                          (with-temp-buffer
                            (let ((exit-code (call-process "curl" nil t nil "-s" "-f" req-url)))

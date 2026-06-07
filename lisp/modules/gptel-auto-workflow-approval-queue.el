@@ -83,44 +83,45 @@ Skips enqueue if an identical proposal (same component+target) already
 exists in the pending queue (deduplication).
 Queue-entry plist keys: :id, :created-at, :expires-at, :status,
 :source, :proposal, :risk, :component, :pattern-target, :rollback-tag."
-  (let* ((risk (or (plist-get tested-proposal :risk) "unknown"))
-         (component (or (plist-get tested-proposal :component) "unknown"))
-         (ptarget (or (plist-get tested-proposal :pattern-target) "unknown"))
-         ;; Dedup: skip if identical proposal already pending
-         (existing-count (gptel-auto-workflow-approval-queue--count-pending-by-target
-                          component ptarget)))
-    (when (> existing-count 0)
-      (message "[approval-queue] Skipping duplicate: %s/%s (%d already pending)"
-               component ptarget existing-count)
-      (cl-return-from gptel-auto-workflow-approval-queue-enqueue nil))
-    (let* ((now (float-time))
-           (timestamp (format-time-string "%Y%m%dT%H%M%S" now))
-           (component-slug (replace-regexp-in-string
-                            "[^a-zA-Z0-9]" "-" (downcase component)))
-           (ptarget-slug (replace-regexp-in-string
-                          "[^a-zA-Z0-9]" "-" (downcase ptarget)))
-           (proposal-id (format "proposal-%s-%s-%s" timestamp component-slug ptarget-slug))
-           (expires-at (+ now gptel-auto-workflow-approval-queue-expiry-seconds))
-           (queue-entry
-            (list :id proposal-id
-                  :created-at now
-                  :expires-at expires-at
-                  :status "pending"
-                  :source "monitoring-agent"
-                  :proposal tested-proposal
-                  :risk risk
-                  :component component
-                  :pattern-target ptarget
-                  :rollback-tag rollback-tag))
-           (pending-dir
-            (expand-file-name
-             "pending"
-             (expand-file-name gptel-auto-workflow-approval-queue-dir)))
-           (filepath (gptel-auto-workflow-approval-queue-file proposal-id)))
-      (make-directory pending-dir t)
-      (with-temp-file filepath
-        (prin1 queue-entry (current-buffer)))
-      queue-entry)))
+   (let* ((risk (or (plist-get tested-proposal :risk) "unknown"))
+          (component (or (plist-get tested-proposal :component) "unknown"))
+          (ptarget (or (plist-get tested-proposal :pattern-target) "unknown"))
+          ;; Dedup: skip if identical proposal already pending
+          (existing-count (gptel-auto-workflow-approval-queue--count-pending-by-target
+                           component ptarget)))
+     (if (> existing-count 0)
+         (progn
+           (message "[approval-queue] Skipping duplicate: %s/%s (%d already pending)"
+                    component ptarget existing-count)
+           nil)
+       (let* ((now (float-time))
+              (timestamp (format-time-string "%Y%m%dT%H%M%S" now))
+              (component-slug (replace-regexp-in-string
+                               "[^a-zA-Z0-9]" "-" (downcase component)))
+              (ptarget-slug (replace-regexp-in-string
+                             "[^a-zA-Z0-9]" "-" (downcase ptarget)))
+              (proposal-id (format "proposal-%s-%s-%s" timestamp component-slug ptarget-slug))
+              (expires-at (+ now gptel-auto-workflow-approval-queue-expiry-seconds))
+              (queue-entry
+               (list :id proposal-id
+                     :created-at now
+                     :expires-at expires-at
+                     :status "pending"
+                     :source "monitoring-agent"
+                     :proposal tested-proposal
+                     :risk risk
+                     :component component
+                     :pattern-target ptarget
+                     :rollback-tag rollback-tag))
+              (pending-dir
+               (expand-file-name
+                "pending"
+                (expand-file-name gptel-auto-workflow-approval-queue-dir)))
+              (filepath (gptel-auto-workflow-approval-queue-file proposal-id)))
+         (make-directory pending-dir t)
+         (with-temp-file filepath
+           (prin1 queue-entry (current-buffer)))
+         queue-entry))))
 
 ;; ── Read Helpers ──
 

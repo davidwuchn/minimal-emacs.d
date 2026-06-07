@@ -229,7 +229,62 @@ Cleans up all files after BODY completes."
      ;; Approve it
      (gptel-auto-workflow-approval-queue-approve
       (plist-get entry :id))
-     (should (not (gptel-auto-workflow-approval-queue-pending-p))))))
+      (should (not (gptel-auto-workflow-approval-queue-pending-p))))))
+
+(ert-deftest test-approval-queue/enqueue-dedup-no-crash ()
+  "Enqueue with duplicate component+target returns nil without crashing.
+Regression: cl-return-from without cl-block caused runtime crash."
+  (with-approval-queue-sandbox
+   (let* ((proposal
+           (test-approval-queue--make-proposal
+            "high" "strategy-harness" "lisp/harness.el"))
+          (entry1
+           (gptel-auto-workflow-approval-queue-enqueue
+            proposal "rollback-test")))
+     (should entry1)
+     ;; Second enqueue with same component+target should return nil (dedup)
+     ;; and NOT crash with cl-missing-block error
+     (let ((entry2
+            (gptel-auto-workflow-approval-queue-enqueue
+             proposal "rollback-test")))
+       (should-not entry2)))))
+
+(ert-deftest test-approval-queue/enqueue-different-targets-not-deduped ()
+  "Enqueue with different targets creates separate entries."
+  (with-approval-queue-sandbox
+   (let* ((proposal1
+           (test-approval-queue--make-proposal
+            "high" "strategy-harness" "lisp/harness.el"))
+          (proposal2
+           (test-approval-queue--make-proposal
+            "high" "strategy-harness" "lisp/other.el"))
+          (entry1
+           (gptel-auto-workflow-approval-queue-enqueue
+            proposal1 "rollback-test"))
+          (entry2
+           (gptel-auto-workflow-approval-queue-enqueue
+            proposal2 "rollback-test")))
+     (should entry1)
+     (should entry2)
+     (should-not (equal (plist-get entry1 :id) (plist-get entry2 :id))))))
+
+(ert-deftest test-approval-queue/enqueue-dedup-safe ()
+  "Duplicate enqueue returns nil without signaling any error.
+Regression: cl-return-from without cl-block caused cl-missing-block error."
+  (with-approval-queue-sandbox
+   (let* ((proposal
+           (test-approval-queue--make-proposal
+            "medium" "dedup-test" "lisp/dedup.el"))
+          (first (gptel-auto-workflow-approval-queue-enqueue proposal "tag"))
+          (result nil)
+          (error nil))
+     (condition-case err
+         (setq result (gptel-auto-workflow-approval-queue-enqueue proposal "tag"))
+       (error (setq error err)))
+     ;; Should NOT have errored
+     (should-not error)
+      ;; Should return nil for duplicate
+      (should-not result))))
 
 (provide 'test-gptel-auto-workflow-approval-queue)
 ;;; test-gptel-auto-workflow-approval-queue.el ends here

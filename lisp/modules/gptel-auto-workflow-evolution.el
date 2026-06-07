@@ -2241,11 +2241,11 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                        (plist-get top :module)
                        (or (plist-get top :best-delta) 0.0)
                        (or (plist-get top :history-count) 0))
-              (when (fboundp 'gptel-auto-workflow-code-regeneration--full-workflow)
-                (gptel-auto-workflow-code-regeneration--full-workflow
-                 (plist-get top :module)
-                 (plist-get top :current-best-model)
-                nil)))))
+               (when (fboundp 'gptel-auto-workflow-code-regeneration--full-workflow)
+                 (gptel-auto-workflow-code-regeneration--full-workflow
+                  (plist-get top :module)
+                  nil
+                  (plist-get top :current-best-model))))))
       (error nil)))
   (condition-case nil
       (let ((new-experiments (or (gptel-auto-workflow--evolution-count-new) 0))
