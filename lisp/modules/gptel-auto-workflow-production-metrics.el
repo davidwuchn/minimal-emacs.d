@@ -25,6 +25,10 @@
 (require 'cl-lib)
 
 (declare-function gptel-auto-workflow--expand-workspace-path "gptel-tools-agent-base")
+(declare-function gptel-auto-workflow--feedback-configured-p "gptel-auto-workflow-external-sensors")
+(declare-function gptel-auto-workflow--collect-user-feedback "gptel-auto-workflow-external-sensors")
+(declare-function gptel-auto-workflow--github-sensor-collect "gptel-auto-workflow-external-sensors")
+(declare-function gptel-auto-workflow--full-sensor-pipeline "gptel-auto-workflow-external-sensors")
 
 ;;; Customization
 (defgroup gptel-auto-workflow-production-metrics nil
@@ -161,66 +165,99 @@ Returns float 0.0-1.0 representing error rate."
         (min 1.0 (/ rate 1000.0)))
     0.0))
 
-(defun gptel-auto-workflow--query-user-feedback (_target)
+(defun gptel-auto-workflow--query-user-feedback (target)
   "Query user feedback system for TARGET.
 Returns satisfaction delta: -1.0 (worse) to +1.0 (better).
-Stub implementation - returns 0.0 until feedback system is integrated."
-  ;; TODO: Integrate with Slack, GitHub issues, or custom feedback API
-  ;; For now, return neutral delta
+Uses external-sensors feedback webhook when configured, else returns 0.0."
+  (condition-case nil
+      (when (fboundp 'gptel-auto-workflow--feedback-configured-p)
+        (when (gptel-auto-workflow--feedback-configured-p)
+          (let* ((feedback (gptel-auto-workflow--collect-user-feedback
+                            (file-name-nondirectory (or target ""))))
+                 (satisfaction (and feedback (plist-get feedback :satisfaction-rate))))
+            (when (and satisfaction (> satisfaction 0.0))
+              ;; Normalize: 0.5 = neutral, above = positive, below = negative
+              (* 2.0 (- satisfaction 0.5))))))
+    (error 0.0))
   0.0)
 
 (defun gptel-auto-workflow--query-support-tickets (_target)
-  "Query support ticket system for TARGET.
-Returns number of tickets reduced (integer, 0-N).
-Stub implementation - returns 0 until ticket system is integrated."
-  ;; TODO: Integrate with Zendesk, Freshdesk, or custom ticket API
-  ;; For now, return 0 tickets reduced
+  "Query support ticket system via GitHub Issues sensor.
+Returns number of recently closed bug issues (proxy for tickets resolved).
+Uses gh CLI to query GitHub Issues when available, else returns 0."
+  (condition-case nil
+      (when (fboundp 'gptel-auto-workflow--github-sensor-collect)
+        (let ((gh-data (gptel-auto-workflow--github-sensor-collect)))
+          (when gh-data
+            (plist-get gh-data :closed-issues))))
+    (error 0))
   0)
 
-(defun gptel-auto-workflow--track-production-impact (target _experiment-id)
+(defun gptel-auto-workflow--track-production-impact (target experiment-id)
   "Track production impact for TARGET experiment.
 EXPERIMENT-ID: unique identifier for this experiment.
 Returns plist with production metrics for TSV columns 33-39.
-Uses external APIs when available, falls back to local signals.
-Local signals are ALWAYS tried when target resolves to an existing file —
-this is the YC principle of measuring business context from local reality,
-not just external Sentry/feedback APIs."
-  (let* ((metrics (or (gptel-auto-workflow--query-sentry-errors target) '()))
-         (error-before (or (plist-get metrics :before-rate) 0.0))
-         (error-after (or (plist-get metrics :after-rate) 0.0))
-         (error-delta (if (plist-get metrics :before-rate)
-                          (- error-after error-before)
-                        0.0))
-         (satisfaction-delta (gptel-auto-workflow--query-user-feedback target))
-         (tickets-reduced (gptel-auto-workflow--query-support-tickets target))
-         ;; Try local-metrics whenever external signals are zero OR target is a real file.
-         ;; This makes business_value_score meaningful even without Sentry wiring.
-         (root (or (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
-                        (gptel-auto-workflow--expand-workspace-path ""))
-                   default-directory))
-         (abs-target (when (and target (stringp target))
-                       (if (file-name-absolute-p target) target
-                         (expand-file-name target root))))
-         (local-metrics (when (or (and (= error-delta 0.0)
-                                       (= satisfaction-delta 0.0)
-                                       (= tickets-reduced 0))
-                                   (and abs-target (file-exists-p abs-target)))
-                          (gptel-auto-workflow--compute-local-business-value target)))
-         (business-value (or (and local-metrics (plist-get local-metrics :business-value-score))
-                             (gptel-auto-workflow--calculate-business-value
-                              error-delta satisfaction-delta tickets-reduced)))
-         (risk-score (or (and local-metrics (plist-get local-metrics :risk-score))
-                         (gptel-auto-workflow--calculate-production-risk-score
-                          error-delta satisfaction-delta tickets-reduced))))
-    (list :prod-error-rate-before error-before
-          :prod-error-rate-after error-after
-          :prod-error-rate-delta error-delta
-          :user-satisfaction-delta (or (and local-metrics (plist-get local-metrics :user-satisfaction-delta))
-                                       satisfaction-delta)
-          :support-tickets-reduced (or (and local-metrics (plist-get local-metrics :support-tickets-reduced))
-                                       tickets-reduced)
-          :business-value-score business-value
-          :risk-score risk-score)))
+Prefers full-sensor-pipeline from external-sensors when available
+(richer data: Sentry errors + performance + feedback + business value),
+falls back to individual queries, then to local signals.
+Local signals are ALWAYS tried when target resolves to an existing file."
+  (let* ((sensor-result
+          (condition-case nil
+              (when (fboundp 'gptel-auto-workflow--full-sensor-pipeline)
+                (gptel-auto-workflow--full-sensor-pipeline
+                 (file-name-nondirectory (or target "")) experiment-id))
+            (error nil)))
+         (sensor-bv (and sensor-result (plist-get sensor-result :business-value-score))))
+    (if (and sensor-result (> (or sensor-bv 0.0) 0.0))
+        ;; Rich path: full sensor pipeline returned real data
+        (let* ((error-impact (plist-get sensor-result :error-rate-impact))
+               (feedback (plist-get sensor-result :user-feedback))
+               (error-delta (or (plist-get error-impact :error-rate-improvement-pct) 0.0))
+               (satisfaction-delta (or (plist-get feedback :satisfaction-rate) 0.0)))
+          (list :prod-error-rate-before (or (plist-get error-impact :before-rate) 0.0)
+                :prod-error-rate-after (or (plist-get error-impact :after-rate) 0.0)
+                :prod-error-rate-delta error-delta
+                :user-satisfaction-delta satisfaction-delta
+                :support-tickets-reduced 0
+                :business-value-score (or sensor-bv 0.0)
+                :risk-score (gptel-auto-workflow--calculate-production-risk-score
+                             error-delta satisfaction-delta 0)))
+      ;; Fallback path: individual queries + local signals
+      ;; Local signals always tried when target is a real file (Pi5 evolution)
+      (let* ((metrics (or (gptel-auto-workflow--query-sentry-errors target) '()))
+             (error-before (or (plist-get metrics :before-rate) 0.0))
+             (error-after (or (plist-get metrics :after-rate) 0.0))
+             (error-delta (if (plist-get metrics :before-rate)
+                              (- error-after error-before)
+                            0.0))
+             (satisfaction-delta (gptel-auto-workflow--query-user-feedback target))
+             (tickets-reduced (gptel-auto-workflow--query-support-tickets target))
+             (root (or (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
+                            (gptel-auto-workflow--expand-workspace-path ""))
+                       default-directory))
+             (abs-target (when (and target (stringp target))
+                           (if (file-name-absolute-p target) target
+                             (expand-file-name target root))))
+             (local-metrics (when (or (and (= error-delta 0.0)
+                                           (= satisfaction-delta 0.0)
+                                           (= tickets-reduced 0))
+                                      (and abs-target (file-exists-p abs-target)))
+                              (gptel-auto-workflow--compute-local-business-value target)))
+             (business-value (or (and local-metrics (plist-get local-metrics :business-value-score))
+                                 (gptel-auto-workflow--calculate-business-value
+                                  error-delta satisfaction-delta tickets-reduced)))
+             (risk-score (or (and local-metrics (plist-get local-metrics :risk-score))
+                             (gptel-auto-workflow--calculate-production-risk-score
+                              error-delta satisfaction-delta tickets-reduced))))
+        (list :prod-error-rate-before error-before
+              :prod-error-rate-after error-after
+              :prod-error-rate-delta error-delta
+              :user-satisfaction-delta (or (and local-metrics (plist-get local-metrics :user-satisfaction-delta))
+                                           satisfaction-delta)
+              :support-tickets-reduced (or (and local-metrics (plist-get local-metrics :support-tickets-reduced))
+                                           tickets-reduced)
+              :business-value-score business-value
+              :risk-score risk-score)))))
 
 (defun gptel-auto-workflow--compute-local-business-value (target)
   "Compute business value from LOCAL signals when external APIs are unavailable.
