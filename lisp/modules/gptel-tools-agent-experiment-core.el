@@ -232,7 +232,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
         (funcall callback result)))
     (cl-return-from gptel-auto-experiment-run))
   ;; ROI pre-flight check — reject experiments where predicted ROI < threshold
-  ;; nil predicted-roi means "no history for this category" → allow through
+  ;; Categories with no history or zero ROI get 1.0 (break-even default),
+  ;; which passes the default threshold of 1.0 and allows data collection.
   (when (fboundp 'gptel-token-economics--predict-roi)
     (let* ((category (when (and target
                                 (fboundp 'gptel-auto-workflow--categorize-target))
