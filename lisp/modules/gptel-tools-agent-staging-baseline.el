@@ -803,7 +803,7 @@ the reviewer admits it could not verify the diff or locate the relevant file."
   (when (and (stringp review-output)
              (not (gptel-auto-workflow--review-approved-p review-output)))
     (let ((case-fold-search t))
-      (or (memq (car (gptel-auto-experiment--categorize-error review-output))
+      (or (memq (car (ignore-errors (gptel-auto-experiment--categorize-error review-output)))
                 '(:api-rate-limit :api-error :timeout))
           (string-match-p
            (rx (or line-start "\n")
