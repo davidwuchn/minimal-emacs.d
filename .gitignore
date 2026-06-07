@@ -20,6 +20,7 @@ lisp/modules/*.elc
 !OUROBOROS.md
 !OUROBOROS-V5.md
 !BUSINESS_CONTEXT.md
+!INSTALL.md
 !.dir-locals.el
 !.gitmodules
 !assistant/

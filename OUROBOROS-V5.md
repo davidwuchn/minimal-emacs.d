@@ -30,17 +30,20 @@
 - [Safety](#safety) — Guards and self-healing
 - [Troubleshooting](#troubleshooting) — Known failure modes and fixes
 
+**For step-by-step installation:** See [INSTALL.md](INSTALL.md)
 **For business context, YC Vision, and GTM narrative:** See [BUSINESS_CONTEXT.md](BUSINESS_CONTEXT.md)
 
 ---
 
 ## Begin
 
+> **Full installation guide:** [INSTALL.md](INSTALL.md) — prerequisites, API keys, daemon setup, verification.
+
 ```bash
 git clone --recurse-submodules https://github.com/davidwuchn/minimal-emacs.d ~/.emacs.d
 cd ~/.emacs.d && ./scripts/setup-packages.sh
 ./scripts/setup-eca-links.sh
-# API keys in ~/.authinfo
+# API keys in ~/.authinfo — see INSTALL.md Step 4
 ./scripts/run-pipeline.sh
 ```
 
