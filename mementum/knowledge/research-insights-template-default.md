@@ -3,7 +3,7 @@ title: Research Insights - template-default
 status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
-insight-quality: 0.3/10
+insight-quality: 0.4/10
 allium-issues: 0
 allium-severity: 0.00
 allium-status: coherent
@@ -11,9 +11,9 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 217 experiments (3% keep rate).*
+*Consolidated from 188 experiments (4% keep rate).*
 
-**Performance:** 7 kept / 1 discarded / 12 failed (EXTRACTED — from TSV)
+**Performance:** 7 kept / 1 discarded / 10 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
@@ -42,7 +42,6 @@ were misleading.
 - `lisp/modules/gptel-auto-workflow-projects.el` (6 kept / 2 failed)
 - `lisp/modules/gptel-benchmark-principles.el` (1 kept / 6 failed)
 - `lisp/modules/gptel-auto-workflow-mementum.el` (1 failed)
-- `lisp/modules/gptel-auto-workflow-production-metrics.el` (1 failed)
 
 ## Meta-Learning Recommendations (INFERRED — from pattern analysis)
 
@@ -57,65 +56,148 @@ were misleading.
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*2 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Distilled Hypotheses
+The user wants me to distill the research strategy findings. They've provided:
 
-All kept hypotheses target two principles: **φ Vitality** (progressive improvement, adaptive to discovery/edge cases) and **fractal Clarity** (explicit assumptions, testable, minimal complexity).
+1. A research strategy: template-default
+2. 139 experiments across various targets (lisp modules and staging configs)
+3. Kept hypotheses: 2 hypotheses about Emacs Lisp code
+4. Discarded hypotheses: (none listed)
 
-## By Theme
+The task seems to be to distill this information into a concise summary. Let me analyze what's being asked.
 
-### 1. Cache & State Management
-- **Cache identity vs. content**: `gptel-auto-workflow--normalized-projects` uses `eq` for project-list comparison, causing spurious invalidation when `gptel-auto-workflow-projects` is rebound to an equal list. Switch to `equal` and check cache before `ensure-buffer-tables`.
-- **Buffer lookup hardening**: Extract buffer lookup into a validation sequence with explicit nil guards, so the function tolerates missing FSM state.
+Looking at the structure, this appears to be a research experiment log where:
+- They ran 139 experiments across various Emacs Lisp modules
+- They kept 2 specific hypotheses
+- They discarded 0 (or the discarded ones aren't shown)
 
-### 2. Error Handling & Edge Cases
-- **Path validation**: Add directory existence check and correct a misleading error message.
-- **Project-list edge cases**: Wrap `file-attributes` in `ignore-errors` and early-return on an empty project list.
+The two kept hypotheses are:
+1. Add marker-live check for the `where` parameter in some function
+2. Add `hash-table-p` guard in `gptel-auto-workflow--research-cache-get` for nil-safety
 
-### 3. Idempotency / Lifecycle
-- **Advice re-activation guard**: Prevent re-adding advice that's already active, and extract the symmetric disable function.
+I should distill this into a clear, useful summary. The user likely wants me to:
+- Summarize what was found
+- Identify the key patterns/insights
+- Present this concisely
 
-### 4. Simplification (Clarity)
-- Replace `format-mode-line` with direct `mode-name`; swap `if` for `when`; add a nil-safety guard around buffer iteration.
+Let me think about what "distill" means here - it means to extract the essential meaning from. So I should condense this large research output into the key findings.
 
-### 5. Latent Bug Fix
-- `gptel-benchmark-eight-keys-weakest` crashes when scoring task-type hypotheses because `not-applicable` symbols break `(< 'not-applicable <number>)` during sort. Filter `not-applicable` entries before sorting.
+Key observations:
+1. The research used a "template-default" strategy
+2. 139 experiments were run across many related Emacs Lisp modules dealing with workflow, agents, and tools
+3. Only 2 hypotheses were kept (very selective)
+4. The kept hypotheses share a common theme: defensive programming / nil-safety / guard conditions
+5. Both are about preventing crashes from edge cases (dead markers, nil hash tables)
 
-## Common Pattern
+The pattern is interesting: both kept hypotheses are about robust error handling, specifically:
+- Guarding against invalid input states (dead markers)
+- Guarding against nil/uninitialized data structures (nil hash tables)
 
-Every hypothesis is a **small, surgical change** to existing code (not a refactor), explicitly justified against the dual metrics of Vitality + Clarity. Several overlap thematically (defensive guards, explicit assumptions, content-based comparisons) and could be batched.
+This suggests the research was looking for code robustness issues.
 
-## Discarded
-
-None — the discarded section is empty ("No hypothesis stated").
+Let me write a distilled summary.
 ```
 
 ### Check Issues
 
-# Review: Distilled Hypotheses
+# Distilled Research Summary
 
-Overall, this is a clean, well-structured triage document. The thematic grouping is sensible, each hypothesis is actionable, and the "common pattern" observation is a useful meta-synthesis. A few things worth flagging:
+**Strategy:** template-default  
+**Volume:** 139 experiments across Emacs Lisp modules (`gptel`, workflow, agent, tool)  
+**Yield:** 2 kept hypotheses, 0 discarded
 
-## Strengths
+## Kept Hypotheses
 
-- **Actionability**: Every hypothesis states both *what* to change and *why* — good for review and execution.
-- **Thematic clustering** is real, not forced: the guard/early-return pattern genuinely recurs across sections 2, 3, and 4.
-- **The "Common Pattern" section** correctly notices that several items could be batched — this is a useful planning signal.
+1. **`marker-live` guard on `where` parameter** — in some function accepting a marker, validate it's still live before using it (prevents crash from dead/garbage-collected markers).
 
-## Concerns & Gaps
+2. **`hash-table-p` guard in `gptel-auto-workflow--research-cache-get`** — verify the argument is actually a hash table before calling hash-table accessors (prevents error when the cache slot is nil or holds the wrong type).
 
-### 1. The "Discarded" section being empty is a yellow flag
-If no candidate hypotheses were considered and dropped, either (a) the upstream set was already pre-filtered (in which case say so), or (b) the distillation process isn't being surfaced honestly. A brief note like "all candidates survived the φ/Clarity filter" would close the loop.
+## Key Pattern
 
-### 2. Mix of diagnosis and prescription
-Several entries conflate "what is wrong" with "how to fix it." For example:
-- §1: *"causing spurious invalidation when … is rebound to an equal list"* — this is a diagnosis.
-- *"Switch to `equal` and check cache before `ensure-buffer-tables`"* — this is a prescription.
+Both surviving hypotheses are **defensive nil/type guards** — hardening against edge cases where a parameter is present but in an invalid state (dead marker, nil/non-hash-table). Neither addresses logic, performance, or feature gaps; the signal the research surfaced is purely about **crash-resistance at boundary points**.
 
-Splitting these would let reviewers challenge one without the other. Also, `equal` on a list of project structures may be more expensive than `eq` on a stable list — worth justifying the cost vs. the alt
+## Interpretation
+
+- The template-default strategy produced a high volume of false positives — only 2 of 139 (~1.4%) survived.
+- Surviving findings cluster tightly: same defensive-programming motif, same class of bug (external/edge-case input shape, not core algorithm).
+- No hypotheses about behavior, semantics, or correctness-of-result were retained — suggesting either (a) such hypotheses weren't generated, or (b) they were all discarded upstream and aren't shown here.
+
+## Caveat
+
+With **zero discarded hypotheses listed**, the rejection 
 
 ... (truncated)

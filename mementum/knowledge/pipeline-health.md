@@ -7,6 +7,6 @@ Current backend: MiniMax
 
 Format: timestamp | diagnosis | remedy | before | after | effective?
 
-- 1780796867 | grader-destroying-experiments | grader-timeout=1200 | 0% → -100% | PENDING
-- 1780796825 | grader-destroying-experiments | grader-timeout=1200 | 0% → -100% | PENDING
-- 1780796825 | grader-destroying-experiments | grader-timeout=1200 | 0% → -100% | PENDING
+- 1780732147 | grader-destroying-experiments | grader-timeout=300 | 0% → -100% | PENDING
+- 1780732142 | grader-destroying-experiments | grader-timeout=300 | 0% → -100% | PENDING
+- 1780732142 | grader-destroying-experiments | grader-timeout=300 | 0% → -100% | PENDING
