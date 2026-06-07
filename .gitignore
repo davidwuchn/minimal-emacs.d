@@ -40,6 +40,8 @@ lisp/modules/*.elc
 !mementum/knowledge/modules/*.md
 !mementum/knowledge/plans/
 !mementum/knowledge/plans/**/*.md
+!mementum/knowledge/patterns/
+!mementum/knowledge/patterns/*.md
 !lisp/modules/gptel-skill-*.el
 !lisp/modules/gptel-benchmark*.el
 !lisp/modules/gptel-workflow-*.el
