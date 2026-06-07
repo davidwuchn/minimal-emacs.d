@@ -1,10 +1,9 @@
 # Mementum State
 
 > **Bootstrapped**: 2026-06-06
-> **Session**: Approval queue for high-risk monitoring agent proposals
-> **Status**: All P0+P1 complete, approval queue closes OV5 self-improving loop
-> **Latest**: Human approval queue — high-risk proposals wait for human review instead of auto-deploying
-> **Active Plan**: OV5 self-improving system — all YC phases complete
+> **Session**: Pipeline reliability fixes — worktree race, OOM, ROI cold-start, boundary
+> **Status**: All critical pipeline bugs fixed, daemon stable at ~417MB RSS
+> **Latest**: ROI cold-start (1.0 default), empty path → workspace root, worktree preservation
 
 ---
 
@@ -12,18 +11,15 @@
 
 | Priority | Item | Model | Status |
 |---|---|---|---|
-| **P0** | OV5 self-heal: fix workspace boundary violations | @maintainer | **COMPLETE** |
-| **P0** | Refine top 20 auto-generated module docs | doc-explorer | **COMPLETE** |
-| **P0** | Test pipeline wrapper in production | pipeline-ops | **COMPLETE** |
-| **P0** | Optimize model routing based on task type | ov5-architect | **COMPLETE** |
-| **P0** | Wire self-heal hooks into experiment core | @maintainer | **COMPLETE** |
+| **P0** | Fix worktree race (preserve active experiments) | @maintainer | **COMPLETE** |
+| **P0** | Fix OOM (4GB ulimit, 60s watchdog, 1.5GB RSS threshold) | @maintainer | **COMPLETE** |
+| **P0** | Fix ROI cold-start (1.0 default for unknown/zero categories) | @maintainer | **COMPLETE** |
+| **P0** | Fix boundary error (empty path → workspace root) | @maintainer | **COMPLETE** |
+| **P0** | Fix sed -i '' → sed -i (Linux compat) | @maintainer | **COMPLETE** |
 | **P1** | Monitoring Agent: Complete (Phases 1-3) | @maintainer | **COMPLETE** |
 | **P1** | Token Economics: ROI pre-flight in experiment core | @maintainer | **COMPLETE** |
 | **P1** | Production Metrics: Weighted grader scoring | @maintainer | **COMPLETE** |
-| **P1** | Refine remaining 97 module docs with OV5 ontology/AutoTTS | doc-explorer | **IN PROGRESS** |
-| **P2** | Human interface → pipeline (approval queue) | @maintainer | **COMPLETE** |
 | **P2** | Submit PR for install.sh macOS sed | delegate-opus | **BLOCKED** (upstream) |
-| **P2** | Unified pipeline: consolidate scripts | @maintainer | **COMPLETE** |
 
 ## Completed Work
 
