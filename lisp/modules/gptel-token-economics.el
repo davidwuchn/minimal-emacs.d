@@ -116,6 +116,26 @@ Returns list of (category . roi) pairs."
           (lambda (a b) (> (cdr a) (cdr b))))))
 
 ;; ============================================================================
+;; Task 3.2b: ROI Pre-Flight Prediction
+;; ============================================================================
+
+(defcustom gptel-token-economics-roi-threshold 1.0
+  "Minimum predicted ROI required to start an experiment.
+Experiments with predicted ROI below this threshold are rejected
+at the pre-flight check. Default 1.0 means value-gained must
+at least equal cost."
+  :type 'float
+  :group 'gptel-token-economics)
+
+(defun gptel-token-economics--predict-roi (category)
+  "Predict ROI for a new experiment in CATEGORY.
+Uses historical category-roi as the predictor. Returns 0.0
+when CATEGORY has no historical data (unknown or nil category)."
+  (if (or (null category) (equal category :unknown))
+      0.0
+    (gptel-token-economics--category-roi category)))
+
+;; ============================================================================
 ;; Task 3.3: Budget Allocation
 ;; ============================================================================
 

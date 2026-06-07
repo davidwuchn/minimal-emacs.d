@@ -272,6 +272,62 @@ Default tolerance is 0.0001."
     (let ((roi (gptel-token-economics--calculate-roi experiment)))
       (should (<= roi 0.0)))))
 
+;; ============================================================================
+;; ROI Pre-Flight Prediction Tests
+;; ============================================================================
+
+(ert-deftest test-token-economics/predict-roi-from-category-history ()
+  "Should predict ROI from historical category-roi."
+  (test-token-economics--with-clean-state
+   (let ((experiments '((:id "exp-001" :category :programming :input-tokens 1000 :output-tokens 500
+                         :score-before 0.40 :score-after 0.65 :decision "kept")
+                        (:id "exp-002" :category :programming :input-tokens 1500 :output-tokens 800
+                         :score-before 0.50 :score-after 0.70 :decision "kept"))))
+     (dolist (exp experiments)
+       (gptel-token-economics--track-experiment exp))
+     (let ((predicted (gptel-token-economics--predict-roi :programming))
+           (historical (gptel-token-economics--category-roi :programming)))
+       ;; Predicted ROI should equal historical category-roi
+       (should (test-token-economics--approximately-equal predicted historical))))))
+
+(ert-deftest test-token-economics/predict-roi-unknown-category ()
+  "Should return 0.0 for unknown or nil categories."
+  (test-token-economics--with-clean-state
+   ;; No history for :unknown category
+   (should (= 0.0 (gptel-token-economics--predict-roi :unknown)))
+   (should (= 0.0 (gptel-token-economics--predict-roi nil)))))
+
+(ert-deftest test-token-economics/pre-flight-rejects-below-threshold ()
+  "Pre-flight should reject when predicted ROI is below threshold."
+  (test-token-economics--with-clean-state
+   (let ((experiments '((:id "exp-001" :category :research :input-tokens 2000 :output-tokens 1000
+                         :score-before 0.60 :score-after 0.55 :decision "discarded"))))
+     (dolist (exp experiments)
+       (gptel-token-economics--track-experiment exp))
+     ;; :research has 0.0 ROI (all discarded)
+     (let ((predicted (gptel-token-economics--predict-roi :research)))
+       (should (= 0.0 predicted))
+       ;; With threshold 5.0, should be rejected
+       (let ((gptel-token-economics-roi-threshold 5.0))
+         (should (< predicted gptel-token-economics-roi-threshold)))
+       ;; With threshold 0.5, still rejected (0.0 < 0.5)
+       (let ((gptel-token-economics-roi-threshold 0.5))
+         (should (< predicted gptel-token-economics-roi-threshold)))))))
+
+(ert-deftest test-token-economics/pre-flight-passes-above-threshold ()
+  "Pre-flight should pass when predicted ROI exceeds threshold."
+  (test-token-economics--with-clean-state
+   (let ((experiments '((:id "exp-001" :category :programming :input-tokens 1000 :output-tokens 500
+                         :score-before 0.40 :score-after 0.65 :decision "kept")
+                        (:id "exp-002" :category :programming :input-tokens 800 :output-tokens 400
+                         :score-before 0.50 :score-after 0.80 :decision "kept"))))
+     (dolist (exp experiments)
+       (gptel-token-economics--track-experiment exp))
+     (let ((predicted (gptel-token-economics--predict-roi :programming)))
+       ;; With default threshold 1.0, programming ROI > 1.0
+       (should (> predicted 1.0))
+       (should (>= predicted gptel-token-economics-roi-threshold))))))
+
 (provide 'test-gptel-token-economics)
 
 ;;; test-gptel-token-economics.el ends here

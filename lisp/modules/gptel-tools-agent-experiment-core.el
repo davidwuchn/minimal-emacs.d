@@ -63,6 +63,7 @@
 (declare-function my/gptel--run-agent-tool-with-timeout "gptel-tools-agent-subagent")
 (declare-function gptel-auto-experiment--validate-code "gptel-tools-agent-validation")
 (declare-function gptel-auto-workflow--assert-main-untouched "gptel-tools-agent-worktree")
+(declare-function gptel-token-economics--predict-roi "gptel-token-economics")
 (declare-function gptel-auto-workflow-create-worktree "gptel-tools-agent-worktree")
 ;;; gptel-tools-agent-experiment-core.el --- Single experiment execution -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
@@ -229,6 +230,29 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
       (when (functionp callback)
         (funcall callback result)))
     (cl-return-from gptel-auto-experiment-run))
+  ;; ROI pre-flight check — reject experiments where predicted ROI < threshold
+  (when (fboundp 'gptel-token-economics--predict-roi)
+    (let* ((category (when (and target
+                                (fboundp 'gptel-auto-workflow--categorize-target))
+                       (gptel-auto-workflow--categorize-target target)))
+           (predicted-roi (gptel-token-economics--predict-roi category))
+           (threshold (if (boundp 'gptel-token-economics-roi-threshold)
+                          gptel-token-economics-roi-threshold 1.0)))
+      (when (< predicted-roi threshold)
+        (message "[auto-experiment] ⏹ ROI pre-flight rejected: category %s predicted ROI %.2f < threshold %.2f — aborting experiment %d/%d for %s"
+                 (or category "unknown") predicted-roi threshold
+                 experiment-id max-experiments target)
+        (let ((result (list :target target :id experiment-id :kept nil
+                            :error "roi-below-threshold"
+                            :category category
+                            :predicted-roi predicted-roi
+                            :roi-threshold threshold)))
+          (gptel-auto-experiment-log-tsv gptel-auto-workflow--run-id result)
+          (when (fboundp 'gptel-token-economics--track-experiment)
+            (gptel-token-economics--track-experiment result))
+          (when (functionp callback)
+            (funcall callback result)))
+        (cl-return-from gptel-auto-experiment-run))))
   (message "[auto-experiment] Starting %d/%d for %s" experiment-id max-experiments target)
   (setq gptel-auto-experiment--loaded-skills nil)
   (setq gptel-auto-experiment--suggested-workflow nil)
