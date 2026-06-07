@@ -1079,7 +1079,12 @@ Returns a plist suitable for logging or dashboard display."
                     ("expired" (setq aq-expired (1+ aq-expired))))))))))
       ;; ── Sensors ──
       (let ((sentry-configured (and (getenv "OV5_SENTRY_API_KEY") t))
-            (feedback-configured (and (getenv "OV5_FEEDBACK_ENDPOINT") t)))
+            (feedback-configured (and (getenv "OV5_FEEDBACK_ENDPOINT") t))
+            (github-data
+             (condition-case nil
+                 (when (fboundp 'gptel-auto-workflow--github-sensor-collect)
+                   (gptel-auto-workflow--github-sensor-collect))
+               (error nil))))
         ;; ── Context DB ──
         (let ((ctx-count
                (length (when (file-directory-p (concat root "var/context"))
@@ -1120,8 +1125,11 @@ Returns a plist suitable for logging or dashboard display."
                                      :rejected aq-rejected
                                      :deployed aq-deployed
                                      :expired aq-expired)
-               :sensors (list :sentry (if sentry-configured "configured" "not-configured")
-                              :feedback (if feedback-configured "configured" "not-configured"))
+                :sensors (list :sentry (if sentry-configured "configured" "not-configured")
+                               :feedback (if feedback-configured "configured" "not-configured")
+                               :github-open (or (plist-get github-data :open-issues) 0)
+                               :github-closed (or (plist-get github-data :closed-issues) 0)
+                               :github-bugs (or (plist-get github-data :bug-count) 0))
                :context-db (list :entries ctx-count)
                :disposable (list :candidates disp-count)
                :mementum (list :memories mem-count

@@ -2194,7 +2194,15 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
     (error nil))
   ;; Ensure required modules are loaded before evolution checks
   (mapc (lambda (m) (require m nil t))
-        '(gptel-tools-agent-base gptel-tools-agent-main))
+        '(gptel-tools-agent-base gptel-tools-agent-main
+          gptel-auto-workflow-external-sensors
+          gptel-auto-workflow-production-metrics
+          gptel-auto-workflow-production
+          gptel-auto-workflow-monitoring-agent
+          gptel-auto-workflow-approval-queue
+          gptel-auto-workflow-disposable-tracker
+          gptel-auto-workflow-code-regeneration
+          gptel-auto-workflow-architectural-evolution))
   ;; ─── Production Cycle Pre-steps (monitoring → approval → disposable → regeneration) ───
   ;; These run before the main evolution steps so the cycle has fresh monitoring data,
   ;; approved proposals applied, and disposable modules identified for regeneration.
@@ -6813,7 +6821,8 @@ If not improved after 3 runs, trigger escalation."
            (effective (or (> current-rate before-rate) partial-recovery)))
       (cond
        (effective
-        (message "[self-heal] ✓ Recovery verified: %.0f%% → %.0f%% (grader-failures: %d, timeouts: %d, %s)"
+        (message "[self-heal] ✓ Recovery verified: %.0f%% → %.0f%% (grader-failures: %d,
+timeouts: %d, %s)"
                  (* 100 before-rate) (* 100 current-rate)
                  current-grader-failures current-timeouts
                  (plist-get gptel-auto-workflow--last-remediation :remedy))
@@ -6823,7 +6832,8 @@ If not improved after 3 runs, trigger escalation."
         ;; Reset escalation counter since fix worked
         (gptel-auto-workflow--reset-escalation-counter))
        (t
-        (message "[self-heal] ✗ Recovery NOT verified: still %.0f%% (was %.0f%%, grader-failures: %d, timeouts: %d)"
+        (message "[self-heal] ✗ Recovery NOT verified: still %.0f%% (was %.0f%%,
+grader-failures: %d, timeouts: %d)"
                  (* 100 current-rate) (* 100 before-rate)
                  current-grader-failures current-timeouts)
          ;; Increment remediation failure counter
