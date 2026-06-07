@@ -24,6 +24,25 @@
 
 (require 'cl-lib)
 
+;;; Customization
+(defgroup gptel-auto-workflow-production-metrics nil
+  "Production metrics weighting for experiment scoring."
+  :group 'gptel-auto-workflow)
+
+(defcustom gptel-auto-workflow-production-weight-business-value 0.3
+  "Weight multiplier for business-value-score boost on effective-score.
+Higher values give more weight to experiments with demonstrated business value.
+Range 0.0–1.0. Set to 0.0 to disable business-value boosting."
+  :type 'float
+  :group 'gptel-auto-workflow-production-metrics)
+
+(defcustom gptel-auto-workflow-production-weight-risk-penalty 0.5
+  "Weight multiplier for risk-score penalty on effective-score.
+Higher values penalize risky experiments more aggressively.
+Range 0.0–1.0. Set to 0.0 to disable risk-based penalty."
+  :type 'float
+  :group 'gptel-auto-workflow-production-metrics)
+
 ;; API configuration
 (defvar gptel-auto-workflow--sentry-api-key nil
   "Sentry API key for production metrics.
@@ -336,6 +355,19 @@ Returns :auto (risk < 0.3), :recommend (0.3-0.7), or :required (> 0.7)."
      ((< risk 0.3) :auto)
      ((< risk 0.7) :recommend)
      (t :required))))
+
+(defun gptel-auto-workflow--weight-score-with-production-metrics (score target)
+  "Weight SCORE with production metrics for TARGET.
+Business-value-score boosts effective-score; risk-score penalizes it.
+Formula: effective = score + (business-value * weight) - (risk * weight)
+Returns weighted score, or original SCORE if production metrics unavailable."
+  (if-let* ((metrics (gptel-auto-workflow--get-production-metrics target))
+            (bv (plist-get metrics :business-value-score))
+            (risk (plist-get metrics :risk-score)))
+      (let ((boost (* bv gptel-auto-workflow-production-weight-business-value))
+            (penalty (* risk gptel-auto-workflow-production-weight-risk-penalty)))
+        (+ score boost (- penalty)))
+    score))
 
 (provide 'gptel-auto-workflow-production-metrics)
 

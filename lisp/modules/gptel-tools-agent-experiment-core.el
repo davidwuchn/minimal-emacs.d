@@ -65,6 +65,7 @@
 (declare-function gptel-auto-workflow--assert-main-untouched "gptel-tools-agent-worktree")
 (declare-function gptel-token-economics--predict-roi "gptel-token-economics")
 (declare-function gptel-auto-workflow-create-worktree "gptel-tools-agent-worktree")
+(declare-function gptel-auto-workflow--weight-score-with-production-metrics "gptel-auto-workflow-production-metrics")
 ;;; gptel-tools-agent-experiment-core.el --- Single experiment execution -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
@@ -1055,13 +1056,17 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                   ;; When the grader passed but the structural eight-keys score
                                                   ;; is nil or near-zero, use the normalized grader score instead.
                                                   ;; This prevents valid changes from being rejected because
-                                                  ;; the structural scorer failed to compute.
-                                                  (effective-score
-                                                   (if (and grade-passed
-                                                            (or (null score-after) (< score-after 0.1))
-                                                            grade-score grade-total (> grade-total 0))
-                                                       (/ (float grade-score) grade-total)
-                                                     (or score-after 0))))
+                                                   ;; the structural scorer failed to compute.
+                                                   (effective-score
+                                                    (let ((raw-score
+                                                           (if (and grade-passed
+                                                                    (or (null score-after) (< score-after 0.1))
+                                                                    grade-score grade-total (> grade-total 0))
+                                                               (/ (float grade-score) grade-total)
+                                                             (or score-after 0))))
+                                                      (if (fboundp 'gptel-auto-workflow--weight-score-with-production-metrics)
+                                                          (gptel-auto-workflow--weight-score-with-production-metrics raw-score target)
+                                                        raw-score))))
                                                    (message "[auto-experiment] DEBUG benchmark: passed=%s tests-passed=%s validation-error=%s nucleus-passed=%s debug=%s eight-keys=%s→%s"
                                                              passed tests-passed validation-error (plist-get bench :nucleus-passed) (plist-get bench :debug-info)
                                                              score-after effective-score)
@@ -1873,12 +1878,16 @@ Called when the grader passed but the benchmark/validation failed."
                          (grade-score (plist-get refine-grade :score))
                          (grade-total (plist-get refine-grade :total))
                          (effective-score
-                          (if (and (plist-get refine-grade :passed)
-                                   (or (null score-after) (< score-after 0.1))
-                                   grade-score grade-total (> grade-total 0))
-                              (/ (float grade-score) grade-total)
-                            (or score-after 0)))
-                         (quality (or (gptel-auto-experiment--code-quality-score) 0.5))
+                           (let ((raw-score
+                                  (if (and (plist-get refine-grade :passed)
+                                           (or (null score-after) (< score-after 0.1))
+                                           grade-score grade-total (> grade-total 0))
+                                      (/ (float grade-score) grade-total)
+                                    (or score-after 0))))
+                             (if (fboundp 'gptel-auto-workflow--weight-score-with-production-metrics)
+                                 (gptel-auto-workflow--weight-score-with-production-metrics raw-score target)
+                               raw-score)))
+                          (quality (or (gptel-auto-experiment--code-quality-score) 0.5))
                          (exp-result
                           (list :target target :id experiment-id
                                 :hypothesis hypothesis
