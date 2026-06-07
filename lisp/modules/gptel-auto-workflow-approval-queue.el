@@ -132,7 +132,11 @@ Returns nil if file does not exist or cannot be read."
     (with-temp-buffer
       (insert-file-contents filepath)
       (goto-char (point-min))
-      (read (current-buffer)))))
+      (condition-case nil
+          (read (current-buffer))
+        (error
+         (message "[approval-queue] Warning: corrupt sexp file %s" filepath)
+         nil)))))
 
 ;; ── List ──
 
