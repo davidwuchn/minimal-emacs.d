@@ -1,10 +1,10 @@
 # Mementum State
 
 > **Bootstrapped**: 2026-06-06
-> **Session**: Context database — causal/business memory sidecar
-> **Status**: YC Phases 1(partial), 2(done), 3(started), 4(done) — OV5 self-improving loop closed
-> **Latest**: Context database captures 'why' not 'what' per experiment — Phase 3 foundation
-> **Active Plan**: OV5 self-improving system — YC vision 60%+ complete
+> **Session**: Architectural evolution — structural pipeline proposals
+> **Status**: YC Phases 1(partial), 2(done), 3(started), 4(done) — OV5 ~65% complete
+> **Latest**: Architectural evolution detects module retirement, routing, regressions — Phase 2.3 complete
+> **Active Plan**: OV5 self-improving system — YC vision ~65% complete
 
 ---
 
@@ -17,7 +17,7 @@
 | **P0** | Test pipeline wrapper in production | pipeline-ops | **COMPLETE** |
 | **P0** | Optimize model routing based on task type | ov5-architect | **COMPLETE** |
 | **P0** | Wire self-heal hooks into experiment core | @maintainer | **COMPLETE** |
-| **P1** | Monitoring Agent: Complete (Phases 1-3) | @maintainer | **COMPLETE** |
+| **P1** | Monitoring Agent: Complete (Phases 1-3 + architectural evolution) | @maintainer | **COMPLETE** |
 | **P1** | Token Economics: ROI pre-flight in experiment core | @maintainer | **COMPLETE** |
 | **P1** | Production Metrics: Weighted grader scoring | @maintainer | **COMPLETE** |
 | **P1** | Refine remaining 97 module docs with OV5 ontology/AutoTTS | doc-explorer | **IN PROGRESS** |
@@ -65,7 +65,17 @@
 - Plan creation runs at pipeline start; state + pattern updates run at pipeline end
 - `bash -n` validates syntax
 
-### Monitoring Agent (P1 — YC Phase 2 "Holy Shit Moment")
+### Architectural Evolution (P1 — YC Phase 2.3)
+
+**Structural pipeline proposals from experiment data:**
+- New module: `gptel-auto-workflow-architectural-evolution.el` (8 functions, 23 tests)
+- Phase 4 in monitoring cycle: strategy routing, hypothesis routing, score+persist
+- Detects: module retirement (0% keep-rate), routing opportunities, global regressions, coverage gaps
+- Enriched proposal schema: proposal-kind, scope, approval-class, evidence, sample-size
+- Risk classification: investigation→auto, routing→notify, module change→required
+- Legacy keys for score-proposal compatibility
+
+YC Phase 2 now complete: failure patterns + proposals + architectural evolution
 
 **3-phase implementation complete:**
 - **Phase 1**: Failure pattern analysis (classify, analyze, persist)
@@ -154,8 +164,8 @@ User Input → Detect Task Type → Route to Model → Self-Heal Diagnostic → 
 
 ## Next Steps (Suggested by Active Mementum)
 
-1. **Architectural evolution** — extend monitoring agent to propose structural pipeline changes (Phase 2.3 remaining)
-2. **Code regeneration** — consume context database to regenerate modules with better models (Phase 3.2)
+1. **Code regeneration** — consume context database to regenerate modules with better models (Phase 3.2)
+2. **Production API integration** — wire real Sentry/DataDog endpoints (Phase 1.1 remaining)
 3. **Refine remaining 87 module docs** (P1, low urgency)
 4. **Upstream PR** — install.sh macOS sed (blocked)
 
