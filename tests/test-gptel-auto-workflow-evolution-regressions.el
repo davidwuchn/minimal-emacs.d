@@ -636,8 +636,10 @@ to the async LLM path (tested implicitly by the real pipeline)."
   (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
              #'ert--allium-ff-root))
     (let ((knowledge-dir (expand-file-name "mementum/knowledge" (ert--allium-ff-root)))
+          (insights-dir (expand-file-name "var/knowledge" (ert--allium-ff-root)))
           (knowledge-file (expand-file-name "var/knowledge/research-insights-test-strategy.md" (ert--allium-ff-root))))
       (make-directory knowledge-dir t)
+      (make-directory insights-dir t)
       (with-temp-file knowledge-file
         (insert "# Research Insights: test-strategy\n\n## Summary\n\nOriginal content.\n"))
       (gptel-auto-workflow--allium-persist-spec

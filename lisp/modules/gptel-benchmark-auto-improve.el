@@ -339,7 +339,8 @@ Returns checkpoint-id for potential rollback."
 
 (defun gptel-benchmark-improvement-cycle (name type results)
   "Run complete improvement cycle for NAME of TYPE with RESULTS.
-This is the Ouroboros loop: Observe → Detect → Generate → Apply → Feed Forward."
+This is the Ouroboros loop: Observe → Detect → Generate → Apply → Feed
+Forward."
   (let* ((detect (gptel-benchmark-detect-anti-patterns results))
          (generate (gptel-benchmark-generate-improvements name type detect))
          (apply-count 0))
