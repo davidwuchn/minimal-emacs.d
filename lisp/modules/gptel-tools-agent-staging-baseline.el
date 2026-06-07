@@ -110,18 +110,63 @@ Explicitly assumes: exit code 0 means success, non-zero means failure."
   "Cached baseline test results, recomputed once per daemon session.
 Keyed by staging-main-ref hash to detect branch changes.")
 
+(defvar gptel-auto-workflow--cached-baseline-test-mtimes nil
+  "Hash table mapping test file paths to their mtime when baseline was cached.
+Used to detect when test files have been modified since the baseline was
+computed, which would invalidate the cached baseline results.")
+
+(defun gptel-auto-workflow--get-test-files-mtime-hash ()
+  "Return hash table of test file paths to mtimes in tests/ directory.
+Only includes .el files in the top-level tests/ directory."
+  (let ((test-dir (expand-file-name "tests/" (or (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
+                                                     (gptel-auto-workflow--expand-workspace-path ""))
+                                                default-directory)))
+        (mtimes (make-hash-table :test 'equal)))
+    (when (file-directory-p test-dir)
+      (dolist (file (directory-files test-dir t "\\.el\\'" t))
+        (condition-case nil
+            (puthash file (float-time (nth 5 (file-attributes file))) mtimes)
+          (error nil))))
+    mtimes))
+
+(defun gptel-auto-workflow--baseline-cache-stale-p ()
+  "Return t if test files have been modified since baseline was cached.
+Compares current mtime of test files against the cached mtimes.
+Uses 1-second epsilon to handle filesystem timestamp precision."
+  (let ((current-mtimes (gptel-auto-workflow--get-test-files-mtime-hash))
+        (cached-mtimes gptel-auto-workflow--cached-baseline-test-mtimes))
+    (cond
+     ;; No cached mtimes → cache is fresh (first time)
+     ((null cached-mtimes) nil)
+     ;; Different number of test files → cache is stale
+     ((/= (hash-table-count current-mtimes) (hash-table-count cached-mtimes)) t)
+     ;; Check each test file's mtime
+     (t
+      (let ((stale nil))
+        (maphash
+         (lambda (file mtime)
+           (let ((current-mtime (gethash file current-mtimes)))
+             ;; Use 1-second epsilon to handle filesystem timestamp precision
+             (when (or (null current-mtime)
+                       (> (abs (- current-mtime mtime)) 1.0))
+               (setq stale t))))
+         cached-mtimes)
+        stale)))))
+
 (defun gptel-auto-workflow--main-baseline-test-results ()
   "Return plist describing verification failures for the current
-staging baseline ref.  Results are cached per daemon session to avoid
-recreating the baseline worktree and rerunning all 2003 tests (~21 min)
-for every single experiment."
+ staging baseline ref.  Results are cached per daemon session to avoid
+ recreating the baseline worktree and rerunning all 2003 tests (~21 min)
+ for every single experiment.
+ Cache is invalidated when test files are modified (mtime check)."
   (let ((main-ref (gptel-auto-workflow--staging-main-ref)))
     (cond
      ((not main-ref)
       (list :error "Missing main ref for baseline comparison"))
-     ;; Return cached results if still valid for this ref
+     ;; Return cached results if still valid for this ref AND test files unchanged
      ((and gptel-auto-workflow--cached-baseline-results
-           (equal (plist-get gptel-auto-workflow--cached-baseline-results :ref) main-ref))
+           (equal (plist-get gptel-auto-workflow--cached-baseline-results :ref) main-ref)
+           (not (gptel-auto-workflow--baseline-cache-stale-p)))
       gptel-auto-workflow--cached-baseline-results)
      (t
       (or
@@ -179,20 +224,23 @@ for every single experiment."
                                                 exit-code verify-exit-code)
                                     :failed-tests failed-tests
                                     :output output))
-                             (t
-                              (list :ref main-ref
-                                    :exit-code (gptel-auto-workflow--normalize-test-exit-code
-                                                exit-code verify-exit-code)
-                                    :error (format "Failed to parse %s baseline test failures"
-                                                   main-ref)
-                                    :output output)))))
-                  (when (buffer-live-p buffer)
-                    (kill-buffer buffer)))))))))
-       (progn
-         (setq gptel-auto-workflow--cached-baseline-results
-               (list :ref main-ref
-                     :error (format "Failed to create %s baseline worktree" main-ref)))
-         gptel-auto-workflow--cached-baseline-results))))))
+                              (t
+                               (list :ref main-ref
+                                     :exit-code (gptel-auto-workflow--normalize-test-exit-code
+                                                 exit-code verify-exit-code)
+                                     :error (format "Failed to parse %s baseline test failures"
+                                                    main-ref)
+                                     :output output)))))
+                   ;; Store test file mtimes for cache invalidation
+                   (setq gptel-auto-workflow--cached-baseline-test-mtimes
+                         (gptel-auto-workflow--get-test-files-mtime-hash))
+                   (when (buffer-live-p buffer)
+                     (kill-buffer buffer)))))))))
+        (progn
+          (setq gptel-auto-workflow--cached-baseline-results
+                (list :ref main-ref
+                      :error (format "Failed to create %s baseline worktree" main-ref)))
+          gptel-auto-workflow--cached-baseline-results))))))
 
 (defun gptel-auto-workflow--staging-tests-match-main-baseline-p (staging-output)
   "Return (PASS-P . NOTE) comparing STAGING-OUTPUT against main baseline.

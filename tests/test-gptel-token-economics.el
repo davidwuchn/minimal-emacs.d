@@ -326,24 +326,25 @@ Default tolerance is 0.0001."
        (should (test-token-economics--approximately-equal predicted historical))))))
 
 (ert-deftest test-token-economics/predict-roi-unknown-category ()
-  "Should return nil for unknown or nil categories (no opinion).
-nil means no historical data — pre-flight should allow the experiment."
+  "Should return nil for unknown or nil categories (no prediction available).
+nil means 'no opinion' — pre-flight should allow the experiment through."
   (test-token-economics--with-clean-state
+   ;; No history for :unknown category → nil (allow through)
    (should (null (gptel-token-economics--predict-roi :unknown)))
    (should (null (gptel-token-economics--predict-roi nil)))))
 
 (ert-deftest test-token-economics/pre-flight-rejects-below-threshold ()
   "Pre-flight should reject when predicted ROI is below threshold.
-:research has records (all discarded, ROI 0.0) — real measurement, returns 0.0."
+Categories with real history showing zero ROI return historical value (0.0)."
   (test-token-economics--with-clean-state
    (let ((experiments '((:id "exp-001" :category :research :input-tokens 2000 :output-tokens 1000
                          :score-before 0.60 :score-after 0.55 :decision "discarded"))))
      (dolist (exp experiments)
        (gptel-token-economics--track-experiment exp))
-     ;; :research has records → returns 0.0 (not nil, real measurement)
+     ;; :research has records with 0.0 ROI (all discarded) → returns 0.0
      (let ((predicted (gptel-token-economics--predict-roi :research)))
        (should (= 0.0 predicted))
-       ;; With threshold 5.0, rejected (0.0 < 5.0)
+       ;; With threshold 5.0, should be rejected (0.0 < 5.0)
        (let ((gptel-token-economics-roi-threshold 5.0))
          (should (< predicted gptel-token-economics-roi-threshold)))
        ;; With threshold 0.5, still rejected (0.0 < 0.5)
@@ -351,13 +352,16 @@ nil means no historical data — pre-flight should allow the experiment."
          (should (< predicted gptel-token-economics-roi-threshold)))))))
 
 (ert-deftest test-token-economics/predict-roi-new-category-allows-through ()
-  "Pre-flight should allow new categories with no historical data.
-Returns nil (no opinion) — pre-flight skips nil via (and predicted-roi (< ...))."
+  "Pre-flight should allow new categories with no historical data (nil prediction).
+nil means 'no opinion' — the experiment should not be blocked."
   (test-token-economics--with-clean-state
-   ;; No experiments tracked at all → nil (no opinion, allow through)
+   ;; No experiments tracked at all → no records for :brand-new-category
    (should (null (gptel-token-economics--predict-roi :brand-new-category)))
-   ;; nil short-circuits the (and predicted-roi (< ...)) check → allowed
+   ;; nil is not < threshold, so pre-flight would allow through
    (let ((gptel-token-economics-roi-threshold 5.0))
+     ;; nil is not a number, so (< nil 5.0) would error.
+     ;; The pre-flight check in experiment-core uses (and predicted-roi (< predicted-roi threshold))
+     ;; which short-circuits on nil → experiment allowed through.
      (should (null (gptel-token-economics--predict-roi :brand-new-category))))))
 
 (ert-deftest test-token-economics/pre-flight-passes-above-threshold ()
