@@ -291,7 +291,11 @@ pipeline_git_sync_latest() {
     git -C "$DIR" pull --rebase 2>&1 || log "WARNING: $label git pull failed"
 
     if [ "$stash_made" -eq 1 ]; then
-        git -C "$DIR" stash pop 2>/dev/null || log "WARNING: $label stash pop failed"
+        if ! git -C "$DIR" stash pop 2>/dev/null; then
+            log "WARNING: $label stash pop failed, resetting to HEAD and dropping stash"
+            git -C "$DIR" reset --hard HEAD 2>/dev/null || true
+            git -C "$DIR" stash drop 2>/dev/null || true
+        fi
     fi
 }
 
@@ -810,7 +814,11 @@ if [ "$has_auto_gen" -eq 1 ]; then
     
     # Restore stashed changes
     if [ "$stash_made" -eq 1 ]; then
-        git -C "$DIR" stash pop 2>/dev/null || log "WARNING: stash pop failed after auto-publish"
+        if ! git -C "$DIR" stash pop 2>/dev/null; then
+            log "WARNING: stash pop failed after auto-publish, resetting to HEAD and dropping stash"
+            git -C "$DIR" reset --hard HEAD 2>/dev/null || true
+            git -C "$DIR" stash drop 2>/dev/null || true
+        fi
     fi
 else
     log "No auto-generated changes to publish"
