@@ -278,16 +278,26 @@ run_self_evolution() {
         log "Self-evolution skipped (throttled)"
     elif printf '%s' "$evolution_output" | grep -q "converged"; then
         log "Self-evolution skipped (converged)"
-    elif printf '%s' "$evolution_output" | grep -qE '(^|[^a-z])discard($|[^a-z])'; then
-        log "Self-evolution skipped (discard - keep rate not improved)"
     elif printf '%s' "$evolution_output" | grep -q "first"; then
         log "Self-evolution skipped (first run / establishing baseline)"
-    elif printf '%s' "$evolution_output" | grep -q "keep"; then
-        log "Self-evolution completed (kept improvements)"
     elif printf '%s' "$evolution_output" | grep -q "Insufficient new data"; then
         log "Self-evolution skipped (insufficient new data)"
+    # Autoresearch safety: a 'discard' return means a recent experiment was
+    # REVERTED (rolled back) because it was worse than the baseline. This is
+    # a SUCCESS of the safety system, not a self-evolution failure.
+    elif printf '%s' "$evolution_output" | grep -q "\[autoresearch\] DISCARD"; then
+        log "Self-evolution safety-net: autoresearch reverted a regression"
+    elif printf '%s' "$evolution_output" | grep -q "\[autoresearch\] KEEP"; then
+        log "Self-evolution kept an improvement (autoresearch)"
+    # Plain 'discard' return (no autoresearch context) is rare; log it
+    elif printf '%s' "$evolution_output" | grep -qE '^[A-Za-z]*discard$|^discard$'; then
+        log "Self-evolution returned 'discard' (unclassified — check autoresearch)"
     elif printf '%s' "$evolution_output" | grep -q "Self-evolution cycle complete"; then
         log "Self-evolution completed (research: $RESEARCH_QUALITY)"
+    elif printf '%s' "$evolution_output" | grep -q "triggered-experiments"; then
+        log "Self-evolution triggered fresh experiments (no new data)"
+    elif printf '%s' "$evolution_output" | grep -q "early-error"; then
+        log "WARNING: self-evolution early-error (pre-steps)"
     else
         log "WARNING: self-evolution command had issues, but continuing pipeline"
         # Non-fatal: evolution failure shouldn't stop experiments
@@ -918,10 +928,16 @@ mkdir -p "$DIGEST_DIR"
         # Find results.tsv files modified in last 24h
         recent_results=$(find "$DIR/var/tmp/experiments" -maxdepth 2 -name "results.tsv" -mtime -1 2>/dev/null | sort)
         if [ -n "$recent_results" ]; then
-            # Use awk to aggregate kept experiments across all recent files
+            # Use awk to aggregate kept experiments across all recent files.
+            # Show: target, score delta, business value, decision.
+            # This gives the human (Yin/Yang) enough context to evaluate
+            # what the system is actually producing — not just file names.
             for rf in $recent_results; do
                 awk -F'\t' 'NR>1 && $8 ~ /^(kept|grader-bypass|merged|staged)$/ {
-                    printf "- **%s** (exp %s, decision: %s)\n", $2, $1, $8
+                    delta = ($7 == "" ? 0 : $7)
+                    bv = ($38 == "" ? 0 : $38)
+                    hyp = substr($3, 1, 80)
+                    printf "- **%s** (Δ=%+.2f, BV=%.2f) %s [%s]\n", $2, delta, bv, hyp, $8
                 }' "$rf" 2>/dev/null
             done
         else
@@ -958,11 +974,55 @@ mkdir -p "$DIGEST_DIR"
         echo "- pipeline-health.md not yet created"
     fi
     echo ""
+    echo "## Keep-Rate Trend (last 7 days)"
+    echo ""
+    # Aggregate kept/total across all results.tsv files modified in last 7 days
+    if compgen -G "$DIR/var/tmp/experiments/*/results.tsv" >/dev/null; then
+        find "$DIR/var/tmp/experiments" -maxdepth 2 -name "results.tsv" -mtime -7 -exec cat {} \; 2>/dev/null | \
+            awk -F'\t' 'NR>1 {
+                total++
+                if ($8 ~ /^(kept|grader-bypass|merged|staged)$/) kept++
+            } END {
+                if (total > 0) {
+                    rate = kept * 100.0 / total
+                    printf "- **Total experiments (7d):** %d\n- **Kept:** %d\n- **Keep-rate:** %.1f%%\n", total, kept, rate
+                    if (rate < 5) print "- ⚠ LOW: target is 20%+ for self-evolution to make progress"
+                } else {
+                    print "- No experiments in last 7 days"
+                }
+            }'
+    else
+        echo "- No results files found"
+    fi
+    # Per-decision breakdown
+    if compgen -G "$DIR/var/tmp/experiments/*/results.tsv" >/dev/null; then
+        find "$DIR/var/tmp/experiments" -maxdepth 2 -name "results.tsv" -mtime -7 -exec cat {} \; 2>/dev/null | \
+            awk -F'\t' 'NR>1 {count[$8]++} END {
+                for (d in count) printf "- %s: %d\n", d, count[d]
+            }' | sort -k2 -n -r | head -10
+    fi
+    echo ""
     echo "## Pipeline Run Status"
     echo ""
     echo "- Final status: $PIPELINE_FINAL_STATUS"
     echo "- Pipeline log: $PIPELINE_LOG"
     echo "- Last run timestamp: $(date '+%Y-%m-%d %H:%M:%S')"
+    echo ""
+    echo "## Knowledge Page Freshness"
+    echo ""
+    # Flag knowledge pages older than 14 days as potentially stale.
+    if compgen -G "$DIR/mementum/knowledge/*.md" >/dev/null; then
+        stale_count=$(find "$DIR/mementum/knowledge" -maxdepth 1 -name "*.md" -mtime +14 2>/dev/null | wc -l)
+        fresh_count=$(find "$DIR/mementum/knowledge" -maxdepth 1 -name "*.md" -mtime -14 2>/dev/null | wc -l)
+        echo "- Fresh (≤14d): $fresh_count"
+        echo "- Stale (>14d): $stale_count"
+        if [ "$stale_count" -gt 0 ]; then
+            echo "- Stale pages (top 5):"
+            find "$DIR/mementum/knowledge" -maxdepth 1 -name "*.md" -mtime +14 -printf '  - %f (%TY-%Tm-%Td)\n' 2>/dev/null | sort -k3 | head -5
+        fi
+    else
+        echo "- No knowledge pages yet"
+    fi
 } > "$DIGEST_FILE"
 log "Daily digest written: $DIGEST_FILE"
 
