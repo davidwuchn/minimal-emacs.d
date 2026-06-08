@@ -614,10 +614,10 @@ if [ -n "$SELF_AUDIT_REPORT" ]; then
         AUDIT_ISSUES=$(grep 'issues-count' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. *(\d+)/) { print $1 }')
         COLD_BACKENDS=$(grep 'cold-backends \.' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'while (/\"([^\"]+)\"/g) { print "$1," }' | perl -pe 's/,$//')
         UNEVALUATED_STRATS=$(grep 'unevaluated-strategies' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. *(\d+)/) { print $1 }')
-         BOTTLENECK=$(grep 'staging-merge-bottleneck' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. t\b/) { print "1" }')
-         BROKEN_MODULES=$(grep -c 'broken-modules' "$SELF_AUDIT_RESULT_FILE" 2>/dev/null || echo 0)
-         PRICING_STALE=$(grep 'pricing-stale' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. (\d+)/) { print $1 }' || echo 0)
-         DAYS_STALE=$(grep 'pricing-days-stale' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. (\d+)/) { print $1 }' || echo 0)
+         BOTTLENECK=$(grep 'staging-merge-bottleneck' "$SELF_AUDIT_RESULT_FILE" 2>/dev/null | perl -ne 'if (/\. t\b/) { print "1" }')
+         BROKEN_MODULES=$(grep -c 'broken-modules' "$SELF_AUDIT_RESULT_FILE" 2>/dev/null | tr -d ' \n' || echo 0)
+         PRICING_STALE=$(grep 'pricing-stale' "$SELF_AUDIT_RESULT_FILE" 2>/dev/null | perl -ne 'if (/\. (\d+)/) { print $1 }' || echo 0)
+         DAYS_STALE=$(grep 'pricing-days-stale' "$SELF_AUDIT_RESULT_FILE" 2>/dev/null | perl -ne 'if (/\. (\d+)/) { print $1 }' || echo 0)
          # Default empty values to 0 for safe integer comparison
          : "${BOTTLENECK:=0}"
          : "${BROKEN_MODULES:=0}"
@@ -710,7 +710,7 @@ if [ -f "$HEALTH_FILE" ]; then
         else
             NEW_TIMEOUT=$((CURRENT_TIMEOUT * 3 / 2))  # Increase by 50% for persistent issues
         fi
-        log "  Auto-fix: grader-destroying-experiments detected ($GRADER_ISSUES× PENDING)"
+        log "  Auto-fix: grader-destroying-experiments detected (${GRADER_ISSUES}x PENDING)"
         log "  Escalating grader timeout: $CURRENT_TIMEOUT → $NEW_TIMEOUT"
         echo "$NEW_TIMEOUT" > "$DIR/var/tmp/grader-timeoutOverride.txt"
         # Also force fast backends for grading
