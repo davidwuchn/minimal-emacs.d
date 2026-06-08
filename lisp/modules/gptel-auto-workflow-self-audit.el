@@ -1045,14 +1045,15 @@ Also flags if the knowledge page hasn't been updated in >30 days."
 (defun gptel-auto-workflow-self-audit--compute-token-economics (&optional root)
   "Compute token economics from experiment TSV data using real registry pricing.
 Scans var/tmp/experiments/*/results.tsv for last 24h.
-Returns plist (:total :total-cost :kept :kept-cost :models-seen)."
+Returns plist (:total :total-cost :kept :kept-cost :models-seen :model-breakdown).
+:model-breakdown is ((:model :count :kept-count :cost :speed :capabilities) ...)."
   (let* ((root (or root (gptel-auto-workflow-self-audit--root)))
          (exp-dir (expand-file-name "var/tmp/experiments" root))
          (cutoff (- (float-time) 86400))  ; 24h
          (pricing (make-hash-table :test 'equal))
-         (total 0) (kept 0) (total-cost 0.0) (kept-cost 0.0)
-         (models-seen (make-hash-table :test 'equal)))
-    ;; Build pricing lookup from registry
+         (model-stats (make-hash-table :test 'equal))
+         (total 0) (kept 0) (total-cost 0.0) (kept-cost 0.0))
+    ;; Build pricing + metadata lookup from registry
     (when (boundp 'gptel-backend-registry)
       (dolist (entry gptel-backend-registry)
         (dolist (m (plist-get (cdr entry) :model-metadata))
@@ -1060,9 +1061,13 @@ Returns plist (:total :total-cost :kept :kept-cost :models-seen)."
                  (p (cdr m))
                  (in (or (plist-get p :pricing-input) 0.0))
                  (out (or (plist-get p :pricing-output) 0.0))
-                 (cache (or (plist-get p :pricing-cache-hit) 0.0)))
-            ;; Use input+cache as baseline cost per experiment
-            (puthash model (+ in cache) pricing)))))
+                 (cache (or (plist-get p :pricing-cache-hit) 0.0))
+                 (speed (or (plist-get p :speed) 'unknown))
+                 (caps (or (plist-get p :capabilities) '(code-generation))))
+            (puthash model (list :cost (+ in cache)
+                                 :speed speed
+                                 :capabilities caps)
+                     pricing)))))
     ;; Scan recent TSV files
     (when (file-directory-p exp-dir)
       (dolist (tsv (directory-files exp-dir t "results\\.tsv$"))
@@ -1077,20 +1082,49 @@ Returns plist (:total :total-cost :kept :kept-cost :models-seen)."
                     (when (>= (length fields) 16)
                       (let* ((model (nth 15 fields))
                              (decision (nth 7 fields))
-                             (cost (or (gethash model pricing) 0.10)))
-                        (puthash model t models-seen)
+                             (info (or (gethash model pricing)
+                                       (list :cost 0.10 :speed 'unknown
+                                             :capabilities '(code-generation))))
+                             (cost (plist-get info :cost))
+                             (kept-p (string-match-p
+                                      "\\`\\(kept\\|grader-bypass\\|merged\\|staged\\)"
+                                      decision))
+                             (stats (or (gethash model model-stats)
+                                        (list :count 0 :kept-count 0
+                                              :total-cost 0.0 :kept-cost 0.0
+                                              :speed (plist-get info :speed)
+                                              :caps (plist-get info :capabilities)))))
+                        ;; Update per-model stats
+                        (plist-put stats :count (1+ (plist-get stats :count)))
+                        (plist-put stats :total-cost
+                                   (+ (plist-get stats :total-cost) cost))
+                        (when kept-p
+                          (plist-put stats :kept-count
+                                     (1+ (plist-get stats :kept-count)))
+                          (plist-put stats :kept-cost
+                                     (+ (plist-get stats :kept-cost) cost)))
+                        (puthash model stats model-stats)
+                        ;; Totals
                         (setq total (1+ total))
                         (setq total-cost (+ total-cost cost))
-                        (when (string-match-p
-                               "\\`\\(kept\\|grader-bypass\\|merged\\|staged\\)"
-                               decision)
+                        (when kept-p
                           (setq kept (1+ kept))
                           (setq kept-cost (+ kept-cost cost)))))
                     (forward-line 1))))
             (error nil)))))
-    (list :total total :total-cost total-cost
-          :kept kept :kept-cost kept-cost
-          :models-seen (hash-table-count models-seen))))
+    ;; Build sorted model breakdown
+    (let ((breakdown '()))
+      (maphash (lambda (model stats)
+                 (push (append (list :model model) stats) breakdown))
+               model-stats)
+      (setq breakdown (sort breakdown
+                            (lambda (a b)
+                              (> (plist-get a :total-cost)
+                                 (plist-get b :total-cost)))))
+      (list :total total :total-cost total-cost
+            :kept kept :kept-cost kept-cost
+            :models-seen (hash-table-count model-stats)
+            :model-breakdown breakdown))))
 
 (provide 'gptel-auto-workflow-self-audit)
 ;;; gptel-auto-workflow-self-audit.el ends here

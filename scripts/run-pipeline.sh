@@ -1324,18 +1324,30 @@ mkdir -p "$DIGEST_DIR"
   (setq gptel-auto-workflow--workspace-path \"$DIR\")
   (require 'gptel-auto-workflow-self-audit nil t)
   (let ((result (gptel-auto-workflow-self-audit--compute-token-economics)))
-    (princ (format \"total=%d|total_cost=%.2f|kept=%d|kept_cost=%.2f|models=%d\"
+    ;; Line 1: totals
+    (princ (format \"TOTAL|%d|%.2f|%d|%.2f|%d\n\"
             (plist-get result :total)
             (plist-get result :total-cost)
             (plist-get result :kept)
             (plist-get result :kept-cost)
-            (plist-get result :models-seen)))))" 2>&1)
-    if [ -n "$TOKEN_ECON" ] && echo "$TOKEN_ECON" | grep -q 'total='; then
-        total_experiments=$(echo "$TOKEN_ECON" | cut -d'|' -f1 | cut -d= -f2)
-        total_cost=$(echo "$TOKEN_ECON" | cut -d'|' -f2 | cut -d= -f2)
-        kept_experiments=$(echo "$TOKEN_ECON" | cut -d'|' -f3 | cut -d= -f2)
-        kept_cost=$(echo "$TOKEN_ECON" | cut -d'|' -f4 | cut -d= -f2)
-        models_seen=$(echo "$TOKEN_ECON" | cut -d'|' -f5 | cut -d= -f2)
+            (plist-get result :models-seen)))
+    ;; Line 2+: per-model breakdown
+    (dolist (m (plist-get result :model-breakdown))
+      (princ (format \"MODEL|%s|%d|%d|%.2f|%.2f|%s\n\"
+              (plist-get m :model)
+              (plist-get m :kept-count)
+              (plist-get m :count)
+              (plist-get m :kept-cost)
+              (plist-get m :total-cost)
+              (symbol-name (plist-get m :speed)))))))" 2>&1)
+    # Parse totals (first line)
+    TOTAL_LINE=$(echo "$TOKEN_ECON" | grep '^TOTAL|')
+    if [ -n "$TOTAL_LINE" ]; then
+        total_experiments=$(echo "$TOTAL_LINE" | cut -d'|' -f2)
+        total_cost=$(echo "$TOTAL_LINE" | cut -d'|' -f3)
+        kept_experiments=$(echo "$TOTAL_LINE" | cut -d'|' -f4)
+        kept_cost=$(echo "$TOTAL_LINE" | cut -d'|' -f5)
+        models_seen=$(echo "$TOTAL_LINE" | cut -d'|' -f6)
     fi
     if [ "${total_experiments:-0}" -gt 0 ]; then
         echo "- **${total_experiments} experiments** across ${models_seen:-0} models (24h), est. cost: \$${total_cost:-0.00}"
@@ -1349,6 +1361,14 @@ mkdir -p "$DIGEST_DIR"
             echo "- ⚠ **Pricing may be stale**: $PRICING_STALE discrepancies vs bailian-pricing.md ($DAYS_STALE days old)"
             echo "  → Update: edit mementum/knowledge/bailian-pricing.md then re-run self-audit"
         fi
+        # Per-model breakdown (cost descending)
+        echo ""
+        echo "| Model | Kept/Total | Kept Cost | Total Cost | Speed |"
+        echo "|-------|-----------|-----------|------------|-------|"
+        echo "$TOKEN_ECON" | grep '^MODEL|' | while IFS='|' read -r _ model kept_count total_count kept_cost_m total_cost_m speed; do
+            keep_pct=$(awk "BEGIN {printf \"%.0f\", ${kept_count:-0}*100/${total_count:-1}}")
+            echo "| $model | ${kept_count}/${total_count} (${keep_pct}%) | \$$kept_cost_m | \$$total_cost_m | $speed |"
+        done
     else
         echo "- No experiments in last 24h (no cost data)"
     fi
