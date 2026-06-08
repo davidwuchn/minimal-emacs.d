@@ -1102,7 +1102,8 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
                (fboundp 'gptel-benchmark-grade))
           ;; Ensure grader dispatch cannot strand the experiment without a
            ;; result when routing/prompt construction fails synchronously.
-           (condition-case err
+           (with-no-warnings
+            (condition-case err
               (with-current-buffer grade-buffer
                 (gptel-benchmark-grade
                  (gptel-auto-experiment--build-grading-output output target worktree)
@@ -1133,8 +1134,8 @@ blocks)")
                      :error-source (format "Error: grader dispatch failed: %s"
                                            (error-message-string err))
                     :grader-only-failure t)
-              t)))
-        (gptel-auto-experiment--finish-grade
+               t))))
+         (gptel-auto-experiment--finish-grade
          grade-id callback (list :score 100 :passed t) t)))))
 
 (defun gptel-auto-experiment--parse-comparator-winner (response)

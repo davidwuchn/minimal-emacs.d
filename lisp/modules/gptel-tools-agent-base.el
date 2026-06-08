@@ -229,10 +229,10 @@ Functions are called with no arguments.
 Useful for adding self-heal checks, logging, or validation.
 
 Example:
-  (add-hook 'gptel-auto-workflow-before-experiment-hook
-            #'gptel-auto-workflow--self-heal-byte-compiler)
-  (add-hook 'gptel-auto-workflow-before-experiment-hook
-            #'gptel-auto-workflow--run-bare-path-diagnostic)")
+  (add-hook \\='gptel-auto-workflow-before-experiment-hook
+            #\\='gptel-auto-workflow--self-heal-byte-compiler)
+  (add-hook \\='gptel-auto-workflow-before-experiment-hook
+            #\\='gptel-auto-workflow--run-bare-path-diagnostic)")
 
 (defvar gptel-auto-workflow-after-experiment-hook nil
   "Hook run after each target batch completes.
@@ -240,8 +240,8 @@ Functions are called with no arguments.
 Useful for monitoring agent, logging, and post-experiment analysis.
 
 Example:
-  (add-hook 'gptel-auto-workflow-after-experiment-hook
-            #'gptel-auto-workflow--monitoring-cycle)")
+  (add-hook \\='gptel-auto-workflow-after-experiment-hook
+            #\\='gptel-auto-workflow--monitoring-cycle)")
 
 (defun gptel-auto-workflow--run-bare-path-diagnostic ()
   "Run bare-path diagnostic and log results.

@@ -131,6 +131,11 @@ Returns sanitized TEXT."
   "Accumulator for Wu Xing diagnostic repair actions.
 Populated by VSM health check, consumed by cross-subsystem feedback.")
 
+(defvar probe-healthy nil
+  "Dynamic variable set by grader probe to indicate health status.
+Used by `gptel-auto-workflow--probe-classify-result' to communicate
+grader health back to the caller's lexical scope.")
+
 (defvar gptel-auto-workflow--evolution-last-kept-target)
 
 (defun gptel-auto-workflow--eight-keys-convergence-score ()

@@ -27,6 +27,7 @@
 (defvar gptel-auto-experiment--mementum-recall)
 (defvar gptel-auto-experiment--grader-insights)
 (defvar gptel-auto-experiment--executor-reasoning)
+(defvar gptel-auto-workflow-context-db-auto-capture)
 (defvar gptel-task-type-model-defaults)
 (defvar gptel-auto-workflow-executor-rate-limit-fallbacks)
 (defvar gptel-backend-models)
