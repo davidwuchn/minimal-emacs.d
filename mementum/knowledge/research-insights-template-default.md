@@ -3,7 +3,7 @@ title: Research Insights - template-default
 status: active
 category: knowledge
 tags: [research, auto-workflow, template-default]
-insight-quality: 0.5/10
+insight-quality: 0.3/10
 allium-issues: 0
 allium-severity: 0.00
 allium-status: coherent
@@ -11,39 +11,36 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 194 experiments (5% keep rate).*
+*Consolidated from 61 experiments (3% keep rate).*
 
-**Performance:** 10 kept / 1 discarded / 21 failed (EXTRACTED — from TSV)
+**Performance:** 2 kept / 0 discarded / 25 failed (EXTRACTED — from TSV)
 
 ## Successful Targets
 
-- `lisp/modules/gptel-tools-agent-prompt-build.el` (3 kept / 2 failed)
-- `lisp/modules/gptel-auto-workflow-projects.el` (4 kept)
-- `lisp/modules/gptel-benchmark-subagent.el` (2 kept / 3 failed)
-- `lisp/modules/gptel-ext-retry.el` (1 kept)
+- `lisp/modules/gptel-auto-workflow-projects.el` (2 kept / 3 failed)
 
 ### Structure (deterministic scan)
 
 ```elisp-structure
-defuns: gptel-auto-workflow--knowledge-cache-get, gptel-auto-workflow--knowledge-cache-set, gptel-auto-workflow--knowledge-cache-invalidate, gptel-auto-workflow--knowledge-cache-stats, gptel-auto-workflow--load-token-efficiency-data, gptel-auto-workflow--adapt-prompt-compression, gptel-auto-experiment--prompt-structure-score, gptel-auto-experiment--kibcm-axis, gptel-auto-experiment--forge-fixed-point, gptel-auto-experiment--compile-score, gptel-auto-experiment--decompile-score, gptel-auto-experiment--nucleus-compiler-prompt, gptel-auto-experiment--forge-lambda-fixed-point, gptel-auto-experiment--edn-richness-score, gptel-auto-experiment--count-edn-elements, gptel-auto-experiment--use-lambda-prompts-p, gptel-auto-experiment--lambda-compress-prompt, gptel-auto-experiment--resolve-prompt, gptel-auto-experiment--allium-compiler-prompt, gptel-auto-experiment--allium-distill
-defvars: gptel-ai-behaviors--current-hashtags), gptel-ai-behaviors--current-strategy), gptel-ai-behaviors--combo-hashtag), gptel-auto-experiment--suggested-workflow), gptel-auto-experiment--current-task-hint), gptel-auto-experiment--review-feedback), gptel-auto-workflow--current-strategy-name), gptel-auto-experiment--mementum-recall), gptel-auto-experiment--grader-insights), gptel-auto-experiment--executor-reasoning), gptel-task-type-model-defaults), gptel-auto-workflow-executor-rate-limit-fallbacks), gptel-backend-models), gptel-auto-workflow--skills), gptel-auto-experiment-large-target-byte-threshold), gptel-auto-workflow--last-prompt-sections), gptel-auto-workflow--current-research-context), gptel-auto-experiment-time-budget), gptel-auto-workflow-use-staging), gptel-auto-workflow--running)
-requires: cl-lib, seq, subr-x, gptel-ext-backend-registry
-provides: gptel-tools-agent-prompt-build
-declares: gptel-auto-workflow--plist-delete-all, gptel-agent-read-file, gptel-auto-workflow--valid-strategy-name-p, gptel-auto-workflow--best-strategy-for-axis, gptel-auto-workflow-load-research-findings, gptel-benchmark--detect-task-type, gptel-backend-name, gptel-request, my/gptel-get-model-metadata, gptel-auto-workflow--current-run-id, gptel-auto-workflow--ensure-results-file, gptel-auto-workflow--make-idempotent-callback, gptel-auto-workflow--non-empty-string-p, gptel-auto-workflow--plist-get, gptel-auto-workflow--results-file-path, gptel-auto-workflow--worktree-base-root, gptel-auto-experiment--eight-keys-scores, gptel-auto-workflow--project-root, gptel-auto-workflow--persist-status, my/gptel--sanitize-for-logging
-errors: Error, error, error, error, ERROR, error, error, error, error, Error, signal, error, signal, error, error, error, error, error, error, error
-handlers: nil, nil, err, ..., ...), nil, err, err, err, err, err, err, err, nil, nil
+defuns: gptel-auto-workflow--ensure-buffer-tables, gptel-auto-workflow--normalized-projects, gptel-auto-workflow--normalize-worktree-dir, gptel-auto-workflow--buffer-tool-snapshot, gptel-auto-workflow--routed-fsm-info, gptel-auto-workflow--get-worktree-buffer, gptel-auto-workflow--get-project-buffer, gptel-auto-workflow-add-project, gptel-auto-workflow-remove-project, gptel-auto-workflow-list-projects, gptel-auto-workflow-run-all-projects, gptel-auto-workflow--finish-queued-cron-job, gptel-auto-workflow--queue-cron-job, gptel-auto-workflow-queue-all-projects, gptel-auto-workflow--get-project-for-context, gptel-auto-workflow--advice-task-override, gptel-auto-workflow-enable-per-project-subagents, gptel-auto-workflow-disable-per-project-subagents, gptel-auto-workflow--advice-task-overlay-buffer, gptel-auto-workflow--enable-overlay-buffer-advice
+defvars: gptel-auto-workflow--async, gptel-auto-workflow--process, gptel-auto-workflow--worktree-state, gptel-auto-workflow-worktree-base, gptel-auto-workflow--current-target, gptel-auto-workflow-projects, gptel-auto-workflow--project-buffers, gptel-auto-workflow--current-project, gptel-auto-workflow--run-project-root, gptel-auto-workflow--cron-job-running, gptel-auto-workflow--stats, gptel-auto-workflow--running, gptel-auto-workflow--cron-job-timer, gptel-auto-workflow--defer-subagent-env-persistence, mementum-root, gptel-auto-workflow--project-root-override), gptel-auto-workflow--research-findings-cache, gptel-auto-workflow--worktree-buffers, gptel-auto-workflow--normalized-projects-cache, gptel-auto-workflow--normalized-projects-hash
+requires: cl-lib, gptel-tools-agent
+provides: gptel-auto-workflow-projects
+declares: gptel-auto-workflow--project-root, gptel-auto-workflow--get-worktree-dir, gptel-auto-workflow--mark-messages-start, gptel-auto-workflow--persist-status, gptel-auto-workflow-cron-safe, gptel-auto-workflow-run-async--guarded, gptel-auto-workflow-run-research, gptel-fsm-info, gptel-mementum-weekly-job, gptel-benchmark-instincts-weekly-job, gptel-auto-workflow--run-autotts-evolution, gptel-auto-workflow--reorder-fallbacks-by-ontology, gptel-auto-workflow--run-research-champion-league, gptel-auto-workflow--run-strategy-evolution
+errors: error, error, error, error, error, error, error, user-error, error, error, error, error, error, signal
+handlers: err, err, err, err, nil, nil, err, err, nil, nil, err, err, err, err, err, err, err
+advised: gptel-agent--task, gptel-agent--task-overlay
 ```
 
 ## Targets with Validation Failures
 
-These targets may need different research patterns or the research findings
-were misleading.
+These targets may need different research patterns or the research findings were misleading.
 
-- `lisp/modules/gptel-auto-workflow-strategic.el` (4 failed)
-- `lisp/modules/gptel-benchmark-subagent.el` (2 kept / 3 failed)
-- `lisp/modules/gptel-tools-agent-error.el` (1 failed)
-- `lisp/modules/gptel-tools-agent-prompt-build.el` (3 kept / 2 failed)
-- `lisp/modules/gptel-tools-agent-experiment-core.el` (1 discarded / 6 failed)
+- `lisp/modules/gptel-auto-workflow-projects.el` (2 kept / 3 failed)
+- `lisp/modules/gptel-benchmark-subagent.el` (3 failed)
+- `lisp/modules/gptel-tools-agent-error.el` (3 failed)
+- `lisp/modules/gptel-tools-agent-prompt-build.el` (3 failed)
+- `lisp/modules/gptel-auto-workflow-strategic.el` (3 failed)
 
 ## Meta-Learning Recommendations (INFERRED — from pattern analysis)
 
@@ -362,334 +359,24 @@ were misleading.
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.30). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Distillation: template-default Research
-
-## Scope
-- **163 experiments** across 45 targets (mostly `gptel-auto-workflow-*`, `gptel-tools-agent-*`, `gptel-ext-*`, `gptel-benchmark-*` modules, plus `staging-merge`, `staging-review`, `treesit-agent-tools-workspace`).
-- Strategy: **template-default** (default-hypothesis sweep across all target surfaces).
-
-## Surviving Hypotheses (3)
-
-All three share a common thread: **making implicit error/failure paths explicit via sentinels and guards**, evaluated along **Axis A (error handling)** and **Axis D (safety)**.
-
-| # | Target | Mechanism | Axes |
-|---|--------|-----------|------|
-| 1 | `gptel-benchmark-call-subagent-sync` | Add **timeout sentinel** distinct from `nil` so callers can disambiguate timeout from success. | A, D |
-| 2 | (target obscured in source) | **Nil-guard `where`** + wrap overlay creation in `condition-case` so overlay faults don't break task execution. | A, D |
-| 3 | `gptel--fsm-next` (called by `my/gptel-auto-retry`) | Wrap in `condition-case`, default to `ERRS` on invalid FSM state so retry machinery survives instead of aborting. | A, D |
-
-## Rejected Hypotheses
-- Effectively **none survived as structured content** — the rejected set is filled with `unknown` / placeholder entries. Treat the kept list as the empirical yield of the run; the discard log carries no signal.
-
-## Synthesis
-
-The template-default sweep converged on a **narrow but coherent cluster**: every kept hypothesis is a **defensive boundary** at a known fragility point — a synchronous subagent call that can hang, an overlay API that can throw, and an FSM transition that can be queried in an invalid state. No hypothesis proposed *new capability*; all proposed **making existing failure modes recoverable or classifiable**.
-
-**Implication for the workstream:** the empirical bottleneck is not feature coverage but **error-path clarity at module seams**. Future experiments should pivot away from template-default toward targeted probes around (a) timeout/sentinel conventions for sync subagent calls, (b) overlay/UI-side fault isolation, and (c) FSM precondition checks in retry orchestration.
-
-## Caveats
-- One kept hypothesis (#2) lost its target identifier in transcription; verify before acting on it.
-- The discard log being structurally empty is itself a signal: either rejection criteria were over-strict, or rejected entries were not promoted into the report.
+(tool-result (#s(gptel-tool #[(&rest call-args) ((condition-case err (let* ((actual-args (if async-p (cdr call-args) call-args)) (normalized-args (copy-sequence actual-args)) (i 0) (specs (if (functionp args) (funcall args) args))) (if (and specs (proper-list-p specs)) (progn (let ((tail specs)) (while tail (let ((spec (car tail))) (let* ((raw-val (nth i normalized-args)) (val (if (null raw-val) raw-val (nucleus-tools--normalize-arg-value raw-val spec))) (type (plist-get spec :type)) (arg-name (plist-get spec :name)) (optional (plist-get spec :optional))) (if (equal raw-val val) nil (let* ((c (nthcdr i normalized-args))) (setcar c val))) (cond ((and (null val) (not optional) (not (or (equal type boolean) (eq type 'boolean)))) (nucleus-tools--validation-error tool-name :required arg-name)) ((not (null val)) (cond ((member type '(string string)) (let nil (nucleus-tools--validate-string val arg-name spec))) ((member type '(integer integer)) (let nil (nucleus-tools--validate-number val arg-name spec) (if (integerp val) nil (nucleus-tools--validation-error arg-name :type an integer val)))) ((member type '(number number)) (let nil (nucleus-tools--validate-number val arg-name spec))) ((member type '(boolean boolean)) (let nil (if (memq val '(t nil :json-false)) nil (nucleus-tools--validation-error arg-name :type a boolean val)))) ((member type '(array array)) (let nil (nucleus-tools--validate-array val arg-name spec))) ((member type '(object object)) (let nil (if (or (hash-table-p val) (listp val)) nil (nucleus-tools--validation-error arg-name :type an object val)))) (t 'nil)))) (setq i (1+ i))) (setq tail (cdr tail))))))) (if async-p (apply func (car call-args) normalized-args) (apply func normalized-args))) (user-error (if async-p (let ((callback (car call-args))) (if (functionp callback) (funcall callback (format Error: %s (error-message-string err))) (signal (car err) (cdr err)))) (signal (car err) (cdr err)))))) ((async-p) (args (:name file_path :type string :description Path to the file to read) (:name start_line :type integer :optional t :description Start line (1-indexed)) (:name end_line :type integer :optional t :description End line (1-indexed)) (:name hashline :type boolean :optional t :description When true, prefix each line with hashline tag (e.g. '42:a3|content') for stable editing)) (func . #[(&rest args) ((let* ((err (and t (my/gptel-tool-acl-check name args)))) (if err (error %s err) (apply orig-func args)))) ((orig-func . my/gptel--read-file-safe) (name . Read))]) (tool-name . Read))] Read Read file contents by line range. When hashline=true, returns content-addressed line tags for reliable editing. PDF files extracted as text. Binary files rejected. ((:name file_path :type string :description Path to the file to read) (:name start_line :type integer :optional t :description Start line (1-indexed)) (:name end_line :type integer :optional t :description End line (1-indexed)) (:name hashline :type boolean :optional t :description When true, prefix each line with hashline tag (e.g. '42:a3|content') for stable editing)) nil gptel-agent #[(&rest args) ((or (my/gptel-tool-acl-needs-confirm name args) (and (functionp orig-confirm) (apply orig-confirm args)) (and (not (functionp orig-confirm)) orig-confirm))) ((orig-confirm) (name . Read))] t) (:file_path lisp/modules/gptel-tools-agent-error.el :start_line 1 :end_line 50) error Error: File /home/davidwu/lisp/modules/gptel-tools-agent-error.el is not readable) (#s(gptel-tool #[(&rest call-args) ((condition-case err (let* ((actual-args (if async-p (cdr call-args) call-args)) (normalized-args (copy-sequence actual-args)) (i 0) (specs (if (functionp args) (funcall args) args))) (if (and specs (proper-list-p specs)) (progn (let ((tail specs)) (while tail (let ((spec (car tail))) (let* ((raw-val (nth i normalized-args)) (val (if (null raw-val) raw-val (nucleus-tools--normalize-arg-value raw-val spec))) (type (plist-get spec :type)) (arg-name (plist-get spec :
+-- ... truncated ...
 ```
 
 ### Check Issues
 
-# Review of Distillation Document
+## Summary
 
-Overall this is well-structured, honest about its limitations, and the synthesis is strong. A few things worth tightening:
+The two `Read` errors were caused by **incorrect file paths** — the `.emacs.d` component was missing.
 
-## Factual / concrete concerns
+| Incorrect path (errored) | Correct path (works) |
+|---|---|
+| `/home/davidwu/lisp/modules/gptel-tools-agent-error.el` | `/home/davidwu/.emacs.d/lisp/modules/gptel-tools-agent-error.el` |
+| `/home/davidwu/lisp/modules/gptel-auto-workflow-strategic.el` | `/home/davidwu/.emacs.d/lisp/modules/gptel-auto-workflow-strategic.el` |
 
-**1. "`where`" in hypothesis #2.**
-In Emacs Lisp, `where` isn't a standard function/keyword. Most likely transcription of `when` (the common guard form), or possibly a `cl-find`/predicate call where someone wrote a bareword `where` informally. Worth verifying against the source before acting on it, because the mechanism description hinges on this token.
-
-**2. 1.8% yield isn't called out.**
-163 experiments → 3 kept. That's a 98.2% rejection rate. The synthesis calls the result "narrow but coherent" without ever saying it was *also* an unusually thin one. The caveat hints at over-strict rejection criteria, but the reader has to do that arithmetic. A one-liner like "yield was ~1.8%; the cluster is coherent but rests on three observations" would calibrate expectations correctly.
-
-**3. Axis A and Axis D are referenced but never defined.**
-The reader is told every kept hypothesis scored on these two axes, with no mention of B or C. Either:
-- there are only A and D in the rubric (then say so), or
-- the other axes exist and were systematically empty (then say that).
-
-As written, the gap is distracting and undermines the "coherent cluster" framing — coherence along *two* of *N* axes is a weaker claim than the document implies.
-
-## Structural / framing
-
-**4. "No hypothesis proposed new capability" is sli
-
-... (truncated)
+Both files **do exist** and are readable at the correct paths under `~/.emacs.d/lisp/modules/`. The `lisp/` directory lives inside `.emacs.d/`, not directly under `$HOME`.

@@ -584,6 +584,31 @@ log "Cleared stale findings files"
 # Capture start time AFTER clearing stale files so mtime check is reliable
 PIPELINE_START_TIME="$(date +%s)"
 
+# ─── Step 0.4: Self-audit (META — finds the gaps humans find) ───
+# The system audits itself for: backend cold-start, strategy cold-start,
+# staging-merge bottleneck, and module byte-compile health.
+# This is the YC principle: 'self-evolve must include META, not just code.'
+log "=== Step 0.4: Self-audit ==="
+SELF_AUDIT_REPORT=$(emacs --batch -L "$DIR/lisp/modules" \
+    -L "$DIR/packages/gptel" -L "$DIR/packages/compat" \
+    -l gptel --eval \
+    '(progn
+       (require (quote gptel-auto-workflow-self-audit))
+       (setq gptel-auto-workflow-self-audit-enabled t)
+       (setq gptel-auto-workflow--workspace-path "'"$DIR"'")
+       (let ((report (gptel-auto-workflow-self-audit-execute)))
+         (when report (princ report))))' 2>&1)
+if [ -n "$SELF_AUDIT_REPORT" ]; then
+    log "$SELF_AUDIT_REPORT"
+    # Check if any modules are broken (byte-compile check)
+    BROKEN_COUNT=$(echo "$SELF_AUDIT_REPORT" | grep -c 'modules broken' 2>/dev/null || echo 0)
+    if [ "$BROKEN_COUNT" -gt 0 ]; then
+        log "  ⚠ BROKEN MODULES DETECTED — self-audit caught what the monitor missed"
+    fi
+else
+    log "  Self-audit: no issues found (or module not loaded)"
+fi
+
 # ─── Step 0.5: Self-heal preflight (cheap, runs before any daemon work) ───
 # Read last self-healing state from disk and decide whether to escalate.
 # Catches PENDING remediations that verify-recovery should have closed.
