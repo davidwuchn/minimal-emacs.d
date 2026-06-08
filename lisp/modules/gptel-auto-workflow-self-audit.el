@@ -465,11 +465,86 @@ Returns plist :broken (list of files with errors), :total, :healthy."
 ;;; Pipeline entry
 
 (defun gptel-auto-workflow-self-audit-execute ()
-  "Run audit, write memory if issues found, return formatted report."
+  "Run audit, write memory if issues found, return formatted report.
+Also writes structured result to var/tmp/self-audit-result.el for
+the pipeline self-heal step to consume."
   (let ((result (gptel-auto-workflow-self-audit-run)))
     (when result
-      (gptel-auto-workflow-self-audit--write-memory result))
+      (gptel-auto-workflow-self-audit--write-memory result)
+      (gptel-auto-workflow-self-audit--write-structured-result result))
     (gptel-auto-workflow-self-audit--format-report result)))
+
+(defun gptel-auto-workflow-self-audit--build-structured-result-content (result)
+  "Build content string for var/tmp/self-audit-result.el from RESULT.
+Uses concat to avoid deeply nested insert/format calls in the write function."
+  (let* ((bcc (plist-get result :module-health))
+         (bca (plist-get result :backend-cold-start))
+         (sca (plist-get result :strategy-cold-start))
+         (sma (plist-get result :staging-merge-bottleneck))
+         (cold (plist-get bca :cold))
+         (unev (plist-get sca :unevaluated))
+         (bottleneck (plist-get sma :bottleneck-p))
+         (broken (plist-get bcc :broken))
+         (issues (plist-get result :issues)))
+    (concat
+     ";; self-audit-result.el — structured audit findings\n"
+     ";; Written by gptel-auto-workflow-self-audit-execute\n"
+     ";; Consumed by run-pipeline.sh Step 0.5 for auto-remediation\n"
+     ";;\n"
+     (format "(issues-count . %d)\n" issues)
+     (format "(cold-backends . %S)\n" cold)
+     (format "(unevaluated-strategies . %d)\n" unev)
+     (format "(staging-merge-bottleneck . %S)\n" bottleneck)
+     (when broken
+       (format "(broken-modules . %S)\n" (mapcar #'car broken)))
+     ";; Remediation actions for self-heal:\n"
+     (when (> (length cold) 0)
+       "(remediation . force-cold-backends)\n")
+     (when (> unev 0)
+       "(remediation . increase-exploration-rate)\n")
+     (when bottleneck
+       "(remediation . staging-merge-autoresolve)\n")
+     (when (> (length broken) 0)
+       "(remediation . flag-broken-modules)\n")
+     (format "(audit-timestamp . %S)\n"
+             (plist-get result :timestamp)))))
+
+(defun gptel-auto-workflow-self-audit--write-structured-result (result)
+  "Write RESULT as a structured file for pipeline self-heal to consume.
+File: var/tmp/self-audit-result.el — contains an alist the bash script
+can grep for specific remediation actions."
+  (when result
+    (let* ((root (gptel-auto-workflow-self-audit--root))
+           (result-file (expand-file-name
+                         "var/tmp/self-audit-result.el" root))
+           (content (gptel-auto-workflow-self-audit--build-structured-result-content
+                     result)))
+      (condition-case err
+          (progn
+            (make-directory (file-name-directory result-file) t)
+            (with-temp-file result-file
+              (insert content))
+            (message "[self-audit] Wrote structured result to %s"
+                     result-file))
+        (error
+         (message "[self-audit] Failed to write structured result: %s"
+                  (error-message-string err)))))))
+
+(defun gptel-auto-workflow-self-audit-verify-recovery (before-result)
+  "Verify whether issues found in BEFORE-RESULT improved after remediation.
+Returns plist :before-issues, :after-issues, :improved-p, :delta."
+  (let* ((after-result (gptel-auto-workflow-self-audit-run))
+         (before-issues (or (plist-get before-result :issues) 0))
+         (after-issues (or (plist-get after-result :issues) 0))
+         (delta (- before-issues after-issues))
+         (improved (> delta 0)))
+    (list :before-issues before-issues
+          :after-issues after-issues
+          :delta delta
+          :improved-p improved
+          :still-broken (when (> after-issues 0)
+                         (format "%d issues remain after remediation"
+                                 after-issues)))))
 
 (provide 'gptel-auto-workflow-self-audit)
 ;;; gptel-auto-workflow-self-audit.el ends here

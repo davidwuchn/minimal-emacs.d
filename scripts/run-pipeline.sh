@@ -584,11 +584,15 @@ log "Cleared stale findings files"
 # Capture start time AFTER clearing stale files so mtime check is reliable
 PIPELINE_START_TIME="$(date +%s)"
 
-# ─── Step 0.4: Self-audit (META — finds the gaps humans find) ───
-# The system audits itself for: backend cold-start, strategy cold-start,
-# staging-merge bottleneck, and module byte-compile health.
-# This is the YC principle: 'self-evolve must include META, not just code.'
-log "=== Step 0.4: Self-audit ==="
+# ─── Step 0.4: Self-audit → auto-fix → keep-going (META loop) ───
+# The full YC loop: DETECT problems, AUTO-FIX them, KEEP GOING.
+# Previous system: detected problems but took no action (the auto-fix was broken).
+# Now: self-audit writes structured result → self-heal reads it and takes
+# specific remediation actions → pipeline continues with fixes applied.
+log "=== Step 0.4: Self-audit (DETECT) ==="
+SELF_AUDIT_RESULT_FILE="$DIR/var/tmp/self-audit-result.el"
+# Remove stale result from previous run
+rm -f "$SELF_AUDIT_RESULT_FILE"
 SELF_AUDIT_REPORT=$(emacs --batch -L "$DIR/lisp/modules" \
     -L "$DIR/packages/gptel" -L "$DIR/packages/compat" \
     -l gptel --eval \
@@ -598,36 +602,92 @@ SELF_AUDIT_REPORT=$(emacs --batch -L "$DIR/lisp/modules" \
        (setq gptel-auto-workflow--workspace-path "'"$DIR"'")
        (let ((report (gptel-auto-workflow-self-audit-execute)))
          (when report (princ report))))' 2>&1)
+AUDIT_ISSUES=0
+COLD_BACKENDS=""
+UNEVALUATED_STRATS=0
+BOTTLENECK=false
+BROKEN_MODULES=0
 if [ -n "$SELF_AUDIT_REPORT" ]; then
     log "$SELF_AUDIT_REPORT"
-    # Check if any modules are broken (byte-compile check)
-    BROKEN_COUNT=$(echo "$SELF_AUDIT_REPORT" | grep -c 'modules broken' 2>/dev/null || echo 0)
-    if [ "$BROKEN_COUNT" -gt 0 ]; then
-        log "  ⚠ BROKEN MODULES DETECTED — self-audit caught what the monitor missed"
+    # Read structured result file for specific remediation actions
+    if [ -f "$SELF_AUDIT_RESULT_FILE" ]; then
+        AUDIT_ISSUES=$(grep 'issues-count' "$SELF_AUDIT_RESULT_FILE" 2>/dev/null | perl -pi -e 's/.*\. (\d+)/$1/' || echo 0)
+        COLD_BACKENDS=$(grep 'cold-backends' "$SELF_AUDIT_RESULT_FILE" 2>/dev/null | perl -pi -e 's/\(cold-backends \(([^)]+)\)\)/$1/' | perl -pi -e 's/"//g' || echo "")
+        UNEVALUATED_STRATS=$(grep 'unevaluated-strategies' "$SELF_AUDIT_RESULT_FILE" 2>/dev/null | perl -pi -e 's/.*\. (\d+)/$1/' || echo 0)
+        BOTTLENECK=$(grep 'staging-merge-bottleneck' "$SELF_AUDIT_RESULT_FILE" 2>/dev/null | grep -c 't' || echo 0)
+        BROKEN_MODULES=$(grep 'broken-modules' "$SELF_AUDIT_RESULT_FILE" 2>/dev/null | wc -l || echo 0)
+        log "  Structured audit: $AUDIT_ISSUES issues, $BROKEN_MODULES broken modules, bottleneck=$BOTTLENECK"
     fi
 else
     log "  Self-audit: no issues found (or module not loaded)"
 fi
 
-# ─── Step 0.5: Self-heal preflight (cheap, runs before any daemon work) ───
-# Read last self-healing state from disk and decide whether to escalate.
-# Catches PENDING remediations that verify-recovery should have closed.
-log "=== Step 0.5: Self-heal preflight ==="
+# ─── Step 0.5: Auto-fix (ACT on what Step 0.4 detected) ───
+# The pipeline now takes SPECIFIC remediation actions based on what
+# the self-audit found. This closes the DETECT→ACT gap that was the
+# reason the monitor kept going without fixing anything.
+log "=== Step 0.5: Auto-fix (ACT on self-audit findings) ==="
+REMEDIAL_ACTIONS=0
+
+# Auto-fix 1: Force cold backends into rotation
+# If backends have 0 experiments in 7d, clear their rate-limit so
+# the onto-router will try them on the next evolution cycle.
+if [ -n "$COLD_BACKENDS" ] && [ "$COLD_BACKENDS" != "nil" ]; then
+    log "  Auto-fix: forcing cold backends into rotation ($COLD_BACKENDS)"
+    # Clear ALL rate-limited backends so cold ones get a chance
+    if [ -f "$DIR/var/tmp/rate-limited-backends.txt" ]; then
+        log "  Clearing rate-limited-backend cache (was blocking cold backends)"
+        rm -f "$DIR/var/tmp/rate-limited-backends.txt"
+    fi
+    # Write the cold backends to a force-try file that the daemon reads
+    echo "$COLD_BACKENDS" > "$DIR/var/tmp/force-try-backends.txt"
+    REMEDIAL_ACTIONS=$((REMEDIAL_ACTIONS + 1))
+fi
+
+# Auto-fix 2: Increase exploration rate for unevaluated strategies
+# If >50% of strategies are unevaluated, the system is in cold-start.
+# Write a signal file that increases exploration from default to 70%.
+if [ "$UNEVALUATED_STRATS" -gt 2 ]; then
+    log "  Auto-fix: increasing exploration rate ($UNEVALUATED_STRATS strategies unevaluated)"
+    echo "70" > "$DIR/var/tmp/exploration-rateOverride.txt"
+    REMEDIAL_ACTIONS=$((REMEDIAL_ACTIONS + 1))
+fi
+
+# Auto-fix 3: Staging-merge bottleneck — already handled by auto-resolver
+# The .md auto-resolver was deployed in commit 95396bc1. For .el conflicts,
+# we can't auto-fix but we can flag for human review.
+if [ "$BOTTLENECK" -gt 0 ]; then
+    log "  Auto-fix: staging-merge bottleneck flagged (.md auto-resolved, .el needs review)"
+    REMEDIAL_ACTIONS=$((REMEDIAL_ACTIONS + 1))
+fi
+
+# Auto-fix 4: Broken modules — flag but don't attempt code fix
+# Broken modules can't compile; the system can detect but not auto-fix
+# source code errors. Log the warning and continue.
+if [ "$BROKEN_MODULES" -gt 0 ]; then
+    log "  ⚠ BROKEN MODULES DETECTED — cannot auto-fix source code, flagged for human review"
+    REMEDIAL_ACTIONS=$((REMEDIAL_ACTIONS + 1))
+fi
+
+# Auto-fix 5: Pipeline-health PENDING remediations (legacy self-heal)
 HEALTH_FILE="$DIR/mementum/knowledge/pipeline-health.md"
 if [ -f "$HEALTH_FILE" ]; then
     PENDING_COUNT=$(grep -c '| PENDING' "$HEALTH_FILE" 2>/dev/null || echo 0)
     CONSECUTIVE=$(grep -E '^Consecutive failures:' "$HEALTH_FILE" 2>/dev/null | awk '{print $NF}' || echo 0)
-    log "  pipeline-health: $PENDING_COUNT pending remediations, $CONSECUTIVE consecutive failures"
+    log "  pipeline-health: $PENDING_COUNT pending, $CONSECUTIVE consecutive failures"
     if [ "$PENDING_COUNT" -ge 5 ] || [ "${CONSECUTIVE:-0}" -ge 3 ]; then
-        log "  ⚠ Self-heal threshold reached: forcing backend rotation"
-        # Clear backend rate-limit cache so onto-router considers alternatives
+        log "  Auto-fix: clearing stale rate-limited-backend cache (threshold reached)"
         if [ -f "$DIR/var/tmp/rate-limited-backends.txt" ]; then
-            log "  Clearing stale rate-limited-backend cache"
             rm -f "$DIR/var/tmp/rate-limited-backends.txt"
         fi
+        REMEDIAL_ACTIONS=$((REMEDIAL_ACTIONS + 1))
     fi
+fi
+
+if [ "$REMEDIAL_ACTIONS" -gt 0 ]; then
+    log "  Auto-fix: $REMEDIAL_ACTIONS remedial actions applied — KEEPING GOING"
 else
-    log "  pipeline-health: not yet initialized (first run)"
+    log "  Auto-fix: no remedial actions needed this cycle"
 fi
 
 # ─── Step 0.6: Refresh approval-queue priorities ───
@@ -1275,6 +1335,42 @@ if [ "$old_count" -gt 0 ]; then
     log "Cleaned $old_count old optimize branches (merged before 7 days)"
 else
     log "No old optimize branches to clean"
+fi
+
+# ─── Step 6.7: Verify recovery (did auto-fixes from Step 0.4-0.5 work?) ───
+# This closes the full YC loop: DETECT → AUTO-FIX → VERIFY → KEEP GOING.
+# Re-run self-audit and compare before/after. If issues improved, the
+# system is self-healing. If they didn't, escalate for human review.
+log "=== Step 6.7: Verify recovery ==="
+if [ -f "$SELF_AUDIT_RESULT_FILE" ]; then
+    BEFORE_ISSUES="$AUDIT_ISSUES"
+    VERIFY_REPORT=$(emacs --batch -L "$DIR/lisp/modules" \
+        -L "$DIR/packages/gptel" -L "$DIR/packages/compat" \
+        -l gptel --eval \
+        '(progn
+           (require (quote gptel-auto-workflow-self-audit))
+           (setq gptel-auto-workflow-self-audit-enabled t)
+           (setq gptel-auto-workflow--workspace-path "'"$DIR"'")
+           (let ((result (gptel-auto-workflow-self-audit-run)))
+             (when result
+               (princ (format "after-issues: %d\n" (plist-get result :issues))))))' 2>&1)
+    AFTER_ISSUES=$(echo "$VERIFY_REPORT" | grep 'after-issues' | perl -pi -e 's/.*: (\d+)/$1/' || echo "$BEFORE_ISSUES")
+    DELTA=$((BEFORE_ISSUES - AFTER_ISSUES))
+    if [ "$DELTA" -gt 0 ]; then
+        log "  ✓ Recovery verified: $BEFORE_ISSUES → $AFTER_ISSUES issues (improved by $DELTA)"
+        log "  Self-evolve loop WORKING: DETECT → AUTO-FIX → VERIFY → KEEP GOING"
+    elif [ "$DELTA" -eq 0 ]; then
+        log "  ‖ No improvement: $BEFORE_ISSUES → $AFTER_ISSUES issues (delta=0)"
+        log "  Self-audit detected but auto-fix did not resolve — same problems persist"
+        if [ "$BEFORE_ISSUES" -ge 3 ]; then
+            log "  ⚠ Escalation: ≥3 unresolved issues — flagging for human review in digest"
+        fi
+    else
+        log "  ⚠ Regression: $BEFORE_ISSUES → $AFTER_ISSUES issues (worse by $((-DELTA)))"
+        log "  Self-evolve loop detected regression — auto-fixes may have side effects"
+    fi
+else
+    log "  No self-audit result from Step 0.4 — skipping verify-recovery"
 fi
 
 # ─── Step 7: Commit and push outcomes to main ───
