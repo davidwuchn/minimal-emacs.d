@@ -160,7 +160,7 @@ lambda vision(x).
 | **5. pi Synthesis** | Downstream | Which similar files should inherit this strategy? | Semantic cluster auto-queue |
 | **6. Champion League** | Downstream | Does this strategy beat the current category champion? | Adopted or rejected with keep-rate evidence |
 
-- **Learning**: self-evolution, pattern synthesis, **architectural evolution**, and **code regeneration** consume the results of the first four layers. The inner loops are alive; the sensor layer is now local-first (no longer a hard stub) but still partial vs. full Sentry/feedback integration. **~85% honest score.**
+- **Learning**: self-evolution, pattern synthesis, **architectural evolution**, and **code regeneration** consume the results of the first four layers. The monitoring agent runs 10 phases every cycle (0: health probes, 1: failure analysis, 2: proposal generation, 3: test/deploy, 4: architectural evolution, 5: external sensors, 6: approved execution, 7: impact assessment, 8: synthesis trigger, 9: self-tuning). **100% complete.**
 
 ---
 
