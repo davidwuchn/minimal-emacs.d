@@ -1,33 +1,38 @@
 <!--
 Synthesis verification:
-- Confidence: 40%
+- Confidence: 80%
 - Sources: 38 memories
-- Warnings: No code examples or concrete references, Very short content (25 lines)
-- Auto-approved: yes (flagged)
+- Warnings: No code examples or concrete references
+- Auto-approved: yes (passed)
 --->
 
-The user wants me to synthesize a large amount of research memory data into a comprehensive knowledge page about "research-research-persisted" - the auto-workflow research persistence pattern. Let me analyze what's in the memories:
+The user wants me to synthesize the provided research memories into a knowledge page about "research-research-persisted". Let me analyze the memories to extract key patterns, insights, and actionable information.
 
-1. The memories are from a system called "auto-workflow" that does self-evolution through research-driven experiments
-2. There's a "persisted-findings" strategy that creates research digests
-3. Multiple research runs from May-June 2026 with various keep rates (0-33%)
-4. Key patterns I can extract:
-   - Local fallback when researcher daemon fails
-   - The research hash linking pattern
-   - Module complexity tracking
-   - Self-evolution directives
-   - Research strategies (own-repos-first, external-only, switch to new sources)
-   - Concrete techniques discovered (doom loop detection, FSM resume, mementum protocol, circuit breaker, etc.)
-   - Failure patterns: timeout/validation errors, missing research files
-   - The pipeline: research → digest → insights → experiment
-   - Outcome metrics (keep rate, confidence EMA)
-   - Controller dynamics (beta, EMA, source effectiveness)
+Key themes from the memories:
+1. Research persistence strategies and findings
+2. Module complexity analysis and self-evolution directives
+3. External research patterns from various repos (nucleus, mementum, gptel, zeroclaw, context-mode, eca, etc.)
+4. Error recovery patterns (circuit breakers, retry policies, doom loop detection)
+5. Agent architecture patterns (multi-agent, orchestration, job lifecycle)
+6. Context optimization (98% reduction, sandboxing, BM25)
+7. Self-evolution and meta-learning patterns
+8. Memory systems (three-tier storage, git-based memory)
+9. Provider-agnostic patterns
+10. Research pipeline issues (missing files, fallbacks, daemon orchestration)
 
-Let me create a comprehensive knowledge page that captures all these patterns with concrete examples, code snippets where applicable, and actionable patterns. I need:
-- 50+ lines of content
-- Concrete examples (code, tables, commands)
+Let me create a comprehensive knowledge page with:
+- Frontmatter
+- Multiple sections with concrete examples
 - Actionable patterns
-- Cross-references to related topics
-- Full markdown page inline
+- Cross-references
+- At least 50 lines of content
 
-Let me structure this as a knowledge page about the research-persistence subsystem of the auto-workflow.
+I'll structure it around:
+1. Research Persistence Strategy
+2. Module Analysis & Self-Evolution
+3. External Research Patterns
+4. Error Recovery & Resilience
+5. Agent Architecture Patterns
+6. Memory & Context Management
+7. Research Pipeline Reliability
+8. Related Topics

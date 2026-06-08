@@ -1,14 +1,14 @@
 ---
-valid-from: 2026-06-07T20:22
+valid-from: 2026-06-08T08:59
 ---
 
-# Mistake: 2026-06-07 20:22
+# Mistake: 2026-06-08 08:59
 
 **Failure type:** strategy
 **Target:** lisp/modules/gptel-auto-workflow-production-metrics.el
 **Occurrences:** 10
 **Example reasons:** none
-**Trend:** 2026-06-05T191239Z-12df -> 2026-06-06T230740Z-7760
+**Trend:** 2026-06-04T233316Z-f984 -> 2026-06-07T180953Z-ee3d
 
 This pattern was detected by the monitoring agent as a systemic failure requiring investigation.
 
