@@ -1,0 +1,1 @@
+All `condition-case` error handlers that log `(error-message-string err)` must wrap it with `my/gptel--sanitize-for-logging` (max-len 160). This is the consistent pattern across the codebase (base.el line 289, benchmark.el lines 1051-1052). Raw error strings in `message` calls risk logging unbounded/sensitive content. The declare-function is in `gptel-tools-agent-git`.

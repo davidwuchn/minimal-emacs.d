@@ -1,25 +1,17 @@
 <!--
 Synthesis verification:
-- Confidence: 40%
+- Confidence: 12%
 - Sources: 7 memories
-- Warnings: No code examples or concrete references, Very short content (17 lines)
+- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-prompt', Very short content (9 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize memories about "mistake-failure-pattern-prompt" into a knowledge page. Let me analyze the memories:
+The user wants me to synthesize memory entries about prompt-type failures across several Emacs Lisp modules into a knowledge page. Let me analyze the memories:
 
-1. Multiple prompt failures detected across various gptel-related modules
-2. Failure type: "prompt" - suggesting issues with prompt construction/usage
-3. Targets are all in `lisp/modules/` directory, related to gptel tools, auto-workflow, benchmark, etc.
-4. Occurrences range from 3-5 per file
-5. Trends show these are recurring issues over time (May 30 - June 7, 2026)
-6. All detected by monitoring agent as "systemic failure requiring investigation"
+1. All failures are type "prompt"
+2. Targets are various gptel modules
+3. Occurrences range from 3-5
+4. Example reasons are all "none"
+5. Trends show timestamps spanning late May to early June 2026
 
-I need to create a comprehensive knowledge page with:
-- Minimum 50 lines of actual content
-- Concrete examples (code, tables, commands)
-- Actionable patterns
-- Cross-references to related topics
-- Full markdown format with frontmatter
-
-Let me construct a detailed knowledge page about prompt failure patterns based on these memories.
+Let me create a comprehensive knowledge page that meets all the requirements: 50+ lines, concrete examples, actionable patterns, cross-references.
