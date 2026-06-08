@@ -171,7 +171,7 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
                 result)))))
       (when (buffer-live-p output-buffer)
         (kill-buffer output-buffer))
-      (when (file-exists-p isolated-status-file)
+      (when (and isolated-status-file (file-exists-p isolated-status-file))
         (delete-file isolated-status-file)))))
 
 (defcustom gptel-auto-experiment-require-tests t
