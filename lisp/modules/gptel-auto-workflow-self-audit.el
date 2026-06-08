@@ -260,10 +260,11 @@ FILTER-FN is called on each value; only truthy results are kept."
 
 (defun gptel-auto-workflow-self-audit--run-knowledge-gap-check ()
   "Check the unified graph for knowledge gaps.
-Detects: isolated nodes (no edges), low-confidence communities,
-and targets with no similarity edges. Returns plist :gap-count, :isolated,
-:low-confidence."
-  (let ((gap-count 0) (isolated '()) (low-conf-communities '()))
+Detects: isolated nodes, low-confidence communities, self-referencing edges,
+ontology-rule violations, and graph-ontology mismatches.
+Returns plist :gap-count, :isolated, :low-confidence, :self-refs, :mismatches."
+  (let ((gap-count 0) (isolated '()) (low-conf-communities '())
+        (self-refs 0) (mismatches '()))
     (condition-case err
         (when (fboundp 'gptel-auto-workflow--unified-graph-ensure)
           (let ((graph (gptel-auto-workflow--unified-graph-ensure)))
@@ -272,11 +273,41 @@ and targets with no similarity edges. Returns plist :gap-count, :isolated,
               (maphash (lambda (key edges)
                          (when (null edges)
                            (let ((id (cdr key)))
-                             (unless (string-match-p "^\." id)  ; skip method stubs
+                             (unless (string-match-p "^\." id)
                                (push id isolated)))))
                        graph)
               (setq gap-count (+ gap-count (length isolated)))
-              ;; Find low-confidence edges in communities
+              ;; Ontology-edge validation: self-referencing edges
+              (maphash (lambda (from-key edges)
+                         (dolist (edge (or edges ()))
+                           (when (equal from-key (cadr edge))
+                             (setq self-refs (1+ self-refs)))))
+                       graph)
+              (when (> self-refs 0)
+                (setq gap-count (+ gap-count 1)))
+              ;; Graph-ontology mismatch: same-category targets with no similarity edge
+              (when (fboundp 'gptel-auto-workflow--categorize-target)
+                (let ((files (make-hash-table :test 'equal)))
+                  (maphash (lambda (key _) (when (eq (car key) :file) (puthash (cdr key) t files))) graph)
+                  (let ((file-list '()))
+                    (maphash (lambda (k _) (push k file-list)) files)
+                    (dolist (a file-list)
+                      (dolist (b file-list)
+                        (unless (equal a b)
+                          (let ((cat-a (ignore-errors (gptel-auto-workflow--categorize-target a)))
+                                (cat-b (ignore-errors (gptel-auto-workflow--categorize-target b))))
+                            (when (and cat-a cat-b (equal cat-a cat-b))
+                              ;; Same category — check for similarity edge
+                              (let ((has-sim nil))
+                                (dolist (e (gethash (cons :file a) graph))
+                                  (when (and (equal (cadr e) (cons :file b))
+                                             (eq (car e) :similar))
+                                    (setq has-sim t)))
+                                (unless has-sim
+                                  (push (cons a b) mismatches)))))))))
+                  (when mismatches
+                    (setq gap-count (+ gap-count (min 3 (length mismatches)))))))
+              ;; Low-confidence communities (existing)
               (when (fboundp 'gptel-auto-workflow--unified-graph-communities)
                 (let* ((communities (gptel-auto-workflow--unified-graph-communities))
                        (comm-confidence (make-hash-table :test 'equal)))
@@ -286,21 +317,21 @@ and targets with no similarity edges. Returns plist :gap-count, :isolated,
                                  (dolist (edge (or edges '()))
                                    (let ((label (nth 3 edge)))
                                      (when (eq label 'AMBIGUOUS)
-                                       (puthash comm
-                                                (1+ (gethash comm comm-confidence 0))
-                                                comm-confidence))))))
+                                       (puthash comm (1+ (gethash comm comm-confidence 0)) comm-confidence))))))
                              graph)
                     (maphash (lambda (comm count)
-                               (when (> count 3)  ; community with >3 AMBIGUOUS edges
+                               (when (> count 3)
                                  (push (cons comm count) low-conf-communities)))
                              comm-confidence)
                     (when low-conf-communities
                       (setq gap-count (+ gap-count 1)))))))))
       (error (message "[self-audit] Knowledge gap check failed: %s"
                       (error-message-string err))))
-    (list :gap-count (min gap-count 10)  ; cap at 10 to avoid dominating issue count
+    (list :gap-count (min gap-count 10)
           :isolated (seq-take isolated 5)
-          :low-confidence-communities (seq-take low-conf-communities 3))))
+          :low-confidence-communities (seq-take low-conf-communities 3)
+          :self-refs self-refs
+          :mismatches (seq-take mismatches 3))))
 
 (defun gptel-auto-workflow-self-audit--format-knowledge-gap-section (kg)
   "Format knowledge gap section from KG plist."
@@ -308,17 +339,24 @@ and targets with no similarity edges. Returns plist :gap-count, :isolated,
       ""
     (let ((gaps (plist-get kg :gap-count))
           (isolated (plist-get kg :isolated))
-          (low-conf (plist-get kg :low-confidence-communities)))
+          (low-conf (plist-get kg :low-confidence-communities))
+          (self-refs (plist-get kg :self-refs))
+          (mismatches (plist-get kg :mismatches)))
       (if (or (null gaps) (= gaps 0))
           "- ✓ Knowledge graph: 0 gaps detected\n\n"
         (concat
          (format "### Knowledge graph gaps (%d found)\n" gaps)
          (when isolated
-           (format "- %d isolated nodes (no connections): %s\n"
+           (format "- %d isolated nodes: %s\n"
                    (length isolated)
                    (mapconcat #'identity isolated ", ")))
+         (when (> self-refs 0)
+           (format "- %d self-referencing edges (ontology violation)\n" self-refs))
+         (when mismatches
+           (format "- %d same-category pairs with no similarity edge (graph-ontology gap)\n"
+                   (length mismatches)))
          (when low-conf
-           (format "- %d communities with >3 AMBIGUOUS edges (low confidence)\n"
+           (format "- %d communities with >3 AMBIGUOUS edges\n"
                    (length low-conf)))
          "\n")))))
 
