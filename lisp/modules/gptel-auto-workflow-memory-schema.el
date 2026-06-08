@@ -1277,21 +1277,26 @@ The graph is interactive: click nodes, search, zoom, drag."
          "<!DOCTYPE html>
 <html><head><meta charset=\"utf-8\">
 <title>OV5 Knowledge Graph</title>
-<script src=\"https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js\"></script>
-<link href=\"https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css\" rel=\"stylesheet\">
+<script
+src=\"https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js\"></script>
+<link href=\"https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css\"
+rel=\"stylesheet\">
 <style>body{margin:0}#graph{width:100vw;height:100vh;background:#1a1a2e}
 .vis-node{font-size:12px}.vis-edge{stroke:#555}</style></head>
 <body><div id=\"graph\"></div>
 <script>
 fetch('%s').then(r=>r.json()).then(data=>{
   var nodes=new vis.DataSet(data.nodes.map(n=>({id:n.id,label:n.label,
-    group:n.type==='file'?1:n.type==='skill'?2:3})));
+    group:n.type===\='file\='?1:n.type===\='skill\='?2:3})));
   var edges=new vis.DataSet(data.links.map(l=>({from:l.source,to:l.target,
-    label:l.type,title:l.confidence+' w='+l.weight,color:{color:l.confidence==='EXTRACTED'?'#4fc3f7':l.confidence==='INFERRED'?'#ffb74d':'#ef5350'}})));
-  var container=document.getElementById('graph');
+label:l.type,title:l.confidence+'
+w='+l.weight,color:{color:l.confidence===\='EXTRACTED\='?'#4fc3f7':l.confidence===\='INFERRED\='?'#ffb74d':'#ef5350'}})));
+  var container=document.getElementById(\='graph\=');
   new vis.Network(container,{nodes:nodes,edges:edges},{
-    groups:{1:{color:{background:'#1565c0'}},2:{color:{background:'#2e7d32'}},3:{color:{background:'#6a1b9a'}}},
-    physics:{stabilization:{iterations:100}},edges:{arrows:'to',smooth:{type:'curvedCW'}}});
+
+groups:{1:{color:{background:'#1565c0'}},2:{color:{background:'#2e7d32'}},3:{color:{background:'#6a1b9a'}}},
+
+physics:{stabilization:{iterations:100}},edges:{arrows:\='to\=',smooth:{type:\='curvedCW\='}}});
 }).catch(e=>document.body.innerHTML='<p style=color:red>Error: '+e+'</p>');
 </script></body></html>"))
     (with-temp-file html-file
@@ -1303,8 +1308,10 @@ fetch('%s').then(r=>r.json()).then(data=>{
 
 (defun gptel-auto-workflow--mcp-handle-request (method &optional params)
   "Handle an MCP-style query and return a JSON response string.
-Supports: graph-stats, god-nodes, communities, node-neighbors, surprising-edges.
-Callable via emacsclient: (gptel-auto-workflow--mcp-handle-request \"method\" \"params\")"
+Supports: graph-stats, god-nodes, communities, node-neighbors,
+surprising-edges.
+Callable via emacsclient: (gptel-auto-workflow--mcp-handle-request \"method\"
+\"params\")"
   (condition-case err
       (let ((result nil))
         (cond
@@ -1329,5 +1336,74 @@ Callable via emacsclient: (gptel-auto-workflow--mcp-handle-request \"method\" \"
          (t (setq result "{\"error\":\"unknown method\"}")))
         result)
     (error (format "{\"error\":\"%s\"}" (error-message-string err)))))
+
+;;; AST extraction (deterministic Elisp parsing — graphify's extract() layer)
+
+(defun gptel-auto-workflow--extract-elisp-ast (file-path)
+  "Extract structural data from FILE-PATH using Elisp reader.
+Returns plist: (:defuns :defvars :requires :provides).
+Deterministic — no LLM needed. Uses Emacs' built-in read."
+  (let ((defuns nil) (defvars nil) (requires nil) (provides nil))
+    (condition-case nil
+        (with-temp-buffer
+          (insert-file-contents file-path)
+          (goto-char (point-min))
+          (while (not (eobp))
+            (condition-case nil
+                (let ((form (read (current-buffer))))
+                  (when (listp form)
+                    (pcase (car form)
+                      ('defun (push (cadr form) defuns))
+                      ((or 'defvar 'defcustom 'defconst)
+                       (push (cadr form) defvars))
+                      ('require (push (cadr form) requires))
+                      ('provide (push (cadr form) provides)))))
+              (end-of-file nil)
+              (error (forward-sexp 1)))))
+      (error nil))
+    (list :defuns (nreverse defuns)
+          :defvars (nreverse defvars)
+          :requires (nreverse requires)
+          :provides (nreverse provides))))
+
+(defun gptel-auto-workflow--ingest-elisp-asts (target-dir)
+  "Extract AST from all .el files in TARGET-DIR and add to unified graph.
+Adds :defines edges (file -> function), :requires edges (file -> file),
+and :provides edges (file -> feature).
+Returns number of edges added."
+  (let* ((graph (gptel-auto-workflow--unified-graph-ensure))
+         (edge-count 0))
+    (when (and graph (file-directory-p target-dir))
+      (dolist (f (directory-files target-dir t "\\.el$"))
+        (let* ((ast (gptel-auto-workflow--extract-elisp-ast f))
+               (basename (file-name-nondirectory f))
+               (slug (file-name-sans-extension basename)))
+          ;; Add :defines edges (file defines function)
+          (dolist (fn (plist-get ast :defuns))
+            (when (gethash (cons :file slug) graph)
+              (let ((existing (gethash (cons :file slug) graph)))
+                (puthash (cons :file slug)
+                         (cons (list :defines (cons :function (symbol-name fn))
+                                     1.0 'EXTRACTED 1.0)
+                               existing)
+                         graph)
+                (setq edge-count (1+ edge-count)))))
+          ;; Add :requires edges
+          (dolist (req (plist-get ast :requires))
+            (let* ((req-name (if (stringp req) req (symbol-name req)))
+                   (req-slug (if (string-match "^\\(.+\\)\\.el$" req-name)
+                                 (match-string 1 req-name)
+                               req-name)))
+              (when (gethash (cons :file slug) graph)
+                (let ((existing (gethash (cons :file slug) graph)))
+                  (puthash (cons :file slug)
+                           (cons (list :requires (cons :file req-slug)
+                                       1.0 'EXTRACTED 1.0)
+                                 existing)
+                           graph)
+                  (setq edge-count (1+ edge-count))))))))
+      (message "[memory-schema] Ingested AST from %s: %d edges added"
+               target-dir edge-count))
+    edge-count))
 
 (provide 'gptel-auto-workflow-memory-schema)
