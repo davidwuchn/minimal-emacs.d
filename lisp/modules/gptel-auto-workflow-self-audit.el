@@ -261,7 +261,8 @@ FILTER-FN is called on each value; only truthy results are kept."
 (defun gptel-auto-workflow-self-audit--run-knowledge-gap-check ()
   "Check the unified graph for knowledge gaps.
 Detects: isolated nodes (no edges), low-confidence communities,
-and targets with no similarity edges. Returns plist :gap-count, :isolated, :low-confidence."
+and targets with no similarity edges. Returns plist :gap-count, :isolated,
+:low-confidence."
   (let ((gap-count 0) (isolated '()) (low-conf-communities '()))
     (condition-case err
         (when (fboundp 'gptel-auto-workflow--unified-graph-ensure)
