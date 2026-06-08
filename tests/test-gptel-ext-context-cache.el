@@ -204,7 +204,7 @@
   (test--context-cache-setup)
   (let ((meta (my/gptel-get-model-metadata "qwen3.7-plus")))
     (should meta)
-    (should (= (plist-get meta :context-window) 131072))
+    (should (= (plist-get meta :context-window) 1000000))
     (should (plist-get meta :description))))
 
 (ert-deftest cache/metadata/cf-gpt-oss-120b ()
@@ -222,9 +222,9 @@
   (let ((meta (my/gptel-get-model-metadata "@cf/moonshotai/kimi-k2.6")))
     (should meta)
     (should (= (plist-get meta :context-window) 262144))
-    (should (= (plist-get meta :pricing-input) 0.95))
-    (should (= (plist-get meta :pricing-cached-input) 0.16))
-    (should (= (plist-get meta :pricing-output) 4.00))
+    (should (= (plist-get meta :pricing-input) 2.07))
+    (should (= (plist-get meta :pricing-cached-input) 0.28))
+    (should (= (plist-get meta :pricing-output) 8.28))
     (should (member 'tools (plist-get meta :features)))
     (should (member 'reasoning (plist-get meta :features)))
     (should (member 'vision (plist-get meta :features)))))
@@ -239,7 +239,7 @@
   (test--context-cache-setup)
   (let ((meta (my/gptel-get-model-metadata "qwen3.7-plus-today")))
     (should meta)
-    (should (= (plist-get meta :context-window) 131072))))
+    (should (= (plist-get meta :context-window) 1000000))))
 
 (ert-deftest cache/metadata/partial-match-nil-overrides-shorter-prefix ()
   "A longer partial match with nil should not fall back to a shorter prefix."

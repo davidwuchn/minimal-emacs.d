@@ -12,12 +12,13 @@
      :models (MiniMax-M3)
      :default-model MiniMax-M3
      :model-metadata
-       ((MiniMax-M3
-        :context-window 1000000
-        :pricing-input 0.30 :pricing-output 1.20 :pricing-cache-hit 0.06
-        :capabilities (code-generation tool-calls)
-        :speed fast
-        :thinking-policy on)))  ;; reasoning_split separates thinking from content
+        ((MiniMax-M3
+         :context-window 1000000
+         :pricing-cny-input 4.2 :pricing-cny-output 16.8
+         :pricing-input 0.58 :pricing-output 2.32 :pricing-cache-hit 0.12
+         :capabilities (code-generation tool-calls)
+         :speed fast
+         :thinking-policy on)))  ;; reasoning_split separates thinking from content
 
     (DeepSeek
      :host "api.deepseek.com"
@@ -42,22 +43,24 @@
      :host "api.kimi.com"
      :models (kimi-k2.6 kimi-k2.5)
      :default-model kimi-k2.6
-     :model-metadata
-      ((kimi-k2.6
-        :context-window 262144
-        :pricing-input 0.95 :pricing-output 4.00 :pricing-cache-hit 0.16
-        :capabilities (code-generation tool-calls long-context)
-        :speed medium
-        :thinking-policy auto)))
-
-    (CF-Gateway
-     :host "gateway.ai.cloudflare.com"
-     :models (\@cf/moonshotai/kimi-k2.6)
-     :default-model \@cf/moonshotai/kimi-k2.6
-     :model-metadata
-      ((\@cf/moonshotai/kimi-k2.6
-        :context-window 262144
-        :pricing-input 0.95 :pricing-output 4.00 :pricing-cache-hit 0.16
+      :model-metadata
+       ((kimi-k2.6
+         :context-window 262144
+         :pricing-cny-input 15 :pricing-cny-output 60
+         :pricing-input 2.07 :pricing-output 8.28 :pricing-cache-hit 0.28
+         :capabilities (code-generation tool-calls long-context)
+         :speed medium
+         :thinking-policy auto)))
+ 
+     (CF-Gateway
+      :host "gateway.ai.cloudflare.com"
+      :models (\@cf/moonshotai/kimi-k2.6)
+      :default-model \@cf/moonshotai/kimi-k2.6
+      :model-metadata
+       ((\@cf/moonshotai/kimi-k2.6
+         :context-window 262144
+         :pricing-cny-input 15 :pricing-cny-output 60
+         :pricing-input 2.07 :pricing-output 8.28 :pricing-cache-hit 0.28
         :capabilities (code-generation tool-calls long-context reasoning)
         :speed medium
         :thinking-policy auto)))
@@ -66,19 +69,20 @@
      :host "coding.dashscope.aliyuncs.com"
      :models (qwen3.7-plus qwen3.6-plus qwen3-coder-plus)
      :default-model qwen3.7-plus
-     :model-metadata
-      ((qwen3.7-plus
-        :context-window 131072
-        :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
-        :capabilities (code-generation reasoning)
-        :speed medium
-        :thinking-policy on)
-       (qwen3.6-plus
-        :context-window 131072
-        :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
-        :capabilities (code-generation tool-calls)
-        :speed medium
-        :thinking-policy on)))
+       :model-metadata
+       ((qwen3.7-plus
+         :context-window 1000000
+         :pricing-cny-input 6 :pricing-cny-output 24
+         :pricing-input 0.83 :pricing-output 3.31 :pricing-cache-hit 0.08
+         :capabilities (code-generation reasoning)
+         :speed medium
+         :thinking-policy on)
+        (qwen3.6-plus
+         :context-window 1000000
+         :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
+         :capabilities (code-generation tool-calls)
+         :speed medium
+         :thinking-policy on)))
 
     (Z-AI
      :host "open.bigmodel.cn"
@@ -117,26 +121,29 @@
        :default-model qwen3.7-max
        :model-metadata
        ((qwen3.7-max
-          :context-window 131072
-          :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
+          :context-window 1000000
+          :pricing-cny-input 12 :pricing-cny-output 36
+          :pricing-input 1.66 :pricing-output 4.97 :pricing-cache-hit 0.17
           :capabilities (reasoning code-generation)
           :speed medium
           :thinking-policy on)
          (qwen3.7-plus
-          :context-window 131072
-          :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
+          :context-window 1000000
+          :pricing-cny-input 6 :pricing-cny-output 24
+          :pricing-input 0.83 :pricing-output 3.31 :pricing-cache-hit 0.08
           :capabilities (code-generation reasoning)
           :speed medium
           :thinking-policy on)
          (qwen3.6-plus
-          :context-window 131072
+          :context-window 1000000
           :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
           :capabilities (code-generation tool-calls)
           :speed medium
           :thinking-policy on)
          (qwen3.6-flash
-          :context-window 131072
-          :pricing-input 0.14 :pricing-output 0.57 :pricing-cache-hit 0.03
+          :context-window 1000000
+          :pricing-cny-input 4.8 :pricing-cny-output 28.8
+          :pricing-input 0.66 :pricing-output 3.97 :pricing-cache-hit 0.07
           :capabilities (code-generation)
           :speed fast
           :thinking-policy on)
@@ -154,7 +161,8 @@
          :thinking-policy auto)
         (kimi-k2.6
          :context-window 262144
-         :pricing-input 0.95 :pricing-output 4.00 :pricing-cache-hit 0.16
+         :pricing-cny-input 15 :pricing-cny-output 60
+         :pricing-input 2.07 :pricing-output 8.28 :pricing-cache-hit 0.28
          :capabilities (code-generation tool-calls long-context)
          :speed medium
          :thinking-policy auto)
@@ -237,6 +245,7 @@ emergency use only.")
   '((deepseek-v4-pro . ((xhigh . "high") (high . "medium") (default . "low")))
     (deepseek-v4-flash . ((xhigh . "high") (high . "medium") (default . "low")))
     (qwen3.7-max . ((xhigh . "high") (high . "medium") (default . "low")))
+    (qwen3.7-plus . ((xhigh . "high") (high . "medium") (default . "low")))
     (kimi-k2.6 . ((xhigh . "high") (high . "medium") (default . "low")))
     (glm-5.1 . ((xhigh . "high") (high . "medium") (default . "low"))))
   "Effort level mapping per backend/model.

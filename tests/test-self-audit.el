@@ -268,5 +268,58 @@
             (should (search-forward "Staging-Merge Bottleneck" nil t)))))
     (test-self-audit--teardown)))
 
+(ert-deftest test-self-audit/write-memory-handles-nil-issues ()
+  "`gptel-auto-workflow-self-audit--write-memory' must not error when
+audit-result has no :issues key (or :issues is nil).
+Regression: the comparison `(> (plist-get audit-result :issues) 0)` signaled
+`wrong-type-argument number-or-marker-p' when :issues was nil.
+Fix: `(> (or (plist-get audit-result :issues) 0) 0)`."
+  (let* ((test-self-audit--tmp-dir (make-temp-file "aw-audit-nil" t))
+         (gptel-auto-workflow--workspace-path test-self-audit--tmp-dir)
+         (mem-dir (expand-file-name "mementum/memories/"
+                                    test-self-audit--tmp-dir))
+         (result (list :timestamp (format-time-string "%Y%m%dT%H%M%SZ")
+                        :backend-cold-start '(:cold nil)
+                        ;; NOTE: no :issues key
+                        :strategy-cold-start '(:unevaluated nil)
+                        :merge-bottleneck '(:unmerged nil)
+                        :byte-compile-warnings '(:warnings nil)))
+         (mem-files-before (progn (make-directory mem-dir t)
+                                  (length (directory-files mem-dir t nil "\\.md$")))))
+    (unwind-protect
+        (progn
+          (condition-case err
+              (gptel-auto-workflow-self-audit--write-memory result)
+            (error
+             (ert-fail (format "write-memory should not error on nil :issues: %S" err))))
+          ;; After call (no :issues): no new memory file
+          (let ((after (length (directory-files mem-dir t nil "\\.md$"))))
+            (should (eq mem-files-before after))))
+      (delete-directory test-self-audit--tmp-dir t))))
+
+(ert-deftest test-self-audit/filter-recent-files-skips-deleted ()
+  "`gptel-auto-workflow-self-audit--filter-recent-files' must not
+error when a file in the list has been deleted between directory
+listing and attribute lookup. Race condition: scan finds file A,
+then background job deletes it, then we read its mtime.
+Fix: `when-let` on `file-attributes` (returns nil for missing files)
+instead of `(file-exists-p f)` + `(file-attributes f)` (which would
+double-stat the file)."
+  (let* ((tmp-dir (make-temp-file "aw-audit-filter" t))
+         (live (expand-file-name "live.tsv" tmp-dir))
+         (cutoff (float-time)))
+    (unwind-protect
+        (progn
+          (write-region "" nil live)
+          ;; Pass a non-existent file alongside a real one
+          (let* ((dead (expand-file-name "never-existed.tsv" tmp-dir))
+                 (result (gptel-auto-workflow-self-audit--filter-recent-files
+                          (list live dead)
+                          (- cutoff 1000))))
+            ;; Should not error, should include the live file (mtime > cutoff)
+            (should (member live result))
+            (should-not (member dead result))))
+      (delete-directory tmp-dir t))))
+
 (provide 'test-self-audit)
 ;;; test-self-audit.el ends here

@@ -804,7 +804,8 @@ Returns alist of (ENTITY . ((SYNONYM . SCORE) ...)) with SCORE >= THRESHOLD
   "Record an ontology EVENT-TYPE with DATA into the schema index.
 EVENT-TYPE is one of :saturation, :strategy-change, :drift, :backend-change.
 DATA is a plist with event-specific fields.
-Creates entity and triple entries so future graph walks surface these learnings."
+Creates entity and triple entries so future graph walks surface these
+learnings."
   (gptel-auto-workflow--memory-schema-ensure-loaded)
   (let* ((category (plist-get data :category))
          (cat-str (and category
@@ -894,7 +895,14 @@ schema triples (schema-neighbor), synonymy, skill graph,
 category routing, and backend preferences.
 Returns the graph hash table."
   (let ((graph (make-hash-table :test 'equal :size 256)))
-    (cl-labels ((ensure-node (type id)
+    (cl-labels ((edge-confidence (edge-type weight)
+                  (cond ((eq edge-type :requires) (cons 'EXTRACTED 1.0))
+                        ((eq edge-type :similar) (cons 'INFERRED (min 1.0 weight)))
+                        ((eq edge-type :schema-neighbor) (cons 'INFERRED 0.8))
+                        ((eq edge-type :skill-graph) (cons 'INFERRED (min 1.0 weight)))
+                        ((eq edge-type :co-occurrence) (cons 'AMBIGUOUS 0.3))
+                        (t (cons 'INFERRED 0.5))))
+                (ensure-node (type id)
                   (let ((key (cons type id)))
                     (unless (gethash key graph)
                       (puthash key nil graph))
@@ -903,9 +911,12 @@ Returns the graph hash table."
                   (when (and from-id to-id (> weight 0))
                     (let* ((from-key (ensure-node from-type from-id))
                            (to-key (cons to-type to-id))
-                           (existing (gethash from-key graph)))
+                           (existing (gethash from-key graph))
+                           (conf (edge-confidence edge-type weight)))
                       (puthash from-key
-                               (cons (list edge-type to-key weight) existing)
+                               (cons (list edge-type to-key weight
+                                           (car conf) (cdr conf))
+                                     existing)
                                graph)))))
       (gptel-auto-workflow--memory-schema-ensure-loaded)
       (let ((root (condition-case nil (gptel-auto-workflow--worktree-base-root) (error nil))))
@@ -1063,5 +1074,260 @@ Returns list of (BACKEND . SCORE)."
     (let ((result nil))
       (maphash (lambda (backend score) (push (cons backend score) result)) backends)
       (cl-sort result #'> :key #'cdr))))
+
+;;; Graph topology analysis (community detection + centrality — graphify-inspired)
+
+(defun gptel-auto-workflow--unified-graph-god-nodes (&optional top-n)
+  "Return the most-connected nodes in the unified graph by degree centrality.
+Excludes file-level hub nodes and isolates. Returns list of (node-key .
+degree).
+TOP-N defaults to 10."
+  (let ((graph (gptel-auto-workflow--unified-graph-ensure))
+        (degrees (make-hash-table :test 'equal :size 64)))
+    (when graph
+      ;; Count outgoing degree for each node
+      (maphash (lambda (from-key edges)
+                 (when edges
+                   (puthash from-key
+                            (+ (length edges)
+                               (gethash from-key degrees 0))
+                            degrees)
+                   (dolist (edge edges)
+                     (let ((to-key (cadr edge)))
+                       (puthash to-key
+                                (1+ (gethash to-key degrees 0))
+                                degrees)))))
+               graph)
+      ;; Sort by degree descending, filter file hubs and isolates
+      (let ((ranked '()))
+        (maphash (lambda (key deg)
+                   (let ((type (car key)))
+                     ;; Skip file hubs (all files connect to many things)
+                     (unless (and (eq type :file) (> deg 10))
+                       (push (cons key deg) ranked))))
+                 degrees)
+        (seq-take (cl-sort ranked #'> :key #'cdr)
+                  (or top-n 10))))))
+
+(defun gptel-auto-workflow--unified-graph-communities (&optional max-iterations)
+  "Detect communities in the unified graph using label propagation.
+Returns hash table: node-key -> community-id (integer).
+MAX-ITERATIONS defaults to 20."
+  (let* ((graph (gptel-auto-workflow--unified-graph-ensure))
+         (communities (make-hash-table :test 'equal :size 64))
+         (nodes '())
+         (community-id 0))
+    (when graph
+      ;; Initialize: each node in its own community
+      (maphash (lambda (key _edges)
+                 (puthash key community-id communities)
+                 (push key nodes)
+                 (setq community-id (1+ community-id)))
+               graph)
+      ;; Label propagation
+      (cl-loop for iteration from 0 below (or max-iterations 20)
+               for changed = nil
+               do (dolist (node nodes)
+            (let* ((edges (gethash node graph))
+                   (neighbor-votes (make-hash-table :test 'equal :size 16)))
+              ;; Count neighbor community votes
+              (dolist (edge (or edges '()))
+                (let* ((to-key (cadr edge))
+                       (neighbor-community (gethash to-key communities)))
+                  (when neighbor-community
+                    (puthash neighbor-community
+                             (1+ (gethash neighbor-community neighbor-votes 0))
+                             neighbor-votes))))
+              ;; Also count reverse edges (nodes that point TO this node)
+              (dolist (other-node nodes)
+                (unless (equal other-node node)
+                  (dolist (edge (gethash other-node graph))
+                    (when (equal (cadr edge) node)
+                      (let ((nc (gethash other-node communities)))
+                        (when nc
+                          (puthash nc
+                                   (1+ (gethash nc neighbor-votes 0))
+                                   neighbor-votes)))))))
+              ;; Choose majority community
+              (let ((best-community nil) (best-count 0))
+                (maphash (lambda (comm count)
+                           (when (> count best-count)
+                             (setq best-community comm best-count count)))
+                         neighbor-votes)
+                (when (and best-community
+                           (not (= best-community (gethash node communities))))
+                  (puthash node best-community communities)
+                   (setq changed t)))))
+          (unless changed
+            (message "[memory-schema] Label propagation converged after %d iterations"
+                     iteration)
+            (cl-return communities)))
+      communities)))
+
+(defun gptel-auto-workflow--unified-graph-surprising-connections (&optional top-n)
+  "Find surprising cross-community connections in the unified graph.
+Returns list of (source-id target-id edge-type score).
+Surprising = cross-community edges with low-confidence edge types.
+TOP-N defaults to 10."
+  (let* ((graph (gptel-auto-workflow--unified-graph-ensure))
+         (communities (gptel-auto-workflow--unified-graph-communities))
+         (surprises '()))
+    (when (and graph communities)
+      (maphash (lambda (from-key edges)
+                 (let ((from-comm (gethash from-key communities)))
+                   (dolist (edge (or edges '()))
+                     (let* ((to-key (cadr edge))
+                            (to-comm (gethash to-key communities))
+                            (edge-type (car edge))
+                            (weight (nth 2 edge)))
+                       ;; Surprising: cross-community AND (low weight OR inferred edge)
+                       (when (and from-comm to-comm
+                                  (not (= from-comm to-comm))
+                                  (or (< weight 0.5)
+                                      (member edge-type '(:similar :schema-neighbor))))
+                         (push (list (cdr from-key) (cdr to-key)
+                                     edge-type weight
+                                     (abs (- from-comm to-comm)))
+                               surprises))))))
+               graph)
+      (seq-take (cl-sort surprises #'> :key (lambda (s) (nth 4 s)))
+                (or top-n 10)))))
+
+(defun gptel-auto-workflow--unified-graph-stats-for-prompt ()
+  "Return a compact summary of graph topology for prompt injection.
+Includes: node count, edge count, top god nodes, community count,
+surprising connections. Uses graphify-inspired format."
+  (let* ((graph (gptel-auto-workflow--unified-graph-ensure)))
+    (when (and graph (> (hash-table-count graph) 0))
+      (let* ((node-count (hash-table-count graph))
+             (edge-count 0) (extracted 0) (inferred 0) (ambiguous 0)
+             (god-nodes (gptel-auto-workflow--unified-graph-god-nodes 5))
+             (communities (gptel-auto-workflow--unified-graph-communities))
+             (comm-set (make-hash-table :test 'equal))
+             (surprises (gptel-auto-workflow--unified-graph-surprising-connections 5)))
+        (maphash (lambda (_k edges)
+                   (dolist (edge (or edges ()))
+                     (setq edge-count (1+ edge-count))
+                     (pcase (nth 3 edge)
+                       ('EXTRACTED (setq extracted (1+ extracted)))
+                       ('INFERRED (setq inferred (1+ inferred)))
+                       ('AMBIGUOUS (setq ambiguous (1+ ambiguous))))))
+                 graph)
+        (when communities
+          (maphash (lambda (_k comm) (puthash comm t comm-set)) communities))
+        (concat
+         "## Knowledge Graph Topology\n"
+         (format "- %d nodes, %d edges, %d communities\n"
+                 node-count edge-count (hash-table-count comm-set))
+         (when (> edge-count 0)
+           (format "- Confidence: %d EXTRACTED (%.0f%%) %d INFERRED (%.0f%%) %d AMBIGUOUS (%.0f%%)\n"
+                   extracted (* 100.0 (/ (float extracted) edge-count))
+                   inferred (* 100.0 (/ (float inferred) edge-count))
+                   ambiguous (* 100.0 (/ (float ambiguous) edge-count))))
+         (when god-nodes
+           (concat "- **God nodes** (most-connected):\n"
+                   (mapconcat (lambda (n)
+                                (format "  - %s:%s (degree=%d)"
+                                        (car (car n)) (cdr (car n)) (cdr n)))
+                              god-nodes "\n")
+                   "\n"))
+         (when surprises
+           (concat "- **Surprising connections** (cross-community):\n"
+                   (mapconcat (lambda (s)
+                                (format "  - %s ⟷ %s [%s, weight=%.2f]"
+                                        (nth 0 s) (nth 1 s) (nth 2 s) (nth 3 s)))
+                              surprises "\n")
+                   "\n"))
+         "\n")))))
+
+;;; Graph export (JSON for external tools, visualization)
+
+(defun gptel-auto-workflow--unified-graph-export-json (output-file)
+  "Export unified graph as node-link JSON to OUTPUT-FILE.
+Format compatible with NetworkX and vis.js."
+  (let ((graph (gptel-auto-workflow--unified-graph-ensure)))
+    (when (and graph (> (hash-table-count graph) 0))
+      (let ((nodes nil) (links nil) (seen (make-hash-table :test 'equal)))
+        (maphash (lambda (key edges)
+                   (let ((nid (format "%s:%s" (car key) (cdr key))))
+                     (unless (gethash nid seen)
+                       (puthash nid t seen)
+                       (push (format "{\"id\":\"%s\",\"label\":\"%s\",\"type\":\"%s\"}"
+                                     nid (cdr key) (car key)) nodes))
+                     (dolist (edge (or edges ()))
+                       (push (format "{\"source\":\"%s\",\"target\":\"%s\",\"type\":\"%s\",\"weight\":%.2f,\"confidence\":\"%s\"}"
+                                     nid (format "%s:%s" (car (cadr edge)) (cdr (cadr edge)))
+                                     (car edge) (nth 2 edge) (nth 3 edge))
+                             links))))
+                 graph)
+        (with-temp-file output-file
+          (insert "{\n")
+          (insert "  \"nodes\": [" (mapconcat #'identity (nreverse nodes) ",\n             ") "],\n")
+          (insert "  \"links\": [" (mapconcat #'identity (nreverse links) ",\n             ") "]\n")
+          (insert "}\n"))
+        (message "[memory-schema] Exported graph to %s (%d nodes, %d edges)"
+                 output-file (length nodes) (length links))
+        t))))
+
+(defun gptel-auto-workflow--unified-graph-export-html (json-file html-file)
+  "Generate an interactive HTML visualization from JSON-FILE.
+Writes standalone HTML to HTML-FILE using vis.js from CDN.
+The graph is interactive: click nodes, search, zoom, drag."
+  (let ((template
+         "<!DOCTYPE html>
+<html><head><meta charset=\"utf-8\">
+<title>OV5 Knowledge Graph</title>
+<script src=\"https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js\"></script>
+<link href=\"https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css\" rel=\"stylesheet\">
+<style>body{margin:0}#graph{width:100vw;height:100vh;background:#1a1a2e}
+.vis-node{font-size:12px}.vis-edge{stroke:#555}</style></head>
+<body><div id=\"graph\"></div>
+<script>
+fetch('%s').then(r=>r.json()).then(data=>{
+  var nodes=new vis.DataSet(data.nodes.map(n=>({id:n.id,label:n.label,
+    group:n.type==='file'?1:n.type==='skill'?2:3})));
+  var edges=new vis.DataSet(data.links.map(l=>({from:l.source,to:l.target,
+    label:l.type,title:l.confidence+' w='+l.weight,color:{color:l.confidence==='EXTRACTED'?'#4fc3f7':l.confidence==='INFERRED'?'#ffb74d':'#ef5350'}})));
+  var container=document.getElementById('graph');
+  new vis.Network(container,{nodes:nodes,edges:edges},{
+    groups:{1:{color:{background:'#1565c0'}},2:{color:{background:'#2e7d32'}},3:{color:{background:'#6a1b9a'}}},
+    physics:{stabilization:{iterations:100}},edges:{arrows:'to',smooth:{type:'curvedCW'}}});
+}).catch(e=>document.body.innerHTML='<p style=color:red>Error: '+e+'</p>');
+</script></body></html>"))
+    (with-temp-file html-file
+      (insert (format template
+                      (file-relative-name json-file
+                                          (file-name-directory html-file)))))
+    (message "[memory-schema] Exported HTML visualization to %s" html-file)
+    t))
+
+(defun gptel-auto-workflow--mcp-handle-request (method &optional params)
+  "Handle an MCP-style query and return a JSON response string.
+Supports: graph-stats, god-nodes, communities, node-neighbors, surprising-edges.
+Callable via emacsclient: (gptel-auto-workflow--mcp-handle-request \"method\" \"params\")"
+  (condition-case err
+      (let ((result nil))
+        (cond
+         ((equal method "graph-stats")
+          (let* ((g (gptel-auto-workflow--unified-graph-ensure))
+                 (nc (if g (hash-table-count g) 0))
+                 (ec 0))
+            (when g (maphash (lambda (_k e) (setq ec (+ ec (length (or e ()))))) g))
+            (setq result (format "{\"nodes\":%d,\"edges\":%d}" nc ec))))
+         ((equal method "god-nodes")
+          (let ((gn (gptel-auto-workflow--unified-graph-god-nodes (or (and params (read params)) 5))))
+            (setq result (format "[%s]" (mapconcat (lambda (n) (format "[\"%s:%s\",%d]" (caar n) (cdar n) (cdr n))) gn ",")))))
+         ((equal method "communities")
+          (let ((comms (gptel-auto-workflow--unified-graph-communities))
+                (counts (make-hash-table :test 'equal)))
+            (when comms
+              (maphash (lambda (_k v) (puthash v (1+ (gethash v counts 0)) counts)) comms)
+              (setq result (format "{\"community_count\":%d}" (hash-table-count counts))))))
+         ((equal method "surprising-edges")
+          (let ((surp (gptel-auto-workflow--unified-graph-surprising-connections 5)))
+            (setq result (format "[%s]" (mapconcat (lambda (s) (format "[\"%s\",\"%s\",\"%s\",%.2f]" (nth 0 s) (nth 1 s) (nth 2 s) (nth 3 s))) surp ",")))))
+         (t (setq result "{\"error\":\"unknown method\"}")))
+        result)
+    (error (format "{\"error\":\"%s\"}" (error-message-string err)))))
 
 (provide 'gptel-auto-workflow-memory-schema)

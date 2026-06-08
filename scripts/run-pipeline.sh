@@ -616,7 +616,12 @@ if [ -n "$SELF_AUDIT_REPORT" ]; then
         UNEVALUATED_STRATS=$(grep 'unevaluated-strategies' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. *(\d+)/) { print $1 }')
         BOTTLENECK=$(grep 'staging-merge-bottleneck' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. t\b/) { print "1" }')
         BROKEN_MODULES=$(grep -c 'broken-modules' "$SELF_AUDIT_RESULT_FILE" 2>/dev/null || echo 0)
+        PRICING_STALE=$(grep 'pricing-stale' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. (\d+)/) { print $1 }' || echo 0)
+        DAYS_STALE=$(grep 'pricing-days-stale' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. (\d+)/) { print $1 }' || echo 0)
         log "  Structured audit: $AUDIT_ISSUES issues, $BROKEN_MODULES broken modules, bottleneck=$BOTTLENECK"
+        if [ "${PRICING_STALE:-0}" -gt 0 ]; then
+            log "  ⚠ Pricing STALE: $PRICING_STALE discrepancies ($DAYS_STALE days since last knowledge page update)"
+        fi
     fi
 else
     log "  Self-audit: no issues found (or module not loaded)"
@@ -702,7 +707,14 @@ if [ -f "$HEALTH_FILE" ]; then
         REMEDIAL_ACTIONS=$((REMEDIAL_ACTIONS + 1))
         GRADER_ESCALATED=1
     fi
-fi
+    fi
+    # Auto-fix 5: Pricing staleness — flag for human review (can't auto-update code)
+    if [ "${PRICING_STALE:-0}" -gt 0 ] || [ "${DAYS_STALE:-0}" -gt 30 ]; then
+        log "  Auto-fix: pricing may be stale ($PRICING_STALE discrepancies, $DAYS_STALE days old)"
+        echo "pricing-stale:$PRICING_STALE:days:$DAYS_STALE" > "$DIR/var/tmp/pricing-stale.txt"
+        log "  → Flagged in var/tmp/pricing-stale.txt — update bailian-pricing.md from Bailian console"
+        REMEDIAL_ACTIONS=$((REMEDIAL_ACTIONS + 1))
+    fi
 
 if [ "$REMEDIAL_ACTIONS" -gt 0 ]; then
     log "  Auto-fix: $REMEDIAL_ACTIONS remedial actions applied — KEEPING GOING"
@@ -1255,6 +1267,44 @@ mkdir -p "$DIGEST_DIR"
         echo "- No knowledge pages yet"
     fi
     echo ""
+    echo "## Knowledge Graph Topology"
+    echo ""
+    # Generate graph topology via emacs batch call to memory-schema module
+    GRAPH_TOPOLOGY=$(emacs --batch -L "$DIR/lisp/modules" \
+        -L "$DIR/packages/gptel" -L "$DIR/packages/compat" \
+        -l gptel --eval \
+        '(progn
+           (require (quote gptel-auto-workflow-memory-schema) nil t)
+           (setq gptel-auto-workflow--workspace-path "'"$DIR"'")
+           (if (fboundp (quote gptel-auto-workflow--unified-graph-stats-for-prompt))
+               (let ((stats (gptel-auto-workflow--unified-graph-stats-for-prompt)))
+                 (if stats
+                     (princ stats)
+                   (princ "- Knowledge graph not yet built (no data)\n")))
+             (princ "- Memory-schema module not loaded\n"))))' 2>&1)
+    if [ -n "$GRAPH_TOPOLOGY" ]; then
+        echo "$GRAPH_TOPOLOGY"
+    else
+        echo "- Graph generation failed or no data available"
+    fi
+    # Export graph as JSON + HTML for external tools and visualization
+    GRAPH_JSON="$DIGEST_DIR/graph-$(date +%F).json"
+    GRAPH_HTML="$DIGEST_DIR/graph-$(date +%F).html"
+    emacs --batch -L "$DIR/lisp/modules" \
+        -L "$DIR/packages/gptel" -L "$DIR/packages/compat" \
+        -l gptel --eval \
+        "(progn
+           (require 'gptel-auto-workflow-memory-schema nil t)
+           (setq gptel-auto-workflow--workspace-path \"$DIR\")
+           (when (fboundp 'gptel-auto-workflow--unified-graph-export-json)
+             (gptel-auto-workflow--unified-graph-export-json \"$GRAPH_JSON\"))
+           (when (fboundp 'gptel-auto-workflow--unified-graph-export-html)
+             (gptel-auto-workflow--unified-graph-export-html \"$GRAPH_JSON\" \"$GRAPH_HTML\")))" \
+        2>/dev/null
+    if [ -f "$GRAPH_JSON" ]; then
+        echo "- Graph exported: $GRAPH_JSON, $GRAPH_HTML"
+    fi
+    echo ""
     echo "## Strategy Pool Visibility"
     echo ""
     # How many strategies exist? How many have been evaluated? How many
@@ -1285,51 +1335,64 @@ mkdir -p "$DIGEST_DIR"
     fi
     # ── Recommended Actions (actionable by human in one command) ──
     echo ""
-    echo "## Token Economics (cost per experiment)"
+    echo "## Token Economics (real per-model pricing from registry)"
     echo ""
-    # Estimate token cost: ~$0.10 baseline per experiment, weighted by backend cost
-    # Backend cost multipliers: flash=0.5x pro=1.0x qwen=1.5x default=1.2x
-    base_cost=0.10  # baseline dollars per experiment
     total_experiments=0
     total_cost=0
     kept_cost=0
     kept_count=0
-    if compgen -G "$DIR/var/tmp/experiments/*/results.tsv" >/dev/null; then
-        find "$DIR/var/tmp/experiments" -maxdepth 2 -name "results.tsv" -mtime -1 -exec cat {} \; 2>/dev/null | \
-            awk -F'\t' -v base="$base_cost" 'NR>1 {
-                backend = ($15 == "" ? "unknown" : $15)
-                multiplier = 1.0
-                if (backend ~ /flash/) multiplier = 0.5
-                else if (backend ~ /pro/) multiplier = 1.0
-                else if (backend ~ /qwen/) multiplier = 1.5
-                else if (backend ~ /kimi/) multiplier = 1.2
-                else multiplier = 1.0
-                cost = base * multiplier
-                total_cost += cost
-                total++
-                if ($8 ~ /^(kept|grader-bypass|merged|staged)$/) {
-                    kept_cost += cost
-                    kept++
-                }
-            } END {
-                printf "total=%d|total_cost=%.2f|kept=%d|kept_cost=%.2f\n", total, total_cost, kept, kept_cost
-            }' > "$DIR/var/tmp/token-economics.tmp" 2>/dev/null
-        if [ -f "$DIR/var/tmp/token-economics.tmp" ]; then
-            total_experiments=$(cut -d'|' -f1 "$DIR/var/tmp/token-economics.tmp" | cut -d= -f2)
-            total_cost=$(cut -d'|' -f2 "$DIR/var/tmp/token-economics.tmp" | cut -d= -f2)
-            kept_experiments=$(cut -d'|' -f3 "$DIR/var/tmp/token-economics.tmp" | cut -d= -f2)
-            kept_cost=$(cut -d'|' -f4 "$DIR/var/tmp/token-economics.tmp" | cut -d= -f2)
-            rm -f "$DIR/var/tmp/token-economics.tmp"
-        fi
+    # Use gptel-auto-workflow-self-audit--compute-token-economics
+    # which reads TSV data + registry pricing for real cost per model
+    TOKEN_ECON=$(emacs --batch -L "$DIR/lisp/modules" --eval "
+(progn
+  (setq gptel-auto-workflow--workspace-path \"$DIR\")
+  (require 'gptel-auto-workflow-self-audit nil t)
+  (let ((result (gptel-auto-workflow-self-audit--compute-token-economics)))
+    ;; Line 1: totals
+    (princ (format \"TOTAL|%d|%.2f|%d|%.2f|%d\n\"
+            (plist-get result :total)
+            (plist-get result :total-cost)
+            (plist-get result :kept)
+            (plist-get result :kept-cost)
+            (plist-get result :models-seen)))
+    ;; Line 2+: per-model breakdown
+    (dolist (m (plist-get result :model-breakdown))
+      (princ (format \"MODEL|%s|%d|%d|%.2f|%.2f|%s\n\"
+              (plist-get m :model)
+              (plist-get m :kept-count)
+              (plist-get m :count)
+              (plist-get m :kept-cost)
+              (plist-get m :total-cost)
+              (symbol-name (plist-get m :speed)))))))" 2>&1)
+    # Parse totals (first line)
+    TOTAL_LINE=$(echo "$TOKEN_ECON" | grep '^TOTAL|')
+    if [ -n "$TOTAL_LINE" ]; then
+        total_experiments=$(echo "$TOTAL_LINE" | cut -d'|' -f2)
+        total_cost=$(echo "$TOTAL_LINE" | cut -d'|' -f3)
+        kept_experiments=$(echo "$TOTAL_LINE" | cut -d'|' -f4)
+        kept_cost=$(echo "$TOTAL_LINE" | cut -d'|' -f5)
+        models_seen=$(echo "$TOTAL_LINE" | cut -d'|' -f6)
     fi
     if [ "${total_experiments:-0}" -gt 0 ]; then
-        echo "- **${total_experiments} experiments** (24h), est. cost: \$${total_cost:-0.00}"
-        echo "- **${kept_experiments:-0} kept** (est. \$${kept_cost:-0.00} value delivered, ${kept_experiments:-0}/${total_experiments} = $(awk "BEGIN {printf \"%.0f\", ${kept_experiments:-0}*100/${total_experiments}}")% keep-rate)"
+        echo "- **${total_experiments} experiments** across ${models_seen:-0} models (24h), est. cost: \$${total_cost:-0.00}"
+        echo "- **${kept_experiments:-0} kept** (est. \$${kept_cost:-0.00} value, ${kept_experiments:-0}/${total_experiments} = $(awk "BEGIN {printf \"%.0f\", ${kept_experiments:-0}*100/${total_experiments}}")% keep-rate)"
         cost_per_kept=$(awk "BEGIN {printf \"%.2f\", ${kept_cost:-0}/${kept_experiments:-1}}")
-        echo "- **Cost per kept experiment**: \$${cost_per_kept:-0.00}"
+        echo "- **Cost per kept experiment**: \$${cost_per_kept:-0.00} (real per-model pricing)"
         if [ "${kept_experiments:-0}" -gt 0 ] && [ "$(echo "$cost_per_kept > 0.50" | bc 2>/dev/null || echo 0)" = "1" ]; then
             echo "- ⚠ High cost per kept — consider cheaper backends or tighter grading"
         fi
+        if [ "${PRICING_STALE:-0}" -gt 0 ]; then
+            echo "- ⚠ **Pricing may be stale**: $PRICING_STALE discrepancies vs bailian-pricing.md ($DAYS_STALE days old)"
+            echo "  → Update: edit mementum/knowledge/bailian-pricing.md then re-run self-audit"
+        fi
+        # Per-model breakdown (cost descending)
+        echo ""
+        echo "| Model | Kept/Total | Kept Cost | Total Cost | Speed |"
+        echo "|-------|-----------|-----------|------------|-------|"
+        echo "$TOKEN_ECON" | grep '^MODEL|' | while IFS='|' read -r _ model kept_count total_count kept_cost_m total_cost_m speed; do
+            keep_pct=$(awk "BEGIN {printf \"%.0f\", ${kept_count:-0}*100/${total_count:-1}}")
+            echo "| $model | ${kept_count}/${total_count} (${keep_pct}%) | \$$kept_cost_m | \$$total_cost_m | $speed |"
+        done
     else
         echo "- No experiments in last 24h (no cost data)"
     fi
@@ -1355,6 +1418,11 @@ mkdir -p "$DIGEST_DIR"
         if [ "${cold_pending:-0}" -gt 0 ]; then
             echo "- **$cold_pending cold-start issues** — system may need backend diversity push"
         fi
+    fi
+    # Pricing freshness
+    if [ "${PRICING_STALE:-0}" -gt 0 ]; then
+        echo "- **⚠ Pricing may be stale** ($PRICING_STALE discrepancies, knowledge page $DAYS_STALE days old)"
+        echo "  → Update: edit \`mementum/knowledge/bailian-pricing.md\` from Bailian console, then re-run pipeline"
     fi
     # Zero run detection
     if [ "${ZERO_RUN_DETECTED:-0}" -eq 1 ]; then

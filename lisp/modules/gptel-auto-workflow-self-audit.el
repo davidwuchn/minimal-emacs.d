@@ -60,10 +60,9 @@ then --expand-workspace-path (daemon mode), then default-directory."
   "Return FILES whose mtime is after CUTOFF (float-time)."
   (let (recent)
     (dolist (f files)
-      (when (and (file-exists-p f)
-                 (time-less-p cutoff
-                              (float-time (nth 5 (file-attributes f)))))
-        (push f recent)))
+      (when-let ((attrs (file-attributes f)))
+        (when (time-less-p cutoff (float-time (nth 5 attrs)))
+          (push f recent))))
     recent))
 
 (defun gptel-auto-workflow-self-audit--tsv-files (&optional window)
@@ -234,26 +233,94 @@ FILTER-FN is called on each value; only truthy results are kept."
            (bca (gptel-auto-workflow-self-audit--run-backend-check))
            (sca (gptel-auto-workflow-self-audit--run-strategy-check))
            (sma (gptel-auto-workflow-self-audit--run-merge-check))
+           (pricing (gptel-auto-workflow-self-audit--check-pricing-freshness))
+           (kg (gptel-auto-workflow-self-audit--run-knowledge-gap-check))
            (cold (plist-get bca :cold))
            (cold-count (length cold))
            (unev (plist-get sca :unevaluated))
            (broken-count (length (plist-get bcc :broken)))
            (bottleneck (plist-get sma :bottleneck-p))
-           (issues (+ broken-count
-                      cold-count
-                      unev
-                      (if bottleneck 1 0))))
+           (pricing-stale (plist-get pricing :stale-count))
+           (kg-count (plist-get kg :gap-count))
+           (issues (+ broken-count cold-count unev
+                      (if bottleneck 1 0)
+                      (if (> pricing-stale 0) 1 0)
+                      kg-count)))
       (list :module-health bcc
             :backend-cold-start bca
             :strategy-cold-start sca
             :staging-merge-bottleneck sma
+            :pricing-freshness pricing
+            :knowledge-gaps kg
             :timestamp (format-time-string "%Y-%m-%dT%H:%M:%S")
             :issues issues
-:auto-fixable (+ broken-count
-                              cold-count
-                             unev)))))
+            :auto-fixable (+ broken-count cold-count unev)))))
 
 ;;; Report formatting
+
+(defun gptel-auto-workflow-self-audit--run-knowledge-gap-check ()
+  "Check the unified graph for knowledge gaps.
+Detects: isolated nodes (no edges), low-confidence communities,
+and targets with no similarity edges. Returns plist :gap-count, :isolated,
+:low-confidence."
+  (let ((gap-count 0) (isolated '()) (low-conf-communities '()))
+    (condition-case err
+        (when (fboundp 'gptel-auto-workflow--unified-graph-ensure)
+          (let ((graph (gptel-auto-workflow--unified-graph-ensure)))
+            (when (and graph (> (hash-table-count graph) 0))
+              ;; Find isolated nodes: degree 0
+              (maphash (lambda (key edges)
+                         (when (null edges)
+                           (let ((id (cdr key)))
+                             (unless (string-match-p "^\." id)  ; skip method stubs
+                               (push id isolated)))))
+                       graph)
+              (setq gap-count (+ gap-count (length isolated)))
+              ;; Find low-confidence edges in communities
+              (when (fboundp 'gptel-auto-workflow--unified-graph-communities)
+                (let* ((communities (gptel-auto-workflow--unified-graph-communities))
+                       (comm-confidence (make-hash-table :test 'equal)))
+                  (when communities
+                    (maphash (lambda (from-key edges)
+                               (let ((comm (gethash from-key communities)))
+                                 (dolist (edge (or edges '()))
+                                   (let ((label (nth 3 edge)))
+                                     (when (eq label 'AMBIGUOUS)
+                                       (puthash comm
+                                                (1+ (gethash comm comm-confidence 0))
+                                                comm-confidence))))))
+                             graph)
+                    (maphash (lambda (comm count)
+                               (when (> count 3)  ; community with >3 AMBIGUOUS edges
+                                 (push (cons comm count) low-conf-communities)))
+                             comm-confidence)
+                    (when low-conf-communities
+                      (setq gap-count (+ gap-count 1)))))))))
+      (error (message "[self-audit] Knowledge gap check failed: %s"
+                      (error-message-string err))))
+    (list :gap-count (min gap-count 10)  ; cap at 10 to avoid dominating issue count
+          :isolated (seq-take isolated 5)
+          :low-confidence-communities (seq-take low-conf-communities 3))))
+
+(defun gptel-auto-workflow-self-audit--format-knowledge-gap-section (kg)
+  "Format knowledge gap section from KG plist."
+  (if (not kg)
+      ""
+    (let ((gaps (plist-get kg :gap-count))
+          (isolated (plist-get kg :isolated))
+          (low-conf (plist-get kg :low-confidence-communities)))
+      (if (or (null gaps) (= gaps 0))
+          "- ✓ Knowledge graph: 0 gaps detected\n\n"
+        (concat
+         (format "### Knowledge graph gaps (%d found)\n" gaps)
+         (when isolated
+           (format "- %d isolated nodes (no connections): %s\n"
+                   (length isolated)
+                   (mapconcat #'identity isolated ", ")))
+         (when low-conf
+           (format "- %d communities with >3 AMBIGUOUS edges (low confidence)\n"
+                   (length low-conf)))
+         "\n")))))
 
 (defun gptel-auto-workflow-self-audit--format-backend-section (bca)
   "Format backend cold-start section from BCA plist."
@@ -307,6 +374,7 @@ FILTER-FN is called on each value; only truthy results are kept."
           (sca (plist-get audit-result :strategy-cold-start))
           (sma (plist-get audit-result :staging-merge-bottleneck))
           (bcc (plist-get audit-result :module-health))
+          (kg (plist-get audit-result :knowledge-gaps))
           (issues (plist-get audit-result :issues))
           (ts (plist-get audit-result :timestamp)))
       (concat
@@ -319,6 +387,7 @@ FILTER-FN is called on each value; only truthy results are kept."
        (gptel-auto-workflow-self-audit--format-backend-section bca)
        (gptel-auto-workflow-self-audit--format-strategy-section sca)
        (gptel-auto-workflow-self-audit--format-merge-section sma)
+       (gptel-auto-workflow-self-audit--format-knowledge-gap-section kg)
        (format "**Audit score: %d issues found** (timestamp %s)\n"
                issues ts)
        "Memory written: mementum/memories/audit-fix-*.md\n"))))
@@ -374,7 +443,7 @@ FILTER-FN is called on each value; only truthy results are kept."
 
 (defun gptel-auto-workflow-self-audit--write-memory (audit-result)
   "Write an audit-fix memory file when issues are found."
-  (when (and audit-result (> (plist-get audit-result :issues) 0))
+  (when (and audit-result (> (or (plist-get audit-result :issues) 0) 0))
     (let* ((root (gptel-auto-workflow-self-audit--root))
            (memory-dir (expand-file-name "mementum/memories/" root))
            (ts (plist-get audit-result :timestamp))
@@ -490,11 +559,14 @@ Uses concat to avoid deeply nested insert/format calls in the write function."
          (bca (plist-get result :backend-cold-start))
          (sca (plist-get result :strategy-cold-start))
          (sma (plist-get result :staging-merge-bottleneck))
+         (pricing (plist-get result :pricing-freshness))
          (cold (plist-get bca :cold))
          (unev (plist-get sca :unevaluated))
          (bottleneck (plist-get sma :bottleneck-p))
          (broken (plist-get bcc :broken))
-         (issues (plist-get result :issues)))
+         (issues (plist-get result :issues))
+         (pricing-stale (or (plist-get pricing :stale-count) 0))
+         (pricing-days (or (plist-get pricing :days-stale) 0)))
     (concat
      ";; self-audit-result.el — structured audit findings\n"
      ";; Written by gptel-auto-workflow-self-audit-execute\n"
@@ -504,6 +576,8 @@ Uses concat to avoid deeply nested insert/format calls in the write function."
      (format "(cold-backends . %S)\n" cold)
      (format "(unevaluated-strategies . %d)\n" unev)
      (format "(staging-merge-bottleneck . %S)\n" bottleneck)
+     (format "(pricing-stale . %d)\n" pricing-stale)
+     (format "(pricing-days-stale . %d)\n" pricing-days)
      (when broken
        (format "(broken-modules . %S)\n" (mapcar #'car broken)))
      ";; Remediation actions for self-heal:\n"
@@ -513,6 +587,8 @@ Uses concat to avoid deeply nested insert/format calls in the write function."
        "(remediation . increase-exploration-rate)\n")
      (when bottleneck
        "(remediation . staging-merge-autoresolve)\n")
+     (when (> pricing-stale 0)
+       "(remediation . update-pricing)\n")
      (when (> (length broken) 0)
        "(remediation . flag-broken-modules)\n")
      (format "(audit-timestamp . %S)\n"
@@ -789,6 +865,269 @@ Returns number of signals applied."
     (when (file-exists-p grader-timeout-file) (delete-file grader-timeout-file))
     (when (file-exists-p grader-backends-file) (delete-file grader-backends-file))
     applied))
+ 
+;;; Pricing freshness check (token-economics foundation)
+
+(defun gptel-auto-workflow-self-audit--parse-pricing-knowledge ()
+  "Parse mementum/knowledge/bailian-pricing.md and return pricing alist.
+Each entry: (:model :input-cny :output-cny :cache-cny :context :last-updated).
+Extracts last-updated from frontmatter for freshness tracking."
+  (let* ((root (gptel-auto-workflow-self-audit--root))
+         (pricing-file (expand-file-name
+                        "mementum/knowledge/bailian-pricing.md" root))
+         (pricing '())
+         (last-updated ""))
+    (when (file-exists-p pricing-file)
+      (with-temp-buffer
+        (insert-file-contents pricing-file)
+        (goto-char (point-min))
+        ;; Extract last-updated from frontmatter
+        (when (re-search-forward "^last-updated: \\(.+\\)" nil t)
+          (setq last-updated (string-trim (match-string 1))))
+        ;; Parse pricing blocks: ```pricing ... ```
+        (goto-char (point-min))
+        (while (search-forward "```pricing" nil t)
+          (forward-line 1)
+          (let ((start (point)))
+            (when (search-forward "```" nil t)
+              (forward-line 0)
+              (let ((block (buffer-substring start (point))))
+                (dolist (line (split-string block "\n" t))
+                  (let ((parts (split-string line "|" t)))
+                    (when (>= (length parts) 5)
+                      (let ((model (string-trim (nth 0 parts)))
+                            (input-cny (string-to-number (string-trim (nth 1 parts))))
+                            (output-cny (string-to-number (string-trim (nth 2 parts))))
+                            (cache-cny (string-to-number (string-trim (nth 3 parts))))
+                            (context (string-to-number (string-trim (nth 4 parts)))))
+                        (when (and (> input-cny 0) (> output-cny 0))
+                          (push (list :model model
+                                      :input-cny input-cny
+                                      :output-cny output-cny
+                                      :cache-cny cache-cny
+                                      :context context
+                                      :last-updated last-updated)
+                                 pricing))))))))
+        ))
+        (nreverse pricing)))))
+
+(defun gptel-auto-workflow-self-audit--find-provider-for-model (model)
+  "Find which provider in gptel-backend-registry has MODEL.
+Returns provider name or nil."
+  (when (boundp 'gptel-backend-registry)
+    (catch 'found
+      (dolist (entry gptel-backend-registry)
+        (let* ((provider (car entry))
+               (plist (cdr entry))
+               (models (plist-get plist :models)))
+          (when (and models (memq (intern model) models))
+            (throw 'found provider)))))))
+
+(defun gptel-auto-workflow-self-audit--get-registry-pricing (provider model)
+  "Get current pricing from gptel-backend-registry for PROVIDER/MODEL.
+Returns plist (:input :output :cache :context) or nil."
+  (when (and (boundp 'gptel-backend-registry) provider)
+    (let ((entry (assoc provider gptel-backend-registry)))
+      (when entry
+        (let* ((plist (cdr entry))
+               (metadata (plist-get plist :model-metadata))
+               (model-sym (intern model))
+               (model-entry (assoc model-sym metadata)))
+          (when model-entry
+            (let ((mplist (cdr model-entry)))
+              (list :input (or (plist-get mplist :pricing-input) 0)
+                    :output (or (plist-get mplist :pricing-output) 0)
+                    :cache (or (plist-get mplist :pricing-cache-hit) 0)
+                    :context (or (plist-get mplist :context-window) 0)))))))))
+
+(defun gptel-auto-workflow-self-audit--check-pricing-freshness ()
+  "Compare bailian-pricing.md knowledge page against gptel-backend-registry.
+Returns plist (:stale-count :discrepancies :knowledge-count :last-updated
+:days-stale).
+Each discrepancy: (:model :provider :field :expected :actual).
+Also flags if the knowledge page hasn't been updated in >30 days."
+  (let ((knowledge (gptel-auto-workflow-self-audit--parse-pricing-knowledge))
+        (discrepancies '())
+        (conversion-rate 0.138)  ; 1 CNY ≈ $0.138
+        (last-updated "")
+        (days-stale 0))
+    ;; Check knowledge page freshness
+    (when knowledge
+      (setq last-updated (plist-get (car knowledge) :last-updated))
+      (when (not (string-empty-p last-updated))
+        (let* ((updated-time (condition-case nil
+                                 (float-time
+                                  (date-to-time
+                                   (replace-regexp-in-string "T" " " last-updated)))
+                               (error nil)))
+               (now (float-time))
+               (days (when updated-time (/ (- now updated-time) 86400))))
+          (when days (setq days-stale (floor days))))))
+    ;; Compare knowledge entries against registry
+    (dolist (entry knowledge)
+      (let* ((model (plist-get entry :model))
+             (input-cny (plist-get entry :input-cny))
+             (output-cny (plist-get entry :output-cny))
+             (cache-cny (plist-get entry :cache-cny))
+             (context-kb (plist-get entry :context))
+             (provider (gptel-auto-workflow-self-audit--find-provider-for-model
+                        model))
+             (reg (when provider
+                    (gptel-auto-workflow-self-audit--get-registry-pricing
+                     provider model)))
+             (expected-input (* input-cny conversion-rate))
+             (expected-output (* output-cny conversion-rate))
+             (expected-cache (* cache-cny conversion-rate)))
+        (when reg
+          ;; Check input price (20% tolerance for exchange rate)
+          (when (and (> expected-input 0)
+                     (> (abs (- (plist-get reg :input) expected-input))
+                        (* expected-input 0.2)))
+            (push (list :model model :provider provider :field :pricing-input
+                        :expected (format "%.2f" expected-input)
+                        :actual (format "%.2f" (plist-get reg :input)))
+                  discrepancies))
+          ;; Check output price
+          (when (and (> expected-output 0)
+                     (> (abs (- (plist-get reg :output) expected-output))
+                        (* expected-output 0.2)))
+            (push (list :model model :provider provider :field :pricing-output
+                        :expected (format "%.2f" expected-output)
+                        :actual (format "%.2f" (plist-get reg :output)))
+                  discrepancies))
+          ;; Check context window
+          (when (and (> context-kb 0)
+                     (/= (plist-get reg :context) context-kb))
+            (push (list :model model :provider provider :field :context-window
+                        :expected (number-to-string context-kb)
+                        :actual (number-to-string (plist-get reg :context)))
+                  discrepancies)))))
+    ;; Add staleness warning if knowledge page is old
+    (when (> days-stale 30)
+      (push (list :model "KNOWLEDGE-PAGE" :provider "N/A"
+                  :field :freshness
+                  :expected (format "≤30 days")
+                  :actual (format "%d days stale" days-stale))
+            discrepancies))
+    (list :stale-count (length discrepancies)
+          :discrepancies (nreverse discrepancies)
+          :knowledge-count (length knowledge)
+          :last-updated last-updated
+          :days-stale days-stale
+          :last-checked (format-time-string "%Y-%m-%dT%H:%M:%S"))))
+
+(defun gptel-auto-workflow-self-audit--format-pricing-report (result)
+  "Format pricing freshness result as a readable string."
+  (let ((stale (plist-get result :stale-count))
+        (disc (plist-get result :discrepancies))
+        (kcount (plist-get result :knowledge-count))
+        (days-stale (plist-get result :days-stale)))
+    (concat
+     (format "Pricing check: %d models known, %d discrepancies" kcount stale)
+     (when (> days-stale 0)
+       (format " (knowledge page %d days old)" days-stale))
+     (if (= stale 0)
+         " — pricing fresh ✓"
+       (concat
+        "\n" (mapconcat
+              (lambda (d)
+                (format "  - %s/%s %s: expected %s, actual %s"
+                        (plist-get d :provider) (plist-get d :model)
+                        (plist-get d :field)
+                        (plist-get d :expected)
+                        (plist-get d :actual)))
+              disc "\n")
+        (when (> days-stale 30)
+          "\n⚠ Knowledge page >30 days stale — update from Bailian console")
+        "\n→ Resolve: update registry OR update bailian-pricing.md")))))
+
+;;; Token Economics (real per-model pricing from registry)
+
+(defun gptel-auto-workflow-self-audit--compute-token-economics (&optional root)
+  "Compute token economics from experiment TSV data using real registry pricing.
+Scans var/tmp/experiments/*/results.tsv for last 24h.
+Returns plist (:total :total-cost :kept :kept-cost :models-seen
+:model-breakdown).
+:model-breakdown is ((:model :count :kept-count :cost :speed :capabilities)
+...)."
+  (let* ((root (or root (gptel-auto-workflow-self-audit--root)))
+         (exp-dir (expand-file-name "var/tmp/experiments" root))
+         (cutoff (- (float-time) 86400))  ; 24h
+         (pricing (make-hash-table :test 'equal))
+         (model-stats (make-hash-table :test 'equal))
+         (total 0) (kept 0) (total-cost 0.0) (kept-cost 0.0))
+    ;; Build pricing + metadata lookup from registry
+    (when (boundp 'gptel-backend-registry)
+      (dolist (entry gptel-backend-registry)
+        (dolist (m (plist-get (cdr entry) :model-metadata))
+          (let* ((model (symbol-name (car m)))
+                 (p (cdr m))
+                 (in (or (plist-get p :pricing-input) 0.0))
+                 (out (or (plist-get p :pricing-output) 0.0))
+                 (cache (or (plist-get p :pricing-cache-hit) 0.0))
+                 (speed (or (plist-get p :speed) 'unknown))
+                 (caps (or (plist-get p :capabilities) '(code-generation))))
+            (puthash model (list :cost (+ in cache)
+                                 :speed speed
+                                 :capabilities caps)
+                     pricing)))))
+    ;; Scan recent TSV files
+    (when (file-directory-p exp-dir)
+      (dolist (tsv (directory-files exp-dir t "results\\.tsv$"))
+        (when (> (float-time (nth 5 (file-attributes tsv))) cutoff)
+          (condition-case nil
+              (with-temp-buffer
+                (insert-file-contents tsv)
+                (goto-char (point-min))
+                (while (not (eobp))
+                  (let* ((line (buffer-substring (point) (line-end-position)))
+                         (fields (split-string line "\t")))
+                    (when (>= (length fields) 16)
+                      (let* ((model (nth 15 fields))
+                             (decision (nth 7 fields))
+                             (info (or (gethash model pricing)
+                                       (list :cost 0.10 :speed 'unknown
+                                             :capabilities '(code-generation))))
+                             (cost (plist-get info :cost))
+                             (kept-p (string-match-p
+                                      "\\`\\(kept\\|grader-bypass\\|merged\\|staged\\)"
+                                      decision))
+                             (stats (or (gethash model model-stats)
+                                        (list :count 0 :kept-count 0
+                                              :total-cost 0.0 :kept-cost 0.0
+                                              :speed (plist-get info :speed)
+                                              :caps (plist-get info :capabilities)))))
+                        ;; Update per-model stats
+                        (plist-put stats :count (1+ (plist-get stats :count)))
+                        (plist-put stats :total-cost
+                                   (+ (plist-get stats :total-cost) cost))
+                        (when kept-p
+                          (plist-put stats :kept-count
+                                     (1+ (plist-get stats :kept-count)))
+                          (plist-put stats :kept-cost
+                                     (+ (plist-get stats :kept-cost) cost)))
+                        (puthash model stats model-stats)
+                        ;; Totals
+                        (setq total (1+ total))
+                        (setq total-cost (+ total-cost cost))
+                        (when kept-p
+                          (setq kept (1+ kept))
+                          (setq kept-cost (+ kept-cost cost)))))
+                    (forward-line 1))))
+            (error nil)))))
+    ;; Build sorted model breakdown
+    (let ((breakdown '()))
+      (maphash (lambda (model stats)
+                 (push (append (list :model model) stats) breakdown))
+               model-stats)
+      (setq breakdown (sort breakdown
+                            (lambda (a b)
+                              (> (plist-get a :total-cost)
+                                 (plist-get b :total-cost)))))
+      (list :total total :total-cost total-cost
+            :kept kept :kept-cost kept-cost
+            :models-seen (hash-table-count model-stats)
+            :model-breakdown breakdown))))
 
 (provide 'gptel-auto-workflow-self-audit)
 ;;; gptel-auto-workflow-self-audit.el ends here

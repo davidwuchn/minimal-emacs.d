@@ -11,7 +11,7 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 61 experiments (3% keep rate).*
+*Consolidated from 67 experiments (3% keep rate).*
 
 **Performance:** 2 kept / 0 discarded / 25 failed (EXTRACTED — from TSV)
 
@@ -55,328 +55,57 @@ These targets may need different research patterns or the research findings were
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-(tool-result (#s(gptel-tool #[(&rest call-args) ((condition-case err (let* ((actual-args (if async-p (cdr call-args) call-args)) (normalized-args (copy-sequence actual-args)) (i 0) (specs (if (functionp args) (funcall args) args))) (if (and specs (proper-list-p specs)) (progn (let ((tail specs)) (while tail (let ((spec (car tail))) (let* ((raw-val (nth i normalized-args)) (val (if (null raw-val) raw-val (nucleus-tools--normalize-arg-value raw-val spec))) (type (plist-get spec :type)) (arg-name (plist-get spec :name)) (optional (plist-get spec :optional))) (if (equal raw-val val) nil (let* ((c (nthcdr i normalized-args))) (setcar c val))) (cond ((and (null val) (not optional) (not (or (equal type boolean) (eq type 'boolean)))) (nucleus-tools--validation-error tool-name :required arg-name)) ((not (null val)) (cond ((member type '(string string)) (let nil (nucleus-tools--validate-string val arg-name spec))) ((member type '(integer integer)) (let nil (nucleus-tools--validate-number val arg-name spec) (if (integerp val) nil (nucleus-tools--validation-error arg-name :type an integer val)))) ((member type '(number number)) (let nil (nucleus-tools--validate-number val arg-name spec))) ((member type '(boolean boolean)) (let nil (if (memq val '(t nil :json-false)) nil (nucleus-tools--validation-error arg-name :type a boolean val)))) ((member type '(array array)) (let nil (nucleus-tools--validate-array val arg-name spec))) ((member type '(object object)) (let nil (if (or (hash-table-p val) (listp val)) nil (nucleus-tools--validation-error arg-name :type an object val)))) (t 'nil)))) (setq i (1+ i))) (setq tail (cdr tail))))))) (if async-p (apply func (car call-args) normalized-args) (apply func normalized-args))) (user-error (if async-p (let ((callback (car call-args))) (if (functionp callback) (funcall callback (format Error: %s (error-message-string err))) (signal (car err) (cdr err)))) (signal (car err) (cdr err)))))) ((async-p) (args (:name file_path :type string :description Path to the file to read) (:name start_line :type integer :optional t :description Start line (1-indexed)) (:name end_line :type integer :optional t :description End line (1-indexed)) (:name hashline :type boolean :optional t :description When true, prefix each line with hashline tag (e.g. '42:a3|content') for stable editing)) (func . #[(&rest args) ((let* ((err (and t (my/gptel-tool-acl-check name args)))) (if err (error %s err) (apply orig-func args)))) ((orig-func . my/gptel--read-file-safe) (name . Read))]) (tool-name . Read))] Read Read file contents by line range. When hashline=true, returns content-addressed line tags for reliable editing. PDF files extracted as text. Binary files rejected. ((:name file_path :type string :description Path to the file to read) (:name start_line :type integer :optional t :description Start line (1-indexed)) (:name end_line :type integer :optional t :description End line (1-indexed)) (:name hashline :type boolean :optional t :description When true, prefix each line with hashline tag (e.g. '42:a3|content') for stable editing)) nil gptel-agent #[(&rest args) ((or (my/gptel-tool-acl-needs-confirm name args) (and (functionp orig-confirm) (apply orig-confirm args)) (and (not (functionp orig-confirm)) orig-confirm))) ((orig-confirm) (name . Read))] t) (:file_path lisp/modules/gptel-tools-agent-error.el :start_line 1 :end_line 50) error Error: File /home/davidwu/lisp/modules/gptel-tools-agent-error.el is not readable) (#s(gptel-tool #[(&rest call-args) ((condition-case err (let* ((actual-args (if async-p (cdr call-args) call-args)) (normalized-args (copy-sequence actual-args)) (i 0) (specs (if (functionp args) (funcall args) args))) (if (and specs (proper-list-p specs)) (progn (let ((tail specs)) (while tail (let ((spec (car tail))) (let* ((raw-val (nth i normalized-args)) (val (if (null raw-val) raw-val (nucleus-tools--normalize-arg-value raw-val spec))) (type (plist-get spec :type)) (arg-name (plist-get spec :
--- ... truncated ...
+# Distillation
+
+## Scope
+- **Strategy:** template-default
+- **Experiments:** 67 across 9 targets
+- **Files investigated:** 8 gptel modules + 1 staging-review
+
+## Valid Findings (2 kept, 0 discarded)
+
+### 1. Dead-marker crash risk via `where` parameter
+**Issue:** A `where` value may be a marker from a buffer that has since been killed. Passing such a dead marker downstream will trigger errors.
+**Fix:** Add a `marker-live` check before delegating `where` to the original function.
+
+### 2. Missing nil-guard in `gptel-auto-workflow--research-cache-get`
+**Issue:** The function assumes the research-findings cache hash table is live. If nil (early startup or after error recovery), it raises `wrong-type-argument`.
+**Fix:** Add a `hash-table-p` guard, mirroring the existing pattern in `gptel-auto-workflow-strategic.el:2719-2721`.
+**Note:** This is an internal inconsistency — the same library already protects against this case elsewhere.
+
+## Net Assessment
+Both findings are **defensive-coding gaps** in early/error-recovery paths. Neither appears to be a logic bug; both are robustness/consistency fixes. Low risk to apply, high value for startup and post-error resilience.
 ```
 
 ### Check Issues
 
-## Summary
+# Review of Distillation
 
-The two `Read` errors were caused by **incorrect file paths** — the `.emacs.d` component was missing.
+## What's working
 
-| Incorrect path (errored) | Correct path (works) |
-|---|---|
-| `/home/davidwu/lisp/modules/gptel-tools-agent-error.el` | `/home/davidwu/.emacs.d/lisp/modules/gptel-tools-agent-error.el` |
-| `/home/davidwu/lisp/modules/gptel-auto-workflow-strategic.el` | `/home/davidwu/.emacs.d/lisp/modules/gptel-auto-workflow-strategic.el` |
+- **Clean separation** of findings from net assessment — easy to scan.
+- **Finding 2 is well-anchored:** names the function, points to the reference pattern with line numbers, and the "internal inconsistency" note is the strongest part — it's a load-bearing argument that the fix is *removing* inconsistency, not adding new behavior.
+- **Net assessment correctly distinguishes** defensive-coding gaps from logic bugs, and the risk/value framing ("low risk to apply, high value") is appropriate.
 
-Both files **do exist** and are readable at the correct paths under `~/.emacs.d/lisp/modules/`. The `lisp/` directory lives inside `.emacs.d/`, not directly under `$HOME`.
+## What needs attention
+
+### 1. Asymmetric specificity between the two findings
+Finding 2 cites a function name and a reference line range (`gptel-auto-workflow-strategic.el:2719-2721`). Finding 1 cites neither. It should specify:
+- Which function receives `where`
+- Which downstream call would raise (e.g., `save-excursion`, `goto-char`, `insert`?)
+- File and approximate line range
+
+Without that, Finding 1 is unverifiable from the document alone.
+
+### 2. "0 discarded" is underspecified
+"2 kept, 0 discarded" implies a triage step, but the original count is missing. Readers can't judge the filter's selectivity. Either drop the kept/discarded framing or include the input count (e.g., "2 kept, 0 discarded from N total").
+
+### 3. "template-default" strategy is undefined
+In Scope, this label is opaque. If it refers to a specific strategy in the codebase, name it; if it's a meta-template descriptor, say so explicitly. As written, a reader six months from now w
+
+... (truncated)

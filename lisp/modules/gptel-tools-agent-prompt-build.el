@@ -1109,7 +1109,8 @@ Returns a compact lambda-notation string ready for the LLM."
               (context-db (cdr (assoc 'context-db-context vars)))
               (system-health (cdr (assoc 'system-health-context vars)))
               (human-priorities (cdr (assoc 'human-priorities-context vars)))
-              (github-sensor (cdr (assoc 'github-sensor-context vars))))
+              (github-sensor (cdr (assoc 'github-sensor-context vars)))
+              (graph-topology (cdr (assoc 'graph-topology-context vars))))
     (concat
       ;; KV CACHE PREFIX — STATIC sections first (shared across experiments)
       ;; These tokens are identical for every experiment → high cache-hit rate.
@@ -1180,6 +1181,7 @@ Returns a compact lambda-notation string ready for the LLM."
        (if system-health (concat system-health "\n") "")
        (if human-priorities (concat human-priorities "\n") "")
        (if github-sensor (concat github-sensor "\n") "")
+       (if graph-topology (concat graph-topology "\n") "")
        (if git-hist (concat "GIT: " git-hist "\n") "")
       (if axis-g (concat "AXIS: " axis-g "\n") "")
       (if axis-p (concat "AXIS-PERF: " axis-p "\n") "")
@@ -1374,6 +1376,14 @@ This injects REAL USER SIGNALS (GitHub Issues) into evolution prompts."
                  (not (string-match-p "0 open, 0 closed" summary)))
         (concat "EXTERNAL-SIGNALS (GitHub Issues — real user feedback):\n"
                 summary)))))
+
+(defun gptel-auto-experiment--graph-topology-for-prompt ()
+  "Return knowledge graph topology summary for prompt injection.
+Calls unified-graph-stats-for-prompt which detects communities,
+god nodes, and surprising cross-community connections.
+Returns nil if the memory-schema module is unavailable."
+  (when (fboundp 'gptel-auto-workflow--unified-graph-stats-for-prompt)
+    (gptel-auto-workflow--unified-graph-stats-for-prompt)))
 
 (defun gptel-auto-experiment--human-priorities-for-prompt ()
   "Read approved proposals from the approval queue and format as business context.
@@ -1749,6 +1759,7 @@ Read ONE function. Edit ONE line. Verify. Done."))))
                 (system-health-context . ,(gptel-auto-experiment--system-health-for-prompt))
                 (human-priorities-context . ,(gptel-auto-experiment--human-priorities-for-prompt))
                 (github-sensor-context . ,(gptel-auto-experiment--github-sensor-for-prompt))
+                (graph-topology-context . ,(gptel-auto-experiment--graph-topology-for-prompt))
                 (time-budget . ,(/ gptel-auto-experiment-time-budget 60))
               (focus-line . ,focus-line)
               (sexp-check-command . ,sexp-check-command))))

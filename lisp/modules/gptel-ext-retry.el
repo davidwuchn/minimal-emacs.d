@@ -982,9 +982,10 @@ EDGE CASE: TRIM-FN may return nil or 0 — handled gracefully."
     ("kimi-k2.6"          . 800000)
     ("kimi-k2.5"          . 800000)   ; legacy alias for k2.6
     ("kimi-for-coding"    . 400000)
-    ("qwen3.7-plus"       . 400000)   ; 131K tokens, replaces qwen3.6-plus
-    ("qwen3.6-plus"       . 400000)
-    ("qwen3.6-flash"      . 400000)
+    ("qwen3.7-max"        . 3000000)  ; 1M tokens ≈ 3.5MB
+    ("qwen3.7-plus"       . 3000000)  ; 1M tokens, Bailian tiered ¥2-6/¥8-24
+    ("qwen3.6-plus"       . 3000000)  ; 1M tokens
+    ("qwen3.6-flash"      . 3000000)  ; 1M tokens, Bailian tiered ¥1.2-4.8/¥7.2-28.8
     ("qwen3-coder-next"   . 400000)
     ("qwen3-coder-plus"   . 3000000)  ; 1M tokens ≈ 3.5MB, leave room for output
     ("qwen3-max-2026-01-23" . 400000)

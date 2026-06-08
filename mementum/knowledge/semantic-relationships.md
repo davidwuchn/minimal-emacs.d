@@ -4,21 +4,21 @@
 
 # Semantic File Relationships
 
-Generated: 2026-06-07T15:09
+Generated: 2026-06-04T00:21
 
-| lisp/modules/gptel-tools-agent-base.el | lisp/modules/gptel-tools-agent-prompt-build.el | 0.750 |
-| lisp/modules/gptel-auto-workflow-research-benchmark.el | lisp/modules/gptel-tools-agent-prompt-build.el | 0.500 |
-| lisp/modules/gptel-benchmark-auto-improve.el | lisp/modules/gptel-benchmark-subagent.el | 0.400 |
-| lisp/modules/gptel-benchmark-integrate.el | lisp/modules/gptel-benchmark-subagent.el | 0.400 |
-| lisp/modules/gptel-benchmark-integration-tests.el | lisp/modules/gptel-benchmark-subagent.el | 0.400 |
-| lisp/modules/gptel-benchmark-subagent.el | lisp/modules/gptel-skill-benchmark.el | 0.400 |
-| lisp/modules/gptel-auto-workflow-research-benchmark.el | lisp/modules/gptel-benchmark-subagent.el | 0.400 |
-| lisp/modules/gptel-auto-workflow-evolution.el | lisp/modules/gptel-tools-agent-prompt-build.el | 0.400 |
-| lisp/modules/gptel-benchmark-subagent.el | lisp/modules/gptel-monitoring-agent.el | 0.333 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/gptel-tools-agent-prompt-build.el | 0.300 |
-| lisp/modules/gptel-auto-workflow-external-sensors.el | lisp/modules/gptel-benchmark-subagent.el | 0.286 |
-| lisp/modules/gptel-auto-workflow-human-interface.el | lisp/modules/gptel-tools-agent-prompt-build.el | 0.250 |
-| lisp/modules/gptel-benchmark-subagent.el | lisp/modules/gptel-tools-agent-prompt-build.el | 0.222 |
+| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-auto-workflow-strategic.el | 0.800 |
+| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-benchmark-core.el | 0.333 |
+| lisp/modules/gptel-auto-workflow-beads.el | lisp/modules/gptel-auto-workflow-projects.el | 0.333 |
+| lisp/modules/gptel-auto-workflow-production.el | lisp/modules/gptel-auto-workflow-projects.el | 0.333 |
+| lisp/modules/gptel-auto-workflow-cq-evolution.el | lisp/modules/gptel-auto-workflow-projects.el | 0.333 |
+| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-auto-workflow-research-benchmark.el | 0.333 |
+| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-ext-retry.el | 0.286 |
+| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-ext-backend-registry.el | 0.286 |
+| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-tools-agent-research.el | 0.286 |
+| lisp/modules/gptel-auto-workflow-evolution.el | lisp/modules/gptel-auto-workflow-projects.el | 0.267 |
+| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/standalone-research.el | 0.250 |
+| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-tools-agent-prompt-build.el | 0.231 |
+| lisp/modules/gptel-auto-workflow-ontology-router.el | lisp/modules/gptel-auto-workflow-projects.el | 0.200 |
 
 ## Ontology Implications
 
