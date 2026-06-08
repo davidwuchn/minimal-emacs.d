@@ -22,7 +22,6 @@
 (declare-function gptel-auto-workflow--categorize-target "gptel-auto-workflow-ontology-router")
 (declare-function skill-graph-node-level "gptel-auto-workflow-skill-graph")
 (declare-function skill-graph-edge-weight "gptel-auto-workflow-skill-graph")
-(declare-function gptel-auto-workflow-self-audit--root "gptel-auto-workflow-self-audit")
 (defvar skill-graph--edges)
 
 ;; ─── Configuration ───
@@ -1364,6 +1363,55 @@ label:l.type,title:l.confidence+'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 w='+l.weight,color:{color:l.confidence===\='EXTRACTED\='?'#4fc3f7':l.confidence===\='INFERRED\='?'#ffb74d':'#ef5350'}})));
   var container=document.getElementById(\='graph\=');
   new vis.Network(container,{nodes:nodes,edges:edges},{
@@ -1386,7 +1434,105 @@ w='+l.weight,color:{color:l.confidence===\='EXTRACTED\='?'#4fc3f7':l.confidence=
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 groups:{1:{color:{background:'#1565c0'}},2:{color:{background:'#2e7d32'}},3:{color:{background:'#6a1b9a'}}},
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1551,7 +1697,7 @@ Returns list of question strings."
         (maphash (lambda (k e) (when (null e) (setq isolated (1+ isolated)) (when (<= isolated 3) (push (format "Why is %s:%s isolated with no connections?" (car k) (cdr k)) questions)))) graph))
       ;; AMBIGUOUS edges — need verification
       (let ((amb-count 0))
-         (maphash (lambda (_k edges) (dolist (e (or edges ())) (when (eq (nth 3 e) 'AMBIGUOUS) (setq amb-count (1+ amb-count)))) (when (>= amb-count 3) (unless (member "Verify AMBIGUOUS graph edges — some connections may be wrong" questions) (push "Verify AMBIGUOUS graph edges — some connections may be wrong" questions)))) graph))
+         (maphash (lambda (_k edges) (dolist (e (or edges ())) (when (eq (nth 3 e) 'AMBIGUOUS) (setq amb-count (1+ amb-count)))) (when (>= amb-count 3) (unless (member "Verify AMBIGUOUS graph edges — some connections may be wrong" questions) (push "Verify AMBIGUOUS graph edges — some connections may be wrong" questions))))) graph)
       ;; God nodes with many INFERRED edges
       (let ((gn (gptel-auto-workflow--unified-graph-god-nodes 3)))
         (dolist (g gn) (push (format "What is the role of %s:%s (degree=%d) in the architecture?" (caar g) (cdar g) (cdr g)) questions))))
