@@ -268,6 +268,16 @@ Returns plist with :success, :module, :kept, :score-after, :result."
         (error
          (message "[regen] Experiment run failed: %s" (error-message-string err))
          (setq gptel-auto-workflow--experiment-prompt-override nil)
+         (when (fboundp 'gptel-auto-workflow--mementum-write-memory)
+           (let ((slug-module
+                  (if (fboundp 'gptel-auto-workflow--mementum-slug)
+                      (gptel-auto-workflow--mementum-slug module)
+                    (replace-regexp-in-string
+                     "[^a-zA-Z0-9]" "-" (downcase (or module "unknown"))))))
+             (gptel-auto-workflow--mementum-write-memory
+              '❌ (format "regen-failed-%s" slug-module)
+              (format "Regeneration error: %s, module: %s, model: %s"
+                      (error-message-string err) module target-model))))
          (list :success nil
                :module module
                :reason (error-message-string err)

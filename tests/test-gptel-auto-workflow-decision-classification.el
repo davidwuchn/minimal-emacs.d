@@ -316,7 +316,7 @@ Not actually called because setup resets to known good values."
   (with-clean-decision-classification-state
    (setq gptel-auto-workflow--risk-patterns
          '((:pattern-name "test/pattern" :count 3 :confidence 0.7)))
-   (let ((tmp-dir (make-temp-file "test-dc-")))
+   (let ((tmp-dir (make-temp-file "test-dc-" t)))
      (unwind-protect
          (let ((default-directory tmp-dir))
            (let ((result (gptel-auto-workflow--persist-risk-patterns)))
@@ -327,7 +327,7 @@ Not actually called because setup resets to known good values."
 (ert-deftest test-decision-classification/load-risk-patterns ()
   "Should load risk patterns from var/risk-patterns.sexp."
   (with-clean-decision-classification-state
-   (let ((tmp-dir (make-temp-file "test-dc-")))
+   (let ((tmp-dir (make-temp-file "test-dc-" t)))
      (unwind-protect
          (let ((default-directory tmp-dir))
            ;; First persist
@@ -345,7 +345,7 @@ Not actually called because setup resets to known good values."
 (ert-deftest test-decision-classification/load-risk-patterns-no-file ()
   "Should return nil when risk-patterns.sexp does not exist."
   (with-clean-decision-classification-state
-   (let ((tmp-dir (make-temp-file "test-dc-")))
+   (let ((tmp-dir (make-temp-file "test-dc-" t)))
      (unwind-protect
          (let ((default-directory tmp-dir))
            (should-not (file-exists-p (expand-file-name "var/risk-patterns.sexp" tmp-dir)))
@@ -357,7 +357,7 @@ Not actually called because setup resets to known good values."
   (with-clean-decision-classification-state
    (setq gptel-auto-workflow--approval-history
          '((:experiment-id "exp-1" :approval-type :auto-approved)))
-   (let ((tmp-dir (make-temp-file "test-dc-")))
+   (let ((tmp-dir (make-temp-file "test-dc-" t)))
      (unwind-protect
          (let ((default-directory tmp-dir))
            (let ((result (gptel-auto-workflow--persist-approval-history)))
@@ -368,7 +368,7 @@ Not actually called because setup resets to known good values."
 (ert-deftest test-decision-classification/load-approval-history ()
   "Should load approval history from var/approval-history.sexp."
   (with-clean-decision-classification-state
-   (let ((tmp-dir (make-temp-file "test-dc-")))
+   (let ((tmp-dir (make-temp-file "test-dc-" t)))
      (unwind-protect
          (let ((default-directory tmp-dir))
            ;; Persist
@@ -386,7 +386,7 @@ Not actually called because setup resets to known good values."
 (ert-deftest test-decision-classification/learn-risk-patterns-persists ()
   "learn-risk-patterns should call persist-risk-patterns at the end."
   (with-clean-decision-classification-state
-   (let ((tmp-dir (make-temp-file "test-dc-")))
+   (let ((tmp-dir (make-temp-file "test-dc-" t)))
      (unwind-protect
          (let ((default-directory tmp-dir))
            ;; Add some history
@@ -406,7 +406,7 @@ Not actually called because setup resets to known good values."
 (ert-deftest test-decision-classification/track-approval-decision-persists ()
   "track-approval-decision should also persist approval-history."
   (with-clean-decision-classification-state
-   (let ((tmp-dir (make-temp-file "test-dc-")))
+   (let ((tmp-dir (make-temp-file "test-dc-" t)))
      (unwind-protect
          (let ((default-directory tmp-dir))
            (setq gptel-auto-workflow--approval-history nil)
