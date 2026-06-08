@@ -546,5 +546,43 @@ Returns plist :before-issues, :after-issues, :improved-p, :delta."
                          (format "%d issues remain after remediation"
                                  after-issues)))))
 
+;;; Signal-file reader (bridge between pipeline bash → daemon Emacs)
+
+(defun gptel-auto-workflow-self-audit-apply-pipeline-signals ()
+  "Read signal files written by pipeline Step 0.5 and apply them to the daemon.
+This bridges bash auto-fix signals into the Emacs daemon process.
+Returns number of signals applied."
+  (let* ((root (gptel-auto-workflow-self-audit--root))
+         (force-file (expand-file-name "var/tmp/force-try-backends.txt" root))
+         (exploration-file (expand-file-name "var/tmp/exploration-rateOverride.txt" root))
+         (applied 0))
+    ;; Auto-fix 1: Unblock cold backends from rate-limit blacklist
+    (when (file-exists-p force-file)
+      (let ((cold-names (with-temp-buffer
+                           (insert-file-contents force-file)
+                           (split-string (buffer-string) "," t))))
+        (when (and cold-names (boundp 'gptel-auto-workflow--rate-limited-backends))
+          (dolist (name cold-names)
+            (setq gptel-auto-workflow--rate-limited-backends
+                  (delete name gptel-auto-workflow--rate-limited-backends)))
+          (message "[self-audit] Force-try: %d cold backends unblocked (%s)"
+                   (length cold-names)
+                   (mapconcat #'identity cold-names ", "))
+          (setq applied (1+ applied)))))
+    ;; Auto-fix 2: Override exploration rate from pipeline signal
+    (when (file-exists-p exploration-file)
+      (let ((rate (with-temp-buffer
+                    (insert-file-contents exploration-file)
+                    (string-to-number (buffer-string)))))
+        (when (and (> rate 0)
+                   (boundp 'gptel-auto-workflow--ontology-reorder-exploration-rate))
+          (setq gptel-auto-workflow--ontology-reorder-exploration-rate (/ rate 100.0))
+          (message "[self-audit] Exploration override: %d%% (from pipeline)" rate)
+          (setq applied (1+ applied)))))
+    ;; Clean up signal files (one-shot, consumed)
+    (when (file-exists-p force-file) (delete-file force-file))
+    (when (file-exists-p exploration-file) (delete-file exploration-file))
+    applied))
+
 (provide 'gptel-auto-workflow-self-audit)
 ;;; gptel-auto-workflow-self-audit.el ends here

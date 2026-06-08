@@ -611,11 +611,11 @@ if [ -n "$SELF_AUDIT_REPORT" ]; then
     log "$SELF_AUDIT_REPORT"
     # Read structured result file for specific remediation actions
     if [ -f "$SELF_AUDIT_RESULT_FILE" ]; then
-        AUDIT_ISSUES=$(grep 'issues-count' "$SELF_AUDIT_RESULT_FILE" 2>/dev/null | perl -pi -e 's/.*\. (\d+)/$1/' || echo 0)
-        COLD_BACKENDS=$(grep 'cold-backends' "$SELF_AUDIT_RESULT_FILE" 2>/dev/null | perl -pi -e 's/\(cold-backends \(([^)]+)\)\)/$1/' | perl -pi -e 's/"//g' || echo "")
-        UNEVALUATED_STRATS=$(grep 'unevaluated-strategies' "$SELF_AUDIT_RESULT_FILE" 2>/dev/null | perl -pi -e 's/.*\. (\d+)/$1/' || echo 0)
-        BOTTLENECK=$(grep 'staging-merge-bottleneck' "$SELF_AUDIT_RESULT_FILE" 2>/dev/null | grep -c 't' || echo 0)
-        BROKEN_MODULES=$(grep 'broken-modules' "$SELF_AUDIT_RESULT_FILE" 2>/dev/null | wc -l || echo 0)
+        AUDIT_ISSUES=$(grep 'issues-count' "$SELF_AUDIT_RESULT_FILE" | sed -n 's/.*\. *\([0-9]*\))/\1/p')
+        COLD_BACKENDS=$(grep 'cold-backends \.' "$SELF_AUDIT_RESULT_FILE" | grep -oP '"[^"]*"' | tr -d '"' | tr '\n' ',' | sed 's/,$//')
+        UNEVALUATED_STRATS=$(grep 'unevaluated-strategies' "$SELF_AUDIT_RESULT_FILE" | sed -n 's/.*\. *\([0-9]*\))/\1/p')
+        BOTTLENECK=$(grep 'staging-merge-bottleneck' "$SELF_AUDIT_RESULT_FILE" | grep -cP '\. t\b' || echo 0)
+        BROKEN_MODULES=$(grep 'broken-modules' "$SELF_AUDIT_RESULT_FILE" | wc -l || echo 0)
         log "  Structured audit: $AUDIT_ISSUES issues, $BROKEN_MODULES broken modules, bottleneck=$BOTTLENECK"
     fi
 else
@@ -1354,7 +1354,8 @@ if [ -f "$SELF_AUDIT_RESULT_FILE" ]; then
            (let ((result (gptel-auto-workflow-self-audit-run)))
              (when result
                (princ (format "after-issues: %d\n" (plist-get result :issues))))))' 2>&1)
-    AFTER_ISSUES=$(echo "$VERIFY_REPORT" | grep 'after-issues' | perl -pi -e 's/.*: (\d+)/$1/' || echo "$BEFORE_ISSUES")
+    AFTER_ISSUES=$(echo "$VERIFY_REPORT" | grep 'after-issues' | sed -n 's/.*: *\([0-9]*\)/\1/p')
+    : "${AFTER_ISSUES:=$BEFORE_ISSUES}"
     DELTA=$((BEFORE_ISSUES - AFTER_ISSUES))
     if [ "$DELTA" -gt 0 ]; then
         log "  ✓ Recovery verified: $BEFORE_ISSUES → $AFTER_ISSUES issues (improved by $DELTA)"
