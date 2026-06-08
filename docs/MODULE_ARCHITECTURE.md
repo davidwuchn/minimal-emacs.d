@@ -51,6 +51,25 @@ The nucleus system is built on **gptel** (upstream LLM chat engine) with layered
 └───────────────────────────┬─────────────────────────────────────────┘
                             │
 ┌───────────────────────────▼─────────────────────────────────────────┐
+│              YC Self-Improving Layer (~95% complete)                  │
+│  gptel-auto-workflow-*.el (34 modules)                               │
+│  ┌──────────────────┬──────────────────┬──────────────────┐          │
+│  │ Monitoring       │ Decision         │ Code Regen       │          │
+│  │ (7-phase cycle)  │ (classification) │ (from context)   │          │
+│  ├──────────────────┼──────────────────┼──────────────────┤          │
+│  │ Approval Queue   │ Architecture     │ Context DB       │          │
+│  │ (human gate)     │ (evolution)      │ (causal memory)  │          │
+│  ├──────────────────┼──────────────────┼──────────────────┤          │
+│  │ Token Economics  │ Self-Audit       │ Production       │          │
+│  │ (ROI pre-flight) │ (knowledge gaps) │ (metrics+scoring)│          │
+│  ├──────────────────┼──────────────────┴──────────────────┤          │
+│  │ External Sensors │ Ontology │ Skill Graph │ Knowledge   │          │
+│  │ (GitHub/Sentry)  │ (routing)│ (governance)│ (reasoning) │          │
+│  └──────────────────┴─────────────────────────────────────┘          │
+│  All cross-module calls use declare-function + fboundp guards        │
+└───────────────────────────┬─────────────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────────────┐
 │                       Core Layer                                     │
 │  gptel-ext-core.el  │  gptel-ext-fsm-utils.el                        │
 │  (temp dir, markdown compat, curl hardening, tool registry audit)   │
@@ -534,6 +553,55 @@ lisp/modules/
 │   ├── nucleus-tools-validate.el  # Signature check
 │   └── nucleus-tools-verify.el    # Registration check
 │
+├── YC Self-Improving (34 modules)
+│   ├── Core Loop
+│   │   ├── gptel-auto-workflow-monitoring-agent.el      # 7-phase monitoring cycle (~839 lines)
+│   │   ├── gptel-auto-workflow-approval-queue.el        # Human approval gate
+│   │   ├── gptel-auto-workflow-decision-classification.el # Risk classification + persist
+│   │   └── gptel-auto-workflow-architectural-evolution.el # Structural proposals
+│   │
+│   ├── Code & Context
+│   │   ├── gptel-auto-workflow-code-regeneration.el     # Regenerate from business context
+│   │   ├── gptel-auto-workflow-context-database.el      # Per-experiment causal memory
+│   │   ├── gptel-auto-workflow-disposable-tracker.el    # Resource lifecycle tracking
+│   │   └── gptel-auto-workflow-bare-path-diagnostic.el  # Workspace boundary validation
+│   │
+│   ├── Metrics & Economics
+│   │   ├── gptel-auto-workflow-production-metrics.el    # Weighted grader scoring
+│   │   ├── gptel-auto-workflow-production.el            # Production impact tracking
+│   │   └── gptel-token-economics.el                     # ROI pre-flight
+│   │
+│   ├── Sensors & Knowledge
+│   │   ├── gptel-auto-workflow-external-sensors.el      # GitHub/Sentry/webhook
+│   │   ├── gptel-auto-workflow-knowledge-reasoning.el   # Knowledge inference
+│   │   ├── gptel-auto-workflow-self-audit.el            # Knowledge gap detection
+│   │   ├── gptel-auto-workflow-skill-graph.el           # Skill dependency graph
+│   │   └── gptel-auto-workflow-skill-governance.el      # Skill lifecycle
+│   │
+│   ├── Ontology & Strategy
+│   │   ├── gptel-auto-workflow-ontology-router.el       # Confidence-weighted routing
+│   │   ├── gptel-auto-workflow-ontology-predict.el      # Prediction models
+│   │   ├── gptel-auto-workflow-ontology-strategy.el     # Strategy selection
+│   │   ├── gptel-auto-workflow-cq-evolution.el          # CQ loop evolution
+│   │   └── gptel-auto-workflow-strategic.el             # Strategic planning
+│   │
+│   ├── Research & Learning
+│   │   ├── gptel-auto-workflow-research-benchmark.el    # Research benchmarking
+│   │   ├── gptel-auto-workflow-research-digest.el       # Research summarization
+│   │   ├── gptel-auto-workflow-research-integration.el  # Research integration
+│   │   ├── gptel-auto-workflow-git-learning.el          # Git-based learning
+│   │   ├── gptel-auto-workflow-evolution.el             # Evolution tracking
+│   │   └── gptel-auto-workflow-mementum.el              # Mementum integration
+│   │
+│   └── Infrastructure
+│       ├── gptel-auto-workflow-bootstrap.el             # System bootstrap
+│       ├── gptel-auto-workflow-behavioral-tests.el      # Behavioral test runner
+│       ├── gptel-auto-workflow-beads.el                 # Bead pattern tracking
+│       ├── gptel-auto-workflow-human-interface.el       # Human interaction layer
+│       ├── gptel-auto-workflow-memory-schema.el         # Memory schema management
+│       ├── gptel-auto-workflow-projects.el              # Project management
+│       └── gptel-auto-workflow-recovery.el              # Error recovery
+│
 └── Tree-sitter
     ├── treesit-agent-tools.el
     ├── treesit-agent-tools-workspace.el
@@ -566,4 +634,62 @@ Set by `gptel-config.el`:
 - **Upstream gptel**: `var/elpa/gptel-0.9.9.4/`
 - **Tool Registry**: `gptel-tools.el`
 - **Preset Definitions**: `nucleus-presets.el`
-- **STATE.md**: Current module line counts and descriptions
+- **Module Docs**: `mementum/knowledge/modules/`
+- **State**: `mementum/state.md`
+
+## YC Monitoring Cycle
+
+The monitoring agent runs a 7-phase cycle every 15 minutes (900s throttle):
+
+```
+Phase 0: Health Probes (every 3rd cycle)
+    ├── probe-daemon-alive
+    ├── probe-experiment-loop-stuck
+    └── probe-metrics-freshness
+          │
+Phase 1: Failure Analysis
+    ├── Parse recent experiment TSV results
+    └── Classify failure patterns
+          │
+Phase 2: Proposal Generation
+    ├── Generate fix proposals from patterns
+    ├── Score + validate proposals
+    └── Auto-deploy low-risk (score ≥ 0.6)
+          │
+Phase 3: Architectural Evolution
+    ├── Module retirement (0% keep-rate)
+    ├── Routing opportunities
+    ├── Global regression detection
+    └── Coverage gap identification
+          │
+Phase 4: External Sensors
+    └── GitHub Issues sensor (real data)
+          │
+Phase 5: Deploy→Regen Wiring
+    ├── Resolve pattern-target to .el file
+    ├── Attempt code-regeneration--execute
+    └── Rollback via git reset on failure
+          │
+Phase 6: Approval Queue
+    ├── Auto-approve recurring (≥3 occurrences)
+    ├── Execute approved proposals
+    └── Prune expired (7-day TTL)
+```
+
+### Risk Classification
+
+| Risk Level | Action | Approval |
+|------------|--------|----------|
+| **Low** (score ≥ 0.6) | Auto-deploy | None |
+| **Medium** | Deploy after grace period (24h) | Notification |
+| **High** | Enqueue for human review | Required |
+
+### Persistence
+
+| Data | Location | Survives Restart |
+|------|----------|-----------------|
+| Risk patterns | `var/risk-patterns.sexp` | Yes |
+| Approval history | `var/approval-history.sexp` | Yes |
+| Approval queue | `var/approval-queue/pending/` | Yes |
+| Context sidecars | `var/context/<id>.sexp` | Yes |
+| Experiment TSV | `var/tmp/experiments/` | Yes |

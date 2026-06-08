@@ -1090,7 +1090,116 @@ Logs: `var/tmp/cron/*.log`
 
 ---
 
-**Document Version:** 2.0  
-**Last Updated:** 2026-04-11  
-**Release:** v2026.04.11  
-**Changes:** Preserved unrelated user cron entries during install, documented the smoke-test verification flow, and kept cron wrapper/E2E instructions aligned with the dedicated daemon
+## YC Self-Improving System (~95% Complete)
+
+The Ouroboros V5 YC (Yielding Cycle) vision is a self-improving architecture where the system monitors, learns, proposes fixes, and deploys them autonomously.
+
+### 7-Phase Monitoring Cycle
+
+Runs every 15 minutes (900s throttle) via `gptel-auto-workflow-monitoring-agent.el`:
+
+```
+Phase 0: Health Probes (every 3rd cycle)
+    ├── probe-daemon-alive — check worker daemon responsive
+    ├── probe-experiment-loop-stuck — detect stalled experiments
+    └── probe-metrics-freshness — verify metrics not stale
+
+Phase 1: Failure Analysis
+    ├── Parse recent experiment TSV results
+    └── Classify failure patterns (by category)
+
+Phase 2: Proposal Generation
+    ├── Generate fix proposals from failure patterns
+    ├── Score + validate proposals
+    └── Auto-deploy low-risk proposals (score >= 0.6)
+
+Phase 3: Architectural Evolution
+    ├── Module retirement (0% keep-rate detection)
+    ├── Routing opportunities (success >= 40%)
+    ├── Global regression detection
+    └── Coverage gap identification
+
+Phase 4: External Sensors
+    └── GitHub Issues sensor (collects real issue data)
+
+Phase 5: Deploy-Regen Wiring
+    ├── Resolve pattern-target to .el file path
+    ├── Attempt code-regeneration--execute
+    └── Rollback via git reset --hard on failure
+
+Phase 6: Approval Queue Execution
+    ├── Auto-approve recurring proposals (>= 3 past occurrences)
+    ├── Execute approved proposals
+    └── Prune expired entries (7-day TTL)
+```
+
+### Key YC Modules
+
+| Module | Lines | Purpose |
+|--------|-------|---------|
+| `gptel-auto-workflow-monitoring-agent.el` | ~839 | Central 7-phase orchestrator |
+| `gptel-auto-workflow-approval-queue.el` | ~563 | Human approval gate for high-risk |
+| `gptel-auto-workflow-decision-classification.el` | ~400 | Risk classification + persistence |
+| `gptel-auto-workflow-code-regeneration.el` | ~290 | Regenerate modules from context |
+| `gptel-auto-workflow-architectural-evolution.el` | ~356 | Structural pipeline proposals |
+| `gptel-auto-workflow-context-database.el` | ~691 | Per-experiment causal memory |
+| `gptel-auto-workflow-self-audit.el` | ~1142 | Knowledge gap detection + token economics |
+| `gptel-auto-workflow-external-sensors.el` | ~300 | GitHub/Sentry/webhook integration |
+| `gptel-token-economics.el` | ~200 | ROI pre-flight check |
+
+### Code Regeneration Execution
+
+The `--execute` function closes the loop between identifying candidates and actually regenerating code:
+
+```elisp
+;; Identify candidates from context DB
+(gptel-auto-workflow-code-regeneration--identify-candidates)
+
+;; Full workflow with execution
+(gptel-auto-workflow-code-regeneration--full-workflow :execute t)
+```
+
+**Flow:** Context DB summary -> identify candidates -> generate prompt -> experiment core runs with callback -> write mementum memory (success/failure).
+
+### Persistent Risk Patterns
+
+Risk patterns and approval history survive daemon restarts:
+
+| Data | File | Auto-persist |
+|------|------|-------------|
+| Risk patterns | `var/risk-patterns.sexp` | On `learn-risk-patterns` |
+| Approval history | `var/approval-history.sexp` | On `track-approval-decision` |
+| Approval queue | `var/approval-queue/pending/*.sexp` | On enqueue |
+| Context sidecars | `var/context/<experiment-id>.sexp` | On experiment log |
+
+### Deploy-Regen Wiring
+
+When the monitoring agent auto-deploys a proposal:
+
+1. **Resolve** — `pattern-target` mapped to real `.el` file path
+2. **Attempt regen** — `code-regeneration--execute` called with resolved file
+3. **Rollback** — `git reset --hard` on failure, mementum memory written
+4. **Fallback** — symbolic deploy for non-file proposals
+
+**Config:**
+```elisp
+gptel-auto-workflow-attempt-regen-on-deploy  ; default t
+```
+
+### Self-Audit (Pipeline Step 0.5)
+
+Runs before pipeline experiments to detect knowledge gaps:
+
+1. **Unified graph check** — verify skill graph connectivity
+2. **Backend registry** — validate backend configs
+3. **Pricing knowledge** — ensure token economics data current
+4. **Cold-start scan** — identify knowledge pages < 7 days old
+5. **System health synthesis** — write `system-health-patterns.md` from >= 3 audits
+6. **Token economics** — compute from 24h experiment data
+
+---
+
+**Document Version:** 3.0  
+**Last Updated:** 2026-06-08  
+**Release:** v2026.06.08  
+**Changes:** Added YC self-improving system documentation (7-phase monitoring cycle, code regeneration, risk persistence, deploy-regen wiring, self-audit)
