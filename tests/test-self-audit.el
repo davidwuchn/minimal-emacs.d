@@ -190,7 +190,82 @@
           (should report)
           (should (string-match "Self-Audit" report))
           ;; Cold backends should appear somewhere in the result
-          (should (member "ColdBackend1" (plist-get (plist-get result :backend-cold-start) :cold)))))
+           (should (member "ColdBackend1" (plist-get (plist-get result :backend-cold-start) :cold)))))
+     (test-self-audit--teardown)))
+
+;; ── Synthesis Tests ──
+
+(ert-deftest test-self-audit/read-audit-memories-empty ()
+  "Returns nil when no audit-fix memory files exist."
+  (test-self-audit--setup)
+  (unwind-protect
+      (let ((memories (gptel-auto-workflow-self-audit--read-audit-memories)))
+        (should (null memories)))
+    (test-self-audit--teardown)))
+
+(ert-deftest test-self-audit/read-audit-memories-parses-files ()
+  "Parses audit-fix memory files and returns list of plists."
+  (test-self-audit--setup)
+  (unwind-protect
+      (progn
+        ;; Create 3 audit-fix memory files
+        (with-temp-file (expand-file-name "mementum/memories/audit-fix-run-1.md" test-self-audit--tmp-dir)
+          (insert "---\ntimestamp: 2026-06-01T10:00:00\nissues: 5\n---\n\nBackend cold-start: 3/8 backends\nStrategy cold-start: 12/15 strategies\nBOTTLENECK: staging-merge\n"))
+        (with-temp-file (expand-file-name "mementum/memories/audit-fix-run-2.md" test-self-audit--tmp-dir)
+          (insert "---\ntimestamp: 2026-06-02T10:00:00\nissues: 4\n---\n\nBackend cold-start: 2/8 backends\nStrategy cold-start: 10/15 strategies\n"))
+        (with-temp-file (expand-file-name "mementum/memories/audit-fix-run-3.md" test-self-audit--tmp-dir)
+          (insert "---\ntimestamp: 2026-06-03T10:00:00\nissues: 3\n---\n\nBackend cold-start: 4/8 backends\nBOTTLENECK: staging-merge\n"))
+        (let ((memories (gptel-auto-workflow-self-audit--read-audit-memories)))
+          (should (= (length memories) 3))
+          ;; Check that at least one has cold backends
+          (should (> (seq-count (lambda (m) (> (plist-get m :cold-backends) 0)) memories) 0))))
+    (test-self-audit--teardown)))
+
+(ert-deftest test-self-audit/synthesize-system-health-below-threshold ()
+  "Returns nil when fewer than 3 audit-fix memories exist."
+  (test-self-audit--setup)
+  (unwind-protect
+      (progn
+        ;; Create only 2 audit-fix memory files
+        (with-temp-file (expand-file-name "mementum/memories/audit-fix-run-1.md" test-self-audit--tmp-dir)
+          (insert "---\ntimestamp: 2026-06-01T10:00:00\nissues: 5\n---\n\nBackend cold-start: 3/8 backends\n"))
+        (with-temp-file (expand-file-name "mementum/memories/audit-fix-run-2.md" test-self-audit--tmp-dir)
+          (insert "---\ntimestamp: 2026-06-02T10:00:00\nissues: 4\n---\n\nBackend cold-start: 2/8 backends\n"))
+        (let ((result (gptel-auto-workflow-self-audit--synthesize-system-health)))
+          (should (null result))
+          ;; Knowledge page should NOT be created
+          (should-not (file-exists-p
+                       (expand-file-name "mementum/knowledge/system-health-patterns.md"
+                                         test-self-audit--tmp-dir)))))
+    (test-self-audit--teardown)))
+
+(ert-deftest test-self-audit/synthesize-system-health-creates-knowledge-page ()
+  "Creates system-health-patterns.md when >=3 audit-fix memories exist."
+  (test-self-audit--setup)
+  (unwind-protect
+      (progn
+        ;; Create 3 audit-fix memory files
+        (with-temp-file (expand-file-name "mementum/memories/audit-fix-run-1.md" test-self-audit--tmp-dir)
+          (insert "---\ntimestamp: 2026-06-01T10:00:00\nissues: 5\n---\n\nBackend cold-start: 3/8 backends\nStrategy cold-start: 12/15 strategies\nBOTTLENECK: staging-merge\n"))
+        (with-temp-file (expand-file-name "mementum/memories/audit-fix-run-2.md" test-self-audit--tmp-dir)
+          (insert "---\ntimestamp: 2026-06-02T10:00:00\nissues: 4\n---\n\nBackend cold-start: 2/8 backends\nStrategy cold-start: 10/15 strategies\nBOTTLENECK: staging-merge\n"))
+        (with-temp-file (expand-file-name "mementum/memories/audit-fix-run-3.md" test-self-audit--tmp-dir)
+          (insert "---\ntimestamp: 2026-06-03T10:00:00\nissues: 3\n---\n\nBackend cold-start: 4/8 backends\nBOTTLENECK: staging-merge\n"))
+        (let ((result (gptel-auto-workflow-self-audit--synthesize-system-health)))
+          (should (= result 3))
+          ;; Knowledge page should be created
+          (should (file-exists-p
+                   (expand-file-name "mementum/knowledge/system-health-patterns.md"
+                                     test-self-audit--tmp-dir)))
+          ;; Content should contain key sections
+          (with-temp-buffer
+            (insert-file-contents
+             (expand-file-name "mementum/knowledge/system-health-patterns.md"
+                               test-self-audit--tmp-dir))
+            (goto-char (point-min))
+            (should (search-forward "System Health Patterns" nil t))
+            (should (search-forward "Backend Cold-Start" nil t))
+            (should (search-forward "Staging-Merge Bottleneck" nil t)))))
     (test-self-audit--teardown)))
 
 (provide 'test-self-audit)
