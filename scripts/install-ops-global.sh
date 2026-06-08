@@ -57,7 +57,7 @@ additional_delegates:
 
 additional_implementers:
   safe:
-    model: bailian-token-plan/qwen3.6-plus
+    model: github-copilot/gpt-5.4-mini
 EOF
 
 # 3. Cross-platform text edits use perl5 (perl -pi -e works on macOS + Linux)
@@ -103,7 +103,7 @@ if [ -f "$AGENTS_DIR/delegate-creative.md" ]; then
 fi
 update_model "$AGENTS_DIR/doc-explorer.md"           "bailian-token-plan/deepseek-v4-pro"
 update_model "$AGENTS_DIR/implementer.md"           "bailian-token-plan/glm-5.1"
-update_model "$AGENTS_DIR/implementer-safe.md"      "bailian-token-plan/qwen3.6-plus"
+update_model "$AGENTS_DIR/implementer-safe.md"      "github-copilot/gpt-5.4-mini"
 update_model "$AGENTS_DIR/legacy-curator.md"        "bailian-token-plan/deepseek-v4-pro"
 
 # 6. Enable thinking for DeepSeek models in opencode.json (pure jq, no python3)
@@ -172,6 +172,6 @@ fi
 
 echo ""
 echo "=== Installation Complete ==="
-echo "Models: @maintainer→qwen3.7-plus, delegate→deepseek-v4-pro, strong→gpt-5.4, gpt→gpt-5.5, opus→claude-opus-4.8, qwen→qwen3.7-max, creative→deepseek-v4-pro, fast→deepseek-v4-flash, implementer→glm-5.1, implementer-safe→qwen3.6-plus"
+echo "Models: @maintainer→qwen3.7-plus, delegate→deepseek-v4-pro, strong→gpt-5.4, gpt→gpt-5.5, opus→claude-opus-4.8, qwen→qwen3.7-max, creative→deepseek-v4-pro, fast→deepseek-v4-flash, implementer→glm-5.1, implementer-safe→gpt-5.4-mini"
 echo "OV5 Cowork: OpenCode configured"
 echo "Next: Restart OpenCode, select @maintainer agent"
