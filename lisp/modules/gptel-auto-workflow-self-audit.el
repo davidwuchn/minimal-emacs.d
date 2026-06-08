@@ -1006,7 +1006,6 @@ Also flags if the knowledge page hasn't been updated in >30 days."
       (let* ((model (plist-get entry :model))
              (input-cny (plist-get entry :input-cny))
              (output-cny (plist-get entry :output-cny))
-             (cache-cny (plist-get entry :cache-cny))
              (context-kb (plist-get entry :context))
              (provider (gptel-auto-workflow-self-audit--find-provider-for-model
                         model))
@@ -1014,8 +1013,7 @@ Also flags if the knowledge page hasn't been updated in >30 days."
                     (gptel-auto-workflow-self-audit--get-registry-pricing
                      provider model)))
              (expected-input (* input-cny conversion-rate))
-             (expected-output (* output-cny conversion-rate))
-             (expected-cache (* cache-cny conversion-rate)))
+             (expected-output (* output-cny conversion-rate)))
         (when reg
           ;; Check input price (20% tolerance for exchange rate)
           (when (and (> expected-input 0)
@@ -1101,7 +1099,6 @@ Returns plist (:total :total-cost :kept :kept-cost :models-seen
           (let* ((model (symbol-name (car m)))
                  (p (cdr m))
                  (in (or (plist-get p :pricing-input) 0.0))
-                 (out (or (plist-get p :pricing-output) 0.0))
                  (cache (or (plist-get p :pricing-cache-hit) 0.0))
                  (speed (or (plist-get p :speed) 'unknown))
                  (caps (or (plist-get p :capabilities) '(code-generation))))

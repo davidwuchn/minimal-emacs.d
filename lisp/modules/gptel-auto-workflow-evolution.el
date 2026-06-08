@@ -37,6 +37,7 @@
 (declare-function gptel-knowledge--check-ontology-consistency "gptel-auto-workflow-knowledge-reasoning" (ontology-rules))
 (declare-function gptel-knowledge--floyd-warshall "gptel-auto-workflow-knowledge-reasoning" (nodes edges))
 (declare-function gptel-knowledge--experiment-causal-graph "gptel-auto-workflow-knowledge-reasoning" (results))
+(declare-function gptel-auto-workflow--graph-same-community-p "gptel-auto-workflow-memory-schema" (target-a target-b))
 (declare-function gptel-knowledge--allen-detect-gaps "gptel-auto-workflow-knowledge-reasoning" (intervals))
 (declare-function gptel-knowledge--ontology-from-experiments "gptel-auto-workflow-knowledge-reasoning" (results))
 (declare-function gptel-auto-workflow--load-skill-content "gptel-tools-agent-prompt-build" (skill-name))
@@ -128,6 +129,8 @@ Returns sanitized TEXT."
 (defvar gptel-auto-workflow--wu-xing-actions nil
   "Accumulator for Wu Xing diagnostic repair actions.
 Populated by VSM health check, consumed by cross-subsystem feedback.")
+
+(defvar gptel-auto-workflow--evolution-last-kept-target)
 
 (defun gptel-auto-workflow--eight-keys-convergence-score ()
   "Compute Eight Keys convergence score from kept experiments.

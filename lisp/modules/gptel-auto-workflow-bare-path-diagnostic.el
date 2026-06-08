@@ -8,6 +8,8 @@
 
 ;;; Code:
 
+(declare-function gptel-auto-workflow--expand-workspace-path "gptel-tools-agent-base")
+
 (defconst gptel-auto-workflow--bare-path-dangerous-functions
   '("directory-files" "with-temp-file" "find-file" "insert-file-contents")
   "List of I/O function names that should not receive bare string path literals.")
