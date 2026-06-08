@@ -6844,7 +6844,21 @@ priorities")
   "Set grader timeout safely, never below default (900s).
 Respects pipeline override if set. Otherwise matches experiment budget
 but clamped to [900, 1800]. This prevents the death spiral where
-self-heal sets timeout=300 → grader fails → more PENDING."
+self-heal sets timeout=300 → grader fails → more PENDING.
+
+NOTE: This sets the *default* `gptel-auto-experiment-grade-timeout` with
+a strict [900, 1800] clamp. The runtime function
+`gptel-auto-experiment--effective-grade-timeout` uses a wider
+[300, 2*default] clamp on the *override* so operators can set extreme
+values intentionally. The two clamps differ by design: this one
+prevents self-heal from creating a spiral, the runtime one
+resiliently bounds overrides.
+
+When the pipeline override is active, this function returns the
+override value WITHOUT writing it to the default var — the runtime
+function reads the override directly, and overwriting the default
+with the override would weaken the runtime cap (since the runtime
+cap is `2*default`)."
   (when (and (boundp 'gptel-auto-experiment-grade-timeout)
              (boundp 'gptel-auto-experiment-time-budget))
     (let* ((default 900)
@@ -6853,7 +6867,11 @@ self-heal sets timeout=300 → grader fails → more PENDING."
            (budget gptel-auto-experiment-time-budget)
            (new-timeout (or pipeline-override
                             (max default (min 1800 budget)))))
-      (setq gptel-auto-experiment-grade-timeout new-timeout)
+      ;; Only write to the default when we computed from the budget
+      ;; (NOT from the override) — otherwise we pollute the default
+      ;; with override values and weaken the runtime cap.
+      (unless pipeline-override
+        (setq gptel-auto-experiment-grade-timeout new-timeout))
       new-timeout)))
 
 (defun gptel-auto-workflow--auto-remediate (diagnosis)
