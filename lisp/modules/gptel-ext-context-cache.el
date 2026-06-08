@@ -158,6 +158,7 @@ Avoids repeated filtering of the same symbol list.")
     ("deepseek-v4-flash" . 1000000)
     ("deepseek-v4-pro" . 1000000)
     ;; MiniMax
+    ("MiniMax-M3" . 1000000)
     ("minimax-m2.7-highspeed" . 196608)
     ("minimax-m2.7" . 196608)
     ("MiniMax-M2.5" . 196608)
@@ -265,17 +266,24 @@ https://developers.cloudflare.com/workers-ai/models/kimi-k2.6/")
      :pricing-input 12.0 :pricing-output 24.0
      :max-output 384000
      :description "DeepSeek V4 Pro - 1M context, thinking-enabled reasoning model")
-    ;; MiniMax
+     ;; MiniMax — Bailian pricing as of 2026-06 (permanent 50% off applied)
+     ;; MiniMax-M3: tiered 512K/1M. ¥4.2→2.1 / ¥16.8→8.4 / ¥0.84→0.42
+     ("MiniMax-M3"
+      :context-window 1000000
+      :pricing-input 0.58 :pricing-output 2.32 :pricing-cache-hit 0.12
+      :max-output 131072
+      :features (streaming tools reasoning)
+      :description "MiniMax M3 - 1M context, tiered ¥2.1-4.2/¥8.4-16.8, 50% off")
     ("minimax-m2.7-highspeed"
-     :context-window 196608
-      :pricing-input 0.30 :pricing-output 1.20
-     :max-output 131072
-     :description "MiniMax M2.7 Highspeed - 196k context, lower-latency agent workflows")
-    ("minimax-m2.7"
-     :context-window 196608
-     :pricing-input 0.27 :pricing-output 0.95
-     :max-output 16384
-     :description "MiniMax M2.7 - 196k context, advanced agent workflows")
+      :context-window 196608
+      :pricing-input 0.58 :pricing-output 2.32 :pricing-cache-hit 0.06 :pricing-cache-write 0.36
+      :max-output 131072
+      :description "MiniMax M2.7 Highspeed - 196k context, ¥4.2/¥16.8")
+     ("minimax-m2.7"
+      :context-window 196608
+      :pricing-input 0.29 :pricing-output 1.16 :pricing-cache-hit 0.06 :pricing-cache-write 0.36
+      :max-output 16384
+      :description "MiniMax M2.7 - 196k context, ¥2.1/¥8.4")
     ("MiniMax-M2.5"
      :context-window 196608
      :pricing-input 0.27 :pricing-output 0.95
@@ -299,18 +307,17 @@ context")
      :pricing-input 0.15 :pricing-output 0.6
      :max-output 16384
      :description "GPT-4o Mini - fast, cheap")
-    ;; Kimi
-    ("@cf/moonshotai/kimi-k2.6"
-     :context-window 262144
-     :pricing-input 0.95 :pricing-cached-input 0.16 :pricing-output 4.00
-     :features (streaming tools reasoning vision)
-     :description "Cloudflare Workers AI Kimi K2.6 - 262k context, reasoning, function calling,
-vision")
-    ("kimi-k2.5"
-     :context-window 262144
-     :pricing-input 0.45 :pricing-output 2.20
-     :max-output 16384
-     :description "Kimi K2.5 - legacy alias for K2.6")
+     ;; Kimi — Bailian pricing as of 2026-06
+     ("@cf/moonshotai/kimi-k2.6"
+      :context-window 262144
+      :pricing-input 2.07 :pricing-cached-input 0.28 :pricing-output 8.28
+      :features (streaming tools reasoning vision)
+      :description "Cloudflare Kimi K2.6 - 262k context, ¥15/¥60, reasoning, vision")
+     ("kimi-k2.5"
+      :context-window 262144
+      :pricing-input 8.28 :pricing-output 9.94
+      :max-output 16384
+      :description "Kimi K2.5 - legacy, ¥60/¥72")
     ;; GLM (Zhipu AI)
     ("glm-5"
      :context-window 131072
@@ -948,10 +955,11 @@ Description: %s"
      :rate-limit "Check console"
      :pricing-model "Per-token, competitive pricing"
      :features (streaming tools)
-     :notes "M2.5/M2.7/M2.7-highspeed: 196k context. Highspeed favors lower-latency agent workflows."
-     :context-windows
-     ((minimax-m2.7-highspeed . 196608)
-      (minimax-m2.7 . 196608))))
+      :notes "MiniMax-M3: 1M context (tiered ¥2.1-4.2/¥8.4-16.8). M2.7: 196k."
+      :context-windows
+      ((MiniMax-M3 . 1000000)
+       (minimax-m2.7-highspeed . 196608)
+       (minimax-m2.7 . 196608))))
 
   "Provider usage contracts: rate limits, pricing models, features, and notes.
 Use `my/gptel-show-provider-contract' to query.")
