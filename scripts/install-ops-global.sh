@@ -105,7 +105,11 @@ if [ -f "$AGENTS_DIR/delegate-strong.md" ]; then
 fi
 update_model "$AGENTS_DIR/delegate-gpt.md"           "github-copilot/gpt-5.5"
 update_model "$AGENTS_DIR/delegate-opus.md"          "github-copilot/claude-opus-4.8"
-update_model "$AGENTS_DIR/delegate-qwen.md"          "bailian-token-plan/qwen3.7-max"
+# delegate-qwen — restore meaningful description (OPS overwrites with generic)
+if [ -f "$AGENTS_DIR/delegate-qwen.md" ]; then
+    perl -pi -e 's|^description:.*|description: Delegate variant '"'"'qwen'"'"' with model bailian-token-plan/qwen3.7-max (thinking). Use for second opinions, cross-checking results, Chinese language tasks, and alternative perspectives on hard problems.|' "$AGENTS_DIR/delegate-qwen.md"
+    update_model "$AGENTS_DIR/delegate-qwen.md" "bailian-token-plan/qwen3.7-max"
+fi
 # delegate-creative — also fix stale description referencing minimax-cn-coding-plan
 if [ -f "$AGENTS_DIR/delegate-creative.md" ]; then
     perl -pi -e 's|^description:.*|description: Delegate variant '"'"'creative'"'"' with model bailian-token-plan/deepseek-v4-pro. Use for creative writing, brainstorming, content generation, and open-ended exploration.|' "$AGENTS_DIR/delegate-creative.md"
