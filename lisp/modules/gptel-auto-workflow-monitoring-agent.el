@@ -49,6 +49,16 @@
                   "gptel-tools-agent-experiment-loop")
 (declare-function gptel-auto-workflow--with-staging-worktree
                   "gptel-tools-agent-experiment-loop")
+;; Ontology router for category-aware pattern prioritization
+(declare-function gptel-auto-workflow--categorize-target
+                  "gptel-auto-workflow-ontology-router")
+(declare-function gptel-auto-workflow--category-baseline-keep-rate
+                  "gptel-auto-workflow-ontology-router")
+;; Synthesis trigger for knowledge page proposals
+(declare-function gptel-mementum-check-synthesis-candidates
+                  "gptel-tools-agent-research")
+(declare-function gptel-mementum-synthesize-candidate
+                  "gptel-tools-agent-research")
 
 (declare-function gptel-auto-workflow-approval-queue-enqueue
                   "gptel-auto-workflow-approval-queue")
@@ -460,7 +470,8 @@ Classification order: compilation > grader > prompt > strategy > unknown."
 Calls gptel-auto-workflow--parse-all-results to load experiments,
 filters to non-kept decisions, classifies each failure, groups by
 (type, target), and returns patterns with count >= min-occurrences.
-Returns a list of pattern plists sorted descending by :count."
+Enriches patterns with ontology category and keep-rate for prioritization.
+Returns a list of pattern plists sorted by category priority then count."
   (let* ((records
           (when (fboundp 'gptel-auto-workflow--parse-all-results)
             (gptel-auto-workflow--parse-all-results)))
@@ -505,35 +516,56 @@ Returns a list of pattern plists sorted descending by :count."
                           (lambda (f) (plist-get f :run-dir))
                           fails)))
                   (first-seen (or (car (last run-dirs)) "unknown"))
-                  (last-seen (or (car run-dirs) "unknown")))
+                  (last-seen (or (car run-dirs) "unknown"))
+                  ;; Ontology enrichment: category and keep-rate
+                  (category (when (fboundp 'gptel-auto-workflow--categorize-target)
+                              (gptel-auto-workflow--categorize-target target)))
+                  (category-keep-rate
+                   (when (and category
+                              (fboundp 'gptel-auto-workflow--category-baseline-keep-rate))
+                     (gptel-auto-workflow--category-baseline-keep-rate category))))
              (push (list :type ftype
                          :target target
                          :count count
                          :examples examples
                          :first-seen first-seen
-                         :last-seen last-seen)
+                         :last-seen last-seen
+                         :category (or category "uncategorized")
+                         :category-keep-rate category-keep-rate)
                    patterns)))))
      groups)
-    ;; Sort descending by count
+    ;; Sort by category priority (low keep-rate = higher priority), then count
     (sort patterns
           (lambda (a b)
-            (> (plist-get a :count)
-               (plist-get b :count))))))
+            (let* ((ka (or (plist-get a :category-keep-rate) 1.0))
+                   (kb (or (plist-get b :category-keep-rate) 1.0))
+                   (ca (plist-get a :count))
+                   (cb (plist-get b :count)))
+              ;; Primary: lower keep-rate = higher priority
+              ;; Secondary: higher count = higher priority
+              (if (= ka kb)
+                  (> ca cb)
+                (< ka kb)))))))
 
 ;; ── Pattern Formatting ──
 
 (defun gptel-auto-workflow--failure-pattern->string (pattern)
   "Format PATTERN plist into a human-readable string for mementum.
-PATTERN contains :type, :target, :count, :examples, :first-seen, :last-seen."
+PATTERN contains :type, :target, :count, :examples, :first-seen, :last-seen,
+:category, :category-keep-rate (ontology enrichment)."
   (let ((type (plist-get pattern :type))
         (target (plist-get pattern :target))
         (count (plist-get pattern :count))
         (examples (plist-get pattern :examples))
         (first-seen (plist-get pattern :first-seen))
-        (last-seen (plist-get pattern :last-seen)))
+        (last-seen (plist-get pattern :last-seen))
+        (category (or (plist-get pattern :category) "uncategorized"))
+        (keep-rate (plist-get pattern :category-keep-rate)))
     (format
-     "**Failure type:** %s\n**Target:** %s\n**Occurrences:** %d\n**Example reasons:** %s\n**Trend:** %s -> %s\n\nThis pattern was detected by the monitoring agent as a systemic failure requiring investigation."
-     type target count
+     "**Failure type:** %s\n**Target:** %s\n**Category:** %s (keep-rate: %s)\n**Occurrences:** %d\n**Example reasons:** %s\n**Trend:** %s -> %s\n\nThis pattern was detected by the monitoring agent as a systemic failure requiring investigation. Priority determined by category keep-rate (lower = higher priority)."
+     type target category
+     (if keep-rate (format "%.1f%%" (* keep-rate 100)) "unknown")
+     count
      (if examples (mapconcat #'identity examples "; ") "none")
      first-seen last-seen)))
 
@@ -1028,6 +1060,38 @@ Returns list of written mementum file paths, or nil if throttled/disabled."
                 (when assessments
                   (message "[monitoring] Phase 7: Assessed %d deployments"
                            (length assessments)))))
+            ;; Phase 8: Synthesis trigger — detect ≥3 memories, propose knowledge page
+            (ignore-errors
+              (when (fboundp 'gptel-mementum-check-synthesis-candidates)
+                (let ((candidates (gptel-mementum-check-synthesis-candidates)))
+                  (when candidates
+                    (message "[monitoring] Phase 8: %d synthesis candidates detected"
+                             (length candidates))
+                    (dolist (candidate candidates)
+                      (let* ((topic (plist-get candidate :topic))
+                             (count (plist-get candidate :count))
+                             (files (plist-get candidate :files))
+                             (slug (format "synthesis-proposal-%s"
+                                           (if (fboundp 'gptel-auto-workflow--mementum-slug)
+                                               (gptel-auto-workflow--mementum-slug topic)
+                                             (replace-regexp-in-string
+                                              "[^a-zA-Z0-9]" "-" (downcase topic)))))
+                             (content (format "**Topic:** %s\n**Memory count:** %d\n**Source memories:** %s\n\nSynthesis candidate detected: %d memories on this topic exceed threshold. Consider creating a knowledge page to capture reusable patterns. %s"
+                                              topic count
+                                              (mapconcat #'file-name-nondirectory files ", ")
+                                              count
+                                              (if (>= count 5)
+                                                  "HIGH PRIORITY: Auto-synthesis recommended."
+                                                "Standard priority: Review and synthesize manually."))))
+                        ;; Write mementum memory proposing synthesis
+                        (when (fboundp 'gptel-auto-workflow--mementum-write-memory)
+                          (gptel-auto-workflow--mementum-write-memory
+                           '🧠 slug content))
+                        ;; Auto-synthesize for high-count topics
+                        (when (and (>= count 5)
+                                   (fboundp 'gptel-mementum-synthesize-candidate))
+                          (message "[monitoring] Phase 8: Auto-synthesizing high-count topic: %s" topic)
+                          (gptel-mementum-synthesize-candidate candidate))))))))
             (ignore (nreverse written)))))))))))
 
 (provide 'gptel-auto-workflow-monitoring-agent)
