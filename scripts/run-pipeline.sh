@@ -1303,6 +1303,36 @@ mkdir -p "$DIGEST_DIR"
         2>/dev/null
     if [ -f "$GRAPH_JSON" ]; then
         echo "- Graph exported: $GRAPH_JSON, $GRAPH_HTML"
+        # Take snapshot for drift detection
+        SNAPSHOT_FILE="$DIGEST_DIR/graph-snapshot-$(date +%F).txt"
+        emacs --batch -L "$DIR/lisp/modules" \
+            -L "$DIR/packages/gptel" -L "$DIR/packages/compat" \
+            -l gptel --eval \
+            "(progn
+               (require 'gptel-auto-workflow-memory-schema nil t)
+               (setq gptel-auto-workflow--workspace-path \"$DIR\")
+               (when (fboundp 'gptel-auto-workflow--graph-snapshot)
+                 (gptel-auto-workflow--graph-snapshot \"$SNAPSHOT_FILE\")))" \
+            2>/dev/null
+        # Compare with previous snapshot if exists
+        PREV_SNAPSHOT=$(ls -t "$DIGEST_DIR"/graph-snapshot-*.txt 2>/dev/null | sed -n '2p')
+        if [ -n "$PREV_SNAPSHOT" ] && [ -f "$SNAPSHOT_FILE" ]; then
+            DRIFT=$(emacs --batch -L "$DIR/lisp/modules" \
+                -L "$DIR/packages/gptel" -L "$DIR/packages/compat" \
+                -l gptel --eval \
+                "(progn
+                   (require 'gptel-auto-workflow-memory-schema nil t)
+                   (setq gptel-auto-workflow--workspace-path \"$DIR\")
+                   (when (fboundp 'gptel-auto-workflow--graph-diff)
+                     (let ((result (gptel-auto-workflow--graph-diff \"$PREV_SNAPSHOT\")))
+                       (if result
+                           (princ (format \"Drift: %.1f%% structural change\" (cdr (assq 'drift-pct result))))
+                         (princ \"No drift detected\")))))" \
+                2>/dev/null)
+            if [ -n "$DRIFT" ]; then
+                echo "- $DRIFT"
+            fi
+        fi
     fi
     echo ""
     echo "## Strategy Pool Visibility"
