@@ -211,8 +211,13 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                          (and (string= agent-type "analyzer")
                               (boundp 'gptel-auto-workflow--analyzer-failed-backends)
                               gptel-auto-workflow--analyzer-failed-backends)
-                         (and (boundp 'gptel-auto-workflow--rate-limited-backends)
-                              gptel-auto-workflow--rate-limited-backends)))
+                         ;; When pipeline forces grader backends, skip rate-limit exclusion
+                         ;; for graders — the pipeline escalated because grading was failing.
+                         (unless (and (string= agent-type "grader")
+                                      (boundp 'gptel-auto-workflow--force-grader-backends)
+                                      gptel-auto-workflow--force-grader-backends)
+                           (and (boundp 'gptel-auto-workflow--rate-limited-backends)
+                                gptel-auto-workflow--rate-limited-backends))))
               ;; Phase 1: ontology category + best-model from ai-behaviors
               (category
                (and (boundp 'gptel-auto-workflow--current-target)

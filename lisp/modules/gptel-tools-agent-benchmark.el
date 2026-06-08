@@ -770,6 +770,18 @@ Previously 450s caused grader to timeout before experiment finished,
 destroying all experiments with score=0. Now grader lives as long as
 the experiment itself.")
 
+(defun gptel-auto-experiment--effective-grade-timeout ()
+  "Return the effective grader timeout, respecting pipeline override.
+Reads gptel-auto-workflow--grader-timeout-override if bound.
+Capped at 2x default (1800s), floored at 300s.
+When the pipeline detects grader-destroying-experiments, it escalates
+the timeout via signal files read by apply-pipeline-signals."
+  (let* ((default gptel-auto-experiment-grade-timeout)
+         (override (and (boundp 'gptel-auto-workflow--grader-timeout-override)
+                        gptel-auto-workflow--grader-timeout-override))
+         (effective (or override default)))
+    (max 300 (min (* 2 default) effective))))
+
 (defun gptel-auto-experiment--reset-grade-state ()
   "Cancel and clear all pending grade callbacks."
   (maphash
@@ -1067,13 +1079,14 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
                gptel-auto-experiment--grade-state)
       (let ((timeout-timer
              (run-with-timer
-              gptel-auto-experiment-grade-timeout nil
+              (gptel-auto-experiment--effective-grade-timeout)
+              nil
               (lambda ()
                 (let ((state (gethash grade-id
                                       gptel-auto-experiment--grade-state)))
                   (when (gptel-auto-workflow--state-active-p state)
                     (message "[auto-exp] Grading timeout after %ds — AUTO-PASS to prevent destruction"
-                             gptel-auto-experiment-grade-timeout)
+                             (gptel-auto-experiment--effective-grade-timeout))
                     ;; CRITICAL FIX: timeout means grader couldn't evaluate,
                     ;; NOT that code is bad. Auto-pass prevents 0%% keep rate.
                     (gptel-auto-experiment--finish-grade
@@ -1103,7 +1116,7 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
                  (lambda (result)
                    (gptel-auto-experiment--finish-grade
                     grade-id callback result t))
-                 gptel-auto-experiment-grade-timeout))
+                 (gptel-auto-experiment--effective-grade-timeout))
             (error
              (message "[auto-exp] Grader dispatch failed: %s"
                       (my/gptel--sanitize-for-logging
@@ -1354,3 +1367,4 @@ Returns plist suitable for experiment result enrichment."
 
 (provide 'gptel-tools-agent-benchmark)
 ;;; gptel-tools-agent-benchmark.el ends here
+)
