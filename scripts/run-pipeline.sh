@@ -1382,6 +1382,12 @@ mkdir -p "$DIGEST_DIR"
         if [ "${kept_experiments:-0}" -gt 0 ] && [ "$(echo "$cost_per_kept > 0.50" | bc 2>/dev/null || echo 0)" = "1" ]; then
             echo "- ⚠ High cost per kept — consider cheaper backends or tighter grading"
         fi
+        # Cost budget alert
+        COST_BUDGET=5.00  # daily USD budget threshold
+        if [ "$(echo "${total_cost:-0} > $COST_BUDGET" | bc 2>/dev/null || echo 0)" = "1" ]; then
+            echo "- ⚠ **Over daily budget**: \$${total_cost:-0.00} > \$${COST_BUDGET} threshold"
+            echo "  → Review expensive models in breakdown table below"
+        fi
         if [ "${PRICING_STALE:-0}" -gt 0 ]; then
             echo "- ⚠ **Pricing may be stale**: $PRICING_STALE discrepancies vs bailian-pricing.md ($DAYS_STALE days old)"
             echo "  → Update: edit mementum/knowledge/bailian-pricing.md then re-run self-audit"
