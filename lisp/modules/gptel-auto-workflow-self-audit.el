@@ -60,10 +60,9 @@ then --expand-workspace-path (daemon mode), then default-directory."
   "Return FILES whose mtime is after CUTOFF (float-time)."
   (let (recent)
     (dolist (f files)
-      (when (and (file-exists-p f)
-                 (time-less-p cutoff
-                              (float-time (nth 5 (file-attributes f)))))
-        (push f recent)))
+      (when-let ((attrs (file-attributes f)))
+        (when (time-less-p cutoff (float-time (nth 5 attrs)))
+          (push f recent))))
     recent))
 
 (defun gptel-auto-workflow-self-audit--tsv-files (&optional window)
@@ -374,7 +373,7 @@ FILTER-FN is called on each value; only truthy results are kept."
 
 (defun gptel-auto-workflow-self-audit--write-memory (audit-result)
   "Write an audit-fix memory file when issues are found."
-  (when (and audit-result (> (plist-get audit-result :issues) 0))
+  (when (and audit-result (> (or (plist-get audit-result :issues) 0) 0))
     (let* ((root (gptel-auto-workflow-self-audit--root))
            (memory-dir (expand-file-name "mementum/memories/" root))
            (ts (plist-get audit-result :timestamp))

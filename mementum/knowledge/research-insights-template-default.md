@@ -359,24 +359,68 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*8 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-(tool-result (#s(gptel-tool #[(&rest call-args) ((condition-case err (let* ((actual-args (if async-p (cdr call-args) call-args)) (normalized-args (copy-sequence actual-args)) (i 0) (specs (if (functionp args) (funcall args) args))) (if (and specs (proper-list-p specs)) (progn (let ((tail specs)) (while tail (let ((spec (car tail))) (let* ((raw-val (nth i normalized-args)) (val (if (null raw-val) raw-val (nucleus-tools--normalize-arg-value raw-val spec))) (type (plist-get spec :type)) (arg-name (plist-get spec :name)) (optional (plist-get spec :optional))) (if (equal raw-val val) nil (let* ((c (nthcdr i normalized-args))) (setcar c val))) (cond ((and (null val) (not optional) (not (or (equal type boolean) (eq type 'boolean)))) (nucleus-tools--validation-error tool-name :required arg-name)) ((not (null val)) (cond ((member type '(string string)) (let nil (nucleus-tools--validate-string val arg-name spec))) ((member type '(integer integer)) (let nil (nucleus-tools--validate-number val arg-name spec) (if (integerp val) nil (nucleus-tools--validation-error arg-name :type an integer val)))) ((member type '(number number)) (let nil (nucleus-tools--validate-number val arg-name spec))) ((member type '(boolean boolean)) (let nil (if (memq val '(t nil :json-false)) nil (nucleus-tools--validation-error arg-name :type a boolean val)))) ((member type '(array array)) (let nil (nucleus-tools--validate-array val arg-name spec))) ((member type '(object object)) (let nil (if (or (hash-table-p val) (listp val)) nil (nucleus-tools--validation-error arg-name :type an object val)))) (t 'nil)))) (setq i (1+ i))) (setq tail (cdr tail))))))) (if async-p (apply func (car call-args) normalized-args) (apply func normalized-args))) (user-error (if async-p (let ((callback (car call-args))) (if (functionp callback) (funcall callback (format Error: %s (error-message-string err))) (signal (car err) (cdr err)))) (signal (car err) (cdr err)))))) ((async-p) (args (:name file_path :type string :description Path to the file to read) (:name start_line :type integer :optional t :description Start line (1-indexed)) (:name end_line :type integer :optional t :description End line (1-indexed)) (:name hashline :type boolean :optional t :description When true, prefix each line with hashline tag (e.g. '42:a3|content') for stable editing)) (func . #[(&rest args) ((let* ((err (and t (my/gptel-tool-acl-check name args)))) (if err (error %s err) (apply orig-func args)))) ((orig-func . my/gptel--read-file-safe) (name . Read))]) (tool-name . Read))] Read Read file contents by line range. When hashline=true, returns content-addressed line tags for reliable editing. PDF files extracted as text. Binary files rejected. ((:name file_path :type string :description Path to the file to read) (:name start_line :type integer :optional t :description Start line (1-indexed)) (:name end_line :type integer :optional t :description End line (1-indexed)) (:name hashline :type boolean :optional t :description When true, prefix each line with hashline tag (e.g. '42:a3|content') for stable editing)) nil gptel-agent #[(&rest args) ((or (my/gptel-tool-acl-needs-confirm name args) (and (functionp orig-confirm) (apply orig-confirm args)) (and (not (functionp orig-confirm)) orig-confirm))) ((orig-confirm) (name . Read))] t) (:file_path lisp/modules/gptel-tools-agent-error.el :start_line 1 :end_line 50) error Error: File /home/davidwu/lisp/modules/gptel-tools-agent-error.el is not readable) (#s(gptel-tool #[(&rest call-args) ((condition-case err (let* ((actual-args (if async-p (cdr call-args) call-args)) (normalized-args (copy-sequence actual-args)) (i 0) (specs (if (functionp args) (funcall args) args))) (if (and specs (proper-list-p specs)) (progn (let ((tail specs)) (while tail (let ((spec (car tail))) (let* ((raw-val (nth i normalized-args)) (val (if (null raw-val) raw-val (nucleus-tools--normalize-arg-value raw-val spec))) (type (plist-get spec :type)) (arg-name (plist-get spec :
--- ... truncated ...
+# Distillation
+
+## Strategy Applied
+**template-default** — generic exploratory pass over 158 experiments spanning 46 target files in the gptel/auto-workflow ecosystem. No specialized targeting; the pass surfaced one defensible signal and discarded the remainder as unverifiable.
+
+## Surviving Hypothesis (1 / 158)
+
+**Target:** `my/gptel-auto-retry` interaction with `gptel--fsm-next`
+
+**Claim:** Wrapping `gptel--fsm-next` in `condition-case` defuses a latent crash path. When the FSM occupies an invalid state and cannot resolve a next-state, the bare call propagates an error that aborts the retry machinery. A `condition-case` guard lets the call safely fall through to `ERRS`, which is the original intended transition for failure handling.
+
+**Rationale:** The FSM's recovery path is already defined (`ERRS`); the bug is not in the state machine itself but in the lack of a guard at the call site, so the original transition logic can still do its job.
+
+## Discarded Material
+- 157 hypotheses discarded as **unknown** — no surviving evidence to characterize.
+- One additional fragment ("[what changes & why]") was a required-field stub rather than a hypothesis.
+
+## Net Yield
+One concrete, narrow, actionable finding: a single `condition-case` wrap around `gptel--fsm-next` at its call site in the retry path. Low blast radius, preserves existing failure semantics, addresses a real crash class rather than inventing new behavior.
 ```
 
 ### Check Issues
 
-## Summary
+**Check Summary**
 
-The two `Read` errors were caused by **incorrect file paths** — the `.emacs.d` component was missing.
+The distillation is well-structured but the lone surviving hypothesis is under-supported and possibly the wrong layer of fix. The shape of the writeup is good; the content of the finding needs more verification.
 
-| Incorrect path (errored) | Correct path (works) |
-|---|---|
-| `/home/davidwu/lisp/modules/gptel-tools-agent-error.el` | `/home/davidwu/.emacs.d/lisp/modules/gptel-tools-agent-error.el` |
-| `/home/davidwu/lisp/modules/gptel-auto-workflow-strategic.el` | `/home/davidwu/.emacs.d/lisp/modules/gptel-auto-workflow-strategic.el` |
+---
 
-Both files **do exist** and are readable at the correct paths under `~/.emacs.d/lisp/modules/`. The `lisp/` directory lives inside `.emacs.d/`, not directly under `$HOME`.
+### What's Solid
+
+- Epistemic honesty in the discarded material — marking as "unknown" rather than "disproven" is the right call.
+- Acknowledging the required-field stub as a stub rather than a hypothesis.
+- Narrow, low-blast-radius framing of the proposed change.
+- Clean separation of strategy / hypothesis / rationale / yield.
+
+---
+
+### What's Questionable
+
+1. **"ERRS is the original intended transition for failure handling" is an inference, not a fact.** The distillation presents it as settled, but reaching ERRS could happen via a return value (in which case `condition-case` is unnecessary), a state assignment by the caller, or a separate signal path. Without the call site in view, the mechanism is unspecified.
+
+2. **The fix targets the symptom, not the cause.** If `gptel--fsm-next` signals on invalid states, the real question is *why* the FSM enters an invalid state. Plausible alternatives:
+   - Validate state at the call site before invoking `gptel--fsm-next`
+   - Have `gptel--fsm-next` return a sentinel instead of signaling
+   - Add a precondition in the FSM itself
+   
+   The proposed fix assumes the call site is the right layer without arguing it.
+
+3. **"Aborts the retry machinery" is unverified.** If the retry loop already has error handling, the 
+
+... (truncated)
