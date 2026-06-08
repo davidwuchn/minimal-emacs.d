@@ -85,7 +85,7 @@ for agent in maintainer maintainer-direct; do
     if [ -f "$file" ]; then
         # Portable: remove any existing model line, then insert after description.
         # perl -i -pe applies the block to each line; $_ holds the current line.
-        perl -i -pe 'if (/^model:/) { $_ = ""; } elsif (/^description:/) { $_ = $_ . "model: bailian-token-plan/qwen3.7-plus\n"; }' "$file"
+        perl -i -pe 'if (/^model:/) { $_ = ""; } elsif (/^description:/) { $_ = $_ . "model: bailian-token-plan/qwen3.7-plus\noptions:\n  reasoningEffort: high\n"; }' "$file"
     fi
 done
 
@@ -96,7 +96,11 @@ update_model "$AGENTS_DIR/delegate-strong.md"        "github-copilot/gpt-5.4"
 update_model "$AGENTS_DIR/delegate-gpt.md"           "github-copilot/gpt-5.5"
 update_model "$AGENTS_DIR/delegate-opus.md"          "github-copilot/claude-opus-4.8"
 update_model "$AGENTS_DIR/delegate-qwen.md"          "bailian-token-plan/qwen3.7-max"
-update_model "$AGENTS_DIR/delegate-creative.md"      "bailian-token-plan/deepseek-v4-pro"
+# delegate-creative — also fix stale description referencing minimax-cn-coding-plan
+if [ -f "$AGENTS_DIR/delegate-creative.md" ]; then
+    perl -pi -e 's|^description:.*|description: Delegate variant '"'"'creative'"'"' with model bailian-token-plan/deepseek-v4-pro. Use for creative writing, brainstorming, content generation, and open-ended exploration.|' "$AGENTS_DIR/delegate-creative.md"
+    update_model "$AGENTS_DIR/delegate-creative.md" "bailian-token-plan/deepseek-v4-pro"
+fi
 update_model "$AGENTS_DIR/doc-explorer.md"           "bailian-token-plan/deepseek-v4-pro"
 update_model "$AGENTS_DIR/implementer.md"           "bailian-token-plan/glm-5.1"
 update_model "$AGENTS_DIR/implementer-safe.md"      "bailian-token-plan/qwen3.6-plus"
