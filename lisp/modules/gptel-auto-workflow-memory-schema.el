@@ -1058,22 +1058,38 @@ Returns list of (BACKEND . SCORE)."
       (dolist (edge (gptel-auto-workflow--unified-graph-neighbors :category cat-str
                                                                     '(:best-backend)))
         (let ((backend (cdr (cadr edge)))
-              (weight (nth 2 edge)))
-          (puthash backend (max weight (gethash backend backends 0.0)) backends))))
+              (weight (nth 2 edge))
+              (conf-score (or (nth 4 edge) 0.5)))
+          (puthash backend (max (* weight conf-score)
+                               (gethash backend backends 0.0)) backends))))
     (dolist (edge (gptel-auto-workflow--unified-graph-neighbors :file slug '(:similar)))
       (let ((sim-file (cdr (cadr edge)))
-            (sim-score (nth 2 edge)))
+            (sim-score (nth 2 edge))
+            (conf-score (or (nth 4 edge) 0.5)))
         (let ((sim-cat (when (fboundp 'gptel-auto-workflow--categorize-target)
                          (gptel-auto-workflow--categorize-target sim-file))))
           (when sim-cat
             (dolist (be (gptel-auto-workflow--unified-graph-neighbors
                          :category (substring (symbol-name sim-cat) 1) '(:best-backend)))
-              (let ((backend (cdr (cadr be)))
-                    (weight (* sim-score (nth 2 be))))
+               (let ((backend (cdr (cadr be)))
+                     (weight (* sim-score (nth 2 be) conf-score)))
                 (puthash backend (max weight (gethash backend backends 0.0)) backends)))))))
     (let ((result nil))
       (maphash (lambda (backend score) (push (cons backend score) result)) backends)
       (cl-sort result #'> :key #'cdr))))
+
+(defun gptel-auto-workflow--graph-same-community-p (target-a target-b)
+  "Return t if TARGET-A and TARGET-B share the same graph community."
+  (let* ((comms (gptel-auto-workflow--unified-graph-communities))
+         (sa (file-name-sans-extension (file-name-nondirectory target-a)))
+         (sb (file-name-sans-extension (file-name-nondirectory target-b))))
+    (when comms (let ((ca (gethash (cons :file sa) comms)) (cb (gethash (cons :file sb) comms))) (and ca cb (= ca cb))))))
+
+(defun gptel-auto-workflow--graph-community-for-target (target)
+  "Return community ID for TARGET, or nil."
+  (let* ((comms (gptel-auto-workflow--unified-graph-communities))
+         (slug (file-name-sans-extension (file-name-nondirectory target))))
+    (when comms (gethash (cons :file slug) comms))))
 
 ;;; Graph topology analysis (community detection + centrality — graphify-inspired)
 
