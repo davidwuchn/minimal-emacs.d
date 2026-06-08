@@ -804,7 +804,8 @@ Returns alist of (ENTITY . ((SYNONYM . SCORE) ...)) with SCORE >= THRESHOLD
   "Record an ontology EVENT-TYPE with DATA into the schema index.
 EVENT-TYPE is one of :saturation, :strategy-change, :drift, :backend-change.
 DATA is a plist with event-specific fields.
-Creates entity and triple entries so future graph walks surface these learnings."
+Creates entity and triple entries so future graph walks surface these
+learnings."
   (gptel-auto-workflow--memory-schema-ensure-loaded)
   (let* ((category (plist-get data :category))
          (cat-str (and category
@@ -1063,5 +1064,161 @@ Returns list of (BACKEND . SCORE)."
     (let ((result nil))
       (maphash (lambda (backend score) (push (cons backend score) result)) backends)
       (cl-sort result #'> :key #'cdr))))
+
+;;; Graph topology analysis (community detection + centrality — graphify-inspired)
+
+(defun gptel-auto-workflow--unified-graph-god-nodes (&optional top-n)
+  "Return the most-connected nodes in the unified graph by degree centrality.
+Excludes file-level hub nodes and isolates. Returns list of (node-key .
+degree).
+TOP-N defaults to 10."
+  (let ((graph (gptel-auto-workflow--unified-graph-ensure))
+        (degrees (make-hash-table :test 'equal :size 64)))
+    (when graph
+      ;; Count outgoing degree for each node
+      (maphash (lambda (from-key edges)
+                 (when edges
+                   (puthash from-key
+                            (+ (length edges)
+                               (gethash from-key degrees 0))
+                            degrees)
+                   (dolist (edge edges)
+                     (let ((to-key (cadr edge)))
+                       (puthash to-key
+                                (1+ (gethash to-key degrees 0))
+                                degrees)))))
+               graph)
+      ;; Sort by degree descending, filter file hubs and isolates
+      (let ((ranked '()))
+        (maphash (lambda (key deg)
+                   (let ((type (car key)))
+                     ;; Skip file hubs (all files connect to many things)
+                     (unless (and (eq type :file) (> deg 10))
+                       (push (cons key deg) ranked))))
+                 degrees)
+        (seq-take (cl-sort ranked #'> :key #'cdr)
+                  (or top-n 10))))))
+
+(defun gptel-auto-workflow--unified-graph-communities (&optional max-iterations)
+  "Detect communities in the unified graph using label propagation.
+Returns hash table: node-key -> community-id (integer).
+MAX-ITERATIONS defaults to 20."
+  (let* ((graph (gptel-auto-workflow--unified-graph-ensure))
+         (communities (make-hash-table :test 'equal :size 64))
+         (nodes '())
+         (community-id 0))
+    (when graph
+      ;; Initialize: each node in its own community
+      (maphash (lambda (key _edges)
+                 (puthash key community-id communities)
+                 (push key nodes)
+                 (setq community-id (1+ community-id)))
+               graph)
+      ;; Label propagation
+      (cl-loop for iteration from 0 below (or max-iterations 20)
+               for changed = nil
+               do (dolist (node nodes)
+            (let* ((edges (gethash node graph))
+                   (neighbor-votes (make-hash-table :test 'equal :size 16)))
+              ;; Count neighbor community votes
+              (dolist (edge (or edges '()))
+                (let* ((to-key (cadr edge))
+                       (neighbor-community (gethash to-key communities)))
+                  (when neighbor-community
+                    (puthash neighbor-community
+                             (1+ (gethash neighbor-community neighbor-votes 0))
+                             neighbor-votes))))
+              ;; Also count reverse edges (nodes that point TO this node)
+              (dolist (other-node nodes)
+                (unless (equal other-node node)
+                  (dolist (edge (gethash other-node graph))
+                    (when (equal (cadr edge) node)
+                      (let ((nc (gethash other-node communities)))
+                        (when nc
+                          (puthash nc
+                                   (1+ (gethash nc neighbor-votes 0))
+                                   neighbor-votes)))))))
+              ;; Choose majority community
+              (let ((best-community nil) (best-count 0))
+                (maphash (lambda (comm count)
+                           (when (> count best-count)
+                             (setq best-community comm best-count count)))
+                         neighbor-votes)
+                (when (and best-community
+                           (not (= best-community (gethash node communities))))
+                  (puthash node best-community communities)
+                   (setq changed t)))))
+          (unless changed
+            (message "[memory-schema] Label propagation converged after %d iterations"
+                     iteration)
+            (cl-return communities)))
+      communities)))
+
+(defun gptel-auto-workflow--unified-graph-surprising-connections (&optional top-n)
+  "Find surprising cross-community connections in the unified graph.
+Returns list of (source-id target-id edge-type score).
+Surprising = cross-community edges with low-confidence edge types.
+TOP-N defaults to 10."
+  (let* ((graph (gptel-auto-workflow--unified-graph-ensure))
+         (communities (gptel-auto-workflow--unified-graph-communities))
+         (surprises '()))
+    (when (and graph communities)
+      (maphash (lambda (from-key edges)
+                 (let ((from-comm (gethash from-key communities)))
+                   (dolist (edge (or edges '()))
+                     (let* ((to-key (cadr edge))
+                            (to-comm (gethash to-key communities))
+                            (edge-type (car edge))
+                            (weight (nth 2 edge)))
+                       ;; Surprising: cross-community AND (low weight OR inferred edge)
+                       (when (and from-comm to-comm
+                                  (not (= from-comm to-comm))
+                                  (or (< weight 0.5)
+                                      (member edge-type '(:similar :schema-neighbor))))
+                         (push (list (cdr from-key) (cdr to-key)
+                                     edge-type weight
+                                     (abs (- from-comm to-comm)))
+                               surprises))))))
+               graph)
+      (seq-take (cl-sort surprises #'> :key (lambda (s) (nth 4 s)))
+                (or top-n 10)))))
+
+(defun gptel-auto-workflow--unified-graph-stats-for-prompt ()
+  "Return a compact summary of graph topology for prompt injection.
+Includes: node count, edge count, top god nodes, community count,
+surprising connections. Uses graphify-inspired format."
+  (let* ((graph (gptel-auto-workflow--unified-graph-ensure)))
+    (when (and graph (> (hash-table-count graph) 0))
+      (let* ((node-count (hash-table-count graph))
+             (edge-count 0)
+             (god-nodes (gptel-auto-workflow--unified-graph-god-nodes 5))
+             (communities (gptel-auto-workflow--unified-graph-communities))
+             ;; Count unique communities
+             (comm-set (make-hash-table :test 'equal))
+             (surprises (gptel-auto-workflow--unified-graph-surprising-connections 5)))
+        (maphash (lambda (_k edges)
+                   (setq edge-count (+ edge-count (length (or edges '())))))
+                 graph)
+        (when communities
+          (maphash (lambda (_k comm) (puthash comm t comm-set)) communities))
+        (concat
+         "## Knowledge Graph Topology (graphify-inspired)\n"
+         (format "- %d nodes, %d edges, %d communities detected\n"
+                 node-count edge-count (hash-table-count comm-set))
+         (when god-nodes
+           (concat "- **God nodes** (most-connected):\n"
+                   (mapconcat (lambda (n)
+                                (format "  - %s:%s (degree=%d)"
+                                        (car (car n)) (cdr (car n)) (cdr n)))
+                              god-nodes "\n")
+                   "\n"))
+         (when surprises
+           (concat "- **Surprising connections** (cross-community):\n"
+                   (mapconcat (lambda (s)
+                                (format "  - %s ⟷ %s [%s, weight=%.2f]"
+                                        (nth 0 s) (nth 1 s) (nth 2 s) (nth 3 s)))
+                              surprises "\n")
+                   "\n"))
+         "\n")))))
 
 (provide 'gptel-auto-workflow-memory-schema)

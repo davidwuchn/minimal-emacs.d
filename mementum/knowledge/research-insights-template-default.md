@@ -11,7 +11,7 @@ allium-status: coherent
 
 # Research Strategy: template-default
 
-*Consolidated from 61 experiments (3% keep rate).*
+*Consolidated from 67 experiments (3% keep rate).*
 
 **Performance:** 2 kept / 0 discarded / 25 failed (EXTRACTED — from TSV)
 
@@ -55,372 +55,57 @@ These targets may need different research patterns or the research findings were
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*8 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*0 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
 # Distillation
 
-## Strategy Applied
-**template-default** — generic exploratory pass over 158 experiments spanning 46 target files in the gptel/auto-workflow ecosystem. No specialized targeting; the pass surfaced one defensible signal and discarded the remainder as unverifiable.
+## Scope
+- **Strategy:** template-default
+- **Experiments:** 67 across 9 targets
+- **Files investigated:** 8 gptel modules + 1 staging-review
 
-## Surviving Hypothesis (1 / 158)
+## Valid Findings (2 kept, 0 discarded)
 
-**Target:** `my/gptel-auto-retry` interaction with `gptel--fsm-next`
+### 1. Dead-marker crash risk via `where` parameter
+**Issue:** A `where` value may be a marker from a buffer that has since been killed. Passing such a dead marker downstream will trigger errors.
+**Fix:** Add a `marker-live` check before delegating `where` to the original function.
 
-**Claim:** Wrapping `gptel--fsm-next` in `condition-case` defuses a latent crash path. When the FSM occupies an invalid state and cannot resolve a next-state, the bare call propagates an error that aborts the retry machinery. A `condition-case` guard lets the call safely fall through to `ERRS`, which is the original intended transition for failure handling.
+### 2. Missing nil-guard in `gptel-auto-workflow--research-cache-get`
+**Issue:** The function assumes the research-findings cache hash table is live. If nil (early startup or after error recovery), it raises `wrong-type-argument`.
+**Fix:** Add a `hash-table-p` guard, mirroring the existing pattern in `gptel-auto-workflow-strategic.el:2719-2721`.
+**Note:** This is an internal inconsistency — the same library already protects against this case elsewhere.
 
-**Rationale:** The FSM's recovery path is already defined (`ERRS`); the bug is not in the state machine itself but in the lack of a guard at the call site, so the original transition logic can still do its job.
-
-## Discarded Material
-- 157 hypotheses discarded as **unknown** — no surviving evidence to characterize.
-- One additional fragment ("[what changes & why]") was a required-field stub rather than a hypothesis.
-
-## Net Yield
-One concrete, narrow, actionable finding: a single `condition-case` wrap around `gptel--fsm-next` at its call site in the retry path. Low blast radius, preserves existing failure semantics, addresses a real crash class rather than inventing new behavior.
+## Net Assessment
+Both findings are **defensive-coding gaps** in early/error-recovery paths. Neither appears to be a logic bug; both are robustness/consistency fixes. Low risk to apply, high value for startup and post-error resilience.
 ```
 
 ### Check Issues
 
-**Check Summary**
+# Review of Distillation
 
-The distillation is well-structured but the lone surviving hypothesis is under-supported and possibly the wrong layer of fix. The shape of the writeup is good; the content of the finding needs more verification.
+## What's working
 
----
+- **Clean separation** of findings from net assessment — easy to scan.
+- **Finding 2 is well-anchored:** names the function, points to the reference pattern with line numbers, and the "internal inconsistency" note is the strongest part — it's a load-bearing argument that the fix is *removing* inconsistency, not adding new behavior.
+- **Net assessment correctly distinguishes** defensive-coding gaps from logic bugs, and the risk/value framing ("low risk to apply, high value") is appropriate.
 
-### What's Solid
+## What needs attention
 
-- Epistemic honesty in the discarded material — marking as "unknown" rather than "disproven" is the right call.
-- Acknowledging the required-field stub as a stub rather than a hypothesis.
-- Narrow, low-blast-radius framing of the proposed change.
-- Clean separation of strategy / hypothesis / rationale / yield.
+### 1. Asymmetric specificity between the two findings
+Finding 2 cites a function name and a reference line range (`gptel-auto-workflow-strategic.el:2719-2721`). Finding 1 cites neither. It should specify:
+- Which function receives `where`
+- Which downstream call would raise (e.g., `save-excursion`, `goto-char`, `insert`?)
+- File and approximate line range
 
----
+Without that, Finding 1 is unverifiable from the document alone.
 
-### What's Questionable
+### 2. "0 discarded" is underspecified
+"2 kept, 0 discarded" implies a triage step, but the original count is missing. Readers can't judge the filter's selectivity. Either drop the kept/discarded framing or include the input count (e.g., "2 kept, 0 discarded from N total").
 
-1. **"ERRS is the original intended transition for failure handling" is an inference, not a fact.** The distillation presents it as settled, but reaching ERRS could happen via a return value (in which case `condition-case` is unnecessary), a state assignment by the caller, or a separate signal path. Without the call site in view, the mechanism is unspecified.
-
-2. **The fix targets the symptom, not the cause.** If `gptel--fsm-next` signals on invalid states, the real question is *why* the FSM enters an invalid state. Plausible alternatives:
-   - Validate state at the call site before invoking `gptel--fsm-next`
-   - Have `gptel--fsm-next` return a sentinel instead of signaling
-   - Add a precondition in the FSM itself
-   
-   The proposed fix assumes the call site is the right layer without arguing it.
-
-3. **"Aborts the retry machinery" is unverified.** If the retry loop already has error handling, the 
+### 3. "template-default" strategy is undefined
+In Scope, this label is opaque. If it refers to a specific strategy in the codebase, name it; if it's a meta-template descriptor, say so explicitly. As written, a reader six months from now w
 
 ... (truncated)
