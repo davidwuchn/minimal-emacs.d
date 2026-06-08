@@ -729,7 +729,7 @@ CALLBACK receives the Turtle string or nil."
 (defvar gptel-auto-workflow--ab-test-sections
   '(suggestions self-evolution topic-specific git-history
                 axis-performance cross-target-patterns failure-patterns
-                research-findings context-db system-health)
+                research-findings context-db system-health human-priorities)
   "Prompt sections that can be individually included/excluded for A/B testing.")
 
 (defvar gptel-auto-workflow--ab-test-omit-rate 0.2
@@ -1107,7 +1107,8 @@ Returns a compact lambda-notation string ready for the LLM."
              (keep-rate (cdr (assoc 'keep-rate vars)))
              (uni-d (cdr (assoc 'unified-directive vars)))
               (context-db (cdr (assoc 'context-db-context vars)))
-              (system-health (cdr (assoc 'system-health-context vars))))
+              (system-health (cdr (assoc 'system-health-context vars)))
+              (human-priorities (cdr (assoc 'human-priorities-context vars))))
     (concat
       ;; KV CACHE PREFIX — STATIC sections first (shared across experiments)
       ;; These tokens are identical for every experiment → high cache-hit rate.
@@ -1176,6 +1177,7 @@ Returns a compact lambda-notation string ready for the LLM."
        (if research (concat "RESEARCH: " research "\n") "")
        (if context-db (concat context-db "\n") "")
        (if system-health (concat system-health "\n") "")
+       (if human-priorities (concat human-priorities "\n") "")
        (if git-hist (concat "GIT: " git-hist "\n") "")
       (if axis-g (concat "AXIS: " axis-g "\n") "")
       (if axis-p (concat "AXIS-PERF: " axis-p "\n") "")
@@ -1358,6 +1360,43 @@ This biases the evolution LLM to prioritize fixes for known system issues."
             (when (> (length compact) 10)
               (concat "SYSTEM-HEALTH (recurring issues from self-audit):\n"
                       compact))))))))
+
+(defun gptel-auto-experiment--human-priorities-for-prompt ()
+  "Read approved proposals from the approval queue and format as business context.
+Returns formatted string of human-approved priorities, or nil if none exist.
+This injects REAL USER NEEDS into the experiment prompt — the human operator
+explicitly approved these improvements."
+  (let* ((root (gptel-auto-workflow--project-root))
+         (decisions-dir (expand-file-name
+                         "var/approval-queue/decisions" root))
+         (approved '()))
+    (when (file-directory-p decisions-dir)
+      (dolist (f (directory-files decisions-dir t "\\.sexp$"))
+        (condition-case _
+            (let ((data (with-temp-buffer
+                          (insert-file-contents f)
+                          (goto-char (point-min))
+                          (read (current-buffer)))))
+              (when (and (listp data)
+                         (string= (plist-get data :status) "approved"))
+                (let* ((proposal (plist-get data :proposal))
+                       (desc (if (listp proposal)
+                                 (plist-get proposal :description)
+                               "unknown"))
+                       (component (or (plist-get data :component)
+                                      (if (listp proposal)
+                                          (plist-get proposal :component))
+                                      "unknown"))
+                       (target (plist-get data :pattern-target)))
+                  (push (format "- %s (%s): %s"
+                                component
+                                (or target "any target")
+                                desc)
+                        approved))))
+          (error nil))))
+    (when approved
+      (concat "BUSINESS-CONTEXT (human-approved priorities from approval queue):\n"
+              (string-join (nreverse approved) "\n")))))
 
 (defun gptel-auto-experiment-build-prompt (target experiment-id max-experiments analysis baseline
                                                   &optional previous-results)
@@ -1694,6 +1733,7 @@ Read ONE function. Edit ONE line. Verify. Done."))))
                                        (or (gptel-auto-workflow--memory-schema-experiment-context target) "")))
                 (context-db-context . ,(gptel-auto-experiment--context-db-for-prompt target))
                 (system-health-context . ,(gptel-auto-experiment--system-health-for-prompt))
+                (human-priorities-context . ,(gptel-auto-experiment--human-priorities-for-prompt))
                 (time-budget . ,(/ gptel-auto-experiment-time-budget 60))
               (focus-line . ,focus-line)
               (sexp-check-command . ,sexp-check-command))))
