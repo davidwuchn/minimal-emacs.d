@@ -6563,7 +6563,7 @@ Saves to var/tmp/evolution-scores.json."
                         (error 0)))
          (results (gptel-auto-workflow--parse-all-results))
          (current (if (listp results) (length results) 0)))
-    (- current (or (ignore-errors (float last-total)) 0))))
+    (max 0 (- current (or (ignore-errors (float last-total)) 0)))))
 
 ;; ─── Allium BDD: Behavior-Driven Development via spec checking ───
 
