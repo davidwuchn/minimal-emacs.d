@@ -113,9 +113,11 @@ if [ -f "$OPENCODE_JSON" ]; then
         tmp_json="$(mktemp)"
         jq '
           .provider["bailian-token-plan"].models["deepseek-v4-pro"].options.thinking = {"type": "enabled", "budgetTokens": 16384} |
-          .provider["bailian-token-plan"].models["deepseek-v4-flash"].options.thinking = {"type": "enabled", "budgetTokens": 16384}
+          .provider["bailian-token-plan"].models["deepseek-v4-flash"].options.thinking = {"type": "enabled", "budgetTokens": 16384} |
+          .small_model = "bailian-token-plan/deepseek-v4-flash" |
+          .agent.compaction.model = "bailian-token-plan/deepseek-v4-flash"
         ' "$OPENCODE_JSON" > "$tmp_json" && mv "$tmp_json" "$OPENCODE_JSON"
-        echo "DeepSeek thinking enabled (via jq)"
+        echo "DeepSeek thinking enabled + compaction/small_model set (via jq)"
     else
         echo "WARNING: jq not found — skip enabling DeepSeek thinking mode"
         echo "Install jq or manually add thinking config to $OPENCODE_JSON"
