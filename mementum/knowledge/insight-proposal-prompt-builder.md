@@ -1,26 +1,27 @@
 <!--
 Synthesis verification:
 - Confidence: 40%
-- Sources: 6 memories
-- Warnings: No code examples or concrete references, Very short content (18 lines)
+- Sources: 7 memories
+- Warnings: No code examples or concrete references, Very short content (19 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize memories about "insight-proposal-prompt-builder" into a knowledge page. The memories are all about recurring prompt failures in various lisp modules, all related to the prompt-builder component.
+The user wants me to synthesize memories about "insight-proposal-prompt-builder" into a knowledge page. The memories are all about recurring prompt failures in various lisp modules, all related to the "prompt-builder" component. Let me analyze the patterns:
 
-Let me create a comprehensive knowledge page with:
-1. Frontmatter
-2. At least 50 lines of actual content
-3. Concrete examples (code, tables, commands)
-4. Actionable patterns
-5. Cross-references to related topics
+1. Multiple modules have recurring prompt failures
+2. All are in the `lisp/modules/` directory
+3. All are related to gptel tools and auto-workflow
+4. Expected impact ranges from 60-80% reduction in failures
+5. Confidence ranges from 0.60-0.80
+6. Risk is consistently "medium"
+7. Validation rates are low (0.01-0.02)
+8. Status is "tentative"
 
-The memories show:
-- Multiple modules with recurring prompt failures
-- All related to prompt-builder component
-- Confidence levels: 0.60-0.80
-- Risk: medium
-- Expected impact: 60-80% reduction in failures
-- Status: tentative
+I need to create a comprehensive knowledge page with:
+- Minimum 50 lines of actual content
+- Concrete examples (code, tables, commands)
+- Actionable patterns
+- Cross-references to related topics
+- Full markdown format with frontmatter
 
-I'll create a knowledge page that synthesizes these into actionable guidance for addressing prompt-builder failures.
+Let me create a detailed knowledge page about the prompt-builder component, its failure patterns, and remediation strategies.
