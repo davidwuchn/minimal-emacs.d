@@ -616,7 +616,12 @@ if [ -n "$SELF_AUDIT_REPORT" ]; then
         UNEVALUATED_STRATS=$(grep 'unevaluated-strategies' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. *(\d+)/) { print $1 }')
         BOTTLENECK=$(grep 'staging-merge-bottleneck' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. t\b/) { print "1" }')
         BROKEN_MODULES=$(grep -c 'broken-modules' "$SELF_AUDIT_RESULT_FILE" 2>/dev/null || echo 0)
+        PRICING_STALE=$(grep 'pricing-stale' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. (\d+)/) { print $1 }' || echo 0)
+        DAYS_STALE=$(grep 'pricing-days-stale' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. (\d+)/) { print $1 }' || echo 0)
         log "  Structured audit: $AUDIT_ISSUES issues, $BROKEN_MODULES broken modules, bottleneck=$BOTTLENECK"
+        if [ "${PRICING_STALE:-0}" -gt 0 ]; then
+            log "  ⚠ Pricing STALE: $PRICING_STALE discrepancies ($DAYS_STALE days since last knowledge page update)"
+        fi
     fi
 else
     log "  Self-audit: no issues found (or module not loaded)"
@@ -1306,50 +1311,43 @@ mkdir -p "$DIGEST_DIR"
     fi
     # ── Recommended Actions (actionable by human in one command) ──
     echo ""
-    echo "## Token Economics (cost per experiment)"
+    echo "## Token Economics (real per-model pricing from registry)"
     echo ""
-    # Estimate token cost: ~$0.10 baseline per experiment, weighted by backend cost
-    # Backend cost multipliers: flash=0.5x pro=1.0x qwen=1.5x default=1.2x
-    base_cost=0.10  # baseline dollars per experiment
     total_experiments=0
     total_cost=0
     kept_cost=0
     kept_count=0
-    if compgen -G "$DIR/var/tmp/experiments/*/results.tsv" >/dev/null; then
-        find "$DIR/var/tmp/experiments" -maxdepth 2 -name "results.tsv" -mtime -1 -exec cat {} \; 2>/dev/null | \
-            awk -F'\t' -v base="$base_cost" 'NR>1 {
-                backend = ($15 == "" ? "unknown" : $15)
-                multiplier = 1.0
-                if (backend ~ /flash/) multiplier = 0.5
-                else if (backend ~ /pro/) multiplier = 1.0
-                else if (backend ~ /qwen/) multiplier = 1.5
-                else if (backend ~ /kimi/) multiplier = 1.2
-                else multiplier = 1.0
-                cost = base * multiplier
-                total_cost += cost
-                total++
-                if ($8 ~ /^(kept|grader-bypass|merged|staged)$/) {
-                    kept_cost += cost
-                    kept++
-                }
-            } END {
-                printf "total=%d|total_cost=%.2f|kept=%d|kept_cost=%.2f\n", total, total_cost, kept, kept_cost
-            }' > "$DIR/var/tmp/token-economics.tmp" 2>/dev/null
-        if [ -f "$DIR/var/tmp/token-economics.tmp" ]; then
-            total_experiments=$(cut -d'|' -f1 "$DIR/var/tmp/token-economics.tmp" | cut -d= -f2)
-            total_cost=$(cut -d'|' -f2 "$DIR/var/tmp/token-economics.tmp" | cut -d= -f2)
-            kept_experiments=$(cut -d'|' -f3 "$DIR/var/tmp/token-economics.tmp" | cut -d= -f2)
-            kept_cost=$(cut -d'|' -f4 "$DIR/var/tmp/token-economics.tmp" | cut -d= -f2)
-            rm -f "$DIR/var/tmp/token-economics.tmp"
-        fi
+    # Use gptel-auto-workflow-self-audit--compute-token-economics
+    # which reads TSV data + registry pricing for real cost per model
+    TOKEN_ECON=$(emacs --batch -L "$DIR/lisp/modules" --eval "
+(progn
+  (setq gptel-auto-workflow--workspace-path \"$DIR\")
+  (require 'gptel-auto-workflow-self-audit nil t)
+  (let ((result (gptel-auto-workflow-self-audit--compute-token-economics)))
+    (princ (format \"total=%d|total_cost=%.2f|kept=%d|kept_cost=%.2f|models=%d\"
+            (plist-get result :total)
+            (plist-get result :total-cost)
+            (plist-get result :kept)
+            (plist-get result :kept-cost)
+            (plist-get result :models-seen)))))" 2>&1)
+    if [ -n "$TOKEN_ECON" ] && echo "$TOKEN_ECON" | grep -q 'total='; then
+        total_experiments=$(echo "$TOKEN_ECON" | cut -d'|' -f1 | cut -d= -f2)
+        total_cost=$(echo "$TOKEN_ECON" | cut -d'|' -f2 | cut -d= -f2)
+        kept_experiments=$(echo "$TOKEN_ECON" | cut -d'|' -f3 | cut -d= -f2)
+        kept_cost=$(echo "$TOKEN_ECON" | cut -d'|' -f4 | cut -d= -f2)
+        models_seen=$(echo "$TOKEN_ECON" | cut -d'|' -f5 | cut -d= -f2)
     fi
     if [ "${total_experiments:-0}" -gt 0 ]; then
-        echo "- **${total_experiments} experiments** (24h), est. cost: \$${total_cost:-0.00}"
-        echo "- **${kept_experiments:-0} kept** (est. \$${kept_cost:-0.00} value delivered, ${kept_experiments:-0}/${total_experiments} = $(awk "BEGIN {printf \"%.0f\", ${kept_experiments:-0}*100/${total_experiments}}")% keep-rate)"
+        echo "- **${total_experiments} experiments** across ${models_seen:-0} models (24h), est. cost: \$${total_cost:-0.00}"
+        echo "- **${kept_experiments:-0} kept** (est. \$${kept_cost:-0.00} value, ${kept_experiments:-0}/${total_experiments} = $(awk "BEGIN {printf \"%.0f\", ${kept_experiments:-0}*100/${total_experiments}}")% keep-rate)"
         cost_per_kept=$(awk "BEGIN {printf \"%.2f\", ${kept_cost:-0}/${kept_experiments:-1}}")
-        echo "- **Cost per kept experiment**: \$${cost_per_kept:-0.00}"
+        echo "- **Cost per kept experiment**: \$${cost_per_kept:-0.00} (real per-model pricing)"
         if [ "${kept_experiments:-0}" -gt 0 ] && [ "$(echo "$cost_per_kept > 0.50" | bc 2>/dev/null || echo 0)" = "1" ]; then
             echo "- ⚠ High cost per kept — consider cheaper backends or tighter grading"
+        fi
+        if [ "${PRICING_STALE:-0}" -gt 0 ]; then
+            echo "- ⚠ **Pricing may be stale**: $PRICING_STALE discrepancies vs bailian-pricing.md ($DAYS_STALE days old)"
+            echo "  → Update: edit mementum/knowledge/bailian-pricing.md then re-run self-audit"
         fi
     else
         echo "- No experiments in last 24h (no cost data)"

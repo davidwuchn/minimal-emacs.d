@@ -489,11 +489,14 @@ Uses concat to avoid deeply nested insert/format calls in the write function."
          (bca (plist-get result :backend-cold-start))
          (sca (plist-get result :strategy-cold-start))
          (sma (plist-get result :staging-merge-bottleneck))
+         (pricing (plist-get result :pricing-freshness))
          (cold (plist-get bca :cold))
          (unev (plist-get sca :unevaluated))
          (bottleneck (plist-get sma :bottleneck-p))
          (broken (plist-get bcc :broken))
-         (issues (plist-get result :issues)))
+         (issues (plist-get result :issues))
+         (pricing-stale (or (plist-get pricing :stale-count) 0))
+         (pricing-days (or (plist-get pricing :days-stale) 0)))
     (concat
      ";; self-audit-result.el — structured audit findings\n"
      ";; Written by gptel-auto-workflow-self-audit-execute\n"
@@ -503,6 +506,8 @@ Uses concat to avoid deeply nested insert/format calls in the write function."
      (format "(cold-backends . %S)\n" cold)
      (format "(unevaluated-strategies . %d)\n" unev)
      (format "(staging-merge-bottleneck . %S)\n" bottleneck)
+     (format "(pricing-stale . %d)\n" pricing-stale)
+     (format "(pricing-days-stale . %d)\n" pricing-days)
      (when broken
        (format "(broken-modules . %S)\n" (mapcar #'car broken)))
      ";; Remediation actions for self-heal:\n"
@@ -512,6 +517,8 @@ Uses concat to avoid deeply nested insert/format calls in the write function."
        "(remediation . increase-exploration-rate)\n")
      (when bottleneck
        "(remediation . staging-merge-autoresolve)\n")
+     (when (> pricing-stale 0)
+       "(remediation . update-pricing)\n")
      (when (> (length broken) 0)
        "(remediation . flag-broken-modules)\n")
      (format "(audit-timestamp . %S)\n"
@@ -963,6 +970,58 @@ Also flags if the knowledge page hasn't been updated in >30 days."
         (when (> days-stale 30)
           "\n⚠ Knowledge page >30 days stale — update from Bailian console")
         "\n→ Resolve: update registry OR update bailian-pricing.md")))))
+
+;;; Token Economics (real per-model pricing from registry)
+
+(defun gptel-auto-workflow-self-audit--compute-token-economics (&optional root)
+  "Compute token economics from experiment TSV data using real registry pricing.
+Scans var/tmp/experiments/*/results.tsv for last 24h.
+Returns plist (:total :total-cost :kept :kept-cost :models-seen)."
+  (let* ((root (or root (gptel-auto-workflow-self-audit--root)))
+         (exp-dir (expand-file-name "var/tmp/experiments" root))
+         (cutoff (- (float-time) 86400))  ; 24h
+         (pricing (make-hash-table :test 'equal))
+         (total 0) (kept 0) (total-cost 0.0) (kept-cost 0.0)
+         (models-seen (make-hash-table :test 'equal)))
+    ;; Build pricing lookup from registry
+    (when (boundp 'gptel-backend-registry)
+      (dolist (entry gptel-backend-registry)
+        (dolist (m (plist-get (cdr entry) :model-metadata))
+          (let* ((model (symbol-name (car m)))
+                 (p (cdr m))
+                 (in (or (plist-get p :pricing-input) 0.0))
+                 (out (or (plist-get p :pricing-output) 0.0))
+                 (cache (or (plist-get p :pricing-cache-hit) 0.0)))
+            ;; Use input+cache as baseline cost per experiment
+            (puthash model (+ in cache) pricing)))))
+    ;; Scan recent TSV files
+    (when (file-directory-p exp-dir)
+      (dolist (tsv (directory-files exp-dir t "results\\.tsv$"))
+        (when (> (float-time (nth 5 (file-attributes tsv))) cutoff)
+          (condition-case nil
+              (with-temp-buffer
+                (insert-file-contents tsv)
+                (goto-char (point-min))
+                (while (not (eobp))
+                  (let* ((line (buffer-substring (point) (line-end-position)))
+                         (fields (split-string line "\t")))
+                    (when (>= (length fields) 16)
+                      (let* ((model (nth 15 fields))
+                             (decision (nth 7 fields))
+                             (cost (or (gethash model pricing) 0.10)))
+                        (puthash model t models-seen)
+                        (setq total (1+ total))
+                        (setq total-cost (+ total-cost cost))
+                        (when (string-match-p
+                               "\\`\\(kept\\|grader-bypass\\|merged\\|staged\\)"
+                               decision)
+                          (setq kept (1+ kept))
+                          (setq kept-cost (+ kept-cost cost)))))
+                    (forward-line 1))))
+            (error nil)))))
+    (list :total total :total-cost total-cost
+          :kept kept :kept-cost kept-cost
+          :models-seen (hash-table-count models-seen))))
 
 (provide 'gptel-auto-workflow-self-audit)
 ;;; gptel-auto-workflow-self-audit.el ends here
