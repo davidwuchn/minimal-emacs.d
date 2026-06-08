@@ -51,11 +51,11 @@ The nucleus system is built on **gptel** (upstream LLM chat engine) with layered
 └───────────────────────────┬─────────────────────────────────────────┘
                             │
 ┌───────────────────────────▼─────────────────────────────────────────┐
-│              YC Self-Improving Layer (~95% complete)                  │
+│              YC Self-Improving Layer (✅ 100% complete)               │
 │  gptel-auto-workflow-*.el (34 modules)                               │
 │  ┌──────────────────┬──────────────────┬──────────────────┐          │
 │  │ Monitoring       │ Decision         │ Code Regen       │          │
-│  │ (7-phase cycle)  │ (classification) │ (from context)   │          │
+│  │ (9-phase cycle)  │ (classification) │ (from context)   │          │
 │  ├──────────────────┼──────────────────┼──────────────────┤          │
 │  │ Approval Queue   │ Architecture     │ Context DB       │          │
 │  │ (human gate)     │ (evolution)      │ (causal memory)  │          │
