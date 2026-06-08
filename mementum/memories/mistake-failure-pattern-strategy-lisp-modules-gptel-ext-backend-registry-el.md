@@ -1,14 +1,14 @@
 ---
-valid-from: 2026-06-08T11:04
+valid-from: 2026-06-07T20:21
 ---
 
-# Mistake: 2026-06-08 11:04
+# Mistake: 2026-06-07 20:21
 
 **Failure type:** strategy
-**Target:** staging-review
-**Occurrences:** 15
+**Target:** lisp/modules/gptel-ext-backend-registry.el
+**Occurrences:** 3
 **Example reasons:** none
-**Trend:** 2026-06-03T231639Z-16fc -> 2026-06-08T071221Z-2d34
+**Trend:** 2026-06-05T005714Z-0cd4 -> 2026-06-05T030636Z-639f
 
 This pattern was detected by the monitoring agent as a systemic failure requiring investigation.
 

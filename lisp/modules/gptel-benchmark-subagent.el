@@ -423,14 +423,21 @@ TYPE, DESCRIPTION, PROMPT same as async version.
 TIMEOUT overrides default.
 Returns:
 - On success: the callback result
-- On timeout: (gptel-benchmark--timeout-sentinel TYPE DESCRIPTION)"
+- On timeout: (gptel-benchmark--timeout-sentinel TYPE DESCRIPTION)
+- On callback error: (gptel-benchmark-error TYPE DESCRIPTION ERR)"
   (let ((result nil)
         (done nil)
         (deadline (+ (float-time) (or timeout gptel-benchmark-subagent-timeout))))
     (gptel-benchmark-call-subagent
      type description prompt
      (lambda (r)
-       (setq result r done t))
+       (condition-case err
+           (setq result r done t)
+         (error
+          ;; Set done/result FIRST so the loop unblocks even if message errors
+          (setq result (list 'gptel-benchmark-error type description err)
+                done t)
+          (message "[subagent] Callback error for %s: %s" description err))))
      timeout)
     (let ((iters 0)
           (max-iters 1200))

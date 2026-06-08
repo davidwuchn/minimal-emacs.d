@@ -440,10 +440,17 @@ Usage:
         (error
          (message "[staging-recovery] Recovery sweep skipped: %s"
                   (error-message-string err)))))
-    (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
-    (gptel-auto-workflow--clear-rate-limited-backends)
-    (when (fboundp 'gptel-auto-workflow--clear-run-failed-backends)
-      (gptel-auto-workflow--clear-run-failed-backends))
+(gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+     (gptel-auto-workflow--clear-rate-limited-backends)
+     (when (fboundp 'gptel-auto-workflow--clear-run-failed-backends)
+       (gptel-auto-workflow--clear-run-failed-backends))
+     ;; Apply pipeline auto-fix signals (bridge between bash Step 0.5 and daemon)
+     ;; The pipeline writes signal files; the daemon reads them here.
+     ;; This closes the DETECT→ACT→KEEP-GOING loop.
+     (when (fboundp 'gptel-auto-workflow-self-audit-apply-pipeline-signals)
+       (let ((signals (gptel-auto-workflow-self-audit-apply-pipeline-signals)))
+         (when (> signals 0)
+           (message "[daemon] Applied %d pipeline auto-fix signals" signals))))
     ;; Default to Moonshot for headless workflows instead of global MiniMax
     ;; (which is usually quota-exhausted).  The ontology router will
     ;; reorder backends once it has experiment data. Only set when

@@ -55,56 +55,10 @@ additional_implementers:
     model: bailian-token-plan/glm-5.1
 EOF
 
-# 3. Ensure GNU sed on macOS (BSD sed is incompatible with install.sh)
-if [[ "$(uname)" == "Darwin" ]] && ! command -v gsed >/dev/null 2>&1; then
-    # Create a sed wrapper that handles GNU-only features
-    SED_WRAP_DIR="$(mktemp -d)"
-    cat > "$SED_WRAP_DIR/sed" <<'SEDWRAP'
-#!/usr/bin/env bash
-set -euo pipefail
-in_place=false
-script=""
-files=()
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        -i) in_place=true; shift
-             if [[ $# -gt 0 && "$1" != -* && "$1" != /* && "$1" != s* ]]; then shift; fi ;;
-        -*) echo "sed-wrapper: unknown option: $1" >&2; exit 1 ;;
-        *)  if [[ -z "$script" ]]; then script="$1"; else files+=("$1"); fi; shift ;;
-    esac
-done
-
-# Handle GNU inline 'a' (append) command via awk
-if [[ "$script" =~ ^/(.+)/a[[:space:]](.+)$ ]]; then
-    pattern="${BASH_REMATCH[1]}"
-    text="${BASH_REMATCH[2]}"
-    for file in "${files[@]}"; do
-        if $in_place && [[ -n "$file" && -f "$file" ]]; then
-            tmpf="$(mktemp)"
-            awk -v t="$text" "/${pattern}/{print; print t; next}1" "$file" > "$tmpf" && mv "$tmpf" "$file"
-        elif [[ -n "$file" && -f "$file" ]]; then
-            awk -v t="$text" "/${pattern}/{print; print t; next}1" "$file"
-        fi
-    done
-    exit 0
-fi
-
-# Pass through to BSD sed (with -i '' fix)
-bsd_args=()
-$in_place && bsd_args+=("-i" "")
-[[ -n "$script" ]] && bsd_args+=("$script")
-bsd_args+=("${files[@]}")
-exec /usr/bin/sed "${bsd_args[@]}"
-SEDWRAP
-    chmod +x "$SED_WRAP_DIR/sed"
-    export PATH="$SED_WRAP_DIR:$PATH"
-    trap 'rm -rf "$SED_WRAP_DIR" "$TMPDIR"' EXIT
-    echo "Using BSD sed compatibility wrapper"
-elif [[ "$(uname)" == "Darwin" ]]; then
-    # gsed is available — prepend gnubin to use GNU sed everywhere
-    GNUBIN="$(brew --prefix gnu-sed)/libexec/gnubin"
-    export PATH="$GNUBIN:$PATH"
-    echo "Using GNU sed ($GNUBIN)"
+# 3. Cross-platform text edits use perl5 (perl -pi -e works on macOS + Linux)
+# No BSD/GNU sed wrapper needed: perl is identical on both platforms.
+if [[ "$(uname)" == "Darwin" ]]; then
+    echo "Using perl5 for cross-platform text edits (macOS)"
 fi
 
 # 4. Run installer
@@ -116,9 +70,7 @@ AGENTS_DIR="$HOME/.config/opencode/agents"
 update_model() {
     local file="$1" model="$2"
     if [ -f "$file" ]; then
-        local tmpf
-        tmpf="$(mktemp)"
-        sed "s|^model:.*|model: $model|" "$file" > "$tmpf" && mv "$tmpf" "$file"
+        perl -pi -e 's|^model:.*|model: '"$model"'|' "$file"
     fi
 }
 
@@ -126,12 +78,9 @@ update_model() {
 for agent in maintainer maintainer-direct; do
     file="$AGENTS_DIR/$agent.md"
     if [ -f "$file" ]; then
-        # Portable: delete model line, then insert after description using temp file
-        tmpf="$(mktemp)"
-        sed '/^model:/d' "$file" > "$tmpf"
-        # Insert "model: ..." after the description line
-        awk '/^description:/{print; print "model: bailian-token-plan/kimi-k2.6"; next}1' "$tmpf" > "$file"
-        rm -f "$tmpf"
+        # Portable: remove any existing model line, then insert after description.
+        # perl -i -pe applies the block to each line; $_ holds the current line.
+        perl -i -pe 'if (/^model:/) { $_ = ""; } elsif (/^description:/) { $_ = $_ . "model: bailian-token-plan/kimi-k2.6\n"; }' "$file"
     fi
 done
 

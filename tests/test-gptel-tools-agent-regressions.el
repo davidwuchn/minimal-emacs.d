@@ -4401,7 +4401,7 @@ delivers a :stale-run sentinel without grading, benchmarking, or logging."
           (gptel-make-openai "DashScope"
             :host "coding.dashscope.aliyuncs.com"
             :key (lambda () "token")
-            :models '(qwen3.5-plus qwen3.6-plus)))
+            :models '(qwen3.7-plus qwen3.6-plus)))
          (had-dashscope (boundp 'gptel--dashscope))
          (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
          (preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
@@ -4436,7 +4436,7 @@ delivers a :stale-run sentinel without grading, benchmarking, or logging."
           (gptel-make-openai "DashScope"
             :host "coding.dashscope.aliyuncs.com"
             :key (lambda () "token")
-            :models '(qwen3.5-plus)))
+            :models '(qwen3.7-plus)))
          (had-dashscope (boundp 'gptel--dashscope))
          (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
          (preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
@@ -4666,7 +4666,7 @@ of DashScope's own model."
           (gptel-make-openai "DashScope"
             :host "coding.dashscope.aliyuncs.com"
             :key (lambda () "token")
-            :models '(qwen3.5-plus qwen3.6-plus)))
+            :models '(qwen3.7-plus qwen3.6-plus)))
          (had-dashscope (boundp 'gptel--dashscope))
          (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
          (preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
@@ -4716,7 +4716,7 @@ of DashScope's own model."
           (gptel-make-openai "DashScope"
             :host "coding.dashscope.aliyuncs.com"
             :key (lambda () "token")
-            :models '(qwen3.5-plus qwen3.6-plus)))
+            :models '(qwen3.7-plus qwen3.6-plus)))
          (deepseek-backend
           (gptel-make-openai "DeepSeek"
             :host "api.deepseek.com"
@@ -4782,7 +4782,7 @@ of DashScope's own model."
           (gptel-make-openai "DashScope"
             :host "coding.dashscope.aliyuncs.com"
             :key (lambda () "token")
-            :models '(qwen3.5-plus qwen3.6-plus)))
+            :models '(qwen3.7-plus qwen3.6-plus)))
          (had-dashscope (boundp 'gptel--dashscope))
          (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
          (preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
@@ -4832,7 +4832,7 @@ of DashScope's own model."
           (gptel-make-openai "DashScope"
             :host "coding.dashscope.aliyuncs.com"
             :key (lambda () "token")
-            :models '(qwen3.5-plus qwen3.6-plus)))
+            :models '(qwen3.7-plus qwen3.6-plus)))
          (had-dashscope (boundp 'gptel--dashscope))
          (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
          (preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
@@ -4886,7 +4886,7 @@ of DashScope's own model."
           (gptel-make-openai "DashScope"
             :host "coding.dashscope.aliyuncs.com"
             :key (lambda () "token")
-            :models '(qwen3.5-plus qwen3.6-plus)))
+            :models '(qwen3.7-plus qwen3.6-plus)))
          (had-dashscope (boundp 'gptel--dashscope))
          (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
          (preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
@@ -4940,7 +4940,7 @@ of DashScope's own model."
           (gptel-make-openai "DashScope"
             :host "coding.dashscope.aliyuncs.com"
             :key (lambda () "token")
-            :models '(qwen3.5-plus qwen3.6-plus)))
+            :models '(qwen3.7-plus qwen3.6-plus)))
          (had-dashscope (boundp 'gptel--dashscope))
          (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
          (preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
@@ -4994,7 +4994,7 @@ of DashScope's own model."
           (gptel-make-openai "DashScope"
             :host "coding.dashscope.aliyuncs.com"
             :key (lambda () "token")
-            :models '(qwen3.5-plus qwen3.6-plus)))
+            :models '(qwen3.7-plus qwen3.6-plus)))
          (had-dashscope (boundp 'gptel--dashscope))
          (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
          (preset '(:backend "moonshot" :model "kimi-k2.6"))
@@ -5046,7 +5046,7 @@ of DashScope's own model."
           (gptel-make-openai "DashScope"
             :host "coding.dashscope.aliyuncs.com"
             :key (lambda () "token")
-            :models '(qwen3.5-plus qwen3.6-plus)))
+            :models '(qwen3.7-plus qwen3.6-plus)))
          (had-dashscope (boundp 'gptel--dashscope))
          (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
          (preset '(:backend "moonshot" :model "kimi-k2.6"))
@@ -5103,7 +5103,7 @@ of DashScope's own model."
           (gptel-make-openai "DashScope"
             :host "coding.dashscope.aliyuncs.com"
             :key (lambda () "token")
-            :models '(qwen3.5-plus)))
+            :models '(qwen3.7-plus)))
          (had-deepseek (boundp 'gptel--deepseek))
          (old-deepseek (and had-deepseek (symbol-value 'gptel--deepseek)))
          (had-dashscope (boundp 'gptel--dashscope))
@@ -5148,7 +5148,7 @@ of DashScope's own model."
           (gptel-make-openai "DashScope"
             :host "coding.dashscope.aliyuncs.com"
             :key (lambda () "token")
-            :models '(qwen3.5-plus)))
+            :models '(qwen3.7-plus)))
          (had-dashscope (boundp 'gptel--dashscope))
          (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
          (preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))

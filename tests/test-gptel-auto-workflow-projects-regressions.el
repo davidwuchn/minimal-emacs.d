@@ -425,6 +425,35 @@
                               (string-match-p "/tmp/project-a:success" msg))
                             messages)))))
 
+(ert-deftest regression/auto-workflow-projects/advice-task-overlay-buffer-skips-killed-target-buf ()
+  "Overlay advice must not error when fsm-info :buffer is a killed buffer.
+Bug: when WHERE is a dead marker AND target-buf is killed, the old code
+called `with-current-buffer' on the dead buffer, signaling
+`error: Selecting deleted buffer'. The fix checks `(buffer-live-p target-buf)'
+before switching to it, falling back to a plain point-marker."
+  (require 'gptel-request)
+  (let* ((dead-buf (generate-new-buffer "aw-overlay-dead"))
+         (dead-where (with-current-buffer dead-buf (point-marker)))
+         (captured-where nil)
+         (mock-fsm (gptel-make-fsm)))
+    ;; Set FSM info plist so :buffer is the buffer we will then kill.
+    (setf (gptel-fsm-info mock-fsm) (list :buffer dead-buf))
+    ;; Kill the buffer to make both WHERE and target-buf dead.
+    (kill-buffer dead-buf)
+    (let ((gptel--fsm-last mock-fsm))
+      (cl-letf (((symbol-function 'gptel-agent--task-overlay)
+                 (lambda (where &optional _type _desc)
+                   (setq captured-where where))))
+        ;; Should not signal. Should fall back to a non-marker point.
+        (should (gptel-auto-workflow--advice-task-overlay-buffer
+                 #'gptel-agent--task-overlay dead-where))
+        ;; Captured-where must be usable (a marker in a live buffer,
+        ;; or an integer — not a dead marker).
+        (should (or (and (markerp captured-where)
+                         (marker-buffer captured-where)
+                         (buffer-live-p (marker-buffer captured-where)))
+                    (integerp captured-where)))))))
+
 (provide 'test-gptel-auto-workflow-projects-regressions)
 
 ;;; test-gptel-auto-workflow-projects-regressions.el ends here

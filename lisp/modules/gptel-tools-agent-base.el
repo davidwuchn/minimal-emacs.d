@@ -4,8 +4,6 @@
 (declare-function my/gptel--sanitize-for-logging "gptel-tools-agent-git" (text &optional max-len))
 (declare-function package-desc-version "package" (desc))
 
-;;; gptel-tools-agent.el --- Subagent delegation for gptel -*- no-byte-compile: t; lexical-binding: t; -*-
-
 ;; Author: David Wu
 ;; Version: 1.0.0
 ;;
@@ -349,8 +347,6 @@ ERROR-PREFIX defaults to \"[auto-workflow]\"."
    "Failed to %s"))
 
 
-(provide 'gptel-tools-agent-base)
-
 (defun gptel-auto-workflow--require-magit-dependencies ()
   "Require magit-worktree and magit-git dependencies.
 Signals user-error if either dependency fails to load."
@@ -600,7 +596,7 @@ Returns nil if file doesn't exist or isn't readable."
       (cl-labels ((collect (parent)
                     (dolist (candidate (list-system-processes))
                       (let* ((attrs (ignore-errors (process-attributes candidate)))
-                             (ppid (cdr (assq 'ppid attrs))))
+                             (ppid (when (listp attrs) (cdr (assq 'ppid attrs)))))
                         (when (and (integerp ppid)
                                    (= ppid parent)
                                    (not (memq candidate descendants)))

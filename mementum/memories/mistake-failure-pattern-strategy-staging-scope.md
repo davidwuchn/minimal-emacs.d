@@ -1,14 +1,14 @@
 ---
-valid-from: 2026-06-08T11:04
+valid-from: 2026-06-07T20:21
 ---
 
-# Mistake: 2026-06-08 11:04
+# Mistake: 2026-06-07 20:21
 
 **Failure type:** strategy
-**Target:** staging-review
-**Occurrences:** 15
+**Target:** staging-scope
+**Occurrences:** 4
 **Example reasons:** none
-**Trend:** 2026-06-03T231639Z-16fc -> 2026-06-08T071221Z-2d34
+**Trend:** 2026-06-05T191112Z-f070 -> 2026-06-07T110858Z-5463
 
 This pattern was detected by the monitoring agent as a systemic failure requiring investigation.
 

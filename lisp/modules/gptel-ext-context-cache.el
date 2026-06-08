@@ -116,11 +116,13 @@ under `lexical-binding: t'.")
 Avoids repeated filtering of the same symbol list.")
 
 (defvar my/gptel--known-model-context-windows
-  '(;; Qwen (Alibaba) - NOTE: Qwen3.5-Plus and Qwen3-Max have 1M context!
+  '(;; Qwen (Alibaba) - NOTE: qwen3.7-plus / qwen3-coder-plus / qwen3.5 retired
+    ("qwen3.7-max" . 131072)
+    ("qwen3.7-plus" . 131072)
+    ("qwen3.6-plus" . 131072)
+    ("qwen3.6-flash" . 131072)
     ("qwen3-coder-next" . 131072)
     ("qwen3-coder-plus" . 1000000)
-    ("qwen3.5-plus" . 1000000)
-    ("qwen3.5-flash" . 1000000)
     ("qwen3-max-2026-01-23" . 262144)
     ("qwen3-coder" . 131072)
     ("qwen-plus" . 1000000)
@@ -202,28 +204,21 @@ https://developers.cloudflare.com/workers-ai/models/kimi-k2.6/")
      :features (streaming tools vision)
      :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp" "application/pdf")
      :description "Qwen3 Coder Next - fast coding model, 131k context, VISION")
-    ("qwen3-coder-plus"
-     :context-window 1000000
-     :pricing-input 0.6 :pricing-output 2.4
-     :max-output 65536
-     :features (streaming tools vision)
-     :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp" "application/pdf")
-     :description "Qwen3 Coder Plus - advanced coding, 1M context, VISION")
-    ("qwen3.5-plus"
-     :context-window 1000000
-     :pricing-input 0.8 :pricing-output 4.8
-     :max-output 65536
-     :features (streaming tools vision)
-     :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp" "image/tiff" "image/heic" "application/pdf")
-     :description "Qwen3.5 Plus - 1M context, thinking mode, VISION ENABLED")
-    ("qwen3.5-flash"
-     :context-window 1000000
-     :pricing-input 0.2 :pricing-output 2.0
-     :max-output 65536
-     :features (streaming tools vision)
-     :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp" "application/pdf")
-     :description "Qwen3.5 Flash - fast, 1M context, VISION ENABLED")
-    ("qwen3-max-2026-01-23"
+     ("qwen3-coder-plus"
+      :context-window 1000000
+      :pricing-input 0.6 :pricing-output 2.4
+      :max-output 65536
+      :features (streaming tools vision)
+      :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp" "application/pdf")
+      :description "Qwen3 Coder Plus - advanced coding, 1M context, VISION")
+     ("qwen3.7-plus"
+      :context-window 131072
+      :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
+      :max-output 32768
+      :features (streaming tools)
+      :mime-types ("text/plain")
+      :description "Qwen3.7 Plus - reasoning + code-generation, replaces qwen3.6-plus")
+     ("qwen3-max-2026-01-23"
      :context-window 262144
      :pricing-input 2.5 :pricing-output 10.0
      :max-output 32768
@@ -881,10 +876,12 @@ Description: %s"
      :features (streaming tools reasoning)
      :notes "Qwen3.5-Plus has 1M context. Reasoning models need streaming or fast response."
      :context-windows
-     ((qwen3-coder-next . 131072)
+     ((qwen3.7-max . 131072)
+      (qwen3.7-plus . 131072)
+      (qwen3.6-plus . 131072)
+      (qwen3.6-flash . 131072)
+      (qwen3-coder-next . 131072)
       (qwen3-coder-plus . 1000000)
-      (qwen3.5-plus . 1000000)
-      (qwen3.5-flash . 1000000)
       (qwen3-max-2026-01-23 . 262144)
       (glm-5 . 131072)
       (glm-4.7 . 131072)))

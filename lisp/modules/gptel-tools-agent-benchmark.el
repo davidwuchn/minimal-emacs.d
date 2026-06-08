@@ -215,8 +215,11 @@ Prevents regressions like model downgrades."
 Returns (ok-p . reason) where REASON is nil if safe, or a description
 of the regression if blocked."
   ;; ASSUMPTION: git commands may fail on corrupted repos or missing refs
-  ;; BEHAVIOR: gracefully skips configs that can't be read instead of crashing
-  ;; EDGE CASE: git show fails → returns (cons "" 1) which fails the consp+exit-code guard
+  ;; BEHAVIOR: treats unreadable configs as regressions (conservative security)
+  ;; EDGE CASE: git show fails → nil result treated as regression, not silently skipped
+  ;; EDGE CASE: git show returns non-zero exit code → also treated as regression
+  ;;   (gptel-auto-workflow--git-result returns (output . exit-code) without throwing)
+  ;; TEST: verify that a missing staging ref blocks the merge
   (let ((regressions nil))
     (dolist (protected gptel-auto-workflow-protected-configs)
       (let* ((file (car protected))
@@ -228,8 +231,8 @@ of the regression if blocked."
                   (gptel-auto-workflow--git-result
                    (format "git show staging:%s" (shell-quote-argument file))
                    30)
-                (error (message "[auto-workflow] ⚠ Failed to read staging:%s: %s" file (error-message-string err))
-                       (cons "" 1))))
+                (error (message "[auto-workflow] ⚠ Failed to read staging:%s: %s" file (my/gptel--sanitize-for-logging (error-message-string err) 160))
+                       nil)))
              (experiment-content
               (condition-case err
                   (gptel-auto-workflow--git-result
@@ -237,11 +240,22 @@ of the regression if blocked."
                            (shell-quote-argument optimize-branch)
                            (shell-quote-argument file))
                    30)
-                (error (message "[auto-workflow] ⚠ Failed to read %s:%s: %s" optimize-branch file (error-message-string err))
-                       (cons "" 1)))))
-        (when (and (stringp expected)
-                   (consp staging-content) (= 0 (cdr staging-content))
-                   (consp experiment-content) (= 0 (cdr experiment-content)))
+                (error (message "[auto-workflow] ⚠ Failed to read %s:%s: %s" optimize-branch file (my/gptel--sanitize-for-logging (error-message-string err) 160))
+                       nil))))
+        (cond
+         ;; SECURITY: unreadable configs are treated as regressions
+         ;; rather than silently skipped (prevents bypass via git errors).
+         ;; Covers both nil (condition-case caught an exception) and
+         ;; non-zero exit code (git command ran but failed, e.g. missing ref).
+         ((or (not staging-content)
+              (and (consp staging-content) (/= 0 (cdr staging-content))))
+          (push (format "%s: unreadable in staging" file) regressions))
+         ((or (not experiment-content)
+              (and (consp experiment-content) (/= 0 (cdr experiment-content))))
+          (push (format "%s: unreadable in %s (may have been deleted)" file optimize-branch) regressions))
+         ((and (stringp expected)
+               (consp staging-content) (= 0 (cdr staging-content))
+               (consp experiment-content) (= 0 (cdr experiment-content)))
           (let* ((staging-str (car staging-content))
                  (experiment-str (car experiment-content))
                  (staging-has-it (and (stringp staging-str)
@@ -249,7 +263,7 @@ of the regression if blocked."
                  (experiment-has-it (and (stringp experiment-str)
                                          (string-match-p (regexp-quote expected) experiment-str))))
             (when (and staging-has-it (not experiment-has-it))
-              (push (format "%s: lost %s" file expected) regressions))))))
+              (push (format "%s: lost %s" file expected) regressions)))))))
     (if regressions
         (progn
           (message "[auto-workflow] ⚠ Protected config regression detected: %s"

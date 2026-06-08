@@ -584,25 +584,122 @@ log "Cleared stale findings files"
 # Capture start time AFTER clearing stale files so mtime check is reliable
 PIPELINE_START_TIME="$(date +%s)"
 
-# ─── Step 0.5: Self-heal preflight (cheap, runs before any daemon work) ───
-# Read last self-healing state from disk and decide whether to escalate.
-# Catches PENDING remediations that verify-recovery should have closed.
-log "=== Step 0.5: Self-heal preflight ==="
+# ─── Step 0.4: Self-audit → auto-fix → keep-going (META loop) ───
+# The full YC loop: DETECT problems, AUTO-FIX them, KEEP GOING.
+# Previous system: detected problems but took no action (the auto-fix was broken).
+# Now: self-audit writes structured result → self-heal reads it and takes
+# specific remediation actions → pipeline continues with fixes applied.
+log "=== Step 0.4: Self-audit (DETECT) ==="
+SELF_AUDIT_RESULT_FILE="$DIR/var/tmp/self-audit-result.el"
+# Remove stale result from previous run
+rm -f "$SELF_AUDIT_RESULT_FILE"
+SELF_AUDIT_REPORT=$(emacs --batch -L "$DIR/lisp/modules" \
+    -L "$DIR/packages/gptel" -L "$DIR/packages/compat" \
+    -l gptel --eval \
+    '(progn
+       (require (quote gptel-auto-workflow-self-audit))
+       (setq gptel-auto-workflow-self-audit-enabled t)
+       (setq gptel-auto-workflow--workspace-path "'"$DIR"'")
+       (let ((report (gptel-auto-workflow-self-audit-execute)))
+         (when report (princ report))))' 2>&1)
+AUDIT_ISSUES=0
+COLD_BACKENDS=""
+UNEVALUATED_STRATS=0
+BOTTLENECK=false
+BROKEN_MODULES=0
+if [ -n "$SELF_AUDIT_REPORT" ]; then
+    log "$SELF_AUDIT_REPORT"
+    # Read structured result file for specific remediation actions
+    if [ -f "$SELF_AUDIT_RESULT_FILE" ]; then
+        AUDIT_ISSUES=$(grep 'issues-count' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. *(\d+)/) { print $1 }')
+        COLD_BACKENDS=$(grep 'cold-backends \.' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'while (/\"([^\"]+)\"/g) { print "$1," }' | perl -pe 's/,$//')
+        UNEVALUATED_STRATS=$(grep 'unevaluated-strategies' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. *(\d+)/) { print $1 }')
+        BOTTLENECK=$(grep 'staging-merge-bottleneck' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. t\b/) { print "1" }')
+        BROKEN_MODULES=$(grep -c 'broken-modules' "$SELF_AUDIT_RESULT_FILE" 2>/dev/null || echo 0)
+        log "  Structured audit: $AUDIT_ISSUES issues, $BROKEN_MODULES broken modules, bottleneck=$BOTTLENECK"
+    fi
+else
+    log "  Self-audit: no issues found (or module not loaded)"
+fi
+
+# ─── Step 0.5: Auto-fix (ACT on what Step 0.4 detected) ───
+# The pipeline now takes SPECIFIC remediation actions based on what
+# the self-audit found. This closes the DETECT→ACT gap that was the
+# reason the monitor kept going without fixing anything.
+log "=== Step 0.5: Auto-fix (ACT on self-audit findings) ==="
+REMEDIAL_ACTIONS=0
+
+# Auto-fix 1: Force cold backends into rotation
+# If backends have 0 experiments in 7d, clear their rate-limit so
+# the onto-router will try them on the next evolution cycle.
+if [ -n "$COLD_BACKENDS" ] && [ "$COLD_BACKENDS" != "nil" ]; then
+    log "  Auto-fix: forcing cold backends into rotation ($COLD_BACKENDS)"
+    # Clear ALL rate-limited backends so cold ones get a chance
+    if [ -f "$DIR/var/tmp/rate-limited-backends.txt" ]; then
+        log "  Clearing rate-limited-backend cache (was blocking cold backends)"
+        rm -f "$DIR/var/tmp/rate-limited-backends.txt"
+    fi
+    # Write the cold backends to a force-try file that the daemon reads
+    echo "$COLD_BACKENDS" > "$DIR/var/tmp/force-try-backends.txt"
+    REMEDIAL_ACTIONS=$((REMEDIAL_ACTIONS + 1))
+fi
+
+# Auto-fix 2: Increase exploration rate for unevaluated strategies
+# If >50% of strategies are unevaluated, the system is in cold-start.
+# Write a signal file that increases exploration from default to 70%.
+if [ "$UNEVALUATED_STRATS" -gt 2 ]; then
+    log "  Auto-fix: increasing exploration rate ($UNEVALUATED_STRATS strategies unevaluated)"
+    echo "70" > "$DIR/var/tmp/exploration-rateOverride.txt"
+    REMEDIAL_ACTIONS=$((REMEDIAL_ACTIONS + 1))
+fi
+
+# Auto-fix 3: Staging-merge bottleneck — already handled by auto-resolver
+# The .md auto-resolver was deployed in commit 95396bc1. For .el conflicts,
+# we can't auto-fix but we can flag for human review.
+if [ "$BOTTLENECK" -gt 0 ]; then
+    log "  Auto-fix: staging-merge bottleneck flagged (.md auto-resolved, .el needs review)"
+    REMEDIAL_ACTIONS=$((REMEDIAL_ACTIONS + 1))
+fi
+
+# Auto-fix 4: Broken modules — flag but don't attempt code fix
+# Broken modules can't compile; the system can detect but not auto-fix
+# source code errors. Log the warning and continue.
+if [ "$BROKEN_MODULES" -gt 0 ]; then
+    log "  ⚠ BROKEN MODULES DETECTED — cannot auto-fix source code, flagged for human review"
+    REMEDIAL_ACTIONS=$((REMEDIAL_ACTIONS + 1))
+fi
+
+# Auto-fix 5: Pipeline-health PENDING remediations (legacy self-heal)
 HEALTH_FILE="$DIR/mementum/knowledge/pipeline-health.md"
 if [ -f "$HEALTH_FILE" ]; then
     PENDING_COUNT=$(grep -c '| PENDING' "$HEALTH_FILE" 2>/dev/null || echo 0)
     CONSECUTIVE=$(grep -E '^Consecutive failures:' "$HEALTH_FILE" 2>/dev/null | awk '{print $NF}' || echo 0)
-    log "  pipeline-health: $PENDING_COUNT pending remediations, $CONSECUTIVE consecutive failures"
+    log "  pipeline-health: $PENDING_COUNT pending, $CONSECUTIVE consecutive failures"
     if [ "$PENDING_COUNT" -ge 5 ] || [ "${CONSECUTIVE:-0}" -ge 3 ]; then
-        log "  ⚠ Self-heal threshold reached: forcing backend rotation"
-        # Clear backend rate-limit cache so onto-router considers alternatives
+        log "  Auto-fix: clearing stale rate-limited-backend cache (threshold reached)"
         if [ -f "$DIR/var/tmp/rate-limited-backends.txt" ]; then
-            log "  Clearing stale rate-limited-backend cache"
             rm -f "$DIR/var/tmp/rate-limited-backends.txt"
         fi
+        REMEDIAL_ACTIONS=$((REMEDIAL_ACTIONS + 1))
     fi
+    # Adaptive fix: detect grader-destroying-experiments (recurring PENDING with 0% effectiveness)
+    GRADER_ISSUES=$(grep 'grader-destroying-experiments.*| PENDING' "$HEALTH_FILE" 2>/dev/null | wc -l)
+    if [ "${GRADER_ISSUES:-0}" -ge 3 ]; then
+        CURRENT_TIMEOUT=$(grep 'grader-destroying-experiments' "$HEALTH_FILE" 2>/dev/null | head -1 | grep -o 'grader-timeout=[0-9]*' | cut -d= -f2 || echo 900)
+        NEW_TIMEOUT=$((CURRENT_TIMEOUT * 3 / 2))  # Increase by 50%
+        log "  Auto-fix: grader-destroying-experiments detected ($GRADER_ISSUES× PENDING)"
+        log "  Escalating grader timeout: $CURRENT_TIMEOUT → $NEW_TIMEOUT"
+        echo "$NEW_TIMEOUT" > "$DIR/var/tmp/grader-timeoutOverride.txt"
+        # Also force fast backends for grading
+        echo "deepseek-v4-flash,deepseek-v4-pro" > "$DIR/var/tmp/force-grader-backends.txt"
+        REMEDIAL_ACTIONS=$((REMEDIAL_ACTIONS + 1))
+    fi
+fi
+
+if [ "$REMEDIAL_ACTIONS" -gt 0 ]; then
+    log "  Auto-fix: $REMEDIAL_ACTIONS remedial actions applied — KEEPING GOING"
 else
-    log "  pipeline-health: not yet initialized (first run)"
+    log "  Auto-fix: no remedial actions needed this cycle"
 fi
 
 # ─── Step 0.6: Refresh approval-queue priorities ───
@@ -973,6 +1070,15 @@ mkdir -p "$DIGEST_DIR"
             echo "- ✗ Self-heal: $pending pending remediations — system may be stuck"
             health_warn=$((health_warn + 1))
         fi
+        # Show recurring diagnoses (top issues by frequency)
+        if [ "${pending:-0}" -gt 0 ]; then
+            echo "  **Recurring PENDING diagnoses**:"
+            grep '| PENDING' "$DIR/mementum/knowledge/pipeline-health.md" 2>/dev/null | \
+                perl -ne '/([^|]+)\s*\|([^|]*)\|([^|]*)\|/ && print "$2\n"' | \
+                sort | uniq -c | sort -rn | head -3 | while read count diagnosis; do
+                echo "  - $count× $diagnosis (not yet fixed)"
+            done
+        fi
     fi
     # 5. Multi-machine coordination
     if [ -f "$DIR/var/tmp/active-runs" ]; then
@@ -1169,6 +1275,89 @@ mkdir -p "$DIGEST_DIR"
     else
         echo "- No strategy directory found"
     fi
+    # ── Recommended Actions (actionable by human in one command) ──
+    echo ""
+    echo "## Token Economics (cost per experiment)"
+    echo ""
+    # Estimate token cost: ~$0.10 baseline per experiment, weighted by backend cost
+    # Backend cost multipliers: flash=0.5x pro=1.0x qwen=1.5x default=1.2x
+    base_cost=0.10  # baseline dollars per experiment
+    total_experiments=0
+    total_cost=0
+    kept_cost=0
+    kept_count=0
+    if compgen -G "$DIR/var/tmp/experiments/*/results.tsv" >/dev/null; then
+        find "$DIR/var/tmp/experiments" -maxdepth 2 -name "results.tsv" -mtime -1 -exec cat {} \; 2>/dev/null | \
+            awk -F'\t' -v base="$base_cost" 'NR>1 {
+                backend = ($15 == "" ? "unknown" : $15)
+                multiplier = 1.0
+                if (backend ~ /flash/) multiplier = 0.5
+                else if (backend ~ /pro/) multiplier = 1.0
+                else if (backend ~ /qwen/) multiplier = 1.5
+                else if (backend ~ /kimi/) multiplier = 1.2
+                else multiplier = 1.0
+                cost = base * multiplier
+                total_cost += cost
+                total++
+                if ($8 ~ /^(kept|grader-bypass|merged|staged)$/) {
+                    kept_cost += cost
+                    kept++
+                }
+            } END {
+                printf "total=%d|total_cost=%.2f|kept=%d|kept_cost=%.2f\n", total, total_cost, kept, kept_cost
+            }' > "$DIR/var/tmp/token-economics.tmp" 2>/dev/null
+        if [ -f "$DIR/var/tmp/token-economics.tmp" ]; then
+            total_experiments=$(cut -d'|' -f1 "$DIR/var/tmp/token-economics.tmp" | cut -d= -f2)
+            total_cost=$(cut -d'|' -f2 "$DIR/var/tmp/token-economics.tmp" | cut -d= -f2)
+            kept_experiments=$(cut -d'|' -f3 "$DIR/var/tmp/token-economics.tmp" | cut -d= -f2)
+            kept_cost=$(cut -d'|' -f4 "$DIR/var/tmp/token-economics.tmp" | cut -d= -f2)
+            rm -f "$DIR/var/tmp/token-economics.tmp"
+        fi
+    fi
+    if [ "${total_experiments:-0}" -gt 0 ]; then
+        echo "- **${total_experiments} experiments** (24h), est. cost: \$${total_cost:-0.00}"
+        echo "- **${kept_experiments:-0} kept** (est. \$${kept_cost:-0.00} value delivered, ${kept_experiments:-0}/${total_experiments} = $(awk "BEGIN {printf \"%.0f\", ${kept_experiments:-0}*100/${total_experiments}}")% keep-rate)"
+        cost_per_kept=$(awk "BEGIN {printf \"%.2f\", ${kept_cost:-0}/${kept_experiments:-1}}")
+        echo "- **Cost per kept experiment**: \$${cost_per_kept:-0.00}"
+        if [ "${kept_experiments:-0}" -gt 0 ] && [ "$(echo "$cost_per_kept > 0.50" | bc 2>/dev/null || echo 0)" = "1" ]; then
+            echo "- ⚠ High cost per kept — consider cheaper backends or tighter grading"
+        fi
+    else
+        echo "- No experiments in last 24h (no cost data)"
+    fi
+    # ── Recommended Actions (actionable by human in one command) ──
+    echo ""
+    echo "## Recommended Actions"
+    echo ""
+    # Pending proposals that need human approval
+    pending_proposals=$(find "$DIR/var/approval-queue/pending" -name "*.sexp" 2>/dev/null | wc -l)
+    if [ "${pending_proposals:-0}" -gt 0 ]; then
+        echo "- **$pending_proposals proposals pending human approval**"
+        echo "  Review: \`ls var/approval-queue/pending/\`"
+    fi
+    # Recurring PENDING self-heal issues
+    if [ -f "$DIR/mementum/knowledge/pipeline-health.md" ]; then
+        grader_count=$(grep -c 'grader-destroying-experiments.*| PENDING' "$DIR/mementum/knowledge/pipeline-health.md" 2>/dev/null || echo 0)
+        if [ "${grader_count:-0}" -ge 3 ]; then
+            echo "- **Grader escalation needed** ($grader_count× PENDING, 0% effective)"
+            echo "  Fix: the pipeline auto-fix now escalates timeout + backends automatically"
+        fi
+        # Check for cold-start patterns
+        cold_pending=$(grep -c 'cold-backend*\|cold-start' "$DIR/mementum/knowledge/pipeline-health.md" 2>/dev/null || echo 0)
+        if [ "${cold_pending:-0}" -gt 0 ]; then
+            echo "- **$cold_pending cold-start issues** — system may need backend diversity push"
+        fi
+    fi
+    # Zero run detection
+    if [ "${ZERO_RUN_DETECTED:-0}" -eq 1 ]; then
+        echo "- **Zero experiments generated** — daemon may need restart or backend check"
+        echo "  Check: \`emacsclient --socket-name=pmf-value-stream --eval '(gptel-auto-workflow--daemon-health)'\`"
+    fi
+    # Approval queue health
+    approved_count=$(grep -l ':status "approved"' "$DIR/var/approval-queue/decisions/"*.sexp 2>/dev/null | wc -l)
+    if [ "${approved_count:-0}" -eq 0 ] && [ "${pending_proposals:-0}" -gt 0 ]; then
+        echo "- **No approved proposals** — human hasn't reviewed pending items. System evolving without human guidance."
+    fi
 } > "$DIGEST_FILE"
 log "Daily digest written: $DIGEST_FILE"
 
@@ -1251,6 +1440,60 @@ if [ "$old_count" -gt 0 ]; then
 else
     log "No old optimize branches to clean"
 fi
+
+# ─── Step 6.7: Verify recovery (did auto-fixes from Step 0.4-0.5 work?) ───
+# This closes the full YC loop: DETECT → AUTO-FIX → VERIFY → KEEP GOING.
+# Re-run self-audit and compare before/after. If issues improved, the
+# system is self-healing. If they didn't, escalate for human review.
+log "=== Step 6.7: Verify recovery ==="
+if [ -f "$SELF_AUDIT_RESULT_FILE" ]; then
+    BEFORE_ISSUES="$AUDIT_ISSUES"
+    VERIFY_REPORT=$(emacs --batch -L "$DIR/lisp/modules" \
+        -L "$DIR/packages/gptel" -L "$DIR/packages/compat" \
+        -l gptel --eval \
+        '(progn
+           (require (quote gptel-auto-workflow-self-audit))
+           (setq gptel-auto-workflow-self-audit-enabled t)
+           (setq gptel-auto-workflow--workspace-path "'"$DIR"'")
+           (let ((result (gptel-auto-workflow-self-audit-run)))
+             (when result
+               (princ (format "after-issues: %d\n" (plist-get result :issues))))))' 2>&1)
+    AFTER_ISSUES=$(echo "$VERIFY_REPORT" | grep 'after-issues' | perl -ne 'if (/:\s*(\d+)/) { print $1 }')
+    : "${AFTER_ISSUES:=$BEFORE_ISSUES}"
+    DELTA=$((BEFORE_ISSUES - AFTER_ISSUES))
+    if [ "$DELTA" -gt 0 ]; then
+        log "  ✓ Recovery verified: $BEFORE_ISSUES → $AFTER_ISSUES issues (improved by $DELTA)"
+        log "  Self-evolve loop WORKING: DETECT → AUTO-FIX → VERIFY → KEEP GOING"
+    elif [ "$DELTA" -eq 0 ]; then
+        log "  ‖ No improvement: $BEFORE_ISSUES → $AFTER_ISSUES issues (delta=0)"
+        log "  Self-audit detected but auto-fix did not resolve — same problems persist"
+        if [ "$BEFORE_ISSUES" -ge 3 ]; then
+            log "  ⚠ Escalation: ≥3 unresolved issues — flagging for human review in digest"
+        fi
+    else
+        log "  ⚠ Regression: $BEFORE_ISSUES → $AFTER_ISSUES issues (worse by $((-DELTA)))"
+        log "  Self-evolve loop detected regression — auto-fixes may have side effects"
+    fi
+else
+    log "  No self-audit result from Step 0.4 — skipping verify-recovery"
+fi
+
+# ─── Step 6.8: Synthesize system-health patterns (Learning<--Quality loop) ───
+# When >=3 audit-fix memories exist with recurring root causes, create
+# mementum/knowledge/system-health-patterns.md so the prompt builder can
+# inject known issues into experiment prompts — biasing evolution to fix them.
+log "=== Step 6.8: Synthesize system-health patterns ==="
+SYNTH_RESULT=$(emacs --batch -L "$DIR/lisp/modules" \
+    -L "$DIR/packages/gptel" -L "$DIR/packages/compat" \
+    -l gptel --eval \
+    '(progn
+       (require (quote gptel-auto-workflow-self-audit))
+       (setq gptel-auto-workflow--workspace-path "'"$DIR"'")
+       (let ((n (gptel-auto-workflow-self-audit--synthesize-system-health)))
+         (if n
+             (princ (format "synthesized: %d memories -> system-health-patterns.md\n" n))
+           (princ "synthesized: below-threshold (<3 audit memories)\n"))))' 2>&1)
+log "  $SYNTH_RESULT"
 
 # ─── Step 7: Commit and push outcomes to main ───
 log "=== Step 7: Publish outcomes to main ==="

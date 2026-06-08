@@ -729,7 +729,7 @@ CALLBACK receives the Turtle string or nil."
 (defvar gptel-auto-workflow--ab-test-sections
   '(suggestions self-evolution topic-specific git-history
                 axis-performance cross-target-patterns failure-patterns
-                research-findings context-db)
+                research-findings context-db system-health human-priorities)
   "Prompt sections that can be individually included/excluded for A/B testing.")
 
 (defvar gptel-auto-workflow--ab-test-omit-rate 0.2
@@ -1106,7 +1106,10 @@ Returns a compact lambda-notation string ready for the LLM."
              (success-feedback (cdr (assoc 'success-feedback vars)))
              (keep-rate (cdr (assoc 'keep-rate vars)))
              (uni-d (cdr (assoc 'unified-directive vars)))
-              (context-db (cdr (assoc 'context-db-context vars))))
+              (context-db (cdr (assoc 'context-db-context vars)))
+              (system-health (cdr (assoc 'system-health-context vars)))
+              (human-priorities (cdr (assoc 'human-priorities-context vars)))
+              (github-sensor (cdr (assoc 'github-sensor-context vars))))
     (concat
       ;; KV CACHE PREFIX — STATIC sections first (shared across experiments)
       ;; These tokens are identical for every experiment → high cache-hit rate.
@@ -1174,6 +1177,9 @@ Returns a compact lambda-notation string ready for the LLM."
          "")
        (if research (concat "RESEARCH: " research "\n") "")
        (if context-db (concat context-db "\n") "")
+       (if system-health (concat system-health "\n") "")
+       (if human-priorities (concat human-priorities "\n") "")
+       (if github-sensor (concat github-sensor "\n") "")
        (if git-hist (concat "GIT: " git-hist "\n") "")
       (if axis-g (concat "AXIS: " axis-g "\n") "")
       (if axis-p (concat "AXIS-PERF: " axis-p "\n") "")
@@ -1311,6 +1317,100 @@ Returns formatted string with up to 5 most recent learnings, or nil."
                        (or (plist-get exp :delta) "no score")))
              recent)
             "\n")))))))
+
+(defun gptel-auto-experiment--system-health-for-prompt ()
+  "Read system-health-patterns.md and return a compact prompt injection.
+Returns nil if the file doesn't exist or has no actionable patterns.
+The returned string is designed for prompt insertion as:
+  SYSTEM-HEALTH: <patterns>
+This biases the evolution LLM to prioritize fixes for known system issues."
+  (let* ((root (gptel-auto-workflow--project-root))
+         (kp-file (expand-file-name
+                   "mementum/knowledge/system-health-patterns.md" root)))
+    (when (file-exists-p kp-file)
+      (with-temp-buffer
+        (insert-file-contents kp-file)
+        (goto-char (point-min))
+        ;; Extract only the "Recurring Root Causes" section
+        (when (search-forward "## Recurring Root Causes" nil t)
+          (let* ((start (point))
+                 (end (or (re-search-forward "^## " nil t)
+                          (point-max)))
+                 (section (buffer-substring start end))
+                 ;; Compact: extract just the key facts
+                 (compact
+                  (with-temp-buffer
+                    (insert section)
+                    (goto-char (point-min))
+                    (let ((lines '()))
+                      (while (not (eobp))
+                        (cond
+                         ((looking-at "### \\(.+\\)")
+                          (push (format "Issue: %s" (match-string 1))
+                                lines))
+                         ((looking-at "- \\*\\*Symptom\\*\\*: \\(.+\\)")
+                          (push (format "  Symptom: %s" (match-string 1))
+                                lines))
+                         ((looking-at "- \\*\\*Auto-fix deployed\\*\\*: \\(.+\\)")
+                          (push (format "  Fix: %s" (match-string 1))
+                                lines))
+                         ((looking-at "- \\*\\*Status\\*\\*: \\(.+\\)")
+                          (push (format "  Status: %s" (match-string 1))
+                                lines)))
+                        (forward-line 1))
+                      (string-join (nreverse lines) "\n")))))
+            (when (> (length compact) 10)
+              (concat "SYSTEM-HEALTH (recurring issues from self-audit):\n"
+                      compact))))))))
+
+(defun gptel-auto-experiment--github-sensor-for-prompt ()
+  "Read GitHub sensor data and format as business context.
+Returns formatted string with open bugs/enhancements, or nil if
+the GitHub sensor module is unavailable or has no data.
+This injects REAL USER SIGNALS (GitHub Issues) into evolution prompts."
+  (when (fboundp 'gptel-auto-workflow--github-sensor-summary)
+    (let ((summary (gptel-auto-workflow--github-sensor-summary)))
+      (when (and summary (not (string-empty-p summary))
+                 (not (string-match-p "0 open, 0 closed" summary)))
+        (concat "EXTERNAL-SIGNALS (GitHub Issues — real user feedback):\n"
+                summary)))))
+
+(defun gptel-auto-experiment--human-priorities-for-prompt ()
+  "Read approved proposals from the approval queue and format as business context.
+Returns formatted string of human-approved priorities, or nil if none exist.
+This injects REAL USER NEEDS into the experiment prompt — the human operator
+explicitly approved these improvements."
+  (let* ((root (gptel-auto-workflow--project-root))
+         (decisions-dir (expand-file-name
+                         "var/approval-queue/decisions" root))
+         (approved '()))
+    (when (file-directory-p decisions-dir)
+      (dolist (f (directory-files decisions-dir t "\\.sexp$"))
+        (condition-case _
+            (let ((data (with-temp-buffer
+                          (insert-file-contents f)
+                          (goto-char (point-min))
+                          (read (current-buffer)))))
+              (when (and (listp data)
+                         (string= (plist-get data :status) "approved"))
+                (let* ((proposal (plist-get data :proposal))
+                       (desc (if (listp proposal)
+                                 (plist-get proposal :description)
+                               "unknown"))
+                       (component (or (plist-get data :component)
+                                      (if (listp proposal)
+                                          (plist-get proposal :component))
+                                      "unknown"))
+                       (target (plist-get data :pattern-target)))
+                  (push (format "- %s (%s): %s"
+                                component
+                                (or target "any target")
+                                desc)
+                        approved))))
+          (error nil))))
+    (when approved
+      (concat "BUSINESS-CONTEXT (human-approved priorities from approval queue):\n"
+              (string-join (nreverse approved) "\n")))))
 
 (defun gptel-auto-experiment-build-prompt (target experiment-id max-experiments analysis baseline
                                                   &optional previous-results)
@@ -1646,6 +1746,9 @@ Read ONE function. Edit ONE line. Verify. Done."))))
                 (memory-context . ,(if (fboundp 'gptel-auto-workflow--memory-schema-experiment-context)
                                        (or (gptel-auto-workflow--memory-schema-experiment-context target) "")))
                 (context-db-context . ,(gptel-auto-experiment--context-db-for-prompt target))
+                (system-health-context . ,(gptel-auto-experiment--system-health-for-prompt))
+                (human-priorities-context . ,(gptel-auto-experiment--human-priorities-for-prompt))
+                (github-sensor-context . ,(gptel-auto-experiment--github-sensor-for-prompt))
                 (time-budget . ,(/ gptel-auto-experiment-time-budget 60))
               (focus-line . ,focus-line)
               (sexp-check-command . ,sexp-check-command))))

@@ -138,11 +138,11 @@
 
 ;;; Tests for known model context windows
 
-(ert-deftest cache/known-models/qwen-35-plus ()
-  "Qwen3.5-Plus should have 1M context."
+(ert-deftest cache/known-models/qwen-37-plus ()
+  "Qwen3.7-Plus should have 131072 context (replaces retired qwen3.5-plus)."
   (test--context-cache-setup)
-  (should (assoc "qwen3.5-plus" my/gptel--known-model-context-windows))
-  (should (= (cdr (assoc "qwen3.5-plus" my/gptel--known-model-context-windows)) 1000000)))
+  (should (assoc "qwen3.7-plus" my/gptel--known-model-context-windows))
+  (should (= (cdr (assoc "qwen3.7-plus" my/gptel--known-model-context-windows)) 131072)))
 
 (ert-deftest cache/known-models/gpt-4o ()
   "GPT-4o should have 128k context."
@@ -199,12 +199,12 @@
 
 ;;; Tests for my/gptel-get-model-metadata
 
-(ert-deftest cache/metadata/qwen-35-plus ()
-  "Should return metadata for Qwen3.5-Plus."
+(ert-deftest cache/metadata/qwen-37-plus ()
+  "Should return metadata for Qwen3.7-Plus."
   (test--context-cache-setup)
-  (let ((meta (my/gptel-get-model-metadata "qwen3.5-plus")))
+  (let ((meta (my/gptel-get-model-metadata "qwen3.7-plus")))
     (should meta)
-    (should (= (plist-get meta :context-window) 1000000))
+    (should (= (plist-get meta :context-window) 131072))
     (should (plist-get meta :description))))
 
 (ert-deftest cache/metadata/cf-gpt-oss-120b ()
@@ -237,9 +237,9 @@
 (ert-deftest cache/metadata/partial-match ()
   "Should match model name partially."
   (test--context-cache-setup)
-  (let ((meta (my/gptel-get-model-metadata "qwen3.5-plus-today")))
+  (let ((meta (my/gptel-get-model-metadata "qwen3.7-plus-today")))
     (should meta)
-    (should (= (plist-get meta :context-window) 1000000))))
+    (should (= (plist-get meta :context-window) 131072))))
 
 (ert-deftest cache/metadata/partial-match-nil-overrides-shorter-prefix ()
   "A longer partial match with nil should not fall back to a shorter prefix."
@@ -247,8 +247,8 @@
   (should-not
    (my/gptel--alist-partial-match
     '(("qwen" . (:context-window 1000000))
-      ("qwen3.5-plus" . nil))
-    "qwen3.5-plus-preview")))
+      ("qwen3.7-plus" . nil))
+    "qwen3.7-plus-preview")))
 
 (ert-deftest cache/gptel-tables/string-model-finds-symbol-entry ()
   "String model ids should still find symbol-keyed gptel table entries."

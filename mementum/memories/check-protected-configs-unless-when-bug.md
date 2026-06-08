@@ -1,0 +1,1 @@
+Bug pattern: `unless`/`when` does NOT provide early return in Elisp. `(unless x (cons nil "error"))` evaluates the `cons` but discards its result — execution continues. Use `if`/`else` instead for proper early return. Found in `gptel-auto-workflow--check-protected-configs` where `(unless proj-root ...)` followed by `(when proj-root ...)` lost the error return value.
