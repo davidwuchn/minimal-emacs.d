@@ -171,7 +171,7 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
                 result)))))
       (when (buffer-live-p output-buffer)
         (kill-buffer output-buffer))
-      (when (file-exists-p isolated-status-file)
+      (when (and isolated-status-file (file-exists-p isolated-status-file))
         (delete-file isolated-status-file)))))
 
 (defcustom gptel-auto-experiment-require-tests t
@@ -214,6 +214,9 @@ Prevents regressions like model downgrades."
   "Check that OPTIMIZE-BRANCH does not regress protected configs.
 Returns (ok-p . reason) where REASON is nil if safe, or a description
 of the regression if blocked."
+  ;; ASSUMPTION: git commands may fail on corrupted repos or missing refs
+  ;; BEHAVIOR: gracefully skips configs that can't be read instead of crashing
+  ;; EDGE CASE: git show fails → returns (cons "" 1) which fails the consp+exit-code guard
   (let ((regressions nil))
     (dolist (protected gptel-auto-workflow-protected-configs)
       (let* ((file (car protected))
@@ -221,15 +224,21 @@ of the regression if blocked."
              (proj-root (gptel-auto-workflow--project-root))
              (default-directory proj-root)
              (staging-content
-              (gptel-auto-workflow--git-result
-               (format "git show staging:%s" (shell-quote-argument file))
-               30))
+              (condition-case err
+                  (gptel-auto-workflow--git-result
+                   (format "git show staging:%s" (shell-quote-argument file))
+                   30)
+                (error (message "[auto-workflow] ⚠ Failed to read staging:%s: %s" file (error-message-string err))
+                       (cons "" 1))))
              (experiment-content
-              (gptel-auto-workflow--git-result
-               (format "git show %s:%s"
-                       (shell-quote-argument optimize-branch)
-                       (shell-quote-argument file))
-               30)))
+              (condition-case err
+                  (gptel-auto-workflow--git-result
+                   (format "git show %s:%s"
+                           (shell-quote-argument optimize-branch)
+                           (shell-quote-argument file))
+                   30)
+                (error (message "[auto-workflow] ⚠ Failed to read %s:%s: %s" optimize-branch file (error-message-string err))
+                       (cons "" 1)))))
         (when (and (stringp expected)
                    (consp staging-content) (= 0 (cdr staging-content))
                    (consp experiment-content) (= 0 (cdr experiment-content)))
