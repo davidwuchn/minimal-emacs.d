@@ -682,6 +682,18 @@ if [ -f "$HEALTH_FILE" ]; then
         fi
         REMEDIAL_ACTIONS=$((REMEDIAL_ACTIONS + 1))
     fi
+    # Adaptive fix: detect grader-destroying-experiments (recurring PENDING with 0% effectiveness)
+    GRADER_ISSUES=$(grep 'grader-destroying-experiments.*| PENDING' "$HEALTH_FILE" 2>/dev/null | wc -l)
+    if [ "${GRADER_ISSUES:-0}" -ge 3 ]; then
+        CURRENT_TIMEOUT=$(grep 'grader-destroying-experiments' "$HEALTH_FILE" 2>/dev/null | head -1 | grep -o 'grader-timeout=[0-9]*' | cut -d= -f2 || echo 900)
+        NEW_TIMEOUT=$((CURRENT_TIMEOUT * 3 / 2))  # Increase by 50%
+        log "  Auto-fix: grader-destroying-experiments detected ($GRADER_ISSUES× PENDING)"
+        log "  Escalating grader timeout: $CURRENT_TIMEOUT → $NEW_TIMEOUT"
+        echo "$NEW_TIMEOUT" > "$DIR/var/tmp/grader-timeoutOverride.txt"
+        # Also force fast backends for grading
+        echo "deepseek-v4-flash,deepseek-v4-pro" > "$DIR/var/tmp/force-grader-backends.txt"
+        REMEDIAL_ACTIONS=$((REMEDIAL_ACTIONS + 1))
+    fi
 fi
 
 if [ "$REMEDIAL_ACTIONS" -gt 0 ]; then
@@ -1057,6 +1069,15 @@ mkdir -p "$DIGEST_DIR"
         else
             echo "- ✗ Self-heal: $pending pending remediations — system may be stuck"
             health_warn=$((health_warn + 1))
+        fi
+        # Show recurring diagnoses (top issues by frequency)
+        if [ "${pending:-0}" -gt 0 ]; then
+            echo "  **Recurring PENDING diagnoses**:"
+            grep '| PENDING' "$DIR/mementum/knowledge/pipeline-health.md" 2>/dev/null | \
+                perl -ne '/([^|]+)\s*\|([^|]*)\|([^|]*)\|/ && print "$2\n"' | \
+                sort | uniq -c | sort -rn | head -3 | while read count diagnosis; do
+                echo "  - $count× $diagnosis (not yet fixed)"
+            done
         fi
     fi
     # 5. Multi-machine coordination

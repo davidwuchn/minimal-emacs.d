@@ -715,6 +715,14 @@ Returns the count of memories found, or nil if below threshold."
 
 ;;; Signal-file reader (bridge between pipeline bash -> daemon Emacs)
 
+(defvar gptel-auto-workflow--grader-timeout-override nil
+  "Override for grader timeout in seconds. Set by pipeline auto-fix
+when grader-destroying-experiments is detected as recurring PENDING.")
+
+(defvar gptel-auto-workflow--force-grader-backends nil
+  "List of backend names to force for grading. Set by pipeline auto-fix
+when grader-destroying-experiments escalates.")
+
 (defun gptel-auto-workflow-self-audit-apply-pipeline-signals ()
   "Read signal files written by pipeline Step 0.5 and apply them to the daemon.
 This bridges bash auto-fix signals into the Emacs daemon process.
@@ -722,6 +730,8 @@ Returns number of signals applied."
   (let* ((root (gptel-auto-workflow-self-audit--root))
          (force-file (expand-file-name "var/tmp/force-try-backends.txt" root))
          (exploration-file (expand-file-name "var/tmp/exploration-rateOverride.txt" root))
+         (grader-timeout-file (expand-file-name "var/tmp/grader-timeoutOverride.txt" root))
+         (grader-backends-file (expand-file-name "var/tmp/force-grader-backends.txt" root))
          (applied 0))
     ;; Auto-fix 1: Unblock cold backends from rate-limit blacklist
     (when (file-exists-p force-file)
@@ -746,9 +756,32 @@ Returns number of signals applied."
           (setq gptel-auto-workflow--ontology-reorder-exploration-rate (/ rate 100.0))
           (message "[self-audit] Exploration override: %d%% (from pipeline)" rate)
           (setq applied (1+ applied)))))
+    ;; Auto-fix 3: Override grader timeout (grader-destroying-experiments escalation)
+    (when (file-exists-p grader-timeout-file)
+      (let ((timeout (with-temp-buffer
+                       (insert-file-contents grader-timeout-file)
+                       (string-to-number (buffer-string)))))
+        (when (> timeout 0)
+          ;; Set grader timeout override (consumed by grader harness)
+          (setq gptel-auto-workflow--grader-timeout-override timeout)
+          (message "[self-audit] Grader timeout override: %ds (from pipeline escalation)"
+                   timeout)
+          (setq applied (1+ applied)))))
+    ;; Auto-fix 4: Force fast backends for grading
+    (when (file-exists-p grader-backends-file)
+      (let ((backends (with-temp-buffer
+                        (insert-file-contents grader-backends-file)
+                        (split-string (buffer-string) "[,\n]+" t))))
+        (when backends
+          (setq gptel-auto-workflow--force-grader-backends backends)
+          (message "[self-audit] Force grader backends: %s (from pipeline escalation)"
+                   (mapconcat #'identity backends ", "))
+          (setq applied (1+ applied)))))
     ;; Clean up signal files (one-shot, consumed)
     (when (file-exists-p force-file) (delete-file force-file))
     (when (file-exists-p exploration-file) (delete-file exploration-file))
+    (when (file-exists-p grader-timeout-file) (delete-file grader-timeout-file))
+    (when (file-exists-p grader-backends-file) (delete-file grader-backends-file))
     applied))
 
 (provide 'gptel-auto-workflow-self-audit)
