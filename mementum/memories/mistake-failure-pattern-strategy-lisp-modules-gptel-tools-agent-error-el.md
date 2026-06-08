@@ -1,15 +1,15 @@
 ---
-valid-from: 2026-06-08T19:52
+valid-from: 2026-06-08T23:06
 ---
 
-# Mistake: 2026-06-08 19:52
+# Mistake: 2026-06-08 23:06
 
 **Failure type:** strategy
 **Target:** lisp/modules/gptel-tools-agent-error.el
-**Category:** :agentic (keep-rate: 4.3%)
-**Occurrences:** 3
+**Category:** :agentic (keep-rate: 1.4%)
+**Occurrences:** 4
 **Example reasons:** none
-**Trend:** 2026-06-02T063409Z-5dd0 -> 2026-06-02T140726Z-cc53
+**Trend:** 2026-06-04T230828Z-0c94 -> 2026-06-05T111024Z-7d5e
 
 This pattern was detected by the monitoring agent as a systemic failure requiring investigation. Priority determined by category keep-rate (lower = higher priority).
 

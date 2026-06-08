@@ -1,15 +1,15 @@
 ---
-valid-from: 2026-06-08T19:52
+valid-from: 2026-06-08T23:06
 ---
 
-# Mistake: 2026-06-08 19:52
+# Mistake: 2026-06-08 23:06
 
 **Failure type:** strategy
 **Target:** staging-verification
-**Category:** :programming (keep-rate: 0.0%)
-**Occurrences:** 5
+**Category:** :programming (keep-rate: 3.5%)
+**Occurrences:** 4
 **Example reasons:** none
-**Trend:** 2026-06-04T013900Z-dfe2 -> 2026-06-07T084411Z-fcc6
+**Trend:** 2026-06-04T150627Z-e01a -> 2026-06-07T230727Z-03f5
 
 This pattern was detected by the monitoring agent as a systemic failure requiring investigation. Priority determined by category keep-rate (lower = higher priority).
 

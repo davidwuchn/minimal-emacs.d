@@ -1,15 +1,15 @@
 ---
-valid-from: 2026-06-08T19:52
+valid-from: 2026-06-08T23:06
 ---
 
-# Mistake: 2026-06-08 19:52
+# Mistake: 2026-06-08 23:06
 
 **Failure type:** strategy
 **Target:** lisp/modules/gptel-auto-workflow-production-metrics.el
-**Category:** :agentic (keep-rate: 4.3%)
-**Occurrences:** 10
+**Category:** :agentic (keep-rate: 1.4%)
+**Occurrences:** 7
 **Example reasons:** none
-**Trend:** 2026-06-04T233316Z-f984 -> 2026-06-07T180953Z-ee3d
+**Trend:** 2026-06-05T230842Z-f74a -> 2026-06-07T031101Z-2473
 
 This pattern was detected by the monitoring agent as a systemic failure requiring investigation. Priority determined by category keep-rate (lower = higher priority).
 
