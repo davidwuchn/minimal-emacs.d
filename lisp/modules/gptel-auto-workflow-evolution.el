@@ -5220,6 +5220,41 @@ Fixes listp errors when JSON arrays are read as vectors."
              (message "[vsm-repair] Target queue reordered by VSM health diagnostics"))
             (_ (message "[vsm-repair] Unknown VSM action: %s" (car action))))))))
 
+(defun gptel-auto-workflow--apply-cohesion-routing-trust ()
+  "Adjust ontology exploration rate per-community based on cohesion.
+High cohesion (>0.7): trust community routing, lower exploration.
+Low cohesion (<0.3): spread experiments, raise exploration.
+Modifies gptel-auto-workflow--ontology-reorder-exploration-rate
+when the current target's community has a known cohesion score."
+  (when (and (boundp 'gptel-auto-workflow--experiment-targets)
+             gptel-auto-workflow--experiment-targets
+             (fboundp 'gptel-auto-workflow--unified-graph-community-cohesion)
+             (fboundp 'gptel-auto-workflow--unified-graph-communities)
+             (boundp 'gptel-auto-workflow--ontology-reorder-exploration-rate))
+    (let* ((communities (gptel-auto-workflow--unified-graph-communities))
+           (cohesion (when communities
+                       (gptel-auto-workflow--unified-graph-community-cohesion communities)))
+           (target (car gptel-auto-workflow--experiment-targets))
+           (slug (when target (file-name-sans-extension (file-name-nondirectory target))))
+           (comm (when slug (gethash (cons :file slug) communities)))
+           (coh (when comm (gethash comm cohesion))))
+      (when coh
+        (let ((base-rate gptel-auto-workflow--ontology-reorder-exploration-rate))
+          (cond ((> coh 0.7)
+                 ;; Well-connected community: trust routing, reduce exploration
+                 (setq gptel-auto-workflow--ontology-reorder-exploration-rate
+                       (max 0.05 (* base-rate 0.5)))
+                 (message "[cohesion-routing] High cohesion (%.0f%%): exploration %.0f%% → %.0f%%"
+                          (* 100 coh) (* 100 base-rate)
+                          (* 100 gptel-auto-workflow--ontology-reorder-exploration-rate)))
+                ((< coh 0.3)
+                 ;; Fragmented community: need more data, increase exploration
+                 (setq gptel-auto-workflow--ontology-reorder-exploration-rate
+                       (min 0.5 (* base-rate 1.5)))
+                 (message "[cohesion-routing] Low cohesion (%.0f%%): exploration %.0f%% → %.0f%%"
+                          (* 100 coh) (* 100 base-rate)
+                          (* 100 gptel-auto-workflow--ontology-reorder-exploration-rate)))))))))
+
 (defun gptel-auto-workflow--boost-god-node-targets ()
   "Promote god-node targets (high centrality) to 40% of experiment budget.
 God nodes connect many modules — fixing them cascades. Called after VSM
@@ -5338,7 +5373,9 @@ VSM LEVELS is a plist of (level . strength):
       ;; Community-aware boost: promote targets from same community as last kept experiment
       (gptel-auto-workflow--boost-same-community-targets)
       ;; Centrality-weighted boost: top-5 god nodes get priority budget
-      (gptel-auto-workflow--boost-god-node-targets))))
+      (gptel-auto-workflow--boost-god-node-targets)
+      ;; Cohesion-based routing: adjust exploration per community
+      (gptel-auto-workflow--apply-cohesion-routing-trust))))
 
 ;; ─── Cross-Subsystem Feedback Functions (re-added after daemon merge wipe) ───
 
