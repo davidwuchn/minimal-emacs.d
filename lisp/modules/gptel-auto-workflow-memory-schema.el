@@ -896,22 +896,12 @@ category routing, and backend preferences.
 Returns the graph hash table."
   (let ((graph (make-hash-table :test 'equal :size 256)))
     (cl-labels ((edge-confidence (edge-type weight)
-                  "Map EDGE-TYPE and WEIGHT to a confidence label + score.
-                  :requires = EXTRACTED (1.0), :similar = INFERRED (score),
-                  :schema-neighbor = INFERRED (0.8), :skill-graph = INFERRED (score),
-                  :co-occurrence = AMBIGUOUS (0.3), others = INFERRED (0.5)."
-                  (cond
-                   ((eq edge-type :requires)
-                    (cons 'EXTRACTED 1.0))
-                   ((eq edge-type :similar)
-                    (cons 'INFERRED (min 1.0 weight)))
-                   ((eq edge-type :schema-neighbor)
-                    (cons 'INFERRED 0.8))
-                   ((eq edge-type :skill-graph)
-                    (cons 'INFERRED (min 1.0 weight)))
-                   ((eq edge-type :co-occurrence)
-                    (cons 'AMBIGUOUS 0.3))
-                   (t (cons 'INFERRED 0.5))))
+                  (cond ((eq edge-type :requires) (cons 'EXTRACTED 1.0))
+                        ((eq edge-type :similar) (cons 'INFERRED (min 1.0 weight)))
+                        ((eq edge-type :schema-neighbor) (cons 'INFERRED 0.8))
+                        ((eq edge-type :skill-graph) (cons 'INFERRED (min 1.0 weight)))
+                        ((eq edge-type :co-occurrence) (cons 'AMBIGUOUS 0.3))
+                        (t (cons 'INFERRED 0.5))))
                 (ensure-node (type id)
                   (let ((key (cons type id)))
                     (unless (gethash key graph)
@@ -927,7 +917,7 @@ Returns the graph hash table."
                                (cons (list edge-type to-key weight
                                            (car conf) (cdr conf))
                                      existing)
-                                graph))))))
+                               graph)))))
       (gptel-auto-workflow--memory-schema-ensure-loaded)
       (let ((root (condition-case nil (gptel-auto-workflow--worktree-base-root) (error nil))))
         (when root
@@ -1004,7 +994,7 @@ Returns the graph hash table."
           (error nil))))
     (setq gptel-auto-workflow--unified-graph graph
           gptel-auto-workflow--unified-graph-time (float-time))
-    graph)
+    graph))
 
 (defun gptel-auto-workflow--unified-graph-ensure ()
   "Ensure the unified graph is built, rebuilding if stale (1 hour)."
@@ -1134,13 +1124,12 @@ MAX-ITERATIONS defaults to 20."
                  (push key nodes)
                  (setq community-id (1+ community-id)))
                graph)
-      ;; Label propagation (simple iterative majority-vote)
-      (let ((iteration 0))
-        (while (< iteration (or max-iterations 20))
-          (let ((changed nil))
-            (dolist (node nodes)
-              (let* ((edges (gethash node graph))
-                     (neighbor-votes (make-hash-table :test 'equal :size 16)))
+      ;; Label propagation
+      (cl-loop for iteration from 0 below (or max-iterations 20)
+               for changed = nil
+               do (dolist (node nodes)
+            (let* ((edges (gethash node graph))
+                   (neighbor-votes (make-hash-table :test 'equal :size 16)))
               ;; Count neighbor community votes
               (dolist (edge (or edges '()))
                 (let* ((to-key (cadr edge))
@@ -1165,17 +1154,15 @@ MAX-ITERATIONS defaults to 20."
                            (when (> count best-count)
                              (setq best-community comm best-count count)))
                          neighbor-votes)
-                  (when (and best-community
-                             (not (= best-community (gethash node communities))))
-                    (puthash node best-community communities)
-                    (setq changed t)))))
-          (if (not changed)
-              (progn
-                (message "[memory-schema] Label propagation converged after %d iterations"
-                         iteration)
-                (setq iteration (or max-iterations 20)))  ; exit loop
-            (setq iteration (1+ iteration)))))
-      communities))))
+                (when (and best-community
+                           (not (= best-community (gethash node communities))))
+                  (puthash node best-community communities)
+                   (setq changed t)))))
+          (unless changed
+            (message "[memory-schema] Label propagation converged after %d iterations"
+                     iteration)
+            (cl-return communities)))
+      communities)))
 
 (defun gptel-auto-workflow--unified-graph-surprising-connections (&optional top-n)
   "Find surprising cross-community connections in the unified graph.
@@ -1191,51 +1178,40 @@ TOP-N defaults to 10."
                    (dolist (edge (or edges '()))
                      (let* ((to-key (cadr edge))
                             (to-comm (gethash to-key communities))
-                             (edge-type (car edge)))
-                       ;; Surprising: cross-community AND (AMBIGUOUS or INFERRED with low score)
+                            (edge-type (car edge))
+                            (weight (nth 2 edge)))
+                       ;; Surprising: cross-community AND (low weight OR inferred edge)
                        (when (and from-comm to-comm
-                                  (not (= from-comm to-comm)))
-                         (let ((conf-label (nth 3 edge))
-                               (conf-score (nth 4 edge))
-                               (surprise-score 0))
-                           ;; Score: AMBIGUOUS=3, low-score INFERRED=2, cross-community bonus
-                           (when (eq conf-label 'AMBIGUOUS)
-                             (setq surprise-score 3))
-                           (when (and (eq conf-label 'INFERRED) (< conf-score 0.5))
-                             (setq surprise-score 2))
-                           (when (> (abs (- from-comm to-comm)) 2)
-                             (setq surprise-score (+ surprise-score 1)))
-                           (when (> surprise-score 0)
-                             (push (list (cdr from-key) (cdr to-key)
-                                         edge-type conf-label conf-score
-                                         (abs (- from-comm to-comm))
-                                         surprise-score)
-                                    surprises))))))))
+                                  (not (= from-comm to-comm))
+                                  (or (< weight 0.5)
+                                      (member edge-type '(:similar :schema-neighbor))))
+                         (push (list (cdr from-key) (cdr to-key)
+                                     edge-type weight
+                                     (abs (- from-comm to-comm)))
+                               surprises))))))
                graph)
-       (seq-take (cl-sort surprises #'> :key (lambda (s) (nth 6 s)))
-                (or top-n 10))))))
+      (seq-take (cl-sort surprises #'> :key (lambda (s) (nth 4 s)))
+                (or top-n 10)))))
 
 (defun gptel-auto-workflow--unified-graph-stats-for-prompt ()
   "Return a compact summary of graph topology for prompt injection.
-Includes: node count, edge count with confidence breakdown,
-top god nodes, community count, surprising connections.
-Uses graphify-inspired format."
+Includes: node count, edge count, top god nodes, community count,
+surprising connections. Uses graphify-inspired format."
   (let* ((graph (gptel-auto-workflow--unified-graph-ensure)))
     (when (and graph (> (hash-table-count graph) 0))
       (let* ((node-count (hash-table-count graph))
-             (edge-count 0)
-             (extracted 0) (inferred 0) (ambiguous 0)
+             (edge-count 0) (extracted 0) (inferred 0) (ambiguous 0)
              (god-nodes (gptel-auto-workflow--unified-graph-god-nodes 5))
              (communities (gptel-auto-workflow--unified-graph-communities))
              (comm-set (make-hash-table :test 'equal))
              (surprises (gptel-auto-workflow--unified-graph-surprising-connections 5)))
         (maphash (lambda (_k edges)
-                   (dolist (edge (or edges '()))
+                   (dolist (edge (or edges ()))
                      (setq edge-count (1+ edge-count))
-                     (let ((label (nth 3 edge)))
-                       (cond ((eq label 'EXTRACTED) (setq extracted (1+ extracted)))
-                             ((eq label 'INFERRED) (setq inferred (1+ inferred)))
-                             ((eq label 'AMBIGUOUS) (setq ambiguous (1+ ambiguous)))))))
+                     (pcase (nth 3 edge)
+                       ('EXTRACTED (setq extracted (1+ extracted)))
+                       ('INFERRED (setq inferred (1+ inferred)))
+                       ('AMBIGUOUS (setq ambiguous (1+ ambiguous))))))
                  graph)
         (when communities
           (maphash (lambda (_k comm) (puthash comm t comm-set)) communities))
@@ -1244,11 +1220,10 @@ Uses graphify-inspired format."
          (format "- %d nodes, %d edges, %d communities\n"
                  node-count edge-count (hash-table-count comm-set))
          (when (> edge-count 0)
-           (concat
-            (format "- Confidence: %d EXTRACTED (%.0f%%) %d INFERRED (%.0f%%) %d AMBIGUOUS (%.0f%%)\n"
-                    extracted (* 100.0 (/ (float extracted) edge-count))
-                    inferred (* 100.0 (/ (float inferred) edge-count))
-                    ambiguous (* 100.0 (/ (float ambiguous) edge-count))))
+           (format "- Confidence: %d EXTRACTED (%.0f%%) %d INFERRED (%.0f%%) %d AMBIGUOUS (%.0f%%)\n"
+                   extracted (* 100.0 (/ (float extracted) edge-count))
+                   inferred (* 100.0 (/ (float inferred) edge-count))
+                   ambiguous (* 100.0 (/ (float ambiguous) edge-count))))
          (when god-nodes
            (concat "- **God nodes** (most-connected):\n"
                    (mapconcat (lambda (n)
@@ -1259,12 +1234,39 @@ Uses graphify-inspired format."
          (when surprises
            (concat "- **Surprising connections** (cross-community):\n"
                    (mapconcat (lambda (s)
-                                (format "  - %s <-> %s [%s/%s, score=%.2f]"
-                                        (nth 0 s) (nth 1 s)
-                                        (nth 2 s) (nth 3 s)
-                                        (nth 5 s)))
+                                (format "  - %s ⟷ %s [%s, weight=%.2f]"
+                                        (nth 0 s) (nth 1 s) (nth 2 s) (nth 3 s)))
                               surprises "\n")
                    "\n"))
          "\n")))))
+
+;;; Graph export (JSON for external tools, visualization)
+
+(defun gptel-auto-workflow--unified-graph-export-json (output-file)
+  "Export unified graph as node-link JSON to OUTPUT-FILE.
+Format compatible with NetworkX and vis.js."
+  (let ((graph (gptel-auto-workflow--unified-graph-ensure)))
+    (when (and graph (> (hash-table-count graph) 0))
+      (let ((nodes nil) (links nil) (seen (make-hash-table :test 'equal)))
+        (maphash (lambda (key edges)
+                   (let ((nid (format "%s:%s" (car key) (cdr key))))
+                     (unless (gethash nid seen)
+                       (puthash nid t seen)
+                       (push (format "{\"id\":\"%s\",\"label\":\"%s\",\"type\":\"%s\"}"
+                                     nid (cdr key) (car key)) nodes))
+                     (dolist (edge (or edges ()))
+                       (push (format "{\"source\":\"%s\",\"target\":\"%s\",\"type\":\"%s\",\"weight\":%.2f,\"confidence\":\"%s\"}"
+                                     nid (format "%s:%s" (car (cadr edge)) (cdr (cadr edge)))
+                                     (car edge) (nth 2 edge) (nth 3 edge))
+                             links))))
+                 graph)
+        (with-temp-file output-file
+          (insert "{\n")
+          (insert "  \"nodes\": [" (mapconcat #'identity (nreverse nodes) ",\n             ") "],\n")
+          (insert "  \"links\": [" (mapconcat #'identity (nreverse links) ",\n             ") "]\n")
+          (insert "}\n"))
+        (message "[memory-schema] Exported graph to %s (%d nodes, %d edges)"
+                 output-file (length nodes) (length links))
+        t))))
 
 (provide 'gptel-auto-workflow-memory-schema)
