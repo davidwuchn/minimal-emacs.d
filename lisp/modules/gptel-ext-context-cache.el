@@ -116,11 +116,11 @@ under `lexical-binding: t'.")
 Avoids repeated filtering of the same symbol list.")
 
 (defvar my/gptel--known-model-context-windows
-  '(;; Qwen (Alibaba) - NOTE: qwen3.7-plus / qwen3-coder-plus / qwen3.5 retired
-    ("qwen3.7-max" . 131072)
-    ("qwen3.7-plus" . 131072)
-    ("qwen3.6-plus" . 131072)
-    ("qwen3.6-flash" . 131072)
+  '(;; Qwen (Alibaba) - Bailian pricing tiers confirm 1M context for latest models
+    ("qwen3.7-max" . 1000000)
+    ("qwen3.7-plus" . 1000000)
+    ("qwen3.6-plus" . 1000000)
+    ("qwen3.6-flash" . 1000000)
     ("qwen3-coder-next" . 131072)
     ("qwen3-coder-plus" . 1000000)
     ("qwen3-max-2026-01-23" . 262144)
@@ -196,7 +196,21 @@ Sources:
 https://developers.cloudflare.com/workers-ai/models/kimi-k2.6/")
 
 (defvar my/gptel--known-model-metadata
-  '(;; Qwen (Alibaba via DashScope) - VISION ENABLED
+  '(;; Qwen (Alibaba via DashScope/Bailian) — Bailian pricing as of 2026-06
+    ;; qwen3.7-max: ¥12/¥36 per 1M tokens in/out (2026-05-20)
+    ("qwen3.7-max"
+     :context-window 1000000
+     :pricing-input 1.66 :pricing-output 4.97
+     :max-output 131072
+     :features (streaming tools reasoning)
+     :description "Qwen3.7 Max - SOTA reasoning, 1M context, ¥12/¥36")
+    ;; qwen3.7-plus: tiered ¥2→6/¥8→24 per 1M (0-256K / 256K-1M)
+    ("qwen3.7-plus"
+     :context-window 1000000
+     :pricing-input 0.83 :pricing-output 3.31
+     :max-output 131072
+     :features (streaming tools reasoning)
+     :description "Qwen3.7 Plus - 1M context, tiered ¥2-6/¥8-24")
     ("qwen3-coder-next"
      :context-window 131072
      :pricing-input 0.3 :pricing-output 1.2
@@ -210,15 +224,8 @@ https://developers.cloudflare.com/workers-ai/models/kimi-k2.6/")
       :max-output 65536
       :features (streaming tools vision)
       :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp" "application/pdf")
-      :description "Qwen3 Coder Plus - advanced coding, 1M context, VISION")
-     ("qwen3.7-plus"
-      :context-window 131072
-      :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
-      :max-output 32768
-      :features (streaming tools)
-      :mime-types ("text/plain")
-      :description "Qwen3.7 Plus - reasoning + code-generation, replaces qwen3.6-plus")
-     ("qwen3-max-2026-01-23"
+       :description "Qwen3 Coder Plus - advanced coding, 1M context, VISION")
+      ("qwen3-max-2026-01-23"
      :context-window 262144
      :pricing-input 2.5 :pricing-output 10.0
      :max-output 32768
@@ -874,12 +881,12 @@ Description: %s"
      :rate-limit "60 req/min (free tier), higher for paid"
      :pricing-model "Per-model, tiered by context length"
      :features (streaming tools reasoning)
-     :notes "Qwen3.5-Plus has 1M context. Reasoning models need streaming or fast response."
-     :context-windows
-     ((qwen3.7-max . 131072)
-      (qwen3.7-plus . 131072)
-      (qwen3.6-plus . 131072)
-      (qwen3.6-flash . 131072)
+      :notes "Qwen3.7-max/plus/flash all have 1M context. Reasoning models need streaming or fast response."
+      :context-windows
+      ((qwen3.7-max . 1000000)
+       (qwen3.7-plus . 1000000)
+       (qwen3.6-plus . 1000000)
+       (qwen3.6-flash . 1000000)
       (qwen3-coder-next . 131072)
       (qwen3-coder-plus . 1000000)
       (qwen3-max-2026-01-23 . 262144)
