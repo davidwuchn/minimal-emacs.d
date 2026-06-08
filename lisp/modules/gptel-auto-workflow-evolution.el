@@ -7950,7 +7950,7 @@ WARNINGS:\n%s\n\nFILE:\n%s"
                (response nil))
           (with-temp-buffer
             (insert prompt)
-            (gptel-send nil ?w)
+            (gptel-send nil)
             (sit-for 30)
             (setq response (buffer-string)))
           (when (and response (> (length response) 0))

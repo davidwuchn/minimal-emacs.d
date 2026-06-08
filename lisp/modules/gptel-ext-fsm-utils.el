@@ -23,7 +23,7 @@
 
 ;;; Code:
 
-(require 'gptel)
+(require 'gptel nil t)
 (require 'cl-lib)
 
 ;;; FSM ID Registry
