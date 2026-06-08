@@ -1445,4 +1445,87 @@ Returns number of edges added."
                target-dir edge-count))
     edge-count))
 
+;;; Nice-to-have enhancements (graphify-inspired optimizations)
+
+(defun gptel-auto-workflow--graph-token-benchmark ()
+  "Estimate token savings from using the graph vs raw corpus.
+Compares graph stats token count (~50 tokens per node/edge summary)
+against estimated raw file token count (~4 tokens per line).
+Returns plist: (:graph-tokens :raw-tokens :savings-pct :ratio)."
+  (let* ((graph (gptel-auto-workflow--unified-graph-ensure))
+         (nc (if graph (hash-table-count graph) 0))
+         (ec 0))
+    (when graph (maphash (lambda (_k e) (setq ec (+ ec (length (or e ()))))) graph))
+    (let* ((graph-tokens (+ (* nc 10) (* ec 15) 100))  ; ~10 tok/node, ~15 tok/edge
+           (root (gptel-auto-workflow-self-audit--root))
+           (raw-lines 0))
+      (when root
+        (dolist (f (directory-files (expand-file-name "lisp/modules" root) t "\\.el$"))
+          (with-temp-buffer (insert-file-contents f) (setq raw-lines (+ raw-lines (count-lines (point-min) (point-max)))))))
+      (let ((raw-tokens (* raw-lines 4))  ; ~4 tokens per line of Elisp
+            (savings (if (> raw-tokens 0) (- 1 (/ (float graph-tokens) raw-tokens)) 0)))
+        (list :graph-tokens graph-tokens :raw-tokens raw-tokens
+              :savings-pct (* 100 savings) :ratio (if (> raw-tokens 0) (/ (float raw-tokens) (max 1 graph-tokens)) 0))))))
+
+(defun gptel-auto-workflow--graph-suggest-questions ()
+  "Generate investigation questions from graph topology gaps.
+Returns list of question strings."
+  (let* ((graph (gptel-auto-workflow--unified-graph-ensure))
+         (questions nil))
+    (when graph
+      ;; Isolated nodes (degree 0) — need documentation or investigation
+      (let ((isolated 0))
+        (maphash (lambda (k e) (when (null e) (setq isolated (1+ isolated)) (when (<= isolated 3) (push (format "Why is %s:%s isolated with no connections?" (car k) (cdr k)) questions)))) graph))
+      ;; AMBIGUOUS edges — need verification
+      (let ((amb-count 0))
+         (maphash (lambda (_k edges) (dolist (e (or edges ())) (when (eq (nth 3 e) 'AMBIGUOUS) (setq amb-count (1+ amb-count)))) (when (>= amb-count 3) (unless (member "Verify AMBIGUOUS graph edges — some connections may be wrong" questions) (push "Verify AMBIGUOUS graph edges — some connections may be wrong" questions))))) graph)
+      ;; God nodes with many INFERRED edges
+      (let ((gn (gptel-auto-workflow--unified-graph-god-nodes 3)))
+        (dolist (g gn) (push (format "What is the role of %s:%s (degree=%d) in the architecture?" (caar g) (cdar g) (cdr g)) questions))))
+    (nreverse questions)))
+
+(defun gptel-auto-workflow--graph-snapshot (output-file)
+  "Save a snapshot of the current graph for later diff comparison.
+Writes timestamps + node/edge counts to OUTPUT-FILE."
+  (let ((graph (gptel-auto-workflow--unified-graph-ensure)))
+    (when graph
+      (let ((nc (hash-table-count graph)) (ec 0))
+        (maphash (lambda (_k e) (setq ec (+ ec (length (or e ()))))) graph)
+        (with-temp-file output-file
+          (insert (format ";; graph snapshot — %s\n" (format-time-string "%Y-%m-%dT%H:%M:%S")))
+          (insert (format "(nodes . %d)\n" nc))
+          (insert (format "(edges . %d)\n" ec)))
+        (message "[memory-schema] Graph snapshot saved to %s" output-file)
+        t))))
+
+(defun gptel-auto-workflow--graph-diff (snapshot-file)
+  "Compare current graph with SNAPSHOT-FILE. Returns diff plist."
+  (when (file-exists-p snapshot-file)
+    (let* ((graph (gptel-auto-workflow--unified-graph-ensure))
+           (nc (if graph (hash-table-count graph) 0))
+           (ec 0) (prev-nc 0) (prev-ec 0))
+      (when graph (maphash (lambda (_k e) (setq ec (+ ec (length (or e ()))))) graph))
+      (with-temp-buffer
+        (insert-file-contents snapshot-file)
+        (goto-char (point-min))
+        (when (re-search-forward "(nodes \\. \\([0-9]+\\))" nil t) (setq prev-nc (string-to-number (match-string 1))))
+        (goto-char (point-min))
+        (when (re-search-forward "(edges \\. \\([0-9]+\\))" nil t) (setq prev-ec (string-to-number (match-string 1)))))
+      (list :nodes-before prev-nc :nodes-after nc :nodes-delta (- nc prev-nc)
+            :edges-before prev-ec :edges-after ec :edges-delta (- ec prev-ec)
+            :drift-pct (if (> prev-nc 0) (* 100 (/ (float (abs (- nc prev-nc))) prev-nc)) 0)))))
+
+(defun gptel-auto-workflow--graph-query-feedback (query result)
+  "Save a graph query and its result as a mementum memory for future synthesis.
+The feedback loop: what the system asks about gets incorporated into knowledge."
+  (let* ((root (gptel-auto-workflow-self-audit--root))
+         (mem-file (expand-file-name
+                    (format "mementum/memories/graph-query-%s.md"
+                            (format-time-string "%Y%m%dT%H%M%S"))
+                    root)))
+    (with-temp-file mem-file
+      (insert "---\ntitle: Graph Query Feedback\ncategory: graph-query\n---\n\n")
+      (insert (format "**Query:** %s\n\n**Result:** %s\n" query result)))
+    (message "[memory-schema] Query feedback saved to %s" mem-file)))
+
 (provide 'gptel-auto-workflow-memory-schema)
