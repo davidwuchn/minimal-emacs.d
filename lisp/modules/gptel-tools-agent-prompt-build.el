@@ -1108,7 +1108,8 @@ Returns a compact lambda-notation string ready for the LLM."
              (uni-d (cdr (assoc 'unified-directive vars)))
               (context-db (cdr (assoc 'context-db-context vars)))
               (system-health (cdr (assoc 'system-health-context vars)))
-              (human-priorities (cdr (assoc 'human-priorities-context vars))))
+              (human-priorities (cdr (assoc 'human-priorities-context vars)))
+              (github-sensor (cdr (assoc 'github-sensor-context vars))))
     (concat
       ;; KV CACHE PREFIX — STATIC sections first (shared across experiments)
       ;; These tokens are identical for every experiment → high cache-hit rate.
@@ -1178,6 +1179,7 @@ Returns a compact lambda-notation string ready for the LLM."
        (if context-db (concat context-db "\n") "")
        (if system-health (concat system-health "\n") "")
        (if human-priorities (concat human-priorities "\n") "")
+       (if github-sensor (concat github-sensor "\n") "")
        (if git-hist (concat "GIT: " git-hist "\n") "")
       (if axis-g (concat "AXIS: " axis-g "\n") "")
       (if axis-p (concat "AXIS-PERF: " axis-p "\n") "")
@@ -1360,6 +1362,18 @@ This biases the evolution LLM to prioritize fixes for known system issues."
             (when (> (length compact) 10)
               (concat "SYSTEM-HEALTH (recurring issues from self-audit):\n"
                       compact))))))))
+
+(defun gptel-auto-experiment--github-sensor-for-prompt ()
+  "Read GitHub sensor data and format as business context.
+Returns formatted string with open bugs/enhancements, or nil if
+the GitHub sensor module is unavailable or has no data.
+This injects REAL USER SIGNALS (GitHub Issues) into evolution prompts."
+  (when (fboundp 'gptel-auto-workflow--github-sensor-summary)
+    (let ((summary (gptel-auto-workflow--github-sensor-summary)))
+      (when (and summary (not (string-empty-p summary))
+                 (not (string-match-p "0 open, 0 closed" summary)))
+        (concat "EXTERNAL-SIGNALS (GitHub Issues — real user feedback):\n"
+                summary)))))
 
 (defun gptel-auto-experiment--human-priorities-for-prompt ()
   "Read approved proposals from the approval queue and format as business context.
@@ -1734,6 +1748,7 @@ Read ONE function. Edit ONE line. Verify. Done."))))
                 (context-db-context . ,(gptel-auto-experiment--context-db-for-prompt target))
                 (system-health-context . ,(gptel-auto-experiment--system-health-for-prompt))
                 (human-priorities-context . ,(gptel-auto-experiment--human-priorities-for-prompt))
+                (github-sensor-context . ,(gptel-auto-experiment--github-sensor-for-prompt))
                 (time-budget . ,(/ gptel-auto-experiment-time-budget 60))
               (focus-line . ,focus-line)
               (sexp-check-command . ,sexp-check-command))))
