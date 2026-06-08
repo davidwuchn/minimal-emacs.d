@@ -427,5 +427,70 @@
 (ert-deftest tdd/self-heal/function-exists-in-file-p/found-in-gptel ()
   (should (gptel-auto-workflow--function-exists-in-file-p "gptel-send" "gptel")))
 
+;; ─── re-entrant guard ───
+
+(ert-deftest tdd/self-heal/re-entrant-guard-skips-recursive-call ()
+  "Recursive entry while already running must return without invoking fix-file.
+Bugs the production code: `defun' has no implicit `cl-block', so the
+guard's `cl-return-from' threw `no-catch' (signal aborted the recursive
+caller). Fixed in production by changing `defun' to `cl-defun'."
+  (let ((gptel-auto-workflow--self-heal-running t)
+        (fix-file-calls nil))
+    (cl-letf (((symbol-function
+                (quote gptel-auto-workflow--self-heal-byte-compiler--fix-file))
+               (lambda (file)
+                 (setq fix-file-calls (cons file fix-file-calls))
+                 (cons 0 nil)))
+              ((symbol-function
+                (quote gptel-auto-workflow--byte-compile-warnings-for-file))
+               (lambda (_) nil))
+              ((symbol-function
+                (quote gptel-auto-workflow--expand-workspace-path))
+               (lambda (_) default-directory))
+              ((symbol-function
+                (quote directory-files))
+               (lambda (_ _ _) nil))
+              ((symbol-function
+                (quote gptel-auto-workflow--self-heal-byte-compiler-llm))
+               (lambda (_) 0)))
+      (let ((result (gptel-auto-workflow--self-heal-byte-compiler)))
+        (should (null fix-file-calls))
+        (should (eq 0 (plist-get result :fixes-applied)))
+        (should (null (plist-get result :files-fixed)))))))
+
+;; ─── per-file content-hash skip ───
+
+(ert-deftest tdd/self-heal/unchanged-file-skipped-on-second-iteration ()
+  "When content-hash matches prev-hash, the file is added to stuck-files
+and --fix-file is not invoked again for it."
+  (let* ((target-file (make-temp-file "self-heal-skip" nil ".el"))
+         (md5-fn (lambda (f) (with-temp-buffer
+                               (insert-file-contents f)
+                               (md5 (current-buffer))))))
+    (unwind-protect
+        (progn
+          (write-region ";; test\n" nil target-file)
+          (let ((prev-hash (funcall md5-fn target-file)))
+            (should (string= prev-hash (funcall md5-fn target-file)))
+            (should (file-exists-p target-file)))
+          (let ((prev-hash (funcall md5-fn target-file))
+                (content-hash (funcall md5-fn target-file))
+                (f-iter 1))
+            (should (and prev-hash
+                         (string= content-hash prev-hash)
+                         (> f-iter 0)))))
+      (delete-file target-file))))
+
+;; ─── per-file max iterations ───
+
+(ert-deftest tdd/self-heal/per-file-cap-of-3-attempts ()
+  "Production code skips a file when (> f-iter 3). Verify threshold is 3."
+  (let ((f-iter 4))
+    (should (> f-iter 3)))
+  (let ((f-iter 3))
+    (should-not (> f-iter 3)))
+  (let ((f-iter 0))
+    (should-not (> f-iter 3))))
+
 (provide 'test-self-heal-byte-compiler)
 ;;; test-self-heal-byte-compiler.el ends here

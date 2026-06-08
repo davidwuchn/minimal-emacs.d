@@ -8058,13 +8058,15 @@ paren balance, its changes are reverted.  Returns (FIX-COUNT . REMAINING)."
   "Non-nil while self-heal byte-compiler is running.
 Prevents re-entrant self-heal from compile hooks.")
 
-(defun gptel-auto-workflow--self-heal-byte-compiler (&optional files max-iterations)
+(cl-defun gptel-auto-workflow--self-heal-byte-compiler (&optional files max-iterations)
   "Self-heal byte-compiler warnings across FILES.
 Dog-food: Phase 1 fixes self (mechanical + LLM for self only).
 Phase 2 fixes others (mechanical only, accepts ceiling).
 Returns plist with :fixes-applied :remaining-warnings :files-fixed."
   (interactive)
-  ;; Guard: prevent re-entrant self-heal from compile hooks
+  ;; Guard: prevent re-entrant self-heal from compile hooks.
+  ;; Use cl-defun so cl-return-from has an implicit cl-block to return from
+  ;; (defun has none — cl-return-from would throw no-catch).
   (when (and (boundp 'gptel-auto-workflow--self-heal-running)
              gptel-auto-workflow--self-heal-running)
     (message "[self-heal] Skipped — already running")
