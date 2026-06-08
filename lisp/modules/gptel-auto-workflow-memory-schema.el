@@ -22,6 +22,7 @@
 (declare-function gptel-auto-workflow--categorize-target "gptel-auto-workflow-ontology-router")
 (declare-function skill-graph-node-level "gptel-auto-workflow-skill-graph")
 (declare-function skill-graph-edge-weight "gptel-auto-workflow-skill-graph")
+(declare-function gptel-auto-workflow-self-audit--root "gptel-auto-workflow-self-audit")
 (defvar skill-graph--edges)
 
 ;; ─── Configuration ───
