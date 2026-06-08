@@ -1277,6 +1277,56 @@ mkdir -p "$DIGEST_DIR"
     fi
     # ── Recommended Actions (actionable by human in one command) ──
     echo ""
+    echo "## Token Economics (cost per experiment)"
+    echo ""
+    # Estimate token cost: ~$0.10 baseline per experiment, weighted by backend cost
+    # Backend cost multipliers: flash=0.5x pro=1.0x qwen=1.5x default=1.2x
+    base_cost=0.10  # baseline dollars per experiment
+    total_experiments=0
+    total_cost=0
+    kept_cost=0
+    kept_count=0
+    if compgen -G "$DIR/var/tmp/experiments/*/results.tsv" >/dev/null; then
+        find "$DIR/var/tmp/experiments" -maxdepth 2 -name "results.tsv" -mtime -1 -exec cat {} \; 2>/dev/null | \
+            awk -F'\t' -v base="$base_cost" 'NR>1 {
+                backend = ($15 == "" ? "unknown" : $15)
+                multiplier = 1.0
+                if (backend ~ /flash/) multiplier = 0.5
+                else if (backend ~ /pro/) multiplier = 1.0
+                else if (backend ~ /qwen/) multiplier = 1.5
+                else if (backend ~ /kimi/) multiplier = 1.2
+                else multiplier = 1.0
+                cost = base * multiplier
+                total_cost += cost
+                total++
+                if ($8 ~ /^(kept|grader-bypass|merged|staged)$/) {
+                    kept_cost += cost
+                    kept++
+                }
+            } END {
+                printf "total=%d|total_cost=%.2f|kept=%d|kept_cost=%.2f\n", total, total_cost, kept, kept_cost
+            }' > "$DIR/var/tmp/token-economics.tmp" 2>/dev/null
+        if [ -f "$DIR/var/tmp/token-economics.tmp" ]; then
+            total_experiments=$(cut -d'|' -f1 "$DIR/var/tmp/token-economics.tmp" | cut -d= -f2)
+            total_cost=$(cut -d'|' -f2 "$DIR/var/tmp/token-economics.tmp" | cut -d= -f2)
+            kept_experiments=$(cut -d'|' -f3 "$DIR/var/tmp/token-economics.tmp" | cut -d= -f2)
+            kept_cost=$(cut -d'|' -f4 "$DIR/var/tmp/token-economics.tmp" | cut -d= -f2)
+            rm -f "$DIR/var/tmp/token-economics.tmp"
+        fi
+    fi
+    if [ "${total_experiments:-0}" -gt 0 ]; then
+        echo "- **${total_experiments} experiments** (24h), est. cost: \$${total_cost:-0.00}"
+        echo "- **${kept_experiments:-0} kept** (est. \$${kept_cost:-0.00} value delivered, ${kept_experiments:-0}/${total_experiments} = $(awk "BEGIN {printf \"%.0f\", ${kept_experiments:-0}*100/${total_experiments}}")% keep-rate)"
+        cost_per_kept=$(awk "BEGIN {printf \"%.2f\", ${kept_cost:-0}/${kept_experiments:-1}}")
+        echo "- **Cost per kept experiment**: \$${cost_per_kept:-0.00}"
+        if [ "${kept_experiments:-0}" -gt 0 ] && [ "$(echo "$cost_per_kept > 0.50" | bc 2>/dev/null || echo 0)" = "1" ]; then
+            echo "- ⚠ High cost per kept — consider cheaper backends or tighter grading"
+        fi
+    else
+        echo "- No experiments in last 24h (no cost data)"
+    fi
+    # ── Recommended Actions (actionable by human in one command) ──
+    echo ""
     echo "## Recommended Actions"
     echo ""
     # Pending proposals that need human approval
