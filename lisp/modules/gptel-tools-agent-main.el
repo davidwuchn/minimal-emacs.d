@@ -191,7 +191,7 @@ Also monitors memory and triggers GC when RSS exceeds threshold."
     (cancel-timer gptel-auto-workflow--status-refresh-timer)
     (setq gptel-auto-workflow--status-refresh-timer nil))
   (when (and (or gptel-auto-workflow--running
-                 gptel-auto-workflow--cron-job-running)
+                 (bound-and-true-p gptel-auto-workflow--cron-job-running))
              (numberp gptel-auto-workflow-status-refresh-interval)
              (> gptel-auto-workflow-status-refresh-interval 0))
     (setq gptel-auto-workflow--status-refresh-timer
