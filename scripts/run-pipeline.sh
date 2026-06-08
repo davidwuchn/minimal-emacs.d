@@ -1287,6 +1287,23 @@ mkdir -p "$DIGEST_DIR"
     else
         echo "- Graph generation failed or no data available"
     fi
+    # Export graph as JSON + HTML for external tools and visualization
+    GRAPH_JSON="$DIGEST_DIR/graph-$(date +%F).json"
+    GRAPH_HTML="$DIGEST_DIR/graph-$(date +%F).html"
+    emacs --batch -L "$DIR/lisp/modules" \
+        -L "$DIR/packages/gptel" -L "$DIR/packages/compat" \
+        -l gptel --eval \
+        "(progn
+           (require 'gptel-auto-workflow-memory-schema nil t)
+           (setq gptel-auto-workflow--workspace-path \"$DIR\")
+           (when (fboundp 'gptel-auto-workflow--unified-graph-export-json)
+             (gptel-auto-workflow--unified-graph-export-json \"$GRAPH_JSON\"))
+           (when (fboundp 'gptel-auto-workflow--unified-graph-export-html)
+             (gptel-auto-workflow--unified-graph-export-html \"$GRAPH_JSON\" \"$GRAPH_HTML\")))" \
+        2>/dev/null
+    if [ -f "$GRAPH_JSON" ]; then
+        echo "- Graph exported: $GRAPH_JSON, $GRAPH_HTML"
+    fi
     echo ""
     echo "## Strategy Pool Visibility"
     echo ""

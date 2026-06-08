@@ -1269,4 +1269,36 @@ Format compatible with NetworkX and vis.js."
                  output-file (length nodes) (length links))
         t))))
 
+(defun gptel-auto-workflow--unified-graph-export-html (json-file html-file)
+  "Generate an interactive HTML visualization from JSON-FILE.
+Writes standalone HTML to HTML-FILE using vis.js from CDN.
+The graph is interactive: click nodes, search, zoom, drag."
+  (let ((template
+         "<!DOCTYPE html>
+<html><head><meta charset=\"utf-8\">
+<title>OV5 Knowledge Graph</title>
+<script src=\"https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js\"></script>
+<link href=\"https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css\" rel=\"stylesheet\">
+<style>body{margin:0}#graph{width:100vw;height:100vh;background:#1a1a2e}
+.vis-node{font-size:12px}.vis-edge{stroke:#555}</style></head>
+<body><div id=\"graph\"></div>
+<script>
+fetch('%s').then(r=>r.json()).then(data=>{
+  var nodes=new vis.DataSet(data.nodes.map(n=>({id:n.id,label:n.label,
+    group:n.type==='file'?1:n.type==='skill'?2:3})));
+  var edges=new vis.DataSet(data.links.map(l=>({from:l.source,to:l.target,
+    label:l.type,title:l.confidence+' w='+l.weight,color:{color:l.confidence==='EXTRACTED'?'#4fc3f7':l.confidence==='INFERRED'?'#ffb74d':'#ef5350'}})));
+  var container=document.getElementById('graph');
+  new vis.Network(container,{nodes:nodes,edges:edges},{
+    groups:{1:{color:{background:'#1565c0'}},2:{color:{background:'#2e7d32'}},3:{color:{background:'#6a1b9a'}}},
+    physics:{stabilization:{iterations:100}},edges:{arrows:'to',smooth:{type:'curvedCW'}}});
+}).catch(e=>document.body.innerHTML='<p style=color:red>Error: '+e+'</p>');
+</script></body></html>"))
+    (with-temp-file html-file
+      (insert (format template
+                      (file-relative-name json-file
+                                          (file-name-directory html-file)))))
+    (message "[memory-schema] Exported HTML visualization to %s" html-file)
+    t))
+
 (provide 'gptel-auto-workflow-memory-schema)
