@@ -217,9 +217,11 @@ Timeout after 30s to prevent infinite spin if callback never fires."
      (list
       "assistant: tool_use Grep(regex=Programmatic path=lisp/modules)"
       (format "tool_result: %s" hits)
-      "assistant: tool_use Read(file_path=lisp/modules/gptel-sandbox.el start_line=1 end_line=60)"
+      "assistant: tool_use Read(file_path=lisp/modules/gptel-sandbox.el start_line=1
+end_line=60)"
       (format "tool_result: %s" first)
-      "assistant: tool_use Read(file_path=assistant/agents/code_agent.md start_line=1 end_line=40)"
+      "assistant: tool_use Read(file_path=assistant/agents/code_agent.md start_line=1
+end_line=40)"
       (format "tool_result: %s" second)
       (format "assistant: final %S" result))
      "\n")))

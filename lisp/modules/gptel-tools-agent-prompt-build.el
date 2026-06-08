@@ -215,23 +215,72 @@ Criteria: has sections, has examples, has specific guidance, right length."
 
 (defconst gptel-auto-experiment--kibcm-patterns
   ;; Tier 1 — Confirmed (KIBC-M: all models, all scales)
-  '((:K "nil.safety\\|nil.guard\\|nil.check\\|guard[^a-z]\\|validat\\|proper-list-p\\|bound-and-true-p\\|filter.out\\|discard\\|remove nil\\|unless nil\\|when nil\\|error.*handling")
-    (:I "passthrough\\|pass through\\|identity\\|reference\\|binding\\|same entity\\|unchanged\\|copy\\|self[^a-z]")
-    (:B "compose\\|chain\\|extract helper\\|helper function\\|refactor into\\|DRY\\|dedup\\|unify\\|pipeline\\|sequence\\|decompose")
-    (:C "reorder\\|flip\\|swap\\|passive\\|invert\\|reverse\\|before.*after\\|after.*before\\|reorganize")
-    (:M "pattern\\|template\\|apply pattern\\|in.context\\|example.driven\\|analogy\\|match\\|few.shot\\|exemplar\\|similar to")
+  '((:K "
+
+
+
+nil.safety\\|nil.guard\\|nil.check\\|guard[^a-z]\\|validat\\|proper-list-p\\|bound-and-true-p\\|filter.out\\|discard\\|remove
+nil\\|unless nil\\|when nil\\|error.*handling")
+    (:I "passthrough\\|pass through\\|identity\\|reference\\|binding\\|same
+entity\\|unchanged\\|copy\\|self[^a-z]")
+    (:B "compose\\|chain\\|extract helper\\|helper function\\|refactor
+into\\|DRY\\|dedup\\|unify\\|pipeline\\|sequence\\|decompose")
+    (:C "
+
+
+
+reorder\\|flip\\|swap\\|passive\\|invert\\|reverse\\|before.*after\\|after.*before\\|reorganize")
+    (:M "pattern\\|template\\|apply
+
+
+
+pattern\\|in.context\\|example.driven\\|analogy\\|match\\|few.shot\\|exemplar\\|similar
+to")
     ;; Tier 2 — Predicted (seeking discovery: larger models)
-    (:W "duplicat\\|double\\|mirror\\|same.*twice\\|self.*same\\|reuse\\|share.logic\\|merge.*duplicate\\|identical.*both")
-    (:T "type.check\\|type.valid\\|annotation\\|type.assert\\|ensure.*type\\|cast\\|coerce\\|narrowing\\|widening")
-    (:PHI "both.*and\\|parallel\\|coordinat\\|multi.property\\|multiple.*same\\|fork\\|split.*combine\\|apply.*two")
-    (:D "deep.compos\\|multi.step\\|nested\\|complex.refactor\\|several.*changes?\\|multiple.*changes?\\|comprehensive")
+    (:W "
+
+
+
+duplicat\\|double\\|mirror\\|same.*twice\\|self.*same\\|reuse\\|share.logic\\|merge.*duplicate\\|identical.*both")
+    (:T "
+
+
+
+type.check\\|type.valid\\|annotation\\|type.assert\\|ensure.*type\\|cast\\|coerce\\|narrowing\\|widening")
+    (:PHI "
+
+
+
+both.*and\\|parallel\\|coordinat\\|multi.property\\|multiple.*same\\|fork\\|split.*combine\\|apply.*two")
+    (:D "
+
+
+
+deep.compos\\|multi.step\\|nested\\|complex.refactor\\|several.*changes?\\|multiple.*changes?\\|comprehensive")
     ;; Tier 3 — Structural (architecture-level)
-    (:SCOPE "scope\\|visibility\\|access.control\\|local\\|global\\|lexical\\|dynamic.*bind\\|closure\\|environment")
-    (:SUBST "simplif\\|reductio\\|substitut\\|replace.*with\\|instead of\\|compress\\|shorte\\|inline\\|expand")
-    (:WHNF "done\\|finished\\|complete\\|final\\|normal.form\\|base.case\\|terminal\\|atomic\\|primitive\\|no.further")
+    (:SCOPE "
+
+
+
+scope\\|visibility\\|access.control\\|local\\|global\\|lexical\\|dynamic.*bind\\|closure\\|environment")
+    (:SUBST "simplif\\|reductio\\|substitut\\|replace.*with\\|instead
+of\\|compress\\|shorte\\|inline\\|expand")
+    (:WHNF "
+
+
+
+done\\|finished\\|complete\\|final\\|normal.form\\|base.case\\|terminal\\|atomic\\|primitive\\|no.further")
     ;; Tier 4 — Meta (self-evolution itself)
-    (:Y "recurs\\|self.refer\\|self.modif\\|self.improv\\|self.evol\\|fixed.point\\|loop\\|iterate\\|repeat.*until\\|while")
-    (:QUOTE "document\\|comment\\|explain\\|describe\\|name\\|label\\|tag\\|categorize\\|classify\\|annotate\\|docstring"))
+    (:Y "
+
+
+
+recurs\\|self.refer\\|self.modif\\|self.improv\\|self.evol\\|fixed.point\\|loop\\|iterate\\|repeat.*until\\|while")
+    (:QUOTE "
+
+
+
+document\\|comment\\|explain\\|describe\\|name\\|label\\|tag\\|categorize\\|classify\\|annotate\\|docstring"))
   "15-axis KIBC-M+ operation patterns for hypothesis classification.
 Tier 1 (K,I,B,C,M): confirmed in all models.
 Tier 2 (W,T,PHI,D): predicted in larger models.
@@ -712,7 +761,8 @@ Human ⊗ AI ⊗ REPL
   :generating {:entry {:action \"Ontology dict → SHACL shapes (Turtle). Create one sh:NodeShape per class with sh:targetClass. For each property: sh:path, sh:datatype (xsd:string/int/date etc.) or sh:class for object properties, sh:minCount/sh:maxCount from cardinality. For required fields: sh:minCount 1. Use sh:severity sh:Violation. Add sh:closed true on strict tier shapes. Include sh:ignoredProperties (rdf:type) on closed shapes. Output Turtle only with @prefix sh: <http://www.w3.org/ns/shacl#>.\"}}
   :explaining {:entry {:action \"SHACL violation → plain English explanation. Given a violation with focus_node, result_path, constraint, value: write a one-sentence explanation of what's wrong and how to fix it. No markup, plain English only.\"}}}}
 "
-  "System prompt for LLM-powered SHACL shape generation and violation explanation.")
+  "System prompt for LLM-powered SHACL shape generation and violation
+explanation.")
 
 (defun gptel-auto-experiment--shacl-generate (ontology-plist &optional callback quality-tier)
   "Generate SHACL shapes from ONTOLOGY-PLIST via LLM.
@@ -1132,16 +1182,19 @@ Returns a compact lambda-notation string ready for the LLM."
       "| ¬doc_only | ¬comment_only | Δ(code) ≡ required\n"
        "| MUST edit files — analysis-only responses will be rejected without grading\n"
        "| MANDATORY: Call Edit/Write tool — do NOT output code as text. Text-only code output = REJECT.\n"
-        "| 1st_line ≡ \"HYPOTHESIS: [what changes & why]\" (NEVER leave blank — always state concrete change)\n"
+        "| 1st_line ≡ \"HYPOTHESIS: [what changes & why]\" (NEVER leave blank — always
+state concrete change)\n"
       (if focus (concat "  " focus "\n") "")
        "| use(Edit,Write,ApplyPatch) — text output ≠ code change. YOU MUST CALL THE EDIT TOOL.\n"
        "| After hypothesis, call Read tool to examine the target, then call Edit/Write to apply changes.\n"
        "| ¬text_only_code | minimal(change) | ¬git(add,commit,push)\n"
        "| ∀cl-return-from: ∃cl-block ∧ name_match | ¬call_undefined_fn\n"
-       "| MANDATORY: Run `emacs --batch --eval \"(byte-compile-file \\\"FILE\\\")\"` on changed files before finishing\n"
+       "| MANDATORY: Run `emacs --batch --eval \"(byte-compile-file \\\"FILE\\\")\"`
+on changed files before finishing\n"
       (concat "| MANDATORY: verify command: " (or sexp "emacs --batch --eval '...'")
               " && ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh\n"
-              "| REPORT: In OUTPUT section, show exactly which verify commands ran and their exit codes\n")
+              "| REPORT: In OUTPUT section, show exactly which verify commands ran and their
+exit codes\n")
       "\nOUTPUT:  CHANGED(file+fn) EVIDENCE(1-2 diffs) VERIFY(cmds+exit_codes) COMMIT(\"not committed\")\n"
       "TYPE(pick_one): bug_fix | performance | refactoring | safety | test_coverage\n"
       "\n"
@@ -1222,7 +1275,8 @@ Returns a compact lambda-notation string ready for the LLM."
       "| replace `(if x nil (y))` with `(unless x (y))`\n"
       "| add type check `(when (stringp x) ...)` before string operation\n"
       "| replace `(append (list a) (list b))` with `(list a b)`\n"
-      "\nCRITICAL: Your code quality delta MUST be >= 0. If you break existing tests or decrease readability, you will be REJECTED.\n")))
+      "\nCRITICAL: Your code quality delta MUST be >= 0. If you break existing tests
+or decrease readability, you will be REJECTED.\n")))
 
 (defun gptel-auto-workflow--load-prompt-template (&optional target)
   "Load prompt template from skill file, category-specific when TARGET provided.
@@ -1244,7 +1298,8 @@ Uses ontology category to select the best template for TARGET."
     (if (> (length skill-content) 0)
         skill-content
       ;; Fallback: inline template (for bootstrapping)
-      "λ experiment({{target}}). id={{experiment-id}}/{{max-experiments}} budget={{time-budget}}m
+      "λ experiment({{target}}). id={{experiment-id}}/{{max-experiments}}
+budget={{time-budget}}m
         path: {{worktree-path}}/{{target-full-path}}
         baseline(8keys): {{baseline}}  {{weakest-keys}}
         {{controller-focus}}
@@ -1257,30 +1312,37 @@ Uses ontology category to select the best template for TARGET."
         REPAIR: {{allium-repair}}
         PAST: {{topic-knowledge}} {{previous-experiment-analysis}}
 
-        SUGGEST: {{suggestions}} {{suggested-hypothesis}} {{mutation-templates}} {{evolved-recommendations}}
+SUGGEST: {{suggestions}} {{suggested-hypothesis}} {{mutation-templates}}
+{{evolved-recommendations}}
 
         RULES:
         | ¬touch(early-init.el, pre-early-init.el, lisp/eca-security.el)
         | ¬doc_only | ¬comment_only | Δ(code) ≡ required
         | 1st_line ≡ \"HYPOTHESIS: [what changes & why]\" (NEVER leave blank)
         {{focus-line}}
-        | use(Edit,Write) — text-only responses will be rejected | minimal(change) | ¬git(add,commit,push)
-        | MANDATORY: Run `emacs --batch --eval \"(byte-compile-file \\\"FILE\\\")\"` on changed files
+| use(Edit,Write) — text-only responses will be rejected | minimal(change) |
+¬git(add,commit,push)
+| MANDATORY: Run `emacs --batch --eval \"(byte-compile-file \\\"FILE\\\")\"`
+on changed files
         | MANDATORY: Run verify command and report exit code
-        | verify: {{sexp-check-command}} && ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
+| verify: {{sexp-check-command}} && ./scripts/verify-nucleus.sh &&
+./scripts/run-tests.sh
 
         OUTPUT:
         CHANGED: file(s) + functions touched
         EVIDENCE: 1-2 concrete diffs
-        VERIFY: commands run + exit codes (MANDATORY — show each command and its exit code)
+VERIFY: commands run + exit codes (MANDATORY — show each command and its exit
+code)
         COMMIT: \"not committed\"
 
-        TYPE(pick_one): bug_fix | performance | refactoring | safety | test_coverage
+TYPE(pick_one): bug_fix | performance | refactoring | safety | test_coverage
 
-        IMPROVE code quality for {{target}}.  Make minimal, targeted CODE changes.
-        ∇ quality(x).  docstring(20%) ∧ patterns(30%) ∧ fn_length(25%) ∧ complexity(25%)
+IMPROVE code quality for {{target}}. Make minimal, targeted CODE changes.
+∇ quality(x). docstring(20%) ∧ patterns(30%) ∧ fn_length(25%) ∧
+complexity(25%)
         | high_baseline(>0.85) → prefer(bug_fix, error_handling) > docstring
-        | grade(9/9) ≢ quality_improved — structural scores may be flat for well-written code.
+| grade(9/9) ≢ quality_improved — structural scores may be flat for
+well-written code.
 
         HYPOTHESES: \"Adding nil validation in X prevents runtime errors\"
                    \"Extracting duplicate Y into helper reduces duplication\"
@@ -1301,7 +1363,8 @@ Uses ontology category to select the best template for TARGET."
         add (when (stringp x) ...) before string operation
         replace (append (list a) (list b)) with (list a b)
 
-        CRITICAL: code quality delta MUST be >= 0. Breaking tests or decreasing readability = REJECTED.")))
+CRITICAL: code quality delta MUST be >= 0. Breaking tests or decreasing
+readability = REJECTED.")))
 
 (defun gptel-auto-experiment--context-db-for-prompt (target)
   "Build context-db learnings string for TARGET module.
@@ -1400,7 +1463,8 @@ Returns nil if the memory-schema module is unavailable."
     (gptel-auto-workflow--unified-graph-stats-for-prompt)))
 
 (defun gptel-auto-experiment--human-priorities-for-prompt ()
-  "Read approved proposals from the approval queue and format as business context.
+  "Read approved proposals from the approval queue and format as business
+context.
 Returns formatted string of human-approved priorities, or nil if none exist.
 This injects REAL USER NEEDS into the experiment prompt — the human operator
 explicitly approved these improvements."
@@ -1535,7 +1599,9 @@ Implements section-level A/B testing to identify effective prompt components."
                       "<one concrete function or variable>")))
          (controller-focus
           (when focus-candidate
-            (format "## Controller-Selected Starting Symbol\n- Symbol: `%s`\n- Kind: %s\n- Approx lines: %d-%d (%d lines)\n- Reason: controller-selected small or medium helper in a very large file; start here or at a direct caller/callee.\n\n"
+            (format "## Controller-Selected Starting Symbol\n- Symbol: `%s`\n- Kind: %s\n- Approx
+lines: %d-%d (%d lines)\n- Reason: controller-selected small or medium helper
+in a very large file; start here or at a direct caller/callee.\n\n"
                     (plist-get focus-candidate :name)
                     (plist-get focus-candidate :kind)
                     (plist-get focus-candidate :start-line)
@@ -1675,7 +1741,8 @@ Read ONE function. Edit ONE line. Verify. Done."))))
                                 ""))
               (self-evolution . ,(if (funcall section-included-p 'self-evolution)
                                      (if (fboundp 'gptel-auto-workflow--evolution-get-knowledge)
-                                         (concat "Constrain: patterns → Δ, anti_patterns → ∞/0, improvements → euler, essence → tao\n\n"
+                                         (concat "Constrain: patterns → Δ, anti_patterns → ∞/0, improvements → euler, essence →
+tao\n\n"
                                                  (gptel-auto-workflow--evolution-get-knowledge))
                                        "")
                                    ""))
@@ -1688,7 +1755,9 @@ Read ONE function. Edit ONE line. Verify. Done."))))
               (moderator-lens . ,(if (and (fboundp 'gptel-auto-workflow--moderator-drift-lens))
                                      (let ((lens (gptel-auto-workflow--moderator-drift-lens target)))
                                        (if lens
-                                           (format "## Moderator Intervention (DIALECTIC.md)\n%s: %s (%d consecutive failures)\nTry a different approach: change strategy, switch backend, or explore a different part of the file.\n"
+                                           (format "## Moderator Intervention (DIALECTIC.md)\n%s: %s (%d consecutive
+failures)\nTry a different approach: change strategy, switch backend, or
+explore a different part of the file.\n"
                                                    (plist-get lens :lens)
                                                    (plist-get lens :reason)
                                                    (plist-get lens :consecutive-failures))
@@ -1811,7 +1880,8 @@ Read ONE function. Edit ONE line. Verify. Done."))))
 
 (defun gptel-auto-experiment--get-topic-knowledge (target)
   "Get compressed topic-specific knowledge for TARGET.
-Extracts topic from filename, returns only actionable patterns under 500 chars.
+Extracts topic from filename, returns only actionable patterns under 500
+chars.
 Uses cache to avoid repeated file reads."
   (let* ((base-name (file-name-sans-extension (file-name-nondirectory target)))
          (topic (when (string-match "gptel-ext-\\(.+\\)" base-name)
@@ -2205,7 +2275,8 @@ If :business-value-score is not set, computes from local signals."
            (hash-valid (and ctx-hash (not (equal ctx-hash "none")))))
       (unless hash-valid
         (setq ctx-hash (sha1 (format "pipeline-defect-%s-%s" target (format-time-string "%s"))))
-        (message "[auto-workflow] WARNING: pipeline defect - no research context for %s, using fallback hash" (or target "unknown")))
+        (message "[auto-workflow] WARNING: pipeline defect - no research context for %s, using
+fallback hash" (or target "unknown")))
       (setq experiment
             (plist-put experiment :research-strategy
                        (or (and ctx (plist-get ctx :strategy)) "none")))
@@ -2288,7 +2359,8 @@ If :business-value-score is not set, computes from local signals."
                           ;; so feedback loop is always preserved.
                           (when (equal hash "none")
                             (setq hash (sha1 (format "pipeline-defect-%s-%s" target (format-time-string "%s"))))
-                            (message "[auto-workflow] WARNING: TSV-level fallback hash for %s (upstream should have set it)"
+                            (message "[auto-workflow] WARNING: TSV-level fallback hash for %s (upstream should have
+set it)"
                                      (or target "unknown")))
                           (gptel-auto-experiment--tsv-escape hash))
                         (or (gptel-auto-experiment--tsv-escape
@@ -2407,8 +2479,10 @@ If :business-value-score is not set, computes from local signals."
   "Return idempotent callback that finalizes EXP-RESULT after optional staging.
 
 When invoked without arguments, or with a non-nil first argument, log
-EXP-RESULT as kept. When invoked with nil, downgrade the result so staging-flow
-failures do not masquerade as published kept results. When a second argument is
+EXP-RESULT as kept. When invoked with nil, downgrade the result so
+staging-flow
+failures do not masquerade as published kept results. When a second argument
+is
 supplied on failure, use it as the downgrade reason."
   (gptel-auto-workflow--make-idempotent-callback
    (lambda (&rest success-args)
@@ -2716,7 +2790,8 @@ If BACKEND is not found, returns \"unknown\"."
 
 (defun gptel-auto-workflow--backend-for-model (model)
   "Derive the backend provider name from a MODEL string.
-Returns a string like \"DeepSeek\", \"MiniMax\", \"moonshot\", \"DashScope\", etc.
+Returns a string like \"DeepSeek\", \"MiniMax\", \"moonshot\", \"DashScope\",
+etc.
 Returns \"unknown\" when model is nil, empty, or unrecognized."
   (cond
    ((or (null model) (not (stringp model)) (string= model ""))
@@ -3456,7 +3531,8 @@ Returns string showing which axes have been most successful."
   (let ((rates-str (gptel-auto-experiment--get-axis-success-rates target)))
     (concat "## Axis Performance History\n"
             rates-str
-            "\n\nRecommendation: Prioritize axes with higher success rates, but also explore underexplored axes to build frontier coverage.\n\n")))
+            "\n\nRecommendation: Prioritize axes with higher success rates, but also
+explore underexplored axes to build frontier coverage.\n\n")))
 
 ;;; Failure Pattern Injection
 
@@ -3918,7 +3994,8 @@ Returns string warning about common rejection reasons, or empty string."
                 parts))))
     (if parts
         (concat (mapconcat #'identity (nreverse parts) "\n\n") "\n\n"
-                "To succeed, actively avoid the failure patterns and address grader feedback above.\n\n")
+                "To succeed, actively avoid the failure patterns and address grader feedback
+above.\n\n")
       "")))
 
 ;; ─── Unified Per-Category Code Generation Directive ───

@@ -318,7 +318,8 @@ Returns suggestions directly, blocking until complete."
 
 (defun gptel-benchmark-llm-synthesize-knowledge-sync (topic memories &optional timeout-seconds)
   "Synchronous version of `gptel-benchmark-llm-synthesize-knowledge'.
-Returns synthesized knowledge content directly. TIMEOUT-SECONDS defaults to 300."
+Returns synthesized knowledge content directly. TIMEOUT-SECONDS defaults to
+300."
   (let ((result nil)
          (done nil)
          (request-buffer (current-buffer)))

@@ -110,7 +110,8 @@ jobs)."
 
 (defun gptel-auto-workflow--sync-staging-with-main ()
   "Fast-forward staging branch to match main.
-Ensures experiments run against latest code without touching the root worktree."
+Ensures experiments run against latest code without touching the root
+worktree."
   (gptel-auto-workflow--sync-staging-from-main))
 
 
@@ -563,7 +564,8 @@ large-result truncation, and result caching."
         (let* ((temp-file (if (fboundp 'my/gptel-make-temp-file)
                               (my/gptel-make-temp-file "gptel-subagent-result-" nil ".txt")
                             (make-temp-file "gptel-subagent-result-" nil ".txt")))
-               (trunc-msg (format "%s\n...[Result too large, truncated. Full result saved to: %s. Use Read tool if you need more]..."
+               (trunc-msg (format "%s\n...[Result too large, truncated. Full result saved to: %s. Use Read tool
+if you need more]..."
                                   (substring result 0 my/gptel-subagent-result-limit)
                                   temp-file))
                (buf (current-buffer))
@@ -592,7 +594,8 @@ large-result truncation, and result caching."
 
 (defun my/gptel-agent--truncate-buffer-around (orig prefix &optional max-lines)
   "Prevent temp artifacts from starting with a raw Emacs modeline.
-ORIG is `gptel-agent--truncate-buffer'. PREFIX and MAX-LINES are passed through."
+ORIG is `gptel-agent--truncate-buffer'. PREFIX and MAX-LINES are passed
+through."
   (let* ((starts-with-modeline
           (and (> (buffer-size) 20000)
                (save-excursion

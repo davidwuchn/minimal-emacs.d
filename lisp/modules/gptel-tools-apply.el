@@ -246,7 +246,7 @@ Prefers `git apply` if in a git repository; otherwise uses `patch`."
   (condition-case err
       (progn
         (unless (or (executable-find "git") (executable-find "patch"))
-          (error "neither 'git' nor 'patch' executable found"))
+          (error "neither \='git\=' nor \='patch\=' executable found"))
         (unless (and (stringp patch) (not (string-empty-p (string-trim patch))))
           (error "patch text is empty"))
         (let* ((clean-patch (my/gptel--extract-patch patch))

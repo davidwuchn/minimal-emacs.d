@@ -307,7 +307,8 @@ subagent callback fired, and avoids reusing a deleted worktree as
                 (funcall safe-invoke)
               (run-at-time 0 nil safe-invoke))))
         (t
-         (message "[nucleus] Warning: my/gptel--invoke-callback-safely skipped invalid callback: %S"
+         (message "[nucleus] Warning: my/gptel--invoke-callback-safely skipped invalid callback:
+%S"
                   (type-of callback)))))
 
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt &optional files include-history include-diff)
@@ -725,7 +726,8 @@ Logs subagent dispatch to ontology for self-evolution tracking."
              (:name "include_history"
                     :type string
                     :optional t
-                    :description "Set to \"false\" to exclude conversation history. Default: history IS included (see my/gptel-subagent-include-history-default).")
+                    :description "Set to \"false\" to exclude conversation history. Default: history IS included
+(see my/gptel-subagent-include-history-default).")
              (:name "include_diff"
                     :type string
                     :optional t
@@ -1136,7 +1138,8 @@ Each item is a plist with keys :branch and :path."
     (nreverse entries)))
 
 (defun gptel-auto-workflow--remote-tracking-optimize-branches (&optional proj-root)
-  "Return local tracking refs for shared remote optimize branches within PROJ-ROOT."
+  "Return local tracking refs for shared remote optimize branches within
+PROJ-ROOT."
   (let* ((default-directory (or proj-root (gptel-auto-workflow--default-dir)))
          (remote (gptel-auto-workflow--shared-remote))
          (tracking-prefix (format "refs/remotes/%s/optimize" remote)))

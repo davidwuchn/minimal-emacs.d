@@ -400,9 +400,10 @@ REQUEST-BUFFER is removed from direct-LLM tracking after delivery."
    (t
     (gptel-mementum--synthesis-agent))))
 
-(defvar gptel-mementum--max-prompt-bytes 600000
+(defvar gptel-mementum--max-prompt-bytes 307200
   "Maximum bytes of memory content to include in a single synthesis prompt.
-Below the 781KB API limit (with margin) to allow for prompt template + response.")
+Must stay below gptel\\='s 341KB compaction limit to avoid payload warnings.
+300KB gives ~40KB headroom for the prompt template.")
 
 (defun gptel-mementum-synthesize-candidate (candidate &optional synchronous synthesis-backend callback-run-id)
   "Synthesize CANDIDATE into knowledge page with human approval.

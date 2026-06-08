@@ -364,7 +364,8 @@ INSTANCES is a list of (:class SYM :id STRING :properties ALIST)."
     (insert "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n")
     (insert "@prefix sh: <http://www.w3.org/ns/shacl#> .\n")
     (insert "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n\n")
-    (insert "[] a owl:Ontology ;\n   rdfs:label \"OV5 Experiment Ontology\" ;\n   rdfs:comment \"Auto-generated from experiment data\" .\n\n")
+    (insert "[] a owl:Ontology ;\n rdfs:label \"OV5 Experiment Ontology\" ;\n rdfs:comment
+\"Auto-generated from experiment data\" .\n\n")
     (dolist (cls classes)
       (insert (format ":%s a owl:Class" (plist-get cls :name)))
       (when (plist-get cls :parent)

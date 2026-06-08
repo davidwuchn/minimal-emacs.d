@@ -364,7 +364,8 @@ stub away linked worktrees lightweight."
         nil))))
 
 (defun gptel-auto-workflow--staging-submodule-conflict-commits (path)
-  "Return conflicted gitlink revisions for submodule PATH in the current worktree."
+  "Return conflicted gitlink revisions for submodule PATH in the current
+worktree."
   (let* ((output
           (gptel-auto-workflow--git-result-ok
            (format "git ls-files -u -- %s" (shell-quote-argument path))
@@ -547,7 +548,8 @@ Reviewer checks for Blocker/Critical issues."
             (diff-content (gptel-auto-workflow--review-diff-content optimize-branch))
             (attachment-note
              (if skipped-review-files
-                 (format "ATTACHED FILE CONTEXT:\n- Attached changed files: %d\n- Omitted oversized files: %s\n- Use repo tools to inspect omitted files when needed.\n\n"
+                 (format "ATTACHED FILE CONTEXT:\n- Attached changed files: %d\n- Omitted oversized
+files: %s\n- Use repo tools to inspect omitted files when needed.\n\n"
                          (length review-files)
                          (mapconcat #'identity skipped-review-files ", "))
                "")))
@@ -589,16 +591,19 @@ DO NOT BLOCK for:
 - Missing tests (the staging flow runs the full suite)
 
 REVIEW METHOD:
-- If the diff introduces a call to an existing helper/function, inspect that helper's
+- If the diff introduces a call to an existing helper/function, inspect that
+helper's
   current definition before blocking on unknown behavior.
-- Do not block solely because a referenced helper is outside the diff when you can
+- Do not block solely because a referenced helper is outside the diff when you
+can
   verify it from the current file/repo.
-- When attached changed file contents are present, use them before claiming a file
+- When attached changed file contents are present, use them before claiming a
+file
   cannot be located.
 
 %s
 
-OUTPUT: First line must be exactly 'APPROVED' or 'BLOCKED: [reason]'.
+OUTPUT: First line must be exactly \='APPROVED\=' or 'BLOCKED: [reason]'.
 BLOCKED requires a specific, observable vulnerability — not general concerns.
 If it would be caught by a test, let it through for the test suite.
 
@@ -812,7 +817,8 @@ defines that function locally."
   "Try to fix issues found in review for OPTIMIZE-BRANCH.
 REVIEW-OUTPUT contains the blocker/critical issues.
 Calls CALLBACK with (success-p . fix-output).
-If `gptel-auto-workflow-research-before-fix' is nil, executor handles directly."
+If `gptel-auto-workflow-research-before-fix' is nil, executor handles
+directly."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (worktree (car (gptel-auto-workflow--branch-worktree-paths optimize-branch proj-root)))
          (default-directory (or worktree proj-root)))
@@ -940,7 +946,8 @@ INSTRUCTIONS:
 2. Make minimal fixes to address each issue
 3. Do NOT make unrelated changes
 4. Do NOT create git commits yourself; leave file changes in the worktree
-5. Do not reply with only a plan or explanation; actually modify the relevant files
+5. Do not reply with only a plan or explanation; actually modify the relevant
+files
 6. If you cannot apply a real code change, reply with 'Error: no fix applied'
 
 Focus only on the issues mentioned. Do not refactor or add features."
@@ -1277,9 +1284,11 @@ projects.el teaches all :agentic experiments)."
            ((string-match-p "byte.compile\\|compil" block-reason)
             "⚠ REVIEW: byte-compile error on a similar file. Run byte-compile BEFORE Edit.")
            ((string-match-p "require\\|undefined function\\|void.function\\|void.variable" block-reason)
-            "⚠ REVIEW: missing require blocked a similar file. Add (require ...) before new functions.")
+            "⚠ REVIEW: missing require blocked a similar file. Add (require ...) before new
+functions.")
            ((string-match-p "style\\|format\\|indent\\|whitespace" block-reason)
-            "⚠ REVIEW: formatting blocked a similar file. Change logic only, never indent/reformat.")
+            "⚠ REVIEW: formatting blocked a similar file. Change logic only, never
+indent/reformat.")
            ((string-match-p "security\\|eval\\|inject\\|dangerous" block-reason)
             "⚠ REVIEW: security issue blocked a similar file. Avoid eval, shell injection.")
            (t (concat "⚠ REVIEW: " (truncate-string-to-width block-reason 80))))))
@@ -1322,7 +1331,8 @@ has no feedback, borrows from adjacent categories."
 
 (defun gptel-auto-workflow--review-accuracy-feedback (category)
   "Return formatted accuracy feedback for CATEGORY based on past review outcomes.
-Returns a string to inject into the review prompt, or nil if insufficient data.
+Returns a string to inject into the review prompt, or nil if insufficient
+data.
 Tells the reviewer its historical bias so it can self-calibrate."
   (when category
     (let* ((outcomes (gethash category gptel-auto-workflow--review-outcomes))

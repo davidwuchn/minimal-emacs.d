@@ -50,7 +50,8 @@ Used for cost tracking and routing context.")
   "Backend name bound in `gptel-benchmark-call-subagent'.
 Used for logging and routing context.")
 (defvar gptel-auto-experiment--last-subagent-backend nil
-  "Last backend used by subagent dispatch.  Set by `gptel-benchmark-call-subagent'.")
+  "Last backend used by subagent dispatch. Set by
+`gptel-benchmark-call-subagent'.")
 (defvar gptel-auto-experiment--last-subagent-model nil
   "Last model used by subagent dispatch.  Set by `gptel-benchmark-call-subagent'.")
 (defvar bumped-model nil
@@ -493,7 +494,8 @@ Uses grader subagent - no local fallback (fail if subagent unavailable)."
                            (if (and is-truncated (< attempt max-attempts))
                                ;; Retry with exponential backoff (2^attempt seconds)
                                (let ((delay (expt 2 attempt)))
-                                 (message "[auto-exp] ⚠ Grader returned truncated response (length=%d, expected>=%d, no score pattern), retrying in %ds (attempt %d/%d): %s"
+                                 (message "[auto-exp] ⚠ Grader returned truncated response (length=%d, expected>=%d, no
+score pattern), retrying in %ds (attempt %d/%d): %s"
                                           (length result-str)
                                           min-length
                                           delay
@@ -547,7 +549,8 @@ hypothesis-aware criteria for experiment goal evaluation."
   test ∩ evaluate: actively try to break before judging.
 
 ## Phase 1: #=test — Attack the code
-The code is guilty until proven innocent. Before evaluating expected behaviors,
+The code is guilty until proven innocent. Before evaluating expected
+behaviors,
 actively TRY TO BREAK IT. Look for:
   · Edge cases: what if inputs are empty, null, out of range?
   · Boundary conditions: off-by-one, empty collections, zero values
@@ -565,7 +568,8 @@ Report every bug you find.
 If the output shows a SMALL DEFENSIVE CHANGE (<15 lines, no deletions,
 adds ignore-errors / when-let / condition-case / stringp / null check):
   → Auto-pass with score 6/9 minimum
-  → Only check: does the change actually add the guard? Is it syntactically valid?
+→ Only check: does the change actually add the guard? Is it syntactically
+valid?
   → Do NOT attack the code for theoretical edge cases
   → Do NOT require hypothesis match for simple nil guards
 Small defensive changes are low-risk and improve robustness. Be lenient.")
@@ -901,7 +905,9 @@ Returns a string explaining what changed and why."
          (complexity-after (or (plist-get experiment :complexity-after) 0))
          (decision (or (plist-get experiment :decision) "unknown"))
          (lines-removed (or (plist-get experiment :lines-removed) 0)))
-    (format "## Experiment: %s\n\n**Target:** %s\n**Hypothesis:** %s\n**Decision:** %s\n**Score:** %.2f → %.2f (Δ %.2f)\n**Complexity:** %.2f → %.2f\n**Lines removed:** %d\n\n### Narrative\n\n%s"
+    (format "## Experiment: %s\n\n**Target:** %s\n**Hypothesis:** %s\n**Decision:**
+%s\n**Score:** %.2f → %.2f (Δ %.2f)\n**Complexity:** %.2f → %.2f\n**Lines
+removed:** %d\n\n### Narrative\n\n%s"
             (or (plist-get experiment :id) "unknown")
             target
             hypothesis
@@ -910,7 +916,8 @@ Returns a string explaining what changed and why."
             complexity-before complexity-after
             lines-removed
             (if (string= decision "kept")
-                (format "This experiment was kept because it improves the codebase while maintaining or reducing complexity. %s"
+                (format "This experiment was kept because it improves the codebase while maintaining or
+reducing complexity. %s"
                         (if (> lines-removed 0)
                             (format "It removed %d lines, demonstrating the subtractive engineering principle." lines-removed)
                           "It maintains clarity while improving functionality."))

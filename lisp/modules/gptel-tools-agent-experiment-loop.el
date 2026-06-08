@@ -233,18 +233,22 @@ Instructs executor to load relevant skill instead of hardcoding patterns."
           ;; Elisp syntax and dangerous patterns - tell executor to load skill
           ((gptel-auto-experiment--elisp-syntax-error-p target validation-error)
            "CALL THIS FIRST: Skill(\"elisp-expert\")
-This skill teaches syntax-safe Elisp edits and dangerous patterns including cl-return-from requirements.")
+This skill teaches syntax-safe Elisp edits and dangerous patterns including
+cl-return-from requirements.")
            ;; Undefined function calls - guide the agent to check Emacs Lisp availability
            ((string-match-p "Undefined function introduced\\|undefined.*runtime.*call"
                             validation-error)
-            "The undefined function was rejected because it does not exist in this Emacs Lisp runtime.
-Before writing a function call, verify it exists in Emacs Lisp. When uncertain, use
+            "The undefined function was rejected because it does not exist in this Emacs
+Lisp runtime.
+Before writing a function call, verify it exists in Emacs Lisp. When
+uncertain, use
 well-known Emacs builtins only. Common Lisp functions NOT available in Emacs:
 getf (use plist-get), plusp (use (> n 0)), remf (use cl-remf),
 psetq (use setq), incf/decf (use setq with +), key (use plist-get),
 cons? (use consp), atom? (use atom).
 CRITICAL: Do NOT call single-letter or short variable names as functions.
-If you see a function like \='tool\=' or \='key\=' in the error, it means you wrote
+If you see a function like \='tool\=' or \='key\=' in the error, it means you
+wrote
 (tool ...) or (key ...) — these are NOT valid Emacs Lisp functions.
 Replace undefined calls with valid Emacs Lisp equivalents or remove them.
 Use function-quote #' for symbols meant as functions, not bare-quote \='.")
@@ -567,7 +571,8 @@ before headless operation.")
 (defvar gptel-auto-workflow--max-stuck-minutes 20
   "Maximum minutes without progress before watchdog force-stops the workflow.
 Increased from 10m to 20m: experiments with slow backends (2-5min per call)
-can exceed the old limit across multiple phases (executor, validation, grading).
+can exceed the old limit across multiple phases (executor, validation,
+grading).
 Each phase is a separate subagent call with no progress update between them.")
 
 (defvar gptel-auto-workflow--total-budget-minutes 120
@@ -1139,7 +1144,8 @@ Return nil on failure."
 
 (defun gptel-auto-workflow--restage-top-level-submodule-gitlinks (&optional worktree)
   "Restore top-level submodule gitlinks in WORKTREE after `git add -A'.
-Hydrated experiment worktrees materialize submodules as checked-out directories.
+Hydrated experiment worktrees materialize submodules as checked-out
+directories.
 Reassert gitlink index entries so commits do not record those paths as
 typechanges."
   (let* ((root (or worktree default-directory))

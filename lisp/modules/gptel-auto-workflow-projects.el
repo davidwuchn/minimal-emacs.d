@@ -317,7 +317,8 @@ Interactively prompts for directory."
 
 (defun gptel-auto-workflow-run-all-projects (&optional completion-callback)
   "Run auto-workflow for all configured projects.
-To be called from cron - visits each project directory (loading .dir-locals.el),
+To be called from cron - visits each project directory (loading
+.dir-locals.el),
 then runs workflow for that project.
 When COMPLETION-CALLBACK is non-nil, call it after all project workflows
 finish."
@@ -709,7 +710,8 @@ Also handles caching and result truncation from old advice."
 
 (defun gptel-auto-workflow-enable-per-project-subagents ()
   "Enable per-project subagent buffer support.
-Installs advice on gptel-agent--task to route subagents to per-project buffers.
+Installs advice on gptel-agent--task to route subagents to per-project
+buffers.
 Also removes old conflicting :override advice if present."
   (interactive)
   (when (fboundp 'gptel-agent--task)
@@ -858,7 +860,8 @@ When COMPLETION-CALLBACK is non-nil, call it after research completes."
 
 (defun gptel-auto-workflow-run-all-research (&optional completion-callback)
   "Run researcher for all configured projects.
-To be called from cron - visits each project directory (loading .dir-locals.el),
+To be called from cron - visits each project directory (loading
+.dir-locals.el),
 then runs researcher for that project.
 When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
   (interactive)

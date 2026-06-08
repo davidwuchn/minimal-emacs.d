@@ -366,7 +366,8 @@ Guards against delivering to a killed parent buffer by checking
         (cl-return-from gptel-agent-loop--deliver-result)))
     (let ((main-cb (gptel-agent-loop--task-main-cb state)))
       (unless (functionp main-cb)
-        (message "[RunAgent] Error: main callback is not a function for task '%s', dropping result"
+        (message "[RunAgent] Error: main callback is not a function for task '%s', dropping
+result"
                  (gptel-agent-loop--task-description state))
         (setf (gptel-agent-loop--task-finished state) t)
         (gptel-agent-loop--cleanup-state state)
@@ -760,7 +761,8 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
 
          (t
           (gptel-agent-loop--cleanup-overlay ov)
-          (message "[RunAgent] Warning: unexpected response type %S for task '%s', treating as error"
+          (message "[RunAgent] Warning: unexpected response type %S for task '%s', treating as
+error"
                    (type-of resp)
                    (cdr task-id))
           (gptel-agent-loop--deliver-result

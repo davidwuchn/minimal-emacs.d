@@ -58,7 +58,8 @@ Return its exit status, or 124 when killed for timeout."
 
 (defun gptel-auto-experiment--call-process-native-timeout (program args timeout)
   "Run PROGRAM with ARGS and kill it after TIMEOUT seconds.
-This helper intentionally captures output in a temporary buffer because current
+This helper intentionally captures output in a temporary buffer because
+current
 validation callers only need the exit code."
   (let* ((buffer (generate-new-buffer " *gptel-validation-process*"))
          (process (make-process :name "gptel-validation-process"
@@ -394,8 +395,10 @@ variable names are not mistaken for undefined function calls."
 (defun gptel-auto-experiment--introduced-undefined-call (diff forms)
   "Return the first newly-added function call in DIFF not defined by runtime.
 
-Only added diff lines are inspected to avoid rejecting pre-existing split-module
-forward references.  FORMS are the parsed top-level forms from the full file and
+Only added diff lines are inspected to avoid rejecting pre-existing
+split-module
+forward references. FORMS are the parsed top-level forms from the full file
+and
 are used to recognize local definitions and `declare-function' declarations."
   (unless (proper-list-p forms)
     (error "ASSUMPTION VIOLATION: forms must be a proper list, got: %S" forms))
@@ -585,7 +588,8 @@ from previous kept experiments. Saves grader API calls.
 Criteria:
 - Total diff < 20 lines
 - Only adds code (no deletions or < 3 deletions)
-- Contains defensive patterns: ignore-errors, when-let, condition-case, stringp
+- Contains defensive patterns: ignore-errors, when-let, condition-case,
+stringp
 - Touches only 1 file"
   (when (and diff-text (not (string-empty-p diff-text)))
     (let* ((line-count (with-temp-buffer

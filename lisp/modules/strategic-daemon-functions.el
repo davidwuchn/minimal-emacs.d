@@ -625,7 +625,8 @@ Returns corrective action or nil."
 
 (defun gptel-auto-workflow--controller-decide-with-doom-check (controller-config output-length output-text)
   "Controller with doom loop detection wrapper.
-Calls controller, checks for doom loop, records history, returns final decision."
+Calls controller, checks for doom loop, records history, returns final
+decision."
   (let* ((decision (gptel-auto-workflow--controller-decide-research-flow
                     controller-config output-length output-text))
          (ema-conf gptel-auto-workflow--research-ema-conf)
@@ -927,7 +928,8 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
                 :ema-conf ema-conf
                 :ema-delta ema-delta)
           turn-confidence)
-         (message "[autotts] Turn %d result: %d chars, conf=%.2f, EMA=%.2f, delta=%.2f, decision=%s"
+         (message "[autotts] Turn %d result: %d chars, conf=%.2f, EMA=%.2f, delta=%.2f,
+decision=%s"
                    (1+ turn) (length (or raw-findings "")) turn-confidence ema-conf ema-delta controller-decision)
          
          ;; Check controller decision
@@ -1058,7 +1060,8 @@ Previous sources DEVIANT — switch to NEW sources.
 PROBE FIRST: Skim source titles/abstracts before deep-reading.
 Search: external trending repos, arxiv, github explore.
 Avoid: sources previously searched (they produced deviant results).
-Priority: 100%% external. Budget: 60s per source probe, 120s for deep read if probe passes."))
+Priority: 100%% external. Budget: 60s per source probe, 120s for deep read if
+probe passes."))
            ;; Neutral → balanced approach
            ((>= turn 2)
             (format "SOURCE DIRECTIVE (controller-enforced):
@@ -1104,10 +1107,12 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
                     ema-conf ema-delta))
            ;; Default / first turn
            (t
-            "**Continue researching.** Focus on gaps or new angles not covered above. Avoid repeating what was already found.")))
+            "**Continue researching.** Focus on gaps or new angles not covered above. Avoid
+repeating what was already found.")))
          (budget-guidance
           (if (> turn 1)
-              (format "\n\n**Budget Note:** This is turn %d+. EMA confidence: %.2f. Be concise. Focus on highest-impact insights only."
+              (format "\n\n**Budget Note:** This is turn %d+. EMA confidence: %.2f. Be concise. Focus
+on highest-impact insights only."
                       (1+ turn) ema-conf)
             "")))
     (format "%s\n\n---\n\n**Previous findings (turn %d):**\n%s\n\n%s%s"
@@ -1155,7 +1160,8 @@ Saves trace, logs results, and digests findings."
                                                  default-directory))))
        (make-directory (file-name-directory internal-file) t)
        (with-temp-file internal-file
-         (insert (format "# Internal Code Analysis\n\n> Updated: %s\n> EMA Confidence: %.2f\n> Final Decision: %s\n\n%s"
+         (insert (format "# Internal Code Analysis\n\n> Updated: %s\n> EMA Confidence: %.2f\n> Final
+Decision: %s\n\n%s"
                          (format-time-string "%Y-%m-%d %H:%M")
                          gptel-auto-workflow--research-ema-conf
                          controller-decision
@@ -1298,7 +1304,8 @@ Returns formatted string with source effectiveness data."
           (setq guidance (concat guidance "- **HIGH PRIORITY** (score > 0.7): Focus research here first\n"))
           (setq guidance (concat guidance "- **MEDIUM PRIORITY** (score 0.3-0.7): Check if new content available\n"))
           (setq guidance (concat guidance "- **LOW PRIORITY** (score < 0.3): Skip unless specifically relevant\n"))
-          (setq guidance (concat guidance "\n**Strategy**: Start with highest-scoring sources, allocate more turns to aligned sources.\n")))
+          (setq guidance (concat guidance "\n**Strategy**: Start with highest-scoring sources, allocate more turns to
+aligned sources.\n")))
       (setq guidance (concat guidance "*No source effectiveness data yet. Using default priorities.*\n")))
     guidance))
 

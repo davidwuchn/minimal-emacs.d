@@ -183,7 +183,8 @@ Recreates the shell when the workflow env or working directory changes."
                      'my/gptel-bash-context-signature signature)
         ;; Initialize Dumb Terminal variables to prevent interactive hanging
         (process-send-string my/gptel--persistent-bash-process
-                             "export TERM=dumb PAGER=cat GIT_PAGER=cat DEBIAN_FRONTEND=noninteractive PS1=''\n")
+                             "export TERM=dumb PAGER=cat GIT_PAGER=cat DEBIAN_FRONTEND=noninteractive
+PS1=''\n")
         (sleep-for 0.1)))))
 
 (defun my/gptel--bash-process-filter (proc output marker finish-fn)

@@ -36,7 +36,17 @@
      :args '((:name "code"
               :type string
 :description
-               "Restricted Emacs Lisp program. Tool-call syntax is (tool-call \"ToolName\" :arg value ...). Must end with (result <expr>). Supported forms: setq, result, top-level tool-call, if/when/unless/not/and/or/progn, let/let*, mapcar, filter, dolist (bounded 100 iter), comparisons, arithmetic (+ - * / 1+ 1- mod max min abs). Data helpers: list/vector/append/length/car/cdr/nth/cons/assoc/alist-get/plist-get. String helpers: concat/format/split-string/string-join/string-trim/string-empty-p/string-match-p/substring."))
+               "Restricted Emacs Lisp program. Tool-call syntax is (tool-call \"ToolName\"
+:arg value ...). Must end with (result <expr>). Supported forms: setq, result,
+top-level tool-call, if/when/unless/not/and/or/progn, let/let*, mapcar,
+filter, dolist (bounded 100 iter), comparisons, arithmetic (+ - * / 1+ 1- mod
+max min abs). Data helpers:
+list/vector/append/length/car/cdr/nth/cons/assoc/alist-get/plist-get. String
+helpers:
+
+
+
+concat/format/split-string/string-join/string-trim/string-empty-p/string-match-p/substring."))
      :category "gptel-agent"
      :confirm t
      :include t)))

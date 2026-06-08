@@ -708,7 +708,8 @@ CANDIDATE_1:
 (declare-function gptel-auto-workflow--load-skill-content "gptel-tools-agent-prompt-build")
 (declare-function gptel-auto-workflow--substitute-template "gptel-tools-agent-prompt-build")
 
-(defun strategy-NAME-build-prompt (target experiment-id max-experiments analysis baseline previous-results)
+(defun strategy-NAME-build-prompt (target experiment-id max-experiments
+analysis baseline previous-results)
   ;; NEW MECHANISM HERE
   ;; Must return a string (the prompt)
   )
@@ -731,7 +732,8 @@ CANDIDATE_3:
 
 ## Important
 
-- The build function MUST call functions from `gptel-tools-agent-prompt-build` module
+- The build function MUST call functions from `gptel-tools-agent-prompt-build`
+module
 - Available functions include:
   - `gptel-auto-experiment-build-prompt` (baseline)
   - `gptel-auto-workflow--load-prompt-template`
@@ -968,7 +970,8 @@ Returns new strategy name or nil if rejected."
                (new-name (gptel-auto-workflow--generate-strategy-name proposer-name)))
          (if (not new-name)
              (progn
-               (message "[strategy-evolution] REJECTED candidate: Proposed name '%s' is generic (must be descriptive)"
+               (message "[strategy-evolution] REJECTED candidate: Proposed name '%s' is generic (must
+be descriptive)"
                         (or proposer-name "nil"))
                nil)
            (let* ((final-code (gptel-auto-workflow--strategy-code-rewrite-name

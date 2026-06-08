@@ -69,7 +69,8 @@ OUTPUT: line1=\"A\"|\"B\"|\"tie\" line2=reason(1 sentence)"
                  (my/gptel--invoke-callback-safely
                   callback
                   (list :keep keep
-                        :reasoning (format "%sWinner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f%s"
+                        :reasoning (format "%sWinner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f →
+%.2f%s"
                                            (if override
                                                (format "Comparator override: %s -> %s | "
                                                        reported-winner winner)
@@ -146,8 +147,10 @@ so we trust the grader more aggressively."
 
 (defun gptel-auto-experiment--grade-explanation-text (grade-details)
   "Return explanation-only text extracted from GRADE-DETAILS.
-When the grader emits rubric bullets like `PASS - ...', ignore the rubric labels
-and preserve only the explanatory text to avoid matching static prompt wording."
+When the grader emits rubric bullets like `PASS - ...', ignore the rubric
+labels
+and preserve only the explanatory text to avoid matching static prompt
+wording."
   (when (stringp grade-details)
     (let ((start 0)
           explanations)
@@ -377,7 +380,12 @@ documentation improvements that the structural model can't evaluate."
     (with-temp-buffer
       (insert-file-contents target-full-path)
       (let ((definition-rx
-             "^(\\(\\(?:cl-defun\\|defun\\|defsubst\\|defmacro\\|cl-defmethod\\|defvar\\|defconst\\|defcustom\\)\\)\\s-+\\([^()\n\t ]+\\)")
+             "
+
+
+
+^(\\(\\(?:cl-defun\\|defun\\|defsubst\\|defmacro\\|cl-defmethod\\|defvar\\|defconst\\|defcustom\\)\\)\\s-+\\([^()\n\t
+]+\\)")
             definitions
             total-lines)
         (goto-char (point-min))
@@ -459,7 +467,8 @@ Rotates across the top-ranked candidates using EXPERIMENT-ID."
   (cl-some #'gptel-auto-experiment--inspection-thrash-result-p previous-results))
 
 (defun gptel-auto-experiment--retry-history (previous-results result)
-  "Return retry history from PREVIOUS-RESULTS plus any durable guidance in RESULT.
+  "Return retry history from PREVIOUS-RESULTS plus any durable guidance in
+RESULT.
 Retries should learn from inspection-thrash failures immediately so the next
 prompt activates the focused recovery contract."
   (if (and result

@@ -60,7 +60,8 @@ Returns alist of (category . pattern) or nil."
 
 (defun gptel-error--match-ignore-case (pattern string)
   "Return non-nil if PATTERN matches STRING case-insensitively.
-This is a convenience wrapper that sets case-fold-search around string-match-p."
+This is a convenience wrapper that sets case-fold-search around
+string-match-p."
   (when (stringp string)
     (let ((case-fold-search t))
       (string-match-p pattern string))))
@@ -244,7 +245,8 @@ switch to a fallback without blacklisting (used for transient errors)."
                            gptel-auto-workflow--runtime-subagent-provider-overrides
                            nil nil #'string=)
                 candidate))
-        (message "[auto-workflow] Provider failure on %s/%s for %s%s; future retries will use %s/%s"
+        (message "[auto-workflow] Provider failure on %s/%s for %s%s; future retries will use
+%s/%s"
                  (or current-backend "unknown")
                  (or current-model "unknown")
                  agent-type
@@ -441,7 +443,8 @@ Only successful executor output may take the local grader retry path."
        (< retries gptel-auto-experiment-max-grader-retries)))
 
 (defun gptel-auto-experiment--remaining-provider-failover-candidate (agent-type)
-  "Return the next available provider fallback for AGENT-TYPE in this run, or nil."
+  "Return the next available provider fallback for AGENT-TYPE in this run, or
+nil."
   (when (and (stringp agent-type)
              (fboundp 'gptel-auto-workflow--headless-provider-override-active-p)
              (gptel-auto-workflow--headless-provider-override-active-p)
@@ -461,13 +464,16 @@ backends so the next experiment can try MiniMax first."
     ;; Clear rate-limited backends so MiniMax gets first crack again
     (setq gptel-auto-workflow--rate-limited-backends nil)
     (setq gptel-auto-experiment--quota-reset-timestamp nil)
-    (message "[auto-workflow] Quota window elapsed. Cleared rate-limited backends. MiniMax will be tried first on next experiment.")))
+    (message "[auto-workflow] Quota window elapsed. Cleared rate-limited backends. MiniMax
+will be tried first on next experiment.")))
 
 (defun gptel-auto-experiment--hard-quota-stops-run-p (agent-type error-output)
   "Return non-nil when ERROR-OUTPUT should stop the run for AGENT-TYPE.
 
-Hard quota errors only stop the whole run after the configured provider fallback
-chain is exhausted. When another backend is still available, the workflow keeps
+Hard quota errors only stop the whole run after the configured provider
+fallback
+chain is exhausted. When another backend is still available, the workflow
+keeps
 retrying on that provider instead."
   (and (gptel-auto-experiment--hard-quota-exhausted-p error-output)
        (not (gptel-auto-experiment--remaining-provider-failover-candidate

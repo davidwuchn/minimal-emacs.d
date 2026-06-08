@@ -424,7 +424,8 @@ TRACES is list of trace plists."
                                   :rate own-rate)
              :external-stats (list :success external-success :total external-total
                                    :rate external-rate))))
-      (message "[autotts] Heuristic evolution: own-repo %.0f%% (%d/%d), external %.0f%% (%d/%d)"
+      (message "[autotts] Heuristic evolution: own-repo %.0f%% (%d/%d), external %.0f%%
+(%d/%d)"
                (* 100 own-rate) own-repo-success own-repo-total
                (* 100 external-rate) external-success external-total)
       new-config)))
@@ -558,7 +559,8 @@ plus :total."
   "Calculate objective value for evolution from TRACES and CONFIG.
 Higher is better. Combines downstream outcome success rates,
 average confidence, token efficiency, and source diversity.
-Uses actual downstream experiment outcomes when available (via trace-success-p),
+Uses actual downstream experiment outcomes when available (via
+trace-success-p),
 falling back to output quality heuristics for traces without outcomes."
   (let ((own-success 0)
         (own-total 0)
@@ -801,7 +803,8 @@ Extract topic performance, source effectiveness, and EMA-outcome correlation."
 
 (defun gptel-auto-workflow--run-controller-design-agent (&optional max-iterations)
   "Run controller code generation agent — the AutoTTS-defining feature.
-An LLM agent designs controller code, tests against replay store (0 LLM calls),
+An LLM agent designs controller code, tests against replay store (0 LLM
+calls),
 gets accuracy + token cost feedback, and rewrites the controller iteratively.
 MAX-ITERATIONS defaults to 5.
 This is how AutoTTS discovers strategies: the agent WRITES the controller,
@@ -824,7 +827,8 @@ not just tunes parameters. The search space is the code itself."
       (setq current-controller (when (fboundp 'gptel-auto-workflow--load-autotts-controller)
                                  (gptel-auto-workflow--load-autotts-controller))
             best-controller current-controller)
-      (message "[controller-agent] Starting controller design agent with %d traces (%d train, %d test)"
+      (message "[controller-agent] Starting controller design agent with %d traces (%d train,
+%d test)"
                (length traces) (length train-traces) (or (length test-traces) 0))
       (dotimes (iter max-iters)
         (let* ((prompt (gptel-auto-workflow--controller-design-prompt
@@ -886,7 +890,8 @@ not just tunes parameters. The search space is the code itself."
                                                        best-objective train-traces iter max-iters)
   "Generate prompt for controller design agent."
   (let* ((trace-summary (gptel-auto-workflow--summarize-traces-for-prompt train-traces))
-         (current-params (format "own-repo-priority=%.2f ext-priority=%.2f stop-threshold=%.2f branch-threshold=%.2f beta=%.2f"
+         (current-params (format "own-repo-priority=%.2f ext-priority=%.2f stop-threshold=%.2f
+branch-threshold=%.2f beta=%.2f"
                                 (or (plist-get current-controller :own-repo-priority) 0.7)
                                 (or (plist-get current-controller :external-priority) 0.15)
                                  (or (plist-get current-controller :stop-threshold)
@@ -1614,7 +1619,8 @@ Returns plist with :metric :value :delta :status, or nil."
 (defun gptel-auto-workflow--autoresearch-check (result-plist &optional target-file description)
   "Check RESULT-PLIST against running best. Implements keep/revert.
 AutoGo autoresearch pattern: if improved → commit. If regressed → revert.
-TARGET-FILE is the file that was changed. DESCRIPTION is for the commit message.
+TARGET-FILE is the file that was changed. DESCRIPTION is for the commit
+message.
 Returns `keep', `discard', or `first'."
   (let* ((metric (plist-get result-plist :metric))
          (value (plist-get result-plist :value))
