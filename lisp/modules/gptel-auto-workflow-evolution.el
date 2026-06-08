@@ -21,6 +21,7 @@
 (require 'gptel-auto-workflow-research-benchmark nil t)
 ;; Soft require: knowledge-reasoning provides causal analysis and gap detection
 (require 'gptel-auto-workflow-knowledge-reasoning nil t)
+(require 'gptel-tools-agent-base nil t)
 
 ;; Forward declarations — defined in gptel-tools-agent-base (loaded before
 ;; this module via post-init's init-ai chain).  These silence the byte-compiler
