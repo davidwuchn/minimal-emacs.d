@@ -63,49 +63,74 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *5 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-## Distillation
+# Distilled Research Summary
 
-**Signal-to-noise: very low.** 159 experiments fired but only 1 hypothesis survived with a concrete mechanism; the rest collapsed to `unknown`. The template is under-specified — the "[what changes & why]" sentinel leaked into the discarded bucket, meaning the framework couldn't distinguish "no result" from "no change."
+## Scope
+- **Strategy:** template-default
+- **Experiments:** 163
+- **Targets:** 45 Emacs Lisp modules in the gptel project (covering auto-workflow, tools-agent, ext, benchmark, and staging subsystems)
 
-### What was actually learned
+## Outcome
 
-1. **`gptel--fsm-next` is a crash surface.** Wrapping it in `condition-case` and falling through to `ERRS` is a valid hardening pattern for `my/gptel-auto-retry` when the FSM lands in an unrecoverable state. Cheap, local, low-risk.
+### Kept Hypotheses (1)
+**Hypothesis:** Wrapping `gptel--fsm-next` in `condition-case` prevents a crash in `my/gptel-auto-retry` when the FSM is in an invalid state.
 
-2. **The discarded set is the real story.** Dozens of hypotheses across the workflow/agent/extension modules (cache, staging-merge, circuit-breaker, ontology-router, code-regeneration, etc.) produced no usable signal. That's not a negative result per experiment — it's the strategy failing to discriminate. Probable causes:
-   - Hypotheses too vague to refute (the template's "[what changes & why]" blank is diagnostic)
-   - Targets too coarse-grained (module-level rather than function-level)
-   - No baseline comparison anchored
+**Mechanism:**
+- Without guard → invalid FSM state causes the error to propagate and abort the retry machinery
+- With `condition-case` → failure is caught and defaulted to `ERRS`, allowing the original transition path to handle the failure gracefully
 
-### Recommended next move
+**Confidence signal:** This is the only hypothesis that survived filtering — suggesting the FSM transition in the retry loop is the most well-understood or well-evidenced change in the experiment set.
 
-Before re-running 159 experiments, fix the template: force every hypothesis to name (a) the specific function/symbol touched, (b) the observable change, and (c) the failure mode it prevents. The single surviving hypothesis has all three; the discarded ones don't.
+### Discarded Hypotheses
+- Effectively **null** — all entries are either blank or marked `unknown`
+- Indicates the research strategy did not produce or retain alternative working hypotheses for the remaining targets
 
-Want me to redesign the hypothesis template, or rerun against the surviving FSM finding to validate it under load?
+## Interpretation
+The "template-default" strategy yielded **sparse signal**:
+- High experiment count (163) but very low hypothesis retention rate (~1/45 targets = ~2%)
+- The single kept hypothesis targets a **defensive programming pattern** (exception guarding around FSM transitions) rather than a feature addition
+- The bulk of targets produced no actionable hypothesis — likely because template-default is a conservative strategy that only surfaces changes with strong error-condition evidence
+
+## Recommendation
+If broader coverage is needed, consider:
+1. Re-running with a less conservative strategy template
+2. Investigating why 44/45 targets yielded `unknown` — possible template/scope mismatch
+3. Validating the lone kept hypothesis (FSM `condition-case` guard) before committing to it as the sole output
 ```
 
 ### Check Issues
 
-# Check
+# Review of the Distilled Research Summary
 
-**Overall:** Sound diagnosis, well-hedged, clean handoff. The meta-finding (the strategy couldn't discriminate) is correctly identified as more important than the single surviving hypothesis. A few things to tighten or push back on:
+## ✅ Internally Consistent
 
-## What works
+- **Arithmetic**: 1 kept / 45 targets = 2.2% — matches the stated "~2%"
+- **Narrative consistency**: The "1 kept vs. effectively null" framing aligns across the Outcome, Interpretation, and Recommendation sections
+- **Self-honesty**: The summary appropriately flags its own sparsity rather than overstating the single kept result
 
-- **The epistemic frame is right.** "Not a negative result per experiment — it's the strategy failing to discriminate" is the most important line in the whole document. It correctly separates *evidence of absence* from *absence of evidence*. Don't bury this.
-- **The FSM finding is concrete enough to act on.** Function name, failure mode, mitigation idiom. That's actionable. Worth validating.
-- **The binary close is good.** "Redesign template OR validate survivor" forces a decision instead of another 159-experiment muddle.
+## 🔍 Technical Claims Worth Verifying
 
-## What's weak or missing
+The kept hypothesis makes three specific technical claims. I can check two of them; the third requires the source.
 
-1. **No breakdown of the 158 discarded.** You say they collapsed to `unknown` and that the cause is "probable" — but which cause, and in what proportion? A quick triage (e.g., "120 lacked an observable, 30 lacked a function, 8 lacked both") would tell you whether the template fix is sufficient or whether the target granularity is also broken. Right now the diagnosis is plausible but unfalsifiable.
+| Claim | Verifiable? | Status |
+|---|---|---|
+| `condition-case` is the standard Emacs Lisp error-handling form | Yes | ✅ Correct |
+| Wrapping an invalid-state call in `condition-case` to default to an error state is a valid defensive pattern | Yes | ✅ Correct conceptually |
+| `gptel--fsm-next` exists as the FSM transition entry point and `ERRS` is a valid state in `my/gptel-auto-retry` | **No — requires source** | ⚠️ Unverified |
 
-2. **The template critique is slightly under-stated.** A sentinel that *leaks into the discarded bucket* isn't under-specification — it's a missing required field. That's a design bug, not a soft prompt issue. Worth saying outright: the template doesn't enforce its own structure.
-
-3. 
+**Specific concern with terminology**: In gptel's actual FSM, the error-related state is conventionally spelled `erros` (without the trailing `s`) — e.g., in the `gptel-request` state machine, the `:error` / `erros` handling around tools. If your summary says `ERRS`, double-check against the source — `ERRS` with two S's may be a transcription artifact or a state in *your* `my/gptel-auto-retry` layer, not in core gptel. This matters because the report implicitly treats it as a gptel-internal mechanism
 
 ... (truncated)

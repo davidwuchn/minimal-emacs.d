@@ -570,3 +570,34 @@ Returns the result of the last form in BODY."
 
 (provide 'test-gptel-auto-workflow-monitoring-agent)
 ;;; test-gptel-auto-workflow-monitoring-agent.el ends here
+;; ─── Phase 7: Post-deploy Impact Assessment ───
+
+(ert-deftest test-monitoring/collect-current-metrics/missing-file-returns-zero ()
+  "Returns :file-size 0 for a non-existent module (no signal)."
+  (let ((m (gptel-auto-workflow--collect-current-metrics "no-such-file-xyz.el")))
+    (should (plist-member m :file-size))
+    (should (= 0 (plist-get m :file-size)))))
+
+(ert-deftest test-monitoring/assess-impact/improvement-on-size-reduction ()
+  "Returns :verdict :improved when file size shrank by >= 5%."
+  (let ((a (list :module "x" :baseline-metrics '(:tests-passing t :file-size 1000))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--collect-current-metrics)
+               (lambda (_) '(:tests-passing t :file-size 800))))
+      (let ((r (gptel-auto-workflow--assess-impact a)))
+        (should (eq :improved (plist-get r :verdict)))))))
+
+(ert-deftest test-monitoring/assess-impact/degradation-when-tests-stop-passing ()
+  "Returns :verdict :degraded when baseline tests pass but current fail."
+  (let ((a (list :module "x" :baseline-metrics '(:tests-passing t :file-size 100))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--collect-current-metrics)
+               (lambda (_) '(:tests-passing nil :file-size 100))))
+      (let ((r (gptel-auto-workflow--assess-impact a)))
+        (should (eq :degraded (plist-get r :verdict)))))))
+
+(ert-deftest test-monitoring/assess-impact/neutral-within-thresholds ()
+  "Returns :verdict :neutral when size change is within ±5%."
+  (let ((a (list :module "x" :baseline-metrics '(:tests-passing t :file-size 1000))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--collect-current-metrics)
+               (lambda (_) '(:tests-passing t :file-size 1010))))
+      (let ((r (gptel-auto-workflow--assess-impact a)))
+        (should (eq :neutral (plist-get r :verdict)))))))
