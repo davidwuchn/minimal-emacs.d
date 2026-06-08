@@ -177,15 +177,23 @@ User Input → Detect Task Type → Route to Model → Self-Heal Diagnostic → 
 
 ## Next Steps (Suggested by Active Mementum)
 
-1. **Pi5 soak time** — let closed loops exercise new wiring (deploy→regen, health probes, risk persistence)
-2. **Slack/Zendesk integration** — external API keys needed, not code wiring
-3. **Human dashboards/alerts** — approval queue review UI (Phase 4.3)
-4. **Upstream PR** — install.sh macOS sed (blocked)
-5. **Update docs/** — module inventories may be stale after YC wiring gap changes
+### Immediate (YC Vision Complete)
+1. **Pi5 soak time** — let all 9 phases exercise new wiring in production
+2. **Monitor Phase 9** — verify self-tuning proposals are generated correctly
+3. **Test approval flow** — approve a self-tuning proposal to verify end-to-end
+
+### Non-Code Work
+4. **External integrations** — Slack/Zendesk/DataDog APIs (requires API keys, not code)
+5. **Documentation** — update README/OV5 docs with Phase 7/8/9 capabilities
+6. **Marketing** — prepare YC completion announcement (100% self-improving loop)
+
+### Future Enhancements (Optional)
+7. **Multi-repo ontology** — cross-project learning
+8. **Visual dashboard** — monitoring agent effectiveness visualization
+9. **Token economics** — auto-budget allocation by ROI
 
 ## Blockers
 
-- **Upstream PR**: install.sh macOS sed — Pi5 fixed locally, upstream not merged
 - **External integrations**: Slack/Zendesk/DataDog need API keys (not code wiring)
 
 ## Context for Next Session
