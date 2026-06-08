@@ -1112,7 +1112,9 @@ into staging or main."
     removed))
 
 (defun gptel-auto-workflow--cleanup-stale-state ()
-  "Clean up stale timers, buffers, and state from aborted runs."
+  "Clean up stale timers, buffers, and state from aborted runs.
+Resilient to partial module loads — guards all optional function calls
+so cleanup never crashes before resetting state."
   (let* ((proj-root (gptel-auto-workflow--default-dir))
          (cleaned 0)
          (queued-run-id
@@ -1125,9 +1127,11 @@ into staging or main."
                         gptel-auto-workflow--status-run-id)))))
     (when proj-root
       (setq gptel-auto-workflow--cron-safe-step "reset-agent")
-      (my/gptel--reset-agent-task-state)
+      (when (fboundp 'my/gptel--reset-agent-task-state)
+        (my/gptel--reset-agent-task-state))
       (setq gptel-auto-workflow--cron-safe-step "clear-overrides")
-      (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+      (when (fboundp 'gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+        (gptel-auto-workflow--clear-runtime-subagent-provider-overrides))
       ;; Clear accumulated backend health strikes so old failures
       ;; don't quarantine all backends on restart (no backend left).
       (setq gptel-auto-workflow--cron-safe-step "clear-lambda-health")
@@ -1145,9 +1149,11 @@ into staging or main."
                  (hash-table-p gptel-auto-workflow--backend-lambda-health-cache))
         (clrhash gptel-auto-workflow--backend-lambda-health-cache))
       (setq gptel-auto-workflow--cron-safe-step "reset-mementum")
-      (gptel-mementum--reset-synthesis-state)
+      (when (fboundp 'gptel-mementum--reset-synthesis-state)
+        (gptel-mementum--reset-synthesis-state))
       (setq gptel-auto-workflow--cron-safe-step "reset-grade")
-      (gptel-auto-experiment--reset-grade-state)
+      (when (fboundp 'gptel-auto-experiment--reset-grade-state)
+        (gptel-auto-experiment--reset-grade-state))
       (setq gptel-auto-workflow--cron-safe-step "cancel-timer")
       (when gptel-auto-workflow--cron-job-timer
         (cancel-timer gptel-auto-workflow--cron-job-timer)
