@@ -16,6 +16,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'pp)
 
 ;; ============================================================================
 ;; Configuration
@@ -175,8 +176,9 @@ Returns t if essential risk factors are missing."
   (setq gptel-auto-workflow--approval-history nil))
 
 (defun gptel-auto-workflow--track-approval-decision (decision)
-  "Track approval DECISION in history."
-  (push decision gptel-auto-workflow--approval-history))
+  "Track approval DECISION in history and persist to disk."
+  (push decision gptel-auto-workflow--approval-history)
+  (gptel-auto-workflow--persist-approval-history))
 
 (defun gptel-auto-workflow--get-approval-history ()
   "Get full approval history."
@@ -228,15 +230,16 @@ Returns plist with :auto-approval-rate, :recommend-rate,
 
 (defun gptel-auto-workflow--learn-risk-patterns ()
   "Learn risk patterns from approval history.
-Analyzes history to identify common patterns and their risk levels."
+Analyzes history to identify common patterns and their risk levels.
+After building patterns, persists them to var/risk-patterns.sexp."
   (let* ((history gptel-auto-workflow--approval-history)
-         (patterns (make-hash-table :test 'equal)))
+          (patterns (make-hash-table :test 'equal)))
     ;; Group experiments by target pattern
     (dolist (decision history)
       (let* ((risk-factors (plist-get decision :risk-factors))
-             (target (plist-get decision :target))
-             (approval-type (plist-get decision :approval-type))
-             (key (gptel-auto-workflow--extract-pattern-key target risk-factors)))
+              (target (plist-get decision :target))
+              (approval-type (plist-get decision :approval-type))
+              (key (gptel-auto-workflow--extract-pattern-key target risk-factors)))
         (when key
           (let ((existing (gethash key patterns)))
             (if existing
@@ -244,11 +247,90 @@ Analyzes history to identify common patterns and their risk levels."
               (puthash key (gptel-auto-workflow--create-pattern key approval-type risk-factors) patterns))))))
     ;; Convert hash table to list and store
     (setq gptel-auto-workflow--risk-patterns
-          (let ((result nil))
-            (maphash (lambda (_key pattern)
-                       (push pattern result))
-                     patterns)
-            (nreverse result)))))
+           (let ((result nil))
+             (maphash (lambda (_key pattern)
+                        (push pattern result))
+                      patterns)
+             (nreverse result)))
+    ;; Persist risk patterns after building
+    (gptel-auto-workflow--persist-risk-patterns)))
+
+;; ============================================================================
+;; Persistence
+;; ============================================================================
+
+(defun gptel-auto-workflow--persist-risk-patterns ()
+  "Write gptel-auto-workflow--risk-patterns to var/risk-patterns.sexp.
+Creates var/ directory if needed.  Uses pp-to-string for readable output."
+  (condition-case err
+      (let* ((var-dir (expand-file-name "var/" default-directory))
+             (filepath (expand-file-name "risk-patterns.sexp" var-dir)))
+        (make-directory var-dir t)
+        (with-temp-file filepath
+          (insert (pp-to-string gptel-auto-workflow--risk-patterns)))
+        filepath)
+    (error
+     (message "[decision] Failed to persist risk patterns: %s"
+              (error-message-string err))
+     nil)))
+
+(defun gptel-auto-workflow--load-risk-patterns ()
+  "Read risk patterns from var/risk-patterns.sexp if it exists.
+Sets gptel-auto-workflow--risk-patterns from the file data.
+Returns the loaded patterns, or nil if file does not exist."
+  (condition-case err
+      (let* ((filepath (expand-file-name "var/risk-patterns.sexp" default-directory)))
+        (when (file-exists-p filepath)
+          (let ((data (with-temp-buffer
+                        (insert-file-contents filepath)
+                        (goto-char (point-min))
+                        (read (current-buffer)))))
+            (when (listp data)
+              (setq gptel-auto-workflow--risk-patterns data)
+              data))))
+    (error
+     (message "[decision] Failed to load risk patterns: %s"
+              (error-message-string err))
+     nil)))
+
+(defun gptel-auto-workflow--persist-approval-history ()
+  "Write gptel-auto-workflow--approval-history to var/approval-history.sexp.
+Creates var/ directory if needed.  Uses pp-to-string for readable output."
+  (condition-case err
+      (let* ((var-dir (expand-file-name "var/" default-directory))
+             (filepath (expand-file-name "approval-history.sexp" var-dir)))
+        (make-directory var-dir t)
+        (with-temp-file filepath
+          (insert (pp-to-string gptel-auto-workflow--approval-history)))
+        filepath)
+    (error
+     (message "[decision] Failed to persist approval history: %s"
+              (error-message-string err))
+     nil)))
+
+(defun gptel-auto-workflow--load-approval-history ()
+  "Read approval history from var/approval-history.sexp if it exists.
+Sets gptel-auto-workflow--approval-history from the file data.
+Returns the loaded history, or nil if file does not exist."
+  (condition-case err
+      (let* ((filepath (expand-file-name "var/approval-history.sexp" default-directory)))
+        (when (file-exists-p filepath)
+          (let ((data (with-temp-buffer
+                        (insert-file-contents filepath)
+                        (goto-char (point-min))
+                        (read (current-buffer)))))
+            (when (listp data)
+              (setq gptel-auto-workflow--approval-history data)
+              data))))
+    (error
+     (message "[decision] Failed to load approval history: %s"
+              (error-message-string err))
+     nil)))
+
+;; Load persisted state on module load
+(ignore-errors
+  (gptel-auto-workflow--load-risk-patterns)
+  (gptel-auto-workflow--load-approval-history))
 
 (defun gptel-auto-workflow--extract-pattern-key (target _risk-factors)
   "Extract pattern key from TARGET and RISK-FACTORS.

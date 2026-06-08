@@ -27,7 +27,7 @@
   "gptel-auto-workflow-evolution")
 (declare-function gptel-auto-workflow-context-db-query
   "gptel-auto-workflow-context-database"
-  (&key target strategy since before after decision))
+  (&rest args))
 (declare-function gptel-auto-workflow-context-db-read
   "gptel-auto-workflow-context-database"
   (experiment-id))
@@ -36,6 +36,12 @@
   (target))
 (declare-function gptel-auto-workflow--project-root
   "gptel-tools-agent-benchmark")
+(declare-function gptel-auto-experiment-run
+  "gptel-tools-agent-experiment-core")
+(declare-function gptel-auto-workflow--mementum-write-memory
+  "gptel-auto-workflow-mementum")
+(declare-function gptel-auto-workflow--mementum-slug
+  "gptel-auto-workflow-mementum")
 
 ;; ============================================================================
 ;; Configuration
@@ -160,19 +166,19 @@ and below-threshold improvement.  Returns nil if context-db unavailable."
             (let ((existing (gethash target by-target)))
               (puthash target
                        (if existing (cons ctx existing) (list ctx))
-                       by-target))))))
-      ;; Phase 2: analyze each target's history
+                       by-target)))))
+      ;; Phase 2: analyze each target's history, collect candidates
       (maphash
        (lambda (target contexts)
          (when (>= (length contexts)
                    gptel-auto-workflow-regeneration-min-history-count)
            (let ((best-delta 0.0)
                  (best-model "unknown"))
-(dolist (ctx2 contexts)
-              (let* ((before (or (plist-get ctx2 :score-before) 0.0))
-                     (after (or (plist-get ctx2 :score-after) 0.0))
-                     (delta (- after before))
-                     (model (or (plist-get ctx2 :model) "unknown")))
+             (dolist (ctx2 contexts)
+               (let* ((before (or (plist-get ctx2 :score-before) 0.0))
+                      (after (or (plist-get ctx2 :score-after) 0.0))
+                      (delta (- after before))
+                      (model (or (plist-get ctx2 :model) "unknown")))
                  (when (> delta best-delta)
                    (setq best-delta delta)
                    (setq best-model model))))
@@ -181,7 +187,7 @@ and below-threshold improvement.  Returns nil if context-db unavailable."
                            :history-count (length contexts)
                            :best-delta best-delta
                            :current-best-model best-model)
-                     candidates))))
+                     candidates)))))
        by-target)
       (nreverse candidates))))
 
@@ -189,21 +195,95 @@ and below-threshold improvement.  Returns nil if context-db unavailable."
 ;; Core: full-workflow
 ;; ============================================================================
 
-(defun gptel-auto-workflow-code-regeneration--full-workflow (module _current-model target-model)
+(defun gptel-auto-workflow-code-regeneration--full-workflow (module _current-model target-model &optional execute)
   "Execute full regeneration workflow for MODULE to TARGET-MODEL.
-Prepares context, generates prompt, sets experiment-prompt-override."
-  (let* ((regen-context
-          (gptel-auto-workflow-code-regeneration--prepare-context
-           module target-model))
-         (prompt
-          (gptel-auto-workflow-code-regeneration--generate-prompt
-           regen-context)))
-    (setq gptel-auto-workflow--experiment-prompt-override prompt)
-    (list :success t
-          :module module
-          :new-model target-model
-          :prompt prompt
-          :regen-context regen-context)))
+Prepares context, generates prompt, sets experiment-prompt-override.
+When EXECUTE is non-nil, delegates to --execute to actually run the
+experiment against the target module instead of just setting the override."
+  (if execute
+      (gptel-auto-workflow-code-regeneration--execute module target-model)
+    (let* ((regen-context
+            (gptel-auto-workflow-code-regeneration--prepare-context
+             module target-model))
+           (prompt
+            (gptel-auto-workflow-code-regeneration--generate-prompt
+             regen-context)))
+      (setq gptel-auto-workflow--experiment-prompt-override prompt)
+      (list :success t
+            :module module
+            :new-model target-model
+            :prompt prompt
+            :regen-context regen-context))))
+
+;; ============================================================================
+;; Core: execute -- Actually run the regeneration experiment
+;; ============================================================================
+
+(defun gptel-auto-workflow-code-regeneration--execute (module target-model)
+  "Execute regeneration for MODULE targeting TARGET-MODEL.
+Calls full-workflow to prepare prompt override, then triggers an
+experiment run via gptel-auto-experiment-run.  After the experiment
+completes, checks the result and writes a mementum memory.
+Returns plist with :success, :module, :kept, :score-after, :result."
+  ;; Step 1: Prepare prompt override via full-workflow (without execute flag)
+  (gptel-auto-workflow-code-regeneration--full-workflow module "current" target-model)
+  ;; Step 2: Run experiment if gptel-auto-experiment-run is available
+  (if (not (fboundp 'gptel-auto-experiment-run))
+      (list :success nil
+            :module module
+            :reason "gptel-auto-experiment-run not available"
+            :kept nil)
+    ;; Step 3: Call experiment system with callback to capture result
+    (let ((experiment-result nil))
+      (condition-case err
+          (gptel-auto-experiment-run
+           module
+           1                        ; experiment-id
+           1                        ; max-experiments
+           0.0                      ; baseline
+           0.0                      ; baseline-code-quality
+           nil                      ; previous-results
+           (lambda (result)
+             "Callback: capture experiment result and write mementum memory."
+             (setq experiment-result result)
+             (let ((kept (plist-get result :kept))
+                   (score-after (plist-get result :score-after))
+                   (slug-module
+                    (if (fboundp 'gptel-auto-workflow--mementum-slug)
+                        (gptel-auto-workflow--mementum-slug module)
+                      (replace-regexp-in-string
+                       "[^a-zA-Z0-9]" "-" (downcase (or module "unknown"))))))
+               (if kept
+                   (when (fboundp 'gptel-auto-workflow--mementum-write-memory)
+                     (gptel-auto-workflow--mementum-write-memory
+                      '✅ (format "regen-success-%s" slug-module)
+                      (format "Regeneration kept: %s, model: %s, score: %.2f"
+                              module target-model (or score-after 0.0))))
+                 (when (fboundp 'gptel-auto-workflow--mementum-write-memory)
+                   (gptel-auto-workflow--mementum-write-memory
+                    '❌ (format "regen-failed-%s" slug-module)
+                    (format "Regeneration rejected: %s, model: %s, score: %.2f"
+                            module target-model (or score-after 0.0))))
+                 (setq gptel-auto-workflow--experiment-prompt-override nil)))))
+        (error
+         (message "[regen] Experiment run failed: %s" (error-message-string err))
+         (setq gptel-auto-workflow--experiment-prompt-override nil)
+         (list :success nil
+               :module module
+               :reason (error-message-string err)
+               :kept nil)))
+      ;; Return result plist
+      (if experiment-result
+          (list :success (plist-get experiment-result :kept)
+                :module module
+                :new-model target-model
+                :kept (plist-get experiment-result :kept)
+                :score-after (plist-get experiment-result :score-after)
+                :result experiment-result)
+        (list :success nil
+              :module module
+              :reason "experiment-result not captured by callback"
+              :kept nil)))))
 
 (provide 'gptel-auto-workflow-code-regeneration)
 

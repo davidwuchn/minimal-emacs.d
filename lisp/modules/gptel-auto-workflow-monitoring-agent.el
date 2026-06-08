@@ -27,6 +27,14 @@
 ;;; Code:
 
 (require 'cl-lib)
+
+;; Forward declarations for optional cross-module calls
+(declare-function gptel-auto-workflow-code-regeneration--execute
+  "gptel-auto-workflow-code-regeneration")
+(declare-function gptel-auto-workflow--mementum-write-memory
+  "gptel-auto-workflow-mementum")
+(declare-function gptel-auto-workflow--mementum-slug
+  "gptel-auto-workflow-mementum")
 (require 'subr-x)
 
 (declare-function gptel-auto-workflow--parse-all-results
@@ -70,7 +78,104 @@ Prevents excessive analysis overhead on the experiment pipeline."
 (defvar gptel-auto-workflow-monitoring-last-cycle-time 0.0
   "Float-time of last monitoring cycle.  Used for throttle enforcement.")
 
+(defvar gptel-auto-workflow-monitoring-cycle-counter 0
+  "Counter for monitoring cycles, used to run health probes every 3rd cycle.")
+
+;; ── Phase 0: Runtime Health Probes ──
+
+(defun gptel-auto-workflow--probe-daemon-alive ()
+  "Check if the Emacs daemon process is responsive.
+Returns plist with :alive, :pid, :uptime."
+  (let* ((pid (emacs-pid))
+         (attrs (ignore-errors (process-attributes pid)))
+         (alive (and attrs t))
+         (uptime
+          (if attrs
+              (let* ((start-time (plist-get attrs :starttime))
+                     (now (float-time)))
+                (if start-time (- now start-time) 0.0))
+            0.0)))
+    (list :alive alive
+          :pid pid
+          :uptime uptime)))
+
+(defun gptel-auto-workflow--probe-experiment-loop-stuck ()
+  "Detect if the experiment loop has not made progress.
+Returns plist with :stuck, :last-cycle-time, :expected-interval, :elapsed."
+  (let* ((last-cycle gptel-auto-workflow-monitoring-last-cycle-time)
+         (expected (* gptel-auto-workflow-monitoring-cycle-interval 3))
+         (now (float-time))
+         (elapsed (if (> last-cycle 0.0) (- now last-cycle) 0.0))
+         (stuck (and (> last-cycle 0.0) (> elapsed expected))))
+    (list :stuck stuck
+          :last-cycle-time last-cycle
+          :expected-interval expected
+          :elapsed elapsed)))
+
+(defun gptel-auto-workflow--probe-metrics-freshness ()
+  "Check that operational metrics snapshots in var/metrics/ are being produced.
+If the newest snapshot is older than 24h, metrics collection is stale.
+Returns plist with :fresh, :latest-snapshot, :age-hours."
+  (let* ((metrics-dir (expand-file-name "var/metrics/" default-directory))
+         (fresh t)
+         (latest-snapshot nil)
+         (age-hours 0.0))
+    (condition-case nil
+        (when (file-directory-p metrics-dir)
+          (let* ((files (directory-files metrics-dir t "-metrics\\.sexp$"))
+                 (sorted (sort files
+                               (lambda (a b)
+                                 (let ((ta (float-time (nth 5 (file-attributes a))))
+                                       (tb (float-time (nth 5 (file-attributes b)))))
+                                   (> ta tb)))))
+                 (newest (car sorted)))
+            (when newest
+              (setq latest-snapshot (file-name-nondirectory newest))
+              (let* ((attrs (file-attributes newest))
+                     (mtime (float-time (nth 5 attrs)))
+                     (age-seconds (- (float-time) mtime)))
+                (setq age-hours (/ age-seconds 3600.0))
+                (setq fresh (< age-hours 24.0))))))
+      (error
+       (setq fresh nil)))
+    (list :fresh fresh
+          :latest-snapshot latest-snapshot
+          :age-hours age-hours)))
+
+(defun gptel-auto-workflow--run-health-probes ()
+  "Run all 3 health probes and return combined plist.
+If any probe shows a problem, writes a mementum memory and returns :healthy nil."
+  (let* ((daemon-probe (gptel-auto-workflow--probe-daemon-alive))
+         (loop-probe (gptel-auto-workflow--probe-experiment-loop-stuck))
+         (metrics-probe (gptel-auto-workflow--probe-metrics-freshness))
+         (daemon-ok (plist-get daemon-probe :alive))
+         (loop-ok (not (plist-get loop-probe :stuck)))
+         (metrics-ok (plist-get metrics-probe :fresh))
+         (healthy (and daemon-ok loop-ok metrics-ok)))
+    (when (and (not loop-ok) (fboundp 'gptel-auto-workflow--mementum-write-memory))
+      (gptel-auto-workflow--mementum-write-memory
+       '❌ "health-probe-experiment-loop-stuck"
+       (format "**Experiment loop stuck:** elapsed=%.0fs, expected=%.0fs"
+               (plist-get loop-probe :elapsed)
+               (plist-get loop-probe :expected-interval))))
+    (when (and (not metrics-ok) (fboundp 'gptel-auto-workflow--mementum-write-memory))
+      (gptel-auto-workflow--mementum-write-memory
+       '❌ "health-probe-metrics-freshness"
+       (format "**Metrics stale:** latest=%s, age=%.1fh"
+               (or (plist-get metrics-probe :latest-snapshot) "none")
+               (plist-get metrics-probe :age-hours))))
+    (list :healthy healthy
+          :daemon-probe daemon-probe
+          :loop-probe loop-probe
+          :metrics-probe metrics-probe)))
+
 ;; ── Phase 3: Auto-Test & Deploy Configuration ──
+
+(defcustom gptel-auto-workflow-monitoring-attempt-regen-on-deploy t
+  "When non-nil, auto-deploy proposals targeting a specific module file
+will attempt code regeneration instead of just symbolic tag + memory."
+  :type 'boolean
+  :group 'gptel-tools-agent)
 
 (defcustom gptel-auto-workflow-monitoring-deploy-threshold 0.6
   "Minimum success rate for auto-deployment of validated proposals.
@@ -420,21 +525,63 @@ For approval-required proposals, also appends :queue-status and :queue-id."
                       (gptel-auto-workflow--mementum-slug ptarget)
                     (replace-regexp-in-string
                      "[^a-zA-Z0-9]" "-" (downcase ptarget)))))
-         (queue-entry nil))
+         (queue-entry nil)
+          ;; Check if pattern-target resolves to a real .el file
+          (target-file
+           (when (and gptel-auto-workflow-monitoring-attempt-regen-on-deploy
+                      (not (equal ptarget "unknown")))
+             (let* ((candidate (expand-file-name ptarget
+                                                 (expand-file-name "lisp/modules/"
+                                                                   default-directory)))
+                    (as-is (expand-file-name ptarget default-directory)))
+               (cond
+                ((file-exists-p candidate) candidate)
+                ((file-exists-p as-is) as-is)
+                (t nil))))))
     (cond
-     ;; Auto-deploy: tag current state and write deployment memory
+     ;; Auto-deploy: attempt regeneration if target file exists
      ((equal deploy-action "auto-deploy")
       (when (fboundp 'gptel-auto-workflow--git-cmd)
         (gptel-auto-workflow--git-cmd
          (format "git tag %s" (shell-quote-argument rollback-tag)) 30))
-      (when (fboundp 'gptel-auto-workflow--mementum-write-memory)
-        (gptel-auto-workflow--mementum-write-memory
-         '✅ (format "deploy-%s" rollback-tag)
-         (format "**Deployed:** %s\n**Risk:** %s\n**Component:** %s\n**Rollback tag:**
-%s\n\nAuto-deployed by monitoring agent (success rate exceeded threshold)."
-                 (plist-get tested-proposal :description)
-                 risk component rollback-tag)))
-      (message "[monitoring] Auto-deployed proposal: %s (risk: %s)" component risk))
+      (if (and target-file
+               (fboundp 'gptel-auto-workflow-code-regeneration--execute))
+          (let ((regen-result
+                 (condition-case err
+                     (gptel-auto-workflow-code-regeneration--execute
+                      ptarget "latest")
+                   (error
+                    (message "[monitoring] Regeneration failed: %s" (error-message-string err))
+                    (list :success nil :kept nil
+                          :reason (error-message-string err))))))
+            (if (plist-get regen-result :kept)
+                (progn
+                  (when (fboundp 'gptel-auto-workflow--mementum-write-memory)
+                    (gptel-auto-workflow--mementum-write-memory
+                     '✅ (format "deploy-regen-%s" rollback-tag)
+                     (format "Deployed (regeneration): %s, risk: %s, target: %s, rollback: %s"
+                             (plist-get tested-proposal :description)
+                             risk component rollback-tag)))
+                  (message "[monitoring] Auto-deployed via regen: %s" component))
+              ;; Regen failed: rollback
+              (when (fboundp 'gptel-auto-workflow--git-cmd)
+                (ignore-errors
+                  (gptel-auto-workflow--git-cmd
+                   (format "git reset --hard %s" (shell-quote-argument rollback-tag)) 60)))
+              (when (fboundp 'gptel-auto-workflow--mementum-write-memory)
+                (gptel-auto-workflow--mementum-write-memory
+                 '❌ (format "deploy-regen-failed-%s" rollback-tag)
+                 (format "Regen failed for %s, rolled back to %s"
+                         component rollback-tag)))
+              (message "[monitoring] Auto-deploy regen failed: %s, rolled back" component)))
+        ;; No target file: symbolic deploy
+        (when (fboundp 'gptel-auto-workflow--mementum-write-memory)
+          (gptel-auto-workflow--mementum-write-memory
+           '✅ (format "deploy-%s" rollback-tag)
+           (format "Deployed (symbolic): %s, risk: %s, component: %s, rollback: %s"
+                   (plist-get tested-proposal :description)
+                   risk component rollback-tag)))
+        (message "[monitoring] Auto-deployed (symbolic): %s (risk: %s)" component risk)))
      ;; Notify: persist pending-notification memory
      ((equal deploy-action "notify")
       (when (fboundp 'gptel-auto-workflow--mementum-write-memory)
@@ -540,8 +687,16 @@ Returns list of written mementum file paths, or nil if throttled/disabled."
                      (truncate elapsed)
                      gptel-auto-workflow-monitoring-cycle-interval)
             nil)
-        ;; Update throttle timestamp
+        ;; Update throttle timestamp and cycle counter
         (setq gptel-auto-workflow-monitoring-last-cycle-time now)
+        (setq gptel-auto-workflow-monitoring-cycle-counter
+              (1+ gptel-auto-workflow-monitoring-cycle-counter))
+        ;; Phase 0: Run health probes every 3rd cycle
+        (when (= (mod gptel-auto-workflow-monitoring-cycle-counter 3) 0)
+          (ignore-errors
+            (let ((health (gptel-auto-workflow--run-health-probes)))
+              (message "[monitoring] Phase 0: Health probes = %s"
+                       (plist-get health :healthy)))))
         ;; Phase 1: Analyze failure patterns
         (let ((patterns (gptel-auto-workflow--analyze-systemic-failures))
               (records

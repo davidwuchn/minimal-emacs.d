@@ -291,9 +291,9 @@ Not actually called because setup resets to known good values."
 (ert-deftest test-decision-classification/handle-missing-data ()
   "Should handle experiments with missing risk data."
   (let ((experiment '(:id "exp-incomplete"
-                      :target "lisp/unknown.el")))
+                       :target "lisp/unknown.el")))
     (let ((decision (gptel-auto-workflow--make-approval-decision experiment)))
-      (should (eq :require-review (plist-get decision :approval-type))))))
+      (should (eq :require-review (plist-get decision :approval-type)))))
 
 (ert-deftest test-decision-classification/handle-conflicting-signals ()
   "Should handle conflicting risk signals."
@@ -306,6 +306,121 @@ Not actually called because setup resets to known good values."
                        )))
      (let ((risk (gptel-auto-workflow--classify-experiment-risk experiment)))
        (should (memq risk '(:medium-risk :high-risk)))))))
+
+;; ============================================================================
+;; Persistence Tests (Gap 2)
+;; ============================================================================
+
+(ert-deftest test-decision-classification/persist-risk-patterns ()
+  "Should persist risk patterns to var/risk-patterns.sexp."
+  (with-clean-decision-classification-state
+   (setq gptel-auto-workflow--risk-patterns
+         '((:pattern-name "test/pattern" :count 3 :confidence 0.7)))
+   (let ((tmp-dir (make-temp-file "test-dc-")))
+     (unwind-protect
+         (let ((default-directory tmp-dir))
+           (let ((result (gptel-auto-workflow--persist-risk-patterns)))
+             (should result)
+             (should (file-exists-p (expand-file-name "var/risk-patterns.sexp" tmp-dir)))))
+       (ignore-errors (delete-directory tmp-dir t))))))
+
+(ert-deftest test-decision-classification/load-risk-patterns ()
+  "Should load risk patterns from var/risk-patterns.sexp."
+  (with-clean-decision-classification-state
+   (let ((tmp-dir (make-temp-file "test-dc-")))
+     (unwind-protect
+         (let ((default-directory tmp-dir))
+           ;; First persist
+           (setq gptel-auto-workflow--risk-patterns
+                 '((:pattern-name "test/pattern" :count 3 :confidence 0.7)))
+           (gptel-auto-workflow--persist-risk-patterns)
+           ;; Clear and reload
+           (setq gptel-auto-workflow--risk-patterns nil)
+           (let ((loaded (gptel-auto-workflow--load-risk-patterns)))
+             (should loaded)
+             (should (= (length loaded) 1))
+             (should (equal (plist-get (car loaded) :pattern-name) "test/pattern"))))
+       (ignore-errors (delete-directory tmp-dir t))))))
+
+(ert-deftest test-decision-classification/load-risk-patterns-no-file ()
+  "Should return nil when risk-patterns.sexp does not exist."
+  (with-clean-decision-classification-state
+   (let ((tmp-dir (make-temp-file "test-dc-")))
+     (unwind-protect
+         (let ((default-directory tmp-dir))
+           (should-not (file-exists-p (expand-file-name "var/risk-patterns.sexp" tmp-dir)))
+           (should-not (gptel-auto-workflow--load-risk-patterns)))
+       (ignore-errors (delete-directory tmp-dir t))))))
+
+(ert-deftest test-decision-classification/persist-approval-history ()
+  "Should persist approval history to var/approval-history.sexp."
+  (with-clean-decision-classification-state
+   (setq gptel-auto-workflow--approval-history
+         '((:experiment-id "exp-1" :approval-type :auto-approved)))
+   (let ((tmp-dir (make-temp-file "test-dc-")))
+     (unwind-protect
+         (let ((default-directory tmp-dir))
+           (let ((result (gptel-auto-workflow--persist-approval-history)))
+             (should result)
+             (should (file-exists-p (expand-file-name "var/approval-history.sexp" tmp-dir)))))
+       (ignore-errors (delete-directory tmp-dir t))))))
+
+(ert-deftest test-decision-classification/load-approval-history ()
+  "Should load approval history from var/approval-history.sexp."
+  (with-clean-decision-classification-state
+   (let ((tmp-dir (make-temp-file "test-dc-")))
+     (unwind-protect
+         (let ((default-directory tmp-dir))
+           ;; Persist
+           (setq gptel-auto-workflow--approval-history
+                 '((:experiment-id "exp-1" :approval-type :auto-approved)))
+           (gptel-auto-workflow--persist-approval-history)
+           ;; Clear and reload
+           (setq gptel-auto-workflow--approval-history nil)
+           (let ((loaded (gptel-auto-workflow--load-approval-history)))
+             (should loaded)
+             (should (= (length loaded) 1))
+             (should (equal (plist-get (car loaded) :experiment-id) "exp-1"))))
+       (ignore-errors (delete-directory tmp-dir t))))))
+
+(ert-deftest test-decision-classification/learn-risk-patterns-persists ()
+  "learn-risk-patterns should call persist-risk-patterns at the end."
+  (with-clean-decision-classification-state
+   (let ((tmp-dir (make-temp-file "test-dc-")))
+     (unwind-protect
+         (let ((default-directory tmp-dir))
+           ;; Add some history
+           (setq gptel-auto-workflow--approval-history nil)
+           (dotimes (i 5)
+             (push `(:experiment-id ,(format "exp-%03d" i)
+                     :approval-type :auto-approved
+                     :risk-factors (:scope-factor 0.1)
+                     :target ,(format "lisp/utils-%d.el" i))
+                   gptel-auto-workflow--approval-history))
+           ;; Learn patterns — this should also persist
+           (gptel-auto-workflow--learn-risk-patterns)
+           ;; Verify file was created
+           (should (file-exists-p (expand-file-name "var/risk-patterns.sexp" tmp-dir))))
+       (ignore-errors (delete-directory tmp-dir t))))))
+
+(ert-deftest test-decision-classification/track-approval-decision-persists ()
+  "track-approval-decision should also persist approval-history."
+  (with-clean-decision-classification-state
+   (let ((tmp-dir (make-temp-file "test-dc-")))
+     (unwind-protect
+         (let ((default-directory tmp-dir))
+           (setq gptel-auto-workflow--approval-history nil)
+           (gptel-auto-workflow--track-approval-decision
+            '(:experiment-id "exp-persist-test" :approval-type :auto-approved))
+           ;; Should have persisted to disk
+           (should (file-exists-p (expand-file-name "var/approval-history.sexp" tmp-dir))))
+       (ignore-errors (delete-directory tmp-dir t))))))
+
+(ert-deftest test-decision-classification/persist-error-handling ()
+  "persist-risk-patterns should return nil on error (e.g., no write permission)."
+  ;; Use an impossible path to force an error
+  (cl-letf (((symbol-function 'make-directory) (lambda (&rest args) (signal 'file-error (list "permission denied")))))
+    (should-not (gptel-auto-workflow--persist-risk-patterns))))
 
 (provide 'test-gptel-auto-workflow-decision-classification)
 
