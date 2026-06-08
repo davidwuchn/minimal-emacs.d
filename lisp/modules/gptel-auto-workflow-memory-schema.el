@@ -1345,11 +1345,14 @@ fetch('%s').then(r=>r.json()).then(data=>{
     group:n.type===\='file\='?1:n.type===\='skill\='?2:3})));
   var edges=new vis.DataSet(data.links.map(l=>({from:l.source,to:l.target,
 label:l.type,title:l.confidence+'
+
 w='+l.weight,color:{color:l.confidence===\='EXTRACTED\='?'#4fc3f7':l.confidence===\='INFERRED\='?'#ffb74d':'#ef5350'}})));
   var container=document.getElementById(\='graph\=');
   new vis.Network(container,{nodes:nodes,edges:edges},{
 
+
 groups:{1:{color:{background:'#1565c0'}},2:{color:{background:'#2e7d32'}},3:{color:{background:'#6a1b9a'}}},
+
 
 physics:{stabilization:{iterations:100}},edges:{arrows:\='to\=',smooth:{type:\='curvedCW\='}}});
 }).catch(e=>document.body.innerHTML='<p style=color:red>Error: '+e+'</p>');
@@ -1478,7 +1481,7 @@ Returns plist: (:graph-tokens :raw-tokens :savings-pct :ratio)."
       (when root
         (dolist (f (directory-files (expand-file-name "lisp/modules" root) t "\\.el$"))
           (with-temp-buffer (insert-file-contents f) (setq raw-lines (+ raw-lines (count-lines (point-min) (point-max)))))))
-      (let ((raw-tokens (* raw-lines 4))  ; ~4 tokens per line of Elisp
+      (let* ((raw-tokens (* raw-lines 4))  ; ~4 tokens per line of Elisp
             (savings (if (> raw-tokens 0) (- 1 (/ (float graph-tokens) raw-tokens)) 0)))
         (list :graph-tokens graph-tokens :raw-tokens raw-tokens
               :savings-pct (* 100 savings) :ratio (if (> raw-tokens 0) (/ (float raw-tokens) (max 1 graph-tokens)) 0))))))
@@ -1533,7 +1536,8 @@ Writes timestamps + node/edge counts to OUTPUT-FILE."
 
 (defun gptel-auto-workflow--graph-query-feedback (query result)
   "Save a graph query and its result as a mementum memory for future synthesis.
-The feedback loop: what the system asks about gets incorporated into knowledge."
+The feedback loop: what the system asks about gets incorporated into
+knowledge."
   (let* ((root (gptel-auto-workflow-self-audit--root))
          (mem-file (expand-file-name
                     (format "mementum/memories/graph-query-%s.md"

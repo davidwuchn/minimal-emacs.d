@@ -139,13 +139,15 @@ Aggregate of per-subsystem scores for convergence detection."
     (cl-return-from gptel-auto-workflow--eight-keys-convergence-score nil))
   (let ((results (gptel-auto-workflow--parse-all-results))
         (autogo 0.0) (autotts 0.0) (selfev 0.0) (count 0))
-    (dolist (r results)
+     (dolist (r results)
       (when (equal (plist-get r :decision) "kept")
-        (let ((hypo (or (plist-get r :hypothesis) "")))
+        (let ((hypo (or (plist-get r :hypothesis) ""))
+              (target (plist-get r :target)))
           (cl-incf autogo (alist-get 'overall (gptel-benchmark-eight-keys-score-for hypo :autogo) 0.0))
           (cl-incf autotts (alist-get 'overall (gptel-benchmark-eight-keys-score-for hypo :autotts) 0.0))
           (cl-incf selfev (alist-get 'overall (gptel-benchmark-eight-keys-score-for hypo :self-evolve) 0.0))
-          (cl-incf count))))
+          (cl-incf count)
+          (when target (setq gptel-auto-workflow--evolution-last-kept-target target)))))
     (if (> count 0) (/ (+ autogo autotts selfev) (* 3 count)) nil))))
 
 (defvar gptel-auto-workflow--evolution-next-cycle-hints nil
@@ -155,6 +157,10 @@ Keys: :prev-champions, :category-budget, :vsm-actions, :regressed-targets.")
 (defvar gptel-auto-workflow--experiment-targets nil
   "List of target file paths for the next experiment batch.
 Set by the experiment loop and reordered by VSM health diagnostics.")
+
+(defvar gptel-auto-workflow--evolution-last-kept-target nil
+  "The target file path of the most recently kept experiment.
+Used by community-aware target selection to compound improvements.")
 
 (defvar gptel-auto-workflow--evolution-repo-root nil
   "Cached git repository root for self-evolution.
@@ -5214,6 +5220,33 @@ Fixes listp errors when JSON arrays are read as vectors."
              (message "[vsm-repair] Target queue reordered by VSM health diagnostics"))
             (_ (message "[vsm-repair] Unknown VSM action: %s" (car action))))))))
 
+(defun gptel-auto-workflow--boost-same-community-targets ()
+  "Promote targets from the same graph community as last kept experiment.
+When the knowledge graph has communities, experiments on related targets
+compound instead of scattering. Called after VSM prioritization."
+  (when (and (boundp 'gptel-auto-workflow--experiment-targets)
+             gptel-auto-workflow--experiment-targets
+             (fboundp 'gptel-auto-workflow--graph-community-for-target)
+             (boundp 'gptel-auto-workflow--evolution-last-kept-target)
+             gptel-auto-workflow--evolution-last-kept-target)
+    (let* ((last-target gptel-auto-workflow--evolution-last-kept-target)
+           (community (gptel-auto-workflow--graph-community-for-target last-target))
+           (targets gptel-auto-workflow--experiment-targets)
+           (same-comm nil)
+           (others nil))
+      (when community
+        (dolist (tgt targets)
+          (if (and (not (equal tgt last-target))
+                   (gptel-auto-workflow--graph-same-community-p last-target tgt))
+              (push tgt same-comm)
+            (push tgt others)))
+        (when same-comm
+          (setq gptel-auto-workflow--experiment-targets
+                (append (nreverse same-comm) (nreverse others)))
+          (message "[community-boost] Promoted %d targets from same community as %s"
+                   (length same-comm)
+                   (file-name-nondirectory last-target)))))))
+
 (defun gptel-auto-workflow--vsm-prioritize-targets (vsm-levels)
   "Reorder experiment target queue based on VSM health LEVEL weaknesses.
 Maps VSM level deficits to specific target file patterns to front-load
@@ -5276,7 +5309,9 @@ VSM LEVELS is a plist of (level . strength):
       (when prioritized
         (message "[vsm-targets] Prioritized %d targets for weak VSM levels: %s"
                  (length prioritized)
-                 (mapconcat #'identity (seq-take (nreverse prioritized) 3) ", "))))))
+                 (mapconcat #'identity (seq-take (nreverse prioritized) 3) ", ")))
+      ;; Community-aware boost: promote targets from same community as last kept experiment
+      (gptel-auto-workflow--boost-same-community-targets))))
 
 ;; ─── Cross-Subsystem Feedback Functions (re-added after daemon merge wipe) ───
 
