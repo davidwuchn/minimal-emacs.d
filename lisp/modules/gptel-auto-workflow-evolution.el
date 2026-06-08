@@ -7953,8 +7953,12 @@ WARNINGS:\n%s\n\nFILE:\n%s"
             (gptel-send nil)
             (sit-for 30)
             (setq response (buffer-string)))
-          (when (and response (> (length response) 0))
-            (let ((cleaned (replace-regexp-in-string
+           (when (and response (> (length response) 0))
+             ;; Reject prompt-echo: LLM sometimes returns the prompt back instead of code
+             (when (string-match-p "\\`Fix these byte-compiler" response)
+               (message "[self-heal] LLM: response echoed prompt, skipping")
+               (cl-return-from gptel-auto-workflow--self-heal-byte-compiler-llm 0))
+             (let ((cleaned (replace-regexp-in-string
                             "```elisp\\|```emacs-lisp\\|```" ""
                             (replace-regexp-in-string "^```.+$" "" response))))
               (with-current-buffer (find-file-noselect self-file)
