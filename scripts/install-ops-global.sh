@@ -85,7 +85,7 @@ for agent in maintainer maintainer-direct; do
     if [ -f "$file" ]; then
         # Portable: remove any existing model line, then insert after description.
         # perl -i -pe applies the block to each line; $_ holds the current line.
-        perl -i -pe 'if (/^model:/) { $_ = ""; } elsif (/^description:/) { $_ = $_ . "model: bailian-token-plan/kimi-k2.6\n"; }' "$file"
+        perl -i -pe 'if (/^model:/) { $_ = ""; } elsif (/^description:/) { $_ = $_ . "model: bailian-token-plan/qwen3.7-plus\n"; }' "$file"
     fi
 done
 
@@ -166,6 +166,6 @@ fi
 
 echo ""
 echo "=== Installation Complete ==="
-echo "Models: @maintainer→kimi-k2.6, delegate→deepseek-v4-pro, strong→gpt-5.4, gpt→gpt-5.5, opus→claude-opus-4.8, qwen→qwen3.7-max, creative→deepseek-v4-pro, fast→deepseek-v4-flash, implementer→glm-5.1, implementer-safe→qwen3.6-plus"
+echo "Models: @maintainer→qwen3.7-plus, delegate→deepseek-v4-pro, strong→gpt-5.4, gpt→gpt-5.5, opus→claude-opus-4.8, qwen→qwen3.7-max, creative→deepseek-v4-pro, fast→deepseek-v4-flash, implementer→glm-5.1, implementer-safe→qwen3.6-plus"
 echo "OV5 Cowork: OpenCode configured"
 echo "Next: Restart OpenCode, select @maintainer agent"
