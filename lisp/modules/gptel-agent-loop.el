@@ -917,8 +917,9 @@ Cache behavior:
           (cl-progv syms vals
             (gptel--apply-preset preset)
             (let* ((request-tools (and gptel-use-tools (listp gptel-tools) (copy-sequence gptel-tools)))
-                   (parent-fsm (and (fboundp 'my/gptel--coerce-fsm)
-                                    (my/gptel--coerce-fsm gptel--fsm-last)))
+                   (parent-fsm (ignore-errors
+                                 (and (fboundp 'my/gptel--coerce-fsm)
+                                      (my/gptel--coerce-fsm gptel--fsm-last))))
                    (fsm-info (ignore-errors
                                (and parent-fsm (gptel-fsm-info parent-fsm))))
                    (parent-buf (or (let ((buf (gptel-agent-loop--task-parent-buffer state)))

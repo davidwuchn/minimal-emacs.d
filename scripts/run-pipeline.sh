@@ -614,10 +614,15 @@ if [ -n "$SELF_AUDIT_REPORT" ]; then
         AUDIT_ISSUES=$(grep 'issues-count' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. *(\d+)/) { print $1 }')
         COLD_BACKENDS=$(grep 'cold-backends \.' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'while (/\"([^\"]+)\"/g) { print "$1," }' | perl -pe 's/,$//')
         UNEVALUATED_STRATS=$(grep 'unevaluated-strategies' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. *(\d+)/) { print $1 }')
-        BOTTLENECK=$(grep 'staging-merge-bottleneck' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. t\b/) { print "1" }')
-        BROKEN_MODULES=$(grep -c 'broken-modules' "$SELF_AUDIT_RESULT_FILE" 2>/dev/null || echo 0)
-        PRICING_STALE=$(grep 'pricing-stale' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. (\d+)/) { print $1 }' || echo 0)
-        DAYS_STALE=$(grep 'pricing-days-stale' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. (\d+)/) { print $1 }' || echo 0)
+         BOTTLENECK=$(grep 'staging-merge-bottleneck' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. t\b/) { print "1" }')
+         BROKEN_MODULES=$(grep -c 'broken-modules' "$SELF_AUDIT_RESULT_FILE" 2>/dev/null || echo 0)
+         PRICING_STALE=$(grep 'pricing-stale' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. (\d+)/) { print $1 }' || echo 0)
+         DAYS_STALE=$(grep 'pricing-days-stale' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. (\d+)/) { print $1 }' || echo 0)
+         # Default empty values to 0 for safe integer comparison
+         : "${BOTTLENECK:=0}"
+         : "${BROKEN_MODULES:=0}"
+         : "${PRICING_STALE:=0}"
+         : "${DAYS_STALE:=0}"
         log "  Structured audit: $AUDIT_ISSUES issues, $BROKEN_MODULES broken modules, bottleneck=$BOTTLENECK"
         if [ "${PRICING_STALE:-0}" -gt 0 ]; then
             log "  ⚠ Pricing STALE: $PRICING_STALE discrepancies ($DAYS_STALE days since last knowledge page update)"
@@ -701,7 +706,7 @@ if [ -f "$HEALTH_FILE" ]; then
         # Hard floor: if timeout was forced below 900 by death spiral, jump to 900 immediately
         if [ "${CURRENT_TIMEOUT:-900}" -lt 900 ]; then
             NEW_TIMEOUT=900
-            log "  Auto-fix: grader death spiral detected (timeout=$CURRENT_TIMEOUT < 900) — forcing hard floor to 900s"
+            log "  Auto-fix: grader death spiral detected (timeout=$CURRENT_TIMEOUT < 900) -- forcing hard floor to 900s"
         else
             NEW_TIMEOUT=$((CURRENT_TIMEOUT * 3 / 2))  # Increase by 50% for persistent issues
         fi

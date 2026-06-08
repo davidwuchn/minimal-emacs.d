@@ -1,14 +1,14 @@
 ---
-valid-from: 2026-06-07T20:22
+valid-from: 2026-06-08T07:37
 ---
 
-# Mistake: 2026-06-07 20:22
+# Mistake: 2026-06-08 07:37
 
 **Failure type:** strategy
 **Target:** lisp/modules/gptel-tools-agent-prompt-build.el
-**Occurrences:** 5
+**Occurrences:** 3
 **Example reasons:** none
-**Trend:** 2026-05-30T190626Z-bfd5 -> 2026-05-30T230118Z-26cc
+**Trend:** 2026-06-03T141124Z-99bb -> 2026-06-03T181508Z-dfa5
 
 This pattern was detected by the monitoring agent as a systemic failure requiring investigation.
 

@@ -648,10 +648,11 @@ Also handles caching and result truncation from old advice."
                     (let* ((default-directory (or worktree-dir project-root))
                            (target-marker (point-marker))
                            (parent-fsm
-                            (and (boundp 'gptel--fsm-last)
-                                 (if (fboundp 'my/gptel--coerce-fsm)
-                                     (my/gptel--coerce-fsm gptel--fsm-last)
-                                   gptel--fsm-last)))
+                            (ignore-errors
+                              (and (boundp 'gptel--fsm-last)
+                                   (if (fboundp 'my/gptel--coerce-fsm)
+                                       (my/gptel--coerce-fsm gptel--fsm-last)
+                                     gptel--fsm-last))))
                            (orig-gptel-fsm-info (symbol-function 'gptel-fsm-info))
                            (info (or (and parent-fsm
                                           (ignore-errors

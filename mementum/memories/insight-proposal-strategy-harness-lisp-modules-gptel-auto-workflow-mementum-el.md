@@ -1,13 +1,13 @@
 ---
-valid-from: 2026-06-08T19:52
+valid-from: 2026-06-08T07:37
 ---
 
-# Insight: 2026-06-08 19:52
+# Insight: 2026-06-08 07:37
 
 **Proposal:** Address recurring strategy failures in lisp/modules/gptel-auto-workflow-mementum.el: recurring failures
 **Component:** strategy-harness
-**Expected impact:** Reduce strategy failures in lisp/modules/gptel-auto-workflow-mementum.el by ~70%
-**Confidence:** 0.70
+**Expected impact:** Reduce strategy failures in lisp/modules/gptel-auto-workflow-mementum.el by ~80%
+**Confidence:** 0.80
 **Risk:** high
 **Validation rate:** 0.04
 **Status:** tentative
