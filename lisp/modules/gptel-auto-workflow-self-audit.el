@@ -471,7 +471,10 @@ the pipeline self-heal step to consume."
   (let ((result (gptel-auto-workflow-self-audit-run)))
     (when result
       (gptel-auto-workflow-self-audit--write-memory result)
-      (gptel-auto-workflow-self-audit--write-structured-result result))
+      (gptel-auto-workflow-self-audit--write-structured-result result)
+      ;; YC Learning←Quality: if >=3 audit-fix memories exist with shared root
+      ;; causes, synthesize a knowledge page so the prompt builder can inject it
+      (gptel-auto-workflow-self-audit--synthesize-system-health))
     (gptel-auto-workflow-self-audit--format-report result)))
 
 (defun gptel-auto-workflow-self-audit--build-structured-result-content (result)
@@ -546,7 +549,171 @@ Returns plist :before-issues, :after-issues, :improved-p, :delta."
                          (format "%d issues remain after remediation"
                                  after-issues)))))
 
-;;; Signal-file reader (bridge between pipeline bash → daemon Emacs)
+;;; System-health synthesis (Learning<-Quality loop)
+
+(defun gptel-auto-workflow-self-audit--read-audit-memories ()
+  "Read all audit-fix-*.md memory files and return list of plists.
+Each plist has :file, :timestamp, :issues, :cold, :unev, :bottleneck."
+  (let* ((root (gptel-auto-workflow-self-audit--root))
+         (mem-dir (expand-file-name "mementum/memories/" root))
+         (memories '()))
+    (when (file-directory-p mem-dir)
+      (dolist (f (directory-files mem-dir t "audit-fix-.*\\.md$"))
+        (condition-case _
+            (with-temp-buffer
+              (insert-file-contents f)
+              (goto-char (point-min))
+              (let ((issues 0) (cold 0) (cold-total 0) (unev 0)
+                    (unev-total 0) (bottleneck nil) (ts ""))
+                (when (search-forward "---" nil t)
+                  (while (and (not (eobp))
+                              (not (looking-at "---")))
+                    (when (looking-at "^issues: \\([0-9]+\\)")
+                      (setq issues (string-to-number (match-string 1))))
+                    (when (looking-at "^\\(timestamp\\): \\(.+\\)")
+                      (setq ts (match-string 2)))
+                    (forward-line 1)))
+                (when (search-forward "Backend cold-start" nil t)
+                  (when (re-search-forward
+                         "\\([0-9]+\\)/\\([0-9]+\\) backends" nil t)
+                    (setq cold (string-to-number (match-string 1)))
+                    (setq cold-total (string-to-number (match-string 2)))))
+                (when (search-forward "Strategy cold-start" nil t)
+                  (when (re-search-forward
+                         "\\([0-9]+\\)/\\([0-9]+\\) strategies" nil t)
+                    (setq unev (string-to-number (match-string 1)))
+                    (setq unev-total (string-to-number (match-string 2)))))
+                (when (search-forward "BOTTLENECK" nil t)
+                  (setq bottleneck t))
+                (push (list :file f :timestamp ts :issues issues
+                            :cold-backends cold :cold-total cold-total
+                            :unevaluated-strategies unev
+                            :unevaluated-total unev-total
+                            :bottleneck-p bottleneck)
+                      memories)))
+          (error nil))))
+    memories))
+
+(defun gptel-auto-workflow-self-audit--synthesize-system-health ()
+  "Aggregate >=3 audit-fix memories into a knowledge page.
+Creates/updates mementum/knowledge/system-health-patterns.md when
+recurring root causes are detected across >=3 audit runs.
+Returns the count of memories found, or nil if below threshold."
+  (let* ((memories (gptel-auto-workflow-self-audit--read-audit-memories))
+         (n (length memories)))
+    (when (>= n 3)
+      (let* ((root (gptel-auto-workflow-self-audit--root))
+             (kp-dir (expand-file-name "mementum/knowledge/" root))
+             (kp-file (expand-file-name "system-health-patterns.md" kp-dir))
+             (cold-runs (seq-count
+                         (lambda (m) (> (plist-get m :cold-backends) 0))
+                         memories))
+             (unev-runs (seq-count
+                         (lambda (m) (> (plist-get m :unevaluated-strategies) 0))
+                         memories))
+             (bottleneck-runs (seq-count
+                               (lambda (m) (plist-get m :bottleneck-p))
+                               memories))
+             (avg-cold (if (> cold-runs 0)
+                           (/ (apply #'+
+                                     (mapcar (lambda (m) (plist-get m :cold-backends))
+                                             memories))
+                              cold-runs)
+                         0))
+             (avg-unev (if (> unev-runs 0)
+                           (/ (apply #'+
+                                     (mapcar (lambda (m) (plist-get m :unevaluated-strategies))
+                                             memories))
+                              unev-runs)
+                         0))
+             (latest (car (sort memories
+                                (lambda (a b)
+                                  (string> (or (plist-get a :timestamp) "")
+                                           (or (plist-get b :timestamp) ""))))))
+             (content
+              (concat
+               "---\n"
+               "title: System Health Patterns\n"
+               "status: active\n"
+               "category: system-health\n"
+               (format "tags: [self-audit, auto-fix, meta]\n")
+               "related: [pipeline-health, self-healing-architecture]\n"
+               (format "last-updated: %s\n"
+                       (or (plist-get latest :timestamp)
+                           (format-time-string "%Y-%m-%dT%H:%M:%S")))
+               "---\n\n"
+               "# System Health Patterns\n\n"
+               "Auto-generated from self-audit memories. Updated every pipeline\n"
+               "run when >=3 audit-fix memories exist.\n\n"
+               (format "## Summary (%d audit runs analyzed)\n\n" n)
+               (format "- **Backend cold-start**: detected in %d/%d runs "
+                       cold-runs n)
+               (format "(avg %.1f cold backends)\n" avg-cold)
+               (format "- **Strategy cold-start**: detected in %d/%d runs "
+                       unev-runs n)
+               (format "(avg %.1f unevaluated strategies)\n" avg-unev)
+               (concat "- **Staging-merge bottleneck**: detected "
+                       "in " (number-to-string bottleneck-runs) "/"
+                       (number-to-string n) " runs\n\n")
+               "## Recurring Root Causes\n\n"
+               (when (>= cold-runs 3)
+                 (concat
+                  "### Backend Cold-Start (>=3 occurrences)\n"
+                  "- **Symptom**: 5-8 backends never tried within "
+                  "cold-start window\n"
+                  "- **Impact**: Reduced model diversity, reliance on "
+                  "single provider\n"
+                  "- **Auto-fix deployed**: force-try-backends.txt signal "
+                  "-> daemon unblocks rate-limited backends\n"
+                  "- **Verification**: check `gptel-auto-workflow--rate-"
+                  "limited-backends` size after pipeline run\n"
+                  "- **Status**: auto-fix applied each pipeline cycle\n\n"))
+               (when (>= unev-runs 3)
+                 (concat
+                  "### Strategy Cold-Start (>=3 occurrences)\n"
+                  "- **Symptom**: 12-15 strategies never evaluated "
+                  "(hidden by 25% Bayesian floor)\n"
+                  "- **Impact**: Poor strategy selection, template-"
+                  "default bias\n"
+                  "- **Auto-fix deployed**: exploration-rateOverride.txt "
+                  "signal -> daemon increases exploration rate\n"
+                  "- **Verification**: check strategy pool visibility "
+                  "in digest\n"
+                  "- **Status**: auto-fix applied each pipeline cycle\n\n"))
+               (when (>= bottleneck-runs 3)
+                 (concat
+                  "### Staging-Merge Bottleneck (>=3 occurrences)\n"
+                  "- **Symptom**: git conflicts in .md files cause "
+                  "experiment failures\n"
+                  "- **Impact**: 3-4%% keep-rate ceiling, wasted "
+                  "experiment cycles\n"
+                  "- **Auto-fix deployed**: --try-autoresolve-conflicts "
+                  "uses --theirs for .md files\n"
+                  "- **Limitation**: source code (.el) conflicts still "
+                  "require manual review\n"
+                  "- **Status**: auto-fix active; .el conflicts "
+                  "escalated to human\n\n"))
+               "## Actionability\n\n"
+               "These patterns are injected into the experiment prompt "
+               "builder via `gptel-auto-experiment--system-health-for-"
+               "prompt`, causing the evolution LLM to:\n"
+               "1. **Prioritize fixes** for targets contributing to "
+               "known bottlenecks\n"
+               "2. **Avoid strategies** that reproduce cold-start patterns\n"
+               "3. **Self-monitor** by checking whether its own changes "
+               "improve system health metrics\n\n"
+               "---\n\n"
+               "*Generated by gptel-auto-workflow-self-audit.el - "
+               "Learning<-Quality loop*\n")))
+        (make-directory kp-dir t)
+        (with-temp-file kp-file
+          (insert content))
+        (message (concat "[self-audit] Synthesized system-health-patterns "
+                         "from %d audit memories (cold=%d, unev=%d, bottleneck=%d)")
+                 n cold-runs unev-runs bottleneck-runs)
+        n))))
+
+;;; Signal-file reader (bridge between pipeline bash -> daemon Emacs)
 
 (defun gptel-auto-workflow-self-audit-apply-pipeline-signals ()
   "Read signal files written by pipeline Step 0.5 and apply them to the daemon.

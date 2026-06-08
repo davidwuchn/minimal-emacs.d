@@ -1374,6 +1374,23 @@ else
     log "  No self-audit result from Step 0.4 — skipping verify-recovery"
 fi
 
+# ─── Step 6.8: Synthesize system-health patterns (Learning<--Quality loop) ───
+# When >=3 audit-fix memories exist with recurring root causes, create
+# mementum/knowledge/system-health-patterns.md so the prompt builder can
+# inject known issues into experiment prompts — biasing evolution to fix them.
+log "=== Step 6.8: Synthesize system-health patterns ==="
+SYNTH_RESULT=$(emacs --batch -L "$DIR/lisp/modules" \
+    -L "$DIR/packages/gptel" -L "$DIR/packages/compat" \
+    -l gptel --eval \
+    '(progn
+       (require (quote gptel-auto-workflow-self-audit))
+       (setq gptel-auto-workflow--workspace-path "'"$DIR"'")
+       (let ((n (gptel-auto-workflow-self-audit--synthesize-system-health)))
+         (if n
+             (princ (format "synthesized: %d memories -> system-health-patterns.md\n" n))
+           (princ "synthesized: below-threshold (<3 audit memories)\n"))))' 2>&1)
+log "  $SYNTH_RESULT"
+
 # ─── Step 7: Commit and push outcomes to main ───
 log "=== Step 7: Publish outcomes to main ==="
 
