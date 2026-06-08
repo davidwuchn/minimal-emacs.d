@@ -628,6 +628,10 @@ fi
 # reason the monitor kept going without fixing anything.
 log "=== Step 0.5: Auto-fix (ACT on self-audit findings) ==="
 REMEDIAL_ACTIONS=0
+FORCE_COLD_BACKENDS=0
+INCREASE_EXPLORATION=0
+STAGING_BOTTLENECK=0
+GRADER_ESCALATED=0
 
 # Auto-fix 1: Force cold backends into rotation
 # If backends have 0 experiments in 7d, clear their rate-limit so
@@ -642,6 +646,7 @@ if [ -n "$COLD_BACKENDS" ] && [ "$COLD_BACKENDS" != "nil" ]; then
     # Write the cold backends to a force-try file that the daemon reads
     echo "$COLD_BACKENDS" > "$DIR/var/tmp/force-try-backends.txt"
     REMEDIAL_ACTIONS=$((REMEDIAL_ACTIONS + 1))
+    FORCE_COLD_BACKENDS=1
 fi
 
 # Auto-fix 2: Increase exploration rate for unevaluated strategies
@@ -651,6 +656,7 @@ if [ "$UNEVALUATED_STRATS" -gt 2 ]; then
     log "  Auto-fix: increasing exploration rate ($UNEVALUATED_STRATS strategies unevaluated)"
     echo "70" > "$DIR/var/tmp/exploration-rateOverride.txt"
     REMEDIAL_ACTIONS=$((REMEDIAL_ACTIONS + 1))
+    INCREASE_EXPLORATION=1
 fi
 
 # Auto-fix 3: Staging-merge bottleneck — already handled by auto-resolver
@@ -659,6 +665,7 @@ fi
 if [ "$BOTTLENECK" -gt 0 ]; then
     log "  Auto-fix: staging-merge bottleneck flagged (.md auto-resolved, .el needs review)"
     REMEDIAL_ACTIONS=$((REMEDIAL_ACTIONS + 1))
+    STAGING_BOTTLENECK=1
 fi
 
 # Auto-fix 4: Broken modules — flag but don't attempt code fix
@@ -693,6 +700,7 @@ if [ -f "$HEALTH_FILE" ]; then
         # Also force fast backends for grading
         echo "deepseek-v4-flash,deepseek-v4-pro" > "$DIR/var/tmp/force-grader-backends.txt"
         REMEDIAL_ACTIONS=$((REMEDIAL_ACTIONS + 1))
+        GRADER_ESCALATED=1
     fi
 fi
 
@@ -1473,6 +1481,28 @@ if [ -f "$SELF_AUDIT_RESULT_FILE" ]; then
     else
         log "  ⚠ Regression: $BEFORE_ISSUES → $AFTER_ISSUES issues (worse by $((-DELTA)))"
         log "  Self-evolve loop detected regression — auto-fixes may have side effects"
+    fi
+    # ── Meta-improvement: track which fixes work vs fail ──
+    # This closes the meta-learning loop: the system observes its own
+    # fix effectiveness and biases toward effective fixes over time.
+    # Format: timestamp | fix-name | delta | effective? | note
+    FIX_EFFECTIVE="effective"
+    if [ "$DELTA" -le 0 ]; then
+        FIX_EFFECTIVE="PENDING"
+    fi
+    # Determine which fixes were applied from Step 0.5
+    FIXES_APPLIED=""
+    [ "$FORCE_COLD_BACKENDS" -eq 1 ] 2>/dev/null && FIXES_APPLIED="$FIXES_APPLIED force-cold-backends"
+    [ "$INCREASE_EXPLORATION" -eq 1 ] 2>/dev/null && FIXES_APPLIED="$FIXES_APPLIED increase-exploration"
+    [ "$STAGING_BOTTLENECK" -eq 1 ] 2>/dev/null && FIXES_APPLIED="$FIXES_APPLIED staging-merge-autoresolve"
+    [ "$GRADER_ESCALATED" -eq 1 ] 2>/dev/null && FIXES_APPLIED="$FIXES_APPLIED grader-escalation"
+    [ -z "$FIXES_APPLIED" ] && FIXES_APPLIED="no-auto-fixes-applied"
+    # Write fix-effectiveness entry to pipeline-health
+    if [ -f "$HEALTH_FILE" ]; then
+        for fix in $FIXES_APPLIED; do
+            echo "- $(date +%s) | $fix | delta=$DELTA | $BEFORE_ISSUES → $AFTER_ISSUES | $FIX_EFFECTIVE" >> "$HEALTH_FILE"
+        done
+        log "  Meta-improvement: logged fix-effectiveness for: $FIXES_APPLIED ($FIX_EFFECTIVE)"
     fi
 else
     log "  No self-audit result from Step 0.4 — skipping verify-recovery"

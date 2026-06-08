@@ -45,8 +45,14 @@
 ;;; Helpers
 
 (defun gptel-auto-workflow-self-audit--root ()
-  "Return workspace root, falling back to default-directory."
-  (or (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
+  "Return workspace root, falling back to default-directory.
+Uses gptel-auto-workflow--workspace-path if set (pipeline batch mode),
+then --expand-workspace-path (daemon mode), then default-directory."
+  (or (and (boundp 'gptel-auto-workflow--workspace-path)
+           gptel-auto-workflow--workspace-path
+           (file-directory-p gptel-auto-workflow--workspace-path)
+           gptel-auto-workflow--workspace-path)
+      (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
            (gptel-auto-workflow--expand-workspace-path ""))
       default-directory))
 
