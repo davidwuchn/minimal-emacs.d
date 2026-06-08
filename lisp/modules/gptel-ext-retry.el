@@ -896,11 +896,16 @@ intelligent compression."
 
 (defvar my/gptel-auto-compact--cheap-overrides
   '(("DeepSeek" . "deepseek-v4-flash")
-    ("DashScope" . "qwen3.5-plus"))
+    ("DashScope" . "qwen3.6-flash")
+    ("TokenPlan" . "qwen3.6-flash"))
   "Cheap model overrides per backend for auto-compact.
 When a backend appears in the headless fallback chain, its model
 is replaced with the cheaper variant listed here (if any).
-Backends not listed use their default fallback model.")
+Backends not listed use their default fallback model.
+
+Auto-compact deliberately avoids qwen*max and qwen*plus variants:
+compaction runs frequently on huge messages, so we want fast + cheap.
+qwen*flash is preferred.")
 
 (defvar my/gptel-auto-compact--extra-backends
   '(("Z-AI" . "glm-4.7")
@@ -917,9 +922,11 @@ extra backends (glm-4.7, minimax-m2.7) as deeper fallbacks.
 Skips rate-limited backends."
   (let ((chain (if (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
                    gptel-auto-workflow-headless-subagent-fallbacks
-                 ;; Fallback if headless chain not loaded
+                 ;; Fallback if headless chain not loaded.
+                 ;; Auto-compact chain: flash models only (no max/plus).
                  '(("DeepSeek" . "deepseek-v4-flash")
-                   ("DashScope" . "qwen3.5-plus"))))
+                   ("DashScope" . "qwen3.6-flash")
+                   ("TokenPlan" . "qwen3.6-flash"))))
         (excluded (if (boundp 'gptel-auto-workflow--rate-limited-backends)
                       gptel-auto-workflow--rate-limited-backends
                     nil)))
@@ -975,7 +982,9 @@ EDGE CASE: TRIM-FN may return nil or 0 — handled gracefully."
     ("kimi-k2.6"          . 800000)
     ("kimi-k2.5"          . 800000)   ; legacy alias for k2.6
     ("kimi-for-coding"    . 400000)
-    ("qwen3.5-plus"       . 400000)   ; 131K tokens
+    ("qwen3.7-plus"       . 400000)   ; 131K tokens, replaces qwen3.6-plus
+    ("qwen3.6-plus"       . 400000)
+    ("qwen3.6-flash"      . 400000)
     ("qwen3-coder-next"   . 400000)
     ("qwen3-coder-plus"   . 3000000)  ; 1M tokens ≈ 3.5MB, leave room for output
     ("qwen3-max-2026-01-23" . 400000)
@@ -984,7 +993,7 @@ EDGE CASE: TRIM-FN may return nil or 0 — handled gracefully."
     ("glm-4.7"            . 350000)
     ("minimax"            . 350000)   ; minimax-m2.7-highspeed, MiniMax-M2.5, etc.
     ("MiniMax"            . 350000)   ; legacy PascalCase variants
-    ("qwen3."             . 400000)   ; qwen3.5-plus, qwen3.6-plus, etc.
+    ("qwen3."             . 400000)   ; qwen3.6-plus, qwen3.7-plus, etc.
     ("deepseek-v4-flash"  . 3000000)  ; 1M tokens ≈ 3.5MB, leave room for output
     ("deepseek-v4-pro"    . 3000000)
     ("deepseek-chat"      . 3000000)

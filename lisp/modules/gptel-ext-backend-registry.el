@@ -64,20 +64,20 @@
 
     (DashScope
      :host "coding.dashscope.aliyuncs.com"
-     :models (qwen3.6-plus qwen3.5-plus qwen3-coder-plus)
-     :default-model qwen3.6-plus
+     :models (qwen3.7-plus qwen3.6-plus qwen3-coder-plus)
+     :default-model qwen3.7-plus
      :model-metadata
-      ((qwen3.6-plus
+      ((qwen3.7-plus
+        :context-window 131072
+        :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
+        :capabilities (code-generation reasoning)
+        :speed medium
+        :thinking-policy on)
+       (qwen3.6-plus
         :context-window 131072
         :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
         :capabilities (code-generation tool-calls)
         :speed medium
-        :thinking-policy on)
-       (qwen3.5-plus
-        :context-window 131072
-        :pricing-input 0.14 :pricing-output 0.57 :pricing-cache-hit 0.03
-        :capabilities (code-generation)
-        :speed fast
         :thinking-policy on)))
 
     (Z-AI
@@ -111,29 +111,35 @@
          :speed fast
          :thinking-policy off)))
 
-     (TokenPlan
-      :host "token-plan.cn-beijing.maas.aliyuncs.com"
-      :models (qwen3.7-max qwen3.6-plus qwen3.6-flash deepseek-v4-pro deepseek-v4-flash kimi-k2.6 glm-5.1)
-      :default-model qwen3.7-max
-      :model-metadata
-      ((qwen3.7-max
-         :context-window 131072
-         :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
-         :capabilities (reasoning code-generation)
-         :speed medium
-         :thinking-policy on)
-        (qwen3.6-plus
-         :context-window 131072
-         :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
-         :capabilities (code-generation tool-calls)
-         :speed medium
-         :thinking-policy on)
-        (qwen3.6-flash
-         :context-window 131072
-         :pricing-input 0.14 :pricing-output 0.57 :pricing-cache-hit 0.03
-         :capabilities (code-generation)
-         :speed fast
-         :thinking-policy on)
+      (TokenPlan
+       :host "token-plan.cn-beijing.maas.aliyuncs.com"
+       :models (qwen3.7-max qwen3.7-plus qwen3.6-plus qwen3.6-flash deepseek-v4-pro deepseek-v4-flash kimi-k2.6 glm-5.1)
+       :default-model qwen3.7-max
+       :model-metadata
+       ((qwen3.7-max
+          :context-window 131072
+          :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
+          :capabilities (reasoning code-generation)
+          :speed medium
+          :thinking-policy on)
+         (qwen3.7-plus
+          :context-window 131072
+          :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
+          :capabilities (code-generation reasoning)
+          :speed medium
+          :thinking-policy on)
+         (qwen3.6-plus
+          :context-window 131072
+          :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
+          :capabilities (code-generation tool-calls)
+          :speed medium
+          :thinking-policy on)
+         (qwen3.6-flash
+          :context-window 131072
+          :pricing-input 0.14 :pricing-output 0.57 :pricing-cache-hit 0.03
+          :capabilities (code-generation)
+          :speed fast
+          :thinking-policy on)
         (deepseek-v4-pro
          :context-window 1000000
          :pricing-input 0.43 :pricing-output 0.86 :pricing-cache-hit 0.004
@@ -170,13 +176,13 @@ When adding/updating models, ONLY edit this structure.")
 (defconst gptel-task-type-model-defaults
   '((analyzer   . ((MiniMax . MiniMax-M3)
                     (TokenPlan . qwen3.7-max)
-                    (DashScope . qwen3.6-plus)
+                    (DashScope . qwen3.7-plus)
                     (moonshot . kimi-k2.6)
                     (DeepSeek . deepseek-v4-flash)))
      (grader     . ((Z-AI . glm-5.1)
                     (MiniMax . MiniMax-M3)
                     (TokenPlan . qwen3.7-max)
-                    (DashScope . qwen3.6-plus)
+                    (DashScope . qwen3.7-plus)
                     (DeepSeek . deepseek-v4-pro)
                     (moonshot . kimi-k2.6)
                     (CF-Gateway . \@cf/moonshotai/kimi-k2.6)))
@@ -185,25 +191,25 @@ When adding/updating models, ONLY edit this structure.")
                     (TokenPlan . qwen3.6-flash)
                     (DeepSeek . deepseek-v4-flash)
                     (CF-Gateway . \@cf/moonshotai/kimi-k2.6)
-                    (DashScope . qwen3.6-plus)
+                    (DashScope . qwen3.7-plus)
                     (moonshot . kimi-k2.6)))
      (researcher . ((MiniMax . MiniMax-M3)
                     (TokenPlan . qwen3.7-max)
-                    (DashScope . qwen3.6-plus)
+                    (DashScope . qwen3.7-plus)
                     (DeepSeek . deepseek-v4-pro)
                     (moonshot . kimi-k2.6)
                     (CF-Gateway . \@cf/moonshotai/kimi-k2.6)))
      (reviewer   . ((Z-AI . glm-5.1)
                     (MiniMax . MiniMax-M3)
                     (TokenPlan . qwen3.7-max)
-                    (DashScope . qwen3.6-plus)
+                    (DashScope . qwen3.7-plus)
                     (DeepSeek . deepseek-v4-pro)
                     (moonshot . kimi-k2.6)
                     (CF-Gateway . \@cf/moonshotai/kimi-k2.6)))
      (comparator . ((Z-AI . glm-5.1)
                     (MiniMax . MiniMax-M3)
                     (TokenPlan . qwen3.7-max)
-                    (DashScope . qwen3.6-plus)
+                    (DashScope . qwen3.7-plus)
                     (DeepSeek . deepseek-v4-pro)
                     (moonshot . kimi-k2.6)
                     (CF-Gateway . \@cf/moonshotai/kimi-k2.6))))
