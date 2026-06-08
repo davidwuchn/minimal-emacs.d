@@ -707,7 +707,14 @@ if [ -f "$HEALTH_FILE" ]; then
         REMEDIAL_ACTIONS=$((REMEDIAL_ACTIONS + 1))
         GRADER_ESCALATED=1
     fi
-fi
+    fi
+    # Auto-fix 5: Pricing staleness — flag for human review (can't auto-update code)
+    if [ "${PRICING_STALE:-0}" -gt 0 ] || [ "${DAYS_STALE:-0}" -gt 30 ]; then
+        log "  Auto-fix: pricing may be stale ($PRICING_STALE discrepancies, $DAYS_STALE days old)"
+        echo "pricing-stale:$PRICING_STALE:days:$DAYS_STALE" > "$DIR/var/tmp/pricing-stale.txt"
+        log "  → Flagged in var/tmp/pricing-stale.txt — update bailian-pricing.md from Bailian console"
+        REMEDIAL_ACTIONS=$((REMEDIAL_ACTIONS + 1))
+    fi
 
 if [ "$REMEDIAL_ACTIONS" -gt 0 ]; then
     log "  Auto-fix: $REMEDIAL_ACTIONS remedial actions applied — KEEPING GOING"
@@ -1394,6 +1401,11 @@ mkdir -p "$DIGEST_DIR"
         if [ "${cold_pending:-0}" -gt 0 ]; then
             echo "- **$cold_pending cold-start issues** — system may need backend diversity push"
         fi
+    fi
+    # Pricing freshness
+    if [ "${PRICING_STALE:-0}" -gt 0 ]; then
+        echo "- **⚠ Pricing may be stale** ($PRICING_STALE discrepancies, knowledge page $DAYS_STALE days old)"
+        echo "  → Update: edit \`mementum/knowledge/bailian-pricing.md\` from Bailian console, then re-run pipeline"
     fi
     # Zero run detection
     if [ "${ZERO_RUN_DETECTED:-0}" -eq 1 ]; then
