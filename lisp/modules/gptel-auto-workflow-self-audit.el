@@ -1085,6 +1085,11 @@ Returns plist (:total :total-cost :kept :kept-cost :models-seen
                     (when (>= (length fields) 16)
                       (let* ((model (nth 15 fields))
                              (decision (nth 7 fields))
+                             ;; effort_level at column 32 (0-indexed 31)
+                             (effort (if (>= (length fields) 32)
+                                         (nth 31 fields) "default"))
+                             (effort (if (string-empty-p effort) "default" effort))
+                             (key (concat model "|" effort))
                              (info (or (gethash model pricing)
                                        (list :cost 0.10 :speed 'unknown
                                              :capabilities '(code-generation))))
@@ -1092,7 +1097,7 @@ Returns plist (:total :total-cost :kept :kept-cost :models-seen
                              (kept-p (string-match-p
                                       "\\`\\(kept\\|grader-bypass\\|merged\\|staged\\)"
                                       decision))
-                             (stats (or (gethash model model-stats)
+                             (stats (or (gethash key model-stats)
                                         (list :count 0 :kept-count 0
                                               :total-cost 0.0 :kept-cost 0.0
                                               :speed (plist-get info :speed)
@@ -1106,7 +1111,7 @@ Returns plist (:total :total-cost :kept :kept-cost :models-seen
                                      (1+ (plist-get stats :kept-count)))
                           (plist-put stats :kept-cost
                                      (+ (plist-get stats :kept-cost) cost)))
-                        (puthash model stats model-stats)
+                        (puthash key stats model-stats)
                         ;; Totals
                         (setq total (1+ total))
                         (setq total-cost (+ total-cost cost))
@@ -1117,8 +1122,12 @@ Returns plist (:total :total-cost :kept :kept-cost :models-seen
             (error nil)))))
     ;; Build sorted model breakdown
     (let ((breakdown '()))
-      (maphash (lambda (model stats)
-                 (push (append (list :model model) stats) breakdown))
+      (maphash (lambda (key stats)
+                 (let* ((parts (split-string key "|"))
+                        (model (car parts))
+                        (effort (cadr parts)))
+                   (push (append (list :model model :effort effort) stats)
+                         breakdown)))
                model-stats)
       (setq breakdown (sort breakdown
                             (lambda (a b)

@@ -1357,8 +1357,9 @@ mkdir -p "$DIGEST_DIR"
             (plist-get result :models-seen)))
     ;; Line 2+: per-model breakdown
     (dolist (m (plist-get result :model-breakdown))
-      (princ (format \"MODEL|%s|%d|%d|%.2f|%.2f|%s\n\"
+      (princ (format \"MODEL|%s|%s|%d|%d|%.2f|%.2f|%s\n\"
               (plist-get m :model)
+              (or (plist-get m :effort) \"default\")
               (plist-get m :kept-count)
               (plist-get m :count)
               (plist-get m :kept-cost)
@@ -1387,11 +1388,11 @@ mkdir -p "$DIGEST_DIR"
         fi
         # Per-model breakdown (cost descending)
         echo ""
-        echo "| Model | Kept/Total | Kept Cost | Total Cost | Speed |"
-        echo "|-------|-----------|-----------|------------|-------|"
-        echo "$TOKEN_ECON" | grep '^MODEL|' | while IFS='|' read -r _ model kept_count total_count kept_cost_m total_cost_m speed; do
+        echo "| Model | Effort | Kept/Total | Kept Cost | Total Cost | Speed |"
+        echo "|-------|--------|-----------|-----------|------------|-------|"
+        echo "$TOKEN_ECON" | grep '^MODEL|' | while IFS='|' read -r _ model effort kept_count total_count kept_cost_m total_cost_m speed; do
             keep_pct=$(awk "BEGIN {printf \"%.0f\", ${kept_count:-0}*100/${total_count:-1}}")
-            echo "| $model | ${kept_count}/${total_count} (${keep_pct}%) | \$$kept_cost_m | \$$total_cost_m | $speed |"
+            echo "| $model | $effort | ${kept_count}/${total_count} (${keep_pct}%) | \$$kept_cost_m | \$$total_cost_m | $speed |"
         done
     else
         echo "- No experiments in last 24h (no cost data)"
