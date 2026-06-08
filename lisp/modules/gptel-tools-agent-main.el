@@ -205,17 +205,28 @@ Also monitors memory and triggers GC when RSS exceeds threshold."
 
 (defun gptel-auto-workflow-force-stop ()
   "Force stop a stuck workflow.
-Interactive command to recover from hung workflow state."
+Interactive command to recover from hung workflow state.
+Resilient to partial module loads — guards all optional function calls
+so the recovery command itself never crashes before resetting state."
   (interactive)
-  (my/gptel--reset-agent-task-state)
-  (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
-  (gptel-mementum--reset-synthesis-state)
-  (gptel-auto-experiment--reset-grade-state)
+  ;; ASSUMPTION: These functions may be void after partial load / failed require.
+  ;; BEHAVIOR: Guard each with fboundp so force-stop always completes.
+  ;; EDGE CASE: Module not loaded → skip that cleanup step, still reset state.
+  ;; TEST: Call force-stop after unloading a module; state should still reset.
+  (when (fboundp 'my/gptel--reset-agent-task-state)
+    (my/gptel--reset-agent-task-state))
+  (when (fboundp 'gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+    (gptel-auto-workflow--clear-runtime-subagent-provider-overrides))
+  (when (fboundp 'gptel-mementum--reset-synthesis-state)
+    (gptel-mementum--reset-synthesis-state))
+  (when (fboundp 'gptel-auto-experiment--reset-grade-state)
+    (gptel-auto-experiment--reset-grade-state))
   (when gptel-auto-workflow--cron-job-timer
     (cancel-timer gptel-auto-workflow--cron-job-timer)
     (setq gptel-auto-workflow--cron-job-timer nil))
   (gptel-auto-workflow--stop-status-refresh-timer)
-  (gptel-auto-workflow--terminate-active-shell-processes)
+  (when (fboundp 'gptel-auto-workflow--terminate-active-shell-processes)
+    (gptel-auto-workflow--terminate-active-shell-processes))
   (setq gptel-auto-workflow--running nil
         gptel-auto-workflow--cron-job-running nil
         gptel-auto-workflow--run-id nil
