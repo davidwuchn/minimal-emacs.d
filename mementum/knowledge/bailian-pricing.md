@@ -59,8 +59,14 @@ MiniMax-M2.7-highspeed | 4.2 | 16.8 | 0.42 | 196608 | fast | Cache write ¥2.625
 ## Effort-Level Economics (Future)
 
 - **Question**: which effort level (xhigh/high/low) is most economic per model?
+- **Mechanism**: higher effort = model thinks longer = more output tokens = higher cost + slower
 - **Metric**: cost-per-kept-experiment at each effort level
-- **Current limitation**: TSV doesn't record per-experiment effort level
-- **Needed**: add effort-level field to TSV output; A/B test across cycles
-- **Registry effort levels**: `gptel-backend-effort-levels` maps model→(xhigh→"high", high→"medium", default→"low")
-- **Status**: `--compute-token-economics` tracks per-model cost; per-effort tracking pending TSV schema change
+  - `xhigh`: slowest, highest quality(?), highest cost (more thinking tokens)
+  - `high`: medium speed/quality/cost
+  - `low` (default): fastest, cheapest, baseline quality
+- **$/token is the same** at all effort levels — total cost differs because token count differs
+- **Current limitation**: TSV doesn't record per-experiment effort level or token count
+- **Needed**: add effort-level + token-usage fields to TSV; A/B test across cycles
+- **Registry**: `gptel-backend-effort-levels` maps model→(effort→API value)
+  e.g., `(qwen3.7-max . ((xhigh . "high") (high . "medium") (default . "low")))`
+- **Status**: `--compute-token-economics` tracks per-model cost; per-effort tracking pending
