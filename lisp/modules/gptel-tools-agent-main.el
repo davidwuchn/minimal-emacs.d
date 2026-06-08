@@ -440,10 +440,10 @@ Usage:
         (error
          (message "[staging-recovery] Recovery sweep skipped: %s"
                   (error-message-string err)))))
-(gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
-     (gptel-auto-workflow--clear-rate-limited-backends)
-     (when (fboundp 'gptel-auto-workflow--clear-run-failed-backends)
-       (gptel-auto-workflow--clear-run-failed-backends))
+    (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+    (gptel-auto-workflow--clear-rate-limited-backends)
+    (when (fboundp 'gptel-auto-workflow--clear-run-failed-backends)
+      (gptel-auto-workflow--clear-run-failed-backends))
      ;; Apply pipeline auto-fix signals (bridge between bash Step 0.5 and daemon)
      ;; The pipeline writes signal files; the daemon reads them here.
      ;; This closes the DETECT→ACT→KEEP-GOING loop.
