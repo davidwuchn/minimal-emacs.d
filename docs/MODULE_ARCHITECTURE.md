@@ -555,7 +555,7 @@ lisp/modules/
 │
 ├── YC Self-Improving (34 modules)
 │   ├── Core Loop
-│   │   ├── gptel-auto-workflow-monitoring-agent.el      # 7-phase monitoring cycle (~839 lines)
+│   │   ├── gptel-auto-workflow-monitoring-agent.el      # 10-phase monitoring cycle (~1300 lines)
 │   │   ├── gptel-auto-workflow-approval-queue.el        # Human approval gate
 │   │   ├── gptel-auto-workflow-decision-classification.el # Risk classification + persist
 │   │   └── gptel-auto-workflow-architectural-evolution.el # Structural proposals
@@ -639,7 +639,7 @@ Set by `gptel-config.el`:
 
 ## YC Monitoring Cycle
 
-The monitoring agent runs a 7-phase cycle every 15 minutes (900s throttle):
+The monitoring agent runs a 10-phase cycle every 15 minutes (900s throttle):
 
 ```
 Phase 0: Health Probes (every 3rd cycle)
@@ -649,31 +649,49 @@ Phase 0: Health Probes (every 3rd cycle)
           │
 Phase 1: Failure Analysis
     ├── Parse recent experiment TSV results
-    └── Classify failure patterns
+    ├── Classify failure patterns
+    └── Persist patterns to mementum
           │
 Phase 2: Proposal Generation
     ├── Generate fix proposals from patterns
     ├── Score + validate proposals
-    └── Auto-deploy low-risk (score ≥ 0.6)
+    └── Persist validated proposals
           │
-Phase 3: Architectural Evolution
+Phase 3: Test & Deploy
+    ├── Test validated proposals against baseline
+    └── Deploy passing proposals (safe rollback)
+          │
+Phase 4: Architectural Evolution
     ├── Module retirement (0% keep-rate)
     ├── Routing opportunities
     ├── Global regression detection
     └── Coverage gap identification
           │
-Phase 4: External Sensors
+Phase 5: External Sensors
     └── GitHub Issues sensor (real data)
           │
-Phase 5: Deploy→Regen Wiring
-    ├── Resolve pattern-target to .el file
-    ├── Attempt code-regeneration--execute
-    └── Rollback via git reset on failure
-          │
-Phase 6: Approval Queue
+Phase 6: Execute Approved Proposals
     ├── Auto-approve recurring (≥3 occurrences)
     ├── Execute approved proposals
+    ├── Deploy medium-risk past grace period
     └── Prune expired (7-day TTL)
+          │
+Phase 7: Post-Deploy Impact Assessment
+    ├── Collect baseline metrics before deployment
+    ├── Wait 3 cycles (~45 min) before assessment
+    ├── Compare baseline vs current metrics
+    └── Return verdict: improved/degraded/neutral
+          │
+Phase 8: Synthesis Trigger
+    ├── Detect topics with ≥3 memories on same topic
+    ├── Propose knowledge page creation
+    └── Auto-synthesize topics with ≥5 memories
+          │
+Phase 9: Self-Tuning (Human-Approved)
+    ├── Collect monitoring effectiveness metrics
+    ├── Generate tuning proposals for defcustom params
+    ├── Route proposals through approval queue
+    └── Apply approved tuning changes
 ```
 
 ### Risk Classification
