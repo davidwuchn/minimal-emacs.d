@@ -42,6 +42,7 @@ legacy-curator: bailian-token-plan/deepseek-v4-pro
 additional_delegates:
   strong:
     model: github-copilot/gpt-5.4
+    reasoningEffort: xhigh
   gpt:
     model: github-copilot/gpt-5.5
     reasoningEffort: max
@@ -93,7 +94,15 @@ done
 # Subagents
 update_model "$AGENTS_DIR/delegate.md"             "bailian-token-plan/deepseek-v4-pro"
 update_model "$AGENTS_DIR/delegate-fast.md"          "bailian-token-plan/deepseek-v4-flash"
-update_model "$AGENTS_DIR/delegate-strong.md"        "github-copilot/gpt-5.4"
+# delegate-strong — ensure reasoningEffort: xhigh
+if [ -f "$AGENTS_DIR/delegate-strong.md" ]; then
+    perl -pi -e 's|^model:.*|model: github-copilot/gpt-5.4|' "$AGENTS_DIR/delegate-strong.md"
+    if ! grep -q "^options:" "$AGENTS_DIR/delegate-strong.md"; then
+        perl -pi -e 's|^(model: github-copilot/gpt-5.4)$|$1\noptions:\n  reasoningEffort: xhigh|' "$AGENTS_DIR/delegate-strong.md"
+    else
+        perl -pi -e 's|^  reasoningEffort:.*|  reasoningEffort: xhigh|' "$AGENTS_DIR/delegate-strong.md"
+    fi
+fi
 update_model "$AGENTS_DIR/delegate-gpt.md"           "github-copilot/gpt-5.5"
 update_model "$AGENTS_DIR/delegate-opus.md"          "github-copilot/claude-opus-4.8"
 update_model "$AGENTS_DIR/delegate-qwen.md"          "bailian-token-plan/qwen3.7-max"
