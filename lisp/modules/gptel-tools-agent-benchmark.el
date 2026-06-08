@@ -183,7 +183,8 @@ work in ELisp).  Set to nil to disable (only for emergency situations)."
 
 (defun gptel-auto-experiment--defer-tests-to-staging-p (skip-tests)
   "Return non-nil when benchmark tests should be deferred to staging.
-This only applies to headless auto-workflow runs that already verify candidates
+This only applies to headless auto-workflow runs that already verify
+candidates
 through the staging gate."
   (and skip-tests
        gptel-auto-experiment-require-tests
@@ -1093,21 +1094,23 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
                      grade-id callback
                      (list :score 4 :total 5 :percentage 80.0 :passed t
                            :details "Grader timeout — auto-pass to prevent experiment destruction"
-                           :grader-only-failure t)))))))))
-        (puthash grade-id (list :done nil :timer timeout-timer)
-                 gptel-auto-experiment--grade-state))
+                            :grader-only-failure t))))))))
+         (puthash grade-id (list :done nil :timer timeout-timer)
+                  gptel-auto-experiment--grade-state)))
       (if (and gptel-auto-experiment-use-subagents
                (fboundp 'gptel-benchmark-grade))
           ;; Ensure grader dispatch cannot strand the experiment without a
-          ;; result when routing/prompt construction fails synchronously.
-          (condition-case err
+           ;; result when routing/prompt construction fails synchronously.
+           (condition-case err
               (with-current-buffer grade-buffer
                 (gptel-benchmark-grade
                  (gptel-auto-experiment--build-grading-output output target worktree)
                  '("change clearly described"
                    "change is minimal and focused"
                    "improves code: fixes bug, improves performance, addresses TODO/FIXME, or enhances clarity/testability"
-                   "verification attempted (byte-compile, syntax, load-test, nucleus, or tests — also check VERIFICATION EVIDENCE FROM <think> section and <think> reasoning blocks)")
+                   "verification attempted (byte-compile, syntax, load-test, nucleus, or tests —
+also check VERIFICATION EVIDENCE FROM <think> section and <think> reasoning
+blocks)")
                  '("large refactor unrelated to stated improvement"
                    "changed security files without review"
                    "no description or unclear purpose"
@@ -1120,14 +1123,14 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
             (error
              (message "[auto-exp] Grader dispatch failed: %s"
                       (my/gptel--sanitize-for-logging
-                       (error-message-string err) 200))
-             (gptel-auto-experiment--finish-grade
-              grade-id callback
-              (list :score 0 :total 1 :percentage 0.0 :passed nil
-                    :details (format "Error: grader dispatch failed: %s"
-                                     (error-message-string err))
-                    :error-source (format "Error: grader dispatch failed: %s"
-                                          (error-message-string err))
+(error-message-string err) 200))
+              (gptel-auto-experiment--finish-grade
+               grade-id callback
+               (list :score 0 :total 1 :percentage 0.0 :passed nil
+                     :details (format "Error: grader dispatch failed: %s"
+                                      (error-message-string err))
+                     :error-source (format "Error: grader dispatch failed: %s"
+                                           (error-message-string err))
                     :grader-only-failure t)
               t)))
         (gptel-auto-experiment--finish-grade
@@ -1255,7 +1258,8 @@ Returns list of strings, each a single think block's content."
 
 (defun gptel-auto-experiment--classify-think-blocks (blocks)
   "Classify each think BLOCK into a reasoning category.
-Returns plist: (:categories LIST :dominant SYMBOL :score FLOAT :verdict STRING)."
+Returns plist: (:categories LIST :dominant SYMBOL :score FLOAT :verdict
+STRING)."
   (let ((categories nil)
         (scores nil)
         (patterns
