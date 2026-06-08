@@ -64,8 +64,8 @@ Value gained = score improvement (score-after - score-before).
 Returns 0.0 for discarded experiments or zero cost.
 Correlates cost with business rationale from context database when available."
   (let ((decision (plist-get experiment :decision))
-        (score-before (plist-get experiment :score-before))
-        (score-after (plist-get experiment :score-after))
+        (score-before (or (plist-get experiment :score-before) 0.0))
+        (score-after (or (plist-get experiment :score-after) 0.0))
         (cost (or (plist-get experiment :cost)
                   (gptel-token-economics--calculate-cost
                    (or (plist-get experiment :input-tokens) 0)

@@ -4,9 +4,9 @@ valid-from: 2026-06-08T19:01
 
 # Insight: 2026-06-08 19:01
 
-**Proposal:** Address recurring strategy failures in lisp/modules/gptel-auto-workflow-strategic.el: recurring failures
+**Proposal:** Address recurring strategy failures in lisp/modules/gptel-auto-workflow-approval-queue.el: recurring failures
 **Component:** strategy-harness
-**Expected impact:** Reduce strategy failures in lisp/modules/gptel-auto-workflow-strategic.el by ~60%
+**Expected impact:** Reduce strategy failures in lisp/modules/gptel-auto-workflow-approval-queue.el by ~60%
 **Confidence:** 0.60
 **Risk:** high
 **Validation rate:** 0.02
