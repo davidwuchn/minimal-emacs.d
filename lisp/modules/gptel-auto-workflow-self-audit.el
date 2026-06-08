@@ -234,25 +234,92 @@ FILTER-FN is called on each value; only truthy results are kept."
            (sca (gptel-auto-workflow-self-audit--run-strategy-check))
            (sma (gptel-auto-workflow-self-audit--run-merge-check))
            (pricing (gptel-auto-workflow-self-audit--check-pricing-freshness))
+           (kg (gptel-auto-workflow-self-audit--run-knowledge-gap-check))
            (cold (plist-get bca :cold))
            (cold-count (length cold))
            (unev (plist-get sca :unevaluated))
            (broken-count (length (plist-get bcc :broken)))
            (bottleneck (plist-get sma :bottleneck-p))
            (pricing-stale (plist-get pricing :stale-count))
+           (kg-count (plist-get kg :gap-count))
            (issues (+ broken-count cold-count unev
                       (if bottleneck 1 0)
-                      (if (> pricing-stale 0) 1 0))))
+                      (if (> pricing-stale 0) 1 0)
+                      kg-count)))
       (list :module-health bcc
             :backend-cold-start bca
             :strategy-cold-start sca
             :staging-merge-bottleneck sma
             :pricing-freshness pricing
+            :knowledge-gaps kg
             :timestamp (format-time-string "%Y-%m-%dT%H:%M:%S")
             :issues issues
             :auto-fixable (+ broken-count cold-count unev)))))
 
 ;;; Report formatting
+
+(defun gptel-auto-workflow-self-audit--run-knowledge-gap-check ()
+  "Check the unified graph for knowledge gaps.
+Detects: isolated nodes (no edges), low-confidence communities,
+and targets with no similarity edges. Returns plist :gap-count, :isolated, :low-confidence."
+  (let ((gap-count 0) (isolated '()) (low-conf-communities '()))
+    (condition-case err
+        (when (fboundp 'gptel-auto-workflow--unified-graph-ensure)
+          (let ((graph (gptel-auto-workflow--unified-graph-ensure)))
+            (when (and graph (> (hash-table-count graph) 0))
+              ;; Find isolated nodes: degree 0
+              (maphash (lambda (key edges)
+                         (when (null edges)
+                           (let ((id (cdr key)))
+                             (unless (string-match-p "^\." id)  ; skip method stubs
+                               (push id isolated)))))
+                       graph)
+              (setq gap-count (+ gap-count (length isolated)))
+              ;; Find low-confidence edges in communities
+              (when (fboundp 'gptel-auto-workflow--unified-graph-communities)
+                (let* ((communities (gptel-auto-workflow--unified-graph-communities))
+                       (comm-confidence (make-hash-table :test 'equal)))
+                  (when communities
+                    (maphash (lambda (from-key edges)
+                               (let ((comm (gethash from-key communities)))
+                                 (dolist (edge (or edges '()))
+                                   (let ((label (nth 3 edge)))
+                                     (when (eq label 'AMBIGUOUS)
+                                       (puthash comm
+                                                (1+ (gethash comm comm-confidence 0))
+                                                comm-confidence))))))
+                             graph)
+                    (maphash (lambda (comm count)
+                               (when (> count 3)  ; community with >3 AMBIGUOUS edges
+                                 (push (cons comm count) low-conf-communities)))
+                             comm-confidence)
+                    (when low-conf-communities
+                      (setq gap-count (+ gap-count 1)))))))))
+      (error (message "[self-audit] Knowledge gap check failed: %s"
+                      (error-message-string err))))
+    (list :gap-count (min gap-count 10)  ; cap at 10 to avoid dominating issue count
+          :isolated (seq-take isolated 5)
+          :low-confidence-communities (seq-take low-conf-communities 3))))
+
+(defun gptel-auto-workflow-self-audit--format-knowledge-gap-section (kg)
+  "Format knowledge gap section from KG plist."
+  (if (not kg)
+      ""
+    (let ((gaps (plist-get kg :gap-count))
+          (isolated (plist-get kg :isolated))
+          (low-conf (plist-get kg :low-confidence-communities)))
+      (if (or (null gaps) (= gaps 0))
+          "- ✓ Knowledge graph: 0 gaps detected\n\n"
+        (concat
+         (format "### Knowledge graph gaps (%d found)\n" gaps)
+         (when isolated
+           (format "- %d isolated nodes (no connections): %s\n"
+                   (length isolated)
+                   (mapconcat #'identity isolated ", ")))
+         (when low-conf
+           (format "- %d communities with >3 AMBIGUOUS edges (low confidence)\n"
+                   (length low-conf)))
+         "\n")))))
 
 (defun gptel-auto-workflow-self-audit--format-backend-section (bca)
   "Format backend cold-start section from BCA plist."
@@ -306,6 +373,7 @@ FILTER-FN is called on each value; only truthy results are kept."
           (sca (plist-get audit-result :strategy-cold-start))
           (sma (plist-get audit-result :staging-merge-bottleneck))
           (bcc (plist-get audit-result :module-health))
+          (kg (plist-get audit-result :knowledge-gaps))
           (issues (plist-get audit-result :issues))
           (ts (plist-get audit-result :timestamp)))
       (concat
@@ -318,6 +386,7 @@ FILTER-FN is called on each value; only truthy results are kept."
        (gptel-auto-workflow-self-audit--format-backend-section bca)
        (gptel-auto-workflow-self-audit--format-strategy-section sca)
        (gptel-auto-workflow-self-audit--format-merge-section sma)
+       (gptel-auto-workflow-self-audit--format-knowledge-gap-section kg)
        (format "**Audit score: %d issues found** (timestamp %s)\n"
                issues ts)
        "Memory written: mementum/memories/audit-fix-*.md\n"))))
