@@ -1,10 +1,10 @@
 # Mementum State
 
 > **Bootstrapped**: 2026-06-06
-> **Session**: YC completion — all 8 test failures fixed, Phase 7 impact assessment added
-> **Status**: YC ~98% complete — feedback loop closed with post-deploy impact assessment
-> **Latest**: Fixed persist tests (make-temp-file DIR arg), execute error handler (writes failure mementum), variable isolation (unwind-protect). Added Phase 7: post-deploy impact assessment with baseline metrics, wait cycles, and verdict tracking
-> **Active Plan**: OV5 self-improving system — YC vision ~98% complete
+> **Session**: YC completion — ontology router wired, synthesis trigger added
+> **Status**: YC ~99% complete — smart experiment selection + knowledge synthesis closed
+> **Latest**: Ontology router enriches failure patterns with category + keep-rate for priority sorting. Phase 8: synthesis trigger detects ≥3 memories, auto-synthesizes ≥5 memories
+> **Active Plan**: OV5 self-improving system — YC vision ~99% complete
 
 ---
 
@@ -192,11 +192,15 @@ User Input → Detect Task Type → Route to Model → Self-Heal Diagnostic → 
 
 - All YC wiring gaps closed and tested
 - Phase 7 post-deploy impact assessment added (feedback loop closed)
+- Phase 8 synthesis trigger added (memory→knowledge loop closed)
+- Ontology router wired into monitoring agent (smart experiment selection)
 - **All 8 test failures fixed**: 5 persist tests, 1 error-path, 1 prompt-override, 1 state leak
 - **Phase 7 implementation**: Baseline metrics collection, wait cycles, impact verdicts (improved/degraded/neutral), mementum memory writes
-- Remaining 2%: Wire ontology router into monitoring agent, add synthesis trigger, allow self-modification
+- **Phase 8 implementation**: Detects ≥3 memories on same topic, proposes knowledge page, auto-synthesizes ≥5 memories
+- **Ontology enrichment**: Failure patterns include :category and :category-keep-rate, sorted by priority (low keep-rate = higher priority)
+- Remaining 1%: Allow self-modification of monitoring code (with human approval)
 - 3 pre-existing test failures (grader, preview, projects) unrelated to YC work
-- Monitoring agent now runs 7 phases: health probes → analyze → propose → test/deploy → architectural → external sensors → approved execution → impact assessment
+- Monitoring agent now runs 8 phases: health probes → analyze → propose → test/deploy → architectural → external sensors → approved execution → impact assessment → synthesis trigger
 
 ---
 
