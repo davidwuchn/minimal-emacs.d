@@ -1,10 +1,10 @@
 # Mementum State
 
 > **Bootstrapped**: 2026-06-06
-> **Session**: Close critical loops: approval→deploy, sensor→scoring, GitHub Issues
-> **Status**: YC Phases 1(~55%), 2(~90%), 3(done), 4(done) — OV5 ~80% complete
-> **Latest**: Approval queue executor wired into monitoring cycle Phase 6; external sensors wired into experiment scoring via full-sensor-pipeline; GitHub Issues sensor collecting real data
-> **Active Plan**: OV5 self-improving system — YC vision ~80% complete
+> **Session**: Close YC wiring gaps: code regen execute, risk persist, health probes, deploy→regen
+> **Status**: YC all 5 layers structurally complete — OV5 ~95% complete
+> **Latest**: All 4 wiring gaps closed; code-regeneration--execute calls experiment system; risk patterns persist to var/; health probes run every 3rd monitoring cycle as Phase 0; auto-deploy attempts real code regeneration with rollback
+> **Active Plan**: OV5 self-improving system — YC vision ~95% complete
 
 ---
 
@@ -177,27 +177,30 @@ User Input → Detect Task Type → Route to Model → Self-Heal Diagnostic → 
 
 ## Next Steps (Suggested by Active Mementum)
 
-1. **Pi5 soak time** — let closed loops (approval→deploy, sensor→scoring, commit retry) run for a week
-2. **Slack/Zendesk integration** — L1 Sensors still weakest layer (~55%)
+1. **Pi5 soak time** — let closed loops exercise new wiring (deploy→regen, health probes, risk persistence)
+2. **Slack/Zendesk integration** — external API keys needed, not code wiring
 3. **Human dashboards/alerts** — approval queue review UI (Phase 4.3)
 4. **Upstream PR** — install.sh macOS sed (blocked)
+5. **Update docs/** — module inventories may be stale after YC wiring gap changes
 
 ## Blockers
 
 - **Upstream PR**: install.sh macOS sed — Pi5 fixed locally, upstream not merged
+- **External integrations**: Slack/Zendesk/DataDog need API keys (not code wiring)
 
 ## Context for Next Session
 
-- All P0+P1+P2 priorities complete; two critical loops closed this session
-- **Approval→deploy loop CLOSED**: `execute-approved` now called in monitoring cycle Phase 6
-- **Sensor→scoring loop CLOSED**: external sensors (Sentry, feedback webhook, GitHub Issues) wired into `track-production-impact` via `full-sensor-pipeline` rich path
-- **Medium-risk grace period**: proposals past `deploy-grace-seconds` auto-deployed in Phase 6c
-- Monitoring agent runs 6 phases: analyze→propose→test/deploy→architectural→GitHub sensor→execute approved
-- Production metrics: real feedback webhook + GitHub Issues replace stubs; local signals always tried for real files (Pi5 evolution)
-- Approval queue: dedup + auto-approve recurring + executor = fully closed loop
-- Commit retry for grader-bypass: attempt 2 uses fresh stage+commit
-- YC Vision completion: ~80% (Sensor ~55%, Policy ~90%, Tools ~95%, Quality ~95%, Learning ~85%)
+- All P0+P1+P2 priorities complete; **all 4 YC wiring gaps closed** this session
+- **Code regen execution**: `--execute` calls experiment system with callback, writes mementum memories
+- **Persistent risk patterns**: risk patterns + approval history survive daemon restart via `var/`
+- **Runtime health probes**: Phase 0 every 3rd monitoring cycle — daemon alive, stuck loop, metrics freshness
+- **Deploy→regen wiring**: auto-deploy resolves pattern-target to .el file, attempts real code regeneration with rollback
+- Monitoring agent now runs 7 phases: health probes→analyze→propose→test/deploy→architectural→GitHub sensor→execute approved
+- YC Vision completion: **~95%** (all 5 layers structurally complete with working code)
+- Remaining 5% = external integrations (API keys), not code wiring
+- HEAD: `237685cff` pushed to Pi5, working tree clean
 - All .el files compile clean with `byte-compile-error-on-warn t`
+- 391/391 ERT tests pass
 
 ---
 
