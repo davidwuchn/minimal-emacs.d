@@ -587,6 +587,7 @@ short-circuiting repeats."
           (let ((candidate (match-string 1)))
             (when (and candidate
                        (< (length candidate) 200)
+                       (not (string-search " " candidate))
                        (string-match-p "--\\|::" candidate))
               (push candidate symbols))))))
     (nreverse (cl-remove-duplicates symbols :test #'string=))))
