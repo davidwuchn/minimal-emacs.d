@@ -1722,5 +1722,22 @@ Returns formatted string with key names and signals."
             (insert (format "\n%s\n" (or best-hypothesis "(Run more experiments)"))))
           (write-region (point-min) (point-max) file))))))
 
+(defun gptel-auto-workflow--daemon-health ()
+  "Return a plist with daemon health status for pipeline digest.
+Checks: running state, experiment count, keep-rate, rate-limited backends."
+  (let* ((running (and (boundp 'gptel-auto-workflow--running)
+                       gptel-auto-workflow--running))
+         (target (and (boundp 'gptel-auto-workflow--current-target)
+                      gptel-auto-workflow--current-target))
+         (rate-limited (and (boundp 'gptel-auto-workflow--rate-limited-backends)
+                            (length gptel-auto-workflow--rate-limited-backends)))
+         (grade-timeout (and (boundp 'gptel-auto-experiment-grade-timeout)
+                             gptel-auto-experiment-grade-timeout)))
+    (format "running=%s target=%s rate-limited=%d grade-timeout=%ds"
+            (if running "yes" "no")
+            (or target "none")
+            (or rate-limited 0)
+            (or grade-timeout 900))))
+
 (provide 'gptel-tools-agent-main)
 ;;; gptel-tools-agent-main.el ends here
