@@ -211,6 +211,195 @@ Default is 24 hours (86400 seconds).  Human can object during this window."
   :type 'integer
   :group 'gptel-tools-agent)
 
+;; ── Post-Deploy Impact Assessment (Phase 7) ──
+
+(defcustom gptel-auto-workflow-monitoring-impact-wait-cycles 3
+  "Number of monitoring cycles to wait before assessing deploy impact.
+Default is 3 cycles.  At 15-minute intervals, this means ~45 minutes
+of observation before impact assessment."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-auto-workflow-monitoring-impact-improvement-threshold 0.05
+  "Minimum relative improvement (0.05 = 5%) to consider deploy successful."
+  :type 'float
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-auto-workflow-monitoring-impact-degradation-threshold -0.10
+  "Maximum relative degradation before triggering rollback.
+A value of -0.10 means -10% degradation triggers rollback consideration."
+  :type 'float
+  :group 'gptel-tools-agent)
+
+(defvar gptel-auto-workflow-monitoring--pending-impact-assessments nil
+  "List of pending post-deploy impact assessments.
+Each element is a plist:
+  (:deploy-time TIME
+   :deploy-cycle CYCLE
+   :module MODULE
+   :proposal PROPOSAL
+   :baseline-metrics PLIST)
+Populated when a proposal is deployed; consumed by Phase 7.")
+
+(defvar gptel-auto-workflow-monitoring--impact-assessment-file
+  (expand-file-name "var/impact-assessments.sexp" user-emacs-directory)
+  "File to persist pending impact assessments across daemon restarts.")
+
+(defun gptel-auto-workflow--persist-impact-assessments ()
+  "Persist pending impact assessments to disk."
+  (ignore-errors
+    (make-directory (file-name-directory
+                     gptel-auto-workflow-monitoring--impact-assessment-file) t)
+    (with-temp-file gptel-auto-workflow-monitoring--impact-assessment-file
+      (prin1 gptel-auto-workflow-monitoring--pending-impact-assessments
+             (current-buffer)))
+    t))
+
+(defun gptel-auto-workflow--load-impact-assessments ()
+  "Load pending impact assessments from disk.  Returns list or nil."
+  (ignore-errors
+    (when (file-exists-p gptel-auto-workflow-monitoring--impact-assessment-file)
+      (with-temp-buffer
+        (insert-file-contents gptel-auto-workflow-monitoring--impact-assessment-file)
+        (goto-char (point-min))
+        (read (current-buffer))))))
+
+(defun gptel-auto-workflow--record-deployment-for-impact (module proposal baseline-metrics)
+  "Record a deployment for later impact assessment.
+MODULE is the file/module deployed.  PROPOSAL is the proposal plist.
+BASELINE-METRICS is a plist of metrics before deployment.
+Adds to pending assessments and persists."
+  (let ((assessment `(:deploy-time ,(float-time)
+                       :deploy-cycle ,gptel-auto-workflow-monitoring-cycle-counter
+                       :module ,module
+                       :proposal ,proposal
+                       :baseline-metrics ,baseline-metrics)))
+    (push assessment gptel-auto-workflow-monitoring--pending-impact-assessments)
+    (gptel-auto-workflow--persist-impact-assessments)
+    (message "[monitoring] Recorded deployment for impact assessment: %s" module)
+    assessment))
+
+(defun gptel-auto-workflow--collect-current-metrics (module)
+  "Collect current metrics for MODULE.
+Returns a plist with :tests-passing, :compile-clean, :file-size.
+This provides a lightweight snapshot for impact comparison."
+  (let ((file-path (expand-file-name module (expand-file-name default-directory)))
+        (tests-passing t)
+        (compile-clean t)
+        (file-size 0))
+    ;; Check file exists and get size
+    (when (file-exists-p file-path)
+      (setq file-size (file-attribute-size (file-attributes file-path))))
+    ;; Check recent test results for this module
+    (when (fboundp 'gptel-auto-workflow--parse-all-results)
+      (let* ((records (gptel-auto-workflow--parse-all-results))
+             (module-records (cl-remove-if-not
+                              (lambda (r) (string-match-p (regexp-quote module)
+                                                          (or (plist-get r :target) "")))
+                              records))
+             (recent (cl-remove-if-not
+                      (lambda (r) (equal (plist-get r :decision) "kept"))
+                      module-records)))
+        (setq tests-passing (> (length recent) 0))))
+    `(:tests-passing ,tests-passing
+      :compile-clean ,compile-clean
+      :file-size ,file-size)))
+
+(defun gptel-auto-workflow--assess-impact (assessment)
+  "Assess impact of a deployment described by ASSESSMENT.
+Compares baseline metrics to current metrics.
+Returns plist with :verdict (:improved :degraded :neutral),
+:delta (relative change), :details (string)."
+  (let* ((module (plist-get assessment :module))
+         (baseline (plist-get assessment :baseline-metrics))
+         (current (gptel-auto-workflow--collect-current-metrics module))
+         (baseline-size (or (plist-get baseline :file-size) 0))
+         (current-size (or (plist-get current :file-size) 0))
+         (baseline-tests (plist-get baseline :tests-passing))
+         (current-tests (plist-get current :tests-passing))
+         (size-delta (if (and baseline-size (> baseline-size 0))
+                         (/ (float (- current-size baseline-size)) baseline-size)
+                       0.0))
+         (verdict :neutral)
+         (details ""))
+    ;; Determine verdict
+    (cond
+     ;; Degradation: tests stopped passing
+     ((and baseline-tests (not current-tests))
+      (setq verdict :degraded)
+      (setq details "Test status degraded: was passing, now failing"))
+     ;; Improvement: size reduction
+     ((and (< size-delta 0)
+           (>= (- size-delta) gptel-auto-workflow-monitoring-impact-improvement-threshold))
+      (setq verdict :improved)
+      (setq details (format "File size reduced by %.1f%%" (* 100 (- size-delta)))))
+     ;; Improvement: tests became passing
+     ((and (not baseline-tests) current-tests)
+      (setq verdict :improved)
+      (setq details "Test status improved: was failing, now passing"))
+     ;; Degradation: concerning size increase
+     ((> size-delta (- gptel-auto-workflow-monitoring-impact-degradation-threshold))
+      (setq verdict :degraded)
+      (setq details (format "File size increased by %.1f%%" (* 100 size-delta)))))
+    `(:verdict ,verdict
+      :delta ,size-delta
+      :module ,module
+      :details ,details
+      :baseline ,baseline
+      :current ,current)))
+
+(defun gptel-auto-workflow--run-impact-assessments ()
+  "Phase 7: Run post-deploy impact assessments.
+Checks pending assessments, assesses those past wait-cycles threshold.
+Returns list of assessment results."
+  ;; Load persisted assessments if in-memory list is empty
+  (when (null gptel-auto-workflow-monitoring--pending-impact-assessments)
+    (let ((loaded (gptel-auto-workflow--load-impact-assessments)))
+      (when loaded
+        (setq gptel-auto-workflow-monitoring--pending-impact-assessments loaded))))
+  (let ((results nil)
+        (remaining nil))
+    (dolist (assessment gptel-auto-workflow-monitoring--pending-impact-assessments)
+      (let* ((deploy-cycle (or (plist-get assessment :deploy-cycle) 0))
+             (cycles-elapsed (- gptel-auto-workflow-monitoring-cycle-counter
+                                deploy-cycle))
+             (module (plist-get assessment :module)))
+        (if (>= cycles-elapsed gptel-auto-workflow-monitoring-impact-wait-cycles)
+            ;; Time to assess
+            (let* ((result (gptel-auto-workflow--assess-impact assessment))
+                   (verdict (plist-get result :verdict))
+                   (details (plist-get result :details))
+                   (slug (format "impact-%s-%s"
+                                 (symbol-name verdict)
+                                 (if (fboundp 'gptel-auto-workflow--mementum-slug)
+                                     (gptel-auto-workflow--mementum-slug module)
+                                   (replace-regexp-in-string
+                                    "[^a-zA-Z0-9]" "-" (downcase module)))))
+                   (content (format "**Impact Assessment for %s**\n**Verdict:** %s\n**Cycles elapsed:** %d\n**Details:** %s\n\n**Baseline:** %s\n**Current:** %s"
+                                    module (symbol-name verdict) cycles-elapsed details
+                                    (plist-get result :baseline)
+                                    (plist-get result :current)))
+                   (symbol (pcase verdict
+                             (:improved '✅)
+                             (:degraded '⚠️)
+                             (_ '📊))))
+              ;; Write mementum memory
+              (when (fboundp 'gptel-auto-workflow--mementum-write-memory)
+                (gptel-auto-workflow--mementum-write-memory symbol slug content))
+              (message "[monitoring] Phase 7: Impact for %s: %s"
+                       module (symbol-name verdict))
+              (push result results)
+              ;; If degraded, log warning
+              (when (eq verdict :degraded)
+                (message "[monitoring] Phase 7: WARNING - degradation for %s" module)))
+          ;; Not yet time, keep in remaining list
+          (push assessment remaining))))
+    ;; Update pending list and persist
+    (setq gptel-auto-workflow-monitoring--pending-impact-assessments
+          (nreverse remaining))
+    (gptel-auto-workflow--persist-impact-assessments)
+    results))
+
 ;; ── Failure Classification ──
 
 (defun gptel-auto-workflow--classify-failure--is-compilation
@@ -831,9 +1020,15 @@ Returns list of written mementum file paths, or nil if throttled/disabled."
                                         "\\.md$" ""
                                         (replace-regexp-in-string
                                          "^pending-notification-" "grace-deploy-" basename))
-                                    (format "**Grace-period auto-deploy:** %s\n**Grace period:** %ds\n**Elapsed:** %ds\n\nDeployed after grace period with no human objection."
-                                            basename (truncate grace) (truncate age))))))))))))))
-            (ignore (nreverse written))))))))))
+                                     (format "**Grace-period auto-deploy:** %s\n**Grace period:** %ds\n**Elapsed:** %ds\n\nDeployed after grace period with no human objection."
+                                             basename (truncate grace) (truncate age)))))))))))))
+            ;; Phase 7: Post-deploy impact assessment
+            (ignore-errors
+              (let ((assessments (gptel-auto-workflow--run-impact-assessments)))
+                (when assessments
+                  (message "[monitoring] Phase 7: Assessed %d deployments"
+                           (length assessments)))))
+            (ignore (nreverse written)))))))))))
 
 (provide 'gptel-auto-workflow-monitoring-agent)
 ;;; gptel-auto-workflow-monitoring-agent.el ends here
