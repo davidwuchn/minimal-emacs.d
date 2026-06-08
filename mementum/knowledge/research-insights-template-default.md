@@ -71,66 +71,63 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
-*5 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
+*3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Distilled Research Summary
+# Distillation
 
 ## Scope
-- **Strategy:** template-default
-- **Experiments:** 163
-- **Targets:** 45 Emacs Lisp modules in the gptel project (covering auto-workflow, tools-agent, ext, benchmark, and staging subsystems)
+163 experiments across 45 gptel modules using the `template-default` research strategy. The target surface spans auto-workflow orchestration, tools-agent runtime/staging/error paths, extensions (backend registry, circuit breaker, retry, tool permits, core), benchmarks (principles, core, subagent), and supporting infrastructure (knowledge reasoning, monitoring, self-audit, CQ evolution, mementum, staging-merge/review).
 
-## Outcome
+## Substantive Finding (1 kept hypothesis)
 
-### Kept Hypotheses (1)
-**Hypothesis:** Wrapping `gptel--fsm-next` in `condition-case` prevents a crash in `my/gptel-auto-retry` when the FSM is in an invalid state.
+**Defensive FSM guard in `my/gptel-auto-retry`.** Wrapping the call to `gptel--fsm-next` in a `condition-case` so that an unresolvable next-state condition yields `ERRS` rather than signaling:
 
-**Mechanism:**
-- Without guard → invalid FSM state causes the error to propagate and abort the retry machinery
-- With `condition-case` → failure is caught and defaulted to `ERRS`, allowing the original transition path to handle the failure gracefully
+- Protects the retry loop from being torn down by an upstream FSM invariant violation.
+- Routes the failure back through the normal transition path, preserving whatever logging/notification the `ERRS` arm already implements.
+- Costs nothing on the happy path (a `condition-case` with no matching condition is effectively a no-op besides the tag form).
 
-**Confidence signal:** This is the only hypothesis that survived filtering — suggesting the FSM transition in the retry loop is the most well-understood or well-evidenced change in the experiment set.
+That is the only hypothesis the harness actually retained evidence for.
 
-### Discarded Hypotheses
-- Effectively **null** — all entries are either blank or marked `unknown`
-- Indicates the research strategy did not produce or retain alternative working hypotheses for the remaining targets
+## Discarded / Unknown
+All 3 discard slots are `unknown` — the first is a verbatim template stub ("[what changes & why]" (NEVER leave blank)), and the next two are unpopulated placeholders. No hypotheses were explicitly rejected with reason; effectively nothing was ruled out.
 
-## Interpretation
-The "template-default" strategy yielded **sparse signal**:
-- High experiment count (163) but very low hypothesis retention rate (~1/45 targets = ~2%)
-- The single kept hypothesis targets a **defensive programming pattern** (exception guarding around FSM transitions) rather than a feature addition
-- The bulk of targets produced no actionable hypothesis — likely because template-default is a conservative strategy that only surfaces changes with strong error-condition evidence
+## Gaps in the run
 
-## Recommendation
-If broader coverage is needed, consider:
-1. Re-running with a less conservative strategy template
-2. Investigating why 44/45 targets yielded `unknown` — possible template/scope mismatch
-3. Validating the lone kept hypothesis (FSM `condition-case` guard) before committing to it as the sole output
+1. **Hypothesis coverage is near-zero.** Out of 163 experiments, the template produced one confirmed hypothesis and zero reasoned rejections. This is a template-fill failure, not a signal about the codebase — the targets were not interrogated.
+2. **No kept hypotheses for any of the 45 targets except the FSM/`auto-retry` adjacency.** The auto-workflow production/evolution/knowledge-reasoning/ontology-router/monitoring-agent modules, the tools-agent staging-merge/runtime/validation/error harness, and the extensions (circuit breaker, retry, tool permits, backend registry) were not examined in any captured result.
+3. **No cross-target synthesis.** Nothing links, e.g., `gptel-ext-retry.el` to `my/gptel-auto-retry`, or the staging-merge/approval-queue/decision-classification trio. The single kept finding sits in isolation.
+4. **No `[what changes & why]` entry was produced** — the template's required change-rationale field is empty across the board.
+
+## Recommended next action
+
+The run should be re-run with the hypothesis-extraction template fields actually populated, or the existing artifacts should be back-filled. The `template-default` strategy is clearly not producing output for this corpus. A narrower scope (e.g., the auto-retry / ext-retry / circuit-breaker cluster, or the tools-agent staging + validation + error trio) would likely yield a denser, more useful kept-hypothesis set than another full-corpus sweep with the same template.
 ```
 
 ### Check Issues
 
-# Review of the Distilled Research Summary
+**Check on the distillation — verdict: structurally sound, but a few claims need tightening before you act on it.**
 
-## ✅ Internally Consistent
+### Correct as written
+- The 1-of-163 framing is fair *if* 163 is the experiment count, not the hypothesis count. The report blurs this — see below.
+- "Template-fill failure, not a signal about the codebase" is the right read. A single surfaced hypothesis with three empty discard slots is exactly what a misconfigured template produces; it's not evidence the corpus is empty.
+- The four gap items are well-stated and distinct. Each points at a different failure mode (coverage, scope, synthesis, required-field).
+- The recommended next action is concrete: either back-fill the existing artifacts or pick a narrower cluster. The two suggested clusters (retry/circuit-breaker triad, or tools-agent staging+validation+error) are reasonable choices.
 
-- **Arithmetic**: 1 kept / 45 targets = 2.2% — matches the stated "~2%"
-- **Narrative consistency**: The "1 kept vs. effectively null" framing aligns across the Outcome, Interpretation, and Recommendation sections
-- **Self-honesty**: The summary appropriately flags its own sparsity rather than overstating the single kept result
+### Needs qualification
 
-## 🔍 Technical Claims Worth Verifying
+1. **"1 / 163" denominator.** "Out of 163 experiments, … one confirmed hypothesis and zero reasoned rejections" reads as if 163 is the hypothesis count. If 163 is the *run* count, the ratio is fine; if 163 is the *hypotheses generated* count, that's a much harsher statement and you should say so. Clarify which it is. Same concern applies to "no kept hypotheses for any of the 45 targets" — that should be "no kept hypotheses *captured*," since a broken template can't prove absence.
 
-The kept hypothesis makes three specific technical claims. I can check two of them; the third requires the source.
-
-| Claim | Verifiable? | Status |
-|---|---|---|
-| `condition-case` is the standard Emacs Lisp error-handling form | Yes | ✅ Correct |
-| Wrapping an invalid-state call in `condition-case` to default to an error state is a valid defensive pattern | Yes | ✅ Correct conceptually |
-| `gptel--fsm-next` exists as the FSM transition entry point and `ERRS` is a valid state in `my/gptel-auto-retry` | **No — requires source** | ⚠️ Unverified |
-
-**Specific concern with terminology**: In gptel's actual FSM, the error-related state is conventionally spelled `erros` (without the trailing `s`) — e.g., in the `gptel-request` state machine, the `:error` / `erros` handling around tools. If your summary says `ERRS`, double-check against the source — `ERRS` with two S's may be a transcription artifact or a state in *your* `my/gptel-auto-retry` layer, not in core gptel. This matters because the report implicitly treats it as a gptel-internal mechanism
+2. **"Costs nothing on the happy path."** Slight overstatement. `condition-case` is a cheap form (basically an `unwind-pr
 
 ... (truncated)
