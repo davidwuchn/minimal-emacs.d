@@ -102,17 +102,22 @@ Queue-entry plist keys: :id, :created-at, :expires-at, :status,
                              "[^a-zA-Z0-9]" "-" (downcase ptarget)))
               (proposal-id (format "proposal-%s-%s-%s" timestamp component-slug ptarget-slug))
               (expires-at (+ now gptel-auto-workflow-approval-queue-expiry-seconds))
-              (queue-entry
-               (list :id proposal-id
-                     :created-at now
-                     :expires-at expires-at
-                     :status "pending"
-                     :source "monitoring-agent"
-                     :proposal tested-proposal
-                     :risk risk
-                     :component component
-                     :pattern-target ptarget
-                     :rollback-tag rollback-tag))
+               (queue-entry
+                (append
+                 (list :id proposal-id
+                       :created-at now
+                       :expires-at expires-at
+                       :status "pending"
+                       :source "monitoring-agent"
+                       :proposal tested-proposal
+                       :risk risk
+                       :component component
+                       :pattern-target ptarget
+                       :rollback-tag rollback-tag)
+                 ;; Preserve :type (e.g. "self-tune") at top level so executors
+                 ;; can distinguish self-tune entries from standard proposals
+                 (and (plist-get tested-proposal :type)
+                      (list :type (plist-get tested-proposal :type)))))
               (pending-dir
                (expand-file-name
                 "pending"
@@ -473,10 +478,13 @@ Returns list of executed proposal IDs."
         (executed nil))
     (when (file-directory-p decisions-dir)
       (dolist (f (directory-files decisions-dir t "\\.sexp$"))
-        (let ((entry (gptel-auto-workflow-approval-queue--read-sexp-file f)))
-          (when (and entry
-                     (equal (plist-get entry :status) "approved")
-                     (not (plist-get entry :deployed-at)))
+          (let ((entry (gptel-auto-workflow-approval-queue--read-sexp-file f)))
+            (when (and entry
+                       (equal (plist-get entry :status) "approved")
+                       (not (plist-get entry :deployed-at))
+                       ;; Skip self-tune entries: handled by
+                       ;; `gptel-auto-workflow--execute-approved-self-tuning'
+                       (not (equal (plist-get entry :type) "self-tune")))
             (let* ((proposal-id (plist-get entry :id))
                    (rollback-tag (plist-get entry :rollback-tag))
                    (component (or (plist-get entry :component) "unknown"))

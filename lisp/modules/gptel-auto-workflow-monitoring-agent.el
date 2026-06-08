@@ -297,10 +297,12 @@ Adds to pending assessments and persists."
 (defun gptel-auto-workflow--collect-current-metrics (module)
   "Collect current metrics for MODULE.
 Returns a plist with :tests-passing, :compile-clean, :file-size.
-This provides a lightweight snapshot for impact comparison."
+This provides a lightweight snapshot for impact comparison.
+When no evidence is available, metrics default to nil (not t) so that
+unknown modules are not reported as healthy."
   (let ((file-path (expand-file-name module (expand-file-name default-directory)))
-        (tests-passing t)
-        (compile-clean t)
+        (tests-passing nil)
+        (compile-clean nil)
         (file-size 0))
     ;; Check file exists and get size
     (when (file-exists-p file-path)
@@ -956,9 +958,9 @@ Returns a plist with metrics about the monitoring agent's performance:
       (setq synthesis-candidates
             (length (directory-files mementum-dir nil "^synthesis-proposal-.*\\.md$"))))
     ;; Count approval queue size
-    (when (fboundp 'gptel-auto-workflow-approval-queue-pending)
+    (when (fboundp 'gptel-auto-workflow-approval-queue-list)
       (setq approval-queue-size
-            (length (gptel-auto-workflow-approval-queue-pending))))
+            (length (gptel-auto-workflow-approval-queue-list))))
     (list :cycle gptel-auto-workflow-monitoring-cycle-counter
           :timestamp (float-time)
           :patterns-detected patterns-detected

@@ -281,10 +281,88 @@ Regression: cl-return-from without cl-block caused cl-missing-block error."
      (condition-case err
          (setq result (gptel-auto-workflow-approval-queue-enqueue proposal "tag"))
        (error (setq error err)))
-     ;; Should NOT have errored
-     (should-not error)
-      ;; Should return nil for duplicate
+      ;; Should NOT have errored
+      (should-not error)
+       ;; Should return nil for duplicate
       (should-not result))))
+
+(ert-deftest test-approval-queue/enqueue-preserves-type-at-top-level ()
+  "Self-tune entries must keep :type at top level of queue-entry, not buried in :proposal.
+Regression: enqueue created queue-entry with fixed keys, so the caller's
+:type \"self-tune\" ended up inside :proposal. Executors filtering by
+:status \"approved\" could not distinguish self-tune from regular entries."
+  (with-approval-queue-sandbox
+   (let* ((entry (gptel-auto-workflow-approval-queue-enqueue
+                 (list :type "self-tune"
+                       :component "monitoring"
+                       :pattern-target "lisp/test.el"
+                       :parameter 'gptel-auto-workflow--foo
+                       :current-value 0.1
+                       :proposed-value 0.2)
+                 "tag")))
+     (should entry)
+     ;; :type must be at top level (this is the fix)
+     (should (equal (plist-get entry :type) "self-tune"))
+     ;; :parameter is stored inside :proposal (per enqueue contract)
+     (let ((nested (plist-get entry :proposal)))
+       (should (eq (plist-get nested :parameter) 'gptel-auto-workflow--foo))
+       (should (= (plist-get nested :current-value) 0.1))
+       (should (= (plist-get nested :proposed-value) 0.2))))))
+
+(ert-deftest test-approval-queue/execute-approved-skips-self-tune ()
+  "Generic executor must NOT mark self-tune entries as deployed.
+Regression: Phase 6 (execute-approved) ran before Phase 9 (self-tuning),
+consuming self-tune entries by marking them :deployed, so the
+self-tuning executor saw nothing to apply."
+  (with-approval-queue-sandbox
+   (let* ((self-tune-entry
+           (gptel-auto-workflow-approval-queue-enqueue
+            (list :type "self-tune"
+                  :component "monitoring"
+                  :pattern-target "lisp/test.el"
+                  :parameter 'gptel-auto-workflow--foo
+                  :current-value 0.1
+                  :proposed-value 0.2)
+            "tag"))
+          (regular-entry
+           (gptel-auto-workflow-approval-queue-enqueue
+            (test-approval-queue--make-proposal
+             "high" "regular-comp" "lisp/other.el")
+            "tag")))
+     (should self-tune-entry)
+     (should regular-entry)
+     ;; Approve both
+     (gptel-auto-workflow-approval-queue-approve (plist-get self-tune-entry :id))
+     (gptel-auto-workflow-approval-queue-approve (plist-get regular-entry :id))
+     ;; Run generic executor
+     (gptel-auto-workflow-approval-queue-execute-approved)
+     ;; Read back both entries from disk
+     (let* ((decisions-dir
+             (expand-file-name
+              "decisions"
+              (expand-file-name gptel-auto-workflow-approval-queue-dir)))
+            (self-tune-file
+             (gptel-auto-workflow-approval-queue-decisions-file
+              (plist-get self-tune-entry :id)))
+            (regular-file
+             (gptel-auto-workflow-approval-queue-decisions-file
+              (plist-get regular-entry :id)))
+            (self-tune-after
+             (and (file-exists-p self-tune-file)
+                  (with-temp-buffer
+                    (insert-file-contents self-tune-file)
+                    (read (current-buffer)))))
+            (regular-after
+             (and (file-exists-p regular-file)
+                  (with-temp-buffer
+                    (insert-file-contents regular-file)
+                    (read (current-buffer))))))
+       ;; Self-tune entry must remain :approved (NOT deployed)
+       (should (equal (plist-get self-tune-after :status) "approved"))
+       (should-not (plist-get self-tune-after :deployed-at))
+       ;; Regular entry must be :deployed
+       (should (equal (plist-get regular-after :status) "deployed"))
+       (should (plist-get regular-after :deployed-at))))))
 
 (provide 'test-gptel-auto-workflow-approval-queue)
 ;;; test-gptel-auto-workflow-approval-queue.el ends here
