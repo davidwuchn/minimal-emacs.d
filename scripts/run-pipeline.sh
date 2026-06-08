@@ -1255,6 +1255,27 @@ mkdir -p "$DIGEST_DIR"
         echo "- No knowledge pages yet"
     fi
     echo ""
+    echo "## Knowledge Graph Topology"
+    echo ""
+    # Generate graph topology via emacs batch call to memory-schema module
+    GRAPH_TOPOLOGY=$(emacs --batch -L "$DIR/lisp/modules" \
+        -L "$DIR/packages/gptel" -L "$DIR/packages/compat" \
+        -l gptel --eval \
+        '(progn
+           (require (quote gptel-auto-workflow-memory-schema) nil t)
+           (setq gptel-auto-workflow--workspace-path "'"$DIR"'")
+           (if (fboundp (quote gptel-auto-workflow--unified-graph-stats-for-prompt))
+               (let ((stats (gptel-auto-workflow--unified-graph-stats-for-prompt)))
+                 (if stats
+                     (princ stats)
+                   (princ "- Knowledge graph not yet built (no data)\n")))
+             (princ "- Memory-schema module not loaded\n"))))' 2>&1)
+    if [ -n "$GRAPH_TOPOLOGY" ]; then
+        echo "$GRAPH_TOPOLOGY"
+    else
+        echo "- Graph generation failed or no data available"
+    fi
+    echo ""
     echo "## Strategy Pool Visibility"
     echo ""
     # How many strategies exist? How many have been evaluated? How many
