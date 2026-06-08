@@ -64,6 +64,9 @@
                   "gptel-auto-workflow-approval-queue")
 (declare-function gptel-auto-workflow-approval-queue--read-sexp-file
                   "gptel-auto-workflow-approval-queue")
+(defvar gptel-auto-workflow-approval-queue-dir
+  "var/approval-queue"
+  "Directory for approval queue files (relative to project root).")
 
 (declare-function gptel-auto-workflow--run-architectural-analysis
                   "gptel-auto-workflow-architectural-evolution")
@@ -1191,8 +1194,8 @@ Returns list of applied parameter symbols."
                            (prin1-to-string (plist-get result :old-value))
                            (prin1-to-string (plist-get result :new-value)))))
                 ;; Mark as applied in the queue
-                (let ((updated (plist-put entry :applied-at (float-time)))
-                      (updated (plist-put updated :tuning-result result)))
+                (let* ((updated (plist-put entry :applied-at (float-time)))
+                       (updated (plist-put updated :tuning-result result)))
                   (with-temp-file f
                     (prin1 updated (current-buffer))))
                 (message "[monitoring] Applied self-tuning: %s = %s"
