@@ -1275,6 +1275,39 @@ mkdir -p "$DIGEST_DIR"
     else
         echo "- No strategy directory found"
     fi
+    # ── Recommended Actions (actionable by human in one command) ──
+    echo ""
+    echo "## Recommended Actions"
+    echo ""
+    # Pending proposals that need human approval
+    pending_proposals=$(find "$DIR/var/approval-queue/pending" -name "*.sexp" 2>/dev/null | wc -l)
+    if [ "${pending_proposals:-0}" -gt 0 ]; then
+        echo "- **$pending_proposals proposals pending human approval**"
+        echo "  Review: \`ls var/approval-queue/pending/\`"
+    fi
+    # Recurring PENDING self-heal issues
+    if [ -f "$DIR/mementum/knowledge/pipeline-health.md" ]; then
+        grader_count=$(grep -c 'grader-destroying-experiments.*| PENDING' "$DIR/mementum/knowledge/pipeline-health.md" 2>/dev/null || echo 0)
+        if [ "${grader_count:-0}" -ge 3 ]; then
+            echo "- **Grader escalation needed** ($grader_count× PENDING, 0% effective)"
+            echo "  Fix: the pipeline auto-fix now escalates timeout + backends automatically"
+        fi
+        # Check for cold-start patterns
+        cold_pending=$(grep -c 'cold-backend*\|cold-start' "$DIR/mementum/knowledge/pipeline-health.md" 2>/dev/null || echo 0)
+        if [ "${cold_pending:-0}" -gt 0 ]; then
+            echo "- **$cold_pending cold-start issues** — system may need backend diversity push"
+        fi
+    fi
+    # Zero run detection
+    if [ "${ZERO_RUN_DETECTED:-0}" -eq 1 ]; then
+        echo "- **Zero experiments generated** — daemon may need restart or backend check"
+        echo "  Check: \`emacsclient --socket-name=pmf-value-stream --eval '(gptel-auto-workflow--daemon-health)'\`"
+    fi
+    # Approval queue health
+    approved_count=$(grep -l ':status "approved"' "$DIR/var/approval-queue/decisions/"*.sexp 2>/dev/null | wc -l)
+    if [ "${approved_count:-0}" -eq 0 ] && [ "${pending_proposals:-0}" -gt 0 ]; then
+        echo "- **No approved proposals** — human hasn't reviewed pending items. System evolving without human guidance."
+    fi
 } > "$DIGEST_FILE"
 log "Daily digest written: $DIGEST_FILE"
 
