@@ -58,6 +58,7 @@ additional_delegates:
 additional_implementers:
   safe:
     model: github-copilot/gpt-5.4-mini
+    reasoningEffort: xhigh
 EOF
 
 # 3. Cross-platform text edits use perl5 (perl -pi -e works on macOS + Linux)
@@ -103,7 +104,15 @@ if [ -f "$AGENTS_DIR/delegate-creative.md" ]; then
 fi
 update_model "$AGENTS_DIR/doc-explorer.md"           "bailian-token-plan/deepseek-v4-pro"
 update_model "$AGENTS_DIR/implementer.md"           "bailian-token-plan/glm-5.1"
-update_model "$AGENTS_DIR/implementer-safe.md"      "github-copilot/gpt-5.4-mini"
+# implementer-safe — ensure reasoningEffort: xhigh
+if [ -f "$AGENTS_DIR/implementer-safe.md" ]; then
+    perl -pi -e 's|^model:.*|model: github-copilot/gpt-5.4-mini|' "$AGENTS_DIR/implementer-safe.md"
+    if ! grep -q "^options:" "$AGENTS_DIR/implementer-safe.md"; then
+        perl -pi -e 's|^(model: github-copilot/gpt-5.4-mini)$|$1\noptions:\n  reasoningEffort: xhigh|' "$AGENTS_DIR/implementer-safe.md"
+    else
+        perl -pi -e 's|^  reasoningEffort:.*|  reasoningEffort: xhigh|' "$AGENTS_DIR/implementer-safe.md"
+    fi
+fi
 update_model "$AGENTS_DIR/legacy-curator.md"        "bailian-token-plan/deepseek-v4-pro"
 
 # 6. Enable thinking for DeepSeek models in opencode.json (pure jq, no python3)
