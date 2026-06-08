@@ -6840,18 +6840,32 @@ priorities")
                gptel-auto-workflow--self-healing-log))
        :target-reset))))
 
+(defun gptel-auto-workflow--auto-remediate-grader-timeout ()
+  "Set grader timeout safely, never below default (900s).
+Respects pipeline override if set. Otherwise matches experiment budget
+but clamped to [900, 1800]. This prevents the death spiral where
+self-heal sets timeout=300 → grader fails → more PENDING."
+  (when (and (boundp 'gptel-auto-experiment-grade-timeout)
+             (boundp 'gptel-auto-experiment-time-budget))
+    (let* ((default 900)
+           (pipeline-override (and (boundp 'gptel-auto-workflow--grader-timeout-override)
+                                   gptel-auto-workflow--grader-timeout-override))
+           (budget gptel-auto-experiment-time-budget)
+           (new-timeout (or pipeline-override
+                            (max default (min 1800 budget)))))
+      (setq gptel-auto-experiment-grade-timeout new-timeout)
+      new-timeout)))
+
 (defun gptel-auto-workflow--auto-remediate (diagnosis)
   "Apply automatic fix for DIAGNOSIS.  Returns t if fix applied."
   (let ((diagnosis-str (plist-get diagnosis :diagnosis))
         (fixed nil))
     (pcase diagnosis-str
       ("grader-destroying-experiments"
-       ;; Match grader timeout to experiment budget
-       (when (and (boundp 'gptel-auto-experiment-time-budget)
-                  (boundp 'gptel-auto-experiment-grade-timeout))
-         (let ((new-timeout gptel-auto-experiment-time-budget))
-           (setq gptel-auto-experiment-grade-timeout new-timeout)
-           (message "[self-heal] Grader destroying experiments — increased timeout to %ds"
+       ;; Safely increase grader timeout — never below 900s default
+       (let ((new-timeout (gptel-auto-workflow--auto-remediate-grader-timeout)))
+         (when new-timeout
+           (message "[self-heal] Grader destroying experiments — timeout set to %ds (min 900s)"
                     new-timeout)
            (push (list :timestamp (float-time)
                        :diagnosis diagnosis-str
