@@ -13,7 +13,12 @@ trap 'rm -rf "$TMPDIR"' EXIT
 SCRIPT_DIR="$(cd "$(dirname "$0")"; pwd)"
 EMACS_DIR="$(cd "$SCRIPT_DIR/.."; pwd)"
 
-OV5_SOCKET="/run/user/$(id -u)/emacs/ov5-auto-workflow"
+# Platform-aware socket path
+if [[ "$(uname)" == "Darwin" ]]; then
+    OV5_SOCKET="/tmp/emacs$(id -u)/ov5-auto-workflow"
+else
+    OV5_SOCKET="/run/user/$(id -u)/emacs/ov5-auto-workflow"
+fi
 SKILL_SRC="${EMACS_DIR}/assistant/skills/ov5"
 OPENCODE_SKILLS="${HOME}/.config/opencode/skills/ov5"
 
@@ -46,13 +51,13 @@ additional_delegates:
     model: bailian-token-plan/qwen3.7-max
     reasoningEffort: high
   creative:
-    model: bailian-token-plan/kimi-k2.6
+    model: bailian-token-plan/deepseek-v4-pro
   fast:
     model: bailian-token-plan/deepseek-v4-flash
 
 additional_implementers:
   safe:
-    model: bailian-token-plan/glm-5.1
+    model: bailian-token-plan/qwen3.6-plus
 EOF
 
 # 3. Cross-platform text edits use perl5 (perl -pi -e works on macOS + Linux)
@@ -91,10 +96,10 @@ update_model "$AGENTS_DIR/delegate-strong.md"        "github-copilot/gpt-5.4"
 update_model "$AGENTS_DIR/delegate-gpt.md"           "github-copilot/gpt-5.5"
 update_model "$AGENTS_DIR/delegate-opus.md"          "github-copilot/claude-opus-4.8"
 update_model "$AGENTS_DIR/delegate-qwen.md"          "bailian-token-plan/qwen3.7-max"
-update_model "$AGENTS_DIR/delegate-creative.md"      "bailian-token-plan/kimi-k2.6"
+update_model "$AGENTS_DIR/delegate-creative.md"      "bailian-token-plan/deepseek-v4-pro"
 update_model "$AGENTS_DIR/doc-explorer.md"           "bailian-token-plan/deepseek-v4-pro"
 update_model "$AGENTS_DIR/implementer.md"           "bailian-token-plan/glm-5.1"
-update_model "$AGENTS_DIR/implementer-safe.md"      "bailian-token-plan/glm-5.1"
+update_model "$AGENTS_DIR/implementer-safe.md"      "bailian-token-plan/qwen3.6-plus"
 update_model "$AGENTS_DIR/legacy-curator.md"        "bailian-token-plan/deepseek-v4-pro"
 
 # 6. Enable thinking for DeepSeek models in opencode.json (pure jq, no python3)
@@ -161,6 +166,6 @@ fi
 
 echo ""
 echo "=== Installation Complete ==="
-echo "Models: @maintainer→kimi-k2.6, delegate→deepseek-v4-pro, strong→gpt-5.4, gpt→gpt-5.5, opus→claude-opus-4.8, qwen→qwen3.7-max, creative→kimi-k2.6, fast→deepseek-v4-flash, implementer→glm-5.1"
+echo "Models: @maintainer→kimi-k2.6, delegate→deepseek-v4-pro, strong→gpt-5.4, gpt→gpt-5.5, opus→claude-opus-4.8, qwen→qwen3.7-max, creative→deepseek-v4-pro, fast→deepseek-v4-flash, implementer→glm-5.1, implementer-safe→qwen3.6-plus"
 echo "OV5 Cowork: OpenCode configured"
 echo "Next: Restart OpenCode, select @maintainer agent"
