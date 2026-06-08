@@ -5220,6 +5220,31 @@ Fixes listp errors when JSON arrays are read as vectors."
              (message "[vsm-repair] Target queue reordered by VSM health diagnostics"))
             (_ (message "[vsm-repair] Unknown VSM action: %s" (car action))))))))
 
+(defun gptel-auto-workflow--boost-god-node-targets ()
+  "Promote god-node targets (high centrality) to 40% of experiment budget.
+God nodes connect many modules — fixing them cascades. Called after VSM
+prioritization and community boost."
+  (when (and (boundp 'gptel-auto-workflow--experiment-targets)
+             gptel-auto-workflow--experiment-targets
+             (fboundp 'gptel-auto-workflow--unified-graph-god-nodes))
+    (let* ((targets gptel-auto-workflow--experiment-targets)
+           (god-nodes (gptel-auto-workflow--unified-graph-god-nodes 5))
+           (god-slugs (mapcar (lambda (n) (cdar n)) god-nodes))
+           (god-targets nil)
+           (others nil)
+           (budget-40 (max 1 (ceiling (* (length targets) 0.4)))))
+      (dolist (tgt targets)
+        (let ((slug (file-name-sans-extension (file-name-nondirectory tgt))))
+          (if (member slug god-slugs)
+              (push tgt god-targets)
+            (push tgt others))))
+      (when god-targets
+        (setq gptel-auto-workflow--experiment-targets
+              (append (seq-take (nreverse god-targets) budget-40)
+                      (nreverse others)))
+        (message "[god-node-boost] Promoted %d god-node targets (top-5 by centrality)"
+                 (min (length god-targets) budget-40))))))
+
 (defun gptel-auto-workflow--boost-same-community-targets ()
   "Promote targets from the same graph community as last kept experiment.
 When the knowledge graph has communities, experiments on related targets
@@ -5311,7 +5336,9 @@ VSM LEVELS is a plist of (level . strength):
                  (length prioritized)
                  (mapconcat #'identity (seq-take (nreverse prioritized) 3) ", ")))
       ;; Community-aware boost: promote targets from same community as last kept experiment
-      (gptel-auto-workflow--boost-same-community-targets))))
+      (gptel-auto-workflow--boost-same-community-targets)
+      ;; Centrality-weighted boost: top-5 god nodes get priority budget
+      (gptel-auto-workflow--boost-god-node-targets))))
 
 ;; ─── Cross-Subsystem Feedback Functions (re-added after daemon merge wipe) ───
 
