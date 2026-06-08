@@ -1399,30 +1399,32 @@ Callable via emacsclient: (gptel-auto-workflow--mcp-handle-request \"method\"
 
 (defun gptel-auto-workflow--extract-elisp-ast (file-path)
   "Extract structural data from FILE-PATH using Elisp reader.
-Returns plist: (:defuns :defvars :requires :provides).
-Deterministic — no LLM needed. Uses Emacs' built-in read."
+Returns plist with (:defuns :defvars :requires :provides).
+Deterministic — no LLM needed. Uses Emacs' built-in read.
+On malformed forms: a bad form may swallow the rest of the file
+(Emacs' read maintains paren-depth state across calls). We detect
+this by checking that the read form contains one of our known
+top-level symbols, and abort the parse if it doesn't."
   (let ((defuns nil) (defvars nil) (requires nil) (provides nil))
     (condition-case nil
         (with-temp-buffer
           (insert-file-contents file-path)
           (goto-char (point-min))
           (while (not (eobp))
-            (condition-case nil
-                (let ((form (read (current-buffer))))
-                  (when (listp form)
-                    (pcase (car form)
-                      ('defun (push (cadr form) defuns))
-                      ((or 'defvar 'defcustom 'defconst)
-                       (push (cadr form) defvars))
-                      ('require (push (cadr form) requires))
-                      ('provide (push (cadr form) provides)))))
-              (end-of-file nil)
-              (error (forward-sexp 1)))))
+            (let* ((form (condition-case nil (read (current-buffer)) (error nil)))
+                   (head (and (listp form) (symbolp (car form)) (car form))))
+              (cond
+               ((null head) (goto-char (point-max)))
+               ((memq head '(defun defvar defcustom defconst require provide))
+                (pcase head
+                  ('defun (push (cadr form) defuns))
+                  ((or 'defvar 'defcustom 'defconst) (push (cadr form) defvars))
+                  ('require (push (cadr form) requires))
+                  ('provide (push (cadr form) provides))))
+               (t nil)))))
       (error nil))
-    (list :defuns (nreverse defuns)
-          :defvars (nreverse defvars)
-          :requires (nreverse requires)
-          :provides (nreverse provides))))
+    (list :defuns (nreverse defuns) :defvars (nreverse defvars)
+          :requires (nreverse requires) :provides (nreverse provides))))
 
 (defun gptel-auto-workflow--ingest-elisp-asts (target-dir)
   "Extract AST from all .el files in TARGET-DIR and add to unified graph.

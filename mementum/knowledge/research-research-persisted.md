@@ -1,38 +1,25 @@
 <!--
 Synthesis verification:
-- Confidence: 80%
+- Confidence: 12%
 - Sources: 38 memories
-- Warnings: No code examples or concrete references
-- Auto-approved: yes (passed)
+- Warnings: No code examples or concrete references, Content does not mention topic 'research-research-persisted', Very short content (17 lines)
+- Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize the provided research memories into a knowledge page about "research-research-persisted". Let me analyze the memories to extract key patterns, insights, and actionable information.
+The user wants me to synthesize all the research memories into a comprehensive knowledge page. Let me analyze the memories carefully and extract the key patterns, findings, and insights.
 
-Key themes from the memories:
-1. Research persistence strategies and findings
-2. Module complexity analysis and self-evolution directives
-3. External research patterns from various repos (nucleus, mementum, gptel, zeroclaw, context-mode, eca, etc.)
-4. Error recovery patterns (circuit breakers, retry policies, doom loop detection)
-5. Agent architecture patterns (multi-agent, orchestration, job lifecycle)
-6. Context optimization (98% reduction, sandboxing, BM25)
-7. Self-evolution and meta-learning patterns
-8. Memory systems (three-tier storage, git-based memory)
-9. Provider-agnostic patterns
-10. Research pipeline issues (missing files, fallbacks, daemon orchestration)
+The memories span from 2026-05-22 to 2026-06-05, covering multiple research runs with varying success rates (0-33% kept). Let me identify the major themes:
 
-Let me create a comprehensive knowledge page with:
-- Frontmatter
-- Multiple sections with concrete examples
+1. **Own repos architecture patterns** - zeroclaw, context-mode, eca, nullclaw, nucleus, mementum, gptel, ai-code-interface.el, Ori-Mnemos
+2. **External research findings** - GCP ADK patterns, Azure agent design, arxiv papers (multi-agent orchestration, self-evolving agents), DSPy, Reflexion
+3. **Local codebase analysis** - module complexity, git activity, self-evolution directives
+4. **Research pipeline observations** - researcher daemon failures, fallback patterns, feedback loop preservation
+5. **Concrete techniques** - circuit breaker, doom loop detection, FSM pause/resume, three-tier memory, tool receipts, context sandboxing
+
+Let me organize this into a comprehensive knowledge page with:
+- Concrete examples (code, tables, commands)
 - Actionable patterns
 - Cross-references
-- At least 50 lines of content
+- Minimum 50 lines
 
-I'll structure it around:
-1. Research Persistence Strategy
-2. Module Analysis & Self-Evolution
-3. External Research Patterns
-4. Error Recovery & Resilience
-5. Agent Architecture Patterns
-6. Memory & Context Management
-7. Research Pipeline Reliability
-8. Related Topics
+I need to write the FULL markdown page inline.

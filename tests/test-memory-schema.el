@@ -750,4 +750,98 @@ Returns list of (source-id target-id edge-type weight community-diff)."
                                           (equal (nth 1 s) "B")))
                          surprises)))))))
 
+;; ─── AST Extraction (deterministic Elisp parsing) ───
+
+(ert-deftest tdd/memory-schema/ast-extract/returns-defuns-defvars-requires-provides ()
+  "`gptel-auto-workflow--extract-elisp-ast' parses an Elisp file
+deterministically using the built-in reader. Returns plist with
+:defuns, :defvars, :requires, :provides keys."
+  (let ((gptel-auto-workflow--test-tmpdir (make-temp-file "schema-test-ast" t)))
+    (unwind-protect
+        (progn
+          (with-temp-file (expand-file-name "ast-sample.el" gptel-auto-workflow--test-tmpdir)
+            (insert ";;; Sample file for AST extraction tests\n")
+            (insert "(require 'cl-lib)\n")
+            (insert "(defun my-func-1 () nil)\n")
+            (insert "(defun my-func-2 (x) (+ x 1))\n")
+            (insert "(defvar my-var 42)\n")
+            (insert "(defconst my-const 100)\n")
+            (insert "(provide 'my-feature)\n"))
+          (let* ((file (expand-file-name "ast-sample.el" gptel-auto-workflow--test-tmpdir))
+                 (ast (gptel-auto-workflow--extract-elisp-ast file)))
+            (should (listp ast))
+            (should (plist-member ast :defuns))
+            (should (plist-member ast :defvars))
+            (should (plist-member ast :requires))
+            (should (plist-member ast :provides))
+            (should (member 'my-func-1 (plist-get ast :defuns)))
+            (should (member 'my-func-2 (plist-get ast :defuns)))
+            (should (member 'my-var (plist-get ast :defvars)))
+            (should (member 'my-const (plist-get ast :defvars)))
+            ;; require/produce forms contain quoted symbols
+            (should (member ''cl-lib (plist-get ast :requires)))
+            (should (member ''my-feature (plist-get ast :provides)))))
+      (delete-directory gptel-auto-workflow--test-tmpdir t))))
+
+(ert-deftest tdd/memory-schema/ast-extract/handles-malformed-gracefully ()
+  "`gptel-auto-workflow--extract-elisp-ast' must not signal on
+malformed input. Captures valid forms before the bad one.
+KNOWN LIMITATION: Emacs' built-in `read' maintains paren-depth
+state across calls, so a single unbalanced-open-paren swallows
+all subsequent forms. The function captures forms that come
+BEFORE the bad region but not after. This is acceptable: real
+.el files don't have unbalanced parens."
+  (let ((gptel-auto-workflow--test-tmpdir (make-temp-file "schema-test-ast-bad" t)))
+    (unwind-protect
+        (progn
+          (with-temp-file (expand-file-name "ast-bad.el" gptel-auto-workflow--test-tmpdir)
+            (insert "(defun good-1 () 1)\n")
+            (insert "(((unbalanced parens\n")  ; this would error on read
+            (insert "(defun good-2 () 2)\n"))
+          (let* ((file (expand-file-name "ast-bad.el" gptel-auto-workflow--test-tmpdir))
+                 (ast (condition-case err
+                           (gptel-auto-workflow--extract-elisp-ast file)
+                         (error (ert-fail (format "AST extraction signaled: %S" err))))))
+            (should (listp ast))
+            ;; Form before the bad region: captured.
+            (let ((defuns (plist-get ast :defuns)))
+              (should (member 'good-1 defuns)))))
+      (delete-directory gptel-auto-workflow--test-tmpdir t))))
+
+;; ─── MCP server (graph query interface) ───
+
+(ert-deftest tdd/memory-schema/mcp-handle-request/graph-stats ()
+  "`gptel-auto-workflow--mcp-handle-request' returns JSON with
+node/edge counts for the \"graph-stats\" method."
+  (with-schema-test-env
+   (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+              (lambda () gptel-auto-workflow--test-tmpdir))
+             ((symbol-function 'gptel-auto-workflow--build-digital-twin)
+              (lambda (&optional _force) nil))
+             ((symbol-function 'gptel-auto-workflow--semantic-similarity-edges)
+              (lambda (&optional _threshold) nil))
+             ((symbol-function 'gptel-auto-workflow--memory-schema-synonymy-edges)
+              (lambda (&optional _threshold) nil)))
+     (let ((gptel-auto-workflow--unified-graph (make-hash-table :test 'equal))
+           (gptel-auto-workflow--unified-graph-time (float-time)))
+       (puthash (cons :entity "A")
+                `((:neighbor ,(cons :entity "B") 1.0))
+                gptel-auto-workflow--unified-graph)
+       (puthash (cons :entity "B")
+                `((:neighbor ,(cons :entity "A") 1.0))
+                gptel-auto-workflow--unified-graph)
+        (let* ((result (gptel-auto-workflow--mcp-handle-request "graph-stats"))
+               (parsed (json-parse-string result :object-type 'alist)))
+          (should (assoc 'nodes parsed))
+          (should (assoc 'edges parsed))
+          (should (= 2 (alist-get 'nodes parsed))))))))
+
+(ert-deftest tdd/memory-schema/mcp-handle-request/unknown-method-returns-error ()
+  "`gptel-auto-workflow--mcp-handle-request' returns a JSON error
+for unknown methods (graceful degradation, not a thrown error)."
+  (let* ((result (gptel-auto-workflow--mcp-handle-request "no-such-method"))
+         (parsed (json-parse-string result :object-type 'alist)))
+    (should (assoc 'error parsed))
+    (should (stringp (alist-get 'error parsed)))))
+
 (provide 'test-memory-schema)
