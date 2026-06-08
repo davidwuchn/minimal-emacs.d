@@ -273,7 +273,7 @@ Returns plist :gap-count, :isolated, :low-confidence, :self-refs, :mismatches."
               (maphash (lambda (key edges)
                          (when (null edges)
                            (let ((id (cdr key)))
-                             (unless (string-match-p "^\." id)
+                              (unless (string-match-p "^\\." id)
                                (push id isolated)))))
                        graph)
               (setq gap-count (+ gap-count (length isolated)))

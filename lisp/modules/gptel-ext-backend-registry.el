@@ -67,7 +67,7 @@
 
     (DashScope
      :host "coding.dashscope.aliyuncs.com"
-     :models (qwen3.7-plus qwen3.6-plus qwen3-coder-plus)
+     :models (qwen3.7-plus qwen3.6-plus)
      :default-model qwen3.7-plus
        :model-metadata
        ((qwen3.7-plus

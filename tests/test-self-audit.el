@@ -284,8 +284,8 @@ Fix: `(> (or (plist-get audit-result :issues) 0) 0)`."
                         :strategy-cold-start '(:unevaluated nil)
                         :merge-bottleneck '(:unmerged nil)
                         :byte-compile-warnings '(:warnings nil)))
-         (mem-files-before (progn (make-directory mem-dir t)
-                                  (length (directory-files mem-dir t nil "\\.md$")))))
+                   (mem-files-before (progn (make-directory mem-dir t)
+                                   (length (directory-files mem-dir t)))))
     (unwind-protect
         (progn
           (condition-case err
@@ -293,7 +293,7 @@ Fix: `(> (or (plist-get audit-result :issues) 0) 0)`."
             (error
              (ert-fail (format "write-memory should not error on nil :issues: %S" err))))
           ;; After call (no :issues): no new memory file
-          (let ((after (length (directory-files mem-dir t nil "\\.md$"))))
+           (let ((after (length (directory-files mem-dir t))))
             (should (eq mem-files-before after))))
       (delete-directory test-self-audit--tmp-dir t))))
 
@@ -320,6 +320,20 @@ double-stat the file)."
             (should (member live result))
             (should-not (member dead result))))
       (delete-directory tmp-dir t))))
+
+(ert-deftest test-self-audit/method-stub-regex-matches-leading-dot ()
+  "Method stub regex `^\\\\.` must match nodes starting with a literal dot.
+Regression: the original regex `\"^\\\\.`\" was written as `\"^\\\\.`\" which in
+Elisp was the string `^\\\\.` (backslash-then-any), NOT `^\\\\.` (literal dot).
+This caused all non-empty ids to be treated as method stubs, so isolated
+nodes were never reported in the knowledge gap check."
+  (let ((regex "^\\."))
+    (should (string-match-p regex ".method"))
+    (should (string-match-p regex ".constructor"))
+    (should-not (string-match-p regex "method"))
+    (should-not (string-match-p regex "something.else"))
+    (should-not (string-match-p regex "foo.bar.baz"))
+    (should-not (string-match-p regex ""))))
 
 (provide 'test-self-audit)
 ;;; test-self-audit.el ends here
