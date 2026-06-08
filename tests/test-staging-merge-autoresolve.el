@@ -56,58 +56,82 @@ when a commit succeeds."
     '("" . 0))
    (t '("" . 0))))
 
-;; Override the git functions
-(fset 'gptel-auto-workflow--git-cmd #'test-autoresolve--mock-git)
-(fset 'gptel-auto-workflow--git-result #'test-autoresolve--mock-git-result)
-
 ;; Required globals for the autoresolver
 (setq gptel-auto-workflow--skip-submodule-sync-env "")
 
+;; Helper macro: bind the git mocks with proper isolation. The fset-based
+;; approach leaks into other tests and breaks them. cl-letf ensures
+;; the mocks are restored after each test.
+(defmacro test-autoresolve--with-git-mocks (&rest body)
+  "Run BODY with git-cmd and git-result mocked for the test."
+  `(let ((test-autoresolve--git-calls '())
+         (test-autoresolve--auto-resolved '())
+         (test-autoresolve--manual-required '())
+         (test-autoresolve--events '()))
+     (cl-letf (((symbol-function 'gptel-auto-workflow--git-cmd)
+                #'test-autoresolve--mock-git)
+               ((symbol-function 'gptel-auto-workflow--git-result)
+                #'test-autoresolve--mock-git-result))
+       ,@body)))
+
+;; Restore the real git functions that fset would have polluted.
+;; Without this, all tests loaded after this file see the mock.
+(when (eq (symbol-function 'gptel-auto-workflow--git-cmd)
+          #'test-autoresolve--mock-git)
+  (fset 'gptel-auto-workflow--git-cmd
+        (lambda (cmd &optional timeout) "")))
+(when (eq (symbol-function 'gptel-auto-workflow--git-result)
+          #'test-autoresolve--mock-git-result)
+  (fset 'gptel-auto-workflow--git-result
+        (lambda (cmd &optional timeout) '("" . 0))))
+
+(ert-deftest test-autoresolve/mocks-restored-after-test ()
+  "Mocks must be scoped per-test (via cl-letf), not global (fset).
+Bug: the original tests in this file used (fset ...) which leaks the
+mock into other tests' execution. After switching to cl-letf, this
+test verifies the git-cmd / git-result symbols are NOT bound to the
+test mocks by the time other tests run."
+  (should (not (eq (symbol-function 'gptel-auto-workflow--git-cmd)
+                  #'test-autoresolve--mock-git)))
+  (should (not (eq (symbol-function 'gptel-auto-workflow--git-result)
+                  #'test-autoresolve--mock-git-result))))
+
 (ert-deftest test-autoresolve/only-md-files-all-resolved ()
   "All .md files → all auto-resolved, 0 manual required."
-  (let ((test-autoresolve--git-calls '())
-        (test-autoresolve--auto-resolved '())
-        (test-autoresolve--manual-required '())
-        (test-autoresolve--events '()))
-    (let ((result (gptel-auto-workflow--try-autoresolve-conflicts
-                  "mementum/knowledge/foo.md\nmementum/knowledge/bar.md"
-                  "optimize/test"
-                  "Merge test"
-                  30)))
-      (should (= 2 (car result)))
-      (should (= 0 (cdr result)))
-      (should (member 'committed test-autoresolve--events)))))
+  (test-autoresolve--with-git-mocks
+   (let ((result (gptel-auto-workflow--try-autoresolve-conflicts
+                 "mementum/knowledge/foo.md\nmementum/knowledge/bar.md"
+                 "optimize/test"
+                 "Merge test"
+                 30)))
+     (should (= 2 (car result)))
+     (should (= 0 (cdr result)))
+     (should (member 'committed test-autoresolve--events)))))
 
 (ert-deftest test-autoresolve/el-files-require-manual-review ()
   "All .el files → 0 auto-resolved, all manual required."
-  (let ((test-autoresolve--git-calls '())
-        (test-autoresolve--auto-resolved '())
-        (test-autoresolve--manual-required '())
-        (test-autoresolve--events '()))
-    (let ((result (gptel-auto-workflow--try-autoresolve-conflicts
-                  "lisp/modules/foo.el\nlisp/modules/bar.el"
-                  "optimize/test"
-                  "Merge test"
-                  30)))
-      (should (= 0 (car result)))
-      (should (= 2 (cdr result)))
-      (should (not (member 'committed test-autoresolve--events))))))
+  (test-autoresolve--with-git-mocks
+   (let ((result (gptel-auto-workflow--try-autoresolve-conflicts
+                 "lisp/modules/foo.el\nlisp/modules/bar.el"
+                 "optimize/test"
+                 "Merge test"
+                 30)))
+     (should (= 0 (car result)))
+     (should (= 2 (cdr result)))
+     (should (not (member 'committed test-autoresolve--events))))))
 
 (ert-deftest test-autoresolve/mixed-files-partial-resolve ()
   "Mixed .md and .el → .md auto-resolved, .el manual required, NO commit."
-  (let ((test-autoresolve--git-calls '())
-        (test-autoresolve--auto-resolved '())
-        (test-autoresolve--manual-required '())
-        (test-autoresolve--events '()))
-    (let ((result (gptel-auto-workflow--try-autoresolve-conflicts
-                  "mementum/knowledge/foo.md\nlisp/modules/bar.el"
-                  "optimize/test"
-                  "Merge test"
-                  30)))
-      (should (= 1 (car result)))
-      (should (= 1 (cdr result)))
-      ;; When there are manual-required files, we DON'T commit
-      (should (not (member 'committed test-autoresolve--events))))))
+  (test-autoresolve--with-git-mocks
+   (let ((result (gptel-auto-workflow--try-autoresolve-conflicts
+                 "mementum/knowledge/foo.md\nlisp/modules/bar.el"
+                 "optimize/test"
+                 "Merge test"
+                 30)))
+     (should (= 1 (car result)))
+     (should (= 1 (cdr result)))
+     ;; When there are manual-required files, we DON'T commit
+     (should (not (member 'committed test-autoresolve--events))))))
 
 (provide 'test-staging-merge-autoresolve)
 ;;; test-staging-merge-autoresolve.el ends here
