@@ -751,7 +751,7 @@ point-marker in target buffer to avoid dead-marker errors."
          (valid-info (and (proper-list-p info) info))
          (target-buf (and valid-info (plist-get valid-info :buffer)))
          (safe-where (if (and (markerp where) (not (marker-buffer where)))
-                         (or (and target-buf
+                         (or (and target-buf (buffer-live-p target-buf)
                                   (with-current-buffer target-buf (point-marker)))
                              (point-marker))
                        where)))

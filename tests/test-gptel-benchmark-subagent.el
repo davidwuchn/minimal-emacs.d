@@ -231,5 +231,29 @@ Now passes in batch — state corruption fixed."
         (should (eq (plist-get captured-preset :model) 'deepseek-v4-pro))
         (should (equal (plist-get captured-request-params :reasoning_effort) "high"))))))
 
+(ert-deftest benchmark-subagent/sync-returns-result-on-callback ()
+  "`gptel-benchmark-call-subagent-sync' returns the result passed to the callback.
+Regression test for the callback-wrapping fix: the function must continue
+to forward the result of a successful async callback to the caller."
+  (cl-letf (((symbol-function 'gptel-benchmark-call-subagent)
+             (lambda (_type _desc _prompt callback &optional _timeout)
+               (funcall callback "sync-result"))))
+    (should (equal (gptel-benchmark-call-subagent-sync
+                    'executor "Run" "Prompt" 5)
+                   "sync-result"))))
+
+(ert-deftest benchmark-subagent/sync-returns-timeout-sentinel-when-no-callback ()
+  "`gptel-benchmark-call-subagent-sync' returns the timeout sentinel
+when the async subagent never calls back. Guards against hangs."
+  (cl-letf (((symbol-function 'gptel-benchmark-call-subagent)
+             (lambda (&rest _args) nil))   ; never invokes callback
+             ((symbol-function 'sit-for)
+             (lambda (&rest _args) nil)))   ; don't actually sleep
+    (let ((result (gptel-benchmark-call-subagent-sync
+                   'executor "Run" "Prompt" 1)))
+      (should (gptel-benchmark--timeout-p result))
+      (should (equal (cadr result) 'executor))
+      (should (equal (caddr result) "Run")))))
+
 (provide 'test-gptel-benchmark-subagent)
 ;;; test-gptel-benchmark-subagent.el ends here
