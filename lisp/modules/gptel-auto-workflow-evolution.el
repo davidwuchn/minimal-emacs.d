@@ -131,24 +131,34 @@ Populated by VSM health check, consumed by cross-subsystem feedback.")
 
 (defun gptel-auto-workflow--eight-keys-convergence-score ()
   "Compute Eight Keys convergence score from kept experiments.
-∃ Truth: returns nil if no scorable data (blocking false convergence).
-Aggregate of per-subsystem scores for convergence detection."
+Weighted by graph centrality: god nodes contribute more to convergence.
+Returns nil if no scorable data."
   (cl-block gptel-auto-workflow--eight-keys-convergence-score
   (unless (fboundp 'gptel-benchmark-eight-keys-score-for)
     (message "[evolution] Eight Keys scoring unavailable — skipping convergence check")
     (cl-return-from gptel-auto-workflow--eight-keys-convergence-score nil))
-  (let ((results (gptel-auto-workflow--parse-all-results))
-        (autogo 0.0) (autotts 0.0) (selfev 0.0) (count 0))
-     (dolist (r results)
+  (let* ((results (gptel-auto-workflow--parse-all-results))
+         (god-nodes (when (fboundp 'gptel-auto-workflow--unified-graph-god-nodes)
+                      (gptel-auto-workflow--unified-graph-god-nodes 20)))
+         (god-map (make-hash-table :test 'equal))
+         (autogo 0.0) (autotts 0.0) (selfev 0.0) (count 0) (total-weight 0.0))
+    ;; Build god-node lookup: slug -> centrality degree
+    (dolist (gn (or god-nodes '()))
+      (puthash (cdar gn) (cdr gn) god-map))
+    (dolist (r results)
       (when (equal (plist-get r :decision) "kept")
-        (let ((hypo (or (plist-get r :hypothesis) ""))
-              (target (plist-get r :target)))
-          (cl-incf autogo (alist-get 'overall (gptel-benchmark-eight-keys-score-for hypo :autogo) 0.0))
-          (cl-incf autotts (alist-get 'overall (gptel-benchmark-eight-keys-score-for hypo :autotts) 0.0))
-          (cl-incf selfev (alist-get 'overall (gptel-benchmark-eight-keys-score-for hypo :self-evolve) 0.0))
+        (let* ((hypo (or (plist-get r :hypothesis) ""))
+               (target (plist-get r :target))
+               (slug (when target (file-name-sans-extension (file-name-nondirectory target))))
+               (centrality (or (gethash slug god-map) 1))
+               (weight (min 3.0 (max 0.5 (/ centrality 5.0)))))
+          (cl-incf autogo (* weight (alist-get 'overall (gptel-benchmark-eight-keys-score-for hypo :autogo) 0.0)))
+          (cl-incf autotts (* weight (alist-get 'overall (gptel-benchmark-eight-keys-score-for hypo :autotts) 0.0)))
+          (cl-incf selfev (* weight (alist-get 'overall (gptel-benchmark-eight-keys-score-for hypo :self-evolve) 0.0)))
           (cl-incf count)
+          (cl-incf total-weight weight)
           (when target (setq gptel-auto-workflow--evolution-last-kept-target target)))))
-    (if (> count 0) (/ (+ autogo autotts selfev) (* 3 count)) nil))))
+    (if (> total-weight 0) (/ (+ autogo autotts selfev) (* 3 total-weight)) nil))))
 
 (defvar gptel-auto-workflow--evolution-next-cycle-hints nil
   "Alist of hints for the next evolution cycle.

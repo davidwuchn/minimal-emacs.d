@@ -597,10 +597,15 @@ as a research task."
          (trimmed (if (> (length base) 200)
                       (concat (truncate-string-to-width base 197 nil nil "") "...")
                     base)))
-    (if (string-empty-p trimmed)
-        ""
-      (concat "## Research Context (REFERENCE ONLY — DO NOT RESEARCH — USE FOR HYPOTHESIS IDEAS)\n"
-              trimmed))))
+     (if (string-empty-p trimmed)
+         ""
+       (concat "## Research Context (REFERENCE ONLY — DO NOT RESEARCH — USE FOR HYPOTHESIS IDEAS)\n"
+               trimmed
+               (when (fboundp 'gptel-auto-workflow--graph-suggest-questions)
+                 (let ((qs (gptel-auto-workflow--graph-suggest-questions)))
+                   (when qs
+                     (concat "\n\n**Graph-suggested investigation questions** (from knowledge gaps):\n"
+                             (mapconcat (lambda (q) (concat "- " q)) qs "\n")))))))))
 
 (defun gptel-auto-experiment--allium-issues-count (check-output)
   "Count distinct issues from Allium check output (deterministic).
