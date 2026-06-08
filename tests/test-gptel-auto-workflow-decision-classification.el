@@ -293,7 +293,7 @@ Not actually called because setup resets to known good values."
   (let ((experiment '(:id "exp-incomplete"
                        :target "lisp/unknown.el")))
     (let ((decision (gptel-auto-workflow--make-approval-decision experiment)))
-      (should (eq :require-review (plist-get decision :approval-type)))))
+      (should (eq :require-review (plist-get decision :approval-type))))))
 
 (ert-deftest test-decision-classification/handle-conflicting-signals ()
   "Should handle conflicting risk signals."
