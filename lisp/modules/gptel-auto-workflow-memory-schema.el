@@ -1301,4 +1301,33 @@ fetch('%s').then(r=>r.json()).then(data=>{
     (message "[memory-schema] Exported HTML visualization to %s" html-file)
     t))
 
+(defun gptel-auto-workflow--mcp-handle-request (method &optional params)
+  "Handle an MCP-style query and return a JSON response string.
+Supports: graph-stats, god-nodes, communities, node-neighbors, surprising-edges.
+Callable via emacsclient: (gptel-auto-workflow--mcp-handle-request \"method\" \"params\")"
+  (condition-case err
+      (let ((result nil))
+        (cond
+         ((equal method "graph-stats")
+          (let* ((g (gptel-auto-workflow--unified-graph-ensure))
+                 (nc (if g (hash-table-count g) 0))
+                 (ec 0))
+            (when g (maphash (lambda (_k e) (setq ec (+ ec (length (or e ()))))) g))
+            (setq result (format "{\"nodes\":%d,\"edges\":%d}" nc ec))))
+         ((equal method "god-nodes")
+          (let ((gn (gptel-auto-workflow--unified-graph-god-nodes (or (and params (read params)) 5))))
+            (setq result (format "[%s]" (mapconcat (lambda (n) (format "[\"%s:%s\",%d]" (caar n) (cdar n) (cdr n))) gn ",")))))
+         ((equal method "communities")
+          (let ((comms (gptel-auto-workflow--unified-graph-communities))
+                (counts (make-hash-table :test 'equal)))
+            (when comms
+              (maphash (lambda (_k v) (puthash v (1+ (gethash v counts 0)) counts)) comms)
+              (setq result (format "{\"community_count\":%d}" (hash-table-count counts))))))
+         ((equal method "surprising-edges")
+          (let ((surp (gptel-auto-workflow--unified-graph-surprising-connections 5)))
+            (setq result (format "[%s]" (mapconcat (lambda (s) (format "[\"%s\",\"%s\",\"%s\",%.2f]" (nth 0 s) (nth 1 s) (nth 2 s) (nth 3 s))) surp ",")))))
+         (t (setq result "{\"error\":\"unknown method\"}")))
+        result)
+    (error (format "{\"error\":\"%s\"}" (error-message-string err)))))
+
 (provide 'gptel-auto-workflow-memory-schema)
