@@ -1046,8 +1046,10 @@ Also flags if the knowledge page hasn't been updated in >30 days."
 (defun gptel-auto-workflow-self-audit--compute-token-economics (&optional root)
   "Compute token economics from experiment TSV data using real registry pricing.
 Scans var/tmp/experiments/*/results.tsv for last 24h.
-Returns plist (:total :total-cost :kept :kept-cost :models-seen :model-breakdown).
-:model-breakdown is ((:model :count :kept-count :cost :speed :capabilities) ...)."
+Returns plist (:total :total-cost :kept :kept-cost :models-seen
+:model-breakdown).
+:model-breakdown is ((:model :count :kept-count :cost :speed :capabilities)
+...)."
   (let* ((root (or root (gptel-auto-workflow-self-audit--root)))
          (exp-dir (expand-file-name "var/tmp/experiments" root))
          (cutoff (- (float-time) 86400))  ; 24h
