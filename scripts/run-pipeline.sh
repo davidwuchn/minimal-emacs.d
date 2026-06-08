@@ -698,7 +698,13 @@ if [ -f "$HEALTH_FILE" ]; then
     GRADER_ISSUES=$(grep 'grader-destroying-experiments.*| PENDING' "$HEALTH_FILE" 2>/dev/null | wc -l)
     if [ "${GRADER_ISSUES:-0}" -ge 3 ]; then
         CURRENT_TIMEOUT=$(grep 'grader-destroying-experiments' "$HEALTH_FILE" 2>/dev/null | head -1 | grep -o 'grader-timeout=[0-9]*' | cut -d= -f2 || echo 900)
-        NEW_TIMEOUT=$((CURRENT_TIMEOUT * 3 / 2))  # Increase by 50%
+        # Hard floor: if timeout was forced below 900 by death spiral, jump to 900 immediately
+        if [ "${CURRENT_TIMEOUT:-900}" -lt 900 ]; then
+            NEW_TIMEOUT=900
+            log "  Auto-fix: grader death spiral detected (timeout=$CURRENT_TIMEOUT < 900) — forcing hard floor to 900s"
+        else
+            NEW_TIMEOUT=$((CURRENT_TIMEOUT * 3 / 2))  # Increase by 50% for persistent issues
+        fi
         log "  Auto-fix: grader-destroying-experiments detected ($GRADER_ISSUES× PENDING)"
         log "  Escalating grader timeout: $CURRENT_TIMEOUT → $NEW_TIMEOUT"
         echo "$NEW_TIMEOUT" > "$DIR/var/tmp/grader-timeoutOverride.txt"
