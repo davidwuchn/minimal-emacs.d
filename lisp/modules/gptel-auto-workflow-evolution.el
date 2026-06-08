@@ -7250,16 +7250,7 @@ Verification: byte-compiled cleanly, no warnings.\n\nDiff:\n+ \"Return 1.\"\n"))
            (lambda (grade)
              (cancel-timer probe-timer)
              (setq probe-done t)
-             (let ((score (plist-get grade :score))
-                   (total (plist-get grade :total)))
-               (if (and (numberp score) (> score 0))
-                   (progn
-                     (message "[self-heal] Probe: grader returned %d/%d — healthy"
-                              score (or total 1))
-                     (setq probe-healthy t))
-                 (progn
-                   (message "[self-heal] Probe: grader returned score=0 — BROKEN")
-                   (setq probe-healthy nil))))))
+             (gptel-auto-workflow--probe-classify-result grade)))
           ;; Wait synchronously (max probe-timeout seconds)
           (let ((wait-start (float-time)))
             (while (and (not probe-done)
@@ -7274,6 +7265,46 @@ Verification: byte-compiled cleanly, no warnings.\n\nDiff:\n+ \"Return 1.\"\n"))
              :confidence 0.99
              :keep-rate 0.0)))
     probe-healthy))
+
+(defun gptel-auto-workflow--probe-classify-result (grade)
+  "Classify GRADE plist from grader call and update `probe-healthy' dynamically.
+Only treats grader as BROKEN on actual error signals (quota exhausted, grader
+infrastructure failure, error category, parse failure), NOT on score=0.
+A legitimate grader CAN return 0 on trivial/no-op changes.
+Side-effect: sets the dynamically-bound `probe-healthy' variable in the
+caller's scope."
+  (let ((score (plist-get grade :score))
+        (total (plist-get grade :total))
+        (details (plist-get grade :details))
+        (error-category (plist-get grade :error-category))
+        (grader-only-failure (plist-get grade :grader-only-failure))
+        (quota-exhausted (plist-get grade :quota-exhausted)))
+    (cond
+     ;; Quota exhausted: not a broken grader, just no API access
+     ((eq quota-exhausted t)
+      (message "[self-heal] Probe: quota exhausted — grader OK but no API")
+      (setq probe-healthy t))
+     ;; Grader-only failure (timeout, no output, etc.):
+     ;; these are grader infrastructure problems, not score=0
+     ((eq grader-only-failure t)
+      (message "[self-heal] Probe: grader returned infrastructure error (%s) — BROKEN"
+               (or details "unknown"))
+      (setq probe-healthy nil))
+     ;; Error category present: grader detected an error in output
+     (error-category
+      (message "[self-heal] Probe: grader error category=%s — BROKEN"
+               error-category)
+      (setq probe-healthy nil))
+     ;; Grader returned a valid response with any numeric score
+     ;; (including 0): grader is WORKING correctly
+     ((numberp score)
+      (message "[self-heal] Probe: grader returned %d/%d — healthy"
+               score (or total 1))
+      (setq probe-healthy t))
+     ;; No valid score AND no error signal: parse failure
+     (t
+      (message "[self-heal] Probe: grader returned invalid result (no score) — BROKEN")
+      (setq probe-healthy nil)))))
 
 (defun gptel-auto-workflow--probe-before-experiments ()
   "Run diagnostic probe before real experiments.

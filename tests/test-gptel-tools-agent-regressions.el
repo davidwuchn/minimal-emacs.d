@@ -20550,6 +20550,82 @@ If it fails, the grader itself is broken, not the code."
     ;; Probe should detect the broken grader
     (should (not probe-passed))))
 
+(ert-deftest self-heal/probe-score-zero-is-not-broken ()
+  "Regression: score=0 from a working grader is NOT a broken grader.
+A legitimate grader CAN return 0/5 on trivial/no-op changes. The probe
+must only flag BROKEN on actual errors (empty result, timeout, parse
+failure), not on score=0 alone. Otherwise the system enters an infinite
+remediation loop every time the grader scores any trivial change 0."
+  (let* ((probe-healthy t)
+         ;; Working grader returns a valid result with score=0
+         (grade-result '(:score 0 :total 5 :percentage 0.0
+                                  :details "trivial change" :passed nil))
+         ;; Key signal: did the grader return a valid response at all?
+         (grader-returned-valid-response t)
+         (grader-timed-out nil)
+         (grader-result-empty nil))
+    ;; The old logic: if score=0, declare broken
+    ;; The new logic: only broken on error signals, not score=0
+    (if (or (not grader-returned-valid-response)
+            grader-timed-out
+            grader-result-empty)
+        (setq probe-healthy nil)
+      ;; Grader returned a valid response with score=0 — that's a legitimate grade
+      (setq probe-healthy t))
+    ;; Probe should NOT declare broken on score=0 alone
+    (should probe-healthy)))
+
+(ert-deftest self-heal/probe-classify-result-score-zero-healthy ()
+  "gptel-auto-workflow--probe-classify-result: score=0 with no error signals
+means the grader is WORKING correctly. A real grader can legitimately
+score 0 on trivial/no-op changes (result-len=3445 in production logs)."
+  (let ((probe-healthy t))
+    (gptel-auto-workflow--probe-classify-result
+     '(:score 0 :total 5 :percentage 0.0
+              :details "trivial change" :passed nil))
+    (should probe-healthy)))
+
+(ert-deftest self-heal/probe-classify-result-positive-score-healthy ()
+  "gptel-auto-workflow--probe-classify-result: positive score is healthy."
+  (let ((probe-healthy nil))
+    (gptel-auto-workflow--probe-classify-result
+     '(:score 4 :total 5 :percentage 80.0 :passed t))
+    (should probe-healthy)))
+
+(ert-deftest self-heal/probe-classify-result-quota-exhausted-healthy ()
+  "gptel-auto-workflow--probe-classify-result: quota-exhausted is not broken.
+Grader infrastructure is fine, just no API access."
+  (let ((probe-healthy nil))
+    (gptel-auto-workflow--probe-classify-result
+     '(:score 0 :total 1 :percentage 0.0 :passed nil
+              :details "quota-exhausted" :quota-exhausted t))
+    (should probe-healthy)))
+
+(ert-deftest self-heal/probe-classify-result-grader-only-failure-broken ()
+  "gptel-auto-workflow--probe-classify-result: grader-only-failure is broken.
+This signals infrastructure problems (timeout, no output), not score=0."
+  (let ((probe-healthy t))
+    (gptel-auto-workflow--probe-classify-result
+     '(:score 0 :total 1 :percentage 0.0 :passed nil
+              :details "no-executor-output" :grader-only-failure t))
+    (should-not probe-healthy)))
+
+(ert-deftest self-heal/probe-classify-result-error-category-broken ()
+  "gptel-auto-workflow--probe-classify-result: error-category signals broken."
+  (let ((probe-healthy t))
+    (gptel-auto-workflow--probe-classify-result
+     '(:score 0 :total 1 :percentage 0.0 :passed nil
+              :error-category "agent-error"))
+    (should-not probe-healthy)))
+
+(ert-deftest self-heal/probe-classify-result-no-score-broken ()
+  "gptel-auto-workflow--probe-classify-result: missing score and no error
+signal means parse failure → broken."
+  (let ((probe-healthy t))
+    (gptel-auto-workflow--probe-classify-result
+     '(:details "weird response with no score"))
+    (should-not probe-healthy)))
+
 (ert-deftest self-heal/probe-skips-real-experiments-when-grader-broken ()
   "When probe detects broken grader, real experiments should be skipped
 until auto-remediation restores grader health."
