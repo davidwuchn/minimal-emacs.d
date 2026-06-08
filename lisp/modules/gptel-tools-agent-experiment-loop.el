@@ -578,6 +578,24 @@ Set to 120min: 5 targets × 2 experiments × 10min avg = 100min budget.")
   "Timestamp when the current workflow run started.
 Set by `gptel-auto-workflow--restart-watchdog-timer'.")
 
+(defvar gptel-auto-workflow--rss-force-stop-kb 4194304
+  "RSS threshold (KB) at which the watchdog force-stops the workflow.
+Default: 4GB. Pi5 has 8GB total; 4GB leaves headroom for OS + other
+processes while still catching genuine memory leaks. The old 1.5GB
+threshold (1572864) killed legitimate subagent work — Emacs + gptel
+buffers + subagent state easily reach 2-3GB during normal operation.
+Set to nil to disable RSS-based force-stop entirely.")
+
+(defvar gptel-auto-workflow--rss-gc-kb 3145728
+  "RSS threshold (KB) at which the watchdog triggers aggressive GC.
+Default: 3GB. This is below force-stop so we get a chance to reclaim
+memory before killing the workflow.")
+
+(defvar gptel-auto-workflow--rss-allow-active-tasks t
+  "When non-nil, skip RSS-based force-stop if there are active subagent tasks.
+Active subagent tasks mean work is in progress, not a memory leak. The
+old code killed workflows at 2GB while a subagent was making progress.")
+
 (defcustom gptel-auto-workflow-status-file "var/tmp/cron/auto-workflow-status.sexp"
   "Path to the persisted auto-workflow status snapshot.
 Relative paths are resolved from the project root."
@@ -1298,16 +1316,26 @@ Force-stops when:
             (let ((rss-kb (and (fboundp 'gptel-auto-workflow--process-rss-kb)
                                (gptel-auto-workflow--process-rss-kb))))
                (cond
-                ;; RSS exceeds 1.5GB — memory leak or accumulation, force-stop to prevent OOM
-                ;; Pi5 has 8GB total; 1.5GB gives headroom for OS + other processes
-                ((and rss-kb (> rss-kb 1572864))  ; 1.5GB in KB
-                 (let ((rss-mb (/ rss-kb 1024.0)))
-                   (message "[auto-workflow] WATCHDOG: RSS %.0fMB exceeds 1.5GB threshold, force-stopping" rss-mb)
+                ;; RSS exceeds force-stop threshold — memory leak or accumulation
+                ;; Pi5 has 8GB total; default 4GB leaves headroom for OS + other processes
+                ;; Skip force-stop if active subagent tasks are making progress
+                ((and rss-kb
+                      gptel-auto-workflow--rss-force-stop-kb
+                      (> rss-kb gptel-auto-workflow--rss-force-stop-kb)
+                      (not (and gptel-auto-workflow--rss-allow-active-tasks
+                                (numberp active-tasks)
+                                (> active-tasks 0))))
+                 (let ((rss-mb (/ rss-kb 1024.0))
+                       (threshold-mb (/ gptel-auto-workflow--rss-force-stop-kb 1024.0)))
+                   (message "[auto-workflow] WATCHDOG: RSS %.0fMB exceeds %.0fMB threshold (no active subagent tasks), force-stopping" rss-mb threshold-mb)
                    (gptel-auto-workflow--force-stop)))
-                ;; RSS exceeds 1GB — trigger aggressive GC to reclaim memory
-                ((and rss-kb (> rss-kb 1048576))  ; 1GB in KB
-                 (let ((rss-mb (/ rss-kb 1024.0)))
-                   (message "[auto-workflow] WATCHDOG: RSS %.0fMB — triggering aggressive GC" rss-mb)
+                ;; RSS exceeds GC threshold — trigger aggressive GC to reclaim memory
+                ((and rss-kb
+                      gptel-auto-workflow--rss-gc-kb
+                      (> rss-kb gptel-auto-workflow--rss-gc-kb))
+                 (let ((rss-mb (/ rss-kb 1024.0))
+                       (threshold-mb (/ gptel-auto-workflow--rss-gc-kb 1024.0)))
+                   (message "[auto-workflow] WATCHDOG: RSS %.0fMB exceeds %.0fMB GC threshold — triggering aggressive GC" rss-mb threshold-mb)
                    (garbage-collect)
                    (garbage-collect)
                    (setq gc-cons-threshold (* 50 1024 1024))  ; 50MB threshold

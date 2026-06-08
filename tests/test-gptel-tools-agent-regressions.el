@@ -11017,6 +11017,71 @@ This guards the grader completion path from crashing during TSV logging."
       (should (equal gptel-auto-workflow--last-progress-time activity-time))
       (should (equal (plist-get gptel-auto-workflow--stats :phase) "running")))))
 
+(ert-deftest regression/auto-workflow/watchdog-skips-rss-force-stop-with-active-subagent ()
+  "Watchdog should NOT force-stop on RSS when active subagent tasks exist.
+Regression: old hardcoded 1.5GB threshold killed legitimate subagent work.
+Emacs + gptel buffers + subagent state easily reach 2-3GB during normal
+operation. The fix makes the threshold configurable (default 4GB) and
+skips force-stop when active subagent tasks are making progress."
+  (let ((gptel-auto-workflow--running t)
+        (gptel-auto-workflow--last-progress-time
+         (time-subtract (current-time) (seconds-to-time 5)))
+        (gptel-auto-workflow--max-stuck-minutes 30)
+        (gptel-auto-workflow--rss-force-stop-kb 1572864)  ; 1.5GB
+        (gptel-auto-workflow--rss-gc-kb 1048576)  ; 1GB
+        (gptel-auto-workflow--rss-allow-active-tasks t)
+        (gptel-auto-workflow--stats '(:phase "running" :total 1 :kept 0))
+        (my/gptel--agent-task-state (make-hash-table :test 'eql))
+        (force-stopped nil))
+    ;; Simulate 2GB RSS (above 1.5GB threshold) with 1 active subagent task
+    (puthash 1 '(:done nil :agent-type "executor")
+             my/gptel--agent-task-state)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--process-rss-kb)
+               (lambda () 2097152))  ; 2GB
+              ((symbol-function 'gptel-auto-workflow--force-stop)
+               (lambda () (setq force-stopped t)))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (gptel-auto-workflow--watchdog-check)
+      ;; Should NOT force-stop because active subagent task exists
+      (should-not force-stopped))))
+
+(ert-deftest regression/auto-workflow/watchdog-rss-force-stops-when-no-active-tasks ()
+  "Watchdog should force-stop on high RSS when no active subagent tasks.
+Without active tasks, high RSS indicates a memory leak or stalled process."
+  (let ((gptel-auto-workflow--running t)
+        (gptel-auto-workflow--last-progress-time
+         (time-subtract (current-time) (seconds-to-time 5)))
+        (gptel-auto-workflow--max-stuck-minutes 30)
+        (gptel-auto-workflow--rss-force-stop-kb 1572864)  ; 1.5GB
+        (gptel-auto-workflow--rss-gc-kb 1048576)  ; 1GB
+        (gptel-auto-workflow--rss-allow-active-tasks t)
+        (gptel-auto-workflow--stats '(:phase "running" :total 1 :kept 0))
+        (my/gptel--agent-task-state (make-hash-table :test 'eql))
+        (force-stopped nil))
+    ;; No active subagent tasks, RSS at 2GB — should force-stop
+    (cl-letf (((symbol-function 'gptel-auto-workflow--process-rss-kb)
+               (lambda () 2097152))  ; 2GB
+              ((symbol-function 'gptel-auto-workflow--force-stop)
+               (lambda () (setq force-stopped t)))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (gptel-auto-workflow--watchdog-check)
+      ;; SHOULD force-stop because no active tasks
+      (should force-stopped))))
+
+(ert-deftest regression/auto-workflow/watchdog-rss-threshold-is-configurable ()
+  "Watchdog RSS thresholds are configurable via defvar.
+The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
+  (should (numberp gptel-auto-workflow--rss-force-stop-kb))
+  (should (numberp gptel-auto-workflow--rss-gc-kb))
+  ;; New defaults: 4GB force-stop, 3GB GC
+  (should (= gptel-auto-workflow--rss-force-stop-kb 4194304))
+  (should (= gptel-auto-workflow--rss-gc-kb 3145728))
+  ;; Force-stop threshold must be higher than GC threshold
+  (should (> gptel-auto-workflow--rss-force-stop-kb
+             gptel-auto-workflow--rss-gc-kb)))
+
 (ert-deftest regression/auto-workflow/headless-subagents-bypass-runagent-loop ()
   "Headless auto-workflow subagents should set the loop bypass flag."
   (let ((gptel-auto-workflow--headless t)
