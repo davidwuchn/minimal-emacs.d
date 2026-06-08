@@ -52,6 +52,15 @@ MiniMax-M2.7-highspeed | 4.2 | 16.8 | 0.42 | 196608 | fast | Cache write ¥2.625
 
 1. Human updates this page from Bailian console whenever new pricing is published
 2. Pipeline Step 0.4 (self-audit) reads this page and compares against `gptel-backend-registry`
-3. Discrepancies are logged as `pricing-stale` issues
-4. Pipeline Step 0.5 (auto-fix) can flag for human review (can't auto-update code)
-5. Token economics in Step 6 uses registry prices for cost calculations
+3. Discrepancies logged as `pricing-stale` issues
+4. Pipeline Step 0.5 writes `var/tmp/pricing-stale.txt` flag
+5. Token economics in Step 6 uses registry prices for real cost calculations
+
+## Effort-Level Economics (Future)
+
+- **Question**: which effort level (xhigh/high/low) is most economic per model?
+- **Metric**: cost-per-kept-experiment at each effort level
+- **Current limitation**: TSV doesn't record per-experiment effort level
+- **Needed**: add effort-level field to TSV output; A/B test across cycles
+- **Registry effort levels**: `gptel-backend-effort-levels` maps model→(xhigh→"high", high→"medium", default→"low")
+- **Status**: `--compute-token-economics` tracks per-model cost; per-effort tracking pending TSV schema change
