@@ -1093,7 +1093,7 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
                      grade-id callback
                      (list :score 4 :total 5 :percentage 80.0 :passed t
                            :details "Grader timeout — auto-pass to prevent experiment destruction"
-                           :grader-only-failure t))))))))
+                           :grader-only-failure t)))))))))
         (puthash grade-id (list :done nil :timer timeout-timer)
                  gptel-auto-experiment--grade-state))
       (if (and gptel-auto-experiment-use-subagents
@@ -1367,4 +1367,3 @@ Returns plist suitable for experiment result enrichment."
 
 (provide 'gptel-tools-agent-benchmark)
 ;;; gptel-tools-agent-benchmark.el ends here
-)
