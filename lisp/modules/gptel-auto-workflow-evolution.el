@@ -8039,13 +8039,24 @@ paren balance, its changes are reverted.  Returns (FIX-COUNT . REMAINING)."
                         (gptel-auto-workflow--byte-compile-warnings-for-file file)
                        (list (cons 0 "PAREN MISMATCH"))))))
 
+(defvar gptel-auto-workflow--self-heal-running nil
+  "Non-nil while self-heal byte-compiler is running.
+Prevents re-entrant self-heal from compile hooks.")
+
 (defun gptel-auto-workflow--self-heal-byte-compiler (&optional files max-iterations)
   "Self-heal byte-compiler warnings across FILES.
 Dog-food: Phase 1 fixes self (mechanical + LLM for self only).
 Phase 2 fixes others (mechanical only, accepts ceiling).
 Returns plist with :fixes-applied :remaining-warnings :files-fixed."
   (interactive)
-  (let* ((self-file (gptel-auto-workflow--expand-workspace-path
+  ;; Guard: prevent re-entrant self-heal from compile hooks
+  (when (and (boundp 'gptel-auto-workflow--self-heal-running)
+             gptel-auto-workflow--self-heal-running)
+    (message "[self-heal] Skipped — already running")
+    (cl-return-from gptel-auto-workflow--self-heal-byte-compiler
+      (list :fixes-applied 0 :remaining-warnings 0 :files-fixed nil)))
+  (let* ((gptel-auto-workflow--self-heal-running t)
+         (self-file (gptel-auto-workflow--expand-workspace-path
                       "lisp/modules/gptel-auto-workflow-evolution.el"))
          (all-files
           (or files
@@ -8079,23 +8090,49 @@ Returns plist with :fixes-applied :remaining-warnings :files-fixed."
     (message "[self-heal] === Phase 2: Mechanical fixes for others ===")
     (let ((iterations 0)
           (prev-count most-positive-fixnum)
+          (file-hashes (make-hash-table :test 'equal))
+          (file-iterations (make-hash-table :test 'equal))
           (unclean (delq nil (mapcar (lambda (f)
-                                       (unless (string= f self-file)
-                                         (when (gptel-auto-workflow--byte-compile-warnings-for-file f) f)))
-                                     all-files))))
+                                        (unless (string= f self-file)
+                                          (when (gptel-auto-workflow--byte-compile-warnings-for-file f) f)))
+                                      all-files))))
       (while (and (< iterations max-iter) unclean)
         (setq iterations (1+ iterations))
         (message "[self-heal] Iteration %d/%d - %d files" iterations max-iter (length unclean))
         (let ((still-unclean nil)
-              (cur-count 0))
+              (cur-count 0)
+              (stuck-files nil))
           (dolist (f unclean)
-            (let* ((result (gptel-auto-workflow--self-heal-byte-compiler--fix-file f))
-                   (fc (car result))
-                   (remaining (cdr result)))
-              (cl-incf total-fixes fc)
-              (cl-incf cur-count (length remaining))
-              (when (> fc 0) (push (file-name-nondirectory f) files-fixed))
-              (when remaining (push f still-unclean))))
+            ;; Guard: skip if file hasn't changed since last fix attempt
+            (let* ((content-hash (when (file-exists-p f)
+                                    (with-temp-buffer
+                                      (insert-file-contents f)
+                                      (md5 (current-buffer)))))
+                    (prev-hash (gethash f file-hashes))
+                    (f-iter (or (gethash f file-iterations) 0)))
+              (if (and prev-hash (string= content-hash prev-hash)
+                       (> f-iter 0))
+                  (progn
+                    (message "[self-heal] %s: unchanged from prior fix, skipping"
+                             (file-name-nondirectory f))
+                    (push f stuck-files))
+                (puthash f content-hash file-hashes)
+                (puthash f (1+ f-iter) file-iterations)
+                ;; Per-file hard limit: 3 attempts max
+                (if (> f-iter 3)
+                    (progn
+                      (message "[self-heal] %s: giving up after %d attempts"
+                               (file-name-nondirectory f) f-iter)
+                      (push f stuck-files))
+                  (let* ((result (gptel-auto-workflow--self-heal-byte-compiler--fix-file f))
+                         (fc (car result))
+                         (remaining (cdr result)))
+                    (cl-incf total-fixes fc)
+                    (cl-incf cur-count (length remaining))
+                    (when (> fc 0) (push (file-name-nondirectory f) files-fixed))
+                    (when remaining (push f still-unclean)))))))
+          ;; Don't retry stuck files (unchanged content or max iterations exceeded)
+          (setq still-unclean (cl-set-difference still-unclean stuck-files :test #'equal))
           (when (>= cur-count prev-count)
             (message "[self-heal] Mechanical ceiling at %d warnings" cur-count)
             (setq unclean nil iterations max-iter))
