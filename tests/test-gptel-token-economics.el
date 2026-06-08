@@ -75,7 +75,7 @@ Default tolerance is 0.0001."
 ;; ============================================================================
 
 (ert-deftest test-token-economics/calculate-roi-for-experiment ()
-  "Should calculate ROI as value gained divided by cost."
+  "Should calculate ROI as value gained dividido por cost."
   (let ((experiment '(:id "exp-001"
                       :input-tokens 1000
                       :output-tokens 500
@@ -88,6 +88,25 @@ Default tolerance is 0.0001."
     (let ((roi (gptel-token-economics--calculate-roi experiment)))
       (should (> roi 4.0))
       (should (< roi 5.0)))))
+
+(ert-deftest test-token-economics/calculate-roi-with-nil-scores-no-error ()
+  "`gptel-token-economics--calculate-roi' must not signal arithmetic-error
+when an experiment plist is missing :score-before or :score-after.
+The fix: (or (plist-get experiment :score-before) 0.0) coerces nil
+to 0.0 so the (- score-after score-before) call is always numeric."
+  (let ((experiment '(:id "exp-002"
+                      :input-tokens 100
+                      :output-tokens 50
+                      ;; NOTE: no :score-before, no :score-after
+                      :decision "kept")))
+    (should (numberp (gptel-token-economics--calculate-roi experiment))))
+  (let ((experiment '(:id "exp-003"
+                      :input-tokens 100
+                      :output-tokens 50
+                      :score-before 0.5
+                      ;; NOTE: no :score-after
+                      :decision "kept")))
+    (should (numberp (gptel-token-economics--calculate-roi experiment)))))
 
 (ert-deftest test-token-economics/roi-zero-for-discarded ()
   "Should return zero ROI for discarded experiments."
