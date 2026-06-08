@@ -1,27 +1,33 @@
 <!--
 Synthesis verification:
-- Confidence: 12%
+- Confidence: 40%
 - Sources: 38 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'research-research-persisted', Very short content (19 lines)
+- Warnings: No code examples or concrete references, Very short content (25 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize all these research memories into a comprehensive knowledge page. Let me analyze what I have:
+The user wants me to synthesize a large amount of research memory data into a comprehensive knowledge page about "research-research-persisted" - the auto-workflow research persistence pattern. Let me analyze what's in the memories:
 
-1. Multiple research runs from 2026-05-22 to 2026-06-05
-2. Topics covered: AI agent architectures, Emacs Lisp AI integration, LLM self-evolution, context optimization, error recovery, memory systems, multi-agent orchestration, prompt optimization, benchmarking
-3. Key findings from own repos (davidwuchn/*): nucleus, mementum, gptel, zeroclaw, context-mode, eca, nullclaw, ai-code-interface.el, Ori-Mnemos, genesis-agent, efrit, gastown, psi, gbrain, nullboiler
-4. Key external sources: DSPy, Reflexion, GCP ADK, Azure patterns, GEPA, EvolveR, MetaAgent, SE-Agent, Continuum, mcp.el, magent, gptel-agent, OpenAI SDK, ACON, MemGPT, A-MEM, MAST
+1. The memories are from a system called "auto-workflow" that does self-evolution through research-driven experiments
+2. There's a "persisted-findings" strategy that creates research digests
+3. Multiple research runs from May-June 2026 with various keep rates (0-33%)
+4. Key patterns I can extract:
+   - Local fallback when researcher daemon fails
+   - The research hash linking pattern
+   - Module complexity tracking
+   - Self-evolution directives
+   - Research strategies (own-repos-first, external-only, switch to new sources)
+   - Concrete techniques discovered (doom loop detection, FSM resume, mementum protocol, circuit breaker, etc.)
+   - Failure patterns: timeout/validation errors, missing research files
+   - The pipeline: research → digest → insights → experiment
+   - Outcome metrics (keep rate, confidence EMA)
+   - Controller dynamics (beta, EMA, source effectiveness)
 
-Let me organize this into a structured knowledge page with:
-- Frontmatter
-- Architecture patterns
-- Memory systems
-- Context optimization
-- Error recovery
-- Self-evolution
-- Multi-agent orchestration
-- Emacs-specific integration
-- Related topics
+Let me create a comprehensive knowledge page that captures all these patterns with concrete examples, code snippets where applicable, and actionable patterns. I need:
+- 50+ lines of content
+- Concrete examples (code, tables, commands)
+- Actionable patterns
+- Cross-references to related topics
+- Full markdown page inline
 
-I need minimum 50 lines, concrete examples, actionable patterns, and cross-references. Let me write this comprehensively.
+Let me structure this as a knowledge page about the research-persistence subsystem of the auto-workflow.

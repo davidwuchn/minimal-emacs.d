@@ -1,52 +1,44 @@
 <!--
 Synthesis verification:
-- Confidence: 80%
+- Confidence: 24%
 - Sources: 7 memories
-- Warnings: No code examples or concrete references
-- Auto-approved: yes (passed)
+- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-prompt'
+- Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize the provided memories into a knowledge page about the "mistake-failure-pattern-prompt" topic. Let me analyze what I have:
+The user wants me to synthesize the provided memories about prompt failure patterns into a comprehensive knowledge page. Let me analyze the data:
 
-All memories share a common pattern:
-- Failure type: prompt
-- Date: 2026-06-07 (with times 14:12 and 20:22)
-- Detected by monitoring agent as systemic failure
-- Various target files, all in lisp/modules/ starting with gptel-
-- Each has different occurrence counts (3-5)
-- No example reasons provided
-- Various trend dates
+1. All 7 memories are about "prompt" failure type
+2. They all target files in `lisp/modules/` with names starting with `gptel-`:
+   - gptel-tools-agent-prompt-build.el (4 occurrences)
+   - gptel-tools-agent-benchmark.el (3 occurrences)
+   - gptel-benchmark-principles.el (3 occurrences)
+   - gptel-auto-workflow-strategic.el (5 occurrences)
+   - gptel-auto-workflow-projects.el (4 occurrences)
+   - gptel-auto-workflow-ontology-router.el (3 occurrences)
+   - gptel-auto-workflow-evolution.el (3 occurrences)
 
-Targets:
-1. gptel-tools-agent-prompt-build.el (4 occurrences)
-2. gptel-tools-agent-benchmark.el (3 occurrences)
-3. gptel-benchmark-principles.el (3 occurrences)
-4. gptel-auto-workflow-strategic.el (5 occurrences)
-5. gptel-auto-workflow-projects.el (4 occurrences)
-6. gptel-auto-workflow-ontology-router.el (3 occurrences)
-7. gptel-auto-workflow-evolution.el (3 occurrences)
+3. Total: 4+3+3+5+4+3+3 = 25 prompt failures
+4. They all have empty "Example reasons" - this is a key observation
+5. The trend timestamps span from late May to early June 2026
+6. Most files relate to either:
+   - Auto-workflow (strategic, projects, ontology-router, evolution)
+   - Tools/agent (prompt-build, benchmark)
+   - Benchmark principles
 
-Total occurrences: 4+3+3+5+4+3+3 = 25
+Patterns I can identify:
+- All targets are Emacs Lisp files in gptel ecosystem
+- The names suggest prompt engineering for LLM agents
+- Files cluster into 3 functional areas: auto-workflow, tools/agent, benchmark
+- All have empty example reasons (suggesting silent/unobserved failures)
+- Most concentrated in late May/early June 2026
 
-Categories of targets:
-- Agent/benchmark files: gptel-tools-agent-prompt-build, gptel-tools-agent-benchmark, gptel-benchmark-principles
-- Auto-workflow files: gptel-auto-workflow-strategic, gptel-auto-workflow-projects, gptel-auto-workflow-ontology-router, gptel-auto-workflow-evolution
+Let me create a comprehensive knowledge page with:
+- Frontmatter
+- Summary statistics
+- Pattern analysis
+- Concrete examples/tables
+- Actionable patterns
+- Cross-references
 
-Let me build a comprehensive knowledge page that:
-1. Has frontmatter
-2. Has 50+ lines of content
-3. Includes concrete examples (code, tables, commands)
-4. Has actionable patterns
-5. Has cross-references to related topics
-
-I'll structure it as:
-- Overview
-- Affected files table
-- Common patterns identified
-- Concrete examples of what prompt failures look like
-- Actionable remediation patterns
-- Monitoring/Detection
-- Prevention checklist
-- Related topics
-
-Let me draft this now.
+I need at least 50 lines of content. Let me write it out.
