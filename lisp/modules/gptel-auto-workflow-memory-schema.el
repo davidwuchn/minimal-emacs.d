@@ -1164,6 +1164,35 @@ MAX-ITERATIONS defaults to 20."
             (cl-return communities)))
       communities)))
 
+(defun gptel-auto-workflow--unified-graph-community-cohesion (communities)
+  "Compute cohesion scores for each community in COMMUNITIES.
+Returns hash table: community-id -> cohesion (0.0-1.0).
+Cohesion = fraction of edges that stay within the community.
+High cohesion (>0.7) = well-connected cluster. Low (<0.3) = fragmented."
+  (let* ((graph (gptel-auto-workflow--unified-graph-ensure))
+         (scores (make-hash-table :test 'equal)))
+    (when (and graph communities)
+      (maphash (lambda (key _edges)
+                 (let ((comm (gethash key communities)))
+                   (when comm
+                     (let* ((total 0) (internal 0)
+                            (edges (gethash key graph)))
+                       (dolist (edge (or edges ()))
+                         (setq total (1+ total))
+                         (let ((to-comm (gethash (cadr edge) communities)))
+                           (when (equal comm to-comm)
+                             (setq internal (1+ internal)))))
+                       (when (> total 0)
+                         (puthash comm
+                                  (cons (+ (car (gethash comm scores '(0 . 0))) total)
+                                        (+ (cdr (gethash comm scores '(0 . 0))) internal))
+                                  scores))))))
+               graph)
+      (maphash (lambda (comm pair)
+                 (puthash comm (/ (float (cdr pair)) (max 1 (car pair))) scores))
+               scores))
+    scores))
+
 (defun gptel-auto-workflow--unified-graph-surprising-connections (&optional top-n)
   "Find surprising cross-community connections in the unified graph.
 Returns list of (source-id target-id edge-type score).
@@ -1215,10 +1244,20 @@ surprising connections. Uses graphify-inspired format."
                  graph)
         (when communities
           (maphash (lambda (_k comm) (puthash comm t comm-set)) communities))
+        (let* ((cohesion (gptel-auto-workflow--unified-graph-community-cohesion communities))
+               (cohesion-str
+                (when cohesion
+                  (let ((vals '()))
+                    (maphash (lambda (_k v) (push v vals)) cohesion)
+                    (let ((avg (if vals (/ (apply '+ vals) (length vals)) 0))
+                          (low (seq-count (lambda (v) (< v 0.3)) vals)))
+                      (format "- Cohesion: %.0f%% avg, %d fragmented communities (<30%%)\n"
+                              (* 100 avg) low))))))
         (concat
          "## Knowledge Graph Topology\n"
          (format "- %d nodes, %d edges, %d communities\n"
                  node-count edge-count (hash-table-count comm-set))
+         (when cohesion-str cohesion-str)
          (when (> edge-count 0)
            (format "- Confidence: %d EXTRACTED (%.0f%%) %d INFERRED (%.0f%%) %d AMBIGUOUS (%.0f%%)\n"
                    extracted (* 100.0 (/ (float extracted) edge-count))
@@ -1238,7 +1277,7 @@ surprising connections. Uses graphify-inspired format."
                                         (nth 0 s) (nth 1 s) (nth 2 s) (nth 3 s)))
                               surprises "\n")
                    "\n"))
-         "\n")))))
+         "\n"))))))
 
 ;;; Graph export (JSON for external tools, visualization)
 
