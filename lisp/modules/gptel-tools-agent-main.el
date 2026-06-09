@@ -529,27 +529,28 @@ Usage:
                     (length discovered))))))
     ;; Restore self-healing lessons from mementum (cross-session learning).
     ;; Previous sessions' "what finally worked" knowledge survives daemon restart.
-    (condition-case nil
-        (when (and (boundp 'gptel-auto-workflow--self-healing-log)
-                   (fboundp 'gptel-auto-workflow--mementum-slug))
-          (let ((mem-dir (expand-file-name "mementum/memories/"
-                                           (gptel-auto-workflow--default-dir))))
-            (when (file-directory-p mem-dir)
-              (dolist (f (directory-files mem-dir t "self-heal-lesson-.*\\.md$"))
-                (with-temp-buffer
-                  (insert-file-contents f)
-                  (goto-char (point-min))
-                  (when (re-search-forward "Final fix: \\(.+\\)" nil t)
-                    (let ((fix (match-string 1)))
-                      (push (list :timestamp (float-time)
-                                  :diagnosis "restored-lesson"
-                                  :remedy fix
-                                  :effective t
-                                  :from-prior-session t)
-                            gptel-auto-workflow--self-healing-log)))
-                  (message "[auto-workflow] Restored self-heal lesson: %s"
-                           (file-name-base f))))))
-      (error (ignore-errors (message "[auto-workflow] Self-heal lesson restore skipped")))))
+    ;; Uses ignore-errors to swallow ALL errors (broken pipe, file read, etc.)
+    ;; so this never blocks the experiment trigger.
+    (ignore-errors
+      (when (and (boundp 'gptel-auto-workflow--self-healing-log)
+                 (fboundp 'gptel-auto-workflow--mementum-slug))
+        (let ((mem-dir (expand-file-name "mementum/memories/"
+                                         (gptel-auto-workflow--default-dir))))
+          (when (file-directory-p mem-dir)
+            (dolist (f (directory-files mem-dir t "self-heal-lesson-.*\\.md$"))
+              (with-temp-buffer
+                (insert-file-contents f)
+                (goto-char (point-min))
+                (when (re-search-forward "Final fix: \\(.+\\)" nil t)
+                  (let ((fix (match-string 1)))
+                    (push (list :timestamp (float-time)
+                                :diagnosis "restored-lesson"
+                                :remedy fix
+                                :effective t
+                                :from-prior-session t)
+                          gptel-auto-workflow--self-healing-log)))
+                (message "[auto-workflow] Restored self-heal lesson: %s"
+                         (file-name-base f))))))))
     ;; Check innovation queue for pending ideas from GTM Mayor
     (when (fboundp 'gptel-auto-workflow--innovation-queue-list)
       (condition-case err

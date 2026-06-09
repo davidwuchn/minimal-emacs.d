@@ -632,7 +632,7 @@ In headless mode, respects `gptel-mementum-headless-auto-approve'."
                     (goto-char (point-min)))
                   (display-buffer preview-buffer)
                    (when (y-or-n-p (format "Create knowledge page for '%s'? (%d lines) " topic line-count))
-                     (gptel-mementum--save-knowledge-page topic files extracted))))))))))
+                     (gptel-mementum--save-knowledge-page topic files extracted)))))))))
      (error
       (message "[mementum] Error handling synthesis for '%s': %s" topic (error-message-string err)))))
 
