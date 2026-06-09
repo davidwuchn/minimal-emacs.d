@@ -91,12 +91,78 @@ Skips lines that are comments, docstrings, or string literals."
            "(> score 0) as grader-broken is wrong - score=0 can be legitimate")))
       issues)))
 
+;; ── Check 4: Unguarded external function calls ──
+
+(defvar gptel-auto-workflow--semantic-external-fns
+  '(gptel-agent-read-file)
+  "List of external functions that require fboundp guards.
+When code calls these without (fboundp '...) or condition-case,
+the function is brittle in test environments where the package
+providing these functions is not loaded.")
+
+(defun gptel-auto-workflow--audit-unguarded-external-calls (file)
+  "Audit FILE for unguarded calls to external functions.
+Reports calls to gptel-agent-read-file (or other registered external
+functions) that are NOT preceded by a (fboundp '...) check or wrapped
+in a condition-case. Such calls are brittle in test environments.
+The check is function-local: it looks for a guard within the same
+defun as the call, not just the immediately preceding lines."
+  (let ((issues 0))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (goto-char (point-min))
+      (dolist (fn gptel-auto-workflow--semantic-external-fns)
+        (let ((pattern (format "(%s\\s-" (symbol-name fn))))
+          (goto-char (point-min))
+          (while (re-search-forward pattern nil t)
+            (let* ((call-line (line-number-at-pos (match-beginning 0)))
+                   (line-text
+                    (save-excursion
+                      (beginning-of-line)
+                      (buffer-substring (point) (line-end-position)))))
+              (unless (or (string-match-p "(defun\\s-+" line-text)
+                         (string-match-p "(declare-function\\s-+" line-text))
+                ;; Find the start of the enclosing defun
+                (let ((defun-start-line 1)
+                      (found-guard nil))
+                  (save-excursion
+                    (goto-line call-line)
+                    ;; Search backward for the enclosing (defun
+                    (when (re-search-backward "^(defun\\b" nil t)
+                      (setq defun-start-line (line-number-at-pos (point)))))
+                  ;; Check for guard anywhere within the defun (after defun-start-line)
+                  (let ((check-line (max 1 (- call-line 1)))
+                        (end-of-lookback defun-start-line))
+                    (while (and (>= check-line end-of-lookback)
+                                (not found-guard))
+                      (save-excursion
+                        (goto-line check-line)
+                        (beginning-of-line)
+                        (when (re-search-forward
+                               (format "fboundp.*'%s" (symbol-name fn))
+                               (line-end-position) t)
+                          (setq found-guard t))
+                        (when (re-search-forward
+                               "condition-case"
+                               (line-end-position) t)
+                          (setq found-guard t)))
+                      (setq check-line (1- check-line)))
+                    (unless found-guard
+                      (setq issues (1+ issues))
+                      (gptel-auto-workflow--semantic-audit-record
+                       file call-line
+                       'unguarded-external-call
+                       (format "Call to %s without (fboundp '%s) or condition-case guard"
+                               (symbol-name fn) (symbol-name fn))))))))))))
+    issues))
+
 ;; ── Audit dispatcher ──
 
 (defvar gptel-auto-workflow--semantic-audit-checks
   '((let-binding-function . gptel-auto-workflow--audit-let-binding-functions)
     (hardcoded-limit . gptel-auto-workflow--audit-hardcoded-limits)
-    (score-zero-bug . gptel-auto-workflow--audit-score-zero-bug))
+    (score-zero-bug . gptel-auto-workflow--audit-score-zero-bug)
+    (unguarded-external-call . gptel-auto-workflow--audit-unguarded-external-calls))
   "Alist of audit check name (symbol) to audit function.")
 
 (cl-defun gptel-auto-workflow--semantic-audit-file (file &key (_auto-fix nil))

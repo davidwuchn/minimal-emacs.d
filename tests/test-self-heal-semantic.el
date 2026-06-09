@@ -141,10 +141,56 @@ File name starts with `test-` so the let-binding check applies."
 
 (ert-deftest test-self-heal-semantic/audit-checks-variable-defined ()
   "The audit checks alist is defined with all checks."
-  (should (= (length gptel-auto-workflow--semantic-audit-checks) 3))
+  (should (= (length gptel-auto-workflow--semantic-audit-checks) 4))
   (should (assq 'let-binding-function gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'hardcoded-limit gptel-auto-workflow--semantic-audit-checks))
-  (should (assq 'score-zero-bug gptel-auto-workflow--semantic-audit-checks)))
+  (should (assq 'score-zero-bug gptel-auto-workflow--semantic-audit-checks))
+  (should (assq 'unguarded-external-call gptel-auto-workflow--semantic-audit-checks)))
+
+;; ── Test 7: Unguarded external function call detection ──
+
+(ert-deftest test-self-heal-semantic/detects-unguarded-external-call ()
+  "Detects calls to gptel-agent-read-file without fboundp guard.
+
+Reproduces the bug: gptel-auto-workflow--load-skill called
+gptel-agent-read-file without a (fboundp 'gptel-agent-read-file) guard,
+causing void-function errors when gptel-agent was not loaded."
+  (let* ((content
+          "(defun load-skill (file)
+  (let ((parsed (gptel-agent-read-file file))
+        (name (car parsed)))
+    name))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-unguarded-external-calls file)))
+          (should (>= issues 1)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/clean-with-fboundp-guard ()
+  "Function call with (fboundp 'foo) guard is clean."
+  (let* ((content
+          "(defun load-skill (file)
+  (when (fboundp 'gptel-agent-read-file)
+    (let ((parsed (gptel-agent-read-file file)))
+      parsed)))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-unguarded-external-calls file)))
+          (should (= issues 0)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/clean-with-condition-case ()
+  "Function call wrapped in condition-case is also safe."
+  (let* ((content
+          "(defun load-skill (file)
+  (condition-case nil
+      (gptel-agent-read-file file)
+    (error nil)))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-unguarded-external-calls file)))
+          (should (= issues 0)))
+      (test-self-heal-semantic--cleanup file))))
 
 ;; ── Test 6: Entry point function ──
 
