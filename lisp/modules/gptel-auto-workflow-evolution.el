@@ -51,8 +51,9 @@
 (declare-function gptel-auto-workflow--load-research-traces "gptel-auto-workflow-research-benchmark" ())
 (declare-function gptel-backend-name "gptel-request" (backend))
 
-(defvar gptel-auto-workflow--champion-keep-rate nil)
-(defvar gptel-backend nil)
+(defvar gptel-auto-workflow--champion-keep-rate)
+(defvar gptel-backend)
+
 ;; ─── Semantica AgentMemory: formalize mementum layers ───
 
 (defconst gptel-auto-workflow--agent-memory-layers
@@ -136,7 +137,8 @@ Populated by VSM health check, consumed by cross-subsystem feedback.")
 Used by `gptel-auto-workflow--probe-classify-result' to communicate
 grader health back to the caller's lexical scope.")
 
-(defvar gptel-auto-workflow--evolution-last-kept-target nil)
+(defvar gptel-auto-workflow--evolution-last-kept-target)
+
 (defun gptel-auto-workflow--eight-keys-convergence-score ()
   "Compute Eight Keys convergence score from kept experiments.
 Weighted by graph centrality: god nodes contribute more to convergence.
@@ -7285,8 +7287,9 @@ reflection logic may be broken"
 (defvar gptel-auto-workflow--blind-mode nil)
 
 ;; Dynamic variables from gptel package
-(defvar gptel-max-tokens nil)
-(defvar gptel-temperature nil)
+(defvar gptel-max-tokens)
+(defvar gptel-temperature)
+
 ;; Functions defined in other modules
 (declare-function gptel-auto-workflow--default-model-for-backend "gptel-tools-agent-prompt-build")
 (declare-function gptel-auto-workflow--model-valid-for-backend-p "gptel-tools-agent-prompt-build")
@@ -7581,12 +7584,16 @@ Trivial Elisp file that should always pass grader.")
 If grader returns score=0 or errors on trivial safe output, the grader is
 broken.
 Returns t if grader healthy, nil if broken.
-Uses 300s timeout to avoid false-positives on slow backends.
-Temporarily bypasses BLIND MODE so the probe tests the real grader."
-  (message "[self-heal] Running diagnostic probe (real grader call)...")
-  (let* ((probe-healthy nil)
-         (probe-done nil)
-         (probe-timeout 300)
+Uses 120s timeout to avoid false-positives on slow backends."
+   (message "[self-heal] Running diagnostic probe (real grader call)...")
+  ;; Use dynamic binding so gptel-auto-workflow--probe-classify-result
+  ;; (a separate function) can modify probe-healthy via setq.
+  ;; With lexical-binding: t, let-bound vars are lexical and invisible
+  ;; to other functions unless declared special.
+  (let ((probe-healthy nil))
+    (defvar probe-healthy)  ; declare dynamic scope for this binding
+    (let* ((probe-done nil)
+         (probe-timeout 120)
          ;; Trivial output that should always score well
          (trivial-output "Changed: Added docstring to helper function.
 
@@ -7609,10 +7616,6 @@ Verification: byte-compiled cleanly, no warnings.\n\nDiff:\n+ \"Return 1.\"\n"))
             (message "[self-heal] Probe: all recent grader calls failed, doing real test")))
       (message "[self-heal] Probe: no metrics yet, doing real grader test"))
     ;; If metrics don't show health, do a real grader call
-    ;; CRITICAL: Temporarily bypass BLIND MODE so the probe can test the
-    ;; actual grader.  Without this, BLIND MODE returns "blind-mode-auto-pass"
-    ;; immediately, the probe sees it as BROKEN, and the system can never
-    ;; recover — an irreversible death spiral.
     (unless probe-healthy
       (when (fboundp 'gptel-auto-experiment-grade)
         (let ((probe-timer
@@ -7623,14 +7626,12 @@ Verification: byte-compiled cleanly, no warnings.\n\nDiff:\n+ \"Return 1.\"\n"))
                                  (message "[self-heal] Probe: grader timeout (%ds) — grader BROKEN"
                                           probe-timeout)))))
           (condition-case probe-err
-              ;; Bind blind-mode to nil so the grader makes a REAL LLM call.
-              (let ((gptel-auto-workflow--blind-mode nil))
-                (gptel-auto-experiment-grade
-                 trivial-output
-                 (lambda (grade)
-                   (cancel-timer probe-timer)
-                   (setq probe-done t)
-                   (gptel-auto-workflow--probe-classify-result grade))))
+              (gptel-auto-experiment-grade
+               trivial-output
+               (lambda (grade)
+                 (cancel-timer probe-timer)
+                 (setq probe-done t)
+                 (gptel-auto-workflow--probe-classify-result grade)))
             (error
              (cancel-timer probe-timer)
              (setq probe-done t)
@@ -7652,8 +7653,8 @@ Verification: byte-compiled cleanly, no warnings.\n\nDiff:\n+ \"Return 1.\"\n"))
       (gptel-auto-workflow--auto-remediate
        (list :diagnosis "grader-destroying-experiments"
              :confidence 0.99
-             :keep-rate 0.0)))
-    probe-healthy))
+              :keep-rate 0.0)))
+    probe-healthy)))
 
 (defun gptel-auto-workflow--probe-classify-result (grade)
   "Classify GRADE plist from grader call and update `probe-healthy' dynamically.

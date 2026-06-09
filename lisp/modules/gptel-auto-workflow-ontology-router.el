@@ -797,8 +797,25 @@ explore=%.0f%%)"
                    (setcar scored (cadr scored))
                    (setcar (cdr scored) tmp))
                  (if forced-swap
-                     (message "[onto-router] DRIFT-FORCED SWAP: %d consecutive failures on %s"
-                              (plist-get drift :consecutive-failures) target)
+                     (let ((top-backend (plist-get (car scored) :backend))
+                           (n-failures (plist-get drift :consecutive-failures)))
+                       (message "[onto-router] DRIFT-FORCED SWAP: %d consecutive failures on %s"
+                                n-failures target)
+                       ;; When ALL recent experiments failed (5 from window of 5),
+                       ;; exclude the top backend to force trying deeper candidates.
+                       ;; This prevents endless swapping between 2 failing backends.
+                       (when (and (>= n-failures 5)
+                                  top-backend
+                                  (not (member top-backend gptel-auto-workflow--rate-limited-backends)))
+                         (push top-backend gptel-auto-workflow--rate-limited-backends)
+                         ;; Auto-expire after 30 minutes (one evolution cycle)
+                         (run-with-timer 1800 nil
+                                         (lambda (be)
+                                           (setq gptel-auto-workflow--rate-limited-backends
+                                                 (remove be gptel-auto-workflow--rate-limited-backends)))
+                                         top-backend)
+                         (message "[onto-router] DRIFT-EXCLUDED %s for 30min (all recent experiments failed)"
+                                  top-backend)))
                    (message "[onto-router] EXPLORATION: swapped top 2 backends for learning"))))
               ;; Record experiment-level routing decision for audit
               (let ((top-5 (seq-take scored 5)))
@@ -1909,7 +1926,6 @@ or nil if no drift detected."
               (backend (plist-get r :backend)))
           (if (and decision (not (equal decision "kept")))
               (cl-incf consecutive)
-            (cl-incf consecutive 0)  ; reset on success
             (setq consecutive 0))
           (when backend
             (puthash backend t backends))))
@@ -3275,15 +3291,15 @@ Returns plist: (:requires (:provides :defuns :defvars :declare-fns)."
         (goto-char (point-min))
         (while (not (eobp))
           (cond
-           ((looking-at "(require\\s-+'?\\([^ )]+\\)")
+           ((looking-at "(require\\s-+'?\\([^ \t()]+\\)")
             (push (match-string-no-properties 1) requires))
-           ((looking-at "(provide\\s-+'?\\([^ )]+\\)")
+           ((looking-at "(provide\\s-+'?\\([^ \t()]+\\)")
             (push (match-string-no-properties 1) provides))
-           ((looking-at "(defun\\s-+\\([^ (]+\\)")
+           ((looking-at "(defun\\s-+\\([^ \t()]+\\)")
             (push (match-string-no-properties 1) defuns))
-           ((looking-at "(defvar\\s-+\\([^ (]+\\)")
+           ((looking-at "(defvar\\s-+\\([^ \t()]+\\)")
             (push (match-string-no-properties 1) defvars))
-           ((looking-at "(declare-function\\s-+\\([^ (]+\\)")
+           ((looking-at "(declare-function\\s-+\\([^ \t()]+\\)")
             (push (match-string-no-properties 1) declare-fns)))
           (forward-line 1))))
     (list :requires (nreverse requires)

@@ -832,20 +832,18 @@ directly."
                              proj-root)))
           (message "[auto-workflow] Creating temp worktree for review fix: %s" tmp-worktree)
           (if (= 0 (call-process "git" nil nil nil "worktree" "add" tmp-worktree optimize-branch))
-              ;; NOTE: No unwind-protect here — the worktree must survive
-              ;; until the async executor callback fires.  Cleanup is handled
-              ;; by --fix-directly/--research-then-fix after the executor finishes.
-              (if (not gptel-auto-workflow-research-before-fix)
-                  (gptel-auto-workflow--fix-directly review-output callback tmp-worktree)
-                (gptel-auto-workflow--research-then-fix review-output callback tmp-worktree))
+              (unwind-protect
+                  (if (not gptel-auto-workflow-research-before-fix)
+                      (gptel-auto-workflow--fix-directly review-output callback tmp-worktree)
+                    (gptel-auto-workflow--research-then-fix review-output callback tmp-worktree))
+                (ignore-errors
+                  (call-process "git" nil nil nil "worktree" "remove" "-f" tmp-worktree)
+                  (when (file-exists-p tmp-worktree)
+                    (delete-directory tmp-worktree t))))
             (funcall callback
                      (cons nil
                            (format "Error: Missing review fix worktree for %s (and git worktree add failed)"
-                                   optimize-branch)))
-            (ignore-errors
-              (call-process "git" nil nil nil "worktree" "remove" "-f" tmp-worktree)
-              (when (file-exists-p tmp-worktree)
-                (delete-directory tmp-worktree t)))))
+                                   optimize-branch)))))
       (if (not gptel-auto-workflow-research-before-fix)
           (gptel-auto-workflow--fix-directly review-output callback worktree)
         (gptel-auto-workflow--research-then-fix review-output callback worktree)))))
@@ -965,22 +963,13 @@ Focus only on the issues mentioned. Do not refactor or add features."
             'executor
             "Fix review issues"
             fix-prompt
-             (lambda (result)
-               (let ((default-directory fix-root)
-                     (response (if (stringp result) result (format "%S" result))))
-                 (funcall callback
-                          (gptel-auto-workflow--finalize-review-fix-result
-                           response
-                           pre-fix-head))
-                 ;; Clean up temp worktree after executor completes.
-                 ;; Must happen AFTER callback (which may git-capture changes).
-                 (when (and worktree
-                            (string-prefix-p (expand-file-name "var/tmp/" proj-root)
-                                             (expand-file-name worktree)))
-                   (ignore-errors
-                     (call-process "git" nil nil nil "worktree" "remove" "-f" worktree)
-                     (when (file-exists-p worktree)
-                       (delete-directory worktree t)))))))))
+            (lambda (result)
+              (let ((default-directory fix-root)
+                    (response (if (stringp result) result (format "%S" result))))
+                (funcall callback
+                         (gptel-auto-workflow--finalize-review-fix-result
+                          response
+                          pre-fix-head)))))))
       (funcall callback (cons nil "No executor agent available")))))
 
 (defun gptel-auto-workflow--research-then-fix (review-output callback &optional worktree)

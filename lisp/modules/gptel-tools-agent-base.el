@@ -36,20 +36,29 @@
 (defun gptel-auto-workflow--default-dir ()
   "Return default directory for git operations.
 Use `gptel-auto-workflow--project-root' if available.
-Fall back to ~/.emacs.d/."
+Fall back to user-emacs-directory or ~/.emacs.d/."
   (or (and (fboundp 'gptel-auto-workflow--project-root)
            (ignore-errors (gptel-auto-workflow--project-root)))
+      (and (stringp user-emacs-directory)
+           (expand-file-name user-emacs-directory))
       (expand-file-name "~/.emacs.d/")))
 
 (defun gptel-auto-workflow--worktree-base-root ()
   "Return a stable root for workflow-owned worktree artifacts.
-Prefer the root captured at workflow start over mutable experiment context."
-  (expand-file-name
-   (or (and (boundp 'gptel-auto-workflow--run-project-root)
-            gptel-auto-workflow--run-project-root)
-       (and (boundp 'gptel-auto-workflow--current-project)
-            gptel-auto-workflow--current-project)
-       (gptel-auto-workflow--default-dir))))
+Prefer the root captured at workflow start over mutable experiment context.
+Never returns nil — always falls back to user-emacs-directory."
+  (let ((root (or (and (boundp 'gptel-auto-workflow--run-project-root)
+                       (stringp gptel-auto-workflow--run-project-root)
+                       gptel-auto-workflow--run-project-root)
+                  (and (boundp 'gptel-auto-workflow--current-project)
+                       (stringp gptel-auto-workflow--current-project)
+                       gptel-auto-workflow--current-project)
+                  (gptel-auto-workflow--default-dir)
+                  user-emacs-directory
+                  (expand-file-name "~/.emacs.d/"))))
+    (if (stringp root)
+        (expand-file-name root)
+      (expand-file-name "~/.emacs.d/"))))
 ;; Ensure evolution production module is loaded for timer and hook variables
 (require 'gptel-auto-workflow-production nil t)
 

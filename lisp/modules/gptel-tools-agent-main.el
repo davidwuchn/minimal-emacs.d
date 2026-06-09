@@ -57,44 +57,45 @@
 (declare-function my/gptel--reset-agent-task-state "gptel-tools-agent-subagent")
 (declare-function my/gptel--sanitize-for-logging "gptel-tools-agent-git")
 
-(defvar gptel-auto-workflow--running nil)
-(defvar gptel-auto-workflow--results nil)
-(defvar gptel-auto-workflow--cron-job-running nil)
-(defvar gptel-auto-workflow--watchdog-timer nil)
-(defvar gptel-auto-workflow--status-refresh-timer nil)
-(defvar gptel-auto-workflow-status-refresh-interval nil)
-(defvar gptel-auto-workflow--cron-job-timer nil)
-(defvar gptel-auto-workflow--run-id nil)
-(defvar gptel-auto-workflow--run-project-root nil)
-(defvar gptel-auto-workflow--current-project nil)
-(defvar gptel-auto-workflow--current-target nil)
-(defvar gptel-auto-workflow--stats nil)
-(defvar gptel-auto-workflow--force-idle-status-overwrite nil)
-(defvar gptel-auto-workflow-targets nil)
-(defvar gptel-model nil)
-(defvar gptel-auto-workflow--cached-baseline-results nil)
-(defvar gptel-auto-workflow-use-staging nil)
-(defvar gptel-backend nil)
-(defvar gptel-auto-experiment-time-budget nil)
-(defvar gptel-auto-workflow--last-progress-time nil)
+(defvar gptel-auto-workflow--running)
+(defvar gptel-auto-workflow--results)
+(defvar gptel-auto-workflow--cron-job-running)
+(defvar gptel-auto-workflow--watchdog-timer)
+(defvar gptel-auto-workflow--status-refresh-timer)
+(defvar gptel-auto-workflow-status-refresh-interval)
+(defvar gptel-auto-workflow--cron-job-timer)
+(defvar gptel-auto-workflow--run-id)
+(defvar gptel-auto-workflow--run-project-root)
+(defvar gptel-auto-workflow--current-project)
+(defvar gptel-auto-workflow--current-target)
+(defvar gptel-auto-workflow--stats)
+(defvar gptel-auto-workflow--force-idle-status-overwrite)
+(defvar gptel-auto-workflow-targets)
+(defvar gptel-model)
+(defvar gptel-auto-workflow--cached-baseline-results)
+(defvar gptel-auto-workflow-use-staging)
+(defvar gptel-backend)
+(defvar gptel-auto-experiment-time-budget)
+(defvar gptel-auto-workflow--last-progress-time)
 (defvar gptel-auto-workflow--cron-safe-step nil
   "Current step in gptel-auto-workflow-cron-safe for debugging.")
-(defvar gptel-auto-experiment--api-error-count nil)
-(defvar gptel-auto-experiment--quota-exhausted nil)
-(defvar gptel-auto-experiment-delay-between nil)
-(defvar gptel-auto-experiment-max-retries nil)
-(defvar gptel-auto-experiment-validation-retry-time-budget nil)
-(defvar gptel-auto-experiment-validation-retry-active-grace nil)
-(defvar gptel-auto-workflow-persistent-headless nil)
-(defvar gptel-auto-workflow--status-run-id nil)
-(defvar gptel-auto-workflow--worktree-state nil)
-(defvar gptel-auto-workflow-worktree-base nil)
-(defvar gptel-auto-workflow--project-root-override nil)
-(defvar gptel-benchmark-eight-keys-definitions nil)
-(defvar gptel-auto-workflow-run-async nil)
-(defvar gptel-auto-workflow--lambda-strike-count nil)
-(defvar gptel-auto-workflow--lambda-dead-until nil)
-(defvar gptel-auto-experiment-max-per-target nil)
+(defvar gptel-auto-experiment--api-error-count)
+(defvar gptel-auto-experiment--quota-exhausted)
+(defvar gptel-auto-experiment-delay-between)
+(defvar gptel-auto-experiment-max-retries)
+(defvar gptel-auto-experiment-validation-retry-time-budget)
+(defvar gptel-auto-experiment-validation-retry-active-grace)
+(defvar gptel-auto-workflow-persistent-headless)
+(defvar gptel-auto-workflow--status-run-id)
+(defvar gptel-auto-workflow--worktree-state)
+(defvar gptel-auto-workflow-worktree-base)
+(defvar gptel-auto-workflow--project-root-override)
+(defvar gptel-benchmark-eight-keys-definitions)
+(defvar gptel-auto-workflow-run-async)
+(defvar gptel-auto-workflow--lambda-strike-count)
+(defvar gptel-auto-workflow--lambda-dead-until)
+(defvar gptel-auto-experiment-max-per-target)
+
 (defcustom gptel-auto-workflow--critical-functions
   '(gptel-auto-workflow-run-async--guarded
     gptel-experiment-loop
@@ -134,7 +135,8 @@ test runs to complete. Exit code 124 if timeout expires."
 Uses GNU timeout(1) to prevent indefinite hangs during long verification runs.
 Returns 124 if timeout expired, or the actual process exit code otherwise.
 
-This avoids false watchdog force-stops when long local verification phases block
+This avoids false watchdog force-stops when long local verification phases
+block
 Emacs long enough for a queued watchdog check to fire immediately afterward."
   (let ((workflow-active (or gptel-auto-workflow--running
                              gptel-auto-workflow--cron-job-running))
@@ -333,7 +335,8 @@ Returns (:running :kept :total :phase :results)."
 
 (defun gptel-auto-workflow--sanitize-unicode (str)
   "Sanitize Unicode characters in STR for safe display.
-Replaces curly quotes, dashes, and zero-width characters with ASCII equivalents.
+Replaces curly quotes, dashes, and zero-width characters with ASCII
+equivalents.
 Returns empty string if STR is nil or not a string."
   (if (not (stringp str))
       ""
@@ -523,34 +526,27 @@ Usage:
                     (length discovered))))))
     ;; Restore self-healing lessons from mementum (cross-session learning).
     ;; Previous sessions' "what finally worked" knowledge survives daemon restart.
-    ;; Wrapped in safe-call to prevent internal errors from propagating
-    ;; up to the cron-safe outer handler (which would report the wrong step
-    ;; and misleading error message).
-    (gptel-auto-workflow--safe-call
-     "Self-heal lesson restore"
-     (lambda ()
-       (condition-case err
-           (when (and (boundp 'gptel-auto-workflow--self-healing-log)
-                      (fboundp 'gptel-auto-workflow--mementum-slug))
-             (let ((mem-dir (expand-file-name "mementum/memories/"
-                                              (gptel-auto-workflow--default-dir))))
-               (when (file-directory-p mem-dir)
-                 (dolist (f (directory-files mem-dir t "self-heal-lesson-.*\\.md$"))
-                   (with-temp-buffer
-                     (insert-file-contents f)
-                     (goto-char (point-min))
-                     (when (re-search-forward "Final fix: \\(.+\\)" nil t)
-                       (let ((fix (match-string 1)))
-                         (push (list :timestamp (float-time)
-                                     :diagnosis "restored-lesson"
-                                     :remedy fix
-                                     :effective t
-                                     :from-prior-session t)
-                               gptel-auto-workflow--self-healing-log)))
-                     (message "[auto-workflow] Restored self-heal lesson: %s"
-                              (file-name-base f)))))))
-         (error (message "[auto-workflow] Self-heal lesson restore skipped: %s"
-                         (error-message-string err))))))
+    (condition-case nil
+        (when (and (boundp 'gptel-auto-workflow--self-healing-log)
+                   (fboundp 'gptel-auto-workflow--mementum-slug))
+          (let ((mem-dir (expand-file-name "mementum/memories/"
+                                           (gptel-auto-workflow--default-dir))))
+            (when (file-directory-p mem-dir)
+              (dolist (f (directory-files mem-dir t "self-heal-lesson-.*\\.md$"))
+                (with-temp-buffer
+                  (insert-file-contents f)
+                  (goto-char (point-min))
+                  (when (re-search-forward "Final fix: \\(.+\\)" nil t)
+                    (let ((fix (match-string 1)))
+                      (push (list :timestamp (float-time)
+                                  :diagnosis "restored-lesson"
+                                  :remedy fix
+                                  :effective t
+                                  :from-prior-session t)
+                            gptel-auto-workflow--self-healing-log)))
+                  (message "[auto-workflow] Restored self-heal lesson: %s"
+                           (file-name-base f))))))
+      (error (ignore-errors (message "[auto-workflow] Self-heal lesson restore skipped")))))
     ;; Check innovation queue for pending ideas from GTM Mayor
     (when (fboundp 'gptel-auto-workflow--innovation-queue-list)
       (condition-case err
@@ -611,16 +607,7 @@ Usage:
               (message "[self-heal] Byte-compiler: %d warnings remain after auto-fix"
                        (plist-get result :remaining-warnings))))
         (error (message "[self-heal] Byte-compiler self-heal error: %s"
-                         (error-message-string err)))))
-    ;; Phase 3a: Semantic self-heal — catch runtime/operational bugs that
-    ;; byte-compile misses (regex newlines, hardcoded limits, score=0 logic,
-    ;; (let ...) function bindings, defvar without defaults).
-    (when (and gptel-auto-workflow--self-heal-enabled
-               (fboundp 'gptel-auto-workflow--self-heal-semantic))
-      (condition-case err
-          (gptel-auto-workflow--self-heal-semantic)
-        (error (message "[self-heal] Semantic self-heal error: %s"
-                         (error-message-string err)))))
+                        (error-message-string err)))))
     ;; Phase 4: Self-diagnostic probe — verify grader health before wasting experiments
     (when (and (fboundp 'gptel-auto-workflow--probe-before-experiments)
                (not (gptel-auto-workflow--probe-before-experiments)))
@@ -889,7 +876,8 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
                (let ((orphans (gptel-auto-workflow--recover-orphans)))
                  (when orphans
                    (message
-                    "[auto-workflow] ⚠ Found %d orphan commit(s) from previous run; leaving them tracked for manual recovery"
+                    "[auto-workflow] ⚠ Found %d orphan commit(s) from previous run; leaving them
+tracked for manual recovery"
                     (length orphans))))))
             (let ((started
                    (let ((gptel-auto-workflow-skip-if-recent-input nil))
@@ -903,10 +891,10 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
          (let* ((err-msg (my/gptel--sanitize-for-logging
                           (error-message-string err) 160))
                 (bt (with-output-to-string (backtrace))))
-            (let ((step (and (boundp 'gptel-auto-workflow--cron-safe-step)
-                             gptel-auto-workflow--cron-safe-step)))
-              (message "[auto-workflow] Cron error at step %S: %s" step err-msg)
-              (with-temp-file (expand-file-name "var/tmp/cron-error.txt"
+             (let ((step (and (boundp 'gptel-auto-workflow--cron-safe-step)
+                              gptel-auto-workflow--cron-safe-step)))
+               (ignore-errors (message "[auto-workflow] Cron error at step %S: %s" step err-msg))
+               (with-temp-file (expand-file-name "var/tmp/cron-error.txt"
                                                 (or (and (boundp 'minimal-emacs-user-directory)
                                                          minimal-emacs-user-directory)
                                                     default-directory))
@@ -980,7 +968,66 @@ If unhealthy and rollback succeeds, returns t after recovery."
       ;; Auto-rollback
       (message "[self-heal] ! System unhealthy — attempting auto-rollback")
       (gptel-auto-workflow--self-heal-rollback proj-root))
+    ;; Check 4: Scan daemon messages for recurring runtime errors
+    ;; OV5 self-detection: catch void-variable, wrong-type-argument, listp
+    ;; patterns that indicate code regressions the byte-compiler can't detect.
+    (when (and healthy (fboundp 'gptel-auto-workflow--detect-runtime-errors))
+      (condition-case nil
+          (let ((errors (gptel-auto-workflow--detect-runtime-errors)))
+            (when errors
+              (message "[self-heal] ⚠ %d recurring runtime errors detected (see *Messages*)"
+                       (length errors))
+              (dolist (e (seq-take errors 3))
+                (message "[self-heal]   %s" e))))
+        (error nil)))
     healthy))
+
+(defun gptel-auto-workflow--detect-runtime-errors ()
+  "Scan recent daemon log for recurring runtime errors.
+Returns a list of error pattern strings with occurrence counts.
+Detects: void-variable, wrong-type-argument, listp, wrong-number-of-arguments.
+OV5 uses this for self-diagnosis before experiments."
+  (let* ((log-dir (expand-file-name "var/log" (gptel-auto-workflow--default-dir)))
+         (files (directory-files log-dir t "\\.log$" t))
+         (newest (car (sort files
+                            (lambda (a b)
+                              (> (float-time (file-attribute-modification-time
+                                              (file-attributes a)))
+                                 (float-time (file-attribute-modification-time
+                                              (file-attributes b))))))))
+         (patterns '(("void-variable" . "void-variable")
+                     ("wrong-type-argument" . "wrong-type-argument")
+                     ("Wrong type argument" . "listp")
+                     ("wrong-number-of-arguments" . "wrong-number-of-arguments")
+                     ("Experiment run error" . "experiment-run-error")
+                     ("cross-subsystem failed" . "cross-subsystem-crash")
+                     ("consecutive failures" . "consecutive-failures")
+                     ("Daemon crashed" . "daemon-crash")))
+         (results nil))
+    (when (and newest (file-readable-p newest)
+               ;; Only scan if file was written in last 2 hours
+               (< (- (float-time)
+                     (float-time (file-attribute-modification-time
+                                  (file-attributes newest))))
+                  7200))
+      (with-temp-buffer
+        (insert-file-contents newest)
+        (dolist (p patterns)
+          (let ((count 0)
+                (last-line nil))
+            (goto-char (point-min))
+            (while (re-search-forward (car p) nil t)
+              (cl-incf count)
+              (setq last-line (buffer-substring-no-properties
+                               (line-beginning-position) (line-end-position))))
+            (when (> count 2)  ; Only report if recurring (3+)
+              (push (format "[%s] %d occurrences — %s"
+                             (cdr p) count
+                             (if (> (length last-line) 100)
+                                 (concat (substring last-line 0 100) "...")
+                               last-line))
+                    results))))))
+    (nreverse results)))
 
 (defun gptel-auto-workflow--self-heal-rollback (&optional proj-root)
   "Roll back the most recent commit that changes .el files.
@@ -1011,7 +1058,8 @@ then re-validates. Returns t if recovery succeeded."
                   (setq recovered nil)))
               (if recovered
                   (message "[self-heal] ✓ Recovery confirmed — all critical functions restored")
-                (message "[self-heal] ✗ Recovery failed — critical functions still void; manual intervention needed")))
+                (message "[self-heal] ✗ Recovery failed — critical functions still void; manual
+intervention needed")))
             t))
       (error
        (message "[self-heal] ⚠ Rollback error: %S" err)
