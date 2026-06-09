@@ -1051,7 +1051,10 @@ OV5 uses this for self-diagnosis before experiments."
                      ("LLM returned nil/non-string" "llm-nil-response"           2 "check-mementum-synthesis-api")
                      ("connection broken by remote peer" "connection-broken"     2 "restart-llm-subprocess")
                      ("allium-bdd.*:fail"           "bdd-spec-failure"           3 "investigate-systematic-bdd-failures")
-                     ("Missing staging branch configuration" "staging-setup-failure" 2 "reinitialize-staging-branch")))
+                      ("Missing staging branch configuration" "staging-setup-failure" 2 "reinitialize-staging-branch")
+                      ("target dispatch failed"        "target-dispatch-failure"  1 "check-target-dispatch-error")
+                      ("grader broken"                 "grader-broken"            2 "check-grader-backend")
+                      ("Provider failure"              "provider-failure"         2 "check-llm-provider")))
          (results nil))
     (when (and newest (file-readable-p newest)
                ;; Only scan if file was written in last 2 hours
