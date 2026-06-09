@@ -555,6 +555,70 @@ Returns a list of pattern plists sorted by category priority then count."
                   (> ca cb)
                 (< ka kb)))))))
 
+;; ── Autonomous Error Pattern Learning ──
+
+(defcustom gptel-auto-workflow-error-pattern-min-occurrences 3
+  "Minimum occurrences of an unknown error before proposing as retryable."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
+(defun gptel-auto-workflow--detect-unknown-error-patterns ()
+  "Find error messages in failures not matching known retryable patterns.
+Returns list of (:error-snippet :count :first-target ...) proposals.
+When unknown error appears >= min-occurrences, propose adding to retryable list."
+  (let* ((patterns gptel-auto-experiment--shared-retryable-error-patterns)
+         (general-pattern (plist-get patterns :general))
+         (transient-pattern (plist-get patterns :transient))
+         (records (when (fboundp 'gptel-auto-workflow--parse-all-results)
+                    (gptel-auto-workflow--parse-all-results)))
+         (unknowns (make-hash-table :test 'equal))
+         (proposals nil))
+    (dolist (rec records)
+      (let* ((grader-reason (or (plist-get rec :grader-reason) ""))
+             (comparator-reason (or (plist-get rec :comparator-reason) ""))
+             (snippets (delq nil
+                             (append
+                              ;; Extract :code "NNNN" patterns
+                              (when (string-match ":code \"[0-9]+\"" grader-reason)
+                                (list (match-string 0 grader-reason)))
+                              (when (string-match ":code \"[0-9]+\"" comparator-reason)
+                                (list (match-string 0 comparator-reason)))
+                              ;; Extract Chinese error phrases (4-20 chars)
+                              (let ((chinese nil) (pos 0))
+                                (while (string-match
+                                        "[\u4e00-\u9fff]\\{4,20\\}"
+                                        grader-reason pos)
+                                  (push (match-string 0 grader-reason) chinese)
+                                  (setq pos (match-end 0)))
+                                chinese)))))
+        (dolist (snippet snippets)
+          (unless (or (string-match-p general-pattern snippet)
+                      (string-match-p transient-pattern snippet))
+            (let* ((key snippet)
+                   (entry (gethash key unknowns)))
+              (if entry
+                  (progn
+                    (plist-put entry :count (1+ (plist-get entry :count)))
+                    (plist-put entry :last-target (plist-get rec :target)))
+                (puthash key
+                         (list :error-snippet snippet
+                               :count 1
+                               :first-target (plist-get rec :target))
+                         unknowns)))))))
+    (maphash
+     (lambda (_ entry)
+       (when (>= (plist-get entry :count)
+                 gptel-auto-workflow-error-pattern-min-occurrences)
+         (push entry proposals)))
+     unknowns)
+    (when proposals
+      (message "[monitoring] Unknown error patterns: %d candidates for retryable list"
+               (length proposals))
+      (dolist (p proposals)
+        (message "[monitoring]   → %S (%d occurrences)"
+                 (plist-get p :error-snippet) (plist-get p :count))))
+    proposals))
+
 ;; ── Pattern Formatting ──
 
 (defun gptel-auto-workflow--failure-pattern->string (pattern)
@@ -1249,6 +1313,12 @@ Returns list of written mementum file paths, or nil if throttled/disabled."
               (written nil))
           (message "[monitoring] Found %d systemic failure patterns"
                    (length patterns))
+          ;; Phase 1b: Autonomous error pattern learning
+          ;; Detect unknown error messages → propose for retryable list
+          (let ((unknown-errors (gptel-auto-workflow--detect-unknown-error-patterns)))
+            (when unknown-errors
+              (message "[monitoring] Auto-learning: %d unknown error patterns — review for retryable list"
+                       (length unknown-errors))))
           ;; Persist each pattern to mementum (Phase 1)
           (dolist (pattern patterns)
             (let* ((ftype (plist-get pattern :type))
