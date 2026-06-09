@@ -465,5 +465,21 @@ causing void-function errors when gptel-agent was not loaded."
     (should (plist-get result :total-issues))
     (should (numberp (plist-get result :files-checked)))))
 
+;; ── Test 12: Fixer registry data-driven dispatch ──
+
+(ert-deftest test-self-heal-semantic/fixer-registry-defined ()
+  "The fixer registry is defined with all auto-fixable issue types."
+  (should (assq 'excessive-blank-lines gptel-auto-workflow--semantic-fixer-alist))
+  (should (assq 'unguarded-external-call gptel-auto-workflow--semantic-fixer-alist))
+  (should (assq 'missing-provide gptel-auto-workflow--semantic-fixer-alist))
+  (should (assq 'unbalanced-parens gptel-auto-workflow--semantic-fixer-alist)))
+
+(ert-deftest test-self-heal-semantic/fixer-entries-are-functions ()
+  "Each fixer in the registry must be a function symbol."
+  (dolist (entry gptel-auto-workflow--semantic-fixer-alist)
+    (let ((fixer (cdr entry)))
+      (should (symbolp fixer))
+      (should (fboundp fixer)))))
+
 (provide 'test-self-heal-semantic)
 ;;; test-self-heal-semantic.el ends here

@@ -530,6 +530,15 @@ from the audit patterns embedded in the code."
 
 ;; ── Integration with existing self-heal pipeline ──
 
+(defvar gptel-auto-workflow--semantic-fixer-alist
+  '((excessive-blank-lines . gptel-auto-workflow--fix-excessive-blank-lines)
+    (unguarded-external-call . gptel-auto-workflow--fix-unguarded-external-calls)
+    (missing-provide . gptel-auto-workflow--fix-missing-provide)
+    (unbalanced-parens . gptel-auto-workflow--fix-unbalanced-parens))
+  "Alist mapping audit issue type (symbol) to its auto-fixer function.
+Adding a new auto-fixer is now a one-line change to this alist.
+Each fixer must take FILE as argument and return fix count (0 = no-op).")
+
 (defun gptel-auto-workflow--self-heal-semantic ()
   "Layer 2+3 self-heal: detect AND fix semantic/operational bugs.
 Runs audit checks on all lisp/modules/*.el files, then applies safe
@@ -540,36 +549,21 @@ auto-fixers for detected issues (e.g., excessive blank lines)."
     (when (> (plist-get result :total-issues) 0)
       (message "[self-heal-semantic] Found %d issues"
                (plist-get result :total-issues)))
-    ;; ── Auto-fix phase: apply safe fixers ──
-    ;; These fixers are structural-only (no logic changes) and safe
-    ;; to run without rollback:
+    ;; ── Auto-fix phase: data-driven dispatch via fixer-alist ──
+    ;; For each file with issues, find which issue types are present,
+    ;; look up their fixers in the alist, and apply them.
     (dolist (entry (plist-get result :report))
       (let* ((file (plist-get entry :file))
-             (log (plist-get entry :log)))
-        ;; Fix excessive blank lines
-        (when (cl-some (lambda (r) (eq (plist-get r :type) 'excessive-blank-lines))
-                       log)
-          (let ((fixed (gptel-auto-workflow--fix-excessive-blank-lines file)))
-            (when (> fixed 0)
-              (cl-incf total-fixed fixed))))
-        ;; Fix unguarded external calls
-        (when (cl-some (lambda (r) (eq (plist-get r :type) 'unguarded-external-call))
-                       log)
-          (let ((fixed (gptel-auto-workflow--fix-unguarded-external-calls file)))
-            (when (> fixed 0)
-              (cl-incf total-fixed fixed))))
-        ;; Fix missing provide
-        (when (cl-some (lambda (r) (eq (plist-get r :type) 'missing-provide))
-                       log)
-          (let ((fixed (gptel-auto-workflow--fix-missing-provide file)))
-            (when (> fixed 0)
-              (cl-incf total-fixed fixed))))
-        ;; Fix unbalanced parens (append missing closes at EOF)
-        (when (cl-some (lambda (r) (eq (plist-get r :type) 'unbalanced-parens))
-                       log)
-          (let ((fixed (gptel-auto-workflow--fix-unbalanced-parens file)))
-            (when (> fixed 0)
-              (cl-incf total-fixed fixed))))))
+             (log (plist-get entry :log))
+             (present-types
+              (delete-dups
+               (delq nil (mapcar (lambda (r) (plist-get r :type)) log)))))
+        (dolist (issue-type present-types)
+          (let ((fixer (alist-get issue-type gptel-auto-workflow--semantic-fixer-alist)))
+            (when fixer
+              (let ((fixed (funcall fixer file)))
+                (when (> fixed 0)
+                  (cl-incf total-fixed fixed))))))))
     (when (> total-fixed 0)
       (message "[self-heal-semantic] Auto-fixed %d issue(s)" total-fixed))
     (plist-put result :auto-fixed total-fixed)
