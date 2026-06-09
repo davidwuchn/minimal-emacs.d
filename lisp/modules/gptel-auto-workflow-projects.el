@@ -602,8 +602,13 @@ Also handles caching and result truncation from old advice."
              (current-dir (file-name-as-directory (expand-file-name default-directory)))
              (worktree-base-dir (file-name-as-directory worktree-base-expanded))
              (worktree-dir (or target-worktree-dir
+                               ;; Accept any var/tmp/ subdirectory as a valid worktree
+                               ;; context — includes review-fix-XXX temp worktrees.
                                (when (and in-auto-workflow
-                                          (string-prefix-p worktree-base-dir current-dir))
+                                          (string-prefix-p
+                                           (file-name-as-directory
+                                            (expand-file-name "var/tmp" project-root))
+                                           current-dir))
                                  current-dir)))
              (missing-executor-worktree
               (and in-auto-workflow

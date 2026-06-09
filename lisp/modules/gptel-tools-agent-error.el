@@ -828,6 +828,11 @@ RETRY-COUNT tracks current retry attempt."
      :grader-failed "Executor succeeded, grader returned score 0")
     ("\\bBLOCKED:" :tool-error ,(lambda (s)
                                   (gptel-auto-experiment--error-snippet s)))
+    ;; Reviewer/executor result text — NOT an error, just a review rejection.
+    ;; Must appear BEFORE the catch-all "error|failed|exception" pattern
+    ;; because reviewer output often contains these words in its analysis.
+    ("^Reviewer result for task:\\|^Executor result for task:"
+     :grader-failed "Review blocked — reviewer did not approve")
     ("error\\|failed\\|exception" :unknown ,(lambda (s)
                                               (let ((snip (gptel-auto-experiment--error-snippet s)))
                                                 (message "[auto-experiment] Unknown error snippet: %s"
