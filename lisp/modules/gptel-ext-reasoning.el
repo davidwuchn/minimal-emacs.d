@@ -69,7 +69,6 @@ requests in the same FSM.  Reset it here so each new request starts fresh."
       (plist-put info :reasoning-block nil))))
 
 
-
 (defun my/gptel--capture-tool-reasoning (_tool-results info)
   "After tool results are displayed, store reasoning keyed by tool-call ID.
 Stores the reasoning string (possibly empty) for every tool-call turn when

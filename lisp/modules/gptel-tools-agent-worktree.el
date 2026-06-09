@@ -606,7 +606,6 @@ repo."
                 t))))))))))
 
 
-
 (defun gptel-auto-workflow--create-staging-worktree ()
   "Create isolated worktree for staging verification.
 Never touches project root - all verification happens in the worktree.
@@ -659,7 +658,6 @@ Returns worktree path or nil on failure."
             (setq gptel-auto-workflow--staging-worktree-dir worktree-dir)
             (message "[auto-workflow] Created staging worktree: %s" worktree-dir)
             worktree-dir))))))
-
 
 
 (defun gptel-auto-workflow--delete-staging-worktree ()

@@ -1175,12 +1175,12 @@ Returns t if evolution was triggered, nil otherwise."
        (message "[meta-learn] Pre-research: Loading topic performance cache")
        (gptel-auto-workflow--load-researcher-meta-learning)
        (setq triggered t))
-      
+
       (post-batch
        ;; Full analysis: RETIRED — Python scripts removed 2026-06-03
        (message "[meta-learn] Post-batch: Python scripts retired — skipping analysis")
        (setq triggered t))
-      
+
       (threshold
        ;; Emergency: check if keep rate below threshold
        (let* ((meta-data (gptel-auto-workflow--load-researcher-meta-learning))
@@ -1190,16 +1190,15 @@ Returns t if evolution was triggered, nil otherwise."
                     effectiveness)
            (gptel-auto-workflow--trigger-researcher-meta-learning 'post-batch)
            (setq triggered t))))
-      
+
       (memory
        ;; Incremental: just update source effectiveness
        (message "[meta-learn] Memory ingestion: Incremental update")
        ;; For now, just reload cache. In future, could append to JSON directly.
        (gptel-auto-workflow--load-researcher-meta-learning)
        (setq triggered t)))
-    
-    triggered))
 
+    triggered))
 
 
 (defun gptel-auto-workflow--digest-research-findings (raw-findings callback)
@@ -2646,7 +2645,6 @@ Returns float 0-1, or nil if no data."
         (/ (float (length topic-results)) (length all-topic))))))
 
 
-
 (defun gptel-auto-workflow--statistical-prob-kept (controller-config output-length output-text)
   "Calculate P(kept) using learned statistical model.
 CONTROLLER-CONFIG contains :model-intercept and :model-weights.
@@ -2929,7 +2927,6 @@ Uses gptel-auto-workflow-research-benchmark.el to:
     (load autotts-file nil 'nomessage)))
 
 ;; ─── Trace Synthesizer ───
-
 
 
 (provide 'gptel-auto-workflow-strategic)

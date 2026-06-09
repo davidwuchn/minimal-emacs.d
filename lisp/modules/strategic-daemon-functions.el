@@ -396,7 +396,6 @@ Returns plist with controller parameters."
              topic-priors)))
 
 
-
 ;; ─── Agent-Generated Rule Evaluation ───
 
 (defun gptel-auto-workflow--controller-config-rule-signals (controller-config)
@@ -696,12 +695,12 @@ Uses EMA trend analysis for momentum-aware stopping."
         (when rule-result
           (message "[autotts] Agent rule: %s" rule-result)
           rule-result)))
-     
+
      ;; Over budget → cut (always check first)
      ((> tokens-used max-tokens)
       (message "[autotts] Controller: CUT (budget %d/%d)" tokens-used max-tokens)
       'cut)
-     
+
       ;; ─── Multi-Branch Pool: Widen/Abandon/Narrow ───
       ;; Check if branch pool stagnation warrants widening
       ((and (>= turn-count 1)
@@ -712,7 +711,7 @@ Uses EMA trend analysis for momentum-aware stopping."
                 (gptel-auto-workflow--branch-pool-active-count)
                 (or (plist-get controller-config :widen-burst) 2))
        'widen)
-      
+
       ;; Check if any branch has been deviant too long → abandon
       ((let ((deviant (gptel-auto-workflow--branch-pool-get-deviant
                        (plist-get controller-config :abandon-patience))))
@@ -724,7 +723,7 @@ Uses EMA trend analysis for momentum-aware stopping."
            t))
        ;; After abandoning, re-evaluate: continue if aligned branches exist
        (if (> (gptel-auto-workflow--branch-pool-active-count) 0) 'continue 'stop))
-      
+
       ;; EMA Momentum Gate: Stop when confidence is high AND trend is non-negative
      ;; Only after warm-up and minimum completion
      ((and (>= turn-count warm-up)
@@ -734,7 +733,7 @@ Uses EMA trend analysis for momentum-aware stopping."
       (message "[autotts] Controller: STOP (EMA conf=%.2f >= %.2f, delta=%.2f >= %.2f) [momentum gate]"
                ema-conf stop-threshold ema-delta (- delta-slack))
       'stop)
-     
+
      ;; Trend-based widening: Branch when confidence stagnates or declines
      ;; AND we're past warm-up AND confidence is below stop threshold
       ((and (>= turn-count (max 1 (/ warm-up 2)))
@@ -744,7 +743,7 @@ Uses EMA trend analysis for momentum-aware stopping."
       (message "[autotts] Controller: BRANCH (EMA conf=%.2f < %.2f, delta=%.2f <= %.2f) [trend-based]"
                ema-conf stop-threshold ema-delta trend-threshold)
       'branch)
-     
+
      ;; Statistical model fallback
      (statistical-model
       (let* ((topic (when (fboundp 'gptel-auto-workflow--detect-research-topic)
@@ -777,7 +776,7 @@ Uses EMA trend analysis for momentum-aware stopping."
           (message "[autotts] Controller: CONTINUE (P(kept)=%.2f, EMA=%.2f) [statistical]"
                    (or prob-kept 0.5) ema-conf)
           'continue))))
-     
+
      ;; Heuristic fallback (fixed: no dead code paths)
      (t
       (let ((min-insights (or (plist-get controller-config :min-insights-for-stop) 2))
@@ -818,22 +817,22 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
     (gptel-auto-workflow--reset-research-ema)
     (when (fboundp 'gptel-auto-workflow--load-active-strategy)
       (gptel-auto-workflow--load-active-strategy)))
-  
+
   ;; Store state in global variables to avoid closure capture issues
   (setq gptel-auto-workflow--research-accumulated-findings accumulated-findings)
   (setq gptel-auto-workflow--research-total-tokens total-tokens)
   (setq gptel-auto-workflow--research-current-turn turn)
   (setq gptel-auto-workflow--research-prompt research-prompt)
-  
+
   ;; Load controller with beta parameterization
   (setq gptel-auto-workflow--research-controller-config (gptel-auto-workflow--load-autotts-controller))
-  
+
   ;; Update EMA alpha from controller config
   (setq gptel-auto-workflow--research-ema-alpha
         (or (plist-get gptel-auto-workflow--research-controller-config :ema-alpha) 0.5))
   (setq gptel-auto-workflow--research-ema-window
         (or (plist-get gptel-auto-workflow--research-controller-config :ema-window) 6))
-  
+
    (let* ((controller-config gptel-auto-workflow--research-controller-config)
           (max-turns (or (plist-get controller-config :max-turns) 3))
           ;; Add turn count to controller config for decision function
@@ -930,7 +929,7 @@ PREVIOUS-DECISION is the controller decision from the previous turn."
          (message "[autotts] Turn %d result: %d chars, conf=%.2f, EMA=%.2f, delta=%.2f,
 decision=%s"
                    (1+ turn) (length (or raw-findings "")) turn-confidence ema-conf ema-delta controller-decision)
-         
+
          ;; Check controller decision
          (cond
           ;; TIMEOUT: Return accumulated findings

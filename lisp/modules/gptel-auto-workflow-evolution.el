@@ -1603,7 +1603,7 @@ Writes to var/tmp/evolution/findings.md."
                   (t
                    (message "[allium-findings] Research findings FAIL: %d issues (severity %.2f) — may be contradictory"
                             issues severity)))))))))
-     
+
       ;; Generate skill file
     (make-directory evolution-dir t)
     (with-temp-file skill-file
@@ -1616,7 +1616,7 @@ hypotheses.\n")
       (insert "# External Research Insights\n\n")
       (insert "*Digested by LLM from internet sources. Avoid re-researching these
 topics.*\n\n")
-      
+
       ;; Include recent external insights
       (if recent-insights
           (progn
@@ -1626,7 +1626,7 @@ topics.*\n\n")
               (insert "\n---\n\n"))
             (insert "\n"))
         (insert "*No recent external research. Run researcher to discover new ideas.*\n\n"))
-      
+
       ;; Include internal strategy performance
       (insert "## Internal Research Strategy Performance\n\n")
       (insert "*These are our own code-analysis strategies, ranked by experiment
@@ -1807,7 +1807,7 @@ results."
                               0.0))
          ;; Analyze which topics are most effective
          (topic-performance (make-hash-table :test 'equal)))
-    
+
     ;; Calculate performance per research topic
     (dolist (r research-results)
       (let ((target (plist-get r :target)))
@@ -1820,7 +1820,7 @@ results."
                             (cadr current))
                         (if (equal (plist-get r :decision) "kept") 1 0))))
             (puthash target (list total kept) topic-performance)))))
-    
+
     ;; Generate updated researcher skill
     (make-directory (file-name-directory skill-file) t)
     (with-temp-file skill-file
@@ -1837,13 +1837,13 @@ novel AI agent techniques and digests them for directive skill evolution.\n")
 system.\n")
       (insert "Your job: hunt the internet for novel ideas that could improve our
 project.\n\n")
-      
+
       ;; Dynamic topics based on performance
       (insert "## Current Research Performance\n\n")
       (insert (format "- Overall research effectiveness: %.1f%% (%d/%d experiments)\n"
                       (* 100 research-keep-rate) kept-research total-research))
       (insert "- Topics ranked by downstream success:\n\n")
-      
+
       ;; Sort topics by keep rate
       (let ((sorted-topics nil))
         (cl-flet ((collect-topic (target counts)
@@ -1854,7 +1854,7 @@ project.\n\n")
                               sorted-topics)))))
           (maphash #'collect-topic topic-performance))
         (setq sorted-topics (sort sorted-topics (lambda (a b) (> (plist-get a :rate) (plist-get b :rate)))))
-        
+
         (if sorted-topics
             (dolist (topic (seq-take sorted-topics 10))
               (insert (format "  - `%s`: %.0f%% keep rate (%d/%d)\n"
@@ -1863,7 +1863,7 @@ project.\n\n")
                               (plist-get topic :kept)
                               (plist-get topic :total))))
           (insert "  - No statistically significant data yet (need ≥3 experiments per topic)\n")))
-      
+
       ;; Dynamic sections
       (insert "\n")
       (insert (gptel-auto-workflow--generate-source-effectiveness-section))
@@ -1872,7 +1872,7 @@ project.\n\n")
       (insert "\n")
       (insert (gptel-auto-workflow--generate-dynamic-instructions))
       (insert "\n")
-      
+
       (insert "## Mission\n\n")
       (insert "Search external sources for actionable techniques related to:\n")
       (insert "- AI agent architectures and workflows\n")
@@ -1881,7 +1881,7 @@ project.\n\n")
       (insert "- Prompt engineering for code generation\n")
       (insert "- Error recovery and retry patterns in agent systems\n")
       (insert "- Benchmarking and evaluation frameworks\n\n")
-      
+
       ;; Priority projects
       (insert "## Priority Projects to Monitor\n\n")
       (insert "### External Projects (Novel Patterns)\n")
@@ -1972,7 +1972,7 @@ agent-config patterns)\n")
 with AGENTS.md and skills\n\n")
       (insert "Check their: recent commits, open issues, closed PRs, architecture
 decisions\n\n")
-      
+
       ;; Sources
       (insert "## Sources\n\n")
       (insert "- **YouTube**: Recent tutorials on AI agent workflows, Emacs AI integration\n")
@@ -1994,7 +1994,7 @@ replay decisions offline:\n\n")
       (insert "  \"tokens_estimate\": 2500\n")
       (insert "}\n")
       (insert "```\n\n")
-       
+
       ;; Instructions
       (insert "## Instructions\n\n")
       (insert "1. Use WebSearch tool to find 3-5 recent/relevant items per topic\n")
@@ -2013,20 +2013,20 @@ ai-code-interface.el, context-mode, gastown, gbrain, nullclaw, genesis-agent,
 promptfoo, GitNexus, LLMLingua\n")
       (insert "   Look at: recent commits, open issues, closed PRs, architecture decisions\n")
       (insert "   Focus on: patterns we can adapt to our Emacs AI agent system\n\n")
-      
+
       ;; Anti-patterns
       (insert "## Anti-patterns (avoid)\n\n")
       (insert "- Generic advice ('use AI', 'improve code')\n")
       (insert "- Ideas already in our codebase (check git log first)\n")
       (insert "- Purely theoretical without implementation path\n")
       (insert "- Tools requiring heavy external dependencies\n\n")
-      
+
       ;; Auto-evolution note
       (insert "---\n\n")
       (insert "*This researcher skill auto-evolves. Performance data updates every cycle.*\n")
       (insert (format "*Current effectiveness: %.1f%% based on %d research-enabled experiments.*\n"
                       (* 100 research-keep-rate) total-research)))
-    
+
     (message "[evolution] Evolved researcher skill: %s" skill-file)))
 
 (defun gptel-auto-workflow--evolve-researcher-from-feedback ()
@@ -2039,7 +2039,7 @@ with kept experiments, and updates the researcher prompt accordingly."
          (by-quality (make-hash-table :test 'equal))
          (total-kept 0)
          (total-experiments 0))
-    
+
     ;; Count experiments by research quality
     (dolist (r results)
       (let ((quality (or (plist-get r :research-quality) "none"))
@@ -2055,7 +2055,7 @@ with kept experiments, and updates the researcher prompt accordingly."
               (setcar current (1+ (car current))))
             (setcdr current (1+ (cdr current)))
             (puthash quality current by-quality)))))
-    
+
     ;; Calculate effectiveness per quality level
     (let ((stats nil))
       (cl-flet ((collect-quality (quality counts)
@@ -2068,7 +2068,7 @@ with kept experiments, and updates the researcher prompt accordingly."
                                  :rate (/ (float kept) total))
                            stats)))))
         (maphash #'collect-quality by-quality))
-      
+
       ;; Log findings
       (if stats
           (progn
@@ -2079,7 +2079,7 @@ with kept experiments, and updates the researcher prompt accordingly."
                        (* 100 (plist-get s :rate))
                        (plist-get s :kept)
                        (plist-get s :total)))
-            
+
             ;; Update researcher skill with feedback
             (let ((_skill-file (expand-file-name "assistant/skills/researcher-prompt/SKILL.md"
                                                 (gptel-auto-workflow--worktree-base-root)))
@@ -6630,7 +6630,6 @@ score=%.2f)"
                    (when file
                       (make-directory (file-name-directory file) t)
                       (with-temp-file file (insert report)))))))))))))
-
 
 
 (defun gptel-auto-workflow--allium-bdd-check (behavior-description &optional callback)

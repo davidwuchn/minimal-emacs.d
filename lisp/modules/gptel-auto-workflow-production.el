@@ -165,21 +165,21 @@ Records to mementum and triggers evolution if needed."
         (gptel-auto-workflow--mementum-record-experiment experiment)
       (error
        (message "[auto-workflow] Mementum recording error: %s" err))))
-  
+
   ;; Capture business context (Phase 3: Context Database)
   (when (fboundp 'gptel-auto-workflow--capture-experiment-context)
     (condition-case err
         (gptel-auto-workflow--capture-experiment-context experiment)
       (error
        (message "[auto-workflow] Context capture error: %s" err))))
-  
+
   ;; Persist context database after each experiment
   (when (fboundp 'gptel-auto-workflow--context-db-persist)
     (condition-case err
         (gptel-auto-workflow--context-db-persist)
       (error
        (message "[auto-workflow] Context persist error: %s" err))))
-  
+
   ;; Track research batch for meta-learning
   (let ((research-hash (plist-get experiment :research-hash)))
     (when (and research-hash (not (equal research-hash "none")))
@@ -191,32 +191,32 @@ Records to mementum and triggers evolution if needed."
         (gptel-auto-workflow--record-research-batch))
       ;; Add to current batch
       (push experiment gptel-auto-workflow--research-batch-results)))
-  
+
   ;; Record to holographic memory (verbum Phase 7)
   (when (fboundp 'gptel-auto-workflow--record-holographic-experiment)
     (condition-case err
         (gptel-auto-workflow--record-holographic-experiment experiment)
       (error (message "[auto-workflow] Holographic recording error: %s" err))))
-  
+
   ;; File bead to PMF→GTM channel
   (when (fboundp 'gptel-auto-workflow--bead-update-from-experiment)
     (condition-case err
         (gptel-auto-workflow--bead-update-from-experiment experiment)
       (error (message "[bead] Experiment bead error: %s" err))))
-  
+
   ;; Update PMF dashboard metrics (Phase 7)
   (when (fboundp 'gptel-auto-workflow--update-pmf-dashboard-metrics)
     (condition-case err
         (gptel-auto-workflow--update-pmf-dashboard-metrics)
       (error (message "[metrics] PMF dashboard update error: %s" err))))
-  
+
   ;; Run monitoring cycle after each experiment (throttled internally to 15 min)
   ;; Layer 1 Sensor: analyzes failures, generates proposals, triggers architectural evolution
   (when (fboundp 'gptel-auto-workflow--monitoring-cycle)
     (condition-case err
         (gptel-auto-workflow--monitoring-cycle)
       (error (message "[monitoring] Monitoring cycle error: %s" err))))
-  
+
   ;; Run evolution every N experiments
   (let ((exp-id (or (plist-get experiment :id) 0)))
     (when (and (> exp-id 0)
@@ -254,7 +254,7 @@ Called when research context changes or run completes."
                                 "")))
          (error
           (message "[auto-workflow] Research recording error: %s" err))))
-   
+
    ;; File beads from research findings (GTM → PMF)
    (when (fboundp 'gptel-auto-workflow--bead-file-from-research)
      (condition-case err
@@ -268,13 +268,13 @@ Called when research context changes or run completes."
                  (message "[bead] Filed %d beads from research findings"
                           (length bead-ids))))))
        (error (message "[bead] Research bead error: %s" err))))
-   
+
    ;; Update GTM dashboard metrics (Phase 7)
    (when (fboundp 'gptel-auto-workflow--update-gtm-dashboard-metrics)
      (condition-case err
          (gptel-auto-workflow--update-gtm-dashboard-metrics)
        (error (message "[metrics] GTM dashboard update error: %s" err))))
-   
+
    ;; Reset batch
    (setq gptel-auto-workflow--research-batch-results nil))
 
@@ -287,14 +287,14 @@ Called when research context changes or run completes."
     (with-current-buffer buf
       (erase-buffer)
       (insert "=== Auto-Workflow Evolution Status ===\n\n")
-      
+
       ;; Evolution config
       (insert "Configuration:\n")
       (insert (format "  Evolution enabled: %s\n" (bound-and-true-p gptel-auto-workflow-evolution-enabled)))
       (insert (format "  Evolution interval: %d seconds\n" gptel-auto-workflow-evolution-interval))
       (insert (format "  Timer active: %s\n\n" 
                       (if gptel-auto-workflow--evolution-timer "YES" "NO")))
-      
+
       ;; Knowledge file
       (let ((knowledge-file (expand-file-name
                              "mementum/knowledge/self-evolution.md"
@@ -310,7 +310,7 @@ Called when research context changes or run completes."
               (insert (format "  Last updated: %s\n\n" 
                               (format-time-string "%Y-%m-%d %H:%M" mtime))))
           (insert "Knowledge Base: NOT FOUND\n\n")))
-      
+
       ;; Git stats
       (when (fboundp 'gptel-auto-workflow--git-raw-facts)
         (condition-case nil
@@ -323,7 +323,7 @@ Called when research context changes or run completes."
               (insert (format "  Merge rate: %.1f%%\n\n" 
                               (* 100 (or (plist-get facts :active-merge-rate) 0.0)))))
           (error nil)))
-      
+
       ;; Benchmark stats
       (when (fboundp 'gptel-auto-experiment--parse-all-results)
         (condition-case nil
@@ -337,7 +337,7 @@ Called when research context changes or run completes."
               (insert (format "  Kept: %d (%.1f%%)\n\n" 
                               kept (* 100.0 (/ (float kept) (max total 1))))))
           (error nil)))
-      
+
       ;; Conflicted target review queue
       (when (and (boundp 'gptel-auto-workflow--conflicted-targets)
                  gptel-auto-workflow--conflicted-targets)
@@ -390,7 +390,7 @@ Called when research context changes or run completes."
               (insert (format "  GTM → PMF: %d beads\n" (length gtm-to-pmf)))
               (insert (format "  PMF → GTM: %d beads\n" (length pmf-to-gtm))))
           (error nil)))
-      
+
       ;; Human decision gate
       (when (and gptel-auto-workflow-human-decision-gate
                  (fboundp 'gptel-auto-workflow--pending-decisions-p))
@@ -399,9 +399,9 @@ Called when research context changes or run completes."
               (insert "\nDecision Gate:\n")
               (insert (format "  Status: %s\n" (if pending "BLOCKED (pending decisions)" "clear"))))
           (error nil)))
-      
+
       (insert "\n")
-      
+
       (insert "\nPress q to quit\n")
       (goto-char (point-min))
       (local-set-key (kbd "q") #'kill-buffer-and-window))
@@ -449,13 +449,13 @@ Returns t if all checks pass, nil with warnings otherwise."
          (findings-ok nil)
          (context-ok nil)
          (issues nil))
-    
+
     ;; Check 1: Findings file
     (if (and (file-exists-p findings-file)
              (> (nth 7 (file-attributes findings-file)) 100))
         (setq findings-ok t)
       (push "Research findings file missing or too small" issues))
-    
+
     ;; Check 2: Findings are recent (within last 24 hours)
     (let ((findings-mtime (when (file-exists-p findings-file)
                             (nth 5 (file-attributes findings-file)))))
@@ -464,7 +464,7 @@ Returns t if all checks pass, nil with warnings otherwise."
                            (seconds-to-time 86400)))
           (setq context-ok t)
         (push "Research findings are stale (>24h old)" issues)))
-    
+
     ;; Report
     (if (and findings-ok context-ok)
         (progn
@@ -685,12 +685,6 @@ Returns the new item ID."
               (replace-regexp-in-string
                "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual
 Impact
-
-
-
-
-
-
 
 
 |\n|----|--------|-----------|-----------------|--------|---------------|---------------|\n"

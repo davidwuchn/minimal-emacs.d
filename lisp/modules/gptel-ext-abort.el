@@ -133,7 +133,6 @@ calls."
   (my/gptel--repair-active-stream-callbacks))
 
 
-
 ;; Used to cancel async tool callbacks after abort.
 (defvar-local my/gptel--abort-generation 0
   "Monotonic counter incremented when aborting gptel activity in this buffer.")
@@ -180,7 +179,6 @@ calls."
     (beginning-of-line)
     (when (looking-at-p regexp)
       (goto-char (match-end 0)))))
-
 
 
 (defun my/gptel-keyboard-quit ()

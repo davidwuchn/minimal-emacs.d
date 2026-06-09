@@ -222,7 +222,6 @@ Creates .index file with topic → file mapping for O(1) lookup."
     (message "[mementum] Index built: %d keywords" (hash-table-count index))))
 
 
-
 (defun gptel-mementum-decay-skills ()
   "Apply decay to skill files not tested in 4+ weeks.
 Run weekly via cron."
@@ -806,7 +805,6 @@ Synthesis verification:
         (gptel-auto-workflow--knowledge-cache-invalidate cache-key)
         (message "[knowledge-cache] Invalidated %s" cache-key)))
     know-file))
-
 
 
 (defun gptel-mementum-weekly-job ()

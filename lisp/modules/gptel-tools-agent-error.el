@@ -880,7 +880,6 @@ Also logs agent-output snippet for debugging when category is :unknown."
     original-max))
 
 
-
 ;;; Dynamic Stop
 
 (defun gptel-auto-experiment-should-stop-p (threshold)
@@ -895,7 +894,6 @@ Reduced from 3 to 1 because moonshot/kimi-k2.6 always times out (Curl 28).
 Fewer retries on failing providers → faster fallback to working provider."
   :type 'integer
   :group 'gptel-tools-agent)
-
 
 
 ;;; Single Experiment

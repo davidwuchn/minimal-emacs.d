@@ -218,9 +218,6 @@ Criteria: has sections, has examples, has specific guidance, right length."
   '((:K "
 
 
-
-
-
 nil.safety\\|nil.guard\\|nil.check\\|guard[^a-z]\\|validat\\|proper-list-p\\|bound-and-true-p\\|filter.out\\|discard\\|remove
 nil\\|unless nil\\|when nil\\|error.*handling")
     (:I "passthrough\\|pass through\\|identity\\|reference\\|binding\\|same
@@ -230,14 +227,8 @@ into\\|DRY\\|dedup\\|unify\\|pipeline\\|sequence\\|decompose")
     (:C "
 
 
-
-
-
 reorder\\|flip\\|swap\\|passive\\|invert\\|reverse\\|before.*after\\|after.*before\\|reorganize")
     (:M "pattern\\|template\\|apply
-
-
-
 
 
 pattern\\|in.context\\|example.driven\\|analogy\\|match\\|few.shot\\|exemplar\\|similar
@@ -246,36 +237,21 @@ to")
     (:W "
 
 
-
-
-
 duplicat\\|double\\|mirror\\|same.*twice\\|self.*same\\|reuse\\|share.logic\\|merge.*duplicate\\|identical.*both")
     (:T "
-
-
-
 
 
 type.check\\|type.valid\\|annotation\\|type.assert\\|ensure.*type\\|cast\\|coerce\\|narrowing\\|widening")
     (:PHI "
 
 
-
-
-
 both.*and\\|parallel\\|coordinat\\|multi.property\\|multiple.*same\\|fork\\|split.*combine\\|apply.*two")
     (:D "
-
-
-
 
 
 deep.compos\\|multi.step\\|nested\\|complex.refactor\\|several.*changes?\\|multiple.*changes?\\|comprehensive")
     ;; Tier 3 — Structural (architecture-level)
     (:SCOPE "
-
-
-
 
 
 scope\\|visibility\\|access.control\\|local\\|global\\|lexical\\|dynamic.*bind\\|closure\\|environment")
@@ -284,22 +260,13 @@ of\\|compress\\|shorte\\|inline\\|expand")
     (:WHNF "
 
 
-
-
-
 done\\|finished\\|complete\\|final\\|normal.form\\|base.case\\|terminal\\|atomic\\|primitive\\|no.further")
     ;; Tier 4 — Meta (self-evolution itself)
     (:Y "
 
 
-
-
-
 recurs\\|self.refer\\|self.modif\\|self.improv\\|self.evol\\|fixed.point\\|loop\\|iterate\\|repeat.*until\\|while")
     (:QUOTE "
-
-
-
 
 
 document\\|comment\\|explain\\|describe\\|name\\|label\\|tag\\|categorize\\|classify\\|annotate\\|docstring"))
@@ -1558,11 +1525,11 @@ Implements section-level A/B testing to identify effective prompt components."
             (when mol (mapconcat #'symbol-name mol " → ")))))
   ;; Adapt compression based on token efficiency analysis
   (gptel-auto-workflow--adapt-prompt-compression)
-  
+
   ;; Select sections for A/B testing
   (let* ((included-sections (gptel-auto-workflow--select-ab-test-sections))
          (section-included-p (lambda (section) (member section included-sections)))
-         
+
          (worktree-path (or (gptel-auto-workflow--get-worktree-dir target)
                             (gptel-auto-workflow--project-root)))
          (worktree-quoted (shell-quote-argument worktree-path))
@@ -3361,33 +3328,33 @@ Does NOT modify the filesystem - operates on a temp copy."
             ;; Copy target to temp file
             (when (file-exists-p target-full-path)
               (copy-file target-full-path temp-file t))
-            
+
             ;; Check 1: Candidate describes actual code change (not docs)
             (if (or (string-match-p "\\bcomment\\b\\|\\bdocstring\\b\\|\\bdocumentation\\b" candidate)
                     (string-match-p "\\badd\\s-+comments\\b\\|\\badd\\s-+doc\\b" candidate))
                 (push "Candidate mentions documentation/comments" errors)
               (setq score (+ score 0.2)))
-            
+
             ;; Check 2: Candidate is specific (mentions function/variable)
             (if (string-match-p "\\b\\(function\\|variable\\|defun\\|defvar\\|method\\|class\\)\\b" candidate)
                 (setq score (+ score 0.2))
               (push "Candidate lacks specific code reference" errors))
-            
+
             ;; Check 3: Candidate targets a real improvement type
             (if (string-match-p "\\b\\(bug\\|fix\\|error\\|performance\\|cache\\|optimize\\|refactor\\|extract\\|duplicate\\|validation\\|guard\\|test\\|memory\\|leak\\)\\b" candidate)
                 (setq score (+ score 0.2))
               (push "Candidate lacks improvement keywords" errors))
-            
+
             ;; Check 4: Candidate is not too vague
             (if (> (length candidate) 20)
                 (setq score (+ score 0.2))
               (push "Candidate description too short" errors))
-            
+
             ;; Check 5: Candidate doesn't repeat common anti-patterns
             (if (string-match-p "\\boptimize\\s-+code\\b\\|\\bimprove\\s-+performance\\b\\|\\bmake\\s-+better\\b" candidate)
                 (push "Candidate uses vague improvement language" errors)
               (setq score (+ score 0.2)))
-            
+
             (list :valid (null errors)
                   :errors (nreverse errors)
                   :score score))
@@ -3972,7 +3939,6 @@ axes from kept experiments across the category."
                                  success-axes "\n"))
               parts))
       (mapconcat #'identity (nreverse parts) "\n"))))
-
 
 
 (defun gptel-auto-experiment--format-failure-patterns (target)

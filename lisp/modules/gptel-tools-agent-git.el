@@ -103,8 +103,6 @@ jobs)."
           (gptel-auto-workflow--push-staging))))))
 
 
-
-
 ;;;###autoload
 
 (defun gptel-auto-workflow--sync-staging-with-main ()
@@ -115,8 +113,6 @@ worktree."
 
 
 ;;;###autoload
-
-
 
 
 ;;; Customization
@@ -186,7 +182,6 @@ payload bloat on
 long-running daemons)."
   :type 'boolean
   :group 'gptel-tools-agent)
-
 
 
 (defvar-local my/gptel--subagent-temp-files nil
@@ -743,9 +738,6 @@ remove it."
               #'my/gptel--reject-conflicted-frontmatter))
 
 
-
-
-
 ;;; Internal Variables
 
 (defvar my/gptel--in-subagent-task nil
@@ -982,7 +974,6 @@ request buffer for an active workflow task."
           (string-prefix-p "*gptel-agent:" (buffer-name buffer))))))
 
 
-
 (defvar my/gptel--abort-depth 0
   "Guard against recursive gptel-abort in sentinel chains.")
 
@@ -1020,7 +1011,6 @@ helpers handle explicit stale-buffer discards during recreate/delete flows."
 (defun my/gptel--agent-task-uses-idle-timeout-p (agent-type)
   "Return non-nil when AGENT-TYPE should use inactivity-based timeout extension."
   (equal agent-type "executor"))
-
 
 
 (defun my/gptel--path-within-directory-p (path directory)

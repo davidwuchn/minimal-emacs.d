@@ -362,7 +362,6 @@ Uses the staging worktree instead of switching branches in the root repo."
                              nil)))))))))))))))))
 
 
-
 (defun gptel-auto-workflow--check-el-syntax (directory output-buffer)
   "Check syntax of changed .el files in DIRECTORY.
 Only validates files modified vs HEAD to avoid failing on pre-existing
@@ -509,7 +508,6 @@ Returns (success-p . output)."
         (cons result output)))))
 
 
-
 (defun gptel-auto-workflow--parse-remote-head (branch output)
   "Return BRANCH head parsed from git ls-remote OUTPUT, ignoring SSH noise."
   (let ((pattern (format "^\\([0-9a-f]\\{40\\}\\)\trefs/heads/%s$"
@@ -579,7 +577,7 @@ ACTION is a short description used in failure messages."
                action
                (my/gptel--sanitize-for-logging push-output 160))
        nil))))
- 
+
 (defun gptel-auto-workflow--promote-staging-to-main ()
   "Merge staging into main and push main to origin.
 Returns t on success, nil on failure.  Only runs when

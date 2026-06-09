@@ -1733,9 +1733,6 @@ treating as success"
                    (funcall launch-executor)))))))))))
 
 
-
-
-
 (defconst gptel-auto-experiment--placeholder-hypothesis-exact-patterns
   '("[What CODE change and why]"
     "What CODE change and why")

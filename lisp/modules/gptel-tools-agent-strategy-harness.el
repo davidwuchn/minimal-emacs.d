@@ -136,7 +136,6 @@ Only removes files NOT tracked by git to preserve committed strategies."
     (message "[strategy] Fresh start complete")))
 
 
-
 (defun gptel-auto-workflow--ensure-strategy-run-directories ()
   "Create strategy run directories if they don't exist."
   (let ((run-dir (gptel-auto-workflow--strategy-run-directory))
@@ -325,9 +324,6 @@ Returns JSON value or nil if strategy is stateless or method not defined."
           (funcall state-fn)
         (error (message "[strategy] get-state error for %s: %s" name err)
                nil)))))
-
-
-
 
 
 ;;; Strategy Evaluation Tracking
@@ -656,7 +652,6 @@ SECTIONS: list of sections included"
         gptel-auto-workflow--strategy-execution-log))
 
 
-
 ;;; Held-Out Test Set (Meta-Harness Anti-Overfitting)
 
 (defun gptel-auto-workflow--split-targets-search-test (targets &optional test-ratio)
@@ -680,16 +675,12 @@ When test-ratio is 0, all targets go to the search set."
     (cons search-set test-set)))
 
 
-
-
-
 (defvar gptel-auto-workflow--strategy-active-search-set nil
   "The current search set of targets used during evolution.
 Test-set targets are excluded from this list.")
 
 (defvar gptel-auto-workflow--strategy-active-test-set nil
   "The current test set of targets held out from evolution.")
-
 
 
 ;;; Strategy Execution

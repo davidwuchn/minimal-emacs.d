@@ -614,12 +614,12 @@ STRATEGY and TARGET filter the performance data.
            (trend-weight (plist-get vsm-params :trend-weight))
            (confidence-weight (plist-get vsm-params :confidence-weight))
            (scored nil))
-    
+
      ;; Log verbum data bypass detection
      (when retrieval-p
        (message "[verbum] BYPASS: %s — retrieval task, zero combinator activation expected"
                 (file-name-nondirectory target)))
-     
+
      ;; Health ladder: filter probation/dead backends, apply weight reduction
     (let ((filtered nil))
       (dolist (entry static-fallbacks)
@@ -634,7 +634,7 @@ STRATEGY and TARGET filter the performance data.
                        (gptel-auto-workflow--backend-health-label backend) backend level)))
            (t (push entry filtered)))))
       (setq static-fallbacks (reverse filtered)))
-    
+
      ;; Score each backend from static list
     (dolist (entry static-fallbacks)
       (let* ((backend (car entry))
@@ -700,7 +700,7 @@ STRATEGY and TARGET filter the performance data.
                                       (gptel-auto-workflow--phase-boost backend target)))
                                -1.0))  ; No data = bottom
               scored)))
-    
+
     ;; Apply category override if available
     (when category-override
       (setq scored (mapcar (lambda (s)
@@ -710,7 +710,7 @@ STRATEGY and TARGET filter the performance data.
                            scored))
       (message "[onto-router] CATEGORY OVERRIDE: %s (%s) → %s (baseline=%.1f%%)"
                category target category-override (if baseline (* baseline 100) 0)))
-    
+
     ;; Apply ternary decisions (verbum Phase 1): reject backends below baseline
     (when baseline
       (setq scored (gptel-auto-workflow--apply-ternary-routing scored baseline))
@@ -722,20 +722,20 @@ STRATEGY and TARGET filter the performance data.
                      (plist-get s :backend)
                      (* (or (plist-get s :rate) 0) 100)
                      (* baseline 100))))))
-    
+
     ;; Apply sieve-based routing (verbum Phase 5): boost matching backends
     (when target
       (setq scored (gptel-auto-workflow--apply-sieve-routing scored target)))
-    
+
     ;; Apply holographic consensus boost (verbum Phase 8): boost backends
     ;; that perform well on the consensus KIBC axis for this target
     (when target
       (setq scored (gptel-auto-workflow--apply-holographic-boost scored target)))
-    
+
     ;; Apply lambda verification penalty (verbum Phase 12): penalize
     ;; degraded backends to avoid routing to backends without lambda compiler
     (setq scored (gptel-auto-workflow--apply-verification-penalty scored))
-    
+
     ;; Sort by score descending, but ternary -1 always at bottom
     (setq scored (sort scored
                        (lambda (a b)
@@ -744,7 +744,7 @@ STRATEGY and TARGET filter the performance data.
                            (if (/= ta tb)
                                (> ta tb)  ; +1 > 0 > -1
                              (> (plist-get a :score) (plist-get b :score)))))))
-    
+
     ;; Log rich routing decision for observability
     (when (> (length scored) 1)
       (let ((top (car scored))
@@ -766,7 +766,7 @@ STRATEGY and TARGET filter the performance data.
                  (plist-get second :confidence)
                  (pcase (plist-get second :ternary) (+1 "ACCEPT") (0 "DEFER") (-1 "REJECT"))
                  (pcase (gptel-auto-workflow--backend-lambda-trend (plist-get second :backend)) (-1 "↓") (1 "↑") (_ "→")))))
-    
+
     ;; Check if we have enough data to trust the reordering
     (let ((total-samples (cl-reduce #'+ scored
                                      :key (lambda (s) (or (plist-get s :total) 0))
@@ -3533,22 +3533,6 @@ possible misclassification"
   '((:agentic        . "agent\\|workflow\\|strategy\\|evolution")
     (:programming    . "benchmark\\|fsm\\|retry\\|test\\|code\\|compile\\|^gptel-ext-")
     (:tool-calls     . "
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 sandbox\\|^gptel-tools-\\(?:bash\\|grep\\|glob\\|edit\\|apply\\|preview\\|programmatic\\)")
