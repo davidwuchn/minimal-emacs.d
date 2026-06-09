@@ -1,15 +1,15 @@
 ---
-title: Self-Evolving Agent Research Papers (May 2026)
+title: Self-Evolving Agent Research Papers (May-June 2026)
 status: active
 category: research
-tags: self-evolution, autonomous-agents, MOSS, Sibyl, APEX, exploration-collapse, source-level-evolution
+tags: self-evolution, autonomous-agents, MOSS, Sibyl, APEX, TSP, exploration-collapse, source-level-evolution, secure-code
 related: OV5 architecture, ontology graph, mementum protocol, self-heal-semantic
 created: 2026-06-09
 ---
 
-# Self-Evolving Agent Research Papers (May 2026)
+# Self-Evolving Agent Research Papers (May-June 2026)
 
-Three highly relevant papers from May 2026 on self-evolving autonomous agents.
+Four highly relevant papers from May-June 2026 on self-evolving autonomous agents.
 
 ## 1. MOSS: Source-Level Self-Evolution (2605.22794)
 
@@ -84,6 +84,41 @@ Three highly relevant papers from May 2026 on self-evolving autonomous agents.
 - Explicit strategy DAG — add prerequisite edges to ontology
 - Fork Discovery — systematically identify unexplored ontology gaps
 
+## 4. TSP: Tree-like Self-Play for Secure Code (2606.03489v1)
+
+**Key Insight:** Current alignment techniques (SFT, RL) apply coarse-grained optimization at the sequence level, failing to address the localized nature of security flaws where a single incorrect token choice can compromise an entire program. TSP reframes secure code generation as a fine-grained sequential decision process by identifying "CWE Risk Nodes" — critical decision points where vulnerabilities emerge.
+
+**TSP Approach:**
+- Constructs decision tree where model explores branching trajectories (secure "golden paths" + vulnerable variants)
+- Self-play at risk nodes: model uses its own insecure branches as "opponent"
+- Dense, on-policy learning signal forces self-correction at critical decision nodes
+- Result: 57.0% → 75.8% security pass rate; 24.5% reduction in unseen CWE vulnerabilities
+- Cross-language transfer: C/C++ security principles transfer to Python, Go, JavaScript
+
+**OV5 Comparison:**
+
+| Aspect | TSP | OV5 |
+|--------|-----|-----|
+| Learning granularity | Token-level risk nodes | Experiment-level kept/discarded |
+| Negative examples | Self-generated vulnerable variants | Discarded experiments |
+| Knowledge persistence | Model weights | Git-based mementum + ontology |
+| Evolution medium | Source code | Source code + prompts + memory |
+| Cross-context transfer | Language-agnostic security principles | Ontology graph relationships |
+| Isolation | None (training) | Git worktree isolation |
+
+**What OV5 does better:**
+- Git worktree isolation — each experiment runs in isolated worktree
+- Ontology graph — rich relational structure beyond simple decision trees
+- Cross-session memory — Mementum protocol persists learning across sessions
+- Source-level + text-level evolution — evolves both code AND prompts/memory
+- Self-heal semantic audit — automatic detection and fixing of code bugs
+
+**What OV5 could learn:**
+- Fine-grained failure analysis — identify specific "risk nodes" in code where failures emerge
+- Self-play at decision points — generate both secure and vulnerable variants at critical points
+- On-policy negative examples — use model's own insecure code generations as training signal
+- Language-agnostic principles — learn abstract security principles that transfer across contexts
+
 ## Summary: Action Items for OV5
 
 | Paper | Key Lesson | OV5 Action Item |
@@ -94,6 +129,10 @@ Three highly relevant papers from May 2026 on self-evolving autonomous agents.
 | Sibyl | Recovered-failure registry | Track how failures were handled (blocked/downgraded/routed) |
 | APEX | Explicit strategy DAG | Add prerequisite edges to ontology to prevent exploration collapse |
 | APEX | Fork Discovery | Systematically identify unexplored ontology gaps |
+| TSP | Fine-grained risk nodes | Add "risk node" detection to self-heal-semantic module |
+| TSP | Self-play at decision points | Generate secure + vulnerable variants at critical points |
+| TSP | On-policy negative examples | Use model's own insecure generations as training signal |
+| TSP | Language-agnostic principles | Learn abstract security principles from experiment outcomes |
 
 ## OV5's Unique Advantages
 
@@ -101,8 +140,9 @@ Three highly relevant papers from May 2026 on self-evolving autonomous agents.
 2. **Mementum protocol** — Cross-session memory via git-based persistence
 3. **Source-level + text-level evolution** — Evolves both code AND prompts/memory
 4. **Ontology graph** — Rich relational structure beyond simple strategy maps
-5. **Self-heal semantic audit** — Automatic detection and fixing of code bugs
+5. **Self-heal semantic audit** — Automatic detection and fixing of code bugs (7 audit checks)
+6. **Cross-session learning** — Mementum persists learning across daemon restarts
 
 ---
 
-*Synthesized from arXiv papers 2605.22794, 2605.22343, 2605.21240*
+*Synthesized from arXiv papers 2605.22794, 2605.22343, 2605.21240, 2606.03489v1*
