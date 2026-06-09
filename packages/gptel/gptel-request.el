@@ -2934,69 +2934,83 @@ PROCESS and _STATUS are process parameters."
           (setf (alist-get process gptel--request-alist nil 'remove) nil)
           (delete-process process)
           (kill-buffer (process-buffer process))))
-    (let ((gptel-curl--sentinel-depth (1+ gptel-curl--sentinel-depth))
-          (proc-buf (process-buffer process))
-          (exit-status (process-exit-status process)))
-    (let* ((fsm (car (alist-get process gptel--request-alist)))
-           (info (gptel-fsm-info fsm))
-           (http-status (plist-get info :http-status)))
-      (when gptel-log-level (gptel-curl--log-response proc-buf info)) ;logging
-      (cond
-       ;; Curl exited with a non-zero status: connection-level failure
-       ((not (zerop exit-status))
-        ;; MAYBE: This transition should happen in the process filter, but it's
-        ;; not clear how to reliably detect Curl failure there.
-        (gptel--fsm-transition fsm)     ;Curl failed, WAIT -> TYPE
-        (plist-put info :error
-                   (format "Curl failed with exit code %d. See Curl manpage for details."
-                           exit-status))
-        (plist-put info :status "Curl failure")
-        (let ((cb_ (plist-get info :callback)))
-          (when (functionp cb_)
-            (with-demoted-errors "gptel callback error: %S"
-              (funcall cb_ nil info)))))
-       ;; Finish handling a successful streaming response
-       ((member http-status '("200" "100"))
-        (let ((cb_ (plist-get info :callback)))
-          (when (functionp cb_)
-            (with-demoted-errors "gptel callback error: %S"
-              (funcall cb_ t info)))))
-       ;; Capture error message from HTTP error response
-       (t
-        (with-current-buffer proc-buf
-          (goto-char (point-max))
-          (if (not (search-backward (plist-get info :uuid) nil t))
-              (plist-put info :error "Could not parse Curl response")
-            (backward-char)
-            (pcase-let* ((`(,_ . ,header-size)
-                          (condition-case nil
-                              (read (current-buffer))
-                            (error '(0 . 0))))
-                         (response (progn (goto-char header-size)
-                                          (condition-case nil (gptel--json-read)
-                                            (error 'json-read-error))))
-                         (error-data
-                          (cond ((plistp response)
-                                 (or (plist-get response :error)     ; generic
-                                     (plist-get response :detail)    ; openai-oauth
-                                     (plist-get response :message)   ; bedrock
-                                     (plist-get response :Message))) ; bedrock
-                                ((arrayp response)
-                                 (cl-some (lambda (el) (plist-get el :error)) response)))))
-              (cond
-               (error-data
-                (plist-put info :error error-data))
-               ((eq response 'json-read-error)
-                (plist-put info :error "Malformed JSON in response."))
-               (t (plist-put info :error "Could not parse HTTP response."))))))
-        (let ((cb_ (plist-get info :callback)))
-          (when (functionp cb_)
-            (with-demoted-errors "gptel callback error: %S"
-              (funcall cb_ nil info))))))
-      (gptel--fsm-transition fsm))      ; Move to next state
-    (setf (alist-get process gptel--request-alist nil 'remove) nil)
-    (delete-process process)
-    (kill-buffer proc-buf))))
+    (condition-case sentinel-err
+        (let ((gptel-curl--sentinel-depth (1+ gptel-curl--sentinel-depth))
+              (proc-buf (process-buffer process))
+              (exit-status (process-exit-status process)))
+          (let* ((fsm (car (alist-get process gptel--request-alist)))
+                 (info (gptel-fsm-info fsm))
+                 (http-status (plist-get info :http-status)))
+            (unless fsm
+              (message "[gptel] Stream cleanup: no FSM for %s, skipping"
+                       (condition-case nil (process-name process) (error "?")))
+              (cl-return-from gptel-curl--stream-cleanup nil))
+            (when gptel-log-level (gptel-curl--log-response proc-buf info)) ;logging
+            (cond
+             ;; Curl exited with a non-zero status: connection-level failure
+             ((not (zerop exit-status))
+              ;; MAYBE: This transition should happen in the process filter, but it's
+              ;; not clear how to reliably detect Curl failure there.
+              (gptel--fsm-transition fsm)     ;Curl failed, WAIT -> TYPE
+              (plist-put info :error
+                         (format "Curl failed with exit code %d. See Curl manpage for details."
+                                 exit-status))
+              (plist-put info :status "Curl failure")
+              (let ((cb_ (plist-get info :callback)))
+                (when (functionp cb_)
+                  (with-demoted-errors "gptel callback error: %S"
+                    (funcall cb_ nil info)))))
+             ;; Finish handling a successful streaming response
+             ((member http-status '("200" "100"))
+              (let ((cb_ (plist-get info :callback)))
+                (when (functionp cb_)
+                  (with-demoted-errors "gptel callback error: %S"
+                    (funcall cb_ t info)))))
+             ;; Capture error message from HTTP error response
+             (t
+              (with-current-buffer proc-buf
+                (goto-char (point-max))
+                (if (not (search-backward (plist-get info :uuid) nil t))
+                    (plist-put info :error "Could not parse Curl response")
+                  (backward-char)
+                  (pcase-let* ((`(,_ . ,header-size)
+                                (condition-case nil
+                                    (read (current-buffer))
+                                  (error '(0 . 0))))
+                               (response (progn (goto-char header-size)
+                                                (condition-case nil (gptel--json-read)
+                                                  (error 'json-read-error))))
+                               (error-data
+                                (cond ((plistp response)
+                                       (or (plist-get response :error)     ; generic
+                                           (plist-get response :detail)    ; openai-oauth
+                                           (plist-get response :message)   ; bedrock
+                                           (plist-get response :Message))) ; bedrock
+                                      ((arrayp response)
+                                       (cl-some (lambda (el) (plist-get el :error)) response)))))
+                    (cond
+                     (error-data
+                      (plist-put info :error error-data))
+                     ((eq response 'json-read-error)
+                      (plist-put info :error "Malformed JSON in response."))
+                     (t (plist-put info :error "Could not parse HTTP response."))))))
+              (let ((cb_ (plist-get info :callback)))
+                (when (functionp cb_)
+                  (with-demoted-errors "gptel callback error: %S"
+                    (funcall cb_ nil info))))))
+            (gptel--fsm-transition fsm))      ; Move to next state
+           (setf (alist-get process gptel--request-alist nil 'remove) nil)
+           (delete-process process)
+           (kill-buffer proc-buf))
+      (error
+       (message "[gptel] Stream cleanup error for %s: %s (depth=%d)"
+                (condition-case nil (process-name process) (error "?"))
+                sentinel-err gptel-curl--sentinel-depth)
+       (ignore-errors
+         (setf (alist-get process gptel--request-alist nil 'remove) nil)
+         (delete-process process)
+         (when (process-buffer process)
+           (kill-buffer (process-buffer process))))))))
 
 (defun gptel-curl--stream-filter (process output)
   (let* ((fsm (car (alist-get process gptel--request-alist)))
