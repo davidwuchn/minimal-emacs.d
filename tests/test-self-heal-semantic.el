@@ -540,6 +540,28 @@ condition-case nil with err reference in handler."
           (should (>= issues 1)))
       (test-self-heal-semantic--cleanup file))))
 
+;; ── Test 13c: Auto-fixer for condition-case-unbound-err ──
+
+(ert-deftest test-self-heal-semantic/fixes-condition-case-unbound-err ()
+  "Auto-fixer changes condition-case nil → err when handler references err."
+  (let* ((content
+          "(defun foo ()\n  (condition-case nil\n      (do-something)\n    (error\n      (message \"failed: %s\" err))))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (let ((fixed (gptel-auto-workflow--fix-condition-case-unbound-err file)))
+            (should (= fixed 1)))
+          ;; Verify the fix was applied
+          (let ((fixed-content (with-temp-buffer
+                                 (insert-file-contents file)
+                                 (buffer-string))))
+            (should (string-match-p "condition-case err" fixed-content))
+            (should-not (string-match-p "condition-case nil" fixed-content)))
+          ;; Verify audit no longer flags it
+          (let ((issues (gptel-auto-workflow--audit-condition-case-unbound-err file)))
+            (should (= issues 0))))
+      (test-self-heal-semantic--cleanup file))))
+
 ;; ── Test 14: Risk node detection (TSP-inspired) ──
 
 (ert-deftest test-self-heal-semantic/detects-risk-node-resource ()

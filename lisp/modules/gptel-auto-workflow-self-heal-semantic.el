@@ -350,17 +350,18 @@ Returns count of such bugs."
                                 (forward-sexp 1)
                                 (1- (point)))
                             (error nil)))
-            (when case-end
-              (save-excursion
-                (goto-char (1- case-end))
-                (backward-up-list 1)
-                (forward-char 1)
-                (forward-word 1)
-                (skip-syntax-forward " '")
-                (let ((var-start (point)))
-                  (skip-syntax-forward "w_")
-                  (when (string= (buffer-substring var-start (point)) "err")
-                    (setq case-binds-err t)))))
+             (when case-end
+               (save-excursion
+                 ;; Go to the enclosing condition-case form to check its variable binding
+                 (goto-char (match-beginning 0))
+                 (backward-up-list 1)  ; from (error up to (condition-case ...)
+                 (forward-char 1)      ; skip "("
+                 (forward-symbol 1)    ; skip "condition-case" (forward-word stops at -)
+                 (skip-syntax-forward " '")
+                 (let ((var-start (point)))
+                   (skip-syntax-forward "w_")
+                   (when (string= (buffer-substring var-start (point)) "err")
+                     (setq case-binds-err t)))))
             (when (and (null has-binding) case-end (null case-binds-err))
               (save-excursion
                 (goto-char match-end-pos)
@@ -656,6 +657,52 @@ case of more closes than opens (which requires deletion — too risky)."
         (setq fixed 1)))
     fixed))
 
+(defun gptel-auto-workflow--fix-condition-case-unbound-err (file)
+  "Fix condition-case nil handlers that reference err without binding.
+Changes (condition-case nil ... (error ... err ...))
+to (condition-case err ... (error ... err ...)).
+Returns number of fixes applied. Safe: only adds binding, never
+removes or changes logic."
+  (let ((fixed 0))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (goto-char (point-min))
+      (while (re-search-forward "(condition-case\\s-+\\(nil\\)\\b" nil t)
+        (let* ((match-start (match-beginning 0))
+               (nil-start (match-beginning 1))
+               (nil-end (match-end 1))
+               (case-end (condition-case nil
+                             (save-excursion
+                               (goto-char match-start)
+                               (forward-sexp 1)
+                               (point))
+                           (error nil))))
+           (when case-end
+             ;; Check if any (error ...) handler references err
+             (save-excursion
+               (goto-char nil-end)
+               (when (re-search-forward "(error\\b" case-end t)
+                 (let ((handler-end (condition-case nil
+                                        (save-excursion
+                                          (goto-char (match-beginning 0))
+                                          (forward-sexp 1)
+                                          (point))
+                                      (error nil))))
+                   (when handler-end
+                     (goto-char (match-end 0))
+                     (when (re-search-forward "[^-_[:word:]]err[^-_[:word:]]" handler-end t)
+                       ;; Found: condition-case nil with err reference
+                       ;; Fix: change "nil" to "err"
+                       (delete-region nil-start nil-end)
+                       (goto-char nil-start)
+                       (insert "err")
+                       (cl-incf fixed)
+                       (message "[self-heal-semantic] Fixed condition-case nil → err in %s"
+                                (file-name-nondirectory file))))))))))
+      (when (> fixed 0)
+        (write-region (point-min) (point-max) file)))
+    fixed))
+
 (cl-defun gptel-auto-workflow--semantic-audit-file (file &key (_auto-fix nil))
   "Run all semantic audit checks on FILE."
   (gptel-auto-workflow--semantic-audit-reset)
@@ -698,7 +745,8 @@ from the audit patterns embedded in the code."
   '((excessive-blank-lines . gptel-auto-workflow--fix-excessive-blank-lines)
     (unguarded-external-call . gptel-auto-workflow--fix-unguarded-external-calls)
     (missing-provide . gptel-auto-workflow--fix-missing-provide)
-    (unbalanced-parens . gptel-auto-workflow--fix-unbalanced-parens))
+    (unbalanced-parens . gptel-auto-workflow--fix-unbalanced-parens)
+    (condition-case-unbound-err . gptel-auto-workflow--fix-condition-case-unbound-err))
   "Alist mapping audit issue type (symbol) to its auto-fixer function.
 Adding a new auto-fixer is now a one-line change to this alist.
 Each fixer must take FILE as argument and return fix count (0 = no-op).")

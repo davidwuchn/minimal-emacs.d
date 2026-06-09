@@ -133,7 +133,7 @@ Messages the repair and updates the :name property in place."
   "Return a tool-result string for dispatch error ERR.
 Uses `error-message-string' when ERR is a proper list, otherwise
 returns a generic error description."
-  (condition-case nil
+  (condition-case err
       (if (proper-list-p err)
           (format "Error: %s" (error-message-string err))
         (format "Error: malformed error %S" err))

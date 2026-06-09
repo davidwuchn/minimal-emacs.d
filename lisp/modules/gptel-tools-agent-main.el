@@ -910,7 +910,7 @@ tracked for manual recovery"
            (setq gptel-auto-workflow--stats
                  (list :phase "error" :total 0 :kept 0))
            (gptel-auto-workflow--persist-status)
-           (condition-case nil
+           (condition-case err
                (funcall finish nil)
              (error (message "[auto-workflow] Finish callback also failed: %s"
                              (error-message-string err))))
