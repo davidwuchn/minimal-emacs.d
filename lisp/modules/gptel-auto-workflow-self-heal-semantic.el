@@ -204,6 +204,58 @@ Returns number of blocks found."
     (excessive-blank-lines . gptel-auto-workflow--audit-blank-lines))
   "Alist of audit check name (symbol) to audit function.")
 
+;; ── Auto-fixers (Layer 2+3: detect AND fix) ──
+
+(defun gptel-auto-workflow--fix-excessive-blank-lines (file)
+  "Fix excessive blank lines in FILE: compress 3+ to 1 separator.
+Returns number of blocks fixed.  Safe: only modifies blank lines,
+never touches code structure."
+  (let ((fixed 0)
+        (content nil)
+        (in-blank-run nil)
+        (blank-count 0))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (goto-char (point-min))
+      ;; Collect lines, compressing blank runs
+      (while (not (eobp))
+        (let ((line (buffer-substring-no-properties
+                     (line-beginning-position) (line-end-position))))
+          (if (string-empty-p (string-trim line))
+              (progn
+                (setq blank-count (1+ blank-count))
+                (setq in-blank-run t))
+            ;; Non-blank line: flush compressed blanks
+            (when in-blank-run
+              (if (>= blank-count 3)
+                  (progn
+                    (setq fixed (1+ fixed))
+                    (push "" content)       ; single separator
+                    (push "" content))      ; single separator
+                ;; 1-2 blanks: keep as-is
+                (dotimes (_ blank-count)
+                  (push "" content)))
+              (setq blank-count 0)
+              (setq in-blank-run nil))
+            (push line content))
+          (forward-line 1)))
+      ;; Trailing blank run
+      (when in-blank-run
+        (if (>= blank-count 3)
+            (progn
+              (setq fixed (1+ fixed))
+              (push "" content))
+          (dotimes (_ blank-count)
+            (push "" content)))))
+    ;; Write back if we fixed anything
+    (when (> fixed 0)
+      (with-temp-file file
+        (dolist (l (nreverse content))
+          (insert l "\n")))
+      (message "[self-heal-semantic] Compressed %d blank-run(s) in %s"
+               fixed (file-name-nondirectory file)))
+    fixed))
+
 (cl-defun gptel-auto-workflow--semantic-audit-file (file &key (_auto-fix nil))
   "Run all semantic audit checks on FILE."
   (gptel-auto-workflow--semantic-audit-reset)
@@ -243,12 +295,29 @@ from the audit patterns embedded in the code."
 ;; ── Integration with existing self-heal pipeline ──
 
 (defun gptel-auto-workflow--self-heal-semantic ()
-  "Layer 2+3 self-heal: detect semantic/operational bugs."
+  "Layer 2+3 self-heal: detect AND fix semantic/operational bugs.
+Runs audit checks on all lisp/modules/*.el files, then applies safe
+auto-fixers for detected issues (e.g., excessive blank lines)."
   (interactive)
-  (let ((result (gptel-auto-workflow--semantic-audit-all)))
+  (let ((result (gptel-auto-workflow--semantic-audit-all))
+        (total-fixed 0))
     (when (> (plist-get result :total-issues) 0)
       (message "[self-heal-semantic] Found %d issues"
                (plist-get result :total-issues)))
+    ;; ── Auto-fix phase: apply safe fixers ──
+    ;; These fixers are structural-only (no logic changes) and safe
+    ;; to run without rollback:
+    (dolist (entry (plist-get result :report))
+      (let* ((file (plist-get entry :file))
+             (log (plist-get entry :log)))
+        (when (cl-some (lambda (r) (eq (plist-get r :type) 'excessive-blank-lines))
+                       log)
+          (let ((fixed (gptel-auto-workflow--fix-excessive-blank-lines file)))
+            (when (> fixed 0)
+              (cl-incf total-fixed fixed))))))
+    (when (> total-fixed 0)
+      (message "[self-heal-semantic] Auto-fixed %d issue(s)" total-fixed))
+    (plist-put result :auto-fixed total-fixed)
     result))
 
 (provide 'gptel-auto-workflow-self-heal-semantic)

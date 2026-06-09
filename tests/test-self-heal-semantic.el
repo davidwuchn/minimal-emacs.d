@@ -170,6 +170,41 @@ File name starts with `test-` so the let-binding check applies."
           (should (= issues 0)))
       (test-self-heal-semantic--cleanup file))))
 
+(ert-deftest test-self-heal-semantic/fix-excessive-blank-lines ()
+  "Fixer compresses 4+ blank lines to single separator."
+  (let* ((content
+          "(defun foo () 1)\n\n\n\n\n\n(defun bar () 2)")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((fixed (gptel-auto-workflow--fix-excessive-blank-lines file)))
+          (should (>= fixed 1))
+          ;; Verify: no 3+ consecutive blank lines remain
+          (with-temp-buffer
+            (insert-file-contents file)
+            (goto-char (point-min))
+            (let ((max-consecutive 0)
+                  (current 0))
+              (while (not (eobp))
+                (if (string-empty-p (buffer-substring-no-properties
+                                     (line-beginning-position)
+                                     (line-end-position)))
+                    (setq current (1+ current))
+                  (setq max-consecutive (max max-consecutive current))
+                  (setq current 0))
+                (forward-line 1))
+              (should (<= max-consecutive 2)))))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/fix-blank-lines-idempotent ()
+  "Fixer on already-clean file returns 0."
+  (let* ((content
+          "(defun foo () 1)\n\n(defun bar () 2)")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((fixed (gptel-auto-workflow--fix-excessive-blank-lines file)))
+          (should (= fixed 0)))
+      (test-self-heal-semantic--cleanup file))))
+
 ;; ── Test 9: Entry point function ──
 
 (ert-deftest test-self-heal-semantic/detects-unguarded-external-call ()
