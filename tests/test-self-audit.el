@@ -253,14 +253,14 @@
           (insert "---\ntimestamp: 2026-06-03T10:00:00\nissues: 3\n---\n\nBackend cold-start: 4/8 backends\nBOTTLENECK: staging-merge\n"))
         (let ((result (gptel-auto-workflow-self-audit--synthesize-system-health)))
           (should (= result 3))
-          ;; Knowledge page should be created
+          ;; Knowledge page should be created (moved to var/tmp/ in 8c89f22f1)
           (should (file-exists-p
-                   (expand-file-name "mementum/knowledge/system-health-patterns.md"
+                   (expand-file-name "var/tmp/system-health-patterns.md"
                                      test-self-audit--tmp-dir)))
           ;; Content should contain key sections
           (with-temp-buffer
             (insert-file-contents
-             (expand-file-name "mementum/knowledge/system-health-patterns.md"
+             (expand-file-name "var/tmp/system-health-patterns.md"
                                test-self-audit--tmp-dir))
             (goto-char (point-min))
             (should (search-forward "System Health Patterns" nil t))
