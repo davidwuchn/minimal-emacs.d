@@ -284,8 +284,66 @@ Returns 1 if missing, 0 if present."
     (unguarded-external-call . gptel-auto-workflow--audit-unguarded-external-calls)
     (excessive-blank-lines . gptel-auto-workflow--audit-blank-lines)
     (unbalanced-parens . gptel-auto-workflow--audit-unbalanced-parens)
-    (missing-provide . gptel-auto-workflow--audit-missing-provide))
+    (missing-provide . gptel-auto-workflow--audit-missing-provide)
+    (condition-case-unbound-err . gptel-auto-workflow--audit-condition-case-unbound-err))
   "Alist of audit check name (symbol) to audit function.")
+
+;; ── Check 8: condition-case with unbound err ──
+
+(defun gptel-auto-workflow--audit-condition-case-unbound-err (file)
+  "Audit FILE for condition-case handlers that reference err without binding.
+Returns count of such bugs."
+  (let ((issues 0))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (goto-char (point-min))
+      (emacs-lisp-mode)
+      (let ((case-fold-search nil))
+        (while (re-search-forward "(error\\b" nil t)
+          (let* ((match-end-pos (match-end 0))
+                 (next-char (or (char-after match-end-pos) 0))
+                 (has-binding t)
+                 (case-end nil)
+                 (case-binds-err nil))
+            (cond
+             ((= next-char ?\)) (setq has-binding nil))
+             ((memq next-char '(?\s ?\t ?\n ?\r))
+              (let ((p (1+ match-end-pos))
+                    (end (point-max)))
+                (while (and (< p end) (memq (char-after p) '(?\s ?\t ?\n ?\r)))
+                  (setq p (1+ p)))
+                (let ((first-real (or (char-after p) 0)))
+                  (when (memq first-real '(?\) ?\( ?\"))
+                    (setq has-binding nil)))))
+             (t nil))
+            (setq case-end (condition-case nil
+                              (save-excursion
+                                (goto-char (match-beginning 0))
+                                (backward-up-list 1)
+                                (forward-sexp 1)
+                                (1- (point)))
+                            (error nil)))
+            (when case-end
+              (save-excursion
+                (goto-char (1- case-end))
+                (backward-up-list 1)
+                (forward-char 1)
+                (forward-word 1)
+                (skip-syntax-forward " '")
+                (let ((var-start (point)))
+                  (skip-syntax-forward "w_")
+                  (when (string= (buffer-substring var-start (point)) "err")
+                    (setq case-binds-err t)))))
+            (when (and (null has-binding) case-end (null case-binds-err))
+              (save-excursion
+                (goto-char match-end-pos)
+                (when (re-search-forward "[^-_[:word:]]err[^-_[:word:]]" case-end t)
+                  (setq issues (1+ issues))
+                  (gptel-auto-workflow--semantic-audit-record
+                   file (line-number-at-pos (match-beginning 0))
+                   'condition-case-unbound-err
+                   "(error) handler references \='err\=' without binding it"))))))))
+    issues))
 
 ;; ── Auto-fixers (Layer 2+3: detect AND fix) ──
 

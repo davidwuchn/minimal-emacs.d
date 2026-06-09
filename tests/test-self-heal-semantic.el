@@ -179,14 +179,15 @@ legitimate subagent work. Set to nil to disable.\")")
 
 (ert-deftest test-self-heal-semantic/audit-checks-variable-defined ()
   "The audit checks alist is defined with all checks."
-  (should (= (length gptel-auto-workflow--semantic-audit-checks) 7))
+  (should (= (length gptel-auto-workflow--semantic-audit-checks) 8))
   (should (assq 'let-binding-function gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'hardcoded-limit gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'score-zero-bug gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'unguarded-external-call gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'excessive-blank-lines gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'unbalanced-parens gptel-auto-workflow--semantic-audit-checks))
-  (should (assq 'missing-provide gptel-auto-workflow--semantic-audit-checks)))
+  (should (assq 'missing-provide gptel-auto-workflow--semantic-audit-checks))
+  (should (assq 'condition-case-unbound-err gptel-auto-workflow--semantic-audit-checks)))
 
 ;; ── Test 10: Missing provide detection ──
 
@@ -480,6 +481,39 @@ causing void-function errors when gptel-agent was not loaded."
     (let ((fixer (cdr entry)))
       (should (symbolp fixer))
       (should (fboundp fixer)))))
+
+;; ── Test 13: condition-case unbound err detection ──
+
+(ert-deftest test-self-heal-semantic/detects-condition-case-unbound-err ()
+  "Detects condition-case handlers that reference err without binding it.
+Bug: '(error) (uses err)' — handler doesn't bind err, so reference is void."
+  (let* ((content
+          "(defun foo ()\n  (condition-case nil\n      (do-something)\n    (error\n      (message \"failed: %s\" (error-message-string err)))))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-condition-case-unbound-err file)))
+          (should (>= issues 1)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/clean-condition-case-bound-err ()
+  "Files with properly bound err are clean."
+  (let* ((content
+          "(defun foo ()\n  (condition-case nil\n      (do-something)\n    (error err\n      (message \"failed: %s\" (error-message-string err)))))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-condition-case-unbound-err file)))
+          (should (= issues 0)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/clean-condition-case-no-err-ref ()
+  "Files with no err reference in handler are clean."
+  (let* ((content
+          "(defun foo ()\n  (condition-case nil\n      (do-something)\n    (error\n      (message \"failed\"))))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-condition-case-unbound-err file)))
+          (should (= issues 0)))
+      (test-self-heal-semantic--cleanup file))))
 
 (provide 'test-self-heal-semantic)
 ;;; test-self-heal-semantic.el ends here
