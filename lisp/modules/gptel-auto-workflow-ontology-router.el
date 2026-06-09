@@ -1,11 +1,10 @@
 ;;; gptel-auto-workflow-ontology-router.el --- Ontology-aware backend fallback reordering -*- lexical-binding: t -*-
 
-(defvar gptel-auto-workflow--routing-audit-log)
-(defvar gptel-auto-workflow--run-failed-backends)
-(defvar gptel-auto-workflow--rate-limited-backends)
-(defvar gptel-ai-behaviors--best-concrete-tasks)
-(defvar gptel-auto-experiment--target-state-cache)
-
+(defvar gptel-auto-workflow--routing-audit-log nil)
+(defvar gptel-auto-workflow--run-failed-backends nil)
+(defvar gptel-auto-workflow--rate-limited-backends nil)
+(defvar gptel-ai-behaviors--best-concrete-tasks nil)
+(defvar gptel-auto-experiment--target-state-cache nil)
 (declare-function gptel-auto-experiment--replay-grader-insights-from-tsv
   "gptel-auto-experiment-core")
 (declare-function gptel-auto-workflow--worktree-base-root
@@ -44,8 +43,7 @@
 Dynamically generated from `gptel-backend-registry'.
 First backend is primary, subsequent backends are tried in order.
 Ordered by keep-rate from experiment data.")
-(defvar gptel-auto-workflow-headless-subagent-fallbacks)
-
+(defvar gptel-auto-workflow-headless-subagent-fallbacks nil)
 ;; ─── Sieve-Based Backend Classification (verbum Phase 5) ───
 ;; Dynamically generated from `gptel-backend-registry' capabilities metadata.
 ;; Qwen3 family (DashScope) → single-neuron (high compression, deterministic).

@@ -16,9 +16,9 @@
   (require 'gptel-tools-agent-prompt-build nil t)
   (require 'json))
 
-(defvar gptel-auto-workflow--strategy-interrupted)
-(defvar gptel-auto-workflow--strategy-evolution-enabled)
-(defvar gptel-auto-workflow--active-strategy)
+(defvar gptel-auto-workflow--strategy-interrupted nil)
+(defvar gptel-auto-workflow--strategy-evolution-enabled nil)
+(defvar gptel-auto-workflow--active-strategy nil)
 (declare-function gptel-auto-workflow--write-evolution-summary "gptel-tools-agent-strategy-harness")
 (declare-function gptel-auto-workflow--ensure-strategy-run-directories "gptel-tools-agent-strategy-harness")
 (declare-function gptel-auto-workflow--discover-strategies "gptel-tools-agent-strategy-harness")
@@ -34,8 +34,7 @@
 (declare-function gptel-auto-workflow--load-skill-content "gptel-tools-agent-prompt-build")
 (declare-function gptel-auto-workflow--find-skill-file "gptel-tools-agent-prompt-build" (skill-name))
 (declare-function gptel-auto-workflow--substitute-template "gptel-tools-agent-prompt-build")
-(defvar gptel-auto-workflow--suppress-strategy-metadata-persistence)
-
+(defvar gptel-auto-workflow--suppress-strategy-metadata-persistence nil)
 (defvar gptel-auto-workflow--strategy-prototype-analysis
   (list :patterns (list (list :type "memory-leak")
                         (list :type "null-check")

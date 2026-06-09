@@ -4,8 +4,7 @@
 (require 'cl-lib)
 (require 'subr-x)
 
-(defvar minimal-emacs-user-directory)
-
+(defvar minimal-emacs-user-directory nil)
 (defcustom gptel-auto-experiment-validation-process-timeout 30
   "Maximum seconds for pre-grade validation subprocesses."
   :type 'integer

@@ -29,9 +29,8 @@
 (declare-function gptel-benchmark-memory-search "gptel-benchmark-memory")
 (declare-function gptel-benchmark-memory-read "gptel-benchmark-memory")
 
-(defvar gptel-agent-loop--state)
-(defvar gptel-benchmark-eight-keys-definitions)
-
+(defvar gptel-agent-loop--state nil)
+(defvar gptel-benchmark-eight-keys-definitions nil)
 ;;; Helpers
 
 (defun gptel-workflow--result-scores (result)

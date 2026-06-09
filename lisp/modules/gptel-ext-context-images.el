@@ -14,8 +14,7 @@
 (require 'gptel)
 
 (declare-function gptel-context--add-binary-file "gptel-context")
-(defvar gptel-context)
-
+(defvar gptel-context nil)
 ;;; Customization
 
 (defgroup my/gptel-context-images nil

@@ -79,7 +79,7 @@ Customize this variable to add more projects.")
 (defvar mementum-root nil
   "Root directory for mementum. Set per-project.")
 
-(defvar gptel-auto-workflow--project-root-override)
+(defvar gptel-auto-workflow--project-root-override nil)
 (defvar gptel-auto-workflow--research-findings-cache
   (make-hash-table :test 'equal)
   "Hash table caching research findings per project root.")

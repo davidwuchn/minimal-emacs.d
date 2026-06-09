@@ -5,10 +5,9 @@
 (declare-function gptel-auto-workflow--json-encode-plist "gptel-auto-workflow-ontology-router" (plist))
 (declare-function gptel-benchmark-call-subagent "gptel-benchmark-subagent")
 (define-error 'research-pipeline-defect "Research pipeline defect" 'error)
-(defvar gptel-auto-workflow--current-research-context)
-(defvar gptel-auto-workflow--research-in-progress)
-(defvar gptel-auto-workflow--research-findings-cache)
-
+(defvar gptel-auto-workflow--current-research-context nil)
+(defvar gptel-auto-workflow--research-in-progress nil)
+(defvar gptel-auto-workflow--research-findings-cache nil)
 (defun slr--root ()
   "Return the project root for standalone research."
   (file-name-as-directory

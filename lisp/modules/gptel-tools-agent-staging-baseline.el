@@ -1,6 +1,6 @@
 ; -*- lexical-binding: t; -*-
 (require 'cl-lib)
-(defvar gptel-auto-workflow--category-action-schemas)
+(defvar gptel-auto-workflow--category-action-schemas nil)
 (declare-function cl-every "cl-lib")
 (declare-function cl-set-difference "cl-lib")
 (declare-function gptel-auto-workflow--default-dir "gptel-tools-agent-base")
@@ -39,20 +39,19 @@
 ;; Part of gptel-tools-agent split
 
 ;; Forward declarations for dynamic variables
-(defvar gptel-auto-experiment-use-subagents)
-(defvar gptel-auto-workflow-git-timeout)
-(defvar gptel-auto-workflow-require-review)
-(defvar gptel-auto-workflow-research-before-fix)
-(defvar gptel-auto-workflow-review-file-context-max-bytes)
-(defvar gptel-auto-workflow-review-file-context-max-total-bytes)
-(defvar gptel-auto-workflow--review-max-retries)
-(defvar gptel-auto-workflow--review-retry-count)
-(defvar gptel-auto-workflow-review-time-budget)
-(defvar gptel-auto-workflow--skip-submodule-sync-env)
-(defvar gptel-auto-workflow--staging-worktree-dir)
+(defvar gptel-auto-experiment-use-subagents nil)
+(defvar gptel-auto-workflow-git-timeout nil)
+(defvar gptel-auto-workflow-require-review nil)
+(defvar gptel-auto-workflow-research-before-fix nil)
+(defvar gptel-auto-workflow-review-file-context-max-bytes nil)
+(defvar gptel-auto-workflow-review-file-context-max-total-bytes nil)
+(defvar gptel-auto-workflow--review-max-retries nil)
+(defvar gptel-auto-workflow--review-retry-count nil)
+(defvar gptel-auto-workflow-review-time-budget nil)
+(defvar gptel-auto-workflow--skip-submodule-sync-env nil)
+(defvar gptel-auto-workflow--staging-worktree-dir nil)
 (defvar my/gptel-agent-task-timeout)
-(defvar gptel-benchmark--subagent-files)
-
+(defvar gptel-benchmark--subagent-files nil)
 (defun gptel-auto-workflow--with-temporary-worktree (slug ref fn)
   "Create a detached temporary worktree for REF.
 Call FN with its path, then clean up."

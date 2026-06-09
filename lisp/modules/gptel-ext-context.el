@@ -66,8 +66,7 @@
 (declare-function my/gptel--context-image-count "gptel-ext-context-images")
 (declare-function my/gptel--run-agent-tool "gptel-tools-agent")
 (defvar my/gptel--context-window-cache)
-(defvar gptel-backend)
-
+(defvar gptel-backend nil)
 ;;; Customization
 
 (defgroup my/gptel-auto-compact nil

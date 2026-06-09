@@ -51,9 +51,8 @@
 (declare-function gptel-auto-workflow--load-research-traces "gptel-auto-workflow-research-benchmark" ())
 (declare-function gptel-backend-name "gptel-request" (backend))
 
-(defvar gptel-auto-workflow--champion-keep-rate)
-(defvar gptel-backend)
-
+(defvar gptel-auto-workflow--champion-keep-rate nil)
+(defvar gptel-backend nil)
 ;; ─── Semantica AgentMemory: formalize mementum layers ───
 
 (defconst gptel-auto-workflow--agent-memory-layers
@@ -137,8 +136,7 @@ Populated by VSM health check, consumed by cross-subsystem feedback.")
 Used by `gptel-auto-workflow--probe-classify-result' to communicate
 grader health back to the caller's lexical scope.")
 
-(defvar gptel-auto-workflow--evolution-last-kept-target)
-
+(defvar gptel-auto-workflow--evolution-last-kept-target nil)
 (defun gptel-auto-workflow--eight-keys-convergence-score ()
   "Compute Eight Keys convergence score from kept experiments.
 Weighted by graph centrality: god nodes contribute more to convergence.
@@ -7288,9 +7286,8 @@ reflection logic may be broken"
 (defvar gptel-auto-workflow--blind-mode nil)
 
 ;; Dynamic variables from gptel package
-(defvar gptel-max-tokens)
-(defvar gptel-temperature)
-
+(defvar gptel-max-tokens nil)
+(defvar gptel-temperature nil)
 ;; Functions defined in other modules
 (declare-function gptel-auto-workflow--default-model-for-backend "gptel-tools-agent-prompt-build")
 (declare-function gptel-auto-workflow--model-valid-for-backend-p "gptel-tools-agent-prompt-build")

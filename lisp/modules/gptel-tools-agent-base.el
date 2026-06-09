@@ -15,7 +15,7 @@
 (require 'gptel-agent nil t)
 (require 'magit-git nil t)
 
-(defvar gptel-send--transitions)
+(defvar gptel-send--transitions nil)
 (declare-function gptel--transform-add-context "gptel-request" (callback fsm))
 (declare-function gptel-auto-workflow--log-conflict "gptel-tools-agent-git")
 (declare-function gptel-auto-workflow--with-staging-worktree
@@ -56,19 +56,18 @@ Prefer the root captured at workflow start over mutable experiment context."
 ;; Forward declaration for variable defined in gptel-auto-workflow-projects.el.
 ;; Do not initialize it here, or later `defvar' initializers in the projects
 ;; module will be skipped and leave the shared table bound to nil.
-(defvar gptel-auto-workflow--project-buffers)
-(defvar gptel-auto-workflow--worktree-buffers)
+(defvar gptel-auto-workflow--project-buffers nil)
+(defvar gptel-auto-workflow--worktree-buffers nil)
 (defvar gptel-auto-workflow--current-project nil)
 (defvar gptel-auto-workflow--run-project-root nil)
-(defvar gptel-auto-workflow--current-target)
-(defvar gptel-auto-workflow--running)
-(defvar gptel-auto-workflow--project-root-override)
-(defvar gptel-auto-workflow-worktree-base)
-(defvar gptel-auto-workflow-staging-branch)
+(defvar gptel-auto-workflow--current-target nil)
+(defvar gptel-auto-workflow--running nil)
+(defvar gptel-auto-workflow--project-root-override nil)
+(defvar gptel-auto-workflow-worktree-base nil)
+(defvar gptel-auto-workflow-staging-branch nil)
 (defvar gptel-agent-loop--bypass nil)
 (defvar gptel-benchmark--subagent-files nil)
-(defvar package-archive-contents)
-
+(defvar package-archive-contents nil)
 (defvar gptel-auto-workflow--allowed-workspace-roots
   (list (expand-file-name "~/.emacs.d/"))
   "List of absolute directory paths allowed as workspace roots.

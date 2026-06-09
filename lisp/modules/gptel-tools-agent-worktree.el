@@ -5,12 +5,11 @@
 (require 'subr-x)
 
 ;; Forward declarations for dynamic variables
-(defvar gptel-auto-workflow-shared-remote)
-(defvar gptel-auto-workflow--skip-submodule-sync-env)
-(defvar gptel-auto-workflow-staging-branch)
-(defvar gptel-auto-workflow--staging-worktree-dir)
-(defvar gptel-auto-workflow--worktree-state)
-
+(defvar gptel-auto-workflow-shared-remote nil)
+(defvar gptel-auto-workflow--skip-submodule-sync-env nil)
+(defvar gptel-auto-workflow-staging-branch nil)
+(defvar gptel-auto-workflow--staging-worktree-dir nil)
+(defvar gptel-auto-workflow--worktree-state nil)
 (declare-function gptel-auto-workflow--default-dir "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--non-empty-string-p "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--hash-get-bound "gptel-tools-agent-base")

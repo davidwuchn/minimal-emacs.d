@@ -31,20 +31,19 @@
 (declare-function gptel-auto-workflow--runtime-subagent-provider-override "gptel-tools-agent-prompt-build")
 
 ;; Variables defined in companion modules to silence byte-compiler.
-(defvar gptel-auto-workflow--rate-limited-backends)
-(defvar gptel-auto-workflow-executor-rate-limit-fallbacks)
-(defvar gptel-auto-experiment-retry-delay)
-(defvar gptel-auto-experiment-rate-limit-max-retry-delay)
-(defvar gptel-auto-experiment--api-error-threshold)
-(defvar gptel-auto-experiment--no-improvement-count)
-(defvar gptel-auto-experiment--api-error-count)
-(defvar gptel-auto-experiment-max-grader-retries)
-(defvar gptel-auto-experiment-max-retries)
-(defvar gptel-auto-experiment-max-per-provider-attempts)
-(defvar gptel-auto-experiment--quota-exhausted)
-(defvar gptel-auto-workflow--run-id)
-(defvar gptel-auto-experiment--grading-target)
-
+(defvar gptel-auto-workflow--rate-limited-backends nil)
+(defvar gptel-auto-workflow-executor-rate-limit-fallbacks nil)
+(defvar gptel-auto-experiment-retry-delay nil)
+(defvar gptel-auto-experiment-rate-limit-max-retry-delay nil)
+(defvar gptel-auto-experiment--api-error-threshold nil)
+(defvar gptel-auto-experiment--no-improvement-count nil)
+(defvar gptel-auto-experiment--api-error-count nil)
+(defvar gptel-auto-experiment-max-grader-retries nil)
+(defvar gptel-auto-experiment-max-retries nil)
+(defvar gptel-auto-experiment-max-per-provider-attempts nil)
+(defvar gptel-auto-experiment--quota-exhausted nil)
+(defvar gptel-auto-workflow--run-id nil)
+(defvar gptel-auto-experiment--grading-target nil)
 (defun gptel-error--load-patterns-from-skill ()
   "Load error patterns from provider-error-analyzer skill.
 Returns alist of (category . pattern) or nil."
@@ -72,7 +71,7 @@ string-match-p."
 Usage-limit errors are excluded because they are retryable rate limits until
 the configured fallback chain is exhausted.")
 
-(defvar gptel-auto-workflow--runtime-subagent-provider-overrides)
+(defvar gptel-auto-workflow--runtime-subagent-provider-overrides nil)
 (defvar gptel-auto-experiment--shared-retryable-error-patterns
   (list :general
         (regexp-opt '("timeout" "timed out" "temporary" "server_error" "WebClientRequestException" "curl failed with exit code 28" "curl failed with exit code 35" "curl failed with exit code 56" "operation timed out" "authorized_error" "token is unusable" "invalid_api_key" "invalid api key" "unauthorized" "http_code \"401\"" "Malformed JSON" "余额不足" "无可用资源包" "insufficient balance" ":code \"1113\"" "credit limit reached") t)

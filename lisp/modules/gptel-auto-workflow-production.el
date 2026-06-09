@@ -154,9 +154,8 @@ Skips when a workflow or cron job is active to avoid preempting experiments."
 List of experiment results sharing the same research context.
 Reset when research context changes.")
 
-(defvar gptel-auto-workflow--stats)
-(defvar gptel-auto-workflow-human-decision-gate)
-
+(defvar gptel-auto-workflow--stats nil)
+(defvar gptel-auto-workflow-human-decision-gate nil)
 (defun gptel-auto-workflow--experiment-complete-hook (experiment)
   "Hook called when EXPERIMENT completes.
 Records to mementum and triggers evolution if needed."

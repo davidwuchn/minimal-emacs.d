@@ -61,16 +61,15 @@
 (declare-function gptel-checkpoint-fail "gptel-ext-checkpoint" (&optional reason))
 (declare-function gptel-checkpoint-snapshot-loop-state "gptel-ext-checkpoint")
 
-(defvar gptel-auto-workflow--run-id)
-(defvar gptel-auto-workflow--worktree-base-root)
-(defvar gptel-auto-workflow--headless)
-(defvar gptel-auto-workflow-persistent-headless)
-(defvar gptel-auto-workflow--current-target)
-(defvar gptel-auto-workflow--stats)
-(defvar gptel-auto-workflow--results)
-(defvar gptel-auto-workflow--running)
-(defvar gptel-auto-workflow--status-run-id)
-
+(defvar gptel-auto-workflow--run-id nil)
+(defvar gptel-auto-workflow--worktree-base-root nil)
+(defvar gptel-auto-workflow--headless nil)
+(defvar gptel-auto-workflow-persistent-headless nil)
+(defvar gptel-auto-workflow--current-target nil)
+(defvar gptel-auto-workflow--stats nil)
+(defvar gptel-auto-workflow--results nil)
+(defvar gptel-auto-workflow--running nil)
+(defvar gptel-auto-workflow--status-run-id nil)
 (defgroup gptel-recovery nil
   "Workflow recovery and resilience settings."
   :group 'gptel-tools-agent)

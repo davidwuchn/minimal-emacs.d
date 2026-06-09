@@ -11,14 +11,13 @@
 (require 'subr-x) ;; for proper-list-p
 
 ;; Forward declarations for external variables
-(defvar package-gnupghome-dir)
-(defvar package-archives)
-(defvar package-archive-priorities)
-(defvar package-archive-contents)
-(defvar gptel-backend)
-(defvar gptel-model)
-(defvar gptel--moonshot)
-
+(defvar package-gnupghome-dir nil)
+(defvar package-archives nil)
+(defvar package-archive-priorities nil)
+(defvar package-archive-contents nil)
+(defvar gptel-backend nil)
+(defvar gptel-model nil)
+(defvar gptel--moonshot nil)
 (defconst gptel-auto-workflow-bootstrap--package-archives
   '(("melpa"        . "https://melpa.org/packages/")
     ("gnu"          . "https://elpa.gnu.org/packages/")

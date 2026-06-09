@@ -62,8 +62,7 @@ Used to show different directive menus for gptel-agent vs regular gptel.")
   (advice-add 'gptel--suffix-system-message
               :around #'my/gptel--suffix-system-message-in-buffer))
 
-(defvar gptel-directives)
-
+(defvar gptel-directives nil)
 (defun my/gptel--filter-directive-menu (orig sym msg &optional external)
   "Around-advice: filter directives based on whether we're in gptel-agent or
 regular gptel.

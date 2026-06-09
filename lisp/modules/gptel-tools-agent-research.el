@@ -2,15 +2,15 @@
 ;; Part of gptel-tools-agent split
 
 ;; Forward declarations for dynamic variables
-(defvar gptel-agent-dirs)
-(defvar gptel-auto-workflow-program-file)
-(defvar gptel-auto-workflow--running)
-(defvar gptel-auto-workflow-skills-dir)
-(defvar gptel-auto-workflow--current-project)
-(defvar gptel-auto-workflow--project-root-override)
-(defvar gptel-auto-workflow--run-project-root)
-(defvar gptel-auto-workflow--headless)
-(defvar gptel-mementum-headless-auto-approve)
+(defvar gptel-agent-dirs nil)
+(defvar gptel-auto-workflow-program-file nil)
+(defvar gptel-auto-workflow--running nil)
+(defvar gptel-auto-workflow-skills-dir nil)
+(defvar gptel-auto-workflow--current-project nil)
+(defvar gptel-auto-workflow--project-root-override nil)
+(defvar gptel-auto-workflow--run-project-root nil)
+(defvar gptel-auto-workflow--headless nil)
+(defvar gptel-mementum-headless-auto-approve nil)
 (defun gptel-auto-workflow-update-mutation-skill (mutation-type all-results)
   "Update MUTATION-TYPE skill file with ALL-RESULTS."
   (let* ((skill-file (format "%s/mutations/%s.md"

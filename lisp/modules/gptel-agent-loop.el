@@ -32,9 +32,8 @@
 (declare-function gptel-make-fsm "gptel")
 (declare-function gptel-request "gptel")
 
-(defvar gptel-use-tools)
-(defvar gptel-tools)
-
+(defvar gptel-use-tools nil)
+(defvar gptel-tools nil)
 (declare-function my/gptel--coerce-fsm "gptel-ext-fsm-utils")
 (declare-function my/gptel--deliver-subagent-result "gptel-tools-agent")
 (declare-function my/gptel--seed-fsm-tools "gptel-tools-agent" (fsm tools))
@@ -49,8 +48,8 @@
 Defined in gptel-tools-agent.el.")
 
 (defvar gptel--fsm-last nil)
-(defvar gptel-agent--agents)
-(defvar gptel-agent-request--handlers)
+(defvar gptel-agent--agents nil)
+(defvar gptel-agent-request--handlers nil)
 (defvar gptel-agent-loop--bypass nil
   "When non-nil, bypass loop control and call the safe task override directly.")
 (defvar gptel--preset nil)

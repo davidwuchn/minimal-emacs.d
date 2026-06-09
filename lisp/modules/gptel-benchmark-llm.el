@@ -21,8 +21,7 @@
 
 (declare-function gptel-request "gptel")
 (declare-function gptel-abort "gptel" (buffer))
-(defvar gptel-model)
-
+(defvar gptel-model nil)
 ;;; Customization
 
 (defgroup gptel-benchmark-llm nil

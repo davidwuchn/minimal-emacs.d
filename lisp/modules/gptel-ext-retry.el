@@ -85,11 +85,10 @@ Used as fallback when `my/gptel-payload-byte-limit' would be too generous")
 (require 'gptel-openai)
 (require 'seq)
 
-(defvar gptel-send--handlers)
-(defvar gptel-request--handlers)
-(defvar gptel-auto-workflow--headless)
-(defvar gptel-auto-workflow-persistent-headless)
-
+(defvar gptel-send--handlers nil)
+(defvar gptel-request--handlers nil)
+(defvar gptel-auto-workflow--headless nil)
+(defvar gptel-auto-workflow-persistent-headless nil)
 (declare-function my/gptel--trim-context-images "gptel-ext-context-images")
 
 ;; --- Automatic Retry for Transient API Errors ---

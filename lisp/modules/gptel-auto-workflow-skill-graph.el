@@ -82,7 +82,7 @@ Prefer workflow/project roots only when they actually contain the skills dir."
                            (file-directory-p
                             (expand-file-name "assistant/skills" dir)))
                          candidates)))
-(defvar minimal-emacs-user-directory)
+(defvar minimal-emacs-user-directory nil)
     (expand-file-name (or root minimal-emacs-user-directory user-emacs-directory))))
 
 ;; ─── Skill Loading ───

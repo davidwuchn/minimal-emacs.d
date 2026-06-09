@@ -4,7 +4,7 @@
 (require 'cl-lib)
 (require 'subr-x)
 (require 'gptel-auto-workflow-behavioral-tests nil t)
-(defvar gptel-auto-workflow--recovering-stale-staging)
+(defvar gptel-auto-workflow--recovering-stale-staging nil)
 (declare-function magit-get-current-branch "magit-git" ())
 (declare-function gptel-auto-workflow--current-run-id "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--make-idempotent-callback "gptel-tools-agent-base")
@@ -52,20 +52,19 @@
 (declare-function gptel-auto-workflow--sync-staging-from-main "gptel-tools-agent-worktree")
 
 ;; Forward declarations for dynamic variables
-(defvar gptel-auto-experiment-max-changed-files)
-(defvar gptel-auto-experiment-retry-delay)
-(defvar gptel-auto-workflow-git-timeout)
+(defvar gptel-auto-experiment-max-changed-files nil)
+(defvar gptel-auto-experiment-retry-delay nil)
+(defvar gptel-auto-workflow-git-timeout nil)
 (defvar gptel-auto-workflow--auto-promote-staging t
   "Non-nil to automatically promote verified staging to main.")
-(defvar gptel-auto-workflow--last-staging-push-output)
-(defvar gptel-auto-workflow--review-error-retry-count)
-(defvar gptel-auto-workflow--review-max-retries)
-(defvar gptel-auto-workflow--review-retry-count)
-(defvar gptel-auto-workflow--running)
-(defvar gptel-auto-workflow--skip-submodule-sync-env)
-(defvar gptel-auto-workflow--staging-push-max-retries)
-(defvar gptel-auto-workflow--staging-worktree-dir)
-
+(defvar gptel-auto-workflow--last-staging-push-output nil)
+(defvar gptel-auto-workflow--review-error-retry-count nil)
+(defvar gptel-auto-workflow--review-max-retries nil)
+(defvar gptel-auto-workflow--review-retry-count nil)
+(defvar gptel-auto-workflow--running nil)
+(defvar gptel-auto-workflow--skip-submodule-sync-env nil)
+(defvar gptel-auto-workflow--staging-push-max-retries nil)
+(defvar gptel-auto-workflow--staging-worktree-dir nil)
 (defconst gptel-auto-workflow--empty-cherry-pick-pattern
   "already applied\\|previous cherry-pick is now empty\\|The previous cherry-pick is now empty"
   "Regex pattern matching git output indicating cherry-pick is already applied.")

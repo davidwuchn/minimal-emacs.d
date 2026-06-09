@@ -36,7 +36,7 @@
 
 (declare-function gptel-benchmark-summarize-results "gptel-benchmark-core")
 (declare-function gptel-benchmark-load-history "gptel-benchmark-core")
-(defvar gptel-benchmark-default-dir)
+(defvar gptel-benchmark-default-dir nil)
 (defvar my/gptel-agent-task-timeout)
 (defvar gptel-agent-preset nil)
 (defvar gptel--request-params nil)

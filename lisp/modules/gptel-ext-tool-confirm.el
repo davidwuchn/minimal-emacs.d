@@ -15,9 +15,8 @@
 (defvar gptel--tool-preview-alist)   ; defined in gptel
 (defvar gptel--request-alist)        ; defined in gptel-request
 (defvar gptel--fsm-last)             ; defined in gptel
-(defvar gptel-sandbox-confirm-function)
-(defvar gptel-sandbox-aggregate-confirm-function)
-
+(defvar gptel-sandbox-confirm-function nil)
+(defvar gptel-sandbox-aggregate-confirm-function nil)
 ;; Forward declarations for gptel-ext-tool-permits.el functions
 (declare-function my/gptel-permit-tool "gptel-ext-tool-permits")
 (declare-function my/gptel-tool-permitted-p "gptel-ext-tool-permits")

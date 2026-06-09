@@ -11,13 +11,12 @@
 
 (declare-function gptel-sandbox--eval-expr "gptel-sandbox" (expr env))
 
-(defvar gptel-auto-workflow--research-accumulated-findings)
-(defvar gptel-auto-workflow--research-total-tokens)
-(defvar gptel-auto-workflow--research-current-turn)
-(defvar gptel-auto-workflow--research-prompt)
-(defvar gptel-auto-workflow--research-controller-config)
-(defvar gptel-auto-workflow--current-research-context)
-
+(defvar gptel-auto-workflow--research-accumulated-findings nil)
+(defvar gptel-auto-workflow--research-total-tokens nil)
+(defvar gptel-auto-workflow--research-current-turn nil)
+(defvar gptel-auto-workflow--research-prompt nil)
+(defvar gptel-auto-workflow--research-controller-config nil)
+(defvar gptel-auto-workflow--current-research-context nil)
 (declare-function gptel-auto-workflow--normalize-response "gptel-auto-workflow-strategic")
 (declare-function gptel-auto-workflow--research-has-external-content-p "gptel-auto-workflow-strategic")
 (declare-function gptel-auto-workflow--research-error-p "gptel-auto-workflow-strategic")

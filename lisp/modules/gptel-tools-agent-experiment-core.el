@@ -69,20 +69,20 @@
 ;;; gptel-tools-agent-experiment-core.el --- Single experiment execution -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
-(defvar gptel-auto-workflow--current-target)
-(defvar gptel-auto-experiment-time-budget)
-(defvar gptel-auto-workflow--run-id)
-(defvar gptel-auto-experiment--no-improvement-count)
-(defvar gptel-auto-experiment--grading-target)
-(defvar gptel-auto-experiment--grading-worktree)
-(defvar gptel-auto-experiment-validation-retry-active-grace)
-(defvar gptel-auto-experiment-validation-retry-time-budget)
-(defvar gptel-auto-workflow-git-timeout)
-(defvar gptel-auto-experiment--best-score)
-(defvar gptel-auto-experiment-auto-push)
-(defvar gptel-auto-workflow-use-staging)
-(defvar gptel-auto-experiment--in-retry)
-(defvar gptel-auto-experiment--in-refine)
+(defvar gptel-auto-workflow--current-target nil)
+(defvar gptel-auto-experiment-time-budget nil)
+(defvar gptel-auto-workflow--run-id nil)
+(defvar gptel-auto-experiment--no-improvement-count nil)
+(defvar gptel-auto-experiment--grading-target nil)
+(defvar gptel-auto-experiment--grading-worktree nil)
+(defvar gptel-auto-experiment-validation-retry-active-grace nil)
+(defvar gptel-auto-experiment-validation-retry-time-budget nil)
+(defvar gptel-auto-workflow-git-timeout nil)
+(defvar gptel-auto-experiment--best-score nil)
+(defvar gptel-auto-experiment-auto-push nil)
+(defvar gptel-auto-workflow-use-staging nil)
+(defvar gptel-auto-experiment--in-retry nil)
+(defvar gptel-auto-experiment--in-refine nil)
 (defvar gptel-auto-experiment--think-intel nil
   "Think-block intelligence from last experiment's agent output.
 Set by executor callback, contains plist with :verdict :acts :explores etc.")
@@ -92,7 +92,7 @@ Updated by the refine loop, consumed by the evolution cycle.")
 (defvar gptel-auto-experiment--target-state-cache (make-hash-table :test 'equal)
   "Cache of target file state before experiments: (:byte-compiles :syntax-ok).
 Checked before each run to detect pre-existing breakage.")
-(defvar gptel-auto-experiment-active-grace)
+(defvar gptel-auto-experiment-active-grace nil)
 (defvar gptel-auto-experiment--loaded-skills nil
   "Dynamic variable. Accumulates skill names loaded during an experiment.
 Pushed to by gptel-auto-workflow--load-skill, captured in experiment :skills.
@@ -123,11 +123,10 @@ This helps avoid wasted retry attempts on files that were already invalid."
         ;; the file was pre-existing broken and retry won't help.
         (or (null (plist-get state :byte-compiles))
             (null (plist-get state :syntax-ok)))))))
-(defvar gptel-auto-workflow-executor-rate-limit-fallbacks)
-(defvar gptel-auto-workflow--rate-limited-backends)
-(defvar gptel-model)
-(defvar gptel-backend)
-
+(defvar gptel-auto-workflow-executor-rate-limit-fallbacks nil)
+(defvar gptel-auto-workflow--rate-limited-backends nil)
+(defvar gptel-model nil)
+(defvar gptel-backend nil)
 (defun gptel-auto-experiment--git-timeout (&optional minimum)
   "Return a numeric git timeout no lower than MINIMUM seconds."
   (let ((minimum (or minimum 300))
@@ -214,8 +213,7 @@ Checks `gptel-auto-workflow--rate-limited-backends' and uses
           (message "[auto-experiment] Main backend %s is rate-limited but no fallback available"
                    current-name))))))
 
-(defvar gptel-auto-experiment-run)
-
+(defvar gptel-auto-experiment-run nil)
 (cl-defun gptel-auto-experiment-run (target experiment-id max-experiments baseline baseline-code-quality previous-results callback &optional log-fn)
   "Run single experiment. Call CALLBACK with result plist.
 BASELINE-CODE-QUALITY is the initial code quality score.

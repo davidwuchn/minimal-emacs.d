@@ -27,10 +27,9 @@
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent" ())
 (declare-function gptel-auto-workflow--valid-strategy-name-p "gptel-tools-agent-strategy-evolver" (name))
 
-(defvar gptel-auto-workflow--active-strategy)
-(defvar gptel-auto-workflow--pending-outcome-updates)
-(defvar gptel-auto-workflow--outcome-evolution-threshold)
-
+(defvar gptel-auto-workflow--active-strategy nil)
+(defvar gptel-auto-workflow--pending-outcome-updates nil)
+(defvar gptel-auto-workflow--outcome-evolution-threshold nil)
 (defun gptel-auto-workflow--plist-dedup-put (plist key value)
   "Like `plist-put' but removes duplicate KEY before inserting.
 Prevents plist key accumulation across successive plist-put calls

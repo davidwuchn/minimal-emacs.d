@@ -13,8 +13,7 @@
 
 (declare-function gptel-fsm-info "gptel-request" (&optional fsm))
 (defvar gptel-auto-workflow--subagent-process-environment nil)
-(defvar gptel--fsm-last)
-
+(defvar gptel--fsm-last nil)
 ;;; Customization
 
 (defgroup gptel-tools-bash nil
