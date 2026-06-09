@@ -7090,20 +7090,23 @@ cap is `2*default`)."
                    :before-rate (plist-get diagnosis :keep-rate)
                    :effective 'PENDING)
              gptel-auto-workflow--self-healing-log)))
-     ;; After any fix attempt: write lesson if this was a persistent problem
-     (when fixed
-       (gptel-auto-workflow--self-reflect-write-lesson
-        diagnosis-str
-        (list :was-persistent
-              (> (plist-get (gptel-auto-workflow--verify-fix-effectiveness diagnosis-str)
-                            :same-fix-count) 1)
-              :attempts (plist-get (gptel-auto-workflow--verify-fix-effectiveness diagnosis-str)
-                                   :same-fix-count)
-              :final-fix (format "%s succeeded after %d attempts"
-                                diagnosis-str
-                                (plist-get (gptel-auto-workflow--verify-fix-effectiveness diagnosis-str)
-                                           :same-fix-count)))))
-     fixed))
+    ;; After any fix attempt: write lesson + adapt threshold
+    (when fixed
+      (gptel-auto-workflow--adapt-threshold diagnosis-str t)
+      (gptel-auto-workflow--self-reflect-write-lesson
+       diagnosis-str
+       (list :was-persistent
+             (> (plist-get (gptel-auto-workflow--verify-fix-effectiveness diagnosis-str)
+                           :same-fix-count) 1)
+             :attempts (plist-get (gptel-auto-workflow--verify-fix-effectiveness diagnosis-str)
+                                  :same-fix-count)
+             :final-fix (format "%s succeeded after %d attempts"
+                               diagnosis-str
+                               (plist-get (gptel-auto-workflow--verify-fix-effectiveness diagnosis-str)
+                                          :same-fix-count)))))
+    (unless fixed
+      (gptel-auto-workflow--adapt-threshold diagnosis-str nil))
+    fixed))
 
 ;;; ─── Phase 7: Recovery Verification ───
 
@@ -7605,7 +7608,33 @@ Returns list of (backend . health-plist) for degraded backends."
 ;;; ─── Phase 6: Backend Escalation (LLM-based self-healing) ───
 
 (defvar gptel-auto-workflow--escalation-threshold 3
-  "Failed remediation count before escalating to alternative backend.")
+  "Failed remediation count before escalating to alternative backend.
+Auto-adapts based on per-diagnosis false-positive rate via --adapt-threshold.")
+
+(defvar gptel-auto-workflow--diagnosis-accuracy (make-hash-table :test 'equal)
+  "Hash: diagnosis -> (true-pos . false-pos) for adaptive threshold tuning.")
+
+(defun gptel-auto-workflow--adapt-threshold (diagnosis was-effective)
+  "Adapt detection threshold for DIAGNOSIS based on whether fix was effective.
+High false-positive rate → raise threshold (fewer false alarms).
+Low false-positive rate → lower threshold (catch more real problems)."
+  (let* ((entry (gethash diagnosis gptel-auto-workflow--diagnosis-accuracy '(0 . 0)))
+         (tp (car entry)) (fp (cdr entry))
+         (new-entry (if was-effective (cons (1+ tp) fp) (cons tp (1+ fp))))
+         (total (+ (car new-entry) (cdr new-entry)))
+         (fp-rate (if (> total 0) (/ (float (cdr new-entry)) total) 0.5)))
+    (puthash diagnosis new-entry gptel-auto-workflow--diagnosis-accuracy)
+    (when (> total 5)
+      (if (> fp-rate 0.5)
+          (progn (setq gptel-auto-workflow--escalation-threshold
+                       (min 5 (1+ gptel-auto-workflow--escalation-threshold)))
+                 (message "[self-heal] 📈 '%s' fp-rate=%.0f%% — raised threshold to %d"
+                          diagnosis (* 100 fp-rate) gptel-auto-workflow--escalation-threshold))
+        (when (< fp-rate 0.2)
+          (setq gptel-auto-workflow--escalation-threshold
+                (max 2 (1- gptel-auto-workflow--escalation-threshold)))
+          (message "[self-heal] 📉 '%s' fp-rate=%.0f%% — lowered threshold to %d"
+                   diagnosis (* 100 fp-rate) gptel-auto-workflow--escalation-threshold))))))
 
 (defvar gptel-auto-workflow--consecutive-failed-remediations 0
   "Counter for consecutive failed auto-remediation attempts.")
