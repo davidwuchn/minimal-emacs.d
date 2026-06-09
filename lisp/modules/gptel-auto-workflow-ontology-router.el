@@ -5,6 +5,10 @@
 (defvar gptel-auto-workflow--rate-limited-backends nil)
 (defvar gptel-ai-behaviors--best-concrete-tasks nil)
 (defvar gptel-auto-experiment--target-state-cache nil)
+(defvar gptel-auto-workflow--reorder-cache nil
+  "Memoized results of `gptel-auto-workflow--reorder-fallbacks-by-ontology'.
+Invalidated when `gptel-auto-workflow--results-cache' is cleared.
+Each entry is ((strategy . target) . result).")
 (declare-function gptel-auto-experiment--replay-grader-insights-from-tsv
   "gptel-auto-experiment-core")
 (declare-function gptel-auto-workflow--worktree-base-root
@@ -588,7 +592,10 @@ STRATEGY and TARGET filter the performance data.
    4. CONFIDENCE — how much data backs this score?
    Weights auto-tune from VSM health when available (defaults 40/30/20/10).
    Penalty: unhealthy backends (3+ recent errors) drop to bottom."
-   (let* ((static-fallbacks (if (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+  (let ((cache-key (cons strategy target)))
+    (or (alist-get cache-key gptel-auto-workflow--reorder-cache nil nil #'equal)
+         (let ((result
+                (let* ((static-fallbacks (if (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
                                   gptel-auto-workflow-executor-rate-limit-fallbacks
                                 (if (fboundp 'gptel-backend-registry-fallback-chain-as-cons)
                                     (gptel-backend-registry-fallback-chain-as-cons 'executor)
@@ -612,8 +619,10 @@ STRATEGY and TARGET filter the performance data.
            (delta-weight (plist-get vsm-params :delta-weight))
            (rate-weight (plist-get vsm-params :rate-weight))
            (trend-weight (plist-get vsm-params :trend-weight))
-           (confidence-weight (plist-get vsm-params :confidence-weight))
-           (scored nil))
+            (confidence-weight (plist-get vsm-params :confidence-weight))
+            ;; Parse results once for the entire scoring loop
+            (all-results (gptel-auto-workflow--parse-all-results))
+            (scored nil))
 
      ;; Log verbum data bypass detection
      (when retrieval-p
@@ -645,9 +654,9 @@ STRATEGY and TARGET filter the performance data.
                           (gptel-auto-workflow--get-backend-performance-stats backend strategy target)))
              (all-raw-rate (plist-get all-stats :keep-rate))
              (all-total (plist-get all-stats :total))
-             ;; Recency-weighted keep-rate (recent experiments count more)
-             (decayed-stats (gptel-auto-workflow--decayed-keep-rate
-                             (gptel-auto-workflow--parse-all-results) backend nil category strategy))
+              ;; Recency-weighted keep-rate (recent experiments count more)
+              (decayed-stats (gptel-auto-workflow--decayed-keep-rate
+                              all-results backend nil category strategy))
              (decayed-rate (plist-get decayed-stats :keep-rate))
              ;; Bayesian floor: backends with < 3 experiments get 0.25
              ;; to avoid cold-start bias. Applied after decay weighting.
@@ -856,8 +865,9 @@ explore=%.0f%%)"
                        (message "[onto-router] Static override: %s → %s"
                                 category category-override)
                        (cons override-entry rest))
-                   static-fallbacks))
-             static-fallbacks))))))
+                     static-fallbacks))))))
+           (push (cons cache-key result) gptel-auto-workflow--reorder-cache)
+           result))))
 
 ;; ─── Integration with Existing Fallback System ───
 
@@ -2555,29 +2565,26 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
              (health (if (fboundp 'gptel-auto-workflow--backend-health-weight)
                          (gptel-auto-workflow--backend-health-weight backend)
                        1.0))
-             ;; Bayesian-smoothed keep-rate: backends with < 3 experiments
-             ;; get the 0.25 floor (DeepSeek's earned keep-rate) to avoid
-             ;; cold-start bias from a single discarded experiment.
-             (keep-rate (if (fboundp 'gptel-auto-workflow--get-backend-performance-stats)
-                             (let* ((stats (gptel-auto-workflow--get-backend-performance-stats backend))
-                                    (raw (plist-get stats :keep-rate))
-                                    (total (plist-get stats :total)))
-                               (if (or (null raw) (< total 3)) 0.25 raw))
-                           0.25))
-             ;; Cold-start exploration boost: backends with very few
-             ;; experiments get a temporary score lift so they can
-             ;; accumulate data and prove themselves. Without this,
-             ;; established backends (DashScope, DeepSeek) permanently
-             ;; dominate and new backends (moonshot/kimi-k2.6) never
-             ;; get a chance to compete.
-             (cold-start-boost
-              (if (fboundp 'gptel-auto-workflow--get-backend-performance-stats)
-                  (let* ((stats (gptel-auto-workflow--get-backend-performance-stats backend))
-                         (total (plist-get stats :total)))
-                    (cond ((< total 3) 0.01)     ; almost no data → minimal boost
-                          ((< total 5) 0.005)    ; some data → tiny boost
-                          (t 0.0)))
-                0.01))  ; if stats unavailable, treat as cold-start
+              ;; Bayesian-smoothed keep-rate: backends with < 3 experiments
+              ;; get the 0.25 floor (DeepSeek's earned keep-rate) to avoid
+              ;; cold-start bias from a single discarded experiment.
+              ;; Single stats call — reused for keep-rate and cold-start-boost.
+              (stats (if (fboundp 'gptel-auto-workflow--get-backend-performance-stats)
+                         (gptel-auto-workflow--get-backend-performance-stats backend)
+                       (list :kept 0 :total 0 :keep-rate nil)))
+              (raw (plist-get stats :keep-rate))
+              (stats-total (plist-get stats :total))
+              (keep-rate (if (or (null raw) (< stats-total 3)) 0.25 raw))
+              ;; Cold-start exploration boost: backends with very few
+              ;; experiments get a temporary score lift so they can
+              ;; accumulate data and prove themselves. Without this,
+              ;; established backends (DashScope, DeepSeek) permanently
+              ;; dominate and new backends (moonshot/kimi-k2.6) never
+              ;; get a chance to compete.
+              (cold-start-boost
+               (cond ((< stats-total 3) 0.01)     ; almost no data → minimal boost
+                     ((< stats-total 5) 0.005)    ; some data → tiny boost
+                     (t 0.0)))
               (quarantined (and (fboundp 'gptel-auto-workflow--backend-quarantined-p)
                                 (gptel-auto-workflow--backend-quarantined-p backend)))
               (rate-limited (and (boundp 'gptel-auto-workflow--rate-limited-backends)
@@ -4112,3 +4119,5 @@ Primary: unified graph skill-cooccur edges.  Fallback: skill graph edges."
 
 (provide 'gptel-auto-workflow-ontology-router)
 ;;; gptel-auto-workflow-ontology-router.el ends here
+
+)))
