@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # install-ops-global.sh - One-shot install of OpenCode Processing Skills + OV5 cowork
 # Usage: ./install-ops-global.sh
-# Requires: git, opencode with bailian-token-plan and github-copilot providers
+# Requires: git, opencode with deepseek, github-copilot, and bigmodel providers
 
 set -euo pipefail
 
@@ -13,11 +13,11 @@ trap 'rm -rf "$TMPDIR"' EXIT
 SCRIPT_DIR="$(cd "$(dirname "$0")"; pwd)"
 EMACS_DIR="$(cd "$SCRIPT_DIR/.."; pwd)"
 
-# Platform-aware socket path
+# Platform-aware socket path (per AGENTS.md S3: /tmp/emacs$(id -u)/)
 if [[ "$(uname)" == "Darwin" ]]; then
     OV5_SOCKET="/tmp/emacs$(id -u)/ov5-auto-workflow"
 else
-    OV5_SOCKET="/run/user/$(id -u)/emacs/ov5-auto-workflow"
+    OV5_SOCKET="/tmp/emacs$(id -u)/ov5-auto-workflow"
 fi
 SKILL_SRC="${EMACS_DIR}/assistant/skills/ov5"
 OPENCODE_SKILLS="${HOME}/.config/opencode/skills/ov5"
@@ -34,10 +34,10 @@ targets:
     enabled: true
     home: ~/.config/opencode
 
-delegate: bailian-token-plan/deepseek-v4-pro
-doc-explorer: bailian-token-plan/deepseek-v4-pro
-implementer: bailian-token-plan/glm-5.1
-legacy-curator: bailian-token-plan/deepseek-v4-pro
+delegate: deepseek/deepseek-v4-pro
+doc-explorer: deepseek/deepseek-v4-pro
+implementer: bigmodel/glm-5.1
+legacy-curator: deepseek/deepseek-v4-pro
 
 additional_delegates:
   strong:
@@ -49,12 +49,12 @@ additional_delegates:
   opus:
     model: github-copilot/claude-opus-4.8
   qwen:
-    model: bailian-token-plan/qwen3.7-max
+    model: deepseek/deepseek-v4-pro
     reasoningEffort: high
   creative:
-    model: bailian-token-plan/deepseek-v4-pro
+    model: deepseek/deepseek-v4-pro
   fast:
-    model: bailian-token-plan/deepseek-v4-flash
+    model: deepseek/deepseek-v4-flash
 
 additional_implementers:
   safe:
@@ -87,13 +87,13 @@ for agent in maintainer maintainer-direct; do
     if [ -f "$file" ]; then
         # Portable: remove any existing model line, then insert after description.
         # perl -i -pe applies the block to each line; $_ holds the current line.
-        perl -i -pe 'if (/^model:/) { $_ = ""; } elsif (/^description:/) { $_ = $_ . "model: bailian-token-plan/qwen3.7-plus\noptions:\n  reasoningEffort: high\n"; }' "$file"
+        perl -i -pe 'if (/^model:/) { $_ = ""; } elsif (/^description:/) { $_ = $_ . "model: deepseek/deepseek-v4-pro\noptions:\n  reasoningEffort: high\n"; }' "$file"
     fi
 done
 
 # Subagents
-update_model "$AGENTS_DIR/delegate.md"             "bailian-token-plan/deepseek-v4-pro"
-update_model "$AGENTS_DIR/delegate-fast.md"          "bailian-token-plan/deepseek-v4-flash"
+update_model "$AGENTS_DIR/delegate.md"             "deepseek/deepseek-v4-pro"
+update_model "$AGENTS_DIR/delegate-fast.md"          "deepseek/deepseek-v4-flash"
 # delegate-strong — ensure reasoningEffort: xhigh
 if [ -f "$AGENTS_DIR/delegate-strong.md" ]; then
     perl -pi -e 's|^model:.*|model: github-copilot/gpt-5.4|' "$AGENTS_DIR/delegate-strong.md"
@@ -107,16 +107,16 @@ update_model "$AGENTS_DIR/delegate-gpt.md"           "github-copilot/gpt-5.5"
 update_model "$AGENTS_DIR/delegate-opus.md"          "github-copilot/claude-opus-4.8"
 # delegate-qwen — restore meaningful description (OPS overwrites with generic)
 if [ -f "$AGENTS_DIR/delegate-qwen.md" ]; then
-    perl -pi -e 's|^description:.*|description: Delegate variant '"'"'qwen'"'"' with model bailian-token-plan/qwen3.7-max (thinking). Use for second opinions, cross-checking results, Chinese language tasks, and alternative perspectives on hard problems.|' "$AGENTS_DIR/delegate-qwen.md"
-    update_model "$AGENTS_DIR/delegate-qwen.md" "bailian-token-plan/qwen3.7-max"
+    perl -pi -e 's|^description:.*|description: Delegate variant '"'"'qwen'"'"' with model deepseek/deepseek-v4-pro. Use for second opinions, cross-checking results, Chinese language tasks, and alternative perspectives on hard problems.|' "$AGENTS_DIR/delegate-qwen.md"
+    update_model "$AGENTS_DIR/delegate-qwen.md" "deepseek/deepseek-v4-pro"
 fi
 # delegate-creative — also fix stale description referencing minimax-cn-coding-plan
 if [ -f "$AGENTS_DIR/delegate-creative.md" ]; then
-    perl -pi -e 's|^description:.*|description: Delegate variant '"'"'creative'"'"' with model bailian-token-plan/deepseek-v4-pro. Use for creative writing, brainstorming, content generation, and open-ended exploration.|' "$AGENTS_DIR/delegate-creative.md"
-    update_model "$AGENTS_DIR/delegate-creative.md" "bailian-token-plan/deepseek-v4-pro"
+    perl -pi -e 's|^description:.*|description: Delegate variant '"'"'creative'"'"' with model deepseek/deepseek-v4-pro. Use for creative writing, brainstorming, content generation, and open-ended exploration.|' "$AGENTS_DIR/delegate-creative.md"
+    update_model "$AGENTS_DIR/delegate-creative.md" "deepseek/deepseek-v4-pro"
 fi
-update_model "$AGENTS_DIR/doc-explorer.md"           "bailian-token-plan/deepseek-v4-pro"
-update_model "$AGENTS_DIR/implementer.md"           "bailian-token-plan/glm-5.1"
+update_model "$AGENTS_DIR/doc-explorer.md"           "deepseek/deepseek-v4-pro"
+update_model "$AGENTS_DIR/implementer.md"           "bigmodel/glm-5.1"
 # implementer-safe — ensure reasoningEffort: xhigh
 if [ -f "$AGENTS_DIR/implementer-safe.md" ]; then
     perl -pi -e 's|^model:.*|model: github-copilot/gpt-5.4-mini|' "$AGENTS_DIR/implementer-safe.md"
@@ -126,23 +126,21 @@ if [ -f "$AGENTS_DIR/implementer-safe.md" ]; then
         perl -pi -e 's|^  reasoningEffort:.*|  reasoningEffort: xhigh|' "$AGENTS_DIR/implementer-safe.md"
     fi
 fi
-update_model "$AGENTS_DIR/legacy-curator.md"        "bailian-token-plan/deepseek-v4-pro"
+update_model "$AGENTS_DIR/legacy-curator.md"        "deepseek/deepseek-v4-pro"
 
-# 6. Enable thinking for DeepSeek models in opencode.json (pure jq, no python3)
+# 6. Set compaction and small model in opencode.json (pure jq, no python3)
 OPENCODE_JSON="$HOME/.config/opencode/opencode.json"
 if [ -f "$OPENCODE_JSON" ]; then
     if command -v jq >/dev/null 2>&1; then
         tmp_json="$(mktemp)"
         jq '
-          .provider["bailian-token-plan"].models["deepseek-v4-pro"].options.thinking = {"type": "enabled", "budgetTokens": 16384} |
-          .provider["bailian-token-plan"].models["deepseek-v4-flash"].options.thinking = {"type": "enabled", "budgetTokens": 16384} |
-          .small_model = "bailian-token-plan/deepseek-v4-flash" |
-          .agent.compaction.model = "bailian-token-plan/deepseek-v4-flash"
+          .small_model = "deepseek/deepseek-v4-flash" |
+          .agent.compaction.model = "deepseek/deepseek-v4-flash"
         ' "$OPENCODE_JSON" > "$tmp_json" && mv "$tmp_json" "$OPENCODE_JSON"
-        echo "DeepSeek thinking enabled + compaction/small_model set (via jq)"
+        echo "Compaction + small_model set to deepseek/deepseek-v4-flash (via jq)"
     else
-        echo "WARNING: jq not found — skip enabling DeepSeek thinking mode"
-        echo "Install jq or manually add thinking config to $OPENCODE_JSON"
+        echo "WARNING: jq not found — skip setting compaction model"
+        echo "Install jq or manually add compaction config to $OPENCODE_JSON"
     fi
 fi
 
@@ -194,6 +192,6 @@ fi
 
 echo ""
 echo "=== Installation Complete ==="
-echo "Models: @maintainer→qwen3.7-plus, delegate→deepseek-v4-pro, strong→gpt-5.4, gpt→gpt-5.5, opus→claude-opus-4.8, qwen→qwen3.7-max, creative→deepseek-v4-pro, fast→deepseek-v4-flash, implementer→glm-5.1, implementer-safe→gpt-5.4-mini"
+echo "Models: @maintainer→deepseek/deepseek-v4-pro, delegate→deepseek/deepseek-v4-pro, strong→gpt-5.4, gpt→gpt-5.5, opus→claude-opus-4.8, qwen→deepseek/deepseek-v4-pro, creative→deepseek/deepseek-v4-pro, fast→deepseek/deepseek-v4-flash, implementer→glm-5.1, implementer-safe→gpt-5.4-mini"
 echo "OV5 Cowork: OpenCode configured"
 echo "Next: Restart OpenCode, select @maintainer agent"
