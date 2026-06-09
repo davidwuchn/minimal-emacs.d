@@ -69,7 +69,9 @@
   "Directory for approval queue files (relative to project root).")
 
 (declare-function gptel-auto-workflow--run-architectural-analysis
-                  "gptel-auto-workflow-architectural-evolution")
+  "gptel-auto-workflow-architectural-evolution")
+(declare-function gptel-auto-workflow--self-heal-semantic
+  "gptel-auto-workflow-self-heal-semantic")
 
 ;; ── Configuration ──
 
@@ -1721,9 +1723,21 @@ Returns list of written mementum file paths, or nil if throttled/disabled."
                 ;; 9b: Generate new self-tuning proposals
                 (let ((tuning-proposals (gptel-auto-workflow--run-self-tuning)))
                   (when tuning-proposals
-                    (message "[monitoring] Phase 9: Generated %d new self-tuning proposals (routed to
-approval queue)"
+                    (message "[monitoring] Phase 9: Generated %d new self-tuning proposals (routed to approval queue)"
                              (length tuning-proposals))))))
+            ;; Phase 10: Semantic self-heal — detect and fix code-level issues
+            ;; Runs semantic audit on lisp/modules/*.el and auto-fixes:
+            ;; - Unguarded external calls (void-function prevention)
+            ;; - Excessive blank lines (code hygiene)
+            ;; - Hardcoded limits, score=0 bugs, let-binding functions
+            (ignore-errors
+              (when (fboundp 'gptel-auto-workflow--self-heal-semantic)
+                (let ((result (gptel-auto-workflow--self-heal-semantic)))
+                  (let ((issues (plist-get result :total-issues))
+                        (fixed (plist-get result :auto-fixed)))
+                    (when (> issues 0)
+                      (message "[monitoring] Phase 10: Semantic audit found %d issues, auto-fixed %d"
+                               issues (or fixed 0)))))))
             (ignore (nreverse written)))))))))))
 
 (provide 'gptel-auto-workflow-monitoring-agent)
