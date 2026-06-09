@@ -2301,10 +2301,20 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                       nil
                       (lambda (&optional _results)
                         (gptel-auto-workflow-evolution-run-cycle)))))
-               (error (message "[evolution] Experiment run error: %s (continuing cycle)"
+               (error (message "[evolution] Experiment run error: %s — retrying without lesson restore (continuing cycle)"
                                (if (stringp trigger-err)
                                    trigger-err
-                                 (prin1-to-string trigger-err)))))
+                                 (prin1-to-string trigger-err)))
+                      ;; Retry: the error may be from setup (self-heal lesson restore),
+                      ;; not from the experiment itself. Try once more with a direct call.
+                      (condition-case retry-err
+                          (when (and (fboundp 'gptel-auto-workflow-run-async)
+                                     (not gptel-auto-workflow--running))
+                            (gptel-auto-workflow-run-async
+                             nil
+                             (lambda (&optional _results)
+                               (gptel-auto-workflow-evolution-run-cycle))))
+                        (error (message "[evolution] Retry also failed: %s" retry-err)))))
             ;; Persist hints before returning
             (gptel-auto-workflow--persist-next-cycle-hints)
             (cl-return-from gptel-auto-workflow-evolution-run-cycle "triggered-experiments")))

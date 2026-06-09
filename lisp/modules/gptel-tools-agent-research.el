@@ -592,50 +592,47 @@ When `draft' (default), saves to `mementum/knowledge/drafts/' for later review."
 Shows preview and asks for human approval before saving.
 In headless mode, respects `gptel-mementum-headless-auto-approve'."
   (condition-case err
-      (let* ((extracted (gptel-mementum--extract-content result))
-             (line-count (with-temp-buffer (insert extracted) (count-lines 1 (point-max))))
-             (headless (or (bound-and-true-p gptel-auto-workflow--headless)
-                           (daemonp)))
-             (auto-approve (and headless gptel-mementum-headless-auto-approve))
-             ;; YC principle: a brief synthesis is better than no page at all.
-             ;; For research-derived topics (insight-proposal-*, mistake-failure-pattern-*)
-             ;; the LLM often returns 1 line "you have enough context". Rather
-             ;; than skip, we accept the brief page (≥3 lines) and tag it as
-             ;; 'partial'. This keeps the knowledge base growing.
-             (min-lines (if (string-match "^insight-proposal-\\|^mistake-failure-pattern-\\|^research-" topic)
-                          3
-                        15)))
-        (cond
-         ((< line-count min-lines)
-          (message "[mementum] Skip '%s': only %d lines (need ≥%d)" topic line-count min-lines))
-         ((and headless (not auto-approve))
-          (message "[mementum] Skip '%s': human approval required before saving in headless mode (%d lines)"
-                   topic line-count))
-         (auto-approve
-          (let* ((draft-p (eq auto-approve 'draft))
-                 (saved-file (gptel-mementum--save-knowledge-page
-                              topic files extracted draft-p)))
-            (message "[mementum] %s '%s' (%d lines): %s"
-                     (if draft-p "Drafted" "Created")
-                     topic line-count
-                     (file-relative-name saved-file
-                                         (gptel-auto-workflow--project-root)))))
-          (t
-           (if (or noninteractive
-                   (not (display-graphic-p)))
-               (message "[mementum] Skip '%s': would prompt for approval (%d lines, noninteractive)"
-                        topic line-count)
-             (let ((preview-buffer (get-buffer-create "*Synthesis Preview*")))
-               (with-current-buffer preview-buffer
-                 (erase-buffer)
-                 (insert (format "# Synthesis Preview: %s\n\n" topic))
-                 (insert (format "Generated: %d lines\n\n" line-count))
-                 (insert "## Generated Knowledge Page\n\n")
-                 (insert extracted)
-                 (goto-char (point-min)))
-               (display-buffer preview-buffer)
-                (when (y-or-n-p (format "Create knowledge page for '%s'? (%d lines) " topic line-count))
-                  (gptel-mementum--save-knowledge-page topic files extracted)))))))
+      (let ((extracted (gptel-mementum--extract-content result)))
+        (if (not extracted)
+            (message "[mementum] Skip '%s': LLM returned nil/non-string (API failure)" topic)
+          (let* ((line-count (with-temp-buffer (insert extracted) (count-lines 1 (point-max))))
+                 (headless (or (bound-and-true-p gptel-auto-workflow--headless)
+                               (daemonp)))
+                 (auto-approve (and headless gptel-mementum-headless-auto-approve))
+                 (min-lines (if (string-match "^insight-proposal-\\|^mistake-failure-pattern-\\|^research-" topic)
+                                3
+                              15)))
+            (cond
+             ((< line-count min-lines)
+              (message "[mementum] Skip '%s': only %d lines (need ≥%d)" topic line-count min-lines))
+             ((and headless (not auto-approve))
+              (message "[mementum] Skip '%s': human approval required before saving in headless mode (%d lines)"
+                       topic line-count))
+             (auto-approve
+              (let* ((draft-p (eq auto-approve 'draft))
+                     (saved-file (gptel-mementum--save-knowledge-page
+                                  topic files extracted draft-p)))
+                (message "[mementum] %s '%s' (%d lines): %s"
+                         (if draft-p "Drafted" "Created")
+                         topic line-count
+                         (file-relative-name saved-file
+                                             (gptel-auto-workflow--project-root)))))
+             (t
+              (if (or noninteractive
+                      (not (display-graphic-p)))
+                  (message "[mementum] Skip '%s': would prompt for approval (%d lines, noninteractive)"
+                           topic line-count)
+                (let ((preview-buffer (get-buffer-create "*Synthesis Preview*")))
+                  (with-current-buffer preview-buffer
+                    (erase-buffer)
+                    (insert (format "# Synthesis Preview: %s\n\n" topic))
+                    (insert (format "Generated: %d lines\n\n" line-count))
+                    (insert "## Generated Knowledge Page\n\n")
+                    (insert extracted)
+                    (goto-char (point-min)))
+                  (display-buffer preview-buffer)
+                   (when (y-or-n-p (format "Create knowledge page for '%s'? (%d lines) " topic line-count))
+                     (gptel-mementum--save-knowledge-page topic files extracted))))))))))
      (error
       (message "[mementum] Error handling synthesis for '%s': %s" topic (error-message-string err)))))
 
@@ -720,12 +717,13 @@ Generate the complete knowledge page now. Start with the frontmatter and include
 
 (defun gptel-mementum--extract-content (llm-result)
   "Extract knowledge page content from LLM-RESULT.
-Returns the content between the first --- and end, or the whole result."
-  (let* ((result (if (stringp llm-result) llm-result (format "%s" llm-result)))
-         (start (string-match "---\n" result)))
-    (if start
-        (substring result start)
-      result)))
+Returns the content between the first --- and end, or the whole result.
+Returns nil if LLM-RESULT is nil or not a string (API failure/timeout)."
+  (when (stringp llm-result)
+    (let ((start (string-match "---\n" llm-result)))
+      (if start
+          (substring llm-result start)
+        llm-result))))
 
 (defun gptel-mementum--verify-synthesis (topic content source-files)
   "Verify synthesized CONTENT for TOPIC against SOURCE-FILES.
