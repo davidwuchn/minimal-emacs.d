@@ -346,26 +346,34 @@ Caches when MAX-AGE-DAYS is nil for cycle-local reuse."
                                                     (t (or (nth 15 fields) "unknown"))))
                                      (prompt-chars (string-to-number
                                                     (or (nth (if (<= format-version 24) 15 16) fields) "0")))
-                                     (research-strategy (or (nth (if (<= format-version 20) 20 21) fields) "none"))
-                                     (research-hash (or (nth (if (<= format-version 20) 20 22) fields) "none"))
-                                      (research-quality (or (nth (if (<= format-version 20) 20 23) fields) "none"))
-                                      (kibcm-axis (or (nth (if (<= format-version 24) 20 25) fields) "?"))
-                                      (model (or (nth (if (<= format-version 24) 20 26) fields) "unknown"))
-                                      (skills (or (nth 28 fields) ""))
-                                      (edit-mode (or (nth 29 fields) "none"))
-                                      (cost-usd (string-to-number (or (nth 30 fields) "0")))
-                                      (effort-level (or (nth 31 fields) "default")))
-                                 (push (list :target target
-                                             :hypothesis hypothesis
-                                             :score-before score-before
-                                             :score-after score-after
-                                             :code-quality quality
-                                             :delta delta
-                                             :decision decision
-                                             :grader-quality grader-q
-                                             :prompt-chars prompt-chars
-                                             :backend backend
-                                             :research-strategy research-strategy
+                                      (strategy (if (<= format-version 20) "none"
+                                                   (or (nth 20 fields) "none")))
+                                      (research-strategy (if (<= format-version 20) "none"
+                                                            (or (nth 21 fields) "none")))
+                                      (research-hash (if (<= format-version 20) "none"
+                                                        (or (nth 22 fields) "none")))
+                                       (research-quality (if (<= format-version 20) "none"
+                                                            (or (nth 23 fields) "none")))
+                                       (kibcm-axis (if (<= format-version 24) "?"
+                                                      (or (nth 25 fields) "?")))
+                                       (model (if (<= format-version 24) "unknown"
+                                                 (or (nth 26 fields) "unknown")))
+                                       (skills (or (nth 28 fields) ""))
+                                       (edit-mode (or (nth 29 fields) "none"))
+                                       (cost-usd (string-to-number (or (nth 30 fields) "0")))
+                                       (effort-level (or (nth 31 fields) "default")))
+                                  (push (list :target target
+                                              :hypothesis hypothesis
+                                              :score-before score-before
+                                              :score-after score-after
+                                              :code-quality quality
+                                              :delta delta
+                                              :decision decision
+                                              :grader-quality grader-q
+                                              :prompt-chars prompt-chars
+                                              :backend backend
+                                              :strategy strategy
+                                              :research-strategy research-strategy
                                              :research-hash research-hash
                                              :research-quality research-quality
                                              :kibcm-axis kibcm-axis
@@ -2164,7 +2172,8 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
       (progn
   ;; Rebuild digital twin dependency graph
   (when (fboundp 'gptel-auto-workflow--build-digital-twin)
-    (condition-case nil (gptel-auto-workflow--build-digital-twin) (error nil)))
+    (condition-case err (gptel-auto-workflow--build-digital-twin)
+      (error (message "[evolution] WARNING: build-digital-twin failed: %s" err))))
   ;; Invalidate parse cache so this cycle sees fresh data
   (setq gptel-auto-workflow--results-cache nil)
   ;; Clear reasoning hit counts for new cycle

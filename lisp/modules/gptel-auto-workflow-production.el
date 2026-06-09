@@ -79,14 +79,14 @@ Skips when a workflow or cron job is active to avoid preempting experiments."
         (error nil)))
     ;; Load context database at start of cycle (Phase 3: Context Database)
     (when (fboundp 'gptel-auto-workflow--context-db-load)
-      (condition-case nil
+      (condition-case err
           (gptel-auto-workflow--context-db-load)
-        (error nil)))
+        (error (message "[auto-workflow] WARNING: context-db-load failed: %s" err))))
     ;; Optimize token budget allocation based on category ROI (Phase 4: Token Economics)
     (when (fboundp 'gptel-token-economics--optimize-allocation)
-      (condition-case nil
+      (condition-case err
           (gptel-token-economics--optimize-allocation 100.0)
-        (error nil)))
+        (error (message "[auto-workflow] WARNING: token-economics-optimize failed: %s" err))))
     ;; Monitoring/approval/disposable/regeneration are now in
     ;; gptel-auto-workflow-evolution-run-cycle itself — no need to call them here.
     (condition-case err
@@ -95,9 +95,9 @@ Skips when a workflow or cron job is active to avoid preempting experiments."
           (gptel-auto-workflow-evolution-run-cycle)
           ;; Inform context database after evolution (Phase 3: Context Database)
           (when (fboundp 'gptel-auto-workflow--context-db-persist)
-            (condition-case nil
+            (condition-case err
                 (gptel-auto-workflow--context-db-persist)
-              (error nil)))
+              (error (message "[auto-workflow] WARNING: context-db-persist failed: %s" err))))
           (message "[auto-workflow] Evolution cycle complete."))
       (error
        (message "[auto-workflow] Evolution cycle error: %s" err)
