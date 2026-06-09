@@ -34,8 +34,10 @@
   :group 'gptel-benchmark-llm)
 
 (defcustom gptel-benchmark-llm-model nil
-  "Model to use for LLM suggestions. nil means default."
-  :type '(choice (const :tag "Default" nil)
+  "Model to use for LLM suggestions. nil means auto-select.
+Auto-selection prefers DeepSeek (reliable, low-latency) over the
+default gptel-model (which may be a rate-limited provider)."
+  :type '(choice (const :tag "Auto (DeepSeek fallback)" nil)
                   (string :tag "Model name"))
   :group 'gptel-benchmark-llm)
 
@@ -74,14 +76,31 @@ CALLBACK receives synthesized content."
 
 ;;; LLM Request Functions
 
+(defun gptel-benchmark--auto-select-model ()
+  "Return a reliable model for synthesis, preferring DeepSeek.
+When the default gptel-model is a rate-limited backend (e.g., MiniMax),
+synthesis calls all return nil. DeepSeek is preferred for reliability.
+Returns (MODEL . BACKEND) or nil."
+  (let ((ds-backend (and (fboundp 'gptel-get-backend)
+                        (or (gptel-get-backend 'deepseek)
+                            (gptel-get-backend "deepseek")))))
+    (when ds-backend
+      (cons 'deepseek-chat ds-backend))))
+
 (defun gptel-benchmark--call-llm-request (prompt callback)
   "Call `gptel-request' with PROMPT and CALLBACK.
-When `gptel-benchmark-llm-model' is non-nil, bind `gptel-model' dynamically
-instead of passing an unsupported `:model' keyword.
+When `gptel-benchmark-llm-model' is non-nil, bind `gptel-model' dynamically.
+When nil, auto-select a reliable backend (DeepSeek) instead of the
+default which may be rate-limited (e.g., MiniMax).
 Wraps CALLBACK with a timeout guard to prevent hangs when the gptel
 callback never fires (e.g., void-function nil bug in sentinel)."
-  (let* ((gptel-model (or gptel-benchmark-llm-model
+  (let* ((auto-model (and (null gptel-benchmark-llm-model)
+                          (gptel-benchmark--auto-select-model)))
+         (gptel-model (or gptel-benchmark-llm-model
+                          (car auto-model)
                           (and (boundp 'gptel-model) gptel-model)))
+         (gptel-backend (or (cdr auto-model)
+                            (and (boundp 'gptel-backend) gptel-backend)))
          (done nil)
          (timeout gptel-benchmark-llm-synthesis-timeout)
          (guard-cb
