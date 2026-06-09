@@ -447,17 +447,84 @@ Returns list of assessment results."
             (string-match-p "missing context" gr)
             (string-match-p "unclear" gr)))))
 
+(defun gptel-auto-workflow--classify-failure--is-executor-timeout
+    (decision grader-reason)
+  "Return non-nil if DECISION or GRADER-REASON indicate executor timeout."
+  (let ((d (downcase decision))
+        (gr (downcase grader-reason)))
+    (or (string-match-p "timeout" d)
+        (string-match-p "timed out" gr)
+        (string-match-p "executor.*timeout" gr))))
+
+(defun gptel-auto-workflow--classify-failure--is-empty-hypothesis
+    (hypothesis)
+  "Return non-nil if HYPOTHESIS is empty, placeholder, or executor-failed."
+  (or (null hypothesis)
+      (string-empty-p hypothesis)
+      (string-match-p "\\`\\[what changes" hypothesis)
+      (string-match-p "\\`No hypothesis" hypothesis)
+      (string-match-p "\\`Agent error" hypothesis)
+      (string-match-p "\\`Test hypothesis" hypothesis)
+      (string-match-p "\\`Staging" hypothesis)))
+
+(defun gptel-auto-workflow--classify-failure--is-zero-code-quality
+    (code-quality delta)
+  "Return non-nil if CODE-QUALITY is 0 or near-zero despite effort.
+A non-negative DELTA with zero quality means the change passed grading
+but produced worthless code."
+  (and (numberp code-quality)
+       (<= code-quality 0.1)
+       (numberp delta)
+       (>= delta 0)))
+
+(defun gptel-auto-workflow--classify-failure--is-grader-bypass-fail
+    (decision)
+  "Return non-nil if DECISION indicates grader bypassed but commit/merge failed."
+  (let ((d (downcase decision)))
+    (or (string-match-p "grader-bypass.*fail" d)
+        (string-match-p "commit.*fail" d)
+        (string-match-p "merge.*fail" d))))
+
+(defun gptel-auto-workflow--classify-failure--is-validation-failed
+    (decision grader-reason)
+  "Return non-nil if DECISION or GRADER-REASON indicate validation failure."
+  (let ((d (downcase decision))
+        (gr (downcase grader-reason)))
+    (or (string-match-p "validation.*fail" d)
+        (string-match-p "validation.*fail" gr)
+        (string-match-p "validation-retry" gr))))
+
 (defun gptel-auto-workflow--classify-failure (experiment)
   "Classify EXPERIMENT plist into a failure type symbol.
-Returns one of: grader, compilation, prompt, strategy, unknown.
-EXPERIMENT must contain :decision, :grader-reason (from col 10),
-:prompt-chars, and :strategy fields.
-Classification order: compilation > grader > prompt > strategy > unknown."
+Returns one of: executor-timeout, validation-failed, grader-bypass,
+empty-hypothesis, zero-quality, grader, compilation, prompt, strategy,
+unknown.
+EXPERIMENT must contain :decision, :grader-reason, :prompt-chars,
+:strategy, :hypothesis, :code-quality, and :delta fields.
+Classification order (most actionable first)."
   (let* ((decision (or (plist-get experiment :decision) ""))
          (grader-reason (or (plist-get experiment :grader-reason) ""))
          (prompt-chars (plist-get experiment :prompt-chars))
-         (strategy (or (plist-get experiment :strategy) "")))
+         (strategy (or (plist-get experiment :strategy) ""))
+         (hypothesis (or (plist-get experiment :hypothesis) ""))
+         (code-quality (plist-get experiment :code-quality))
+         (delta (plist-get experiment :delta)))
     (cond
+     ((gptel-auto-workflow--classify-failure--is-executor-timeout
+       decision grader-reason)
+      'executor-timeout)
+     ((gptel-auto-workflow--classify-failure--is-validation-failed
+       decision grader-reason)
+      'validation-failed)
+     ((gptel-auto-workflow--classify-failure--is-grader-bypass-fail
+       decision)
+      'grader-bypass)
+     ((gptel-auto-workflow--classify-failure--is-empty-hypothesis
+       hypothesis)
+      'empty-hypothesis)
+     ((gptel-auto-workflow--classify-failure--is-zero-code-quality
+       code-quality delta)
+      'zero-quality)
      ((gptel-auto-workflow--classify-failure--is-compilation
        decision grader-reason)
       'compilation)
@@ -650,20 +717,24 @@ PATTERN contains :type, :target, :count, :examples, :first-seen, :last-seen,
 
 (defun gptel-auto-workflow--pattern-type->component (ftype)
   "Map failure FTYPE symbol to the responsible pipeline component string.
-Mapping: grader/compilation -> grader, prompt -> prompt-builder,
+Mapping: grader/compilation/grader-bypass -> grader,
+executor-timeout/validation-failed/zero-quality -> executor,
+empty-hypothesis/prompt -> prompt-builder,
 strategy -> strategy-harness, unknown -> general."
   (cond
-   ((member ftype '(grader compilation)) "grader")
-   ((eq ftype 'prompt) "prompt-builder")
+   ((member ftype '(grader compilation grader-bypass)) "grader")
+   ((member ftype '(executor-timeout validation-failed zero-quality)) "executor")
+   ((member ftype '(empty-hypothesis prompt)) "prompt-builder")
    ((eq ftype 'strategy) "strategy-harness")
    (t "general")))
 
 (defun gptel-auto-workflow--component->risk (component)
   "Map COMPONENT string to a risk level string for proposals.
-grader/prompt-builder -> medium, strategy-harness -> high, general -> low."
+grader/prompt-builder -> medium, executor/strategy-harness -> high,
+general -> low."
   (cond
    ((member component '("grader" "prompt-builder")) "medium")
-   ((equal component "strategy-harness") "high")
+   ((member component '("executor" "strategy-harness")) "high")
    (t "low")))
 
 (defun gptel-auto-workflow--count->confidence (count)
