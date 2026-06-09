@@ -353,14 +353,14 @@ Returns the result of the last form in BODY."
                          :feasibility-score 0.7
                          :pattern-type 'grader
                          :pattern-target "lisp/rare.el"))
-         ;; 10 total failures, only 2 match
+         ;; 10 grader failures, only 2 match the target
          (records
           (append
            (make-list 2 (list :decision "rejected" :target "lisp/rare.el"
                               :grader-reason "syntax error" :strategy "default"
                               :prompt-chars 500))
            (make-list 8 (list :decision "rejected" :target "lisp/common.el"
-                              :grader-reason "low quality" :strategy "default"
+                              :grader-reason "type mismatch" :strategy "default"
                               :prompt-chars 500))))
          (validated (gptel-auto-workflow--validate-proposal proposal records)))
     (should (< (plist-get validated :validation-rate) 0.6))

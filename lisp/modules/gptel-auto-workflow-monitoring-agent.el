@@ -461,14 +461,16 @@ Returns list of assessment results."
 
 (defun gptel-auto-workflow--classify-failure--is-empty-hypothesis
     (hypothesis)
-  "Return non-nil if HYPOTHESIS is empty, placeholder, or executor-failed."
-  (or (null hypothesis)
-      (string-empty-p hypothesis)
-      (string-match-p "\\`\\[what changes" hypothesis)
-      (string-match-p "\\`No hypothesis" hypothesis)
-      (string-match-p "\\`Agent error" hypothesis)
-      (string-match-p "\\`Test hypothesis" hypothesis)
-      (string-match-p "\\`Staging" hypothesis)))
+  "Return non-nil if HYPOTHESIS is explicitly provided and is empty/placeholder.
+Only matches if hypothesis is not nil. If hypothesis is nil (not provided),
+returns nil to avoid classifying based on missing data."
+  (and hypothesis
+       (or (string-empty-p hypothesis)
+           (string-match-p "\\`\\[what changes" hypothesis)
+           (string-match-p "\\`No hypothesis" hypothesis)
+           (string-match-p "\\`Agent error" hypothesis)
+           (string-match-p "\\`Test hypothesis" hypothesis)
+           (string-match-p "\\`Staging" hypothesis))))
 
 (defun gptel-auto-workflow--classify-failure--is-zero-code-quality
     (code-quality delta)
@@ -509,7 +511,7 @@ Classification order (most actionable first)."
          (grader-reason (or (plist-get experiment :grader-reason) ""))
          (prompt-chars (plist-get experiment :prompt-chars))
          (strategy (or (plist-get experiment :strategy) ""))
-         (hypothesis (or (plist-get experiment :hypothesis) ""))
+         (hypothesis (plist-get experiment :hypothesis))
          (code-quality (plist-get experiment :code-quality))
          (delta (plist-get experiment :delta)))
     (cond
@@ -522,12 +524,7 @@ Classification order (most actionable first)."
      ((gptel-auto-workflow--classify-failure--is-grader-bypass-fail
        decision)
       'grader-bypass)
-     ((gptel-auto-workflow--classify-failure--is-empty-hypothesis
-       hypothesis)
-      'empty-hypothesis)
-     ((gptel-auto-workflow--classify-failure--is-zero-code-quality
-       code-quality delta)
-      'zero-quality)
+     ;; Check specific failure signals before empty-hypothesis
      ((gptel-auto-workflow--classify-failure--is-compilation
        decision grader-reason)
       'compilation)
@@ -536,6 +533,13 @@ Classification order (most actionable first)."
      ((gptel-auto-workflow--classify-failure--is-prompt
        grader-reason prompt-chars)
       'prompt)
+     ((gptel-auto-workflow--classify-failure--is-zero-code-quality
+       code-quality delta)
+      'zero-quality)
+     ;; empty-hypothesis only if no other signal present
+     ((gptel-auto-workflow--classify-failure--is-empty-hypothesis
+       hypothesis)
+      'empty-hypothesis)
      ;; Strategy: none/nil/unknown/empty strategy only
      ((member (downcase strategy) '("none" "unknown" "nil" ""))
       'strategy)
