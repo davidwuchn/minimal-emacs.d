@@ -930,8 +930,11 @@ Returns variant stem or nil to use base SKILL.md."
   "Load SKILL-NAME following agentskills.io standard.
 Checks for variants/ directory — if present, champion league selects
 the best variant. Returns plist with :name :metadata :body :skill-dir.
-Reuses gptel-agent's `gptel-agent-read-file' for frontmatter parsing."
-  (let ((skill-file (gptel-auto-workflow--find-skill-file skill-name))
+Reuses gptel-agent's `gptel-agent-read-file' for frontmatter parsing.
+Returns a safe empty plist if `gptel-agent-read-file' is not available
+(e.g., in test environments where gptel-agent is not loaded)."
+  (let ((skill-file (and (fboundp 'gptel-agent-read-file)
+                         (gptel-auto-workflow--find-skill-file skill-name)))
         (gptel-auto-workflow--selected-skill-variant nil))
     (if (not skill-file)
         (progn (setq gptel-auto-workflow--selected-skill-variant nil)
