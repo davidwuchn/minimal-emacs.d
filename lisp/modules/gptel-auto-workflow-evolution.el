@@ -5339,6 +5339,16 @@ VSM LEVELS is a plist of (level . strength):
   :s4-intel (Fire) → strategy/evolution modules
   :s5-identity (Water) → core/identity modules"
   (when (boundp 'gptel-auto-workflow--experiment-targets)
+    ;; Fallback: if no batch is set, populate from global target list
+    (when (and (or (not gptel-auto-workflow--experiment-targets)
+                   (= (length gptel-auto-workflow--experiment-targets) 0))
+               (boundp 'gptel-auto-workflow-targets)
+               gptel-auto-workflow-targets)
+      (setq gptel-auto-workflow--experiment-targets
+            (seq-take gptel-auto-workflow-targets
+                      (min 20 (length gptel-auto-workflow-targets))))
+      (message "[vsm-targets] Fallback: populated %d targets from global list"
+               (length gptel-auto-workflow--experiment-targets)))
     (let* ((level-files
             '((:s1-ops . (".*gptel-tools-\\(agent\\|code\\|edit\\|preview\\|bash\\|glob\\|grep\\)"
                           ".*gptel-ext-\\(core\\|fsm\\|retry\\|streaming\\|abort\\|security\\)"))
