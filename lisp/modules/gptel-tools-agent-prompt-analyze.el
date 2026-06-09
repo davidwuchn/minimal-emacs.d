@@ -5,7 +5,7 @@
 (declare-function gptel-auto-experiment--expected-comparator-winner "gptel-tools-agent-benchmark")
 (declare-function gptel-auto-experiment--parse-comparator-winner "gptel-tools-agent-benchmark")
 (declare-function my/gptel--invoke-callback-safely "gptel-tools-agent-subagent")
-(defvar gptel-auto-experiment-use-subagents nil)
+(defvar gptel-auto-experiment-use-subagents)
 (require 'cl-lib)
 ;;; gptel-tools-agent-prompt-analyze.el --- Prompt building - analysis & selection -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
@@ -381,6 +381,12 @@ documentation improvements that the structural model can't evaluate."
       (insert-file-contents target-full-path)
       (let ((definition-rx
              "
+
+
+
+
+
+
 
 
 

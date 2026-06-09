@@ -33,7 +33,7 @@
 (defvar gptel-auto-experiment-max-aux-subagent-retries nil)
 (defvar gptel-auto-experiment-max-per-provider-attempts nil)
 (defvar gptel-auto-experiment-min-quality-gain-on-score-tie nil)
-(defvar gptel-auto-experiment-use-subagents nil)
+(defvar gptel-auto-experiment-use-subagents)
 (defvar gptel-auto-workflow--current-target nil)
 (defvar gptel-auto-workflow--project-root-override nil
   "Override for project root when running from non-git directory.")

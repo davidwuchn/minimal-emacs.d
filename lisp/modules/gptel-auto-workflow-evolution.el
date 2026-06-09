@@ -7638,11 +7638,14 @@ Verification: byte-compiled cleanly, no warnings.\n\nDiff:\n+ \"Return 1.\"\n"))
              (setq probe-healthy nil)
              (message "[self-heal] Probe: grader crashed — %s"
                       (error-message-string probe-err))))
-          ;; Wait synchronously (max probe-timeout seconds)
-          (let ((wait-start (float-time)))
-            (while (and (not probe-done)
-                        (< (- (float-time) wait-start) probe-timeout))
-              (sleep-for 0.1))))))
+           ;; Wait synchronously (max probe-timeout seconds)
+           ;; CRITICAL: use accept-process-output, NOT sleep-for.
+           ;; sleep-for blocks the event loop, preventing the async
+           ;; LLM callback from ever firing — the probe always times out.
+           (let ((wait-start (float-time)))
+             (while (and (not probe-done)
+                         (< (- (float-time) wait-start) probe-timeout))
+               (accept-process-output nil 0.1))))))
     ;; Report result
     (if probe-healthy
         (message "[self-heal] Probe passed: grader healthy")

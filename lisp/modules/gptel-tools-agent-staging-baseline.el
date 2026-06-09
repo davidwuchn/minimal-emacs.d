@@ -39,7 +39,7 @@
 ;; Part of gptel-tools-agent split
 
 ;; Forward declarations for dynamic variables
-(defvar gptel-auto-experiment-use-subagents nil)
+(defvar gptel-auto-experiment-use-subagents)
 (defvar gptel-auto-workflow-git-timeout nil)
 (defvar gptel-auto-workflow-require-review nil)
 (defvar gptel-auto-workflow-research-before-fix nil)
