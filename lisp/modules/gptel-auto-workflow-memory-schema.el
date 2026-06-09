@@ -1488,7 +1488,8 @@ Returns plist: (:graph-tokens :raw-tokens :savings-pct :ratio)."
          (ec 0))
     (when graph (maphash (lambda (_k e) (setq ec (+ ec (length (or e ()))))) graph))
     (let* ((graph-tokens (+ (* nc 10) (* ec 15) 100))  ; ~10 tok/node, ~15 tok/edge
-           (root (gptel-auto-workflow-self-audit--root))
+           (root (and (fboundp 'gptel-auto-workflow-self-audit--root)
+                      (gptel-auto-workflow-self-audit--root)))
            (raw-lines 0))
       (when root
         (dolist (f (directory-files (expand-file-name "lisp/modules" root) t "\\.el$"))
@@ -1550,14 +1551,17 @@ Writes timestamps + node/edge counts to OUTPUT-FILE."
   "Save a graph query and its result as a mementum memory for future synthesis.
 The feedback loop: what the system asks about gets incorporated into
 knowledge."
-  (let* ((root (gptel-auto-workflow-self-audit--root))
-         (mem-file (expand-file-name
-                    (format "mementum/memories/graph-query-%s.md"
-                            (format-time-string "%Y%m%dT%H%M%S"))
-                    root)))
-    (with-temp-file mem-file
-      (insert "---\ntitle: Graph Query Feedback\ncategory: graph-query\n---\n\n")
-      (insert (format "**Query:** %s\n\n**Result:** %s\n" query result)))
-    (message "[memory-schema] Query feedback saved to %s" mem-file)))
+  (let* ((root (and (fboundp 'gptel-auto-workflow-self-audit--root)
+                    (gptel-auto-workflow-self-audit--root)))
+         (mem-file (when root
+                     (expand-file-name
+                      (format "mementum/memories/graph-query-%s.md"
+                              (format-time-string "%Y%m%dT%H%M%S"))
+                      root))))
+    (when mem-file
+      (with-temp-file mem-file
+        (insert "---\ntitle: Graph Query Feedback\ncategory: graph-query\n---\n\n")
+        (insert (format "**Query:** %s\n\n**Result:** %s\n" query result)))
+      (message "[memory-schema] Query feedback saved to %s" mem-file))))
 
 (provide 'gptel-auto-workflow-memory-schema)
