@@ -4,6 +4,7 @@ category: research
 tags: TSP, self-play, risk-nodes, secure-code, fine-grained-learning
 related: self-evolving-agent-research, self-heal-semantic, OV5 architecture
 created: 2026-06-09
+updated: 2026-06-10
 ---
 
 # TSP Paper: Tree-like Self-Play for Secure Code (2606.03489v1)
@@ -28,18 +29,33 @@ TSP reframes secure code generation as a fine-grained sequential decision proces
 - **Cross-language transfer**: C/C++ security principles transfer to Python, Go, JavaScript
 - **No catastrophic forgetting**: HumanEval performance remains stable
 
-## OV5 Application
+## OV5 Implementation Status
 
-**What OV5 can learn:**
+### ✅ Implemented: Risk Node Detection (Check 9)
 
-1. **Fine-grained failure analysis**: Instead of experiment-level kept/discarded, identify specific "risk nodes" in code where failures emerge
-2. **Self-play at decision points**: Generate both secure and vulnerable variants at critical decision points
-3. **On-policy negative examples**: Use model's own insecure code generations as training signal
-4. **Language-agnostic principles**: Learn abstract security principles that transfer across contexts
+**Commit**: `7619488e` — `⊘ feat: add risk-node detection to self-heal-semantic (TSP-inspired)`
 
-**Implementation ideas:**
+Added `gptel-auto-workflow--audit-risk-nodes` to self-heal-semantic module:
+- Detects resource allocation without cleanup (make-hash-table, make-temp-file without unwind-protect)
+- Detects external API calls without error handling (shell-command-to-string, call-process without condition-case)
+- Returns count of risk nodes found
 
-1. Add "risk node" detection to self-heal-semantic module
+**Tests**: 4 new tests (39/39 pass)
+- `detects-risk-node-resource`
+- `detects-risk-node-api`
+- `clean-risk-node-with-cleanup`
+- `clean-risk-node-with-error-handling`
+
+### 🔄 Next Steps
+
+1. **Self-play at decision points**: Generate both secure and vulnerable variants at critical decision points
+2. **On-policy negative examples**: Use model's own insecure code generations as training signal
+3. **Language-agnostic principles**: Learn abstract security principles from experiment outcomes
+4. **Track risk node outcomes**: Correlate risk nodes with kept/discarded experiments
+
+## Original Implementation Ideas
+
+1. Add "risk node" detection to self-heal-semantic module ✅ **DONE**
    - Identify critical decision points in code (e.g., function calls, conditionals, resource allocation)
    - Track which decisions lead to kept vs discarded experiments
 
@@ -70,3 +86,4 @@ TSP reframes secure code generation as a fine-grained sequential decision proces
 ---
 
 *From: arXiv:2606.03489v1 — Learn from Your Mistakes: Tree-like Self-Play for Secure Code LLMs*
+*Implemented: 2026-06-10 — Risk node detection added to self-heal-semantic*
