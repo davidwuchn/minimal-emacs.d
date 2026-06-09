@@ -22,8 +22,8 @@
 (declare-function gptel-auto-workflow--categorize-target "gptel-auto-workflow-ontology-router")
 (declare-function skill-graph-node-level "gptel-auto-workflow-skill-graph")
 (declare-function skill-graph-edge-weight "gptel-auto-workflow-skill-graph")
-(declare-function gptel-auto-workflow-self-audit--root "gptel-auto-workflow-self-audit")
-(defvar skill-graph--edges nil)
+(defvar skill-graph--edges)
+
 ;; ─── Configuration ───
 
 (defcustom gptel-auto-workflow-memory-schema-enabled t
@@ -1348,31 +1348,13 @@ label:l.type,title:l.confidence+'
 
 
 
-
-
-
-
-
-
 w='+l.weight,color:{color:l.confidence===\='EXTRACTED\='?'#4fc3f7':l.confidence===\='INFERRED\='?'#ffb74d':'#ef5350'}})));
   var container=document.getElementById(\='graph\=');
   new vis.Network(container,{nodes:nodes,edges:edges},{
 
 
 
-
-
-
-
-
-
 groups:{1:{color:{background:'#1565c0'}},2:{color:{background:'#2e7d32'}},3:{color:{background:'#6a1b9a'}}},
-
-
-
-
-
-
 
 
 
@@ -1500,8 +1482,7 @@ Returns plist: (:graph-tokens :raw-tokens :savings-pct :ratio)."
          (ec 0))
     (when graph (maphash (lambda (_k e) (setq ec (+ ec (length (or e ()))))) graph))
     (let* ((graph-tokens (+ (* nc 10) (* ec 15) 100))  ; ~10 tok/node, ~15 tok/edge
-           (root (and (fboundp 'gptel-auto-workflow-self-audit--root)
-                      (gptel-auto-workflow-self-audit--root)))
+           (root (gptel-auto-workflow-self-audit--root))
            (raw-lines 0))
       (when root
         (dolist (f (directory-files (expand-file-name "lisp/modules" root) t "\\.el$"))
@@ -1563,17 +1544,14 @@ Writes timestamps + node/edge counts to OUTPUT-FILE."
   "Save a graph query and its result as a mementum memory for future synthesis.
 The feedback loop: what the system asks about gets incorporated into
 knowledge."
-  (let* ((root (and (fboundp 'gptel-auto-workflow-self-audit--root)
-                    (gptel-auto-workflow-self-audit--root)))
-         (mem-file (when root
-                     (expand-file-name
-                      (format "mementum/memories/graph-query-%s.md"
-                              (format-time-string "%Y%m%dT%H%M%S"))
-                      root))))
-    (when mem-file
-      (with-temp-file mem-file
-        (insert "---\ntitle: Graph Query Feedback\ncategory: graph-query\n---\n\n")
-        (insert (format "**Query:** %s\n\n**Result:** %s\n" query result))))
+  (let* ((root (gptel-auto-workflow-self-audit--root))
+         (mem-file (expand-file-name
+                    (format "mementum/memories/graph-query-%s.md"
+                            (format-time-string "%Y%m%dT%H%M%S"))
+                    root)))
+    (with-temp-file mem-file
+      (insert "---\ntitle: Graph Query Feedback\ncategory: graph-query\n---\n\n")
+      (insert (format "**Query:** %s\n\n**Result:** %s\n" query result)))
     (message "[memory-schema] Query feedback saved to %s" mem-file)))
 
 (provide 'gptel-auto-workflow-memory-schema)

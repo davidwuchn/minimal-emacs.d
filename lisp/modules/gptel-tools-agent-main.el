@@ -80,8 +80,10 @@
 (defvar gptel-auto-workflow--cron-safe-step nil
   "Current step in gptel-auto-workflow-cron-safe for debugging.")
 (defvar gptel-auto-workflow--cron-zero-streak 0
-  "Consecutive cycles where cron-error-propagation + zero-experiments-stuck co-occur.
-Reset to 0 on any healthy cycle.  When >=3, clears cron-safe-step to force a fresh cycle.")
+  "Consecutive cycles where cron-error-propagation + zero-experiments-stuck
+co-occur.
+Reset to 0 on any healthy cycle. When >=3, clears cron-safe-step to force a
+fresh cycle.")
 (defvar gptel-auto-experiment--api-error-count)
 (defvar gptel-auto-experiment--quota-exhausted)
 (defvar gptel-auto-experiment-delay-between)
@@ -1017,7 +1019,8 @@ If unhealthy and rollback succeeds, returns t after recovery."
 
 (defun gptel-auto-workflow--detect-runtime-errors ()
   "Scan recent daemon log for recurring runtime errors.
-Returns a list of plists (:pattern LABEL :count N :remedy STRING), or nil if clean.
+Returns a list of plists (:pattern LABEL :count N :remedy STRING), or nil if
+clean.
 Detects: void-variable, wrong-type-argument, listp, wrong-number-of-arguments,
 cron-error-propagation, zero-experiments, llm-nil-response, connection-broken,
 bdd-spec-failure, staging-setup-failure.

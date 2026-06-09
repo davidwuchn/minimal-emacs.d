@@ -10,6 +10,7 @@
 (require 'seq)
 (require 'gptel-ext-abort)
 (require 'gptel-tools-agent-base)
+(require 'gptel-platform-sandbox)
 
 (declare-function gptel-fsm-info "gptel-request" (&optional fsm))
 (defvar gptel-auto-workflow--subagent-process-environment nil)
@@ -27,6 +28,13 @@
 This prevents gptel-agent subagents (e.g. executor) from hanging forever on
 interactive commands like git commit."
   :type 'integer
+  :group 'gptel-tools-bash)
+
+(defcustom my/gptel-bash-platform-sandbox t
+  "When non-nil, auto-detect and use platform sandbox (seatbelt on
+macOS, bubblewrap on Linux) for OS-level process containment.
+When nil, skip platform sandboxing and send commands directly."
+  :type 'boolean
   :group 'gptel-tools-bash)
 
 ;;; Internal Variables
@@ -230,11 +238,15 @@ CALLBACK is called with the result string on completion."
          (done nil)
          ;; Sandbox check: strictly read-only when in Plan mode
          (is-plan (eq (and (boundp 'gptel--preset) gptel--preset)
-                      'gptel-plan)))
+                      'gptel-plan))
+         (profile-file nil))
     (cl-labels
         ((finish (result)
            (unless done
              (setq done t)
+             (when profile-file
+               (ignore-errors (delete-file profile-file))
+               (setq profile-file nil))
              (cond
               ;; Normal case: buffer alive and not aborted
               ((and (buffer-live-p origin)
@@ -265,32 +277,43 @@ CALLBACK is called with the result string on completion."
                          (my/gptel--bash-context-directory) gptel-auto-workflow--allowed-workspace-roots))
                 (my/gptel--ensure-persistent-bash)
 
-              (let* ((proc my/gptel--persistent-bash-process)
-                     (buf (process-buffer proc))
-                     (marker (format "gptel_cmd_done_%s" (md5 (number-to-string (random))))))
+                (let* ((proc my/gptel--persistent-bash-process)
+                       (buf (process-buffer proc))
+                       (marker (format "gptel_cmd_done_%s" (md5 (number-to-string (random))))))
 
-                (with-current-buffer buf (erase-buffer))
+                  (with-current-buffer buf (erase-buffer))
 
-                (set-process-filter proc
-                                    (lambda (p output)
-                                      (my/gptel--bash-process-filter p output marker #'finish)))
+                  (set-process-filter proc
+                                      (lambda (p output)
+                                        (my/gptel--bash-process-filter p output marker #'finish)))
 
-                (process-put proc 'my/gptel-bash-timer
-                             (run-at-time
-                              my/gptel-bash-timeout nil
-                              (lambda (p)
-                                (when (process-live-p p)
-                                  ;; For timeouts, we must kill the hung persistent process
-                                  ;; and force a fresh shell on the next call.
-                                  (ignore-errors (set-process-filter p #'ignore))
-                                  (ignore-errors (set-process-sentinel p #'ignore))
-                                  (delete-process p))
-                                (finish (format "Error: Bash timed out after %ss" my/gptel-bash-timeout)))
-                              proc))
+                  (process-put proc 'my/gptel-bash-timer
+                               (run-at-time
+                                my/gptel-bash-timeout nil
+                                (lambda (p)
+                                  (let ((pf (process-get p 'my/gptel-bash-profile-file)))
+                                    (when pf (ignore-errors (delete-file pf))))
+                                  (when (process-live-p p)
+                                    ;; For timeouts, we must kill the hung persistent process
+                                    ;; and force a fresh shell on the next call.
+                                    (ignore-errors (set-process-filter p #'ignore))
+                                    (ignore-errors (set-process-sentinel p #'ignore))
+                                    (delete-process p))
+                                  (finish (format "Error: Bash timed out after %ss" my/gptel-bash-timeout)))
+                                proc))
 
-                ;; Wrap command in {} to catch errors and safely output the exit code marker
-                (process-send-string proc (format "{ %s\n} 2>&1\necho %s:$?\n" command marker))))))
-        (error (finish (format "Error: %s" (error-message-string err))))))))
+                  ;; Wrap command with platform sandbox when available, otherwise send directly
+                  (let ((pf (if (and my/gptel-bash-platform-sandbox
+                                     (gptel-platform-sandbox--available-p))
+                                (gptel-platform-sandbox--wrap-and-send command proc marker)
+                              (progn
+                                (process-send-string proc (format "{ %s\n} 2>&1\necho %s:$?\n" command marker))
+                                nil))))
+                    (when pf
+                      (setq profile-file pf)
+                      (process-put proc 'my/gptel-bash-profile-file pf)))))))
+        (error (when profile-file (ignore-errors (delete-file profile-file)))
+               (finish (format "Error: %s" (error-message-string err))))))))
 
 ;;; Tool Registration
 
@@ -299,7 +322,7 @@ CALLBACK is called with the result string on completion."
   (when (fboundp 'gptel-make-tool)
     (gptel-make-tool
      :name "Bash"
-     :description "Execute a Bash command. (Note: In Plan Mode, it is sandboxed to read-only commands. In Agent Mode, it is unrestricted.)"
+     :description "Execute a Bash command. (Note: In Plan Mode, it is sandboxed to read-only commands. In Agent Mode, it is unrestricted. When available, OS-level sandboxing (seatbelt on macOS, bubblewrap on Linux) provides additional process containment.)"
      :function #'my/gptel--agent-bash-async
      :async t
      :args '((:name "command"

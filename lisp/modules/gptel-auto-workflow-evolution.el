@@ -2301,7 +2301,8 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
                       nil
                       (lambda (&optional _results)
                         (gptel-auto-workflow-evolution-run-cycle)))))
-               (error (message "[evolution] Experiment run error: %s — retrying without lesson restore (continuing cycle)"
+               (error (message "[evolution] Experiment run error: %s — retrying without lesson restore
+(continuing cycle)"
                                (if (stringp trigger-err)
                                    trigger-err
                                  (prin1-to-string trigger-err)))

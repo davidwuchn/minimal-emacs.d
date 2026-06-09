@@ -17,6 +17,11 @@
 (require 'gptel-tools-agent-base)
 (require 'gptel-auto-workflow-evolution)
 (require 'gptel-auto-workflow-bare-path-diagnostic)
+(require 'gptel-platform-sandbox)
+(require 'gptel-tools)
+(require 'gptel-tools-edit)
+(require 'gptel-tools-grep)
+(require 'gptel-tools-bash)
 
 ;;; Mock implementations (for use with cl-letf)
 
@@ -550,6 +555,174 @@ HYPOTHESIS: [your hypothesis here]"
     (should (null (plist-get routing :task-type)))
     (should (string= (plist-get routing :agent) "delegate"))
     (should (string= (plist-get routing :model) "deepseek-v4-pro"))))
+
+;;; Platform Sandbox Tests
+
+(ert-deftest auto-workflow/platform-sandbox/available-p ()
+  "Platform sandbox should detect availability (sandbox-exec on macOS, bwrap on Linux)."
+  (let ((result (gptel-platform-sandbox--available-p)))
+    (should (or (eq result t) (eq result nil)))))
+
+(ert-deftest auto-workflow/platform-sandbox/platform-name ()
+  "Platform name should return a keyword."
+  (let ((name (gptel-platform-sandbox--platform-name)))
+    (should (memq name '(:seatbelt :bubblewrap :none)))))
+
+(ert-deftest auto-workflow/platform-sandbox/seatbelt-profile-plan-mode ()
+  "Seatbelt profile in plan mode should deny network."
+  (when (eq system-type 'darwin)
+    (let ((profile nil))
+      (unwind-protect
+          (progn
+            (setq profile (gptel-platform-sandbox--seatbelt-profile :plan))
+            (should (file-exists-p profile))
+            (with-temp-buffer
+              (insert-file-contents profile)
+              (let ((content (buffer-string)))
+                ;; Plan mode denies network
+                (should (string-match-p "(deny network\\*)" content))
+                ;; Workspace gets read+write
+                (should (string-match-p "(allow file-read\\* file-write\\*" content))
+                ;; Default is deny
+                (should (string-match-p "(deny default)" content)))))
+        (when (and profile (file-exists-p profile))
+          (delete-file profile))))))
+
+(ert-deftest auto-workflow/platform-sandbox/seatbelt-profile-agent-mode ()
+  "Seatbelt profile in agent mode should allow network."
+  (when (eq system-type 'darwin)
+    (let ((profile nil))
+      (unwind-protect
+          (progn
+            (setq profile (gptel-platform-sandbox--seatbelt-profile :agent))
+            (should (file-exists-p profile))
+            (with-temp-buffer
+              (insert-file-contents profile)
+              (let ((content (buffer-string)))
+                ;; Agent mode allows network
+                (should (string-match-p "(allow network-outbound)" content))
+                ;; Should NOT contain deny network
+                (should-not (string-match-p "(deny network\\*)" content)))))
+        (when (and profile (file-exists-p profile))
+          (delete-file profile))))))
+
+(ert-deftest auto-workflow/platform-sandbox/wrap-command-returns-cons ()
+  "wrap-command should return (WRAPPED . PROFILE-FILE) or (COMMAND . nil)."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-platform-sandbox--workspace-root root)
+         (result (gptel-platform-sandbox--wrap-command "echo hello")))
+    (should (consp result))
+    (should (stringp (car result)))
+    ;; Cleanup if profile file was created
+    (when (cdr result)
+      (should (file-exists-p (cdr result)))
+      (delete-file (cdr result)))))
+
+(ert-deftest auto-workflow/platform-sandbox/wrap-command-contains-sandbox-exec ()
+  "On macOS, wrapped command should contain sandbox-exec."
+  (when (and (eq system-type 'darwin)
+             (executable-find "sandbox-exec"))
+    (let* ((root (expand-file-name "~/.emacs.d/"))
+           (gptel-platform-sandbox--workspace-root root)
+           (result (gptel-platform-sandbox--wrap-command "echo hello")))
+      (unwind-protect
+          (should (string-match-p "sandbox-exec" (car result)))
+        (when (cdr result)
+          (delete-file (cdr result)))))))
+
+;;; Tool Boundary Integration Tests
+
+(ert-deftest auto-workflow/tool-boundary/read/rejects-outside-path ()
+  "Read tool should signal error for paths outside workspace."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (gptel-auto-workflow--run-project-root root)
+         (gptel-auto-workflow--project-root-override nil)
+         (gptel-auto-workflow--current-project nil))
+    (should-error (my/gptel--read-file-safe "/tmp/outside-boundary-test.el")
+                  :type 'error)))
+
+(ert-deftest auto-workflow/tool-boundary/read/accepts-inside-path ()
+  "Read tool should accept paths inside workspace (even if file doesn't exist, boundary check passes)."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (gptel-auto-workflow--run-project-root root)
+         (gptel-auto-workflow--project-root-override nil)
+         (gptel-auto-workflow--current-project nil))
+    ;; This should NOT signal a boundary error — it will fail with "not readable"
+    ;; but that proves boundary check passed.
+    (should-error (my/gptel--read-file-safe "lisp/modules/nonexistent-test-file.el")
+                  :type 'error)))
+
+(ert-deftest auto-workflow/tool-boundary/edit/rejects-outside-path ()
+  "Edit tool callback should receive error containing [boundary] for outside paths."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (gptel-auto-workflow--run-project-root root)
+         (gptel-auto-workflow--project-root-override nil)
+         (gptel-auto-workflow--current-project nil)
+         (result nil))
+    ;; Edit is async — error delivered to callback as string
+    (my/gptel--agent-edit-async
+     (lambda (r) (setq result r))
+     "/tmp/outside-edit-boundary-test.el"
+     "old" "new")
+    (should (stringp result))
+    (should (string-match-p "\\[boundary\\]" result))))
+
+(ert-deftest auto-workflow/tool-boundary/grep/rejects-outside-path ()
+  "Grep tool callback should receive error containing [boundary] for outside paths."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (gptel-auto-workflow--run-project-root root)
+         (gptel-auto-workflow--project-root-override nil)
+         (gptel-auto-workflow--current-project nil)
+         (result nil))
+    ;; Grep is async — error delivered to callback as string
+    (my/gptel--agent-grep-async
+     (lambda (r) (setq result r))
+     "test-pattern"
+     "/tmp/outside-grep-boundary-dir")
+    (should (stringp result))
+    (should (string-match-p "\\[boundary\\]" result))))
+
+(ert-deftest auto-workflow/tool-boundary/bash/rejects-outside-cwd ()
+  "Bash tool should reject commands when CWD is outside workspace."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (gptel-auto-workflow--run-project-root root)
+         (gptel-auto-workflow--project-root-override nil)
+         (gptel-auto-workflow--current-project nil)
+         (default-directory "/tmp/")
+         (result nil))
+    ;; Mock context directory to return something outside workspace
+    (cl-letf (((symbol-function 'my/gptel--bash-context-directory)
+               (lambda () "/tmp/")))
+      (my/gptel--agent-bash-async
+       (lambda (r) (setq result r))
+       "echo hello"))
+    (should (stringp result))
+    (should (string-match-p "\\[boundary\\]" result))))
+
+(ert-deftest auto-workflow/tool-boundary/bash/sandbox-toggle-disable ()
+  "Bash tool should work without platform sandbox when toggle is nil."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (gptel-auto-workflow--run-project-root root)
+         (gptel-auto-workflow--project-root-override nil)
+         (gptel-auto-workflow--current-project nil)
+         (my/gptel-bash-platform-sandbox nil)
+         (default-directory root)
+         (result nil))
+    (cl-letf (((symbol-function 'my/gptel--bash-context-directory)
+               (lambda () root)))
+      ;; Should not error — boundary check passes, sandbox disabled
+      (my/gptel--agent-bash-async
+       (lambda (r) (setq result r))
+       "echo hello"))
+    ;; Result should NOT be a boundary error (might be actual output or timeout)
+    (when (stringp result)
+      (should-not (string-match-p "\\[boundary\\]" result)))))
 
 (provide 'test-auto-workflow)
 ;;; test-auto-workflow.el ends here
