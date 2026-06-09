@@ -559,5 +559,22 @@ Inspired by TSP paper: fine-grained risk nodes where failures emerge."
           (should (= issues 0)))
       (test-self-heal-semantic--cleanup file))))
 
+;; ── Test 15: Zero byte-compilation warnings ──
+
+(ert-deftest test-self-heal-semantic/zero-byte-compile-warnings ()
+  "The module itself must compile without warnings (warnings-as-errors)."
+  (let* ((file (expand-file-name "lisp/modules/gptel-auto-workflow-self-heal-semantic.el"
+                                 default-directory))
+         (warnings
+          (with-temp-buffer
+            (call-process
+             (expand-file-name invocation-name invocation-directory)
+             nil t nil
+             "-Q" "--batch" "-L" (expand-file-name "lisp/modules" default-directory)
+             "-f" "batch-byte-compile" file)
+            (buffer-string))))
+    (should-not (string-match-p "Warning:" warnings))
+    (should-not (string-match-p "Error:" warnings))))
+
 (provide 'test-self-heal-semantic)
 ;;; test-self-heal-semantic.el ends here

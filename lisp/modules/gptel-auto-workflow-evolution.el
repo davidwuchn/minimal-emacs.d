@@ -6787,7 +6787,7 @@ General — works for any diagnosis, not just grader-destroying."
 (defun gptel-auto-workflow--self-reflect-write-lesson (diagnosis result)
   "Write a self-reflection lesson to mementum when a fix finally works.
 Only writes when the fix was effective after previous failures —
-capturing 'what finally worked' for future sessions."
+capturing `what finally worked' for future sessions."
   (when (and result (plist-get result :was-persistent)
              (fboundp 'gptel-auto-workflow--mementum-write-memory))
     (let ((slug (format "self-heal-lesson-%s" (replace-regexp-in-string "[^a-z-]" "-" (downcase diagnosis)))))
@@ -6996,6 +6996,11 @@ cap is `2*default`)."
       (unless pipeline-override
         (setq gptel-auto-experiment-grade-timeout new-timeout))
       new-timeout)))
+
+(defvar gptel-auto-workflow--diagnosis-accuracy nil
+  "Hash table tracking diagnosis fix accuracy.
+Keys are diagnosis strings, values are (SUCCESS-COUNT . FAILURE-COUNT)
+cons cells.  Forward reference; initialized later.")
 
 (defun gptel-auto-workflow--cross-diagnosis-share (diagnosis fixed-p)
   "Share learnings across similar diagnoses.
@@ -7827,8 +7832,9 @@ Returns list of (backend . health-plist) for degraded backends."
   "Failed remediation count before escalating to alternative backend.
 Auto-adapts based on per-diagnosis false-positive rate via --adapt-threshold.")
 
-(defvar gptel-auto-workflow--diagnosis-accuracy (make-hash-table :test 'equal)
-  "Hash: diagnosis -> (true-pos . false-pos) for adaptive threshold tuning.")
+;; Initialize diagnosis accuracy table (forward-declared above)
+(unless (hash-table-p gptel-auto-workflow--diagnosis-accuracy)
+  (setq gptel-auto-workflow--diagnosis-accuracy (make-hash-table :test 'equal)))
 
 (defun gptel-auto-workflow--adapt-threshold (diagnosis was-effective)
   "Adapt detection threshold for DIAGNOSIS based on whether fix was effective.

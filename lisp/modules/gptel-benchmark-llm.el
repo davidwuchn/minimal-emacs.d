@@ -76,10 +76,13 @@ CALLBACK receives synthesized content."
 
 ;;; LLM Request Functions
 
+(defvar gptel-backend)
+(declare-function gptel-request "gptel" (prompt &rest args))
+
 (defun gptel-benchmark--auto-select-model ()
   "Return a reliable model for synthesis via smart routing.
 Uses `gptel-backend-registry-select-for-task' to pick the first available
-backend for the 'researcher task type, skipping rate-limited backends.
+backend for the `researcher' task type, skipping rate-limited backends.
 Returns (MODEL . BACKEND) or nil."
   (when (fboundp 'gptel-backend-registry-select-for-task)
     (when-let ((selection (gptel-backend-registry-select-for-task 'researcher)))
@@ -98,8 +101,6 @@ callback never fires (e.g., void-function nil bug in sentinel)."
          (gptel-model (or gptel-benchmark-llm-model
                           (car auto-model)
                           (and (boundp 'gptel-model) gptel-model)))
-         (gptel-backend (or (cdr auto-model)
-                            (and (boundp 'gptel-backend) gptel-backend)))
          (done nil)
          (timeout gptel-benchmark-llm-synthesis-timeout)
          (guard-cb
@@ -109,6 +110,9 @@ callback never fires (e.g., void-function nil bug in sentinel)."
               (if (functionp callback)
                   (apply callback args)
                 (message "[llm] Guard-cb: original callback is not a function: %S" callback))))))
+    ;; Dynamically set backend if auto-selected
+    (when (and (null gptel-benchmark-llm-model) auto-model (cdr auto-model))
+      (setq gptel-backend (cdr auto-model)))
     (when timeout
       (run-with-timer timeout nil
         (lambda ()

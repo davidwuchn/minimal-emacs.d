@@ -157,35 +157,37 @@ defun as the call, not just the immediately preceding lines."
                 (let ((defun-start-line 1)
                       (found-guard nil))
                   (save-excursion
-                    (goto-line call-line)
+                    (goto-char (point-min))
+                    (forward-line (1- call-line))
                     ;; Search backward for the enclosing (defun
                     (when (re-search-backward "^(defun\\b" nil t)
                       (setq defun-start-line (line-number-at-pos (point)))))
                   ;; Check for guard anywhere within the defun (including current line)
                   (let ((check-line call-line)
                         (end-of-lookback defun-start-line))
-                    (while (and (>= check-line end-of-lookback)
-                                (not found-guard))
-                      (save-excursion
-                        (goto-line check-line)
-                        (beginning-of-line)
-                        (when (re-search-forward
-                               (format "fboundp.*'%s" (symbol-name fn))
-                               (line-end-position) t)
-                          (setq found-guard t))
-                        (when (re-search-forward
-                               "condition-case"
-                               (line-end-position) t)
-                          (setq found-guard t)))
-                      (setq check-line (1- check-line)))
-                    (unless found-guard
-                      (setq issues (1+ issues))
-                      (gptel-auto-workflow--semantic-audit-record
-                       file call-line
-                       'unguarded-external-call
-                       (format "Call to %s without (fboundp '%s) or condition-case guard"
-                               (symbol-name fn) (symbol-name fn))))))))))))
-    issues))
+                     (while (and (>= check-line end-of-lookback)
+                                 (not found-guard))
+                       (save-excursion
+                         (goto-char (point-min))
+                         (forward-line (1- check-line))
+                         (beginning-of-line)
+                         (when (re-search-forward
+                                (format "fboundp.*'%s" (symbol-name fn))
+                                (line-end-position) t)
+                           (setq found-guard t))
+                         (when (re-search-forward
+                                "condition-case"
+                                (line-end-position) t)
+                           (setq found-guard t)))
+                       (setq check-line (1- check-line)))
+                     (unless found-guard
+                       (setq issues (1+ issues))
+                       (gptel-auto-workflow--semantic-audit-record
+                        file call-line
+                        'unguarded-external-call
+                        (format "Call to %s without (fboundp '%s) or condition-case guard"
+                                (symbol-name fn) (symbol-name fn))))))))))))
+     issues))
 
 ;; ── Check 5: Excessive blank lines ──
 
@@ -201,8 +203,7 @@ Returns number of blocks found."
       (insert-file-contents file)
       (goto-char (point-min))
       (while (not (eobp))
-        (let ((line-start (point))
-              (line (buffer-substring-no-properties
+        (let ((line (buffer-substring-no-properties
                      (line-beginning-position) (line-end-position))))
           (if (string-empty-p (string-trim line))
               (progn
@@ -231,7 +232,7 @@ Returns number of blocks found."
 
 (defun gptel-auto-workflow--audit-unbalanced-parens (file)
   "Audit FILE for unbalanced parens/brackets.
-Catches the 'End of file during parsing' class of bugs where editing
+Catches the `End of file during parsing' class of bugs where editing
 introduces a missing close paren. Uses Emacs's built-in check-parens
 after loading the file as emacs-lisp.
 Returns 1 if unbalanced, 0 if balanced."
@@ -253,19 +254,17 @@ Returns 1 if unbalanced, 0 if balanced."
 ;; ── Check 7: Missing provide statement ──
 
 (defun gptel-auto-workflow--audit-missing-provide (file)
-  "Audit FILE for missing (provide 'feature) statement.
+  "Audit FILE for missing (provide \='feature) statement.
 Modules without provide cannot be required by other modules.
 Returns 1 if missing, 0 if present."
   (let ((issues 0)
-        (has-provide nil)
-        (feature-name nil))
+        (has-provide nil))
   (with-temp-buffer
     (insert-file-contents file)
     (goto-char (point-min))
     ;; Look for (provide 'feature) form
     (when (re-search-forward "^(provide\\s-+'\\([^)]+\\))" nil t)
-      (setq has-provide t)
-      (setq feature-name (match-string 1)))
+      (setq has-provide t))
     (unless has-provide
       (setq issues 1)
       (let ((suggested (file-name-sans-extension
@@ -428,7 +427,7 @@ Returns count of risk nodes found."
 
 (defun gptel-auto-workflow--fix-unguarded-external-calls (file)
   "Fix unguarded calls to external functions in FILE.
-Wraps calls like (fn ...) with (and (fboundp 'fn) (fn ...)).
+Wraps calls like (fn ...) with (and (fboundp \='fn) (fn ...)).
 Returns number of calls fixed.  Safe: only adds guards, never changes logic."
   (let ((fixed 0))
     (with-temp-buffer
@@ -450,7 +449,8 @@ Returns number of calls fixed.  Safe: only adds guards, never changes logic."
                 (let ((defun-start-line 1)
                       (found-guard nil))
                   (save-excursion
-                    (goto-line call-line)
+                    (goto-char (point-min))
+                    (forward-line (1- call-line))
                     (when (re-search-backward "^(defun\\b" nil t)
                       (setq defun-start-line (line-number-at-pos (point)))))
                   ;; Check for guard within the defun
@@ -459,7 +459,8 @@ Returns number of calls fixed.  Safe: only adds guards, never changes logic."
                     (while (and (>= check-line end-of-lookback)
                                 (not found-guard))
                       (save-excursion
-                        (goto-line check-line)
+                        (goto-char (point-min))
+                        (forward-line (1- check-line))
                         (beginning-of-line)
                         (when (re-search-forward
                                (format "fboundp.*'%s" (symbol-name fn))
@@ -473,16 +474,15 @@ Returns number of calls fixed.  Safe: only adds guards, never changes logic."
                   ;; No guard found: add one
                   (unless found-guard
                     (save-excursion
-                      (goto-line call-line)
+                      (goto-char (point-min))
+                      (forward-line (1- call-line))
                       (beginning-of-line)
                       ;; Find the opening paren of the call
                       (when (re-search-forward (format "(%s" (symbol-name fn)) (line-end-position) t)
-                        (let* ((call-start (match-beginning 0))
-                               (call-end-pos nil))
+                        (let ((call-start (match-beginning 0)))
                           ;; Find the matching closing paren BEFORE modifying buffer
                           (goto-char call-start)
                           (forward-sexp 1)  ; move to the matching close paren
-                          (setq call-end-pos (point))
                           ;; Now insert the closing paren for the (and ...) wrapper
                           (insert ")")
                           ;; Insert the opening part: (and (fboundp 'fn)
@@ -549,7 +549,7 @@ never touches code structure."
     fixed))
 
 (defun gptel-auto-workflow--fix-missing-provide (file)
-  "Add (provide 'feature) statement to FILE if missing.
+  "Add (provide \='feature) statement to FILE if missing.
 Feature name is derived from filename (e.g., gptel-foo.el -> gptel-foo).
 Idempotent: returns 0 if file already has provide statement.
 Returns 1 if fixed, 0 if no change needed."
