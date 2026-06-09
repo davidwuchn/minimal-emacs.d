@@ -7974,7 +7974,7 @@ WARNINGS is alist of (LINE . TEXT).  Returns number of fixes."
       (kill-buffer (current-buffer)))
     fixes))
 
-(defun gptel-auto-workflow--self-heal-byte-compiler-llm (warnings)
+(cl-defun gptel-auto-workflow--self-heal-byte-compiler-llm (warnings)
   "Escalate stubborn WARNINGS in self to LLM backend.
 LLM fixes self-heal function itself when mechanical fixers fail.
 Extracts only elisp from response, verifies parens, reverts on failure.
