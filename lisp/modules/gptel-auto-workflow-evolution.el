@@ -6992,12 +6992,65 @@ Diagnosis groups: timeout-related, backend-related, target-related."
               (message "[self-heal] 🔗 Cross-learn: '%s' %s → '%s' accuracy updated"
                        diagnosis (if fixed-p "fixed" "failed") sibling))))))))
 
+(defun gptel-auto-workflow--diagnosis-root-cause (diagnosis)
+  "Use ontology causal chains to find root cause of DIAGNOSIS.
+Queries Floyd-Warshall transitive closure and Allen interval gaps
+to determine what upstream failures may have caused this diagnosis.
+Returns list of (:cause :confidence :chain) or nil."
+  (let ((root-causes nil))
+    ;; Ontology causal chains: what causes this?
+    (when (fboundp 'gptel-knowledge--floyd-warshall)
+      (condition-case nil
+          (let* ((results (and (fboundp 'gptel-auto-workflow--parse-all-results)
+                               (gptel-auto-workflow--parse-all-results)))
+                 (nodes (mapcar (lambda (r) (plist-get r :target)) results))
+                 (edges (mapcar (lambda (r) (list (plist-get r :target)
+                                                   (plist-get r :decision)))
+                                results))
+                 (chains (gptel-knowledge--floyd-warshall nodes edges)))
+            ;; Check if diagnosis appears downstream in any chain
+            (when chains
+              (dolist (chain chains)
+                (when (member diagnosis (cdr chain))
+                  (push (list :cause (car chain)
+                              :confidence 0.8
+                              :chain chain)
+                        root-causes)))))
+        (error nil)))
+    ;; Causal mapping: known cause→effect relationships
+    (let ((known-causes
+           '(("backend-rate-limited" "grader-destroying-experiments" 0.85)
+             ("backend-rate-limited" "timeouts-too-aggressive" 0.75)
+             ("hypotheses-poor-quality" "zero-experiment-run" 0.60)
+             ("grader-destroying-experiments" "consecutive-zero-keep-rate" 0.90))))
+      (dolist (kc known-causes)
+        (when (equal (nth 1 kc) diagnosis)
+          (push (list :cause (nth 0 kc)
+                      :confidence (nth 2 kc)
+                      :source "known-causal-map")
+                root-causes))))
+    root-causes))
+
+(defun gptel-auto-workflow--ontology-validate-fix (diagnosis fix-name)
+  "Check if FIX-NAME for DIAGNOSIS is consistent with ontology rules.
+Returns t if the fix aligns with known causal patterns, nil if suspicious."
+  (let ((valid-fixes
+         '(("grader-destroying-experiments" . ("increase-grader-timeout" "switch-grader-backend"))
+           ("timeouts-too-aggressive" . ("increase-grader-timeout" "increase-experiment-budget"))
+           ("backend-rate-limited" . ("clear-rate-limit-cache" "switch-grader-backend"))
+           ("zero-experiment-run" . ("force-discover-targets" "reset-experiment-loop")))))
+    (or (member fix-name (cdr (assoc diagnosis valid-fixes)))
+        (progn
+          (message "[self-heal] ⚠ Ontology: '%s' → '%s' not in validated fix set"
+                   diagnosis fix-name)
+          nil))))
+
 (defvar gptel-auto-workflow--unknown-patterns (make-hash-table :test 'equal)
   "Hash: pattern-signature -> count. When >=5, promotes to new diagnosis type.")
 
 (defun gptel-auto-workflow--self-modify-detection (diagnosis-str details)
   "Self-modify detection: create new diagnosis type for recurring unknowns.
-When 'unknown' fires >=5 times with similar patterns, promote to a named
+When \='unknown\=' fires >=5 times with similar patterns, promote to a named
 diagnosis type so future occurrences get specific auto-fixes."
   (when (equal diagnosis-str "unknown")
     (let* ((sig (or (plist-get details :signature)
@@ -7012,7 +7065,8 @@ diagnosis type so future occurrences get specific auto-fixes."
           new-name)))))
 
 (defvar gptel-auto-workflow--meta-reflection-counter (cons 0 0)
-  "Cons: (total-fix-attempts . successful-fixes). Tracks overall self-heal health.")
+  "Cons: (total-fix-attempts . successful-fixes). Tracks overall self-heal
+health.")
 
 (defun gptel-auto-workflow--meta-reflect ()
   "Meta-meta reflection: is the self-reflection system itself working?
@@ -7022,7 +7076,8 @@ logic itself may be wrong — escalate to human."
          (success (cdr gptel-auto-workflow--meta-reflection-counter))
          (rate (if (> total 10) (/ (float success) total) 1.0)))
     (when (and (> total 10) (< rate 0.5))
-      (message "[self-heal] 🔮 Meta-reflection: only %.0f%% of fixes succeed (%d/%d) — reflection logic may be broken"
+      (message "[self-heal] 🔮 Meta-reflection: only %.0f%% of fixes succeed (%d/%d) —
+reflection logic may be broken"
                (* 100 rate) success total)
       (let ((root (gptel-auto-workflow-self-audit--root)))
         (with-temp-file (expand-file-name "var/tmp/meta-escalation.txt" root)
@@ -7036,6 +7091,19 @@ logic itself may be wrong — escalate to human."
         (fixed nil))
     (pcase diagnosis-str
       ("grader-destroying-experiments"
+       ;; ONTOLOGY: find root cause before treating symptom
+       (let ((root-causes (gptel-auto-workflow--diagnosis-root-cause diagnosis-str)))
+         (when root-causes
+           (message "[self-heal] 🧬 Ontology: root cause of '%s' may be: %s"
+                    diagnosis-str
+                    (mapconcat (lambda (rc) (plist-get rc :cause)) root-causes ", "))
+           ;; If root cause is backend-rate-limited, fix THAT first
+           (dolist (rc root-causes)
+             (when (and (equal (plist-get rc :cause) "backend-rate-limited")
+                        (> (plist-get rc :confidence) 0.8))
+               (message "[self-heal]   → Fixing root cause first: backend-rate-limited")
+               (when (boundp 'gptel-auto-workflow--rate-limited-backends)
+                 (setq gptel-auto-workflow--rate-limited-backends nil))))))
        ;; SELF-REFLECT: question diagnosis after repeated failures
        (let* ((reflection (gptel-auto-workflow--self-reflect diagnosis-str))
               (should-escalate (plist-get reflection :should-try-alternative)))
