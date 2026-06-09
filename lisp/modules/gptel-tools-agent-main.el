@@ -524,7 +524,7 @@ Usage:
                     (length discovered))))))
     ;; Restore self-healing lessons from mementum (cross-session learning).
     ;; Previous sessions' "what finally worked" knowledge survives daemon restart.
-    (condition-case nil
+    (condition-case err
         (when (and (boundp 'gptel-auto-workflow--self-healing-log)
                    (fboundp 'gptel-auto-workflow--mementum-slug))
           (let ((mem-dir (expand-file-name "mementum/memories/"
@@ -543,8 +543,9 @@ Usage:
                                   :from-prior-session t)
                             gptel-auto-workflow--self-healing-log)))
                   (message "[auto-workflow] Restored self-heal lesson: %s"
-                           (file-name-base f))))))
-      (error (message "[auto-workflow] Self-heal lesson restore skipped"))))
+                           (file-name-base f)))))))
+      (error (message "[auto-workflow] Self-heal lesson restore skipped: %s"
+                      (error-message-string err))))
     ;; Check innovation queue for pending ideas from GTM Mayor
     (when (fboundp 'gptel-auto-workflow--innovation-queue-list)
       (condition-case err

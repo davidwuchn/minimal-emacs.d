@@ -478,6 +478,10 @@ If rules conflict:
                     | Diagnostics | Programmatic | RunAgent
                     | Preview | ApplyPatch | Mkdir | Move
 
+λ search_tools(x).  ack > grep | perl > sed
+                    | prefer(ack) for content_search
+                    | prefer(perl) for stream_editing
+
 λ commands(x).      nucleus-agent-toggle
                     | gptel-send | gptel-menu
                     | C-c a (ai-code-menu)
