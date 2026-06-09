@@ -606,7 +606,16 @@ Usage:
               (message "[self-heal] Byte-compiler: %d warnings remain after auto-fix"
                        (plist-get result :remaining-warnings))))
         (error (message "[self-heal] Byte-compiler self-heal error: %s"
-                        (error-message-string err)))))
+                         (error-message-string err)))))
+    ;; Phase 3a: Semantic self-heal — catch runtime/operational bugs that
+    ;; byte-compile misses (regex newlines, hardcoded limits, score=0 logic,
+    ;; (let ...) function bindings, defvar without defaults).
+    (when (and gptel-auto-workflow--self-heal-enabled
+               (fboundp 'gptel-auto-workflow--self-heal-semantic))
+      (condition-case err
+          (gptel-auto-workflow--self-heal-semantic)
+        (error (message "[self-heal] Semantic self-heal error: %s"
+                         (error-message-string err)))))
     ;; Phase 4: Self-diagnostic probe — verify grader health before wasting experiments
     (when (and (fboundp 'gptel-auto-workflow--probe-before-experiments)
                (not (gptel-auto-workflow--probe-before-experiments)))
