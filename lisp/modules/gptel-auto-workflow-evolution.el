@@ -6721,18 +6721,37 @@ This feeds the verify-learn loop: system remembers what worked."
   "Self-reflection: when fixes keep failing, question the diagnosis.
 Returns plist: (:diagnosis-correct-p :alternative-diagnosis :alternative-fix).
 After 3+ failed attempts at the same fix, the system reflects on whether
-its diagnosis was wrong and tries a fundamentally different approach."
+its diagnosis was wrong and tries a fundamentally different approach.
+General — works for any diagnosis, not just grader-destroying."
   (let* ((effectiveness (gptel-auto-workflow--verify-fix-effectiveness diagnosis))
          (fail-count (plist-get effectiveness :same-fix-count))
          (alternatives
           (pcase diagnosis
             ("grader-destroying-experiments"
-             '((:alt-diagnosis "backend-rate-limited" 
+             '((:alt-diagnosis "backend-rate-limited"
                 :alt-fix "switch-grader-backend"
                 :description "Grader may be rate-limited, not timing out")
                (:alt-diagnosis "experiment-too-complex"
                 :alt-fix "simplify-experiment-prompt"
-                :description "Experiments may be too complex for grader"))))))
+                :description "Experiments may be too complex for grader")))
+            ("timeouts-too-aggressive"
+             '((:alt-diagnosis "backend-rate-limited"
+                :alt-fix "switch-grader-backend"
+                :description "Timeouts may be backend rate-limiting, not budget")
+               (:alt-diagnosis "network-issue"
+                :alt-fix "reduce-parallel-experiments"
+                :description "Network congestion may cause timeouts")))
+            ("backend-rate-limited"
+             '((:alt-diagnosis "grader-destroying-experiments"
+                :alt-fix "increase-grader-timeout"
+                :description "What looks like rate-limiting may be grader timeout")
+               (:alt-diagnosis "api-key-expired"
+                :alt-fix "notify-human"
+                :description "API key may need renewal")))
+            (_
+             `((:alt-diagnosis "unknown-novel-failure"
+                :alt-fix "flag-for-human-review"
+                :description ,(format "Novel failure pattern '%s' — needs investigation" diagnosis)))))))
     (list :diagnosis-correct-p (< fail-count 3)
           :fail-count fail-count
           :alternatives (if (>= fail-count 3) alternatives nil)
@@ -7029,7 +7048,61 @@ cap is `2*default`)."
                        :remedy (format "max-exp/target=%d" new-max)
                        :before-rate (plist-get diagnosis :keep-rate))
                  gptel-auto-workflow--self-healing-log)
-           (setq fixed t)))))
+           (setq fixed t))))
+
+      ("backend-rate-limited"
+       ;; Cycle through available backends to find one that works
+       (when (boundp 'gptel-auto-workflow--rate-limited-backends)
+         (setq gptel-auto-workflow--rate-limited-backends nil)
+         (message "[self-heal] Backend rate-limited — cleared rate-limit cache")
+         (push (list :timestamp (float-time)
+                     :diagnosis diagnosis-str
+                     :remedy "clear-rate-limit-cache"
+                     :before-rate (plist-get diagnosis :keep-rate))
+               gptel-auto-workflow--self-healing-log)
+         (setq fixed t)))
+
+      ("zero-experiment-run"
+       ;; Force target re-discovery and batch population
+       (when (and (boundp 'gptel-auto-workflow-targets)
+                  (fboundp 'gptel-auto-workflow--discover-targets))
+         (let ((discovered (gptel-auto-workflow--discover-targets)))
+           (when discovered
+             (setq gptel-auto-workflow-targets discovered
+                   gptel-auto-workflow--experiment-targets
+                   (seq-take discovered (min 10 (length discovered))))
+             (message "[self-heal] Zero experiments — forced %d targets"
+                      (length gptel-auto-workflow--experiment-targets))
+             (push (list :timestamp (float-time)
+                         :diagnosis diagnosis-str
+                         :remedy (format "force-discover-%d-targets" (length discovered))
+                         :before-rate 0.0)
+                   gptel-auto-workflow--self-healing-log)
+             (setq fixed t)))))
+
+      (_
+       ;; Unknown diagnosis — log and flag for investigation
+       (message "[self-heal] Unknown diagnosis: %s — flagging for human review"
+                diagnosis-str)
+       (push (list :timestamp (float-time)
+                   :diagnosis diagnosis-str
+                   :remedy "flagged-for-human-review"
+                   :before-rate (plist-get diagnosis :keep-rate)
+                   :effective 'PENDING)
+             gptel-auto-workflow--self-healing-log)))
+     ;; After any fix attempt: write lesson if this was a persistent problem
+     (when fixed
+       (gptel-auto-workflow--self-reflect-write-lesson
+        diagnosis-str
+        (list :was-persistent
+              (> (plist-get (gptel-auto-workflow--verify-fix-effectiveness diagnosis-str)
+                            :same-fix-count) 1)
+              :attempts (plist-get (gptel-auto-workflow--verify-fix-effectiveness diagnosis-str)
+                                   :same-fix-count)
+              :final-fix (format "%s succeeded after %d attempts"
+                                diagnosis-str
+                                (plist-get (gptel-auto-workflow--verify-fix-effectiveness diagnosis-str)
+                                           :same-fix-count)))))
      fixed))
 
 ;;; ─── Phase 7: Recovery Verification ───
