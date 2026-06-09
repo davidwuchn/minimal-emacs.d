@@ -7,4 +7,5 @@ Current backend: moonshot
 
 Format: timestamp | diagnosis | remedy | before | after | effective?
 
-- 1780994168 | restored-lesson | grader-destroying-experiments succeeded after 3 attempts | 0% → -100% | PENDING
+- 1780985681 | restored-lesson | grader-destroying-experiments succeeded after 3 attempts | 0% → -100% | PENDING
+- 1780990257 | zero-experiment-run | target-selection-empty | — | — | pending

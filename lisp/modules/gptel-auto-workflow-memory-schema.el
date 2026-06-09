@@ -1552,8 +1552,8 @@ knowledge."
                                 root))))
     (when mem-file
       (with-temp-file mem-file
-      (insert "---\ntitle: Graph Query Feedback\ncategory: graph-query\n---\n\n")
-      (insert (format "**Query:** %s\n\n**Result:** %s\n" query result)))
+        (insert "---\ntitle: Graph Query Feedback\ncategory: graph-query\n---\n\n")
+        (insert (format "**Query:** %s\n\n**Result:** %s\n" query result))))
     (message "[memory-schema] Query feedback saved to %s" mem-file)))
 
 (provide 'gptel-auto-workflow-memory-schema)

@@ -4,7 +4,7 @@ status: active
 category: system-health
 tags: [self-audit, auto-fix, meta]
 related: [pipeline-health, self-healing-architecture]
-last-updated: 2026-06-09T14:00:13
+last-updated: 2026-06-09T15:00:10
 ---
 
 # System Health Patterns
@@ -12,11 +12,11 @@ last-updated: 2026-06-09T14:00:13
 Auto-generated from self-audit memories. Updated every pipeline
 run when >=3 audit-fix memories exist.
 
-## Summary (14 audit runs analyzed)
+## Summary (16 audit runs analyzed)
 
-- **Backend cold-start**: detected in 14/14 runs (avg 8.0 cold backends)
-- **Strategy cold-start**: detected in 14/14 runs (avg 29.0 unevaluated strategies)
-- **Staging-merge bottleneck**: detected in 14/14 runs
+- **Backend cold-start**: detected in 15/16 runs (avg 8.0 cold backends)
+- **Strategy cold-start**: detected in 15/16 runs (avg 29.0 unevaluated strategies)
+- **Staging-merge bottleneck**: detected in 15/16 runs
 
 ## Recurring Root Causes
 
