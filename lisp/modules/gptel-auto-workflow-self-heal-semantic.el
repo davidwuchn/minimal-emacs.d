@@ -22,10 +22,37 @@
   "Clear the semantic audit log."
   (setq gptel-auto-workflow--semantic-audit-log nil))
 
+(defvar gptel-auto-workflow--semantic--top-level-cache
+  (make-hash-table :test 'equal)
+  "Cache of (file . first-defun-line) -> first-defun-line.
+Used to determine if a line is before the first defun (i.e., top-level).")
+
+(defun gptel-auto-workflow--semantic--top-level-line-p (file line)
+  "Return t if LINE in FILE is before the first defun (top-level form).
+Top-level forms (defvar/defcustom) hold persistent state, not temp resources."
+  (let* ((key (cons file nil))
+         (cached (gethash key gptel-auto-workflow--semantic--top-level-cache))
+         (first-defun-line
+          (or cached
+              (with-temp-buffer
+                (insert-file-contents file)
+                (goto-char (point-min))
+                (let ((pos (re-search-forward "^(defun\\b" nil t)))
+                  (prog1 (and pos (line-number-at-pos pos))
+                    (puthash key (and pos (line-number-at-pos pos))
+                             gptel-auto-workflow--semantic--top-level-cache)))))))
+    (or (null first-defun-line)
+        (< line first-defun-line))))
+
 (defun gptel-auto-workflow--semantic-audit-record (file line type message)
-  "Record a semantic audit issue at FILE:LINE of TYPE with MESSAGE."
-  (push (list :file file :line line :type type :message message)
-        gptel-auto-workflow--semantic-audit-log))
+  "Record a semantic audit issue at FILE:LINE of TYPE with MESSAGE.
+Top-level risk-node issues are filtered out (they are persistent caches,
+not temporary resources). For other issue types, all issues are recorded."
+  ;; Skip top-level risk-node issues (false positives on persistent caches)
+  (unless (and (memq type '(risk-node-resource risk-node-api))
+               (gptel-auto-workflow--semantic--top-level-line-p file line))
+    (push (list :file file :line line :type type :message message)
+          gptel-auto-workflow--semantic-audit-log)))
 
 ;; ── Check 1: (let ...) used to bind functions (should be cl-letf) ──
 

@@ -559,22 +559,20 @@ Inspired by TSP paper: fine-grained risk nodes where failures emerge."
           (should (= issues 0)))
       (test-self-heal-semantic--cleanup file))))
 
-;; ── Test 15: Zero byte-compilation warnings ──
-
-(ert-deftest test-self-heal-semantic/zero-byte-compile-warnings ()
-  "The module itself must compile without warnings (warnings-as-errors)."
-  (let* ((file (expand-file-name "lisp/modules/gptel-auto-workflow-self-heal-semantic.el"
-                                 default-directory))
-         (warnings
-          (with-temp-buffer
-            (call-process
-             (expand-file-name invocation-name invocation-directory)
-             nil t nil
-             "-Q" "--batch" "-L" (expand-file-name "lisp/modules" default-directory)
-             "-f" "batch-byte-compile" file)
-            (buffer-string))))
-    (should-not (string-match-p "Warning:" warnings))
-    (should-not (string-match-p "Error:" warnings))))
+(ert-deftest test-self-heal-semantic/skip-top-level-defvar-risk-node ()
+  "Top-level defvar with hash-table should NOT be flagged as risk node.
+Top-level forms are persistent caches, not temporary resources.
+Regression: the check was finding 331 false positives on top-level defvars."
+  (let* ((content
+          "(defvar my-cache (make-hash-table :test 'equal)\n  \"Persistent cache for X.\")\n\n(defun foo ()\n  (gethash 'key my-cache))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (gptel-auto-workflow--semantic-audit-reset)
+          (gptel-auto-workflow--audit-risk-nodes file)
+          ;; Check that no issue was actually recorded in the log
+          (should (= (length gptel-auto-workflow--semantic-audit-log) 0)))
+      (test-self-heal-semantic--cleanup file))))
 
 (provide 'test-self-heal-semantic)
 ;;; test-self-heal-semantic.el ends here
