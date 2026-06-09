@@ -269,6 +269,40 @@ Reproduces the memory-schema bug: missing closing paren after fboundp guard."
           (should (= issues 0)))
       (test-self-heal-semantic--cleanup file))))
 
+(ert-deftest test-self-heal-semantic/fix-adds-missing-close-at-eof ()
+  "Auto-fixer appends missing close parens at EOF for the common case."
+  (let* ((content
+          "(defun foo ()\n  (let ((x 1))\n    (setq x 2)\n  (message \"x=%d\" x)\n")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (should (= 1 (gptel-auto-workflow--audit-unbalanced-parens file)))
+          (let ((fixed (gptel-auto-workflow--fix-unbalanced-parens file)))
+            (should (= fixed 1)))
+          (should (= 0 (gptel-auto-workflow--audit-unbalanced-parens file))))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/fix-no-op-when-balanced ()
+  "Auto-fixer is no-op when parens are balanced."
+  (let* ((content
+          "(defun foo ()\n  42)\n")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((fixed (gptel-auto-workflow--fix-unbalanced-parens file)))
+          (should (= fixed 0)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/fix-skip-when-cannot-fix ()
+  "Auto-fixer does not modify file when paren balance cannot be determined
+or when closing > opening (would require deletion, not just addition)."
+  (let* ((content
+          "(defun foo ()\n  42))\n")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((fixed (gptel-auto-workflow--fix-unbalanced-parens file)))
+          (should (= fixed 0)))
+      (test-self-heal-semantic--cleanup file))))
+
 (ert-deftest test-self-heal-semantic/detects-unmatched-brackets ()
   "Detects unmatched brackets in any direction."
   (let* ((content

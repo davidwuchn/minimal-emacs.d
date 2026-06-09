@@ -445,6 +445,50 @@ Returns 1 if fixed, 0 if no change needed."
                feature (file-name-nondirectory file)))
     fixed))
 
+(defun gptel-auto-workflow--fix-unbalanced-parens (file)
+  "Append missing close parens at end of FILE if unbalanced.
+Handles the common case: more opening than closing parens/brackets
+introduced by editing. Returns 1 if fixed, 0 otherwise.
+Safe: only appends closes, never deletes code. Does NOT handle the
+case of more closes than opens (which requires deletion — too risky)."
+  (let ((fixed 0)
+        (opens 0)
+        (closes 0)
+        (new-content nil)
+        (in-string nil)
+        (in-comment nil)
+        (escaped nil))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (setq new-content (buffer-string))
+      ;; Walk through content, tracking paren balance while ignoring
+      ;; string literals and comments (where parens don't count).
+      (dolist (ch (append new-content nil))
+        (cond
+         (escaped (setq escaped nil))
+         ((eq ch 92) (setq escaped t))
+         ((and (not in-string) (eq ch 59))
+          (setq in-comment t))
+         ((and in-comment (eq ch 10))
+          (setq in-comment nil))
+         ((and (not in-comment) (eq ch 34))
+          (setq in-string (not in-string)))
+         ((and (not in-string) (not in-comment))
+          (cond
+           ((eq ch 40) (setq opens (1+ opens)))
+           ((eq ch 41) (setq closes (1+ closes))))))))
+    ;; Only fix if more opens than closes (append closes)
+    (when (> opens closes)
+      (let* ((missing (- opens closes))
+             (closes-str (make-string missing 41)))
+        (setq new-content (concat new-content "\n" closes-str))
+        (with-temp-file file
+          (insert new-content))
+        (message "[self-heal-semantic] Appended %d missing close paren(s) at EOF in %s"
+                 missing (file-name-nondirectory file))
+        (setq fixed 1)))
+    fixed))
+
 (cl-defun gptel-auto-workflow--semantic-audit-file (file &key (_auto-fix nil))
   "Run all semantic audit checks on FILE."
   (gptel-auto-workflow--semantic-audit-reset)
@@ -515,6 +559,12 @@ auto-fixers for detected issues (e.g., excessive blank lines)."
         (when (cl-some (lambda (r) (eq (plist-get r :type) 'missing-provide))
                        log)
           (let ((fixed (gptel-auto-workflow--fix-missing-provide file)))
+            (when (> fixed 0)
+              (cl-incf total-fixed fixed))))
+        ;; Fix unbalanced parens (append missing closes at EOF)
+        (when (cl-some (lambda (r) (eq (plist-get r :type) 'unbalanced-parens))
+                       log)
+          (let ((fixed (gptel-auto-workflow--fix-unbalanced-parens file)))
             (when (> fixed 0)
               (cl-incf total-fixed fixed))))))
     (when (> total-fixed 0)
