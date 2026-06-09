@@ -4,12 +4,12 @@ valid-from: 2026-06-09T08:52
 
 # Mistake: 2026-06-09 08:52
 
-**Failure type:** strategy
-**Target:** lisp/modules/gptel-tools-agent-benchmark.el
-**Category:** :programming (keep-rate: 0.0%)
-**Occurrences:** 5
+**Failure type:** grader-bypass
+**Target:** lisp/modules/gptel-auto-workflow-ontology-strategy.el
+**Category:** :agentic (keep-rate: 4.3%)
+**Occurrences:** 4
 **Example reasons:** none
-**Trend:** 2026-06-02T121153Z-3095 -> 2026-06-04T013900Z-dfe2
+**Trend:** 2026-06-04T013900Z-dfe2 -> 2026-06-05T034931Z-5628
 
 This pattern was detected by the monitoring agent as a systemic failure requiring investigation. Priority determined by category keep-rate (lower = higher priority).
 
