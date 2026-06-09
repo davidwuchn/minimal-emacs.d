@@ -222,8 +222,8 @@ Returns count of cleaned worktrees."
                                 (with-temp-buffer
                                   (insert-file-contents branch-file)
                                   (string-trim (buffer-string))))))
-                  (unless (and branch (> (length branch) 0))
-                    (condition-case nil
+                   (unless (and branch (> (length branch) 0))
+                    (condition-case err
                         (progn
                           (delete-directory dir 'recursive)
                           (cl-incf cleaned)
@@ -408,7 +408,7 @@ Called after each experiment completes."
   (gptel-recovery--ensure-loaded)
   ;; Record to checkpoint
   (when (fboundp 'gptel-checkpoint-record-experiment)
-    (condition-case nil
+    (condition-case err
         (gptel-checkpoint-record-experiment experiment-result)
       (error
        (message "[recovery] Failed to record experiment to checkpoint: %s"
@@ -440,7 +440,7 @@ Called after each experiment completes."
   "Record TARGET completion (SUCCESS=t) or failure (SUCCESS=nil)."
   (gptel-recovery--ensure-loaded)
   (when (fboundp 'gptel-checkpoint-end-target)
-    (condition-case nil
+    (condition-case err
         (gptel-checkpoint-end-target target success)
       (error
        (message "[recovery] Failed to record target complete: %s" err)))))
@@ -450,7 +450,7 @@ Called after each experiment completes."
   (gptel-recovery--ensure-loaded)
   (gptel-recovery--stop-checkpoint-timer)
   (when (fboundp 'gptel-checkpoint-complete)
-    (condition-case nil
+    (condition-case err
         (gptel-checkpoint-complete)
       (error
        (message "[recovery] Failed to mark workflow complete: %s" err))))

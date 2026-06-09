@@ -516,6 +516,30 @@ Bug: '(error) (uses err)' — handler doesn't bind err, so reference is void."
           (should (= issues 0)))
       (test-self-heal-semantic--cleanup file))))
 
+;; ── Test 13b: Real-world patterns from recovery.el ──
+
+(ert-deftest test-self-heal-semantic/detects-recovery-condition-case-nil-err ()
+  "Detects the exact pattern found in gptel-auto-workflow-recovery.el:
+condition-case nil with (error-message-string err) in handler."
+  (let* ((content
+          "(defun gptel-recovery-clean ()\n  (condition-case nil\n      (delete-directory dir 'recursive)\n    (error\n     (message \"[recovery] Failed: %s\" (error-message-string err)))))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-condition-case-unbound-err file)))
+          (should (>= issues 1)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/detects-circuit-breaker-condition-case-nil-err ()
+  "Detects the exact pattern found in gptel-ext-circuit-breaker.el:
+condition-case nil with err reference in handler."
+  (let* ((content
+          "(defun gptel-circuit-load ()\n  (condition-case nil\n      (json-read)\n    (error\n     (message \"[circuit-breaker] Failed: %s\" err))))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-condition-case-unbound-err file)))
+          (should (>= issues 1)))
+      (test-self-heal-semantic--cleanup file))))
+
 ;; ── Test 14: Risk node detection (TSP-inspired) ──
 
 (ert-deftest test-self-heal-semantic/detects-risk-node-resource ()
