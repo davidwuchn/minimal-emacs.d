@@ -124,7 +124,8 @@ Filters out legitimate uses like `(when (> score 0) (push ...))`."
 ;; ── Check 4: Unguarded external function calls ──
 
 (defvar gptel-auto-workflow--semantic-external-fns
-  '(gptel-agent-read-file)
+  '(gptel-agent-read-file
+    gptel-auto-workflow-self-audit--root)
   "List of external functions that require fboundp guards.
 When code calls these without (fboundp '...) or condition-case,
 the function is brittle in test environments where the package
@@ -288,6 +289,75 @@ Returns 1 if missing, 0 if present."
 
 ;; ── Auto-fixers (Layer 2+3: detect AND fix) ──
 
+(defun gptel-auto-workflow--fix-unguarded-external-calls (file)
+  "Fix unguarded calls to external functions in FILE.
+Wraps calls like (fn ...) with (and (fboundp 'fn) (fn ...)).
+Returns number of calls fixed.  Safe: only adds guards, never changes logic."
+  (let ((fixed 0))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (goto-char (point-min))
+      (dolist (fn gptel-auto-workflow--semantic-external-fns)
+        (let ((pattern (format "(%s\\s-" (symbol-name fn))))
+          (goto-char (point-min))
+          (while (re-search-forward pattern nil t)
+            (let* ((call-line (line-number-at-pos (match-beginning 0)))
+                   (line-text
+                    (save-excursion
+                      (beginning-of-line)
+                      (buffer-substring (point) (line-end-position)))))
+              ;; Skip defun/declare-function lines
+              (unless (or (string-match-p "(defun\\s-+" line-text)
+                          (string-match-p "(declare-function\\s-+" line-text))
+                ;; Find the enclosing defun
+                (let ((defun-start-line 1)
+                      (found-guard nil))
+                  (save-excursion
+                    (goto-line call-line)
+                    (when (re-search-backward "^(defun\\b" nil t)
+                      (setq defun-start-line (line-number-at-pos (point)))))
+                  ;; Check for guard within the defun
+                  (let ((check-line (max 1 (- call-line 1)))
+                        (end-of-lookback defun-start-line))
+                    (while (and (>= check-line end-of-lookback)
+                                (not found-guard))
+                      (save-excursion
+                        (goto-line check-line)
+                        (beginning-of-line)
+                        (when (re-search-forward
+                               (format "fboundp.*'%s" (symbol-name fn))
+                               (line-end-position) t)
+                          (setq found-guard t))
+                        (when (re-search-forward
+                               "condition-case"
+                               (line-end-position) t)
+                          (setq found-guard t)))
+                      (setq check-line (1- check-line))))
+                  ;; No guard found: add one
+                  (unless found-guard
+                    (save-excursion
+                      (goto-line call-line)
+                      (beginning-of-line)
+                      ;; Find the opening paren of the call
+                      (when (re-search-forward (format "(%s" (symbol-name fn)) (line-end-position) t)
+                        (let ((call-start (match-beginning 0)))
+                          ;; Insert guard: (and (fboundp 'fn) (fn ...))
+                          (goto-char call-start)
+                          (insert "(and (fboundp '")
+                          (insert (symbol-name fn))
+                          (insert ") ")
+                          ;; Find the matching close paren and insert another close paren
+                          (forward-char 1)  ; move past the opening paren
+                          (forward-sexp 1)  ; move to the matching close paren
+                          (insert ")")
+                          (cl-incf fixed)))))))))))
+      ;; Write back if we fixed anything (INSIDE with-temp-buffer)
+      (when (> fixed 0)
+        (write-region (point-min) (point-max) file)
+        (message "[self-heal-semantic] Added fboundp guards to %d call(s) in %s"
+                 fixed (file-name-nondirectory file))))
+    fixed))
+
 (defun gptel-auto-workflow--fix-excessive-blank-lines (file)
   "Fix excessive blank lines in FILE: compress 3+ to 1 separator.
 Returns number of blocks fixed.  Safe: only modifies blank lines,
@@ -429,11 +499,19 @@ auto-fixers for detected issues (e.g., excessive blank lines)."
     (dolist (entry (plist-get result :report))
       (let* ((file (plist-get entry :file))
              (log (plist-get entry :log)))
+        ;; Fix excessive blank lines
         (when (cl-some (lambda (r) (eq (plist-get r :type) 'excessive-blank-lines))
                        log)
           (let ((fixed (gptel-auto-workflow--fix-excessive-blank-lines file)))
             (when (> fixed 0)
               (cl-incf total-fixed fixed))))
+        ;; Fix unguarded external calls
+        (when (cl-some (lambda (r) (eq (plist-get r :type) 'unguarded-external-call))
+                       log)
+          (let ((fixed (gptel-auto-workflow--fix-unguarded-external-calls file)))
+            (when (> fixed 0)
+              (cl-incf total-fixed fixed))))
+        ;; Fix missing provide
         (when (cl-some (lambda (r) (eq (plist-get r :type) 'missing-provide))
                        log)
           (let ((fixed (gptel-auto-workflow--fix-missing-provide file)))
