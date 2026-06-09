@@ -7106,11 +7106,11 @@ logic itself may be wrong — escalate to human."
       (message "[self-heal] 🔮 Meta-reflection: only %.0f%% of fixes succeed (%d/%d) —
 reflection logic may be broken"
                (* 100 rate) success total)
-       (when (fboundp 'gptel-auto-workflow-self-audit--root)
-         (let ((root (gptel-auto-workflow-self-audit--root)))
-           (with-temp-file (expand-file-name "var/tmp/meta-escalation.txt" root)
-             (insert (format "meta-escalation: %d/%d fixes succeeded (%.0f%%)\n"
-                             success total (* 100 rate)))))))
+      (when (fboundp 'gptel-auto-workflow-self-audit--root)
+        (let ((root (gptel-auto-workflow-self-audit--root)))
+          (with-temp-file (expand-file-name "var/tmp/meta-escalation.txt" root)
+            (insert (format "meta-escalation: %d/%d fixes succeeded (%.0f%%)\n"
+                            success total (* 100 rate)))))))
     rate))
 
 (defun gptel-auto-workflow--auto-remediate (diagnosis)
@@ -7161,7 +7161,7 @@ reflection logic may be broken"
        (let ((effectiveness (gptel-auto-workflow--verify-fix-effectiveness diagnosis-str)))
          (when (plist-get effectiveness :needs-escalation)
            (message "[self-heal] ⚠ grader fix tried %d× without success — escalating"
-                    (plist-get effectiveness :same-fix-count))
+                   (plist-get effectiveness :same-fix-count))
             (when (fboundp 'gptel-auto-workflow-self-audit--root)
               (let ((root (gptel-auto-workflow-self-audit--root)))
                 (with-temp-file (expand-file-name "var/tmp/grader-escalation.txt" root)
