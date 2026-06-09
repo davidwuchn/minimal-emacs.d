@@ -354,6 +354,45 @@ causing void-function errors when gptel-agent was not loaded."
           (should (= issues 0)))
       (test-self-heal-semantic--cleanup file))))
 
+(ert-deftest test-self-heal-semantic/fixes-unguarded-external-call ()
+  "Auto-fixer adds fboundp guard to unguarded external calls."
+  (let* ((content
+          "(defun load-skill (file)
+  (let ((parsed (gptel-agent-read-file file))
+        (name (car parsed)))
+    name))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          ;; First verify it's detected as unguarded
+          (let ((issues-before (gptel-auto-workflow--audit-unguarded-external-calls file)))
+            (should (>= issues-before 1)))
+          ;; Run the fixer
+          (let ((fixed (gptel-auto-workflow--fix-unguarded-external-calls file)))
+            (should (= fixed 1)))
+          ;; Verify it's now guarded
+          (let ((issues-after (gptel-auto-workflow--audit-unguarded-external-calls file)))
+            (should (= issues-after 0)))
+          ;; Verify the fix is correct
+          (let ((fixed-content (with-temp-buffer
+                                 (insert-file-contents file)
+                                 (buffer-string))))
+            (should (string-match-p "fboundp.*gptel-agent-read-file" fixed-content))))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/fixer-skips-already-guarded ()
+  "Auto-fixer doesn't double-guard already guarded calls."
+  (let* ((content
+          "(defun load-skill (file)
+  (when (fboundp 'gptel-agent-read-file)
+    (let ((parsed (gptel-agent-read-file file)))
+      parsed)))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((fixed (gptel-auto-workflow--fix-unguarded-external-calls file)))
+          (should (= fixed 0)))
+      (test-self-heal-semantic--cleanup file))))
+
 ;; ── Test 6: Entry point function ──
 
 (ert-deftest test-self-heal-semantic/entry-point-runs ()

@@ -79,55 +79,82 @@ These targets may need different research patterns or the research findings were
 
 
 
+
+
+
+
+
+
+
+
 ## Allium Behavioral Spec (auto-generated, v3)
 
 *3 check issues (severity 0.00). EXTRACTED from distill→check pipeline.*
 
 ```allium
-# Distillation
+# Distilled Research Output
 
-## Scope
-163 experiments across 45 gptel modules using the `template-default` research strategy. The target surface spans auto-workflow orchestration, tools-agent runtime/staging/error paths, extensions (backend registry, circuit breaker, retry, tool permits, core), benchmarks (principles, core, subagent), and supporting infrastructure (knowledge reasoning, monitoring, self-audit, CQ evolution, mementum, staging-merge/review).
+## Strategy
+**template-default** — 166 experiments across ~50 gptel/agent workflow modules.
 
-## Substantive Finding (1 kept hypothesis)
+## Signal-to-Noise
+Overwhelmingly empty. Of 166 experiments, **1 substantive hypothesis was kept**; the rest were discarded as `unknown` or template placeholders (one discarded entry even left blank where "[what changes & why]" was required).
 
-**Defensive FSM guard in `my/gptel-auto-retry`.** Wrapping the call to `gptel--fsm-next` in a `condition-case` so that an unresolvable next-state condition yields `ERRS` rather than signaling:
+## The One Finding Worth Keeping
 
-- Protects the retry loop from being torn down by an upstream FSM invariant violation.
-- Routes the failure back through the normal transition path, preserving whatever logging/notification the `ERRS` arm already implements.
-- Costs nothing on the happy path (a `condition-case` with no matching condition is effectively a no-op besides the tag form).
+> **Wrap `gptel--fsm-next` in `condition-case` to prevent retry-machinery crashes.**
+>
+> In `my/gptel-auto-retry`, if the FSM is in an invalid state and cannot determine the next transition, `gptel--fsm-next` raises an error that propagates up and aborts the retry loop entirely. Wrapping the call in `condition-case` and falling back to `ERRS` lets the original transition path handle the failure gracefully instead of tearing down the retry pipeline.
 
-That is the only hypothesis the harness actually retained evidence for.
+### Concrete shape
+```elisp
+;; before
+(next-state (gptel--fsm-next fsm current-state))
 
-## Discarded / Unknown
-All 3 discard slots are `unknown` — the first is a verbatim template stub ("[what changes & why]" (NEVER leave blank)), and the next two are unpopulated placeholders. No hypotheses were explicitly rejected with reason; effectively nothing was ruled out.
+;; after  
+(next-state (condition-case nil
+                (gptel--fsm-next fsm current-state)
+              (error 'errs)))
+```
 
-## Gaps in the run
+### Why it matters
+- The retry path (`my/gptel-auto-retry`) is a recovery mechanism — it is *itself* the thing that should never crash on FSM invalidity.
+- Falling back to `ERRS` preserves the existing error-handling transition rather than bypassing it via an uncaught throw.
+- This is defensive coding for a rare but observable failure mode (stale FSM state after upstream errors).
 
-1. **Hypothesis coverage is near-zero.** Out of 163 experiments, the template produced one confirmed hypothesis and zero reasoned rejections. This is a template-fill failure, not a signal about the codebase — the targets were not interrogated.
-2. **No kept hypotheses for any of the 45 targets except the FSM/`auto-retry` adjacency.** The auto-workflow production/evolution/knowledge-reasoning/ontology-router/monitoring-agent modules, the tools-agent staging-merge/runtime/validation/error harness, and the extensions (circuit breaker, retry, tool permits, backend registry) were not examined in any captured result.
-3. **No cross-target synthesis.** Nothing links, e.g., `gptel-ext-retry.el` to `my/gptel-auto-retry`, or the staging-merge/approval-queue/decision-classification trio. The single kept finding sits in isolation.
-4. **No `[what changes & why]` entry was produced** — the template's required change-rationale field is empty across the board.
+## Honest Assessment
 
-## Recommended next action
+The 166-experiment run produced near-zero yield. Possible causes:
+- **Template-default strategy too generic** — no target-specific hypothesis generation.
+- **Targets too broad** — 47 modules means shallow coverage per module.
+- **Hypothesis template not enforced** — discarded hypotheses are literally `unknown` or left blank, suggesting the experimental loop isn't producing candidates worth testing.
 
-The run should be re-run with the hypothesis-extraction template fields actually populated, or the existing artifacts should be back-filled. The `template-default` strategy is clearly not producing output for this corpus. A narrower scope (e.g., the auto-retry / ext-retry / circuit-breaker cluster, or the tools-agent staging + validation + error trio) would likely yield a denser, more useful kept-hypothesis set than another full-corpus sweep with the same template.
+## Recommendation
+Before another 166-experiment run, tighten:
+1. **Scope** — pick 3–5 modules per cycle, not 47.
+2. **Hypothesis template** — reject `unknown` results instead of recording them as "discarded".
+3. **Strategy** — replace `template-default` with a per-module seed (recent diffs, open TODOs, error sites) so candidates are anchored to real code, not generic patterns.
 ```
 
 ### Check Issues
 
-**Check on the distillation — verdict: structurally sound, but a few claims need tightening before you act on it.**
+# Review
 
-### Correct as written
-- The 1-of-163 framing is fair *if* 163 is the experiment count, not the hypothesis count. The report blurs this — see below.
-- "Template-fill failure, not a signal about the codebase" is the right read. A single surfaced hypothesis with three empty discard slots is exactly what a misconfigured template produces; it's not evidence the corpus is empty.
-- The four gap items are well-stated and distinct. Each points at a different failure mode (coverage, scope, synthesis, required-field).
-- The recommended next action is concrete: either back-fill the existing artifacts or pick a narrower cluster. The two suggested clusters (retry/circuit-breaker triad, or tools-agent staging+validation+error) are reasonable choices.
+Overall this is **well-structured and honest** — the meta-observations about the 166-experiment run are the strongest part. But the single technical finding has issues worth fixing before it's acted on.
 
-### Needs qualification
+## Concrete issues
 
-1. **"1 / 163" denominator.** "Out of 163 experiments, … one confirmed hypothesis and zero reasoned rejections" reads as if 163 is the hypothesis count. If 163 is the *run* count, the ratio is fine; if 163 is the *hypotheses generated* count, that's a much harsher statement and you should say so. Clarify which it is. Same concern applies to "no kept hypotheses for any of the 45 targets" — that should be "no kept hypotheses *captured*," since a broken template can't prove absence.
+### 1. `ERRS` vs `'errs` — case and quoting mismatch
+The prose refers to `ERRS` (uppercase) but the code returns `'errs` (lowercase, quoted symbol). In Emacs Lisp these are **different symbols**. Pick one and use it consistently. If the FSM actually defines a state called `errs` (lowercase), the code is correct and the prose needs fixing. If the prose was intended literally, the code needs fixing.
 
-2. **"Costs nothing on the happy path."** Slight overstatement. `condition-case` is a cheap form (basically an `unwind-pr
+### 2. Symbol vs keyword — the fallback value
+`(error 'errs)` returns the **symbol** `errs`. This only works if the FSM's error state is literally the symbol `errs`. If states are keywords (`:errs`), strings (`"errs"`), or something else, this silently does the wrong thing — `next-state` will be bound to a value the FSM can't match.
+
+**Check the actual FSM definition** in `my/gptel-auto-retry`. If states are declared like `(defconst my/gptel-auto-retry-states '(ok errs retry done))`, the symbol is correct. If they're keywords, this is a bug.
+
+### 3. Claims stated more definitively than the evidence supports
+> "`gptel--fsm-next` raises an error that propagates up and aborts the retry loop entirely"
+
+This reads as observed fact, but it's an **interpretation of behavior**. Was the propagation actually traced, or inferred from a crash trace? "Observed" or "r
 
 ... (truncated)
