@@ -6688,7 +6688,33 @@ Signals ert-test-failed if check fails. Use in ERT tests."
 
 (defvar gptel-auto-workflow--self-healing-log nil
   "List of self-healing actions taken.  Each entry is a plist with
-:timestamp, :diagnosis, :remedy, :before-rate, :after-rate.")
+:timestamp, :diagnosis, :remedy, :before-rate, :after-rate,
+:effective (t/nil/PENDING).")
+
+(defun gptel-auto-workflow--verify-fix-effectiveness (diagnosis)
+  "Check if previous fixes for DIAGNOSIS actually worked.
+Returns plist: (:effective-p :same-fix-count :needs-escalation).
+If the same fix was tried >=3 times with no improvement, escalate."
+  (let ((same-fix-count 0)
+        (last-effective nil))
+    (dolist (entry gptel-auto-workflow--self-healing-log)
+      (when (equal (plist-get entry :diagnosis) diagnosis)
+        (setq same-fix-count (1+ same-fix-count))
+        (setq last-effective (plist-get entry :effective))))
+    (list :effective-p (eq last-effective t)
+          :same-fix-count same-fix-count
+          :needs-escalation (and (>= same-fix-count 3)
+                                 (not (eq last-effective t))))))
+
+(defun gptel-auto-workflow--self-heal-learn (diagnosis effective-p)
+  "Mark the last fix for DIAGNOSIS as effective or not.
+Updates the most recent matching entry in self-healing-log.
+This feeds the verify-learn loop: system remembers what worked."
+  (dolist (entry gptel-auto-workflow--self-healing-log)
+    (when (equal (plist-get entry :diagnosis) diagnosis)
+      (unless (plist-get entry :after-rate)
+        (plist-put entry :effective (if effective-p t 'PENDING))
+        (cl-return)))))
 
 (defun gptel-auto-workflow--check-pipeline-health (&optional results)
   "Analyze RESULTS for pipeline health issues.
@@ -6895,7 +6921,17 @@ cap is `2*default`)."
         (fixed nil))
     (pcase diagnosis-str
       ("grader-destroying-experiments"
-       ;; Safely increase grader timeout — never below 900s default
+       ;; VERIFY-LEARN: check if previous fixes for this diagnosis worked
+       (let ((effectiveness (gptel-auto-workflow--verify-fix-effectiveness diagnosis-str)))
+         (when (plist-get effectiveness :needs-escalation)
+           (message "[self-heal] ⚠ grader fix tried %d× without success — escalating"
+                    (plist-get effectiveness :same-fix-count))
+           ;; Escalation: force pipeline-level intervention via signal file
+           (let ((root (gptel-auto-workflow-self-audit--root)))
+             (with-temp-file (expand-file-name "var/tmp/grader-escalation.txt" root)
+               (insert (format "escalated: %d failed fix attempts\n"
+                               (plist-get effectiveness :same-fix-count)))))))
+       ;; Apply the fix (always — even if escalating, still try the safe timeout)
        (let ((new-timeout (gptel-auto-workflow--auto-remediate-grader-timeout)))
          (when new-timeout
            (message "[self-heal] Grader destroying experiments — timeout set to %ds (min 900s)"
