@@ -7,8 +7,10 @@
     (while (string-match "gptel-auto-workflow-self-audit--root" source pos)
       (let ((preceding (substring source (max 0 (- (match-beginning 0) 300))
                                   (match-beginning 0))))
-        (unless (string-match-p "fboundp" preceding)
-          (push (match-beginning 0) unguarded)))
+        ;; Skip declare-function lines (they're not calls)
+        (unless (string-match-p "declare-function" preceding)
+          (unless (string-match-p "fboundp" preceding)
+            (push (match-beginning 0) unguarded))))
       (setq pos (1+ (match-beginning 0))))
     unguarded))
 
