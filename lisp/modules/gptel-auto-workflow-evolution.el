@@ -7588,12 +7588,19 @@ Verification: byte-compiled cleanly, no warnings.\n\nDiff:\n+ \"Return 1.\"\n"))
                                  (setq probe-healthy nil)
                                  (message "[self-heal] Probe: grader timeout (%ds) — grader BROKEN"
                                           probe-timeout)))))
-          (gptel-auto-experiment-grade
-           trivial-output
-           (lambda (grade)
+          (condition-case probe-err
+              (gptel-auto-experiment-grade
+               trivial-output
+               (lambda (grade)
+                 (cancel-timer probe-timer)
+                 (setq probe-done t)
+                 (gptel-auto-workflow--probe-classify-result grade)))
+            (error
              (cancel-timer probe-timer)
              (setq probe-done t)
-             (gptel-auto-workflow--probe-classify-result grade)))
+             (setq probe-healthy nil)
+             (message "[self-heal] Probe: grader crashed — %s"
+                      (error-message-string probe-err))))
           ;; Wait synchronously (max probe-timeout seconds)
           (let ((wait-start (float-time)))
             (while (and (not probe-done)
