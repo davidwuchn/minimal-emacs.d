@@ -1479,7 +1479,7 @@ Returns plist: (:graph-tokens :raw-tokens :savings-pct :ratio)."
          (ec 0))
     (when graph (maphash (lambda (_k e) (setq ec (+ ec (length (or e ()))))) graph))
     (let* ((graph-tokens (+ (* nc 10) (* ec 15) 100))  ; ~10 tok/node, ~15 tok/edge
-           (root (gptel-auto-workflow-self-audit--root))
+           (root (and (fboundp (quote gptel-auto-workflow-self-audit--root)) (gptel-auto-workflow-self-audit--root)))
            (raw-lines 0))
       (when root
         (dolist (f (directory-files (expand-file-name "lisp/modules" root) t "\\.el$"))
@@ -1541,7 +1541,7 @@ Writes timestamps + node/edge counts to OUTPUT-FILE."
   "Save a graph query and its result as a mementum memory for future synthesis.
 The feedback loop: what the system asks about gets incorporated into
 knowledge."
-  (let* ((root (gptel-auto-workflow-self-audit--root))
+  (let* ((root (and (fboundp (quote gptel-auto-workflow-self-audit--root)) (gptel-auto-workflow-self-audit--root)))
          (mem-file (expand-file-name
                     (format "mementum/memories/graph-query-%s.md"
                             (format-time-string "%Y%m%dT%H%M%S"))

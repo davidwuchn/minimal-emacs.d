@@ -161,8 +161,8 @@ defun as the call, not just the immediately preceding lines."
                     ;; Search backward for the enclosing (defun
                     (when (re-search-backward "^(defun\\b" nil t)
                       (setq defun-start-line (line-number-at-pos (point)))))
-                  ;; Check for guard anywhere within the defun (after defun-start-line)
-                  (let ((check-line (max 1 (- call-line 1)))
+                  ;; Check for guard anywhere within the defun (including current line)
+                  (let ((check-line call-line)
                         (end-of-lookback defun-start-line))
                     (while (and (>= check-line end-of-lookback)
                                 (not found-guard))
@@ -340,16 +340,19 @@ Returns number of calls fixed.  Safe: only adds guards, never changes logic."
                       (beginning-of-line)
                       ;; Find the opening paren of the call
                       (when (re-search-forward (format "(%s" (symbol-name fn)) (line-end-position) t)
-                        (let ((call-start (match-beginning 0)))
-                          ;; Insert guard: (and (fboundp 'fn) (fn ...))
+                        (let* ((call-start (match-beginning 0))
+                               (call-end-pos nil))
+                          ;; Find the matching closing paren BEFORE modifying buffer
+                          (goto-char call-start)
+                          (forward-sexp 1)  ; move to the matching close paren
+                          (setq call-end-pos (point))
+                          ;; Now insert the closing paren for the (and ...) wrapper
+                          (insert ")")
+                          ;; Insert the opening part: (and (fboundp 'fn)
                           (goto-char call-start)
                           (insert "(and (fboundp '")
                           (insert (symbol-name fn))
                           (insert ") ")
-                          ;; Find the matching close paren and insert another close paren
-                          (forward-char 1)  ; move past the opening paren
-                          (forward-sexp 1)  ; move to the matching close paren
-                          (insert ")")
                           (cl-incf fixed)))))))))))
       ;; Write back if we fixed anything (INSIDE with-temp-buffer)
       (when (> fixed 0)
