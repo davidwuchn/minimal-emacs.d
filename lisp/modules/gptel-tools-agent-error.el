@@ -872,12 +872,13 @@ Also logs agent-output snippet for debugging when category is :unknown."
 
 (defun gptel-auto-experiment--adaptive-max-experiments (original-max)
   "Return adjusted experiment count based on API error rate."
-  (if (gptel-auto-experiment--should-reduce-experiments-p)
-      (let ((halved (max 1 (ash original-max -1))))
-        (message "[auto-workflow] Reducing experiments from %d to %d due to API errors"
-                 original-max halved)
-        halved)
-    original-max))
+  (let ((omax (or original-max 1)))    ; guard nil
+    (if (gptel-auto-experiment--should-reduce-experiments-p)
+        (let ((halved (max 1 (ash omax -1))))
+          (message "[auto-workflow] Reducing experiments from %d to %d due to API errors"
+                   omax halved)
+          halved)
+      omax)))
 
 
 ;;; Dynamic Stop
