@@ -408,6 +408,43 @@ never touches code structure."
                fixed (file-name-nondirectory file)))
     fixed))
 
+(defun gptel-auto-workflow--fix-missing-provide (file)
+  "Add (provide 'feature) statement to FILE if missing.
+Feature name is derived from filename (e.g., gptel-foo.el -> gptel-foo).
+Idempotent: returns 0 if file already has provide statement.
+Returns 1 if fixed, 0 if no change needed."
+  (let ((fixed 0)
+        (feature (file-name-sans-extension (file-name-nondirectory file)))
+        (has-provide nil)
+        (new-content nil))
+    ;; Read file content
+    (with-temp-buffer
+      (insert-file-contents file)
+      (setq new-content (buffer-string)))
+    ;; Check if provide already exists
+    (when (string-match "^(provide\\s-+'[^)]+)" new-content)
+      (setq has-provide t))
+    (unless has-provide
+      ;; Find the ';;; foo.el ends here' marker and insert provide before it
+      (if (string-match "^;;; .*ends here$" new-content)
+          (let ((marker-start (match-beginning 0)))
+            (setq new-content
+                  (concat (substring new-content 0 marker-start)
+                          (format "(provide '%s)\n" feature)
+                          (substring new-content marker-start)))
+            (setq fixed 1))
+        ;; No ends-here marker: append at end
+        (unless (string= (substring new-content -1) "\n")
+          (setq new-content (concat new-content "\n")))
+        (setq new-content (concat new-content
+                                 (format "(provide '%s)\n" feature)))
+        (setq fixed 1))
+      (with-temp-file file
+        (insert new-content))
+      (message "[self-heal-semantic] Added (provide '%s) to %s"
+               feature (file-name-nondirectory file)))
+    fixed))
+
 (cl-defun gptel-auto-workflow--semantic-audit-file (file &key (_auto-fix nil))
   "Run all semantic audit checks on FILE."
   (gptel-auto-workflow--semantic-audit-reset)
@@ -472,6 +509,12 @@ auto-fixers for detected issues (e.g., excessive blank lines)."
         (when (cl-some (lambda (r) (eq (plist-get r :type) 'unguarded-external-call))
                        log)
           (let ((fixed (gptel-auto-workflow--fix-unguarded-external-calls file)))
+            (when (> fixed 0)
+              (cl-incf total-fixed fixed))))
+        ;; Fix missing provide
+        (when (cl-some (lambda (r) (eq (plist-get r :type) 'missing-provide))
+                       log)
+          (let ((fixed (gptel-auto-workflow--fix-missing-provide file)))
             (when (> fixed 0)
               (cl-incf total-fixed fixed))))))
     (when (> total-fixed 0)

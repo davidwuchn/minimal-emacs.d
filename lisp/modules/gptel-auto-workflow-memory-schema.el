@@ -1347,15 +1347,12 @@ fetch('%s').then(r=>r.json()).then(data=>{
 label:l.type,title:l.confidence+'
 
 
-
 w='+l.weight,color:{color:l.confidence===\='EXTRACTED\='?'#4fc3f7':l.confidence===\='INFERRED\='?'#ffb74d':'#ef5350'}})));
   var container=document.getElementById(\='graph\=');
   new vis.Network(container,{nodes:nodes,edges:edges},{
 
 
-
 groups:{1:{color:{background:'#1565c0'}},2:{color:{background:'#2e7d32'}},3:{color:{background:'#6a1b9a'}}},
-
 
 
 physics:{stabilization:{iterations:100}},edges:{arrows:\='to\=',smooth:{type:\='curvedCW\='}}});

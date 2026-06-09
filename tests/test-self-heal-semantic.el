@@ -210,6 +210,35 @@ legitimate subagent work. Set to nil to disable.\")")
           (should (= issues 0)))
       (test-self-heal-semantic--cleanup file))))
 
+(ert-deftest test-self-heal-semantic/fix-adds-missing-provide ()
+  "Auto-fixer should add (provide 'feature) before 'ends here' marker."
+  (let* ((content
+          "(defun foo ()\n  1)\n;;; foo.el ends here\n")
+         (file (test-self-heal-semantic--tmp-file content))
+         (expected-feature (file-name-sans-extension
+                            (file-name-nondirectory file))))
+    (unwind-protect
+        (progn
+          (let ((fixed (gptel-auto-workflow--fix-missing-provide file)))
+            (should (= fixed 1))
+            (with-temp-buffer
+              (insert-file-contents file)
+              (goto-char (point-min))
+              (should (re-search-forward
+                       (format "^(provide '%s)" expected-feature)
+                       nil t)))))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/fix-no-op-when-present ()
+  "Auto-fixer should not modify files that already have provide."
+  (let* ((content
+          "(defun foo ()\n  1)\n(provide 'foo)\n;;; foo.el ends here\n")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((fixed (gptel-auto-workflow--fix-missing-provide file)))
+          (should (= fixed 0)))
+      (test-self-heal-semantic--cleanup file))))
+
 ;; ── Test 9: Unbalanced parens detection ──
 
 (ert-deftest test-self-heal-semantic/detects-unbalanced-parens ()
