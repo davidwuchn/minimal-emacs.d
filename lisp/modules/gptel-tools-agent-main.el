@@ -79,6 +79,9 @@
 (defvar gptel-auto-workflow--last-progress-time)
 (defvar gptel-auto-workflow--cron-safe-step nil
   "Current step in gptel-auto-workflow-cron-safe for debugging.")
+(defvar gptel-auto-workflow--cron-zero-streak 0
+  "Consecutive cycles where cron-error-propagation + zero-experiments-stuck co-occur.
+Reset to 0 on any healthy cycle.  When >=3, clears cron-safe-step to force a fresh cycle.")
 (defvar gptel-auto-experiment--api-error-count)
 (defvar gptel-auto-experiment--quota-exhausted)
 (defvar gptel-auto-experiment-delay-between)
@@ -978,14 +981,45 @@ If unhealthy and rollback succeeds, returns t after recovery."
               (message "[self-heal] ⚠ %d recurring runtime errors detected (see *Messages*)"
                        (length errors))
               (dolist (e (seq-take errors 3))
-                (message "[self-heal]   %s" e))))
+                (message "[self-heal]   %S" e))))
         (error nil)))
+    ;; Check 5: Cron-zero combo — pipeline stuck with error propagation
+    ;; If both cron-error-propagation and zero-experiments-stuck appear,
+    ;; the pipeline is blocked.  Track consecutive occurrences and force
+    ;; a fresh cycle after 3+ in a row.
+    (condition-case nil
+        (let ((issues (gptel-auto-workflow--detect-runtime-errors)))
+          (if (and issues
+                   (cl-find "cron-error-propagation" issues
+                            :key (lambda (e) (plist-get e :pattern)))
+                   (cl-find "zero-experiments-stuck" issues
+                            :key (lambda (e) (plist-get e :pattern))))
+              (progn
+                (ignore-errors (message "[self-heal] HIGH: cron-error + zero-experiments detected — pipeline stuck"))
+                (when (boundp 'gptel-auto-workflow--self-healing-log)
+                  (push (list :timestamp (float-time)
+                              :diagnosis "cron-zero-combo"
+                              :remedy "retry-experiment-trigger"
+                              :severity "HIGH"
+                              :effective 'PENDING)
+                        gptel-auto-workflow--self-healing-log))
+                (cl-incf gptel-auto-workflow--cron-zero-streak)
+                (when (>= gptel-auto-workflow--cron-zero-streak 3)
+                  (ignore-errors (message "[self-heal] cron-zero streak >=3, clearing cron-safe-step to force fresh cycle"))
+                  (setq gptel-auto-workflow--cron-safe-step nil)
+                  (setq gptel-auto-workflow--cron-zero-streak 0)))
+            ;; Healthy cycle: reset streak counter
+            (when (> gptel-auto-workflow--cron-zero-streak 0)
+              (setq gptel-auto-workflow--cron-zero-streak 0))))
+      (error nil))
     healthy))
 
 (defun gptel-auto-workflow--detect-runtime-errors ()
   "Scan recent daemon log for recurring runtime errors.
-Returns a list of error pattern strings with occurrence counts.
-Detects: void-variable, wrong-type-argument, listp, wrong-number-of-arguments.
+Returns a list of plists (:pattern LABEL :count N :remedy STRING), or nil if clean.
+Detects: void-variable, wrong-type-argument, listp, wrong-number-of-arguments,
+cron-error-propagation, zero-experiments, llm-nil-response, connection-broken,
+bdd-spec-failure, staging-setup-failure.
 OV5 uses this for self-diagnosis before experiments."
   (let* ((log-dir (expand-file-name "var/log" (gptel-auto-workflow--default-dir)))
          (files (directory-files log-dir t "\\.log$" t))
@@ -995,14 +1029,25 @@ OV5 uses this for self-diagnosis before experiments."
                                               (file-attributes a)))
                                  (float-time (file-attribute-modification-time
                                               (file-attributes b))))))))
-         (patterns '(("void-variable" . "void-variable")
-                     ("wrong-type-argument" . "wrong-type-argument")
-                     ("Wrong type argument" . "listp")
-                     ("wrong-number-of-arguments" . "wrong-number-of-arguments")
-                     ("Experiment run error" . "experiment-run-error")
-                     ("cross-subsystem failed" . "cross-subsystem-crash")
-                     ("consecutive failures" . "consecutive-failures")
-                     ("Daemon crashed" . "daemon-crash")))
+         ;; Each entry: (REGEXP LABEL THRESHOLD REMEDY)
+         ;; Existing patterns keep threshold=3 (same as old > count 2).
+         ;; New OV5 pipeline patterns use threshold=2 (default); bdd uses 3.
+         (patterns '(("void-variable"              "void-variable"              3 nil)
+                     ("wrong-type-argument"         "wrong-type-argument"        3 nil)
+                     ("Wrong type argument"         "listp"                      3 nil)
+                     ("wrong-number-of-arguments"   "wrong-number-of-arguments"  3 nil)
+                     ("Experiment run error"        "experiment-run-error"       3 nil)
+                     ("cross-subsystem failed"      "cross-subsystem-crash"      3 nil)
+                     ("consecutive failures"        "consecutive-failures"       3 nil)
+                     ("Daemon crashed"              "daemon-crash"               3 nil)
+                     ("Cron error at step"          "cron-error-propagation"     2 "self-heal-lesson-restore-error-propagation")
+                     ("0 total, 0 kept"             "zero-experiments-stuck"     2 "retry-experiment-trigger")
+                     ("0 experiments"               "zero-experiments-evolution" 2 "check-evolution-cycle-config")
+                     ("new-experiments=0"           "zero-experiments-evolution" 2 "check-evolution-cycle-config")
+                     ("LLM returned nil/non-string" "llm-nil-response"           2 "check-mementum-synthesis-api")
+                     ("connection broken by remote peer" "connection-broken"     2 "restart-llm-subprocess")
+                     ("allium-bdd.*:fail"           "bdd-spec-failure"           3 "investigate-systematic-bdd-failures")
+                     ("Missing staging branch configuration" "staging-setup-failure" 2 "reinitialize-staging-branch")))
          (results nil))
     (when (and newest (file-readable-p newest)
                ;; Only scan if file was written in last 2 hours
@@ -1013,20 +1058,29 @@ OV5 uses this for self-diagnosis before experiments."
       (with-temp-buffer
         (insert-file-contents newest)
         (dolist (p patterns)
-          (let ((count 0)
-                (last-line nil))
+          (let ((regexp (nth 0 p))
+                (label  (nth 1 p))
+                (threshold (nth 2 p))
+                (remedy (nth 3 p))
+                (count 0))
             (goto-char (point-min))
-            (while (re-search-forward (car p) nil t)
-              (cl-incf count)
-              (setq last-line (buffer-substring-no-properties
-                               (line-beginning-position) (line-end-position))))
-            (when (> count 2)  ; Only report if recurring (3+)
-              (push (format "[%s] %d occurrences — %s"
-                             (cdr p) count
-                             (if (> (length last-line) 100)
-                                 (concat (substring last-line 0 100) "...")
-                               last-line))
-                    results))))))
+            (while (re-search-forward regexp nil t)
+              (cl-incf count))
+            (when (>= count threshold)
+              (push (list :pattern label :count count :remedy remedy)
+                    results)))))
+      ;; Dedup: merge entries with the same :pattern label, keeping the highest count
+      (let ((merged (make-hash-table :test 'equal)))
+        (dolist (entry results)
+          (let ((label (plist-get entry :pattern))
+                (count (plist-get entry :count))
+                (remedy (plist-get entry :remedy)))
+            (if (gethash label merged)
+                (when (> count (plist-get (gethash label merged) :count))
+                  (puthash label (list :pattern label :count count :remedy remedy) merged))
+              (puthash label (list :pattern label :count count :remedy remedy) merged))))
+        (setq results nil)
+        (maphash (lambda (_k v) (push v results)) merged)))
     (nreverse results)))
 
 (defun gptel-auto-workflow--self-heal-rollback (&optional proj-root)
