@@ -2176,9 +2176,6 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
       (error (message "[evolution] WARNING: build-digital-twin failed: %s" err))))
   ;; Invalidate parse cache so this cycle sees fresh data
   (setq gptel-auto-workflow--results-cache nil)
-  ;; Invalidate ontology reorder cache (depends on parse results)
-  (when (boundp 'gptel-auto-workflow--reorder-cache)
-    (setq gptel-auto-workflow--reorder-cache nil))
   ;; Clear reasoning hit counts for new cycle
   (when (fboundp 'gptel-ai-behaviors--clear-reasoning-hits)
     (gptel-ai-behaviors--clear-reasoning-hits))
