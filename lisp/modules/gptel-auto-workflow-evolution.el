@@ -22,6 +22,10 @@
 ;; Soft require: knowledge-reasoning provides causal analysis and gap detection
 (require 'gptel-auto-workflow-knowledge-reasoning nil t)
 (require 'gptel-tools-agent-base nil t)
+;; Soft require: self-audit provides self-audit--root used in meta-reflection
+;; and grader remediation escalation (lines 7105, 7160).  Without this,
+;; (void-function gptel-auto-workflow-self-audit--root) blocks experiments.
+(require 'gptel-auto-workflow-self-audit nil t)
 
 ;; Forward declarations — defined in gptel-tools-agent-base (loaded before
 ;; this module via post-init's init-ai chain).  These silence the byte-compiler
@@ -7102,10 +7106,11 @@ logic itself may be wrong — escalate to human."
       (message "[self-heal] 🔮 Meta-reflection: only %.0f%% of fixes succeed (%d/%d) —
 reflection logic may be broken"
                (* 100 rate) success total)
-      (let ((root (gptel-auto-workflow-self-audit--root)))
-        (with-temp-file (expand-file-name "var/tmp/meta-escalation.txt" root)
-          (insert (format "meta-escalation: %d/%d fixes succeeded (%.0f%%)\n"
-                          success total (* 100 rate))))))
+       (when (fboundp 'gptel-auto-workflow-self-audit--root)
+         (let ((root (gptel-auto-workflow-self-audit--root)))
+           (with-temp-file (expand-file-name "var/tmp/meta-escalation.txt" root)
+             (insert (format "meta-escalation: %d/%d fixes succeeded (%.0f%%)\n"
+                             success total (* 100 rate)))))))
     rate))
 
 (defun gptel-auto-workflow--auto-remediate (diagnosis)
@@ -7157,10 +7162,11 @@ reflection logic may be broken"
          (when (plist-get effectiveness :needs-escalation)
            (message "[self-heal] ⚠ grader fix tried %d× without success — escalating"
                     (plist-get effectiveness :same-fix-count))
-           (let ((root (gptel-auto-workflow-self-audit--root)))
-             (with-temp-file (expand-file-name "var/tmp/grader-escalation.txt" root)
-               (insert (format "escalated: %d failed fix attempts\n"
-                               (plist-get effectiveness :same-fix-count)))))))
+            (when (fboundp 'gptel-auto-workflow-self-audit--root)
+              (let ((root (gptel-auto-workflow-self-audit--root)))
+                (with-temp-file (expand-file-name "var/tmp/grader-escalation.txt" root)
+                  (insert (format "escalated: %d failed fix attempts\n"
+                                  (plist-get effectiveness :same-fix-count))))))))
        ;; Apply the fix (always — even if escalating, still try the safe timeout)
        (let ((new-timeout (gptel-auto-workflow--auto-remediate-grader-timeout)))
          (when new-timeout

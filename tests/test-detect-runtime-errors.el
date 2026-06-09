@@ -96,4 +96,17 @@
     ;; This test verifies the patterns are well-formed regexps
     (should (equal (length results) 0)))) ;; count=1 < threshold=2, so no results
 
+;; ─── Test: self-audit--root is loadable via soft require ───
+
+(ert-deftest test-detect/self-audit-require-succeeds ()
+  "evolution.el's soft require of gptel-auto-workflow-self-audit should load
+the module, making self-audit--root fboundp when the file exists."
+  ;; The soft require should not signal an error even if file is absent
+  (should (condition-case nil
+              (progn (require 'gptel-auto-workflow-self-audit nil t) t)
+            (error nil)))
+  ;; If the module loaded, self-audit--root must be fboundp
+  (when (featurep 'gptel-auto-workflow-self-audit)
+    (should (fboundp 'gptel-auto-workflow-self-audit--root))))
+
 (provide 'test-detect-runtime-errors)
