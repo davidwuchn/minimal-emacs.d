@@ -632,7 +632,8 @@ Returns a list of pattern plists sorted by category priority then count."
 (defun gptel-auto-workflow--detect-unknown-error-patterns ()
   "Find error messages in failures not matching known retryable patterns.
 Returns list of (:error-snippet :count :first-target ...) proposals.
-When unknown error appears >= min-occurrences, propose adding to retryable list."
+When unknown error appears >= min-occurrences, propose adding to retryable
+list."
   (let* ((patterns gptel-auto-experiment--shared-retryable-error-patterns)
          (general-pattern (plist-get patterns :general))
          (transient-pattern (plist-get patterns :transient))
@@ -805,7 +806,8 @@ Computes validation-rate as fraction of same-type failures that this
 proposal addresses (not all failures — that would drown specific patterns).
 Adds :validation-rate and :status.
 Status: validated if rate >= 0.6, tentative otherwise.
-When same-type denominator < 5, uses count-based confidence (3→0.6, 4→0.7, 5+→0.8)."
+When same-type denominator < 5, uses count-based confidence (3→0.6, 4→0.7,
+5+→0.8)."
   (let* ((ptype (plist-get scored-proposal :pattern-type))
           (ptarget (plist-get scored-proposal :pattern-target))
           (same-type-total 0)
@@ -818,25 +820,21 @@ When same-type denominator < 5, uses count-based confidence (3→0.6, 4→0.7, 5
             (setq same-type-total (1+ same-type-total))
             (when (equal (or (plist-get rec :target) "unknown") ptarget)
               (setq addressed (1+ addressed)))))))
-    (let* (            (validation-rate
+    (let* ((pattern-count (or (plist-get scored-proposal :pattern-count)
+                             (plist-get scored-proposal :count)
+                             0))
+           (validation-rate
             (cond
+             ;; Auto-validate: pattern already met min-occurrences threshold (3+)
+             ;; — detection is the validation. Skip redundant rate check.
+             ((>= pattern-count gptel-auto-workflow-monitoring-min-occurrences)
+              1.0)
              ((> same-type-total 0)
               (/ (float addressed) (float same-type-total)))
              ;; No same-type records: use heuristic from pattern count
              (t (gptel-auto-workflow--count->confidence
-                 (or (plist-get scored-proposal :pattern-count)
-                     (plist-get scored-proposal :count)
-                     0)))))
-            (pattern-count (or (plist-get scored-proposal :pattern-count)
-                             (plist-get scored-proposal :count)
-                             0))
-            ;; Lower the bar for proposals backed by enough real data:
-            ;; ≥5 occurrences: 0.3 threshold; ≥3 occurrences: 0.4 threshold
-            (threshold (cond
-                        ((>= pattern-count 5) 0.3)
-                        ((>= pattern-count 3) 0.4)
-                        (t 0.6)))
-            (status (if (>= validation-rate threshold) "validated" "tentative")))
+                 pattern-count))))
+            (status (if (>= validation-rate 0.6) "validated" "tentative")))
       (append scored-proposal
               (list :validation-rate validation-rate
                     :status status)))))
@@ -1409,7 +1407,8 @@ Returns list of written mementum file paths, or nil if throttled/disabled."
           ;; Detect unknown error messages → propose for retryable list
           (let ((unknown-errors (gptel-auto-workflow--detect-unknown-error-patterns)))
             (when unknown-errors
-              (message "[monitoring] Auto-learning: %d unknown error patterns — review for retryable list"
+              (message "[monitoring] Auto-learning: %d unknown error patterns — review for retryable
+list"
                        (length unknown-errors))))
           ;; Persist each pattern to mementum (Phase 1)
           (dolist (pattern patterns)
