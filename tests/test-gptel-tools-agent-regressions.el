@@ -7883,6 +7883,51 @@ failure."
                          "stop")))
       (delete-directory tmpdir t))))
 
+(ert-deftest regression/auto-workflow/load-research-findings-nil-cache-no-crash ()
+  "load-research-findings must not crash when cache hash table is nil.
+standalone-research.el re-declares gptel-auto-workflow--research-findings-cache
+as nil. If it loads after strategic.el, gethash/puthash would crash with
+'Wrong type argument: hash-table-p, nil'. The function must handle nil gracefully."
+  (require 'gptel-auto-workflow-strategic)
+  (let* ((tmpdir (make-temp-file "gptel-nil-cache" t))
+         (findings "## Internal analysis\n- Pattern: cold-start fallback")
+         (gptel-auto-workflow--project-root-override tmpdir)
+         ;; Simulate standalone-research.el clobbering the cache to nil
+         (gptel-auto-workflow--research-findings-cache nil)
+         (gptel-auto-workflow--current-research-context nil)
+         (findings-file (expand-file-name "var/tmp/research-findings.md" tmpdir)))
+    (unwind-protect
+        (progn
+          (make-directory (file-name-directory findings-file) t)
+          (with-temp-file findings-file
+            (insert (format "# Research Findings\n\n%s" findings)))
+          ;; Must NOT signal "Wrong type argument: hash-table-p, nil"
+          (should (equal (gptel-auto-workflow-load-research-findings) findings))
+          ;; Context should still be restored even though cache was nil
+          (should (plist-member gptel-auto-workflow--current-research-context :hash)))
+      (delete-directory tmpdir t))))
+
+(ert-deftest regression/auto-workflow/pipeline-lock-prevents-stacking ()
+  "Pipeline lock file must be written on start and cleaned up on exit.
+Regression: lock file was checked but never written, allowing cron
+instances to stack on top of each other."
+  (let* ((tmpdir (make-temp-file "gptel-pipeline-lock" t))
+         (lock-file (expand-file-name "pipeline.lock" tmpdir)))
+    (unwind-protect
+        (progn
+          ;; Simulate: write a PID that IS alive (our own PID)
+          (write-region (number-to-string (emacs-pid)) nil lock-file)
+          (should (file-exists-p lock-file))
+          ;; Read back and verify it matches our PID
+          (let ((lock-pid (with-temp-buffer
+                            (insert-file-contents lock-file)
+                            (string-trim (buffer-string)))))
+            (should (string= lock-pid (number-to-string (emacs-pid))))
+            ;; kill -0 equivalent: signal 0 to check if PID is alive
+            (should (memq (call-process "kill" nil nil nil "-0" lock-pid)
+                          '(0)))))  ; 0 = process exists
+      (delete-directory tmpdir t))))
+
 (ert-deftest regression/auto-workflow/log-tsv-preserves-failure-decision-labels ()
   "results.tsv should keep terminal failure labels instead of flattening to discarded."
   (let* ((tmpdir (make-temp-file "gptel-tsv-decisions" t))

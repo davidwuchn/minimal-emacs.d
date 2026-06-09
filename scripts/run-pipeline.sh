@@ -138,6 +138,10 @@ if [ -f "$LOCK_FILE" ]; then
     fi
 fi
 
+# Acquire lock — write PID and clean up on exit
+echo $$ > "$LOCK_FILE"
+trap 'rm -f "$LOCK_FILE"' EXIT
+
 # ─── Cross-machine coordination ───
 # YC pattern: avoid duplicate work between Pi5 and local. If another machine
 # (per git-tracked "active-runs" file) ran within the last 4 hours, skip.

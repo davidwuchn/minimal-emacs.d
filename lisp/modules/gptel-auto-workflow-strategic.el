@@ -2721,14 +2721,16 @@ When COMPLETION-CALLBACK is non-nil, call it after findings are cached."
         (progn
           (message "[research] τ Wisdom: skipping — findings still fresh (<1h)")
           (when completion-callback
-            (let ((cached (or (gethash cache-key gptel-auto-workflow--research-findings-cache)
+            (let ((cached (or (and (hash-table-p gptel-auto-workflow--research-findings-cache)
+                                   (gethash cache-key gptel-auto-workflow--research-findings-cache))
                               (ignore-errors (gptel-auto-workflow-load-research-findings)))))
               (funcall completion-callback cached))))
       (progn
         (message "[research] Starting periodic research for %s..." proj-root)
         (gptel-auto-workflow--research-patterns
          (lambda (findings)
-           (puthash cache-key findings gptel-auto-workflow--research-findings-cache)
+            (when (hash-table-p gptel-auto-workflow--research-findings-cache)
+              (puthash cache-key findings gptel-auto-workflow--research-findings-cache))
            (let ((file (gptel-auto-workflow--research-file)))
              (make-directory (file-name-directory file) t)
              (with-temp-file file
@@ -2768,7 +2770,8 @@ Returns empty string if no cache exists.
 Findings are cached per-project."
   (let* ((proj-root (gptel-auto-workflow--effective-project-root))
          (cache-key (gptel-auto-workflow--normalized-cache-key proj-root))
-         (cached (gethash cache-key gptel-auto-workflow--research-findings-cache))
+         (cached (and (hash-table-p gptel-auto-workflow--research-findings-cache)
+                      (gethash cache-key gptel-auto-workflow--research-findings-cache)))
          (file (gptel-auto-workflow--research-file))
          (file-findings nil))
     (when (file-exists-p file)
@@ -2793,7 +2796,8 @@ Findings are cached per-project."
            (or (not (stringp cached))
                (string-empty-p cached)
                (> (length file-findings) (length cached))))
-      (puthash cache-key file-findings gptel-auto-workflow--research-findings-cache)
+      (when (hash-table-p gptel-auto-workflow--research-findings-cache)
+        (puthash cache-key file-findings gptel-auto-workflow--research-findings-cache))
       (gptel-auto-workflow--ensure-research-context file-findings)
       (message "[research] Loaded cached findings from disk for %s (%d chars)"
                proj-root (length file-findings))

@@ -7,7 +7,7 @@
 (define-error 'research-pipeline-defect "Research pipeline defect" 'error)
 (defvar gptel-auto-workflow--current-research-context nil)
 (defvar gptel-auto-workflow--research-in-progress nil)
-(defvar gptel-auto-workflow--research-findings-cache nil)
+(defvar gptel-auto-workflow--research-findings-cache) ; forward decl — initialized in gptel-auto-workflow-strategic.el
 (defun slr--root ()
   "Return the project root for standalone research."
   (file-name-as-directory
