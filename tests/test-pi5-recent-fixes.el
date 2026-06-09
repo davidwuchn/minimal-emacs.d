@@ -8,6 +8,8 @@
   (load-file "lisp/modules/gptel-auto-workflow-evolution.el"))
 (unless (fboundp 'gptel-auto-experiment--effective-grade-timeout)
   (load-file "lisp/modules/gptel-tools-agent-benchmark.el"))
+(unless (fboundp 'gptel-auto-workflow--write-heartbeat)
+  (load-file "lisp/modules/gptel-tools-agent-experiment-loop.el"))
 ;; Ensure gptel-auto-workflow--grader-timeout-override is globally bound
 ;; for the (boundp ...) check in --effective-grade-timeout. The
 ;; production file (gptel-auto-workflow-self-audit.el) defvars it; we
@@ -158,6 +160,67 @@ failure modes. The key invariants:
           (let ((eff-result (gptel-auto-experiment--effective-grade-timeout)))
             (should (= 1800 eff-result))))
       (setq gptel-auto-workflow--grader-timeout-override nil))))
+
+;; ---- Heartbeat tests ----
+
+(ert-deftest test-pi5/heartbeat-writes-timestamp ()
+  "Verify heartbeat function writes a file with a valid recent epoch timestamp."
+  (let* ((tmp-dir (make-temp-file "heartbeat-test-" t))
+         (tmp-file (expand-file-name "daemon-heartbeat" tmp-dir)))
+    (unwind-protect
+        (progn
+          (gptel-auto-workflow--write-heartbeat tmp-file)
+          (should (file-exists-p tmp-file))
+          (let* ((content (with-temp-buffer
+                            (insert-file-contents tmp-file)
+                            (buffer-string)))
+                 (ts (string-to-number content))
+                 (now (string-to-number (format-time-string "%s")))
+                 (delta (abs (- now ts))))
+            (should (> ts 0))
+            (should (< delta 5))))  ; within 5 seconds
+      (delete-directory tmp-dir t))))
+
+(ert-deftest test-pi5/heartbeat-staleness-detection ()
+  "Verify the shell check_heartbeat_staleness function detects stale vs fresh."
+  (let* ((tmp-dir (make-temp-file "heartbeat-stale-test-" t))
+         (hb-file (expand-file-name "daemon-heartbeat" tmp-dir))
+         ;; Extract just the function from the script to avoid sourcing
+         ;; the full script (which has set -euo pipefail and top-level code).
+         (func-src "
+LOG=/dev/null
+check_heartbeat_staleness() {
+    local hb_file=\"${1:-}\" threshold=\"${2:-180}\"
+    if [ ! -f \"$hb_file\" ]; then return 1; fi
+    local hb_ts
+    hb_ts=$(head -1 \"$hb_file\" 2>/dev/null | tr -d '[:space:]')
+    if [ -z \"$hb_ts\" ]; then return 1; fi
+    local now delta
+    now=$(date +%s)
+    delta=$((now - hb_ts))
+    if [ \"$delta\" -lt \"$threshold\" ]; then return 0; fi
+    return 1
+}
+check_heartbeat_staleness"))
+    (unwind-protect
+        (progn
+          ;; Test 1: Fresh heartbeat (< 180s) should return 0
+          (with-temp-buffer
+            (insert (format-time-string "%s"))
+            (write-region (point-min) (point-max) hb-file nil 'silent))
+          (should (eq 0 (call-process "bash" nil nil nil
+                                      "-c" (concat func-src " " (shell-quote-argument hb-file) " 180"))))
+          ;; Test 2: Stale heartbeat (300s ago) should return 1
+          (with-temp-buffer
+            (insert (number-to-string (- (string-to-number (format-time-string "%s")) 300)))
+            (write-region (point-min) (point-max) hb-file nil 'silent))
+          (should (eq 1 (call-process "bash" nil nil nil
+                                      "-c" (concat func-src " " (shell-quote-argument hb-file) " 180"))))
+          ;; Test 3: Missing file should return 1
+          (delete-file hb-file)
+          (should (eq 1 (call-process "bash" nil nil nil
+                                      "-c" (concat func-src " " (shell-quote-argument hb-file) " 180")))))
+      (delete-directory tmp-dir t))))
 
 (provide 'test-pi5-recent-fixes)
 ;;; test-pi5-recent-fixes.el ends here

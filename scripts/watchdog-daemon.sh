@@ -157,29 +157,22 @@ socket_accepts_connections() {
 }
 
 # Check if daemon is reachable via emacsclient.
-# First verify the process exists — a busy Emacs blocked on API calls
-# still has its process running, just can't respond to emacsclient.
-# Returns 0 if responsive or process is alive (busy), 1 if truly gone.
+# Uses heartbeat file for freeze detection: if the Emacs main thread is
+# blocked (e.g. on an API call), timers stop firing and the heartbeat goes
+# stale.  A daemon with fresh heartbeat is "alive" even if emacsclient hangs.
+# Returns 0 if responsive or alive (fresh heartbeat), 1 if frozen/gone.
 daemon_responds() {
     timeout 5 emacsclient -a false -s "$SERVER_NAME" --eval 't' >/dev/null 2>&1 && return 0
     # A refused Unix socket means the server endpoint is broken, not just busy.
     if ! socket_accepts_connections; then
         return 1
     fi
-    # Daemon didn't respond via emacsclient — it might be busy with an API call.
-    # Check if the process itself is still alive (R=Running, S=Sleeping, D=uninterruptible I/O).
-    local pid
-    pid=$(first_daemon_pid "$SERVER_NAME")
-    if [ -n "$pid" ]; then
-        local state
-        state=$(ps -p "$pid" -o state= 2>/dev/null | tr -d ' ')
-        if [ -n "$state" ] && echo "$state" | grep -qE '^[RSUD]'; then
-            return 0  # Process is alive, just busy
-        fi
-        echo "[$(date '+%H:%M:%S')] Daemon pid=$pid state=$state (not alive)" >> "$LOG"
-    else
-        echo "[$(date '+%H:%M:%S')] Daemon PID not found" >> "$LOG"
+    # Daemon didn't respond via emacsclient — could be busy or frozen.
+    # Check heartbeat: fresh => alive (legitimate blocking op), stale => frozen.
+    if check_heartbeat_staleness; then
+        return 0  # Heartbeat fresh — daemon is alive, just busy
     fi
+    echo "[$(date '+%H:%M:%S')] Heartbeat stale AND emacsclient failed — daemon frozen" >> "$LOG"
     return 1
 }
 
@@ -203,6 +196,31 @@ proc_is_running() {
     [ -z "$pid" ] && return 1
     # Include D (uninterruptible sleep) — common during API I/O waits
     ps -p "$pid" -o state= 2>/dev/null | grep -qE '^[RSUD]'
+}
+
+# Check heartbeat file staleness.
+# Returns 0 if heartbeat is fresh (< 180s old), 1 if stale or missing.
+# This detects a frozen daemon: if the Emacs main thread is blocked on an
+# API call, timers stop firing, and the heartbeat file goes stale.
+check_heartbeat_staleness() {
+    local hb_file="${1:-$DIR/var/tmp/daemon-heartbeat}"
+    local threshold="${2:-180}"
+    if [ ! -f "$hb_file" ]; then
+        return 1
+    fi
+    local hb_ts
+    hb_ts=$(head -1 "$hb_file" 2>/dev/null | tr -d '[:space:]')
+    if [ -z "$hb_ts" ]; then
+        return 1
+    fi
+    local now delta
+    now=$(date +%s)
+    delta=$((now - hb_ts))
+    if [ "$delta" -lt "$threshold" ]; then
+        return 0  # Fresh heartbeat — daemon is alive
+    fi
+    echo "[$(date '+%H:%M:%S')] Heartbeat stale: ${delta}s > ${threshold}s threshold" >> "$LOG"
+    return 1
 }
 
 mkdir -p "$(dirname "$LOG")"

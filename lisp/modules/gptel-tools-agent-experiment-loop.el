@@ -600,6 +600,40 @@ memory before killing the workflow.")
 Active subagent tasks mean work is in progress, not a memory leak. The
 old code killed workflows at 2GB while a subagent was making progress.")
 
+(defvar gptel-auto-workflow--heartbeat-timer nil
+  "Repeating timer that writes a heartbeat timestamp file for external watchdog.")
+
+(defvar gptel-auto-workflow--heartbeat-file "var/tmp/daemon-heartbeat"
+  "Relative path to the daemon heartbeat file.
+Resolved from the project root via `gptel-auto-workflow--default-dir'.")
+
+(defconst gptel-auto-workflow--heartbeat-interval 30
+  "Seconds between heartbeat file writes.")
+
+(defun gptel-auto-workflow--write-heartbeat (&optional override-path)
+  "Write current epoch timestamp to the heartbeat file.
+OVERRIDE-PATH, if non-nil, is the absolute path to write to (for testing).
+Never signals — errors are silently swallowed so the timer stays alive."
+  (condition-case err
+      (let ((path (or override-path
+                      (expand-file-name
+                       gptel-auto-workflow--heartbeat-file
+                       (gptel-auto-workflow--default-dir)))))
+        (make-directory (file-name-directory path) t)
+        (write-region (format-time-string "%s") nil path nil 'silent))
+    (error nil)))
+
+(defun gptel-auto-workflow--start-heartbeat-timer ()
+  "Start the repeating heartbeat timer.  Cancels any existing one first."
+  (when (timerp gptel-auto-workflow--heartbeat-timer)
+    (cancel-timer gptel-auto-workflow--heartbeat-timer))
+  ;; Fire first beat immediately, then repeat every HEARTBEAT-INTERVAL seconds.
+  (gptel-auto-workflow--write-heartbeat)
+  (setq gptel-auto-workflow--heartbeat-timer
+        (run-with-timer gptel-auto-workflow--heartbeat-interval
+                        gptel-auto-workflow--heartbeat-interval
+                        #'gptel-auto-workflow--write-heartbeat)))
+
 (defcustom gptel-auto-workflow-status-file "var/tmp/cron/auto-workflow-status.sexp"
   "Path to the persisted auto-workflow status snapshot.
 Relative paths are resolved from the project root."
@@ -1404,7 +1438,8 @@ Force-stops when:
   (when (or gptel-auto-workflow--running
             gptel-auto-workflow--cron-job-running)
     (setq gptel-auto-workflow--watchdog-timer
-          (run-with-timer 60 60 #'gptel-auto-workflow--watchdog-check))))
+          (run-with-timer 60 60 #'gptel-auto-workflow--watchdog-check))
+    (gptel-auto-workflow--start-heartbeat-timer)))
 
 (provide 'gptel-tools-agent-experiment-loop)
 ;;; gptel-tools-agent-experiment-loop.el ends here
