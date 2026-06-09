@@ -179,12 +179,55 @@ legitimate subagent work. Set to nil to disable.\")")
 
 (ert-deftest test-self-heal-semantic/audit-checks-variable-defined ()
   "The audit checks alist is defined with all checks."
-  (should (= (length gptel-auto-workflow--semantic-audit-checks) 5))
+  (should (= (length gptel-auto-workflow--semantic-audit-checks) 6))
   (should (assq 'let-binding-function gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'hardcoded-limit gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'score-zero-bug gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'unguarded-external-call gptel-auto-workflow--semantic-audit-checks))
-  (should (assq 'excessive-blank-lines gptel-auto-workflow--semantic-audit-checks)))
+  (should (assq 'excessive-blank-lines gptel-auto-workflow--semantic-audit-checks))
+  (should (assq 'unbalanced-parens gptel-auto-workflow--semantic-audit-checks)))
+
+;; ── Test 9: Unbalanced parens detection ──
+
+(ert-deftest test-self-heal-semantic/detects-unbalanced-parens ()
+  "Detects files with unbalanced parens/brackets.
+Reproduces the memory-schema bug: missing closing paren after fboundp guard."
+  (let* ((content
+          "(defun foo ()
+  (let ((x 1))
+    (setq x 2))
+  ;; Missing close paren before message
+  (message \"x=%d\" x)")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-unbalanced-parens file)))
+          (should (>= issues 1)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/clean-balanced-parens ()
+  "Files with balanced parens are clean."
+  (let* ((content
+          "(defun foo ()
+  (let ((x 1))
+    (setq x 2)))
+(message \"ok\")")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-unbalanced-parens file)))
+          (should (= issues 0)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/detects-unmatched-brackets ()
+  "Detects unmatched brackets in any direction."
+  (let* ((content
+          "(defun foo ()
+  (let (x 1))
+(message \"ok\")")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-unbalanced-parens file)))
+          (should (>= issues 1)))
+      (test-self-heal-semantic--cleanup file))))
 
 ;; ── Test 8: Excessive blank line detection ──
 
@@ -292,13 +335,10 @@ causing void-function errors when gptel-agent was not loaded."
 
 (ert-deftest test-self-heal-semantic/entry-point-runs ()
   "gptel-auto-workflow--self-heal-semantic can be called as entry point."
-  (condition-case err
-      (let ((result (gptel-auto-workflow--self-heal-semantic)))
-        (should result)
-        (should (plist-get result :total-issues)))
-    (error
-     (message "[test] entry-point failed: %s — skippable"
-              (error-message-string err)))))
+  (let ((result (gptel-auto-workflow--self-heal-semantic)))
+    (should result)
+    (should (plist-get result :total-issues))
+    (should (numberp (plist-get result :files-checked)))))
 
 (provide 'test-self-heal-semantic)
 ;;; test-self-heal-semantic.el ends here

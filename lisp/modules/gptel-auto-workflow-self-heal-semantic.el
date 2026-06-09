@@ -226,12 +226,36 @@ Returns number of blocks found."
 
 ;; ── Audit dispatcher ──
 
+;; ── Check 6: Unbalanced parens/brackets ──
+
+(defun gptel-auto-workflow--audit-unbalanced-parens (file)
+  "Audit FILE for unbalanced parens/brackets.
+Catches the 'End of file during parsing' class of bugs where editing
+introduces a missing close paren. Uses Emacs's built-in check-parens
+after loading the file as emacs-lisp.
+Returns 1 if unbalanced, 0 if balanced."
+  (let ((issues 0))
+    (condition-case nil
+        (with-temp-buffer
+          (insert-file-contents file)
+          (emacs-lisp-mode)
+          ;; check-parens raises user-error if unbalanced
+          (check-parens))
+      (user-error
+       (setq issues 1)
+       (gptel-auto-workflow--semantic-audit-record
+        file 1
+        'unbalanced-parens
+        "Unbalanced parens/brackets — Emacs cannot parse this file")))
+    issues))
+
 (defvar gptel-auto-workflow--semantic-audit-checks
   '((let-binding-function . gptel-auto-workflow--audit-let-binding-functions)
     (hardcoded-limit . gptel-auto-workflow--audit-hardcoded-limits)
     (score-zero-bug . gptel-auto-workflow--audit-score-zero-bug)
-    (unguarded-external-call . gptel-auto-workflow--audit-unguarded-calls)
-    (excessive-blank-lines . gptel-auto-workflow--audit-blank-lines))
+    (unguarded-external-call . gptel-auto-workflow--audit-unguarded-external-calls)
+    (excessive-blank-lines . gptel-auto-workflow--audit-blank-lines)
+    (unbalanced-parens . gptel-auto-workflow--audit-unbalanced-parens))
   "Alist of audit check name (symbol) to audit function.")
 
 ;; ── Auto-fixers (Layer 2+3: detect AND fix) ──
