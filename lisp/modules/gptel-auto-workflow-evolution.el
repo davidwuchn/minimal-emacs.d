@@ -6970,6 +6970,66 @@ cap is `2*default`)."
         (setq gptel-auto-experiment-grade-timeout new-timeout))
       new-timeout)))
 
+(defun gptel-auto-workflow--cross-diagnosis-share (diagnosis fixed-p)
+  "Share learnings across similar diagnoses.
+When a fix works for DIAGNOSIS, boost confidence in related diagnoses.
+When it fails, reduce confidence in similar approaches for related problems.
+Diagnosis groups: timeout-related, backend-related, target-related."
+  (let ((groups
+         '(("timeout-related" "grader-destroying-experiments" "timeouts-too-aggressive")
+           ("backend-related" "backend-rate-limited" "grader-destroying-experiments")
+           ("target-related" "zero-experiment-run" "hypotheses-poor-quality"))))
+    (dolist (group groups)
+      (when (member diagnosis (cdr group))
+        (dolist (sibling (cdr group))
+          (unless (equal sibling diagnosis)
+            (let ((sib-entry (gethash sibling gptel-auto-workflow--diagnosis-accuracy '(0 . 0))))
+              (if fixed-p
+                  (puthash sibling (cons (1+ (car sib-entry)) (cdr sib-entry))
+                           gptel-auto-workflow--diagnosis-accuracy)
+                (puthash sibling (cons (car sib-entry) (1+ (cdr sib-entry)))
+                         gptel-auto-workflow--diagnosis-accuracy))
+              (message "[self-heal] 🔗 Cross-learn: '%s' %s → '%s' accuracy updated"
+                       diagnosis (if fixed-p "fixed" "failed") sibling))))))))
+
+(defvar gptel-auto-workflow--unknown-patterns (make-hash-table :test 'equal)
+  "Hash: pattern-signature -> count. When >=5, promotes to new diagnosis type.")
+
+(defun gptel-auto-workflow--self-modify-detection (diagnosis-str details)
+  "Self-modify detection: create new diagnosis type for recurring unknowns.
+When 'unknown' fires >=5 times with similar patterns, promote to a named
+diagnosis type so future occurrences get specific auto-fixes."
+  (when (equal diagnosis-str "unknown")
+    (let* ((sig (or (plist-get details :signature)
+                    (substring (format "%s" details) 0 40)))
+           (count (1+ (gethash sig gptel-auto-workflow--unknown-patterns 0))))
+      (puthash sig count gptel-auto-workflow--unknown-patterns)
+      (when (>= count 5)
+        (let ((new-name (format "auto-learned-%s" (replace-regexp-in-string "[^a-z-]" "-" (downcase sig)))))
+          (message "[self-heal] 🧬 Self-modify: '%s' promoted to '%s' (%d occurrences)"
+                   sig new-name count)
+          ;; The new diagnosis type will be picked up by the detector on next cycle
+          new-name)))))
+
+(defvar gptel-auto-workflow--meta-reflection-counter (cons 0 0)
+  "Cons: (total-fix-attempts . successful-fixes). Tracks overall self-heal health.")
+
+(defun gptel-auto-workflow--meta-reflect ()
+  "Meta-meta reflection: is the self-reflection system itself working?
+Checks overall fix success rate. If >50% of fixes fail, the reflection
+logic itself may be wrong — escalate to human."
+  (let* ((total (car gptel-auto-workflow--meta-reflection-counter))
+         (success (cdr gptel-auto-workflow--meta-reflection-counter))
+         (rate (if (> total 10) (/ (float success) total) 1.0)))
+    (when (and (> total 10) (< rate 0.5))
+      (message "[self-heal] 🔮 Meta-reflection: only %.0f%% of fixes succeed (%d/%d) — reflection logic may be broken"
+               (* 100 rate) success total)
+      (let ((root (gptel-auto-workflow-self-audit--root)))
+        (with-temp-file (expand-file-name "var/tmp/meta-escalation.txt" root)
+          (insert (format "meta-escalation: %d/%d fixes succeeded (%.0f%%)\n"
+                          success total (* 100 rate))))))
+    rate))
+
 (defun gptel-auto-workflow--auto-remediate (diagnosis)
   "Apply automatic fix for DIAGNOSIS.  Returns t if fix applied."
   (let ((diagnosis-str (plist-get diagnosis :diagnosis))
@@ -7090,8 +7150,13 @@ cap is `2*default`)."
                    :before-rate (plist-get diagnosis :keep-rate)
                    :effective 'PENDING)
              gptel-auto-workflow--self-healing-log)))
-    ;; After any fix attempt: write lesson + adapt threshold
+    ;; After any fix attempt: cross-learn + adapt threshold + meta-reflect
     (when fixed
+      (setcar gptel-auto-workflow--meta-reflection-counter
+              (1+ (car gptel-auto-workflow--meta-reflection-counter)))
+      (setcdr gptel-auto-workflow--meta-reflection-counter
+              (1+ (cdr gptel-auto-workflow--meta-reflection-counter)))
+      (gptel-auto-workflow--cross-diagnosis-share diagnosis-str t)
       (gptel-auto-workflow--adapt-threshold diagnosis-str t)
       (gptel-auto-workflow--self-reflect-write-lesson
        diagnosis-str
@@ -7105,7 +7170,12 @@ cap is `2*default`)."
                                (plist-get (gptel-auto-workflow--verify-fix-effectiveness diagnosis-str)
                                           :same-fix-count)))))
     (unless fixed
+      (setcar gptel-auto-workflow--meta-reflection-counter
+              (1+ (car gptel-auto-workflow--meta-reflection-counter)))
+      (gptel-auto-workflow--cross-diagnosis-share diagnosis-str nil)
+      (gptel-auto-workflow--self-modify-detection diagnosis-str diagnosis)
       (gptel-auto-workflow--adapt-threshold diagnosis-str nil))
+    (gptel-auto-workflow--meta-reflect)
     fixed))
 
 ;;; ─── Phase 7: Recovery Verification ───
