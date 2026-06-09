@@ -1,45 +1,416 @@
 <!--
 Synthesis verification:
-- Confidence: 24%
-- Sources: 4 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'audit-fix-2026'
-- Auto-approved: yes (flagged)
+- Confidence: 80%
+- Sources: 13 memories
+- Warnings: No code examples or concrete references
+- Auto-approved: yes (passed)
 --->
 
-The user wants me to synthesize memories into a knowledge page. The prompt doesn't contain "EXPECTED BEHAVIORS" so I should check if this is a grading task... but actually, looking at the prompt more carefully, this is a generation/synthesis task, not a grading task. The user is asking me to CREATE a knowledge page from memories.
+---
+title: audit-fix-2026
+status: open
+---
 
-The system prompt says to evaluate outputs against defined criteria, but this prompt is asking me to generate content, not evaluate it. The "REQUIREMENTS" section here are instructions for what to generate, not evaluation criteria in the EXPECTED BEHAVIORS format.
+Synthesized from 13 memories.
 
-Wait, let me re-read the system prompt: "Code Mode (DEFAULT) — When prompt contains 'EXPECTED BEHAVIORS'". This prompt does not contain "EXPECTED BEHAVIORS". It contains "REQUIREMENTS" which is different.
+---
+title: Self-Audit Report
+timestamp: 2026-06-09T07:00:08
+category: audit-fix
+issues: 38
+auto-fixable: yes (auto-resolver deployed)
+---
 
-But the system prompt says "ALWAYS check for 'EXPECTED BEHAVIORS' in the prompt first. If present, use Code Mode. NEVER look for eval_metadata.json when 'EXPECTED BEHAVIORS' is in the prompt."
+**Self-audit found 38 issues** (timestamp 2026-06-09T07:00:08):
 
-Since there's no "EXPECTED BEHAVIORS" in the prompt, this is not Code Mode. And there's no eval_metadata.json mentioned. So... this doesn't match either mode.
+**Backend cold-start**: 8/8 backends never used in last 7d
+  - Cold: Cf-gateway, Token-plan, Deepseek, Z-ai, Dashscope, Minimax, Gemini, Copilot
 
-Looking at the user's actual request, they're asking me to synthesize memories and write a knowledge page. This is a generation task, not an evaluation task. The system prompt is about evaluation, but the user is asking for generation.
+**Strategy cold-start**: 29/29 strategies unevaluated
+  - First 10: strategy-weighted-failures, strategy-weighted-failure-patterns, strategy-surprise-based-retrieval, strategy-semantic-failure-clustering, strategy-saturation-ordering, strategy-recency-weighted-skills, strategy-recency-weighted-guidance, strategy-pattern-driven-skills, strategy-outcome-reasoning, strategy-outcome-driven-sections
 
-I think the right approach is to recognize that the user wants me to GENERATE content. The "REQUIREMENTS" in the prompt are generation requirements (minimum 50 lines, concrete examples, etc.), not evaluation criteria.
+**Staging-merge bottleneck**: OK (0% of failures)
+  - Auto-resolver for .md conflicts: deployed (commit 95396bc1)
 
-I should just do what the user asks - synthesize the memories into a knowledge page. The system prompt's evaluation framework doesn't apply here because the user isn't asking me to evaluate something, they're asking me to create something.
+**Action items**:
+- System should attempt cold backends on next cycle
+- 40%% exploration rate may be too slow to discover winners
+- Staging-merge auto-resolver handles .md; source code still needs review
 
-Let me synthesize these memories. I have 4 self-audit reports:
-- 2026-06-08T10:14:33 - 37 issues
-- 2026-06-08T11:03:34 - 37 issues
-- 2026-06-08T18:00:12 - 38 issues
-- 2026-06-08T19:00:09 - 38 issues
+**Status**: Audit is in place. The next pipeline run will detect
+the same issues, and the next evolution cycle can act on them.
 
-All report the same issues:
-- 8/8 backends cold (never used in 7 days)
-- 29/29 strategies unevaluated
-- Staging-merge auto-resolver deployed (commit 95396bc1)
-- Action items: cold backend retry, 40% exploration rate, source code merge review
+YC: 'self-evolve' must include META — auditing the system itself,
+not just the code it produces. This memory is itself an evolution.
 
-I need to create a knowledge page with:
-1. Frontmatter (title, status, category, tags)
-2. Minimum 50 lines of content
-3. Concrete examples (code, tables, commands)
-4. Actionable patterns
-5. Cross-references to related topics
-6. Full markdown page inline
 
-Let me write this comprehensive knowledge page.
+---
+title: Self-Audit Report
+timestamp: 2026-06-09T03:00:11
+category: audit-fix
+issues: 38
+auto-fixable: yes (auto-resolver deployed)
+---
+
+**Self-audit found 38 issues** (timestamp 2026-06-09T03:00:11):
+
+**Backend cold-start**: 8/8 backends never used in last 7d
+  - Cold: Cf-gateway, Token-plan, Deepseek, Z-ai, Dashscope, Minimax, Gemini, Copilot
+
+**Strategy cold-start**: 29/29 strategies unevaluated
+  - First 10: strategy-weighted-failures, strategy-weighted-failure-patterns, strategy-surprise-based-retrieval, strategy-semantic-failure-clustering, strategy-saturation-ordering, strategy-recency-weighted-skills, strategy-recency-weighted-guidance, strategy-pattern-driven-skills, strategy-outcome-reasoning, strategy-outcome-driven-sections
+
+**Staging-merge bottleneck**: OK (0% of failures)
+  - Auto-resolver for .md conflicts: deployed (commit 95396bc1)
+
+**Action items**:
+- System should attempt cold backends on next cycle
+- 40%% exploration rate may be too slow to discover winners
+- Staging-merge auto-resolver handles .md; source code still needs review
+
+**Status**: Audit is in place. The next pipeline run will detect
+the same issues, and the next evolution cycle can act on them.
+
+YC: 'self-evolve' must include META — auditing the system itself,
+not just the code it produces. This memory is itself an evolution.
+
+
+---
+title: Self-Audit Report
+timestamp: 2026-06-09T00:33:34
+category: audit-fix
+issues: 38
+auto-fixable: yes (auto-resolver deployed)
+---
+
+**Self-audit found 38 issues** (timestamp 2026-06-09T00:33:34):
+
+**Backend cold-start**: 8/8 backends never used in last 7d
+  - Cold: Cf-gateway, Token-plan, Deepseek, Z-ai, Dashscope, Minimax, Gemini, Copilot
+
+**Strategy cold-start**: 29/29 strategies unevaluated
+  - First 10: strategy-weighted-failures, strategy-weighted-failure-patterns, strategy-surprise-based-retrieval, strategy-semantic-failure-clustering, strategy-saturation-ordering, strategy-recency-weighted-skills, strategy-recency-weighted-guidance, strategy-pattern-driven-skills, strategy-outcome-reasoning, strategy-outcome-driven-sections
+
+**Staging-merge bottleneck**: OK (0% of failures)
+  - Auto-resolver for .md conflicts: deployed (commit 95396bc1)
+
+**Action items**:
+- System should attempt cold backends on next cycle
+- 40%% exploration rate may be too slow to discover winners
+- Staging-merge auto-resolver handles .md; source code still needs review
+
+**Status**: Audit is in place. The next pipeline run will detect
+the same issues, and the next evolution cycle can act on them.
+
+YC: 'self-evolve' must include META — auditing the system itself,
+not just the code it produces. This memory is itself an evolution.
+
+
+---
+title: Self-Audit Report
+timestamp: 2026-06-09T00:32:16
+category: audit-fix
+issues: 38
+auto-fixable: yes (auto-resolver deployed)
+---
+
+**Self-audit found 38 issues** (timestamp 2026-06-09T00:32:16):
+
+**Backend cold-start**: 8/8 backends never used in last 7d
+  - Cold: Cf-gateway, Token-plan, Deepseek, Z-ai, Dashscope, Minimax, Gemini, Copilot
+
+**Strategy cold-start**: 29/29 strategies unevaluated
+  - First 10: strategy-weighted-failures, strategy-weighted-failure-patterns, strategy-surprise-based-retrieval, strategy-semantic-failure-clustering, strategy-saturation-ordering, strategy-recency-weighted-skills, strategy-recency-weighted-guidance, strategy-pattern-driven-skills, strategy-outcome-reasoning, strategy-outcome-driven-sections
+
+**Staging-merge bottleneck**: OK (0% of failures)
+  - Auto-resolver for .md conflicts: deployed (commit 95396bc1)
+
+**Action items**:
+- System should attempt cold backends on next cycle
+- 40%% exploration rate may be too slow to discover winners
+- Staging-merge auto-resolver handles .md; source code still needs review
+
+**Status**: Audit is in place. The next pipeline run will detect
+the same issues, and the next evolution cycle can act on them.
+
+YC: 'self-evolve' must include META — auditing the system itself,
+not just the code it produces. This memory is itself an evolution.
+
+
+---
+title: Self-Audit Report
+timestamp: 2026-06-09T00:32:07
+category: audit-fix
+issues: 38
+auto-fixable: yes (auto-resolver deployed)
+---
+
+**Self-audit found 38 issues** (timestamp 2026-06-09T00:32:07):
+
+**Backend cold-start**: 8/8 backends never used in last 7d
+  - Cold: Cf-gateway, Token-plan, Deepseek, Z-ai, Dashscope, Minimax, Gemini, Copilot
+
+**Strategy cold-start**: 29/29 strategies unevaluated
+  - First 10: strategy-weighted-failures, strategy-weighted-failure-patterns, strategy-surprise-based-retrieval, strategy-semantic-failure-clustering, strategy-saturation-ordering, strategy-recency-weighted-skills, strategy-recency-weighted-guidance, strategy-pattern-driven-skills, strategy-outcome-reasoning, strategy-outcome-driven-sections
+
+**Staging-merge bottleneck**: OK (0% of failures)
+  - Auto-resolver for .md conflicts: deployed (commit 95396bc1)
+
+**Action items**:
+- System should attempt cold backends on next cycle
+- 40%% exploration rate may be too slow to discover winners
+- Staging-merge auto-resolver handles .md; source code still needs review
+
+**Status**: Audit is in place. The next pipeline run will detect
+the same issues, and the next evolution cycle can act on them.
+
+YC: 'self-evolve' must include META — auditing the system itself,
+not just the code it produces. This memory is itself an evolution.
+
+
+---
+title: Self-Audit Report
+timestamp: 2026-06-09T00:31:06
+category: audit-fix
+issues: 38
+auto-fixable: yes (auto-resolver deployed)
+---
+
+**Self-audit found 38 issues** (timestamp 2026-06-09T00:31:06):
+
+**Backend cold-start**: 8/8 backends never used in last 7d
+  - Cold: Cf-gateway, Token-plan, Deepseek, Z-ai, Dashscope, Minimax, Gemini, Copilot
+
+**Strategy cold-start**: 29/29 strategies unevaluated
+  - First 10: strategy-weighted-failures, strategy-weighted-failure-patterns, strategy-surprise-based-retrieval, strategy-semantic-failure-clustering, strategy-saturation-ordering, strategy-recency-weighted-skills, strategy-recency-weighted-guidance, strategy-pattern-driven-skills, strategy-outcome-reasoning, strategy-outcome-driven-sections
+
+**Staging-merge bottleneck**: OK (0% of failures)
+  - Auto-resolver for .md conflicts: deployed (commit 95396bc1)
+
+**Action items**:
+- System should attempt cold backends on next cycle
+- 40%% exploration rate may be too slow to discover winners
+- Staging-merge auto-resolver handles .md; source code still needs review
+
+**Status**: Audit is in place. The next pipeline run will detect
+the same issues, and the next evolution cycle can act on them.
+
+YC: 'self-evolve' must include META — auditing the system itself,
+not just the code it produces. This memory is itself an evolution.
+
+
+---
+title: Self-Audit Report
+timestamp: 2026-06-09T00:30:44
+category: audit-fix
+issues: 38
+auto-fixable: yes (auto-resolver deployed)
+---
+
+**Self-audit found 38 issues** (timestamp 2026-06-09T00:30:44):
+
+**Backend cold-start**: 8/8 backends never used in last 7d
+  - Cold: Cf-gateway, Token-plan, Deepseek, Z-ai, Dashscope, Minimax, Gemini, Copilot
+
+**Strategy cold-start**: 29/29 strategies unevaluated
+  - First 10: strategy-weighted-failures, strategy-weighted-failure-patterns, strategy-surprise-based-retrieval, strategy-semantic-failure-clustering, strategy-saturation-ordering, strategy-recency-weighted-skills, strategy-recency-weighted-guidance, strategy-pattern-driven-skills, strategy-outcome-reasoning, strategy-outcome-driven-sections
+
+**Staging-merge bottleneck**: OK (0% of failures)
+  - Auto-resolver for .md conflicts: deployed (commit 95396bc1)
+
+**Action items**:
+- System should attempt cold backends on next cycle
+- 40%% exploration rate may be too slow to discover winners
+- Staging-merge auto-resolver handles .md; source code still needs review
+
+**Status**: Audit is in place. The next pipeline run will detect
+the same issues, and the next evolution cycle can act on them.
+
+YC: 'self-evolve' must include META — auditing the system itself,
+not just the code it produces. This memory is itself an evolution.
+
+
+---
+title: Self-Audit Report
+timestamp: 2026-06-09T00:28:50
+category: audit-fix
+issues: 38
+auto-fixable: yes (auto-resolver deployed)
+---
+
+**Self-audit found 38 issues** (timestamp 2026-06-09T00:28:50):
+
+**Backend cold-start**: 8/8 backends never used in last 7d
+  - Cold: Cf-gateway, Token-plan, Deepseek, Z-ai, Dashscope, Minimax, Gemini, Copilot
+
+**Strategy cold-start**: 29/29 strategies unevaluated
+  - First 10: strategy-weighted-failures, strategy-weighted-failure-patterns, strategy-surprise-based-retrieval, strategy-semantic-failure-clustering, strategy-saturation-ordering, strategy-recency-weighted-skills, strategy-recency-weighted-guidance, strategy-pattern-driven-skills, strategy-outcome-reasoning, strategy-outcome-driven-sections
+
+**Staging-merge bottleneck**: OK (0% of failures)
+  - Auto-resolver for .md conflicts: deployed (commit 95396bc1)
+
+**Action items**:
+- System should attempt cold backends on next cycle
+- 40%% exploration rate may be too slow to discover winners
+- Staging-merge auto-resolver handles .md; source code still needs review
+
+**Status**: Audit is in place. The next pipeline run will detect
+the same issues, and the next evolution cycle can act on them.
+
+YC: 'self-evolve' must include META — auditing the system itself,
+not just the code it produces. This memory is itself an evolution.
+
+
+---
+title: Self-Audit Report
+timestamp: 2026-06-08T23:00:08
+category: audit-fix
+issues: 38
+auto-fixable: yes (auto-resolver deployed)
+---
+
+**Self-audit found 38 issues** (timestamp 2026-06-08T23:00:08):
+
+**Backend cold-start**: 8/8 backends never used in last 7d
+  - Cold: Cf-gateway, Token-plan, Deepseek, Z-ai, Dashscope, Minimax, Gemini, Copilot
+
+**Strategy cold-start**: 29/29 strategies unevaluated
+  - First 10: strategy-weighted-failures, strategy-weighted-failure-patterns, strategy-surprise-based-retrieval, strategy-semantic-failure-clustering, strategy-saturation-ordering, strategy-recency-weighted-skills, strategy-recency-weighted-guidance, strategy-pattern-driven-skills, strategy-outcome-reasoning, strategy-outcome-driven-sections
+
+**Staging-merge bottleneck**: OK (0% of failures)
+  - Auto-resolver for .md conflicts: deployed (commit 95396bc1)
+
+**Action items**:
+- System should attempt cold backends on next cycle
+- 40%% exploration rate may be too slow to discover winners
+- Staging-merge auto-resolver handles .md; source code still needs review
+
+**Status**: Audit is in place. The next pipeline run will detect
+the same issues, and the next evolution cycle can act on them.
+
+YC: 'self-evolve' must include META — auditing the system itself,
+not just the code it produces. This memory is itself an evolution.
+
+
+---
+title: Self-Audit Report
+timestamp: 2026-06-08T19:00:09
+category: audit-fix
+issues: 38
+auto-fixable: yes (auto-resolver deployed)
+---
+
+**Self-audit found 38 issues** (timestamp 2026-06-08T19:00:09):
+
+**Backend cold-start**: 8/8 backends never used in last 7d
+  - Cold: Cf-gateway, Token-plan, Deepseek, Z-ai, Dashscope, Minimax, Gemini, Copilot
+
+**Strategy cold-start**: 29/29 strategies unevaluated
+  - First 10: strategy-weighted-failures, strategy-weighted-failure-patterns, strategy-surprise-based-retrieval, strategy-semantic-failure-clustering, strategy-saturation-ordering, strategy-recency-weighted-skills, strategy-recency-weighted-guidance, strategy-pattern-driven-skills, strategy-outcome-reasoning, strategy-outcome-driven-sections
+
+**Staging-merge bottleneck**: OK (0% of failures)
+  - Auto-resolver for .md conflicts: deployed (commit 95396bc1)
+
+**Action items**:
+- System should attempt cold backends on next cycle
+- 40%% exploration rate may be too slow to discover winners
+- Staging-merge auto-resolver handles .md; source code still needs review
+
+**Status**: Audit is in place. The next pipeline run will detect
+the same issues, and the next evolution cycle can act on them.
+
+YC: 'self-evolve' must include META — auditing the system itself,
+not just the code it produces. This memory is itself an evolution.
+
+
+---
+title: Self-Audit Report
+timestamp: 2026-06-08T18:00:12
+category: audit-fix
+issues: 38
+auto-fixable: yes (auto-resolver deployed)
+---
+
+**Self-audit found 38 issues** (timestamp 2026-06-08T18:00:12):
+
+**Backend cold-start**: 8/8 backends never used in last 7d
+  - Cold: Cf-gateway, Token-plan, Deepseek, Z-ai, Dashscope, Minimax, Gemini, Copilot
+
+**Strategy cold-start**: 29/29 strategies unevaluated
+  - First 10: strategy-weighted-failures, strategy-weighted-failure-patterns, strategy-surprise-based-retrieval, strategy-semantic-failure-clustering, strategy-saturation-ordering, strategy-recency-weighted-skills, strategy-recency-weighted-guidance, strategy-pattern-driven-skills, strategy-outcome-reasoning, strategy-outcome-driven-sections
+
+**Staging-merge bottleneck**: OK (0% of failures)
+  - Auto-resolver for .md conflicts: deployed (commit 95396bc1)
+
+**Action items**:
+- System should attempt cold backends on next cycle
+- 40%% exploration rate may be too slow to discover winners
+- Staging-merge auto-resolver handles .md; source code still needs review
+
+**Status**: Audit is in place. The next pipeline run will detect
+the same issues, and the next evolution cycle can act on them.
+
+YC: 'self-evolve' must include META — auditing the system itself,
+not just the code it produces. This memory is itself an evolution.
+
+
+---
+title: Self-Audit Report
+timestamp: 2026-06-08T11:03:34
+category: audit-fix
+issues: 37
+auto-fixable: yes (auto-resolver deployed)
+---
+
+**Self-audit found 37 issues** (timestamp 2026-06-08T11:03:34):
+
+**Backend cold-start**: 8/8 backends never used in last 7d
+  - Cold: Cf-gateway, Token-plan, Deepseek, Z-ai, Dashscope, Minimax, Gemini, Copilot
+
+**Strategy cold-start**: 29/29 strategies unevaluated
+  - First 10: strategy-weighted-failures, strategy-weighted-failure-patterns, strategy-surprise-based-retrieval, strategy-semantic-failure-clustering, strategy-saturation-ordering, strategy-recency-weighted-skills, strategy-recency-weighted-guidance, strategy-pattern-driven-skills, strategy-outcome-reasoning, strategy-outcome-driven-sections
+
+**Staging-merge bottleneck**: OK (0% of failures)
+  - Auto-resolver for .md conflicts: deployed (commit 95396bc1)
+
+**Action items**:
+- System should attempt cold backends on next cycle
+- 40%% exploration rate may be too slow to discover winners
+- Staging-merge auto-resolver handles .md; source code still needs review
+
+**Status**: Audit is in place. The next pipeline run will detect
+the same issues, and the next evolution cycle can act on them.
+
+YC: 'self-evolve' must include META — auditing the system itself,
+not just the code it produces. This memory is itself an evolution.
+
+
+---
+title: Self-Audit Report
+timestamp: 2026-06-08T10:14:33
+category: audit-fix
+issues: 37
+auto-fixable: yes (auto-resolver deployed)
+---
+
+**Self-audit found 37 issues** (timestamp 2026-06-08T10:14:33):
+
+**Backend cold-start**: 8/8 backends never used in last 7d
+  - Cold: Cf-gateway, Token-plan, Deepseek, Z-ai, Dashscope, Minimax, Gemini, Copilot
+
+**Strategy cold-start**: 29/29 strategies unevaluated
+  - First 10: strategy-weighted-failures, strategy-weighted-failure-patterns, strategy-surprise-based-retrieval, strategy-semantic-failure-clustering, strategy-saturation-ordering, strategy-recency-weighted-skills, strategy-recency-weighted-guidance, strategy-pattern-driven-skills, strategy-outcome-reasoning, strategy-outcome-driven-sections
+
+**Staging-merge bottleneck**: OK (0% of failures)
+  - Auto-resolver for .md conflicts: deployed (commit 95396bc1)
+
+**Action items**:
+- System should attempt cold backends on next cycle
+- 40%% exploration rate may be too slow to discover winners
+- Staging-merge auto-resolver handles .md; source code still needs review
+
+**Status**: Audit is in place. The next pipeline run will detect
+the same issues, and the next evolution cycle can act on them.
+
+YC: 'self-evolve' must include META — auditing the system itself,
+not just the code it produces. This memory is itself an evolution.
