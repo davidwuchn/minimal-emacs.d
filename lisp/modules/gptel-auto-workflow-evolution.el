@@ -6725,6 +6725,12 @@ its diagnosis was wrong and tries a fundamentally different approach.
 General — works for any diagnosis, not just grader-destroying."
   (let* ((effectiveness (gptel-auto-workflow--verify-fix-effectiveness diagnosis))
          (fail-count (plist-get effectiveness :same-fix-count))
+         ;; GRAPH: check if the problem is in a high-centrality module
+         (god-nodes (when (fboundp 'gptel-auto-workflow--unified-graph-god-nodes)
+                      (gptel-auto-workflow--unified-graph-god-nodes 5)))
+         (graph-context (when god-nodes
+                          (format "%d god nodes in graph — fix impact may be amplified if targeting these"
+                                  (length god-nodes))))
          (alternatives
           (pcase diagnosis
             ("grader-destroying-experiments"
@@ -6752,10 +6758,13 @@ General — works for any diagnosis, not just grader-destroying."
              `((:alt-diagnosis "unknown-novel-failure"
                 :alt-fix "flag-for-human-review"
                 :description ,(format "Novel failure pattern '%s' — needs investigation" diagnosis)))))))
+    (when graph-context
+      (message "[self-heal] 📊 Graph context: %s" graph-context))
     (list :diagnosis-correct-p (< fail-count 3)
           :fail-count fail-count
           :alternatives (if (>= fail-count 3) alternatives nil)
-          :should-try-alternative (>= fail-count 3))))
+          :should-try-alternative (>= fail-count 3)
+          :graph-context graph-context)))
 
 (defun gptel-auto-workflow--self-reflect-write-lesson (diagnosis result)
   "Write a self-reflection lesson to mementum when a fix finally works.
@@ -7218,7 +7227,27 @@ reflection logic may be broken"
                    :before-rate (plist-get diagnosis :keep-rate)
                    :effective 'PENDING)
              gptel-auto-workflow--self-healing-log)))
-    ;; After any fix attempt: cross-learn + adapt threshold + meta-reflect
+    ;; After any fix attempt: cross-learn + adapt + meta-reflect
+    (let ((effectiveness (gptel-auto-workflow--verify-fix-effectiveness diagnosis-str)))
+      (when (and (>= (plist-get effectiveness :same-fix-count) 5)
+                 (fboundp 'gptel-auto-workflow-code-regeneration--identify-candidates))
+        ;; CODE REGENERATION: after 5+ failed fixes, try regenerating the module
+        (message "[self-heal] 🔄 Persistent failure (%s) — triggering code regeneration scan"
+                 diagnosis-str)
+        (condition-case nil
+            (let ((candidates (gptel-auto-workflow-code-regeneration--identify-candidates)))
+              (when candidates
+                (message "[self-heal]   → %d regeneration candidates found" (length candidates))))
+          (error nil)))
+      (when (and (>= (plist-get effectiveness :same-fix-count) 3)
+                 (fboundp 'gptel-auto-workflow--graph-suggest-questions))
+        ;; AUTO-RESEARCH: after 3+ failures, generate investigation questions
+        (condition-case nil
+            (let ((qs (gptel-auto-workflow--graph-suggest-questions)))
+              (when qs
+                (message "[self-heal] 🔬 Research questions for '%s': %s"
+                         diagnosis-str (car qs))))
+          (error nil))))
     (when fixed
       (setcar gptel-auto-workflow--meta-reflection-counter
               (1+ (car gptel-auto-workflow--meta-reflection-counter)))
