@@ -10,7 +10,7 @@
 (defvar gptel-auto-workflow--project-root-override nil)
 (defvar gptel-auto-workflow--run-project-root nil)
 (defvar gptel-auto-workflow--headless nil)
-(defvar gptel-mementum-headless-auto-approve nil)
+(defvar gptel-mementum-headless-auto-approve 'draft)
 (defun gptel-auto-workflow-update-mutation-skill (mutation-type all-results)
   "Update MUTATION-TYPE skill file with ALL-RESULTS."
   (let* ((skill-file (format "%s/mutations/%s.md"
@@ -578,11 +578,11 @@ Ensures agents are loaded once before processing batch."
              (length cands))
     synthesized))
 
-(defcustom gptel-mementum-headless-auto-approve nil
+(defcustom gptel-mementum-headless-auto-approve 'draft
   "When non-nil, auto-approve synthesis in headless mode.
-When nil (default), headless mode skips synthesis to avoid unreviewed writes.
+When nil, headless mode skips synthesis to avoid unreviewed writes.
 When t, saves directly to `mementum/knowledge/'.
-When `draft', saves to `mementum/knowledge/drafts/' for later review."
+When `draft' (default), saves to `mementum/knowledge/drafts/' for later review."
   :type '(choice (const :tag "Skip in headless" nil)
                  (const :tag "Auto-approve" t)
                  (const :tag "Save to drafts" draft))
@@ -595,7 +595,8 @@ In headless mode, respects `gptel-mementum-headless-auto-approve'."
   (condition-case err
       (let* ((extracted (gptel-mementum--extract-content result))
              (line-count (with-temp-buffer (insert extracted) (count-lines 1 (point-max))))
-             (headless (bound-and-true-p gptel-auto-workflow--headless))
+             (headless (or (bound-and-true-p gptel-auto-workflow--headless)
+                           (daemonp)))
              (auto-approve (and headless gptel-mementum-headless-auto-approve))
              ;; YC principle: a brief synthesis is better than no page at all.
              ;; For research-derived topics (insight-proposal-*, mistake-failure-pattern-*)
