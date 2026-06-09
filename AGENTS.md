@@ -186,6 +186,9 @@ Use symbols in commit messages for searchable git history.
 λ sandbox(x).       system_prompts ≢ sandbox
                     | hard_capability_filter(x) > instruct_readonly
                     | plan_mode(x) → readonly_tools(physical)
+                    | ¬shell_only(x) | emacs_native(x) ∨ platform(x)
+                    | macOS(x) → seatbelt(x) | linux(x) → bubblewrap(x)
+                    | defense_depth(x): sanitize → acl → expression → platform
 
 λ resilience(x).    429_timeout(x) → exponential_backoff(x)
                     | hallucinated_tool(x) → inject_error(x)
