@@ -53,11 +53,13 @@
   "Audit FILE for hardcoded resource limits.
 Skips lines that are comments, docstrings, or string literals."
   (let ((issues 0)
+        (line-num 0)
         (lines (split-string (with-temp-buffer
                                (insert-file-contents file)
                                (buffer-string))
                              "\n" t)))
     (dolist (line lines)
+      (setq line-num (1+ line-num))
       ;; Skip: comment lines (;), docstring/section comments (;;;),
       ;; or lines inside strings (starts/ends with ").
       (unless (or (string-prefix-p ";" line)
@@ -67,7 +69,7 @@ Skips lines that are comments, docstrings, or string literals."
         (when (string-match-p "1572864" line)
           (setq issues (1+ issues))
           (gptel-auto-workflow--semantic-audit-record
-           file (1+ issues)
+           file line-num
            'hardcoded-limit
            "Hardcoded 1.5GB limit - should be configurable"))))
     issues))

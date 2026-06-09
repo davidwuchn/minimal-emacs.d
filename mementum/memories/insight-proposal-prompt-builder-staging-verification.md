@@ -1,13 +1,13 @@
 ---
-valid-from: 2026-06-09T08:52
+valid-from: 2026-06-09T12:31
 ---
 
-# Insight: 2026-06-09 08:52
+# Insight: 2026-06-09 12:31
 
 **Proposal:** Address recurring empty-hypothesis failures in staging-verification: recurring failures
 **Component:** prompt-builder
-**Expected impact:** Reduce empty-hypothesis failures in staging-verification by ~80%
-**Confidence:** 0.80
+**Expected impact:** Reduce empty-hypothesis failures in staging-verification by ~60%
+**Confidence:** 0.60
 **Risk:** medium
 **Validation rate:** 0.05
 **Status:** tentative

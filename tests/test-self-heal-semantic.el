@@ -78,6 +78,25 @@ File name starts with `test-` so the let-binding check applies."
           (should (>= issues 1)))
       (test-self-heal-semantic--cleanup file))))
 
+(ert-deftest test-self-heal-semantic/hardcoded-limit-line-number ()
+  "Hardcoded limit detection reports correct line numbers."
+  (let* ((content
+          "(defun foo ()
+  (+ 1 2))
+(defun watchdog-check ()
+  (when (> rss 1572864)
+    (force-stop)))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (gptel-auto-workflow--semantic-audit-reset)
+          (gptel-auto-workflow--audit-hardcoded-limits file)
+          (let ((log gptel-auto-workflow--semantic-audit-log))
+            (should (= (length log) 1))
+            ;; The hardcoded limit is on line 4 (1-indexed, blank lines stripped)
+            (should (= (plist-get (car log) :line) 4))))
+      (test-self-heal-semantic--cleanup file))))
+
 (ert-deftest test-self-heal-semantic/clean-no-hardcoded ()
   "Files without 1.5GB are clean."
   (let* ((content

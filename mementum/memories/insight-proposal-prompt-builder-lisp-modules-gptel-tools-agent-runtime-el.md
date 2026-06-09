@@ -4,9 +4,9 @@ valid-from: 2026-06-09T12:31
 
 # Insight: 2026-06-09 12:31
 
-**Proposal:** Address recurring empty-hypothesis failures in lisp/modules/gptel-auto-workflow-ontology-router.el: recurring failures
+**Proposal:** Address recurring empty-hypothesis failures in lisp/modules/gptel-tools-agent-runtime.el: recurring failures
 **Component:** prompt-builder
-**Expected impact:** Reduce empty-hypothesis failures in lisp/modules/gptel-auto-workflow-ontology-router.el by ~60%
+**Expected impact:** Reduce empty-hypothesis failures in lisp/modules/gptel-tools-agent-runtime.el by ~60%
 **Confidence:** 0.60
 **Risk:** medium
 **Validation rate:** 0.05
