@@ -1,5 +1,6 @@
 ### Allium Issue Trends
-**Regression warnings** (1 strategies with increased issues):
+**Recurring patterns** across all strategies:
 
-- `template-default`: 0 → 4 issues (worse)
+- **Framing tension in the verdict.**: 1 occurrence(s)
+- **"The 32 targets are decorrelated" is a non-sequitur.**: 1 occurrence(s)
 

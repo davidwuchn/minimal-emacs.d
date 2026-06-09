@@ -215,23 +215,39 @@ Criteria: has sections, has examples, has specific guidance, right length."
 
 (defconst gptel-auto-experiment--kibcm-patterns
   ;; Tier 1 — Confirmed (KIBC-M: all models, all scales)
-  '((:K "nil.safety\\|nil.guard\\|nil.check\\|guard[^a-z]\\|validat\\|proper-list-p\\|bound-and-true-p\\|filter.out\\|discard\\|remove nil\\|unless nil\\|when nil\\|error.*handling")
-    (:I "passthrough\\|pass through\\|identity\\|reference\\|binding\\|same entity\\|unchanged\\|copy\\|self[^a-z]")
-    (:B "compose\\|chain\\|extract helper\\|helper function\\|refactor into\\|DRY\\|dedup\\|unify\\|pipeline\\|sequence\\|decompose")
-    (:C "reorder\\|flip\\|swap\\|passive\\|invert\\|reverse\\|before.*after\\|after.*before\\|reorganize")
-    (:M "pattern\\|template\\|apply pattern\\|in.context\\|example.driven\\|analogy\\|match\\|few.shot\\|exemplar\\|similar to")
+  '((:K "
+nil.safety\\|nil.guard\\|nil.check\\|guard[^a-z]\\|validat\\|proper-list-p\\|bound-and-true-p\\|filter.out\\|discard\\|remove
+nil\\|unless nil\\|when nil\\|error.*handling")
+    (:I "passthrough\\|pass through\\|identity\\|reference\\|binding\\|same
+entity\\|unchanged\\|copy\\|self[^a-z]")
+    (:B "compose\\|chain\\|extract helper\\|helper function\\|refactor
+into\\|DRY\\|dedup\\|unify\\|pipeline\\|sequence\\|decompose")
+    (:C "
+reorder\\|flip\\|swap\\|passive\\|invert\\|reverse\\|before.*after\\|after.*before\\|reorganize")
+    (:M "pattern\\|template\\|apply
+pattern\\|in.context\\|example.driven\\|analogy\\|match\\|few.shot\\|exemplar\\|similar
+to")
     ;; Tier 2 — Predicted (seeking discovery: larger models)
-    (:W "duplicat\\|double\\|mirror\\|same.*twice\\|self.*same\\|reuse\\|share.logic\\|merge.*duplicate\\|identical.*both")
-    (:T "type.check\\|type.valid\\|annotation\\|type.assert\\|ensure.*type\\|cast\\|coerce\\|narrowing\\|widening")
-    (:PHI "both.*and\\|parallel\\|coordinat\\|multi.property\\|multiple.*same\\|fork\\|split.*combine\\|apply.*two")
-    (:D "deep.compos\\|multi.step\\|nested\\|complex.refactor\\|several.*changes?\\|multiple.*changes?\\|comprehensive")
+    (:W "
+duplicat\\|double\\|mirror\\|same.*twice\\|self.*same\\|reuse\\|share.logic\\|merge.*duplicate\\|identical.*both")
+    (:T "
+type.check\\|type.valid\\|annotation\\|type.assert\\|ensure.*type\\|cast\\|coerce\\|narrowing\\|widening")
+    (:PHI "
+both.*and\\|parallel\\|coordinat\\|multi.property\\|multiple.*same\\|fork\\|split.*combine\\|apply.*two")
+    (:D "
+deep.compos\\|multi.step\\|nested\\|complex.refactor\\|several.*changes?\\|multiple.*changes?\\|comprehensive")
     ;; Tier 3 — Structural (architecture-level)
-    (:SCOPE "scope\\|visibility\\|access.control\\|local\\|global\\|lexical\\|dynamic.*bind\\|closure\\|environment")
-    (:SUBST "simplif\\|reductio\\|substitut\\|replace.*with\\|instead of\\|compress\\|shorte\\|inline\\|expand")
-    (:WHNF "done\\|finished\\|complete\\|final\\|normal.form\\|base.case\\|terminal\\|atomic\\|primitive\\|no.further")
+    (:SCOPE "
+scope\\|visibility\\|access.control\\|local\\|global\\|lexical\\|dynamic.*bind\\|closure\\|environment")
+    (:SUBST "simplif\\|reductio\\|substitut\\|replace.*with\\|instead
+of\\|compress\\|shorte\\|inline\\|expand")
+    (:WHNF "
+done\\|finished\\|complete\\|final\\|normal.form\\|base.case\\|terminal\\|atomic\\|primitive\\|no.further")
     ;; Tier 4 — Meta (self-evolution itself)
-    (:Y "recurs\\|self.refer\\|self.modif\\|self.improv\\|self.evol\\|fixed.point\\|loop\\|iterate\\|repeat.*until\\|while")
-    (:QUOTE "document\\|comment\\|explain\\|describe\\|name\\|label\\|tag\\|categorize\\|classify\\|annotate\\|docstring"))
+    (:Y "
+recurs\\|self.refer\\|self.modif\\|self.improv\\|self.evol\\|fixed.point\\|loop\\|iterate\\|repeat.*until\\|while")
+    (:QUOTE "
+document\\|comment\\|explain\\|describe\\|name\\|label\\|tag\\|categorize\\|classify\\|annotate\\|docstring"))
   "15-axis KIBC-M+ operation patterns for hypothesis classification.
 Tier 1 (K,I,B,C,M): confirmed in all models.
 Tier 2 (W,T,PHI,D): predicted in larger models.

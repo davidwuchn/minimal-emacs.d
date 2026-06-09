@@ -786,21 +786,24 @@ Patterns detected:
                             :count void-var-count
                             :first-target "runtime-logs"
                             :code-bug t
-                            :suggested-fix "Check for condition-case err shadowing — rename handler's err variable or capture with (let ((captured-err err)) ...)")
+                            :suggested-fix "Check for condition-case err shadowing — rename handler's err variable or
+capture with (let ((captured-err err)) ...)")
                       proposals))
               (when (> bare-defvar-count 0)
                 (push (list :error-snippet "defining as dynamic an already lexical (code-bug: bare defvar)"
                             :count bare-defvar-count
                             :first-target "runtime-logs"
                             :code-bug t
-                            :suggested-fix "Change (defvar FOO) to (defvar FOO nil) — bare defvar doesn't make var special under lexical-binding")
+                            :suggested-fix "Change (defvar FOO) to (defvar FOO nil) — bare defvar doesn't make var special
+under lexical-binding")
                       proposals))
               (when (> wrong-arity-count 2)
                 (push (list :error-snippet "wrong-number-of-arguments (code-bug: fixer/fn arity mismatch)"
                             :count wrong-arity-count
                             :first-target "runtime-logs"
                             :code-bug t
-                            :suggested-fix "Check function call sites for arity mismatch — likely a fixer called with wrong arg count")
+                            :suggested-fix "Check function call sites for arity mismatch — likely a fixer called with
+wrong arg count")
                       proposals))
               (when (> void-fn-count 2)
                 (push (list :error-snippet "void-function (code-bug: missing require/load)"
@@ -814,7 +817,8 @@ Patterns detected:
                             :count wrong-type-count
                             :first-target "runtime-logs"
                             :code-bug t
-                            :suggested-fix "Guard type-dependent operations with (numberp x) or string-to-number before arithmetic")
+                            :suggested-fix "Guard type-dependent operations with (numberp x) or string-to-number before
+arithmetic")
                       proposals))))
         (error nil)))
     proposals))
