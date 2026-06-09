@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # install-ops-global.sh - One-shot install of OpenCode Processing Skills + OV5 cowork
 # Usage: ./install-ops-global.sh
-# Requires: git, opencode with deepseek, github-copilot, and bigmodel providers
+# Requires: git, opencode with deepseek, github-copilot, and zhipuai-coding-plan providers
 
 set -euo pipefail
 
@@ -32,7 +32,7 @@ targets:
 
 delegate: deepseek/deepseek-v4-pro
 doc-explorer: deepseek/deepseek-v4-pro
-implementer: bigmodel/glm-5.1
+implementer: zhipuai-coding-plan/glm-5.1
 legacy-curator: deepseek/deepseek-v4-pro
 
 additional_delegates:
@@ -112,7 +112,7 @@ if [ -f "$AGENTS_DIR/delegate-creative.md" ]; then
     update_model "$AGENTS_DIR/delegate-creative.md" "deepseek/deepseek-v4-pro"
 fi
 update_model "$AGENTS_DIR/doc-explorer.md"           "deepseek/deepseek-v4-pro"
-update_model "$AGENTS_DIR/implementer.md"           "bigmodel/glm-5.1"
+update_model "$AGENTS_DIR/implementer.md"           "zhipuai-coding-plan/glm-5.1"
 # implementer-safe — ensure reasoningEffort: xhigh
 if [ -f "$AGENTS_DIR/implementer-safe.md" ]; then
     perl -pi -e 's|^model:.*|model: github-copilot/gpt-5.4-mini|' "$AGENTS_DIR/implementer-safe.md"
