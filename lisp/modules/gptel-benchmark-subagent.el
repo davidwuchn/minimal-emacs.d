@@ -38,11 +38,11 @@
 (declare-function gptel-benchmark-load-history "gptel-benchmark-core")
 (defvar gptel-benchmark-default-dir)
 (defvar my/gptel-agent-task-timeout)
-(defvar gptel-agent-preset)
-(defvar gptel--request-params)
-(defvar gptel-ai-behaviors--subagent-failures)
-(defvar gptel-ai-behaviors--current-hashtags)
-(defvar gptel-tools-read-hashline-default)
+(defvar gptel-agent-preset nil)
+(defvar gptel--request-params nil)
+(defvar gptel-ai-behaviors--subagent-failures nil)
+(defvar gptel-ai-behaviors--current-hashtags nil)
+(defvar gptel-tools-read-hashline-default nil)
 (defvar log-model nil
   "Model name bound in `gptel-benchmark-call-subagent'.
 Used for cost tracking and routing context.")
@@ -266,7 +266,9 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                     (fboundp 'gptel-ai-behaviors--bump-model)
                     (let* ((sub-key (cons category (intern agent-type)))
                            (count (if (boundp 'gptel-ai-behaviors--subagent-failures)
-                                      (gethash sub-key gptel-ai-behaviors--subagent-failures 0)
+                                      (or (and (hash-table-p gptel-ai-behaviors--subagent-failures)
+                                               (gethash sub-key gptel-ai-behaviors--subagent-failures 0))
+                                          0)
                                     0))
                            (current-model (if (symbolp base-model)
                                               base-model

@@ -79,6 +79,7 @@ Now passes in batch — state corruption fixed."
   :expected-result (if noninteractive :passed :passed)
   (let ((gptel-benchmark-use-subagents t)
         (gptel-agent-preset nil)
+        (gptel--request-params nil)
         (gptel-auto-workflow--analyzer-failed-backends '("DashScope"))
         (gptel-auto-workflow--rate-limited-backends nil)
         captured-preset
@@ -124,9 +125,13 @@ Now passes in batch — state corruption fixed."
   (let ((gptel-benchmark-use-subagents t)
          (gptel-agent-preset '(:backend "MiniMax" :model minimax-m2.7-highspeed
                                :backend "MiniMax" :model minimax-m2.7-highspeed))
-        captured-preset)
+         (gptel--request-params nil)
+         captured-preset)
     (cl-letf (((symbol-function 'my/gptel--agent-task-with-timeout)
                (lambda (_cb _at _desc _prompt &rest _)
+                 (setq captured-preset gptel-agent-preset)))
+              ((symbol-function 'gptel-agent--task)
+               (lambda (_cb _at _desc _prompt)
                  (setq captured-preset gptel-agent-preset)))
               ((symbol-function 'gptel-auto-workflow--headless-provider-override-active-p)
                (lambda () t))
@@ -181,6 +186,10 @@ Now passes in batch — state corruption fixed."
       (puthash (cons :programming 'executor) 5 gptel-ai-behaviors--subagent-failures)
       (cl-letf (((symbol-function 'my/gptel--agent-task-with-timeout)
                  (lambda (_cb _at _desc _prompt &rest _)
+                   (setq captured-preset gptel-agent-preset
+                         captured-request-params gptel--request-params)))
+                ((symbol-function 'gptel-agent--task)
+                 (lambda (_cb _at _desc _prompt)
                    (setq captured-preset gptel-agent-preset
                          captured-request-params gptel--request-params)))
                 ((symbol-function 'gptel-auto-workflow--headless-provider-override-active-p)
