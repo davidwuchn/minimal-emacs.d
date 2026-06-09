@@ -73,14 +73,48 @@ Usage-limit errors are excluded because they are retryable rate limits until
 the configured fallback chain is exhausted.")
 
 (defvar gptel-auto-workflow--runtime-subagent-provider-overrides)
-(defconst gptel-auto-experiment--shared-retryable-error-patterns
+(defvar gptel-auto-experiment--shared-retryable-error-patterns
   (list :general
         (regexp-opt '("timeout" "timed out" "temporary" "server_error" "WebClientRequestException" "curl failed with exit code 28" "curl failed with exit code 35" "curl failed with exit code 56" "operation timed out" "authorized_error" "token is unusable" "invalid_api_key" "invalid api key" "unauthorized" "http_code \"401\"" "Malformed JSON" "余额不足" "无可用资源包" "insufficient balance" ":code \"1113\"" "credit limit reached") t)
         :transient
         (regexp-opt '("WebClientRequestException" "server_error" "curl failed with exit code 28" "curl failed with exit code 35" "curl failed with exit code 56" "operation timed out" "Malformed JSON" "余额不足" "无可用资源包" "insufficient balance" ":code \"1113\"" "credit limit reached") t))
-  "Pre-compiled shared retryable error patterns as a plist.
+   "Pre-compiled shared retryable error patterns as a plist.
 Keys :general (used in is-retryable-error-p) and :transient
 (used in provider-pressure-error-p).")
+
+(defvar gptel-auto-experiment--auto-learned-patterns nil
+  "Error patterns auto-learned by monitoring agent in headless mode.
+Accumulated across daemon lifetime. Rebuilt into retryable pattern
+regex on each append via --auto-append-retryable-pattern.")
+
+(defun gptel-auto-workflow--auto-append-retryable-pattern (snippet)
+  "Auto-add SNIPPET to retryable error patterns (headless, no human gate).
+Called by --detect-unknown-error-patterns for low-risk pattern additions.
+Rebuilds :general and :transient regex from accumulated learned patterns."
+  (unless (member snippet gptel-auto-experiment--auto-learned-patterns)
+    (push snippet gptel-auto-experiment--auto-learned-patterns)
+    ;; Rebuild both regex patterns from base + auto-learned
+    (let* ((base-general '("timeout" "timed out" "temporary" "server_error"
+                           "WebClientRequestException" "curl failed with exit code 28"
+                           "curl failed with exit code 35" "curl failed with exit code 56"
+                           "operation timed out" "authorized_error" "token is unusable"
+                           "invalid_api_key" "invalid api key" "unauthorized"
+                           "http_code \"401\"" "Malformed JSON"
+                           "余额不足" "无可用资源包" "insufficient balance"
+                           ":code \"1113\"" "credit limit reached"))
+           (base-transient '("WebClientRequestException" "server_error"
+                             "curl failed with exit code 28" "curl failed with exit code 35"
+                             "curl failed with exit code 56" "operation timed out"
+                             "Malformed JSON" "余额不足" "无可用资源包"
+                             "insufficient balance" ":code \"1113\"" "credit limit reached"))
+           (all-general (append base-general gptel-auto-experiment--auto-learned-patterns))
+           (all-transient (append base-transient gptel-auto-experiment--auto-learned-patterns)))
+      (plist-put gptel-auto-experiment--shared-retryable-error-patterns
+                 :general (regexp-opt all-general t))
+      (plist-put gptel-auto-experiment--shared-retryable-error-patterns
+                 :transient (regexp-opt all-transient t)))
+    (message "[auto-learn] Appended retryable pattern: %S (total learned: %d)"
+             snippet (length gptel-auto-experiment--auto-learned-patterns))))
 
 (defun gptel-auto-workflow--plist-delete-all (plist prop)
   "Return PLIST without any entries for PROP."

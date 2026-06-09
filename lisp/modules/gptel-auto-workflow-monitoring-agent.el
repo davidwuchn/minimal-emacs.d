@@ -612,11 +612,16 @@ When unknown error appears >= min-occurrences, propose adding to retryable list.
          (push entry proposals)))
      unknowns)
     (when proposals
-      (message "[monitoring] Unknown error patterns: %d candidates for retryable list"
+      (message "[monitoring] Auto-learning: %d unknown error patterns detected"
                (length proposals))
       (dolist (p proposals)
-        (message "[monitoring]   → %S (%d occurrences)"
-                 (plist-get p :error-snippet) (plist-get p :count))))
+        (message "[monitoring]   → auto-append: %S (%d occurrences)"
+                 (plist-get p :error-snippet) (plist-get p :count))
+        ;; Headless auto-fix: immediately add to retryable patterns
+        ;; Low-risk change — just a string in a regex list, no code logic
+        (when (fboundp 'gptel-auto-workflow--auto-append-retryable-pattern)
+          (gptel-auto-workflow--auto-append-retryable-pattern
+           (plist-get p :error-snippet)))))
     proposals))
 
 ;; ── Pattern Formatting ──
