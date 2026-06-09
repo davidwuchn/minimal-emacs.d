@@ -6,29 +6,25 @@
 set -euo pipefail
 
 REPO_URL="https://github.com/DasDigitaleMomentum/opencode-processing-skills.git"
-TMPDIR="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR"' EXIT
+TEMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TEMP_DIR"' EXIT
 
 # Detect emacs.d directory (supports non-standard paths)
 SCRIPT_DIR="$(cd "$(dirname "$0")"; pwd)"
 EMACS_DIR="$(cd "$SCRIPT_DIR/.."; pwd)"
 
-# Platform-aware socket path (per AGENTS.md S3: /tmp/emacs$(id -u)/)
-if [[ "$(uname)" == "Darwin" ]]; then
-    OV5_SOCKET="/tmp/emacs$(id -u)/ov5-auto-workflow"
-else
-    OV5_SOCKET="/tmp/emacs$(id -u)/ov5-auto-workflow"
-fi
+# Socket path (per AGENTS.md S3: /tmp/emacs$(id -u)/)
+OV5_SOCKET="/tmp/emacs$(id -u)/ov5-auto-workflow"
 SKILL_SRC="${EMACS_DIR}/assistant/skills/ov5"
 OPENCODE_SKILLS="${HOME}/.config/opencode/skills/ov5"
 
 echo "=== OpenCode Processing Skills + OV5 Cowork - Global Install ==="
 
 # 1. Clone repo
-git clone --depth=1 "$REPO_URL" "$TMPDIR/ops"
+git clone --depth=1 "$REPO_URL" "$TEMP_DIR/ops"
 
 # 2. Create config.yaml
-cat > "$TMPDIR/ops/config.yaml" <<'EOF'
+cat > "$TEMP_DIR/ops/config.yaml" <<'EOF'
 targets:
   opencode:
     enabled: true
@@ -69,7 +65,7 @@ if [[ "$(uname)" == "Darwin" ]]; then
 fi
 
 # 4. Run installer
-cd "$TMPDIR/ops" && bash install.sh || echo "WARNING: install.sh failed, continuing with model fixes"
+cd "$TEMP_DIR/ops" && bash install.sh || echo "WARNING: install.sh failed, continuing with model fixes"
 
 # 5. Fix models in agent files
 AGENTS_DIR="$HOME/.config/opencode/agents"
@@ -87,7 +83,7 @@ for agent in maintainer maintainer-direct; do
     if [ -f "$file" ]; then
         # Portable: remove any existing model line, then insert after description.
         # perl -i -pe applies the block to each line; $_ holds the current line.
-        perl -i -pe 'if (/^model:/) { $_ = ""; } elsif (/^description:/) { $_ = $_ . "model: deepseek/deepseek-v4-pro\noptions:\n  reasoningEffort: high\n"; }' "$file"
+        perl -pi -e 'if (/^model:/) { $_ = ""; } elsif (/^description:/) { $_ = $_ . "model: deepseek/deepseek-v4-pro\noptions:\n  reasoningEffort: high\n"; }' "$file"
     fi
 done
 
