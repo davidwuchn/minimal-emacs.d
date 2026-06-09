@@ -866,7 +866,7 @@ target).*\n")
         (insert "```\n")))
 
       ;; Write causal chains and gap detection to self-evolution.md (consumed by prompts)
-      (let ((self-evolution-file (expand-file-name "mementum/knowledge/self-evolution.md"
+      (let ((self-evolution-file (expand-file-name "var/tmp/self-evolution.md"
                                                     (gptel-auto-workflow--worktree-base-root))))
         (with-temp-file self-evolution-file
           (insert "---\n")
@@ -917,7 +917,7 @@ Uses cache to avoid repeated file reads."
           (message "[knowledge-cache] Hit for self-evolution (%d chars)" (length cached))
           cached)
       (let ((evolution-file (expand-file-name
-                             "mementum/knowledge/self-evolution.md"
+                             "var/tmp/self-evolution.md"
                              (gptel-auto-workflow--worktree-base-root))))
         (if (file-exists-p evolution-file)
             (let ((content
@@ -2430,7 +2430,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
   (condition-case err
       (let ((trends-report (gptel-auto-workflow--allium-trends-report)))
         (when (> (length trends-report) 30)
-          (let ((file (expand-file-name "mementum/knowledge/allium-trends.md"
+          (let ((file (expand-file-name "var/tmp/allium-trends.md"
                                         (gptel-auto-workflow--worktree-base-root))))
             (make-directory (file-name-directory file) t)
             (with-temp-file file (insert trends-report)))))
@@ -6328,7 +6328,7 @@ Returns a formatted string suitable for mementum/skill guidance."
 (defun gptel-auto-workflow--evolution-persist-backend-comparison ()
   "Save head-to-head backend comparison to mementum."
   (let ((report (gptel-auto-workflow--evolution-backend-comparison-report))
-        (file (expand-file-name "mementum/knowledge/backend-comparison.md"
+        (file (expand-file-name "var/tmp/backend-comparison.md"
                                 (gptel-auto-workflow--worktree-base-root))))
     (when report
       (make-directory (file-name-directory file) t)
@@ -6529,7 +6529,7 @@ vs DeepSeek/deepseek-v4-flash\)."
 (defun gptel-auto-workflow--evolution-persist-model-comparison ()
   "Save model-level head-to-head comparison to mementum."
   (let ((report (gptel-auto-workflow--evolution-model-comparison-report))
-        (file (expand-file-name "mementum/knowledge/model-comparison.md"
+        (file (expand-file-name "var/tmp/model-comparison.md"
                                 (gptel-auto-workflow--worktree-base-root))))
     (when report
       (make-directory (file-name-directory file) t)
@@ -7502,8 +7502,10 @@ Records health snapshot, checks predictive warnings, analyzes patterns."
 ;;; ─── Phase 2: Meta-Learning from Remediation ───
 
 (defvar gptel-auto-workflow--self-healing-state-file
-  "mementum/knowledge/pipeline-health.md"
-  "File to persist self-healing state across sessions.")
+  "var/tmp/pipeline-health.md"
+  "File to persist self-healing state across sessions.
+Stored in var/tmp/ (not mementum/knowledge/) because this is
+operational state auto-generated each cycle, not curated knowledge.")
 
 (defun gptel-auto-workflow--persist-self-healing-state ()
   "Write self-healing log to persistent storage.

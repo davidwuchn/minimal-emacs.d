@@ -1398,7 +1398,7 @@ The returned string is designed for prompt insertion as:
 This biases the evolution LLM to prioritize fixes for known system issues."
   (let* ((root (gptel-auto-workflow--project-root))
          (kp-file (expand-file-name
-                   "mementum/knowledge/system-health-patterns.md" root)))
+                   "var/tmp/system-health-patterns.md" root)))
     (when (file-exists-p kp-file)
       (with-temp-buffer
         (insert-file-contents kp-file)

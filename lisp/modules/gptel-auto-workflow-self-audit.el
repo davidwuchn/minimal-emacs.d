@@ -723,7 +723,7 @@ Returns the count of memories found, or nil if below threshold."
          (n (length memories)))
     (when (>= n 3)
       (let* ((root (gptel-auto-workflow-self-audit--root))
-             (kp-dir (expand-file-name "mementum/knowledge/" root))
+             (kp-dir (expand-file-name "var/tmp/" root))
              (kp-file (expand-file-name "system-health-patterns.md" kp-dir))
              (cold-runs (seq-count
                          (lambda (m) (> (plist-get m :cold-backends) 0))

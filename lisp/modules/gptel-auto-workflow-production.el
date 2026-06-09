@@ -302,7 +302,7 @@ Called when research context changes or run completes."
 
       ;; Knowledge file
       (let ((knowledge-file (expand-file-name
-                             "mementum/knowledge/self-evolution.md"
+                             "var/tmp/self-evolution.md"
                              (if (fboundp 'gptel-auto-workflow--worktree-base-root)
                                  (gptel-auto-workflow--worktree-base-root)
                                "/Users/davidwu/.emacs.d"))))
