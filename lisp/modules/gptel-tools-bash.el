@@ -8,13 +8,13 @@
 (require 'cl-lib)
 (require 'subr-x)
 (require 'seq)
-(require 'gptel-platform-sandbox nil t)
 (require 'gptel-ext-abort)
 (require 'gptel-tools-agent-base)
 
 (declare-function gptel-fsm-info "gptel-request" (&optional fsm))
 (defvar gptel-auto-workflow--subagent-process-environment nil)
-(defvar gptel--fsm-last nil)
+(defvar gptel--fsm-last)
+
 ;;; Customization
 
 (defgroup gptel-tools-bash nil
@@ -183,8 +183,7 @@ Recreates the shell when the workflow env or working directory changes."
                      'my/gptel-bash-context-signature signature)
         ;; Initialize Dumb Terminal variables to prevent interactive hanging
         (process-send-string my/gptel--persistent-bash-process
-                             "export TERM=dumb PAGER=cat GIT_PAGER=cat DEBIAN_FRONTEND=noninteractive
-PS1=''\n")
+                             "export TERM=dumb PAGER=cat GIT_PAGER=cat DEBIAN_FRONTEND=noninteractive PS1=''\n")
         (sleep-for 0.1)))))
 
 (defun my/gptel--bash-process-filter (proc output marker finish-fn)
@@ -289,16 +288,8 @@ CALLBACK is called with the result string on completion."
                                 (finish (format "Error: Bash timed out after %ss" my/gptel-bash-timeout)))
                               proc))
 
-                ;; Wrap command in sandbox (platform-specific: seatbelt/bubblewrap)
-                ;; then in {} to catch errors and safely output the exit code marker.
-                (let* ((wrapped (if (fboundp 'gptel-platform-sandbox--wrap-and-send)
-                                    (gptel-platform-sandbox--wrap-and-send command proc marker)
-                                  nil))
-                       (profile (cdr-safe wrapped)))
-                  (unless wrapped
-                    ;; Fallback: no platform sandbox available
-                    (process-send-string proc (format "{ %s\n} 2>&1\necho %s:$?\n"
-                                                      command marker))))))
+                ;; Wrap command in {} to catch errors and safely output the exit code marker
+                (process-send-string proc (format "{ %s\n} 2>&1\necho %s:$?\n" command marker))))))
         (error (finish (format "Error: %s" (error-message-string err))))))))
 
 ;;; Tool Registration
