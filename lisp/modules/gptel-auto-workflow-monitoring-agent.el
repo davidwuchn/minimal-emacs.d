@@ -644,10 +644,16 @@ list."
   (let* ((patterns gptel-auto-experiment--shared-retryable-error-patterns)
          (general-pattern (plist-get patterns :general))
          (transient-pattern (plist-get patterns :transient))
+         ;; Include known code-bug patterns so they don't get re-proposed
+         (code-bug-pattern (regexp-opt
+                            '("void-variable" "no-catch" "wrong-number-of-arguments"
+                              "Wrong number of arguments" "defining as dynamic an already lexical"
+                              "void-function" "mapcar called on non-list" "wrong-type-argument"
+                              "listp" "setting current directory") t))
          (records (condition-case nil
-                     (when (fboundp 'gptel-auto-workflow--parse-all-results)
-                       (gptel-auto-workflow--parse-all-results))
-                   (error nil)))
+                      (when (fboundp 'gptel-auto-workflow--parse-all-results)
+                        (gptel-auto-workflow--parse-all-results))
+                    (error nil)))
          (unknowns (make-hash-table :test 'equal))
          (proposals nil))
     (dolist (rec records)
@@ -668,9 +674,12 @@ list."
                                   (push (match-string 0 grader-reason) chinese)
                                   (setq pos (match-end 0)))
                                 chinese)))))
-        (dolist (snippet snippets)
-          (unless (or (string-match-p general-pattern snippet)
-                      (string-match-p transient-pattern snippet))
+         (dolist (snippet snippets)
+           (unless (or (string-match-p general-pattern snippet)
+                       (string-match-p transient-pattern snippet)
+                       ;; Skip known code-bug patterns — they are detected
+                       ;; separately by --detect-code-bug-patterns
+                       (string-match-p code-bug-pattern snippet))
             (let* ((key snippet)
                    (entry (gethash key unknowns)))
               (if entry
@@ -688,17 +697,111 @@ list."
                  gptel-auto-workflow-error-pattern-min-occurrences)
          (push entry proposals)))
      unknowns)
-    (when proposals
-      (message "[monitoring] Auto-learning: %d unknown error patterns detected"
-               (length proposals))
-      (dolist (p proposals)
-        (message "[monitoring]   → auto-append: %S (%d occurrences)"
-                 (plist-get p :error-snippet) (plist-get p :count))
-        ;; Headless auto-fix: immediately add to retryable patterns
-        ;; Low-risk change — just a string in a regex list, no code logic
-        (when (fboundp 'gptel-auto-workflow--auto-append-retryable-pattern)
-          (gptel-auto-workflow--auto-append-retryable-pattern
-           (plist-get p :error-snippet)))))
+     (when proposals
+       (message "[monitoring] Auto-learning: %d unknown error patterns detected"
+                (length proposals))
+       (dolist (p proposals)
+         (message "[monitoring]   → auto-append: %S (%d occurrences)"
+                  (plist-get p :error-snippet) (plist-get p :count))
+         (when (fboundp 'gptel-auto-workflow--auto-append-retryable-pattern)
+           (gptel-auto-workflow--auto-append-retryable-pattern
+            (plist-get p :error-snippet)))))
+     ;; Phase: code-bug pattern detection from pipeline logs.
+     ;; These are code-level bugs (not API errors) that OV5 should detect
+     ;; and propose fixes for. The self-heal byte-compiler can fix them.
+     (let ((code-bugs (gptel-auto-workflow--detect-code-bug-patterns)))
+       (dolist (bug code-bugs)
+         (push bug proposals)))
+     proposals))
+
+;; ─── Code-Bug Pattern Detection ───
+
+(defun gptel-auto-workflow--detect-code-bug-patterns ()
+  "Scan recent pipeline outcomes for known code-bug patterns.
+Returns list of proposals for self-heal fixes.
+Patterns detected:
+- void-variable err: err shadowed or unbound in error handler
+- no-catch: cl-return-from in defun (should be cl-defun)
+- defvar without init value: doesn't make var special under lexical-binding
+- wrong-number-of-arguments/Wrong number of arguments: fixer arity mismatch"
+  (let ((proposals nil)
+        (log-file (expand-file-name
+                   (format "var/log/emacs-%d.log" (emacs-pid))
+                   (or (bound-and-true-p minimal-emacs-user-directory)
+                       user-emacs-directory)))
+        (code-bugs
+         (list :void-variable-err
+               (regexp-opt '("void-variable err" "void-variable " "no-catch --cl-block")
+                           t)
+               :defvar-bare
+               "defining as dynamic an already lexical"
+               :wrong-arity
+               (regexp-opt '("wrong-number-of-arguments" "Wrong number of arguments")
+                           t)
+               :void-function
+               "void-function")))
+    (when (and (file-exists-p log-file)
+               (file-readable-p log-file))
+      (condition-case nil
+          (with-temp-buffer
+            (insert-file-contents log-file nil (- (file-attribute-size
+                                                    (file-attributes log-file))
+                                                  (* 100 1024))
+                                  nil)
+            (goto-char (point-min))
+            (let ((void-var-pattern (plist-get code-bugs :void-variable-err))
+                  (bare-defvar-pattern (plist-get code-bugs :defvar-bare))
+                  (wrong-arity-pattern (plist-get code-bugs :wrong-arity))
+                  (void-fn-pattern (plist-get code-bugs :void-function))
+                  (void-var-count 0)
+                  (bare-defvar-count 0)
+                  (wrong-arity-count 0)
+                  (void-fn-count 0))
+              (while (re-search-forward
+                      (concat "\\(" void-var-pattern "\\|"
+                              bare-defvar-pattern "\\|"
+                              wrong-arity-pattern "\\|"
+                              void-fn-pattern "\\)")
+                       nil t)
+                (let ((match (match-string 1)))
+                  (cond
+                    ((string-match-p void-var-pattern match)
+                     (cl-incf void-var-count))
+                    ((string-match-p bare-defvar-pattern match)
+                     (cl-incf bare-defvar-count))
+                    ((string-match-p wrong-arity-pattern match)
+                     (cl-incf wrong-arity-count))
+                    ((string-match-p void-fn-pattern match)
+                     (cl-incf void-fn-count)))))
+              (when (> void-var-count 2)
+                (push (list :error-snippet "void-variable err (code-bug: shadowed/unbound in handler)"
+                            :count void-var-count
+                            :first-target "runtime-logs"
+                            :code-bug t
+                            :suggested-fix "Check for condition-case err shadowing — rename handler's err variable or capture with (let ((captured-err err)) ...)")
+                      proposals))
+              (when (> bare-defvar-count 0)
+                (push (list :error-snippet "defining as dynamic an already lexical (code-bug: bare defvar)"
+                            :count bare-defvar-count
+                            :first-target "runtime-logs"
+                            :code-bug t
+                            :suggested-fix "Change (defvar FOO) to (defvar FOO nil) — bare defvar doesn't make var special under lexical-binding")
+                      proposals))
+              (when (> wrong-arity-count 2)
+                (push (list :error-snippet "wrong-number-of-arguments (code-bug: fixer/fn arity mismatch)"
+                            :count wrong-arity-count
+                            :first-target "runtime-logs"
+                            :code-bug t
+                            :suggested-fix "Check function call sites for arity mismatch — likely a fixer called with wrong arg count")
+                      proposals))
+              (when (> void-fn-count 2)
+                (push (list :error-snippet "void-function (code-bug: missing require/load)"
+                            :count void-fn-count
+                            :first-target "runtime-logs"
+                            :code-bug t
+                            :suggested-fix "Add (require 'module) or declare-function before usage")
+                      proposals))))
+        (error nil)))
     proposals))
 
 ;; ── Pattern Formatting ──
