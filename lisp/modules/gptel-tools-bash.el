@@ -37,6 +37,10 @@ When nil, skip platform sandboxing and send commands directly."
   :type 'boolean
   :group 'gptel-tools-bash)
 
+(defvar my/gptel--bash-busy nil
+  "Non-nil when a Bash command is currently executing.
+Prevents concurrent calls from interleaving on the shared persistent shell.")
+
 ;;; Internal Variables
 
 (defvar my/gptel--persistent-bash-process nil
@@ -127,8 +131,11 @@ When nil, skip platform sandboxing and send commands directly."
   "Check if a Bash COMMAND is safe for Plan mode.
 Returns t if safe, or a string explaining why it was rejected."
   (let* ((cmd (string-trim command))
-         (forbidden-chars '(">" "<" "`" "$(" "sed -i")))
+         (forbidden-chars '(">" "<" "`" "$(" "${" "sed -i")))
     (catch 'rejected
+      ;; Reject if command contains newlines (newline injection bypass)
+      (when (string-match-p "\n" cmd)
+        (throw 'rejected "Contains forbidden newline character"))
       ;; Check forbidden syntax
       (dolist (c forbidden-chars)
         (when (string-match-p (regexp-quote c) cmd)
@@ -140,8 +147,7 @@ Returns t if safe, or a string explaining why it was rejected."
       (let* ((parts (split-string cmd "\\(&&\\|||\\||\\|;\\)" t "[ \t\n\r]+"))
              (whitelist '("ls" "pwd" "tree" "file" "find" "fd" "which" "type"
                           "git status" "git diff" "git log" "git show" "git branch" "git grep" "git rev-parse" "git describe" "git remote" "git tag"
-                          "grep" "rg" "cat" "head" "tail" "wc" "echo" "jq" "awk" "sort" "uniq" "cut" "tr" "xargs"
-                          "pytest" "npm test" "npm run test" "cargo test" "go test" "make test" "make check" "make" "cargo" "npm" "pip" "python" "node"
+                          "grep" "rg" "cat" "head" "tail" "wc" "echo" "jq" "sort" "uniq" "cut" "tr"
                           "test" "[" "true" "false" "basename" "dirname" "realpath" "readlink")))
         (dolist (part parts)
           (let* ((clean-part (string-trim part))
@@ -194,6 +200,17 @@ Recreates the shell when the workflow env or working directory changes."
                              "export TERM=dumb PAGER=cat GIT_PAGER=cat DEBIAN_FRONTEND=noninteractive PS1=''\n")
         (sleep-for 0.1)))))
 
+(defvar my/gptel--bash-temp-files nil
+  "List of temp files created by Bash output truncation. Cleaned on kill.")
+
+(defun my/gptel--bash-cleanup-temp-files ()
+  "Delete all temp files created by Bash output truncation."
+  (dolist (f my/gptel--bash-temp-files)
+    (ignore-errors (delete-file f)))
+  (setq my/gptel--bash-temp-files nil))
+
+(add-hook 'kill-emacs-hook #'my/gptel--bash-cleanup-temp-files)
+
 (defun my/gptel--bash-process-filter (proc output marker finish-fn)
   "Process filter for gptel persistent bash.
 Accumulates OUTPUT in PROC's buffer, detects the end-of-command MARKER,
@@ -210,13 +227,14 @@ Cancels the timeout timer stored on PROC via `process-get'."
                  (out (substring content 0 (match-beginning 0)))
                  (out (string-trim out))
                  (max-length 50000)
-                 (truncated-out
-                  (if (> (length out) max-length)
-                      (let ((temp-file (my/gptel-make-temp-file "bash-" nil ".txt")))
-                        (with-temp-file temp-file (insert out))
-                        (concat (substring out 0 (/ max-length 2))
-                                (format "\n\n... [Output truncated. Result exceeded 50,000 bytes. Full output saved to: %s\nUse Grep to search the full content or Read with offset/limit to view specific sections.] ...\n\n" temp-file)
-                                (substring out (- (/ max-length 2)))))
+                  (truncated-out
+                   (if (> (length out) max-length)
+                       (let ((temp-file (my/gptel-make-temp-file "bash-" nil ".txt")))
+                         (with-temp-file temp-file (insert out))
+                         (push temp-file my/gptel--bash-temp-files)
+                         (concat (substring out 0 (/ max-length 2))
+                                 (format "\n\n... [Output truncated. Result exceeded 50,000 bytes. Full output saved to: %s\nUse Grep to search the full content or Read with offset/limit to view specific sections.] ...\n\n" temp-file)
+                                 (substring out (- (/ max-length 2)))))
                     out))
                  (timer (process-get proc 'my/gptel-bash-timer)))
             (when timer (cancel-timer timer))
@@ -244,6 +262,7 @@ CALLBACK is called with the result string on completion."
         ((finish (result)
            (unless done
              (setq done t)
+             (setq my/gptel--bash-busy nil)
              (when profile-file
                (ignore-errors (delete-file profile-file))
                (setq profile-file nil))
@@ -266,6 +285,9 @@ CALLBACK is called with the result string on completion."
             (unless (and (stringp command) (not (string-empty-p (string-trim command))))
               (error "command is empty"))
 
+            (when my/gptel--bash-busy
+              (error "[concurrent] Bash is busy — cannot run concurrent commands on shared shell"))
+
             (let ((sandbox-err (and is-plan
                                     (let ((res (my/gptel--safe-bash-command-p command)))
                                       (if (stringp res) res nil)))))
@@ -276,10 +298,14 @@ CALLBACK is called with the result string on completion."
                   (error "[boundary] Bash working directory %S is outside allowed workspace roots: %S"
                          (my/gptel--bash-context-directory) gptel-auto-workflow--allowed-workspace-roots))
                 (my/gptel--ensure-persistent-bash)
+                (setq my/gptel--bash-busy t)
 
                 (let* ((proc my/gptel--persistent-bash-process)
                        (buf (process-buffer proc))
-                       (marker (format "gptel_cmd_done_%s" (md5 (number-to-string (random))))))
+                       (marker (format "gptel_cmd_done_%s" (md5 (number-to-string (random)))))
+                       ;; Use a subshell to isolate from persistent state poisoning.
+                       ;; The subshell resets CWD to context-dir and clears env/functions.
+                       (context-dir (my/gptel--bash-context-directory)))
 
                   (with-current-buffer buf (erase-buffer))
 
@@ -302,17 +328,27 @@ CALLBACK is called with the result string on completion."
                                   (finish (format "Error: Bash timed out after %ss" my/gptel-bash-timeout)))
                                 proc))
 
-                  ;; Wrap command with platform sandbox when available, otherwise send directly
-                  (let ((pf (if (and my/gptel-bash-platform-sandbox
-                                     (gptel-platform-sandbox--available-p))
-                                (gptel-platform-sandbox--wrap-and-send command proc marker)
-                              (progn
-                                (process-send-string proc (format "{ %s\n} 2>&1\necho %s:$?\n" command marker))
-                                nil))))
-                    (when pf
-                      (setq profile-file pf)
-                      (process-put proc 'my/gptel-bash-profile-file pf)))))))
-        (error (when profile-file (ignore-errors (delete-file profile-file)))
+                  ;; Wrap command with platform sandbox when available, otherwise send directly.
+                  ;; Commands run in a subshell (cd ... && ...) to prevent persistent state
+                  ;; poisoning (cd/export/function/alias from previous calls).
+                  (let ((sandbox-available (and my/gptel-bash-platform-sandbox
+                                                (gptel-platform-sandbox--available-p))))
+                    (unless sandbox-available
+                      (when my/gptel-bash-platform-sandbox
+                        (message "[security] WARNING: Platform sandbox requested but not available — running unsandboxed")))
+                    (let ((pf (if sandbox-available
+                                 (gptel-platform-sandbox--wrap-and-send
+                                  (format "cd %s && { %s\n}" (shell-quote-argument context-dir) command)
+                                  proc marker)
+                               (progn
+                                 (process-send-string proc (format "{ cd %s && { %s\n}; } 2>&1\necho %s:$?\n"
+                                                                   (shell-quote-argument context-dir) command marker))
+                                 nil))))
+                      (when pf
+                        (setq profile-file pf)
+                        (process-put proc 'my/gptel-bash-profile-file pf))))))))
+        (error (setq my/gptel--bash-busy nil)
+               (when profile-file (ignore-errors (delete-file profile-file)))
                (finish (format "Error: %s" (error-message-string err))))))))
 
 ;;; Tool Registration

@@ -36,7 +36,14 @@
    ((eq system-type 'gnu/linux) :bubblewrap)
    (t :none)))
 
-;; ── Profile Generation ──
+;; ── Configuration ──
+
+(defcustom gptel-platform-sandbox-agent-network t
+  "When non-nil, agent mode allows outbound network in the platform sandbox.
+When nil, both plan and agent mode deny all network access.
+Set to nil to prevent data exfiltration via curl/nc in agent mode."
+  :type 'boolean
+  :group 'gptel-tools-bash)
 
 (defvar gptel-platform-sandbox--workspace-root nil
   "Workspace root directory for sandbox allowlisting.
@@ -78,8 +85,8 @@ MODE is :plan or :agent — plan mode denies all network."
       (insert "(allow process-fork)\n")
       (insert "(allow process-exec (subpath \"/usr\"))\n")
       (insert "(allow process-exec (subpath \"/bin\"))\n")
-      ;; Network: plan mode denies, agent mode allows
-      (if plan-mode
+      ;; Network: plan mode denies, agent mode respects defcustom
+      (if (or plan-mode (not gptel-platform-sandbox-agent-network))
           (insert "(deny network*)\n")
         (insert "(allow network-outbound)\n"))
       ;; Sysctl for system info
@@ -98,19 +105,23 @@ MODE is :plan or :agent — plan mode isolates network."
          (plan-mode (eq mode :plan)))
     (mapconcat
      #'identity
-     (append
-      ;; Read-only bind system dirs
-      (cl-loop for d in '("/usr" "/bin" "/sbin" "/lib" "/lib64" "/etc"
-                          "/opt" "/var" "/dev" "/proc" "/sys")
-               when (file-directory-p d)
-               collect (format "--ro-bind %s %s" d d))
-      ;; Read-write bind workspace and temp
+      (append
+       ;; Read-only bind system dirs (exclude /proc and /sys to prevent info leaks)
+       (cl-loop for d in '("/usr" "/bin" "/sbin" "/lib" "/lib64" "/etc"
+                           "/opt" "/var" "/dev")
+                when (file-directory-p d)
+                collect (format "--ro-bind %s %s" d d))
+       ;; Provide minimal /proc (self only) and empty /sys for compatibility
+       (list "--proc /proc"
+             "--dir /sys"
+             "--dir /tmp")
+       ;; Read-write bind workspace and temp
       (list (format "--bind %s %s" rw-root rw-root)
             (format "--bind %s %s" tmpdir tmpdir))
-      ;; Isolate — plan mode unshares network, agent mode shares it
-      (list (if plan-mode
-                "--unshare-all --new-session"
-              "--unshare-all --share-net --new-session")))
+       ;; Isolate — plan mode or network-disabled unshares network
+       (list (if (or plan-mode (not gptel-platform-sandbox-agent-network))
+                 "--unshare-all --new-session"
+               "--unshare-all --share-net --new-session")))
       " ")))
 
 ;; ── Command Wrapping ──
@@ -125,14 +136,14 @@ bubblewrap (no temp file to clean up) and non-nil for seatbelt."
     (cond
      ((eq (gptel-platform-sandbox--platform-name) :seatbelt)
       (let ((profile (gptel-platform-sandbox--seatbelt-profile mode)))
-        (cons (format "sandbox-exec -f %s -- %s"
+        (cons (format "sandbox-exec -f %s -- /bin/bash -c %s"
                       (shell-quote-argument profile)
-                      command)
+                      (shell-quote-argument command))
               profile)))
      ((eq (gptel-platform-sandbox--platform-name) :bubblewrap)
-      (cons (format "bwrap %s -- %s"
+      (cons (format "bwrap %s -- /bin/bash -c %s"
                     (gptel-platform-sandbox--bwrap-args mode)
-                    command)
+                    (shell-quote-argument command))
             nil))
      (t (cons command nil)))))
 

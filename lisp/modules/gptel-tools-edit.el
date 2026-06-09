@@ -54,7 +54,9 @@ Handles multi-line whitespace before/after fences."
 (defun my/gptel--validate-patch-target (patch-text expected-file)
   "Verify PATCH-TEXT targets EXPECTED-FILE, not arbitrary paths.
 Returns t if validation passes, signals error if mismatch.
-This prevents path traversal via crafted diff headers."
+Validates both basename match and that all patch paths resolve within
+the same directory as EXPECTED-FILE."
+  ;; Validate --- header (source)
   (when (string-match "^--- \\([^\t\n]+\\)" patch-text)
     (let* ((from-header (match-string 1 patch-text))
            (patch-file (cond
@@ -68,6 +70,26 @@ This prevents path traversal via crafted diff headers."
       (unless (string= expected-name patch-name)
         (error "Patch target mismatch: patch targets '%s', expected '%s'"
                patch-name expected-name))))
+  ;; Validate +++ header (destination) — must also match basename
+  (when (string-match "^\\+\\+\\+ \\([^\t\n]+\\)" patch-text)
+    (let* ((to-header (match-string 1 patch-text))
+           (dest-file (if (string-match "^b/" to-header)
+                          (substring to-header 2)
+                        to-header))
+           (dest-name (file-name-nondirectory dest-file))
+           (expected-name (file-name-nondirectory expected-file)))
+      (unless (or (string= dest-name expected-name)
+                  (string= dest-file "/dev/null"))
+        (error "Patch destination mismatch: patch writes to '%s', expected '%s'"
+               dest-name expected-name))))
+  ;; Reject patches with extra file hunks (--- ... followed by another ---)
+  (let ((hunk-count 0)
+        (pos 0))
+    (while (string-match "^--- [^\t\n]+" patch-text pos)
+      (setq hunk-count (1+ hunk-count))
+      (setq pos (match-end 0)))
+    (when (> hunk-count 1)
+      (error "Patch contains %d file targets — only single-file patches allowed" hunk-count)))
   t)
 
 ;;; Edit Mode Tracking

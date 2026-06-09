@@ -132,10 +132,12 @@ Call this after gptel-agent-tools loads."
      :category "gptel-agent"
      :include t)
 
-    ;; Insert tool
+    ;; Insert tool — wrapped with workspace boundary check
     (gptel-make-tool
      :name "Insert"
-     :function #'gptel-agent--insert-in-file
+     :function (lambda (file-path line-number new-str)
+                 (let ((validated-path (gptel-auto-workflow--expand-workspace-path file-path)))
+                   (gptel-agent--insert-in-file validated-path line-number new-str)))
      :description "Insert text at a line number in a file."
      :args '((:name "file_path" :type string :description "Path to the file")
              (:name "line_number" :type integer)
@@ -144,10 +146,12 @@ Call this after gptel-agent-tools loads."
      :confirm t
      :include t)
 
-    ;; Mkdir tool
+    ;; Mkdir tool — wrapped with workspace boundary check
     (gptel-make-tool
      :name "Mkdir"
-     :function #'gptel-agent--make-directory
+     :function (lambda (parent name)
+                 (let ((validated-parent (gptel-auto-workflow--expand-workspace-path parent)))
+                   (gptel-agent--make-directory validated-parent name)))
      :description "Create a directory under a parent directory."
      :args '((:name "parent" :type string)
              (:name "name" :type string))
@@ -155,12 +159,12 @@ Call this after gptel-agent-tools loads."
      :confirm t
      :include t)
 
-    ;; Move tool
+    ;; Move tool — wrapped with workspace boundary check
     (gptel-make-tool
      :name "Move"
      :function (lambda (source dest)
-                 (let ((src (expand-file-name source))
-                       (dst (expand-file-name dest)))
+                 (let ((src (gptel-auto-workflow--expand-workspace-path source))
+                       (dst (gptel-auto-workflow--expand-workspace-path dest)))
                    (if (not (file-exists-p src))
                        (error "Source file does not exist: %s" src)
                      (rename-file src dst t)
