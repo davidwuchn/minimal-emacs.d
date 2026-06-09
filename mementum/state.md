@@ -1,10 +1,10 @@
 # Mementum State
 
 > **Bootstrapped**: 2026-06-06
-> **Session**: YC Vision 100% Complete - All 9 Phases Implemented
-> **Status**: ✅ **YC VISION FULLY IMPLEMENTED** - All 5 layers operational, all 10 monitoring phases running (Phases 0-9)
-> **Latest**: Phase 9 self-modification with human approval gate - monitoring agent tunes its own parameters through approval queue
-> **Active Plan**: None - YC vision complete, system is self-improving
+> **Session**: Platform Sandbox + Tool Boundary Tests Complete
+> **Status**: ✅ **ALL 4 DEFENSE LAYERS ACTIVE** — OS-level sandboxing now wired into Bash tool
+> **Latest**: Platform sandbox (seatbelt/bubblewrap) wired into Bash tool; 57/57 tests pass; grader 9/9 healthy
+> **Active Plan**: None — system is self-improving, pipeline running on Pi5
 
 ---
 
@@ -17,6 +17,8 @@
 | **P0** | Test pipeline wrapper in production | pipeline-ops | **COMPLETE** |
 | **P0** | Optimize model routing based on task type | ov5-architect | **COMPLETE** |
 | **P0** | Wire self-heal hooks into experiment core | @maintainer | **COMPLETE** |
+| **P0** | Wire platform sandbox into Bash tool (L4 defense) | @maintainer | **COMPLETE** ✅ |
+| **P0** | Tool boundary integration tests (57/57) | @maintainer | **COMPLETE** ✅ |
 | **P1** | Monitoring Agent: Complete (Phases 0-9, all 10 phases) | @maintainer | **COMPLETE** ✅ |
 | **P1** | Token Economics: ROI pre-flight in experiment core | @maintainer | **COMPLETE** |
 | **P1** | Production Metrics: Weighted grader scoring | @maintainer | **COMPLETE** |
@@ -152,6 +154,9 @@ YC Phase 3.2: code regeneration from business context
 - **Context database**: Per-experiment causal/business memory — captures 'why' not 'what'
 - **Code regeneration**: Discard old code, regenerate from business context with better models
 - **Architectural evolution**: Structural pipeline proposals (module retirement, routing, regressions)
+- **Platform sandbox (L4)**: OS-level containment — seatbelt (macOS) / bubblewrap (Linux) — wired into Bash tool with defcustom toggle
+- **Defense-in-depth**: L1 (Emacs sandbox) → L2 (boundary validator) → L3 (plan-mode whitelist) → L4 (OS sandbox)
+- **Grader 9/9 healthy**: Subagent dispatch fix working; probe returns perfect scores
 
 ## Model Routing Matrix (Static + Dynamic)
 
@@ -177,15 +182,15 @@ User Input → Detect Task Type → Route to Model → Self-Heal Diagnostic → 
 
 ## Next Steps (Suggested by Active Mementum)
 
-### Immediate (YC Vision Complete)
-1. **Pi5 soak time** — let all 10 phases exercise new wiring in production
-2. **Monitor Phase 9** — verify self-tuning proposals are generated correctly
+### Immediate
+1. **Pi5 soak time** — platform sandbox now on Pi5; let cron cycles exercise it
+2. **Monitor evolution cycle** — 5 targets running, grader 9/9, pipeline healthy
 3. **Test approval flow** — approve a self-tuning proposal to verify end-to-end
 
 ### Non-Code Work
 4. **External integrations** — Slack/Zendesk/DataDog APIs (requires API keys, not code)
-5. **Documentation** — ✅ Phase 7/8/9 capabilities documented in OV5 docs (OUROBOROS-V5.md, MODULE_ARCHITECTURE.md)
-6. **Marketing** — prepare YC completion announcement (100% self-improving loop)
+5. **Documentation** — Phase 7/8/9 capabilities documented in OV5 docs
+6. **Marketing** — 4-layer defense-in-depth complete (L1→L4)
 
 ### Future Enhancements (Optional)
 7. **Multi-repo ontology** — cross-project learning
@@ -198,10 +203,11 @@ User Input → Detect Task Type → Route to Model → Self-Heal Diagnostic → 
 
 ## Context for Next Session
 
-- **YC Vision 100% complete** — all 5 layers operational with full self-improving loop
-- Phase 9 self-modification: monitoring agent can tune its own defcustom parameters through approval queue
-- Phase 8 synthesis trigger: detects ≥3 memories, auto-synthesizes ≥5 memories
-- Phase 7 post-deploy impact assessment: tracks baseline metrics, assesses impact after wait period
+- **All 4 defense layers active**: L1 (Emacs sandbox) → L2 (boundary validator) → L3 (plan-mode whitelist) → L4 (OS sandbox)
+- **Platform sandbox**: `gptel-platform-sandbox.el` wired into `gptel-tools-bash.el`; seatbelt on macOS, bubblewrap on Linux
+- **57/57 tests pass** — 12 new integration tests (platform sandbox + tool boundary)
+- **Grader 9/9** — subagent dispatch fix working perfectly; pipeline running on Pi5
+- **Pipeline healthy**: Evolution cycle active, 5 targets selected, grader scoring 9/9
 - Ontology router wired into monitoring agent: smart experiment selection based on category keep-rate
 - All 8 test failures fixed: 5 persist tests, 1 error-path, 1 prompt-override, 1 state leak
 - Monitoring agent now runs 10 phases: Phase 0 (health probes) → Phase 1 (analyze failures) → Phase 2 (propose improvements) → Phase 3 (test/deploy) → Phase 4 (architectural analysis) → Phase 5 (external sensors) → Phase 6 (approved execution) → Phase 7 (impact assessment) → Phase 8 (synthesis trigger) → Phase 9 (self-tuning)

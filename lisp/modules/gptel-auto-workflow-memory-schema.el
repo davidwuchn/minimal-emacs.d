@@ -1347,12 +1347,21 @@ fetch('%s').then(r=>r.json()).then(data=>{
 label:l.type,title:l.confidence+'
 
 
+
+
+
 w='+l.weight,color:{color:l.confidence===\='EXTRACTED\='?'#4fc3f7':l.confidence===\='INFERRED\='?'#ffb74d':'#ef5350'}})));
   var container=document.getElementById(\='graph\=');
   new vis.Network(container,{nodes:nodes,edges:edges},{
 
 
+
+
+
 groups:{1:{color:{background:'#1565c0'}},2:{color:{background:'#2e7d32'}},3:{color:{background:'#6a1b9a'}}},
+
+
+
 
 
 physics:{stabilization:{iterations:100}},edges:{arrows:\='to\=',smooth:{type:\='curvedCW\='}}});
@@ -1479,7 +1488,7 @@ Returns plist: (:graph-tokens :raw-tokens :savings-pct :ratio)."
          (ec 0))
     (when graph (maphash (lambda (_k e) (setq ec (+ ec (length (or e ()))))) graph))
     (let* ((graph-tokens (+ (* nc 10) (* ec 15) 100))  ; ~10 tok/node, ~15 tok/edge
-           (root (and (fboundp (quote gptel-auto-workflow-self-audit--root)) (gptel-auto-workflow-self-audit--root)))
+           (root (gptel-auto-workflow-self-audit--root))
            (raw-lines 0))
       (when root
         (dolist (f (directory-files (expand-file-name "lisp/modules" root) t "\\.el$"))
@@ -1541,7 +1550,7 @@ Writes timestamps + node/edge counts to OUTPUT-FILE."
   "Save a graph query and its result as a mementum memory for future synthesis.
 The feedback loop: what the system asks about gets incorporated into
 knowledge."
-  (let* ((root (and (fboundp (quote gptel-auto-workflow-self-audit--root)) (gptel-auto-workflow-self-audit--root)))
+  (let* ((root (gptel-auto-workflow-self-audit--root))
          (mem-file (expand-file-name
                     (format "mementum/memories/graph-query-%s.md"
                             (format-time-string "%Y%m%dT%H%M%S"))
