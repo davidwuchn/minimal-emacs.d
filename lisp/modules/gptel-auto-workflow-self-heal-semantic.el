@@ -156,13 +156,52 @@ defun as the call, not just the immediately preceding lines."
                                (symbol-name fn) (symbol-name fn))))))))))))
     issues))
 
+;; ── Check 5: Excessive blank lines ──
+
+(defun gptel-auto-workflow--audit-blank-lines (file)
+  "Audit FILE for excessive blank lines (3+ consecutive).
+Blank-line accumulation is a common artifact of auto-merge/auto-generated
+code. More than 2 consecutive blank lines indicate cruft.
+Returns number of blocks found."
+  (let ((issues 0)
+        (consecutive 0)
+        (start-line 0))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (goto-char (point-min))
+      (while (not (eobp))
+        (let ((line-start (point))
+              (line (buffer-substring-no-properties
+                     (line-beginning-position) (line-end-position))))
+          (if (string-empty-p (string-trim line))
+              (progn
+                (when (= consecutive 0)
+                  (setq start-line (line-number-at-pos)))
+                (setq consecutive (1+ consecutive)))
+            (when (>= consecutive 3)
+              (setq issues (1+ issues))
+              (gptel-auto-workflow--semantic-audit-record
+               file start-line
+               'excessive-blank-lines
+               (format "%d consecutive blank lines — compress to 1 separator" consecutive)))
+            (setq consecutive 0))
+          (forward-line 1)))
+      (when (>= consecutive 3)
+        (setq issues (1+ issues))
+        (gptel-auto-workflow--semantic-audit-record
+         file start-line
+         'excessive-blank-lines
+         (format "%d consecutive blank lines at end of file" consecutive))))
+    issues))
+
 ;; ── Audit dispatcher ──
 
 (defvar gptel-auto-workflow--semantic-audit-checks
   '((let-binding-function . gptel-auto-workflow--audit-let-binding-functions)
     (hardcoded-limit . gptel-auto-workflow--audit-hardcoded-limits)
     (score-zero-bug . gptel-auto-workflow--audit-score-zero-bug)
-    (unguarded-external-call . gptel-auto-workflow--audit-unguarded-external-calls))
+    (unguarded-external-call . gptel-auto-workflow--audit-unguarded-calls)
+    (excessive-blank-lines . gptel-auto-workflow--audit-blank-lines))
   "Alist of audit check name (symbol) to audit function.")
 
 (cl-defun gptel-auto-workflow--semantic-audit-file (file &key (_auto-fix nil))
