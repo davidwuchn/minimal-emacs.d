@@ -1,12 +1,12 @@
 ---
-valid-from: 2026-06-09T12:13
+valid-from: 2026-06-09T23:58
 ---
 
-# Insight: 2026-06-09 12:13
+# Insight: 2026-06-09 23:58
 
 **Self-heal lesson: grader-destroying-experiments**
-Failed 3 times before working.
-Final fix: grader-destroying-experiments succeeded after 3 attempts
+Failed 6 times before working.
+Final fix: grader-destroying-experiments succeeded after 6 attempts
 
 
 

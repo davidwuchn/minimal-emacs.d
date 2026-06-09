@@ -285,7 +285,8 @@ Returns 1 if missing, 0 if present."
     (excessive-blank-lines . gptel-auto-workflow--audit-blank-lines)
     (unbalanced-parens . gptel-auto-workflow--audit-unbalanced-parens)
     (missing-provide . gptel-auto-workflow--audit-missing-provide)
-    (condition-case-unbound-err . gptel-auto-workflow--audit-condition-case-unbound-err))
+    (condition-case-unbound-err . gptel-auto-workflow--audit-condition-case-unbound-err)
+    (risk-node . gptel-auto-workflow--audit-risk-nodes))
   "Alist of audit check name (symbol) to audit function.")
 
 ;; ── Check 8: condition-case with unbound err ──
@@ -343,6 +344,84 @@ Returns count of such bugs."
                    file (line-number-at-pos (match-beginning 0))
                    'condition-case-unbound-err
                    "(error) handler references \='err\=' without binding it"))))))))
+    issues))
+
+;; ── Check 9: Risk nodes (TSP-inspired) ──
+
+(defun gptel-auto-workflow--audit-risk-nodes (file)
+  "Audit FILE for risk nodes — critical decision points where failures emerge.
+Inspired by TSP paper (2606.03489v1): identifies fine-grained risk nodes.
+Detects:
+- Resource allocation without cleanup (make-hash-table/make-temp-file without
+unwind-protect)
+- External API calls without error handling (shell-command-to-string without
+condition-case)
+Returns count of risk nodes found."
+  (let ((issues 0))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (goto-char (point-min))
+      (emacs-lisp-mode)
+      ;; Check for resource allocation without cleanup
+      (let ((resource-patterns '(("make-hash-table" . "unwind-protect")
+                                 ("make-temp-file" . "unwind-protect")
+                                 ("make-temp-name" . "unwind-protect"))))
+        (dolist (pattern resource-patterns)
+          (let ((resource-fn (car pattern))
+                (cleanup-fn (cdr pattern)))
+            (goto-char (point-min))
+            (while (re-search-forward (format "(%s\\b" resource-fn) nil t)
+              (let* ((match-line (line-number-at-pos (match-beginning 0)))
+                     (defun-start (save-excursion
+                                    (when (re-search-backward "^(defun\\b" nil t)
+                                      (point))))
+                     (defun-end (when defun-start
+                                  (save-excursion
+                                    (goto-char defun-start)
+                                    (forward-sexp 1)
+                                    (point))))
+                     (has-cleanup nil))
+                (when (and defun-start defun-end)
+                  (save-excursion
+                    (goto-char defun-start)
+                    (when (re-search-forward (format "(%s\\b" cleanup-fn) defun-end t)
+                      (setq has-cleanup t))))
+                (unless has-cleanup
+                  (setq issues (1+ issues))
+                  (gptel-auto-workflow--semantic-audit-record
+                   file match-line
+                   'risk-node-resource
+                   (format "%s without %s cleanup — risk node" resource-fn cleanup-fn))))))))
+      ;; Check for external API calls without error handling
+      (let ((api-patterns '(("shell-command-to-string" . "condition-case")
+                            ("call-process" . "condition-case")
+                            ("url-retrieve-synchronously" . "condition-case"))))
+        (dolist (pattern api-patterns)
+          (let ((api-fn (car pattern))
+                (error-fn (cdr pattern)))
+            (goto-char (point-min))
+            (while (re-search-forward (format "(%s\\b" api-fn) nil t)
+              (let* ((match-line (line-number-at-pos (match-beginning 0)))
+                     (defun-start (save-excursion
+                                    (when (re-search-backward "^(defun\\b" nil t)
+                                      (point))))
+                     (defun-end (when defun-start
+                                  (save-excursion
+                                    (goto-char defun-start)
+                                    (forward-sexp 1)
+                                    (point))))
+                     (has-error-handling nil))
+                (when (and defun-start defun-end)
+                  (save-excursion
+                    (goto-char defun-start)
+                    (when (re-search-forward (format "(%s\\b" error-fn) defun-end t)
+                      (setq has-error-handling t))))
+                (unless has-error-handling
+                  (setq issues (1+ issues))
+                  (gptel-auto-workflow--semantic-audit-record
+                   file match-line
+                   'risk-node-api
+                   (format "%s without %s — risk node" api-fn error-fn)))))))))
     issues))
 
 ;; ── Auto-fixers (Layer 2+3: detect AND fix) ──

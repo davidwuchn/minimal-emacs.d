@@ -179,7 +179,7 @@ legitimate subagent work. Set to nil to disable.\")")
 
 (ert-deftest test-self-heal-semantic/audit-checks-variable-defined ()
   "The audit checks alist is defined with all checks."
-  (should (= (length gptel-auto-workflow--semantic-audit-checks) 8))
+  (should (= (length gptel-auto-workflow--semantic-audit-checks) 9))
   (should (assq 'let-binding-function gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'hardcoded-limit gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'score-zero-bug gptel-auto-workflow--semantic-audit-checks))
@@ -187,7 +187,8 @@ legitimate subagent work. Set to nil to disable.\")")
   (should (assq 'excessive-blank-lines gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'unbalanced-parens gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'missing-provide gptel-auto-workflow--semantic-audit-checks))
-  (should (assq 'condition-case-unbound-err gptel-auto-workflow--semantic-audit-checks)))
+  (should (assq 'condition-case-unbound-err gptel-auto-workflow--semantic-audit-checks))
+  (should (assq 'risk-node gptel-auto-workflow--semantic-audit-checks)))
 
 ;; ── Test 10: Missing provide detection ──
 
@@ -512,6 +513,49 @@ Bug: '(error) (uses err)' — handler doesn't bind err, so reference is void."
          (file (test-self-heal-semantic--tmp-file content)))
     (unwind-protect
         (let ((issues (gptel-auto-workflow--audit-condition-case-unbound-err file)))
+          (should (= issues 0)))
+      (test-self-heal-semantic--cleanup file))))
+
+;; ── Test 14: Risk node detection (TSP-inspired) ──
+
+(ert-deftest test-self-heal-semantic/detects-risk-node-resource ()
+  "Detects resource allocation without cleanup (risk node).
+Inspired by TSP paper: fine-grained risk nodes where failures emerge."
+  (let* ((content
+          "(defun foo ()\n  (let ((ht (make-hash-table :test 'equal)))\n    (puthash 'key 'value ht)\n    ht))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-risk-nodes file)))
+          (should (>= issues 1)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/detects-risk-node-api ()
+  "Detects external API calls without error handling (risk node)."
+  (let* ((content
+          "(defun foo ()\n  (shell-command-to-string \"ls -la\"))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-risk-nodes file)))
+          (should (>= issues 1)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/clean-risk-node-with-cleanup ()
+  "Files with proper cleanup are clean (no risk node)."
+  (let* ((content
+          "(defun foo ()\n  (unwind-protect\n      (let ((ht (make-hash-table :test 'equal)))\n        (puthash 'key 'value ht)\n        ht)\n    (cleanup)))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-risk-nodes file)))
+          (should (= issues 0)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/clean-risk-node-with-error-handling ()
+  "Files with proper error handling are clean (no risk node)."
+  (let* ((content
+          "(defun foo ()\n  (condition-case err\n      (shell-command-to-string \"ls -la\")\n    (error (message \"failed: %s\" err))))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-risk-nodes file)))
           (should (= issues 0)))
       (test-self-heal-semantic--cleanup file))))
 

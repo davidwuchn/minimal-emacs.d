@@ -7,4 +7,15 @@ Current backend: moonshot
 
 Format: timestamp | diagnosis | remedy | before | after | effective?
 
-- 1781010404 | restored-lesson | grader-destroying-experiments succeeded after 3 attempts | 0% → -100% | PENDING
+- 1781020729 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
+- 1781020722 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
+- 1781020721 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
+- 1781020222 | restored-lesson | grader-destroying-experiments succeeded after 3 attempts | 0% → -100% | PENDING
+- 1781016623 | restored-lesson | grader-destroying-experiments succeeded after 3 attempts | 0% → -100% | PENDING
+- 1781013022 | restored-lesson | grader-destroying-experiments succeeded after 3 attempts | 0% → -100% | PENDING
+- 1781009423 | restored-lesson | grader-destroying-experiments succeeded after 3 attempts | 0% → -100% | PENDING
+- 1781007094 | restored-lesson | grader-destroying-experiments succeeded after 3 attempts | 0% → -100% | PENDING
+- 1781006371 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
+- 1781006364 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
+- 1781006363 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
+- 1781005886 | restored-lesson | grader-destroying-experiments succeeded after 3 attempts | 0% → -100% | PENDING
