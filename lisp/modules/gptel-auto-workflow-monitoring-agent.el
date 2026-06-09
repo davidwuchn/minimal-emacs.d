@@ -640,8 +640,10 @@ list."
   (let* ((patterns gptel-auto-experiment--shared-retryable-error-patterns)
          (general-pattern (plist-get patterns :general))
          (transient-pattern (plist-get patterns :transient))
-         (records (when (fboundp 'gptel-auto-workflow--parse-all-results)
-                    (gptel-auto-workflow--parse-all-results)))
+         (records (condition-case nil
+                     (when (fboundp 'gptel-auto-workflow--parse-all-results)
+                       (gptel-auto-workflow--parse-all-results))
+                   (error nil)))
          (unknowns (make-hash-table :test 'equal))
          (proposals nil))
     (dolist (rec records)
@@ -1407,12 +1409,15 @@ Returns list of written mementum file paths, or nil if throttled/disabled."
           (message "[monitoring] Found %d systemic failure patterns"
                    (length patterns))
           ;; Phase 1b: Autonomous error pattern learning
-          ;; Detect unknown error messages → propose for retryable list
-          (let ((unknown-errors (gptel-auto-workflow--detect-unknown-error-patterns)))
-            (when unknown-errors
-              (message "[monitoring] Auto-learning: %d unknown error patterns — review for retryable
-list"
-                       (length unknown-errors))))
+          ;; Runs independently — crash here must not block monitoring cycle
+          (condition-case auto-learn-err
+              (let ((unknown-errors (gptel-auto-workflow--detect-unknown-error-patterns)))
+                (when unknown-errors
+                  (message "[monitoring] Auto-learning: %d unknown error patterns detected"
+                           (length unknown-errors))))
+            (error
+             (message "[monitoring] Auto-learn skipped: %s"
+                      (error-message-string auto-learn-err))))
           ;; Persist each pattern to mementum (Phase 1)
           (dolist (pattern patterns)
             (let* ((ftype (plist-get pattern :type))
