@@ -1556,3 +1556,4 @@ knowledge."
       (message "[memory-schema] Query feedback saved to %s" mem-file))))
 
 (provide 'gptel-auto-workflow-memory-schema)
+;;; gptel-auto-workflow-memory-schema.el ends here
