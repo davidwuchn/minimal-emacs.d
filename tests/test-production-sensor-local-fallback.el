@@ -51,8 +51,8 @@
 2026-06-07T10:03:00 [error] gptel-ext-retry: still broken
 2026-06-07T10:04:00 [error] unrelated
 "))
-          (let ((gptel-auto-workflow--expand-workspace-path
-                 (lambda (_) root)))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--expand-workspace-path)
+                     (lambda (_) root)))
             (let ((result (gptel-auto-workflow--query-support-tickets
                            (expand-file-name target root))))
               (should (>= result 1))
