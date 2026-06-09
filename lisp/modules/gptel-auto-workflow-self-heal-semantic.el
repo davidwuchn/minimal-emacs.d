@@ -89,7 +89,7 @@
     (score-zero-bug . gptel-auto-workflow--audit-score-zero-bug))
   "Alist of audit check name (symbol) to audit function.")
 
-(cl-defun gptel-auto-workflow--semantic-audit-file (file &key (auto-fix nil))
+(cl-defun gptel-auto-workflow--semantic-audit-file (file &key (_auto-fix nil))
   "Run all semantic audit checks on FILE."
   (gptel-auto-workflow--semantic-audit-reset)
   (let ((total-issues 0))
@@ -99,7 +99,7 @@
     (list :issues total-issues
           :log (nreverse (copy-sequence gptel-auto-workflow--semantic-audit-log)))))
 
-(cl-defun gptel-auto-workflow--semantic-audit-all (&key (auto-fix nil))
+(cl-defun gptel-auto-workflow--semantic-audit-all (&key (_auto-fix nil))
   "Run semantic audit on all Elisp files in lisp/modules/."
   (let* ((modules-dir (or (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
                                (gptel-auto-workflow--expand-workspace-path "lisp/modules"))
