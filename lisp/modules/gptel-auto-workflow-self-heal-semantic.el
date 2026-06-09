@@ -52,44 +52,74 @@
 (defun gptel-auto-workflow--audit-hardcoded-limits (file)
   "Audit FILE for hardcoded resource limits.
 Skips lines that are comments, docstrings, or string literals."
-  (let ((issues 0)
-        (line-num 0)
-        (lines (split-string (with-temp-buffer
-                               (insert-file-contents file)
-                               (buffer-string))
-                             "\n" t)))
-    (dolist (line lines)
-      (setq line-num (1+ line-num))
-      ;; Skip: comment lines (;), docstring/section comments (;;;),
-      ;; or lines inside strings (starts/ends with ").
-      (unless (or (string-prefix-p ";" line)
-                  (string-match-p "^\".*1572864.*\"$" line)
-                  ;; Lines with only text describing the limit (not code)
-                  (string-match-p "^\\s-*\\w.*\\(threshold\\|limit\\|memory\\)" line))
-        (when (string-match-p "1572864" line)
-          (setq issues (1+ issues))
-          (gptel-auto-workflow--semantic-audit-record
-           file line-num
-           'hardcoded-limit
-           "Hardcoded 1.5GB limit - should be configurable"))))
+  (let ((issues 0))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (goto-char (point-min))
+      (let ((case-fold-search nil))
+        (while (re-search-forward "\\b1572864\\b" nil t)
+          (let* ((match-line (line-number-at-pos (match-beginning 0)))
+                 (match-pos (point))
+                 (line-text
+                  (save-excursion
+                    (beginning-of-line)
+                    (buffer-substring (point) (line-end-position)))))
+            ;; Skip if match is inside a string literal (e.g., docstring).
+            (save-excursion
+              (emacs-lisp-mode)
+              (let ((state (syntax-ppss match-pos)))
+                (when (nth 3 state)  ; inside a string
+                  (setq line-text ""))))  ; force skip
+            ;; Skip: comment lines, docstring/section comments, or lines
+            ;; with descriptive text (not actual code with hardcoded limit).
+            (unless (or (string-prefix-p ";" line-text)
+                        (string-match-p "^\".*1572864.*\"$" line-text)
+                        (string-match-p "^\\s-*\\w.*\\(threshold\\|limit\\|memory\\)"
+                                        line-text)
+                        (string= "" line-text))  ; skipped due to string context
+              (setq issues (1+ issues))
+              (gptel-auto-workflow--semantic-audit-record
+               file match-line
+               'hardcoded-limit
+               "Hardcoded 1.5GB limit - should be configurable"))))))
     issues))
 
 ;; ── Check 3: score=0 logic ──
 
 (defun gptel-auto-workflow--audit-score-zero-bug (file)
-  "Audit FILE for the bug pattern (greater-than score 0) as grader-broken."
+  "Audit FILE for the bug pattern (greater-than score 0) as grader-broken.
+Flags only when the check is part of a wider `if`/`cond` form where
+the alternative branch classifies as 'broken' or 'error'.
+Filters out legitimate uses like `(when (> score 0) (push ...))`."
   (let ((issues 0))
-    (progn
-      (with-temp-buffer
-        (insert-file-contents file)
-        (goto-char (point-min))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (goto-char (point-min))
+      (let ((case-fold-search nil))
         (while (re-search-forward "(>\\s-+score\\s-+0)" nil t)
-          (setq issues (1+ issues))
-          (gptel-auto-workflow--semantic-audit-record
-           file (line-number-at-pos (match-beginning 0))
-           'score-zero-bug
-           "(> score 0) as grader-broken is wrong - score=0 can be legitimate")))
-      issues)))
+          (let* ((match-line (line-number-at-pos (match-beginning 0)))
+                 ;; Look at 500 chars around the match for context
+                 (context-start (max (point-min) (- (match-beginning 0) 500)))
+                 (context-end (min (point-max) (+ (point) 500)))
+                 (context
+                  (buffer-substring context-start context-end))
+                 (is-buggy
+                  (and
+                   ;; Has 'broken' or 'error' classification in context
+                   (or (string-match-p "'broken\\b" context)
+                       (string-match-p "BROKEN" context)
+                       (string-match-p "broken" context)
+                       (string-match-p "grader.*broken" context))
+                   ;; Is in an if/cond form
+                   (or (string-match-p "(if\\b" context)
+                       (string-match-p "(cond\\b" context)))))
+            (when is-buggy
+              (setq issues (1+ issues))
+              (gptel-auto-workflow--semantic-audit-record
+               file match-line
+               'score-zero-bug
+               "(> score 0) as grader-broken is wrong - score=0 can be legitimate"))))))
+    issues))
 
 ;; ── Check 4: Unguarded external function calls ──
 

@@ -97,6 +97,27 @@ File name starts with `test-` so the let-binding check applies."
             (should (= (plist-get (car log) :line) 4))))
       (test-self-heal-semantic--cleanup file))))
 
+(ert-deftest test-self-heal-semantic/hardcoded-limit-line-number-with-blanks ()
+  "Hardcoded limit detection reports correct line numbers even with blank lines.
+Regression: split-string with t omits empty strings, breaking line counting."
+  (let* ((content
+          "(defun foo ()
+  (+ 1 2))
+
+(defun watchdog-check ()
+  (when (> rss 1572864)
+    (force-stop)))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (gptel-auto-workflow--semantic-audit-reset)
+          (gptel-auto-workflow--audit-hardcoded-limits file)
+          (let ((log gptel-auto-workflow--semantic-audit-log))
+            (should (= (length log) 1))
+            ;; The hardcoded limit is on line 5 (with blank line on line 3)
+            (should (= (plist-get (car log) :line) 5))))
+      (test-self-heal-semantic--cleanup file))))
+
 (ert-deftest test-self-heal-semantic/clean-no-hardcoded ()
   "Files without 1.5GB are clean."
   (let* ((content
@@ -107,6 +128,23 @@ File name starts with `test-` so the let-binding check applies."
     (unwind-protect
         (let ((issues (gptel-auto-workflow--audit-hardcoded-limits file)))
           (should (= issues 0)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/hardcoded-limit-skip-docstring ()
+  "Hardcoded limit detection skips mentions inside docstrings.
+Regression: 1572864 mentioned in a docstring describing the OLD threshold
+should not be flagged. The check uses syntax-ppss to detect string context."
+  (let* ((content
+          "(defvar foo 4194304
+  \"RSS threshold in KB. The old 1.5GB threshold (1572864) killed
+legitimate subagent work. Set to nil to disable.\")")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (gptel-auto-workflow--semantic-audit-reset)
+          (gptel-auto-workflow--audit-hardcoded-limits file)
+          (let ((log gptel-auto-workflow--semantic-audit-log))
+            (should (= (length log) 0))))
       (test-self-heal-semantic--cleanup file))))
 
 ;; ── Test 4: score=0 logic detection ──

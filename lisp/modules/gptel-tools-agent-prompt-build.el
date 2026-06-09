@@ -977,11 +977,12 @@ Returns a safe empty plist if `gptel-agent-read-file' is not available
   "Load only metadata for SKILL-NAME (progressive disclosure stage 1).
 Returns plist with :name :description etc, or nil if not found.
 Uses gptel-agent's metadata-only parsing."
-  (let ((skill-file (gptel-auto-workflow--find-skill-file skill-name)))
-    (when skill-file
-      (let* ((parsed (gptel-agent-read-file skill-file nil t))
-             (plist (cdr parsed)))
-        plist))))
+  (when (fboundp 'gptel-agent-read-file)
+    (let ((skill-file (gptel-auto-workflow--find-skill-file skill-name)))
+      (when skill-file
+        (let* ((parsed (gptel-agent-read-file skill-file nil t))
+               (plist (cdr parsed)))
+          plist)))))
 
 (defun gptel-auto-workflow--skill-benchmark-variables (skill-name)
   "Return alist of (KEY . VALUE) benchmark variables for SKILL-NAME.

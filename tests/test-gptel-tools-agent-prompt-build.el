@@ -75,5 +75,14 @@ is not loaded, the call to gptel-agent-read-file fails."
     (should (stringp result))
     (should (equal result ""))))
 
+(ert-deftest test-load-skill-metadata/handles-missing-gptel-agent ()
+  "load-skill-metadata should return nil when gptel-agent-read-file is unbound."
+  (unwind-protect
+      (progn
+        (fmakunbound 'gptel-agent-read-file)
+        (let ((result (gptel-auto-workflow--load-skill-metadata "test-skill")))
+          (should (null result))))
+    (ignore-errors (require 'gptel-agent nil t))))
+
 (provide 'test-gptel-tools-agent-prompt-build)
 ;;; test-gptel-tools-agent-prompt-build.el ends here
