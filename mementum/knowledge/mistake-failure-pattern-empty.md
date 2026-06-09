@@ -1,23 +1,28 @@
 <!--
 Synthesis verification:
 - Confidence: 40%
-- Sources: 5 memories
-- Warnings: No code examples or concrete references, Very short content (15 lines)
+- Sources: 8 memories
+- Warnings: No code examples or concrete references, Very short content (20 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize memories about a "mistake-failure-pattern-empty" topic into a knowledge page. The memories are about "empty-hypothesis" failures detected by a monitoring agent across various targets. Let me create a comprehensive knowledge page that meets all requirements.
+The user wants me to synthesize memories about "mistake-failure-pattern-empty" into a knowledge page. Let me analyze the memories:
 
-Let me analyze the patterns:
-- All failures are of type "empty-hypothesis"
-- Targets span staging (verification, scope, review) and specific Lisp files
-- Categories: :programming and :agentic, both with 0.0% keep-rate
-- Occurrences range from 3-9
-- Multiple dates across June 2026
+All memories share:
+- Failure type: empty-hypothesis
+- Category: :programming or :agentic
+- Keep-rate: 0.0% (mostly) or 2.2%
+- Occurrences: 3-9
+- Example reasons: none
+- Targets include: staging-verification, staging-scope, staging-review, and various lisp/modules files
 
-I need to create a knowledge page with:
-1. Minimum 50 lines of content
-2. Concrete examples
+The pattern is "empty-hypothesis" - this seems to be about failures where hypotheses are empty or missing during investigation/debugging processes.
+
+I need to create a comprehensive knowledge page with:
+1. Minimum 50 lines of actual content
+2. Concrete examples (code, tables, commands)
 3. Actionable patterns
-4. Cross-references
-5. Full markdown inline
+4. Cross-references to related topics
+5. Full markdown page
+
+Let me create a thorough knowledge page about the empty-hypothesis failure pattern.
