@@ -1,6 +1,5 @@
 <!--
 Synthesis verification:
-<<<<<<< Updated upstream
 - Confidence: 80%
 - Sources: 14 memories
 - Warnings: No code examples or concrete references
@@ -446,51 +445,3 @@ the same issues, and the next evolution cycle can act on them.
 
 YC: 'self-evolve' must include META — auditing the system itself,
 not just the code it produces. This memory is itself an evolution.
-=======
-- Confidence: 24%
-- Sources: 14 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'audit-fix-2026'
-- Auto-approved: yes (flagged)
---->
-
-The user wants me to synthesize multiple self-audit report memories into a comprehensive knowledge page. Let me analyze the patterns:
-
-1. All reports have very similar content - 38 issues (with one at 37), focused on three areas:
-   - Backend cold-start (8/8 backends never used)
-   - Strategy cold-start (29/29 strategies unevaluated)
-   - Staging-merge bottleneck (OK with auto-resolver)
-
-2. Timestamps range from 2026-06-08 to 2026-06-09, with multiple runs on 2026-06-09
-
-3. The YC note is consistent: 'self-evolve' must include META - auditing the system itself
-
-4. Action items are consistent across reports
-
-5. Auto-resolver for .md conflicts deployed at commit 95396bc1
-
-Let me build a comprehensive knowledge page that:
-- Has frontmatter
-- Documents the audit pattern
-- Lists all 8 cold backends
-- Lists all 29 unevaluated strategies
-- Explains the staging-merge fix
-- Provides actionable patterns
-- Cross-references related topics
-- Shows the timeline of audits
-- Has concrete examples and tables
-
-Let me count the 29 strategies from the partial list:
-1. strategy-weighted-failures
-2. strategy-weighted-failure-patterns
-3. strategy-surprise-based-retrieval
-4. strategy-semantic-failure-clustering
-5. strategy-saturation-ordering
-6. strategy-recency-weighted-skills
-7. strategy-recency-weighted-guidance
-8. strategy-pattern-driven-skills
-9. strategy-outcome-reasoning
-10. strategy-outcome-driven-sections
-... that's only 10 shown, the rest are implied to exist
-
-Let me write a comprehensive knowledge page now.
->>>>>>> Stashed changes

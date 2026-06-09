@@ -89,7 +89,7 @@ Skips lines that are comments, docstrings, or string literals."
 (defun gptel-auto-workflow--audit-score-zero-bug (file)
   "Audit FILE for the bug pattern (greater-than score 0) as grader-broken.
 Flags only when the check is part of a wider `if`/`cond` form where
-the alternative branch classifies as 'broken' or 'error'.
+the alternative branch classifies as \='broken\=' or \='error\='.
 Filters out legitimate uses like `(when (> score 0) (push ...))`."
   (let ((issues 0))
     (with-temp-buffer
