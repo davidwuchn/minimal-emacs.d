@@ -46,6 +46,12 @@ helpers:
 
 
 
+
+
+
+
+
+
 concat/format/split-string/string-join/string-trim/string-empty-p/string-match-p/substring."))
      :category "gptel-agent"
      :confirm t
