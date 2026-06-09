@@ -2391,7 +2391,13 @@ set it)"
       (condition-case err
           (progn
             (gptel-auto-workflow--experiment-complete-hook experiment)
-            (let ((exp-id (round (or (gptel-auto-workflow--plist-get experiment :id) 0))))
+            (let* ((raw-id (gptel-auto-workflow--plist-get experiment :id))
+                   (exp-id (cond ((numberp raw-id) (round raw-id))
+                                 ((stringp raw-id)
+                                  (if (string-match "[0-9]+" raw-id)
+                                      (string-to-number (match-string 0 raw-id))
+                                    0))
+                                 (t 0))))
               (when (and (> exp-id 0) (zerop (% exp-id 5)))
                 (run-with-idle-timer 30 nil (lambda () (condition-case err (gptel-auto-workflow-evolution-run-cycle) (error (message "[evolution] Timer error: %s" err))))))))
         (error

@@ -723,7 +723,8 @@ Patterns detected:
 - void-variable err: err shadowed or unbound in error handler
 - no-catch: cl-return-from in defun (should be cl-defun)
 - defvar without init value: doesn't make var special under lexical-binding
-- wrong-number-of-arguments/Wrong number of arguments: fixer arity mismatch"
+ - wrong-number-of-arguments/Wrong number of arguments: fixer arity mismatch
+ - wrong-type-argument: type coercion bug (e.g., string→number)"
   (let ((proposals nil)
         (log-file (expand-file-name
                    (format "var/log/emacs-%d.log" (emacs-pid))
@@ -739,7 +740,9 @@ Patterns detected:
                (regexp-opt '("wrong-number-of-arguments" "Wrong number of arguments")
                            t)
                :void-function
-               "void-function")))
+               "void-function"
+               :wrong-type-arg
+               "wrong-type-argument")))
     (when (and (file-exists-p log-file)
                (file-readable-p log-file))
       (condition-case nil
@@ -753,15 +756,18 @@ Patterns detected:
                   (bare-defvar-pattern (plist-get code-bugs :defvar-bare))
                   (wrong-arity-pattern (plist-get code-bugs :wrong-arity))
                   (void-fn-pattern (plist-get code-bugs :void-function))
+                  (wrong-type-pattern (plist-get code-bugs :wrong-type-arg))
                   (void-var-count 0)
                   (bare-defvar-count 0)
                   (wrong-arity-count 0)
-                  (void-fn-count 0))
+                  (void-fn-count 0)
+                  (wrong-type-count 0))
               (while (re-search-forward
                       (concat "\\(" void-var-pattern "\\|"
                               bare-defvar-pattern "\\|"
                               wrong-arity-pattern "\\|"
-                              void-fn-pattern "\\)")
+                              void-fn-pattern "\\|"
+                              wrong-type-pattern "\\)")
                        nil t)
                 (let ((match (match-string 1)))
                   (cond
@@ -772,7 +778,9 @@ Patterns detected:
                     ((string-match-p wrong-arity-pattern match)
                      (cl-incf wrong-arity-count))
                     ((string-match-p void-fn-pattern match)
-                     (cl-incf void-fn-count)))))
+                     (cl-incf void-fn-count))
+                    ((string-match-p wrong-type-pattern match)
+                     (cl-incf wrong-type-count)))))
               (when (> void-var-count 2)
                 (push (list :error-snippet "void-variable err (code-bug: shadowed/unbound in handler)"
                             :count void-var-count
@@ -800,6 +808,13 @@ Patterns detected:
                             :first-target "runtime-logs"
                             :code-bug t
                             :suggested-fix "Add (require 'module) or declare-function before usage")
+                      proposals))
+              (when (> wrong-type-count 2)
+                (push (list :error-snippet "wrong-type-argument (code-bug: type coercion)"
+                            :count wrong-type-count
+                            :first-target "runtime-logs"
+                            :code-bug t
+                            :suggested-fix "Guard type-dependent operations with (numberp x) or string-to-number before arithmetic")
                       proposals))))
         (error nil)))
     proposals))
