@@ -395,7 +395,12 @@ Auto-applies LLM backend failover when current provider is rate-limited."
               (if (fboundp 'my/gptel--agent-task-with-timeout)
                (let ((my/gptel-agent-task-timeout
                       (gptel-benchmark--subagent-timeout timeout effective-preset))
-                     (gptel-agent-preset effective-preset)
+                     ;; Strip :system from preset — the dynamic PROMPT argument
+                     ;; contains the correct task-specific instructions.  The
+                     ;; preset's :system is a generic benchmark prompt that
+                     ;; conflicts with target selection, grading, etc.
+                     (gptel-agent-preset
+                      (gptel-auto-workflow--plist-delete-all effective-preset :system))
                      (gptel--request-params
                       (if effort-param
                           (plist-put (copy-sequence gptel--request-params)
@@ -407,7 +412,8 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                   description
                   prompt
                   files))
-              (let ((gptel-agent-preset effective-preset)
+                (let ((gptel-agent-preset
+                      (gptel-auto-workflow--plist-delete-all effective-preset :system))
                     (gptel--request-params
                      (if effort-param
                          (plist-put (copy-sequence gptel--request-params)
