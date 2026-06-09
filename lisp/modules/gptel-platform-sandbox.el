@@ -42,9 +42,17 @@
   "Workspace root directory for sandbox allowlisting.
 Defaults to `gptel-auto-workflow--worktree-base-root' or `default-directory'.")
 
-(defun gptel-platform-sandbox--seatbelt-profile ()
+(defun gptel-platform-sandbox--current-mode ()
+  "Return :plan or :agent based on active gptel preset.
+Plan mode gets tighter restrictions (no network outbound)."
+  (if (and (boundp 'gptel--preset)
+           (eq gptel--preset 'gptel-plan))
+      :plan
+    :agent))
+
+(defun gptel-platform-sandbox--seatbelt-profile (&optional mode)
   "Generate a temporary seatbelt profile for the current workspace.
-Returns the path to the profile file."
+MODE is :plan or :agent — plan mode denies all network."
   (let* ((root (or gptel-platform-sandbox--workspace-root
                    (when (fboundp 'gptel-auto-workflow--worktree-base-root)
                      (gptel-auto-workflow--worktree-base-root))
@@ -53,7 +61,8 @@ Returns the path to the profile file."
          (profile (make-temp-file "sb-" nil ".sb"))
          (ro-dirs '("/usr" "/bin" "/sbin" "/Library" "/System"
                     "/Applications" "/private/var" "/dev"))
-         (rw-root (expand-file-name root)))
+         (rw-root (expand-file-name root))
+         (plan-mode (eq mode :plan)))
     (with-temp-file profile
       (insert "(version 1)\n")
       (insert "(deny default)\n")
@@ -65,25 +74,28 @@ Returns the path to the profile file."
       (insert (format "(allow file-read* file-write* (subpath \"%s\"))\n" rw-root))
       ;; Temp directory
       (insert (format "(allow file-read* file-write* (subpath \"%s\"))\n" tmpdir))
-      ;; Processes
+      ;; Process execution
       (insert "(allow process-fork)\n")
       (insert "(allow process-exec (subpath \"/usr\"))\n")
       (insert "(allow process-exec (subpath \"/bin\"))\n")
-      ;; Network (needed for git, curl, etc.)
-      (insert "(allow network-outbound)\n")
+      ;; Network: plan mode denies, agent mode allows
+      (if plan-mode
+          (insert "(deny network*)\n")
+        (insert "(allow network-outbound)\n"))
       ;; Sysctl for system info
       (insert "(allow sysctl-read)\n"))
     profile))
 
-(defun gptel-platform-sandbox--bwrap-args ()
+(defun gptel-platform-sandbox--bwrap-args (&optional mode)
   "Generate bubblewrap arguments for the current workspace.
-Returns a string of bwrap arguments."
+MODE is :plan or :agent — plan mode isolates network."
   (let* ((root (or gptel-platform-sandbox--workspace-root
                    (when (fboundp 'gptel-auto-workflow--worktree-base-root)
                      (gptel-auto-workflow--worktree-base-root))
                    (expand-file-name default-directory)))
          (rw-root (expand-file-name root))
-         (tmpdir (or (getenv "TMPDIR") "/tmp")))
+         (tmpdir (or (getenv "TMPDIR") "/tmp"))
+         (plan-mode (eq mode :plan)))
     (mapconcat
      #'identity
      (append
@@ -95,31 +107,34 @@ Returns a string of bwrap arguments."
       ;; Read-write bind workspace and temp
       (list (format "--bind %s %s" rw-root rw-root)
             (format "--bind %s %s" tmpdir tmpdir))
-      ;; Isolate everything except what we explicitly bind
-      (list "--unshare-all"
-            "--share-net"   ; network needed for git operations
-            "--new-session"))
-     " ")))
+      ;; Isolate — plan mode unshares network, agent mode shares it
+      (list (if plan-mode
+                "--unshare-all --new-session"
+              "--unshare-all --share-net --new-session")))
+      " ")))
 
 ;; ── Command Wrapping ──
 
 (defun gptel-platform-sandbox--wrap-command (command)
-  "Wrap COMMAND in platform-appropriate sandbox.
+  "Wrap COMMAND in platform-appropriate sandbox with mode-detection.
+Plan mode gets tighter restrictions (no network). Agent mode allows
+network for git, curl, etc.
 Returns (WRAPPED-COMMAND . PROFILE-FILE) where PROFILE-FILE is nil for
 bubblewrap (no temp file to clean up) and non-nil for seatbelt."
-  (cond
-   ((eq (gptel-platform-sandbox--platform-name) :seatbelt)
-    (let ((profile (gptel-platform-sandbox--seatbelt-profile)))
-      (cons (format "sandbox-exec -f %s -- %s"
-                    (shell-quote-argument profile)
+  (let ((mode (gptel-platform-sandbox--current-mode)))
+    (cond
+     ((eq (gptel-platform-sandbox--platform-name) :seatbelt)
+      (let ((profile (gptel-platform-sandbox--seatbelt-profile mode)))
+        (cons (format "sandbox-exec -f %s -- %s"
+                      (shell-quote-argument profile)
+                      command)
+              profile)))
+     ((eq (gptel-platform-sandbox--platform-name) :bubblewrap)
+      (cons (format "bwrap %s -- %s"
+                    (gptel-platform-sandbox--bwrap-args mode)
                     command)
-            profile)))
-   ((eq (gptel-platform-sandbox--platform-name) :bubblewrap)
-    (cons (format "bwrap %s -- %s"
-                  (gptel-platform-sandbox--bwrap-args)
-                  command)
-          nil))
-   (t (cons command nil))))
+            nil))
+     (t (cons command nil)))))
 
 (defun gptel-platform-sandbox--wrap-and-send (command proc marker)
   "Send sandbox-wrapped COMMAND to bash PROC with MARKER.

@@ -34,7 +34,8 @@
 (ert-deftest tdd/platform-sandbox/wrap-command-seatbelt-returns-profile ()
   "seatbelt mode should return a profile file path."
   (cl-letf (((symbol-function 'gptel-platform-sandbox--platform-name) (lambda () :seatbelt))
-            ((symbol-function 'gptel-platform-sandbox--seatbelt-profile) (lambda () "/tmp/test.sb")))
+            ((symbol-function 'gptel-platform-sandbox--current-mode) (lambda () :agent))
+            ((symbol-function 'gptel-platform-sandbox--seatbelt-profile) (lambda (&optional _m) "/tmp/test.sb")))
     (let ((result (gptel-platform-sandbox--wrap-command "echo hello")))
       (should (string-prefix-p "sandbox-exec" (car result)))
       (should (equal "/tmp/test.sb" (cdr result))))))
@@ -42,10 +43,35 @@
 (ert-deftest tdd/platform-sandbox/wrap-command-bwrap-returns-nil-profile ()
   "bubblewrap mode should return nil profile (no temp file to clean)."
   (cl-letf (((symbol-function 'gptel-platform-sandbox--platform-name) (lambda () :bubblewrap))
-            ((symbol-function 'gptel-platform-sandbox--bwrap-args) (lambda () "--bind / /")))
+            ((symbol-function 'gptel-platform-sandbox--current-mode) (lambda () :agent))
+            ((symbol-function 'gptel-platform-sandbox--bwrap-args) (lambda (&optional _m) "--bind / /")))
     (let ((result (gptel-platform-sandbox--wrap-command "echo hello")))
       (should (string-prefix-p "bwrap " (car result)))
       (should (null (cdr result))))))
+
+(ert-deftest tdd/platform-sandbox/plan-mode-restricts-network ()
+  "Plan mode seatbelt profile should deny network."
+  (cl-letf (((symbol-function 'gptel-platform-sandbox--current-mode) (lambda () :plan))
+            ((symbol-function 'gptel-auto-workflow--worktree-base-root) (lambda () "/tmp/test-ws")))
+    (let ((profile (gptel-platform-sandbox--seatbelt-profile :plan)))
+      (unwind-protect
+          (with-temp-buffer
+            (insert-file-contents profile)
+            (should (string-match "(deny network\\*)" (buffer-string)))
+            (should-not (string-match "network-outbound" (buffer-string))))
+        (ignore-errors (delete-file profile))))))
+
+(ert-deftest tdd/platform-sandbox/agent-mode-allows-network ()
+  "Agent mode seatbelt profile should allow network outbound."
+  (cl-letf (((symbol-function 'gptel-platform-sandbox--current-mode) (lambda () :agent))
+            ((symbol-function 'gptel-auto-workflow--worktree-base-root) (lambda () "/tmp/test-ws")))
+    (let ((profile (gptel-platform-sandbox--seatbelt-profile :agent)))
+      (unwind-protect
+          (with-temp-buffer
+            (insert-file-contents profile)
+            (should (string-match "network-outbound" (buffer-string)))
+            (should-not (string-match "(deny network\\*)" (buffer-string))))
+        (ignore-errors (delete-file profile))))))
 
 ;; ── Profile Generation Tests ──
 
@@ -64,13 +90,19 @@
         (ignore-errors (delete-file profile))))))
 
 (ert-deftest tdd/platform-sandbox/bwrap-args-has-unshare-all ()
-  "Bwrap args should include --unshare-all."
-  (cl-letf (((symbol-function 'gptel-platform-sandbox--workspace-root) nil)
-            ((symbol-function 'gptel-auto-workflow--worktree-base-root) (lambda () "/tmp/test-ws")))
-    (let ((args (gptel-platform-sandbox--bwrap-args)))
-      (should (string-match "--unshare-all" args))
-      (should (string-match "--share-net" args))
-      (should (string-match "--ro-bind" args)))))
+  "Bwrap args should include --unshare-all and --share-net in agent mode."
+  (let ((gptel-platform-sandbox--workspace-root "/tmp/test-ws")
+        (args (gptel-platform-sandbox--bwrap-args :agent)))
+    (should (string-match-p "unshare-all" args))
+    (should (string-match-p "share-net" args))
+    (should (string-match-p "ro-bind" args))))
+
+(ert-deftest tdd/platform-sandbox/bwrap-plan-mode-no-share-net ()
+  "Bwrap args in plan mode should NOT include --share-net."
+  (let ((gptel-platform-sandbox--workspace-root "/tmp/test-ws")
+        (args (gptel-platform-sandbox--bwrap-args :plan)))
+    (should (string-match-p "unshare-all" args))
+    (should-not (string-match-p "share-net" args))))
 
 (ert-deftest tdd/platform-sandbox/wrap-and-send-integrates-with-bash-tool ()
   "wrap-and-send requires gptel-platform-sandbox and bash tool.
