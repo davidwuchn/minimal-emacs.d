@@ -3,6 +3,7 @@
 > VSM architecture for minimal-emacs.d + gptel-nucleus.
 > This is the **Ouroboros V5** — see [OUROBOROS-V5.md](OUROBOROS-V5.md) for the full self-regulating architecture.
 > A unified Emacs + AI environment built on mathematical attention.
+> **Scope:** This file governs THIS Emacs instance. No cross-machine coordination.
 
 ```
 λ engage(minimal_emacs).
@@ -12,82 +13,6 @@
 
 ---
 
-## Cross-Machine Co-Evolution Protocol
-
-### Machine Roles
-
-| Machine | Role | Runs Pipeline | Evolves Skills | Pushes Mementum |
-|---------|------|-------------|---------------|-----------------|
-| **Pi5** (24/7 server) | **Primary Evolver** | Yes (`run-pipeline.sh`) | Yes | Yes |
-| **Local dev** (macOS/Linux) | **Secondary / Pull-only** | Manual only (`./scripts/run-pipeline.sh`) | No | Yes (memories only) |
-
-### Rules
-
-1. **Only Pi5** runs the scheduled pipeline (`0 23,3,7,11,15,19`).
-2. **Only Pi5** pushes evolved skill changes (`assistant/skills/`, `mementum/knowledge/`).
-3. **Both machines** can push mementum memories (`mementum/memories/`) and state (`mementum/state.md`).
-4. **Local machine MUST `git pull --rebase` before running experiments** to get Pi5's latest evolved skills.
-5. **No machine force-pushes `origin/main`**. Conflicts are resolved via rebase.
-6. **Auto-evolved files** (`DIRECTIVE.md`, `strategy-guidance.json`, `mementum/knowledge/*.md`) use `merge=theirs` in `.gitattributes` — Pi5 version always wins on pull. Non-Pi5 machines should NOT modify these files locally; if accidentally changed, `git checkout HEAD -- path` discards them.
-
-### Conflict Resolution
-
-- **Skill conflicts**: Pi5's version wins (it has the most experiment data).
-- **Knowledge conflicts**: Merge both versions (newer knowledge supplements older).
-- **Mementum conflicts**: Accept both (memories are atomic and additive).
-- **Never use `git reset --hard`**: Destroys uncommitted work irreversibly. Use `git stash push -m "msg"` to save work, then `git checkout HEAD -- path/...` to discard only specific auto-generated files, then `git stash pop` to restore. Add `git merge --abort` to clear stale merge state before pulling.
-
-### Document Map
-
-| Document | Purpose | Start Here If... |
-|----------|---------|------------------|
-| **AGENTS.md** | This file - VSM system architecture | You need the full framework |
-| **[OUROBOROS-V5.md](OUROBOROS-V5.md)** | Ouroboros V5 architecture & self-regulating design | You're new to this setup |
-| **[README.md](README.md)** | Upstream user documentation | You need base Emacs info |
-| **[eca/AGENTS.md](eca/AGENTS.md)** | ECA configuration & subagents | You need AI provider info |
-| **mementum/** | AI memory system | Session continuity |
-
-### Mementum Structure
-
-| Path | Purpose |
-|------|---------|
-| `mementum/state.md` | Working memory (read first every session) |
-| `mementum/memories/` | Atomic insights (<200 words each) |
-| `mementum/knowledge/` | Synthesized pages (patterns, protocols, project facts) |
-
-### Knowledge Pages
-
-| Page | Content |
-|------|---------|
-| `project-facts.md` | Architecture, modules, backend, configuration |
-| `patterns.md` | Pattern memory (32 patterns) |
-| `nucleus-patterns.md` | Eight Keys, Wu Xing, VSM, 9 First Principles (single source of truth for benchmarks) |
-| `learning-protocol.md` | λ-based pattern learning |
-| `planning-protocol.md` | File-based planning for complex tasks |
-| `sarcasmotron-protocol.md` | Eight Keys violation detection |
-| `tutor-protocol.md` | Prompt quality evaluation |
-| `clojure-protocol.md` | REPL-first development patterns |
-
-### Domain Skills
-
-Tool-based skills reference protocols and provide external integrations:
-
-| Skill | Protocol | External Dependency |
-|-------|----------|---------------------|
-| `clojure-expert` | `clojure-protocol.md` | REPL |
-| `reddit` | — | Python scripts + API |
-| `requesthunt` | — | External API |
-| `seo-geo` | — | External API |
-
-### ECA Configuration
-
-See [eca/AGENTS.md](eca/AGENTS.md) for:
-- Subagent definitions (reviewer, executor, explorer)
-- Provider configuration
-- Custom tools
-- Keybindings
-
----
 
 ## Lambda Notation Reference
 
