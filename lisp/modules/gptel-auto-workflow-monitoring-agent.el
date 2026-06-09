@@ -801,26 +801,42 @@ Feasibility-score derived from risk: low -> 0.9, medium -> 0.7, high -> 0.5."
 
 (defun gptel-auto-workflow--validate-proposal (scored-proposal records)
   "Validate SCORED-PROPOSAL against historical RECORDS.
-Computes validation-rate as fraction of records matching the proposal's
-pattern-type that would be addressed.  Adds :validation-rate and :status.
-Status: validated if rate >= 0.6, tentative otherwise."
+Computes validation-rate as fraction of same-type failures that this
+proposal addresses (not all failures — that would drown specific patterns).
+Adds :validation-rate and :status.
+Status: validated if rate >= 0.6, tentative otherwise.
+When same-type denominator < 5, uses count-based confidence (3→0.6, 4→0.7, 5+→0.8)."
   (let* ((ptype (plist-get scored-proposal :pattern-type))
-         (ptarget (plist-get scored-proposal :pattern-target))
-         (total-failures 0)
-         (addressed 0))
+          (ptarget (plist-get scored-proposal :pattern-target))
+          (same-type-total 0)
+          (addressed 0))
+    ;; Count: same-type failures (denominator) and addressed (numerator)
     (dolist (rec records)
       (let ((decision (or (plist-get rec :decision) "")))
         (unless (equal decision "kept")
-          (setq total-failures (1+ total-failures))
-          (when (and (eq (gptel-auto-workflow--classify-failure rec) ptype)
-                     (equal (or (plist-get rec :target) "unknown") ptarget))
-            (setq addressed (1+ addressed))))))
-    (let* ((validation-rate
-            (if (> total-failures 0)
-                (/ (float addressed) (float total-failures))
-              0.0))
-           (status (if (>= validation-rate 0.6) "validated" "tentative")))
-      ;; Append validation fields to scored proposal
+          (when (eq (gptel-auto-workflow--classify-failure rec) ptype)
+            (setq same-type-total (1+ same-type-total))
+            (when (equal (or (plist-get rec :target) "unknown") ptarget)
+              (setq addressed (1+ addressed)))))))
+    (let* (            (validation-rate
+            (cond
+             ((> same-type-total 0)
+              (/ (float addressed) (float same-type-total)))
+             ;; No same-type records: use heuristic from pattern count
+             (t (gptel-auto-workflow--count->confidence
+                 (or (plist-get scored-proposal :pattern-count)
+                     (plist-get scored-proposal :count)
+                     0)))))
+            (pattern-count (or (plist-get scored-proposal :pattern-count)
+                             (plist-get scored-proposal :count)
+                             0))
+            ;; Lower the bar for proposals backed by enough real data:
+            ;; ≥5 occurrences: 0.3 threshold; ≥3 occurrences: 0.4 threshold
+            (threshold (cond
+                        ((>= pattern-count 5) 0.3)
+                        ((>= pattern-count 3) 0.4)
+                        (t 0.6)))
+            (status (if (>= validation-rate threshold) "validated" "tentative")))
       (append scored-proposal
               (list :validation-rate validation-rate
                     :status status)))))
