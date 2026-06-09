@@ -7582,11 +7582,12 @@ Trivial Elisp file that should always pass grader.")
 If grader returns score=0 or errors on trivial safe output, the grader is
 broken.
 Returns t if grader healthy, nil if broken.
-Uses 120s timeout to avoid false-positives on slow backends."
+Uses 300s timeout to avoid false-positives on slow backends.
+Temporarily bypasses BLIND MODE so the probe tests the real grader."
   (message "[self-heal] Running diagnostic probe (real grader call)...")
   (let* ((probe-healthy nil)
          (probe-done nil)
-         (probe-timeout 120)
+         (probe-timeout 300)
          ;; Trivial output that should always score well
          (trivial-output "Changed: Added docstring to helper function.
 
@@ -7609,6 +7610,10 @@ Verification: byte-compiled cleanly, no warnings.\n\nDiff:\n+ \"Return 1.\"\n"))
             (message "[self-heal] Probe: all recent grader calls failed, doing real test")))
       (message "[self-heal] Probe: no metrics yet, doing real grader test"))
     ;; If metrics don't show health, do a real grader call
+    ;; CRITICAL: Temporarily bypass BLIND MODE so the probe can test the
+    ;; actual grader.  Without this, BLIND MODE returns "blind-mode-auto-pass"
+    ;; immediately, the probe sees it as BROKEN, and the system can never
+    ;; recover — an irreversible death spiral.
     (unless probe-healthy
       (when (fboundp 'gptel-auto-experiment-grade)
         (let ((probe-timer
@@ -7619,12 +7624,14 @@ Verification: byte-compiled cleanly, no warnings.\n\nDiff:\n+ \"Return 1.\"\n"))
                                  (message "[self-heal] Probe: grader timeout (%ds) — grader BROKEN"
                                           probe-timeout)))))
           (condition-case probe-err
-              (gptel-auto-experiment-grade
-               trivial-output
-               (lambda (grade)
-                 (cancel-timer probe-timer)
-                 (setq probe-done t)
-                 (gptel-auto-workflow--probe-classify-result grade)))
+              ;; Bind blind-mode to nil so the grader makes a REAL LLM call.
+              (let ((gptel-auto-workflow--blind-mode nil))
+                (gptel-auto-experiment-grade
+                 trivial-output
+                 (lambda (grade)
+                   (cancel-timer probe-timer)
+                   (setq probe-done t)
+                   (gptel-auto-workflow--probe-classify-result grade))))
             (error
              (cancel-timer probe-timer)
              (setq probe-done t)
