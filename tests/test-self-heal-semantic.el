@@ -179,13 +179,36 @@ legitimate subagent work. Set to nil to disable.\")")
 
 (ert-deftest test-self-heal-semantic/audit-checks-variable-defined ()
   "The audit checks alist is defined with all checks."
-  (should (= (length gptel-auto-workflow--semantic-audit-checks) 6))
+  (should (= (length gptel-auto-workflow--semantic-audit-checks) 7))
   (should (assq 'let-binding-function gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'hardcoded-limit gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'score-zero-bug gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'unguarded-external-call gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'excessive-blank-lines gptel-auto-workflow--semantic-audit-checks))
-  (should (assq 'unbalanced-parens gptel-auto-workflow--semantic-audit-checks)))
+  (should (assq 'unbalanced-parens gptel-auto-workflow--semantic-audit-checks))
+  (should (assq 'missing-provide gptel-auto-workflow--semantic-audit-checks)))
+
+;; ── Test 10: Missing provide detection ──
+
+(ert-deftest test-self-heal-semantic/detects-missing-provide ()
+  "Detects files that don't have a (provide 'foo) statement."
+  (let* ((content
+          "(defun foo ()\n  1)\n;;; foo.el ends here\n")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-missing-provide file)))
+          (should (>= issues 1)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/clean-with-provide ()
+  "Files with (provide 'foo) are clean."
+  (let* ((content
+          "(defun foo ()\n  1)\n(provide 'foo)\n;;; foo.el ends here\n")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-missing-provide file)))
+          (should (= issues 0)))
+      (test-self-heal-semantic--cleanup file))))
 
 ;; ── Test 9: Unbalanced parens detection ──
 

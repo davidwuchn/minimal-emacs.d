@@ -644,4 +644,5 @@
     )
   "Patterns already implemented — do NOT duplicate.")
 
+(provide 'gptel-auto-workflow-research-digest)
 ;;; gptel-auto-workflow-research-digest.el ends here

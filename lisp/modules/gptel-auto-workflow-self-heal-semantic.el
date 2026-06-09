@@ -249,13 +249,41 @@ Returns 1 if unbalanced, 0 if balanced."
         "Unbalanced parens/brackets — Emacs cannot parse this file")))
     issues))
 
+;; ── Check 7: Missing provide statement ──
+
+(defun gptel-auto-workflow--audit-missing-provide (file)
+  "Audit FILE for missing (provide 'feature) statement.
+Modules without provide cannot be required by other modules.
+Returns 1 if missing, 0 if present."
+  (let ((issues 0)
+        (has-provide nil)
+        (feature-name nil))
+  (with-temp-buffer
+    (insert-file-contents file)
+    (goto-char (point-min))
+    ;; Look for (provide 'feature) form
+    (when (re-search-forward "^(provide\\s-+'\\([^)]+\\))" nil t)
+      (setq has-provide t)
+      (setq feature-name (match-string 1)))
+    (unless has-provide
+      (setq issues 1)
+      (let ((suggested (file-name-sans-extension
+                        (file-name-nondirectory file))))
+        (gptel-auto-workflow--semantic-audit-record
+         file 1
+         'missing-provide
+         (format "Missing (provide '%s) — module cannot be required"
+                 suggested)))))
+  issues))
+
 (defvar gptel-auto-workflow--semantic-audit-checks
   '((let-binding-function . gptel-auto-workflow--audit-let-binding-functions)
     (hardcoded-limit . gptel-auto-workflow--audit-hardcoded-limits)
     (score-zero-bug . gptel-auto-workflow--audit-score-zero-bug)
     (unguarded-external-call . gptel-auto-workflow--audit-unguarded-external-calls)
     (excessive-blank-lines . gptel-auto-workflow--audit-blank-lines)
-    (unbalanced-parens . gptel-auto-workflow--audit-unbalanced-parens))
+    (unbalanced-parens . gptel-auto-workflow--audit-unbalanced-parens)
+    (missing-provide . gptel-auto-workflow--audit-missing-provide))
   "Alist of audit check name (symbol) to audit function.")
 
 ;; ── Auto-fixers (Layer 2+3: detect AND fix) ──
