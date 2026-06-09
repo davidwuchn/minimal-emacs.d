@@ -50,19 +50,27 @@
 ;; ── Check 2: Hardcoded resource limits ──
 
 (defun gptel-auto-workflow--audit-hardcoded-limits (file)
-  "Audit FILE for hardcoded resource limits."
-  (let ((issues 0))
-    (progn
-      (with-temp-buffer
-        (insert-file-contents file)
-        (goto-char (point-min))
-        (while (re-search-forward "1572864" nil t)
+  "Audit FILE for hardcoded resource limits.
+Skips lines that are comments, docstrings, or string literals."
+  (let ((issues 0)
+        (lines (split-string (with-temp-buffer
+                               (insert-file-contents file)
+                               (buffer-string))
+                             "\n" t)))
+    (dolist (line lines)
+      ;; Skip: comment lines (;), docstring/section comments (;;;),
+      ;; or lines inside strings (starts/ends with ").
+      (unless (or (string-prefix-p ";" line)
+                  (string-match-p "^\".*1572864.*\"$" line)
+                  ;; Lines with only text describing the limit (not code)
+                  (string-match-p "^\\s-*\\w.*\\(threshold\\|limit\\|memory\\)" line))
+        (when (string-match-p "1572864" line)
           (setq issues (1+ issues))
           (gptel-auto-workflow--semantic-audit-record
-           file (line-number-at-pos (match-beginning 0))
+           file (1+ issues)
            'hardcoded-limit
-           "Hardcoded 1.5GB limit - should be configurable")))
-      issues)))
+           "Hardcoded 1.5GB limit - should be configurable"))))
+    issues))
 
 ;; ── Check 3: score=0 logic ──
 
@@ -100,7 +108,9 @@
           :log (nreverse (copy-sequence gptel-auto-workflow--semantic-audit-log)))))
 
 (cl-defun gptel-auto-workflow--semantic-audit-all (&key (_auto-fix nil))
-  "Run semantic audit on all Elisp files in lisp/modules/."
+  "Run semantic audit on all Elisp files in lisp/modules/.
+Skips the self-heal-semantic module itself to avoid false positives
+from the audit patterns embedded in the code."
   (let* ((modules-dir (or (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
                                (gptel-auto-workflow--expand-workspace-path "lisp/modules"))
                           "lisp/modules"))
@@ -110,13 +120,15 @@
          (report nil))
     (when files
       (dolist (file files)
-        (let* ((result (gptel-auto-workflow--semantic-audit-file file))
-               (issues (plist-get result :issues)))
-          (setq total-issues (+ total-issues issues))
-          (when (> issues 0)
-            (push (list :file file :issues issues
-                        :log (plist-get result :log))
-                  report)))))
+        ;; Skip our own module (contains audit patterns)
+        (unless (string-match-p "self-heal-semantic" (file-name-nondirectory file))
+          (let* ((result (gptel-auto-workflow--semantic-audit-file file))
+                 (issues (plist-get result :issues)))
+            (setq total-issues (+ total-issues issues))
+            (when (> issues 0)
+              (push (list :file file :issues issues
+                          :log (plist-get result :log))
+                    report))))))
     (list :total-issues total-issues
           :files-checked (length files)
           :report (nreverse report))))
