@@ -6717,6 +6717,41 @@ This feeds the verify-learn loop: system remembers what worked."
         (plist-put entry :effective (if effective-p t 'PENDING))
         (cl-return)))))
 
+(defun gptel-auto-workflow--self-reflect (diagnosis)
+  "Self-reflection: when fixes keep failing, question the diagnosis.
+Returns plist: (:diagnosis-correct-p :alternative-diagnosis :alternative-fix).
+After 3+ failed attempts at the same fix, the system reflects on whether
+its diagnosis was wrong and tries a fundamentally different approach."
+  (let* ((effectiveness (gptel-auto-workflow--verify-fix-effectiveness diagnosis))
+         (fail-count (plist-get effectiveness :same-fix-count))
+         (alternatives
+          (pcase diagnosis
+            ("grader-destroying-experiments"
+             '((:alt-diagnosis "backend-rate-limited" 
+                :alt-fix "switch-grader-backend"
+                :description "Grader may be rate-limited, not timing out")
+               (:alt-diagnosis "experiment-too-complex"
+                :alt-fix "simplify-experiment-prompt"
+                :description "Experiments may be too complex for grader"))))))
+    (list :diagnosis-correct-p (< fail-count 3)
+          :fail-count fail-count
+          :alternatives (if (>= fail-count 3) alternatives nil)
+          :should-try-alternative (>= fail-count 3))))
+
+(defun gptel-auto-workflow--self-reflect-write-lesson (diagnosis result)
+  "Write a self-reflection lesson to mementum when a fix finally works.
+Only writes when the fix was effective after previous failures —
+capturing 'what finally worked' for future sessions."
+  (when (and result (plist-get result :was-persistent)
+             (fboundp 'gptel-auto-workflow--mementum-write-memory))
+    (let ((slug (format "self-heal-lesson-%s" (replace-regexp-in-string "[^a-z-]" "-" (downcase diagnosis)))))
+      (gptel-auto-workflow--mementum-write-memory
+       '💡 slug
+       (format "**Self-heal lesson: %s**\nFailed %d times before working.\nFinal fix: %s\n\n"
+               diagnosis
+               (plist-get result :attempts)
+               (plist-get result :final-fix))))))
+
 (defun gptel-auto-workflow--check-pipeline-health (&optional results)
   "Analyze RESULTS for pipeline health issues.
 RESULTS is a list of plists with :kept and :decision keys.
@@ -6922,12 +6957,21 @@ cap is `2*default`)."
         (fixed nil))
     (pcase diagnosis-str
       ("grader-destroying-experiments"
+       ;; SELF-REFLECT: question diagnosis after repeated failures
+       (let* ((reflection (gptel-auto-workflow--self-reflect diagnosis-str))
+              (should-escalate (plist-get reflection :should-try-alternative)))
+         (when should-escalate
+           (message "[self-heal] 🔍 Self-reflection: '%s' fix failed %d× — questioning diagnosis"
+                    diagnosis-str (plist-get reflection :fail-count))
+           (dolist (alt (plist-get reflection :alternatives))
+             (message "[self-heal]   → Alternative: %s — %s"
+                      (plist-get alt :alt-diagnosis)
+                      (plist-get alt :description)))))
        ;; VERIFY-LEARN: check if previous fixes for this diagnosis worked
        (let ((effectiveness (gptel-auto-workflow--verify-fix-effectiveness diagnosis-str)))
          (when (plist-get effectiveness :needs-escalation)
            (message "[self-heal] ⚠ grader fix tried %d× without success — escalating"
                     (plist-get effectiveness :same-fix-count))
-           ;; Escalation: force pipeline-level intervention via signal file
            (let ((root (gptel-auto-workflow-self-audit--root)))
              (with-temp-file (expand-file-name "var/tmp/grader-escalation.txt" root)
                (insert (format "escalated: %d failed fix attempts\n"
