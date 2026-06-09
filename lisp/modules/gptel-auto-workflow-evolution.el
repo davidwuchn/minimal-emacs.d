@@ -6964,9 +6964,24 @@ cap is `2*default`)."
            (message "[self-heal] 🔍 Self-reflection: '%s' fix failed %d× — questioning diagnosis"
                     diagnosis-str (plist-get reflection :fail-count))
            (dolist (alt (plist-get reflection :alternatives))
-             (message "[self-heal]   → Alternative: %s — %s"
-                      (plist-get alt :alt-diagnosis)
-                      (plist-get alt :description)))))
+             (let ((alt-fix (plist-get alt :alt-fix)))
+               (message "[self-heal]   → Trying alternative: %s — %s"
+                        (plist-get alt :alt-diagnosis)
+                        (plist-get alt :description))
+               ;; ACT on alternative
+               (pcase alt-fix
+                 ("switch-grader-backend"
+                  (when (boundp 'gptel-auto-workflow--force-grader-backends)
+                    (setq gptel-auto-workflow--force-grader-backends
+                          '("deepseek-v4-flash" "deepseek-v4-pro" "qwen3.7-max"))
+                    (message "[self-heal]   → Forced grader backends: %S"
+                             gptel-auto-workflow--force-grader-backends)))
+                 ("simplify-experiment-prompt"
+                  (when (boundp 'gptel-auto-experiment-time-budget)
+                    (setq gptel-auto-experiment-time-budget
+                          (max 300 (floor (* gptel-auto-experiment-time-budget 0.7))))
+                    (message "[self-heal]   → Reduced experiment budget to %ds for simpler experiments"
+                             gptel-auto-experiment-time-budget))))))))
        ;; VERIFY-LEARN: check if previous fixes for this diagnosis worked
        (let ((effectiveness (gptel-auto-workflow--verify-fix-effectiveness diagnosis-str)))
          (when (plist-get effectiveness :needs-escalation)

@@ -520,8 +520,31 @@ Usage:
           (when discovered
             (setq gptel-auto-workflow-targets discovered)
             (setq-default gptel-auto-workflow-targets discovered)
-            (message "[auto-workflow] Auto-discovered %d targets"
-                     (length discovered))))))
+           (message "[auto-workflow] Auto-discovered %d targets"
+                    (length discovered))))))
+    ;; Restore self-healing lessons from mementum (cross-session learning).
+    ;; Previous sessions' "what finally worked" knowledge survives daemon restart.
+    (condition-case nil
+        (when (and (boundp 'gptel-auto-workflow--self-healing-log)
+                   (fboundp 'gptel-auto-workflow--mementum-slug))
+          (let ((mem-dir (expand-file-name "mementum/memories/"
+                                           (gptel-auto-workflow--default-dir))))
+            (when (file-directory-p mem-dir)
+              (dolist (f (directory-files mem-dir t "self-heal-lesson-.*\\.md$"))
+                (with-temp-buffer
+                  (insert-file-contents f)
+                  (goto-char (point-min))
+                  (when (re-search-forward "Final fix: \\(.+\\)" nil t)
+                    (let ((fix (match-string 1)))
+                      (push (list :timestamp (float-time)
+                                  :diagnosis "restored-lesson"
+                                  :remedy fix
+                                  :effective t
+                                  :from-prior-session t)
+                            gptel-auto-workflow--self-healing-log)))
+                  (message "[auto-workflow] Restored self-heal lesson: %s"
+                           (file-name-base f))))))
+      (error (message "[auto-workflow] Self-heal lesson restore skipped"))))
     ;; Check innovation queue for pending ideas from GTM Mayor
     (when (fboundp 'gptel-auto-workflow--innovation-queue-list)
       (condition-case err
