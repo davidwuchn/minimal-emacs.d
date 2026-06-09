@@ -6023,7 +6023,7 @@ Checks: required frontmatter, duplicate titles, empty sections."
                 (setq title-count (1+ title-count) pos (match-end 0)))
               (when (= title-count 0)
                 (push "No main heading (# ) found" warnings)))))
-      (error
+      (error err
        (push (format "Failed to read: %s" (error-message-string err)) errors)))
     (gptel-auto-workflow--validation-result
      (null errors)
@@ -7948,7 +7948,7 @@ but when they fail, we need creative reasoning."
             (message "[self-heal] LLM suggestions: %s"
                      (mapconcat #'identity suggestions "; ")))
           suggestions))
-    (error
+    (error err
      (message "[self-heal] LLM diagnosis failed: %s" (error-message-string err))
      nil)))
 
