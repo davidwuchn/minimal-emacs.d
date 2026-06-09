@@ -75,9 +75,9 @@ the configured fallback chain is exhausted.")
 (defvar gptel-auto-workflow--runtime-subagent-provider-overrides)
 (defconst gptel-auto-experiment--shared-retryable-error-patterns
   (list :general
-        (regexp-opt '("timeout" "timed out" "temporary" "server_error" "WebClientRequestException" "curl failed with exit code 28" "curl failed with exit code 35" "curl failed with exit code 56" "operation timed out" "authorized_error" "token is unusable" "invalid_api_key" "invalid api key" "unauthorized" "http_code \"401\"" "Malformed JSON") t)
+        (regexp-opt '("timeout" "timed out" "temporary" "server_error" "WebClientRequestException" "curl failed with exit code 28" "curl failed with exit code 35" "curl failed with exit code 56" "operation timed out" "authorized_error" "token is unusable" "invalid_api_key" "invalid api key" "unauthorized" "http_code \"401\"" "Malformed JSON" "余额不足" "无可用资源包" "insufficient balance" ":code \"1113\"" "credit limit reached") t)
         :transient
-        (regexp-opt '("WebClientRequestException" "server_error" "curl failed with exit code 28" "curl failed with exit code 35" "curl failed with exit code 56" "operation timed out" "Malformed JSON") t))
+        (regexp-opt '("WebClientRequestException" "server_error" "curl failed with exit code 28" "curl failed with exit code 35" "curl failed with exit code 56" "operation timed out" "Malformed JSON" "余额不足" "无可用资源包" "insufficient balance" ":code \"1113\"" "credit limit reached") t))
   "Pre-compiled shared retryable error patterns as a plist.
 Keys :general (used in is-retryable-error-p) and :transient
 (used in provider-pressure-error-p).")
