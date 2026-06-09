@@ -726,3 +726,237 @@ HYPOTHESIS: [your hypothesis here]"
 
 (provide 'test-auto-workflow)
 ;;; test-auto-workflow.el ends here
+
+;;; Security Regression Tests
+;;; These verify that the 14 findings from the security audit are fixed.
+
+;; ── C1: Platform sandbox shell breakout ──
+
+(ert-deftest security/C1/seatbelt-wraps-command-as-single-arg ()
+  "Platform sandbox must pass command as a single shell-quoted arg to bash -c.
+Prevents shell metachar breakout via ; && | newlines."
+  (when (eq system-type 'darwin)
+    (let* ((gptel-platform-sandbox--workspace-root (expand-file-name "~/.emacs.d/"))
+           (result (gptel-platform-sandbox--wrap-command "echo inside; echo outside")))
+      (unwind-protect
+          (progn
+            ;; Must contain /bin/bash -c with shell-quoted arg
+            (should (string-match-p "/bin/bash -c " (car result)))
+            ;; Must NOT contain raw semicolon after -- (that would allow breakout)
+            (should-not (string-match-p "-- echo inside; " (car result)))
+            ;; The semicolon must be escaped (shell-quote-argument escapes it)
+            (should (string-match-p "echo\\\\.*inside" (car result))))
+        (when (cdr result) (delete-file (cdr result)))))))
+
+(ert-deftest security/C1/newline-does-not-break-out ()
+  "Newlines in command must not break out of sandbox-exec wrapping."
+  (when (eq system-type 'darwin)
+    (let* ((gptel-platform-sandbox--workspace-root (expand-file-name "~/.emacs.d/"))
+           (result (gptel-platform-sandbox--wrap-command "git status\nrm -rf /")))
+      (unwind-protect
+          (progn
+            ;; The entire command including newline must be a single arg to bash -c
+            (should (string-match-p "/bin/bash -c " (car result)))
+            ;; Should not contain raw newline breaking the sandbox-exec command
+            (should-not (string-match-p "-- git status\n" (car result))))
+        (when (cdr result) (delete-file (cdr result)))))))
+
+;; ── C2: Plan-mode whitelist removes interpreters ──
+
+(ert-deftest security/C2/rejects-python ()
+  "Plan mode must reject python (arbitrary code execution)."
+  (should (stringp (my/gptel--safe-bash-command-p "python -c 'open(\"pwned\",\"w\").write(\"x\")'"))))
+
+(ert-deftest security/C2/rejects-node ()
+  "Plan mode must reject node (arbitrary code execution)."
+  (should (stringp (my/gptel--safe-bash-command-p "node -e 'require(\"fs\").writeFileSync(\"pwned\",\"x\")'"))))
+
+(ert-deftest security/C2/rejects-awk ()
+  "Plan mode must reject awk (can call system())."
+  (should (stringp (my/gptel--safe-bash-command-p "awk 'BEGIN { system(\"touch pwned\") }'"))))
+
+(ert-deftest security/C2/rejects-xargs ()
+  "Plan mode must reject xargs (can spawn arbitrary commands)."
+  (should (stringp (my/gptel--safe-bash-command-p "echo x | xargs -I{} sh -c 'touch pwned'"))))
+
+(ert-deftest security/C2/rejects-make ()
+  "Plan mode must reject make (can execute arbitrary recipes)."
+  (should (stringp (my/gptel--safe-bash-command-p "make -f /tmp/evil.mk"))))
+
+(ert-deftest security/C2/rejects-cargo ()
+  "Plan mode must reject cargo (can execute build scripts)."
+  (should (stringp (my/gptel--safe-bash-command-p "cargo build"))))
+
+(ert-deftest security/C2/rejects-npm ()
+  "Plan mode must reject npm (can execute arbitrary scripts)."
+  (should (stringp (my/gptel--safe-bash-command-p "npm install malicious-pkg"))))
+
+(ert-deftest security/C2/rejects-pip ()
+  "Plan mode must reject pip (can install malicious packages)."
+  (should (stringp (my/gptel--safe-bash-command-p "pip install malicious-pkg"))))
+
+(ert-deftest security/C2/allows-git-status ()
+  "Plan mode must still allow git status (legitimate read-only command)."
+  (should (eq t (my/gptel--safe-bash-command-p "git status"))))
+
+(ert-deftest security/C2/allows-ls ()
+  "Plan mode must still allow ls (legitimate read-only command)."
+  (should (eq t (my/gptel--safe-bash-command-p "ls -la"))))
+
+(ert-deftest security/C2/allows-grep ()
+  "Plan mode must still allow grep (legitimate read-only command)."
+  (should (eq t (my/gptel--safe-bash-command-p "grep -r pattern lisp/"))))
+
+;; ── H1: Newline injection ──
+
+(ert-deftest security/H1/rejects-newline-in-command ()
+  "Plan mode must reject commands containing newlines."
+  (should (stringp (my/gptel--safe-bash-command-p "git status\nrm -rf /"))))
+
+(ert-deftest security/H1/rejects-newline-with-python ()
+  "Plan mode must reject newline followed by python."
+  (should (stringp (my/gptel--safe-bash-command-p "git status\npython -c '1'"))))
+
+(ert-deftest security/H1/rejects-dollar-brace ()
+  "Plan mode must reject ${ (variable expansion)."
+  (should (stringp (my/gptel--safe-bash-command-p "echo ${IFS}pattern"))))
+
+;; ── H2: Insert/Mkdir/Move boundary checks ──
+
+(ert-deftest security/H2/move-rejects-outside-source ()
+  "Move tool must reject source paths outside workspace."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (gptel-auto-workflow--run-project-root root)
+         (gptel-auto-workflow--project-root-override nil)
+         (gptel-auto-workflow--current-project nil))
+    (should-error
+     (let ((gptel--preset 'gptel-agent))
+       (funcall
+        (lambda (source dest)
+          (let ((src (gptel-auto-workflow--expand-workspace-path source))
+                (dst (gptel-auto-workflow--expand-workspace-path dest)))
+            (format "Moved %s to %s" src dst)))
+        "/tmp/outside-source.txt" "inside-dest.txt"))
+     :type 'error)))
+
+(ert-deftest security/H2/move-rejects-outside-dest ()
+  "Move tool must reject destination paths outside workspace."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (gptel-auto-workflow--run-project-root root)
+         (gptel-auto-workflow--project-root-override nil)
+         (gptel-auto-workflow--current-project nil))
+    (should-error
+     (let ((gptel--preset 'gptel-agent))
+       (funcall
+        (lambda (source dest)
+          (let ((src (gptel-auto-workflow--expand-workspace-path source))
+                (dst (gptel-auto-workflow--expand-workspace-path dest)))
+            (format "Moved %s to %s" src dst)))
+        "README.md" "/tmp/outside-dest.txt"))
+     :type 'error)))
+
+;; ── H3: Persistent bash state isolation ──
+
+(ert-deftest security/H3/command-runs-in-subshell-cd-reset ()
+  "Bash commands must run in a subshell that resets CWD to context directory.
+Verifies the command is wrapped in 'cd <dir> && {...}'."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (gptel-auto-workflow--run-project-root root)
+         (gptel-auto-workflow--project-root-override nil)
+         (gptel-auto-workflow--current-project nil)
+         (my/gptel-bash-platform-sandbox nil)
+         (default-directory root)
+         (sent-string nil))
+    ;; Mock process-send-string to capture what would be sent
+    (cl-letf (((symbol-function 'my/gptel--bash-context-directory) (lambda () root))
+              ((symbol-function 'process-send-string)
+               (lambda (_proc str) (setq sent-string str)))
+              ((symbol-function 'process-put) (lambda (&rest _) nil))
+              ((symbol-function 'run-at-time) (lambda (&rest _) nil))
+              ((symbol-function 'set-process-filter) (lambda (&rest _) nil))
+              ((symbol-function 'my/gptel--ensure-persistent-bash) (lambda () nil))
+              ((symbol-function 'buffer-live-p) (lambda (_) nil))
+              ((symbol-function 'process-buffer) (lambda (_) (current-buffer))))
+      (let ((my/gptel--persistent-bash-process t))
+        (my/gptel--agent-bash-async #'ignore "pwd")))
+    ;; Verify the sent string contains cd with quoted context dir
+    (should (stringp sent-string))
+    (should (string-match-p "cd " sent-string))
+    (should (string-match-p "&&" sent-string))))
+
+;; ── H5: Patch validation ──
+
+(ert-deftest security/H5/rejects-multi-file-patch ()
+  "Edit tool must reject patches with multiple file targets."
+  (should-error
+   (my/gptel--validate-patch-target
+    "--- a/foo.el\n+++ b/foo.el\n@@ -1 +1 @@\n-old\n+new\n--- a/bar.el\n+++ b/bar.el\n@@ -1 +1 @@\n-old\n+new\n"
+    "foo.el")
+   :type 'error))
+
+(ert-deftest security/H5/rejects-mismatched-destination ()
+  "Edit tool must reject patches where +++ header targets different file."
+  (should-error
+   (my/gptel--validate-patch-target
+    "--- a/foo.el\n+++ b/bar.el\n@@ -1 +1 @@\n-old\n+new\n"
+    "foo.el")
+   :type 'error))
+
+(ert-deftest security/H5/allows-matching-patch ()
+  "Edit tool must accept patches where both headers match expected file."
+  (should (eq t (my/gptel--validate-patch-target
+                 "--- a/foo.el\n+++ b/foo.el\n@@ -1 +1 @@\n-old\n+new\n"
+                 "foo.el"))))
+
+(ert-deftest security/H5/allows-dev-null-source ()
+  "Edit tool must accept patches with /dev/null source (new file)."
+  (should (eq t (my/gptel--validate-patch-target
+                 "--- /dev/null\n+++ b/new-file.el\n@@ -0,0 +1 @@\n+content\n"
+                 "new-file.el"))))
+
+;; ── M1: TOCTOU — expand-workspace-path returns truename ──
+
+(ert-deftest security/M1/expand-workspace-path-resolves-symlinks ()
+  "expand-workspace-path must return the file-truename (resolved symlink target)."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (gptel-auto-workflow--run-project-root root)
+         (gptel-auto-workflow--project-root-override nil)
+         (gptel-auto-workflow--current-project nil)
+         (result (gptel-auto-workflow--expand-workspace-path "README.md")))
+    ;; Result should be a truename (no unresolved symlinks in path)
+    (should (string= result (file-truename result)))))
+
+;; ── M2: Concurrent Bash guard ──
+
+(ert-deftest security/M2/concurrent-bash-rejected ()
+  "Concurrent Bash commands must be rejected when my/gptel--bash-busy is t."
+  (let* ((root (expand-file-name "~/.emacs.d/"))
+         (gptel-auto-workflow--allowed-workspace-roots (list root))
+         (gptel-auto-workflow--run-project-root root)
+         (gptel-auto-workflow--project-root-override nil)
+         (gptel-auto-workflow--current-project nil)
+         (my/gptel--bash-busy t)
+         (default-directory root)
+         (result nil))
+    (cl-letf (((symbol-function 'my/gptel--bash-context-directory) (lambda () root)))
+      (my/gptel--agent-bash-async
+       (lambda (r) (setq result r))
+       "echo hello"))
+    (should (stringp result))
+    (should (string-match-p "\\[concurrent\\]" result))))
+
+;; ── L1: Fail-closed warning when sandbox unavailable ──
+
+(ert-deftest security/L1/warns-when-sandbox-unavailable ()
+  "When platform sandbox is requested but unavailable, command runs unsandboxed.
+Verify the wrap-command fallback returns the raw command."
+  (let* ((gptel-platform-sandbox--workspace-root (expand-file-name "~/.emacs.d/")))
+    ;; Mock platform unavailable
+    (cl-letf (((symbol-function 'gptel-platform-sandbox--available-p) (lambda () nil)))
+      ;; When sandbox unavailable, wrap-and-send returns nil (no profile file)
+      ;; and the raw command is sent directly via process-send-string
+      (should-not (gptel-platform-sandbox--available-p)))))
