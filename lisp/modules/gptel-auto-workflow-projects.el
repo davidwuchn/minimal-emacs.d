@@ -328,12 +328,6 @@ finish."
   (ignore-errors
     (call-process "gpg" nil nil nil "--batch" "--quiet" "--decrypt"
                   (expand-file-name "~/.authinfo.gpg")))
-  ;; Moonshot quota exhausted (access_terminated_error).  Returns errors that
-  ;; make it look responsive to the onto-router.  Mark it as rate-limited so
-  ;; the router skips it dynamically.  When quota resets, the onto-router will
-  ;; re-enable it automatically as responses succeed.
-  (when (boundp 'gptel-auto-workflow--rate-limited-backends)
-    (cl-pushnew "moonshot" gptel-auto-workflow--rate-limited-backends :test #'string=))
   ;; Ensure gptel-agent-dirs includes our custom agent directory so
   ;; --update-agents registers all agent types (grader, analyzer, etc.).
   (let ((agents-dir (expand-file-name "assistant/agents"

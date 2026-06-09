@@ -336,6 +336,62 @@ Returns nil if not found."
   (when-let* ((entry (assoc backend gptel-backend-registry)))
     (plist-get (cdr entry) :host)))
 
+;;; Smart Routing — Centralized Backend Selection
+
+(defvar gptel-auto-workflow--rate-limited-backends nil
+  "List of currently rate-limited backend names (strings).
+Used by `gptel-backend-registry-select-for-task' to skip unavailable backends.
+Declared here so the registry can reference it without loading the full
+auto-workflow stack.")
+
+(defun gptel-backend-registry-select-for-task (task-type &optional exclude-backends)
+  "Smart routing: return (BACKEND-OBJECT . MODEL) for TASK-TYPE.
+Walks `gptel-fallback-chains' for TASK-TYPE, skips rate-limited backends
+in `gptel-auto-workflow--rate-limited-backends' and EXCLUDE-BACKENDS,
+resolves model via `gptel-task-type-model-defaults' or registry default,
+returns first available (BACKEND-OBJECT . MODEL) or nil."
+  (let* ((chain (gptel-backend-registry-fallback-chain task-type))
+         (rate-limited (if (boundp 'gptel-auto-workflow--rate-limited-backends)
+                           gptel-auto-workflow--rate-limited-backends
+                         nil))
+         (skip-set (delete-dups
+                    (append (mapcar (lambda (b) (if (symbolp b) (symbol-name b) b))
+                                    (or exclude-backends nil))
+                            (or rate-limited nil)))))
+    (catch 'found
+      (dolist (backend chain)
+        (let* ((backend-name (if (symbolp backend) (symbol-name backend) backend))
+               (backend-sym (if (symbolp backend) backend (intern backend))))
+          (unless (member backend-name skip-set)
+            (when-let* ((model (or (gptel-backend-registry-task-model task-type backend-sym)
+                                   (gptel-backend-registry-default-model backend-sym)))
+                        (backend-obj (and (fboundp 'gptel-get-backend)
+                                          (gptel-get-backend backend-name))))
+              (throw 'found (cons backend-obj model)))))))))
+
+(defun gptel-backend-registry-fallback-chain-as-cons (task-type &optional exclude-backends)
+  "Return fallback chain for TASK-TYPE as ((\"BackendName\" . \"model\") ...) alist.
+Format matches `gptel-auto-workflow-headless-subagent-fallbacks' convention.
+EXCLUDE-BACKENDS is a list of backend names (symbols or strings) to skip."
+  (let* ((chain (gptel-backend-registry-fallback-chain task-type))
+         (rate-limited (if (boundp 'gptel-auto-workflow--rate-limited-backends)
+                           gptel-auto-workflow--rate-limited-backends
+                         nil))
+         (skip-set (delete-dups
+                    (append (mapcar (lambda (b) (if (symbolp b) (symbol-name b) b))
+                                    (or exclude-backends nil))
+                            (or rate-limited nil))))
+         result)
+    (dolist (backend chain)
+      (let* ((backend-name (if (symbolp backend) (symbol-name backend) backend))
+             (backend-sym (if (symbolp backend) backend (intern backend))))
+        (unless (member backend-name skip-set)
+          (let ((model (or (gptel-backend-registry-task-model task-type backend-sym)
+                           (gptel-backend-registry-default-model backend-sym))))
+            (when model
+              (push (cons backend-name (symbol-name model)) result))))))
+    (nreverse result)))
+
 ;;; Thinking Policy — Self-Evolving
 
 (defun gptel-backend-registry-thinking-policy (model)

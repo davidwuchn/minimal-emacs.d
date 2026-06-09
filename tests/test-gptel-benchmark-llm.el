@@ -23,21 +23,23 @@
 
 ;;; Auto-select model tests
 
-(ert-deftest test-llm/auto-select-returns-cons-when-deepseek-available ()
-  "auto-select-model should return (MODEL . BACKEND) when DeepSeek is registered."
+(ert-deftest test-llm/auto-select-returns-cons-when-backend-available ()
+  "auto-select-model should return (MODEL . BACKEND) via smart routing."
   (require 'gptel-benchmark-llm)
-  ;; If gptel-get-backend is available and deepseek is registered, verify format
+  ;; The function now uses gptel-backend-registry-select-for-task 'researcher
+  ;; which walks the fallback chain.  If gptel-get-backend resolves any
+  ;; backend, verify the return format (MODEL . BACKEND).
   (when (fboundp 'gptel-get-backend)
     (let ((result (gptel-benchmark--auto-select-model)))
       (when result
         (should (consp result))
-        (should (equal (car result) 'deepseek-chat))
+        (should (symbolp (car result)))
         (should (object-of-class-p (cdr result) 'gptel-backend))))))
 
-(ert-deftest test-llm/auto-select-returns-nil-when-no-deepseek ()
-  "auto-select-model should return nil when DeepSeek is not available."
+(ert-deftest test-llm/auto-select-returns-nil-when-no-backend ()
+  "auto-select-model should return nil when smart routing finds nothing."
   (require 'gptel-benchmark-llm)
-  ;; If gptel-get-backend exists but deepseek not found, should return nil
+  ;; If gptel-get-backend returns nil for all backends, should return nil
   (cl-letf (((symbol-function 'gptel-get-backend) (lambda (_) nil)))
     (should-not (gptel-benchmark--auto-select-model))))
 

@@ -88,5 +88,53 @@ the new default must be qwen3.7-plus (preferred over older model)."
   (let ((cache my/gptel--known-model-context-windows))
     (should (assoc "qwen3.7-plus" cache))))
 
+;;; Smart routing tests
+
+(ert-deftest test-registry/select-for-task-returns-cons ()
+  "`gptel-backend-registry-select-for-task' should return (BACKEND . MODEL)."
+  (skip-unless (fboundp 'gptel-backend-registry-select-for-task))
+  (let ((result (gptel-backend-registry-select-for-task 'executor)))
+    (when result
+      (should (consp result))
+      (should (or (object-of-class-p (car result) 'gptel-backend)
+                  ;; In batch mode gptel-get-backend may not resolve
+                  (null (car result))))
+      (should (symbolp (cdr result))))))
+
+(ert-deftest test-registry/select-for-task-skips-excluded ()
+  "select-for-task should skip backends in exclude-backends."
+  (skip-unless (fboundp 'gptel-backend-registry-select-for-task))
+  ;; Get the first backend in the executor chain
+  (let* ((chain (gptel-backend-registry-fallback-chain 'executor))
+         (first-backend (car chain))
+         (result (gptel-backend-registry-select-for-task
+                  'executor (list first-backend))))
+    ;; If result is non-nil, it must NOT use the excluded backend
+    (when result
+      (should (not (equal (gptel-backend-name (car result))
+                          (symbol-name first-backend)))))))
+
+(ert-deftest test-registry/fallback-chain-as-cons-format ()
+  "`gptel-backend-registry-fallback-chain-as-cons' should return
+alist of (\"BackendName\" . \"model-name\") string pairs."
+  (skip-unless (fboundp 'gptel-backend-registry-fallback-chain-as-cons))
+  (let ((result (gptel-backend-registry-fallback-chain-as-cons 'executor)))
+    (should (listp result))
+    (should (> (length result) 0))
+    (dolist (entry result)
+      (should (consp entry))
+      (should (stringp (car entry)))
+      (should (stringp (cdr entry))))))
+
+(ert-deftest test-registry/fallback-chain-as-cons-skips-excluded ()
+  "fallback-chain-as-cons should not include excluded backends."
+  (skip-unless (fboundp 'gptel-backend-registry-fallback-chain-as-cons))
+  (let* ((chain (gptel-backend-registry-fallback-chain 'executor))
+         (first-backend (symbol-name (car chain)))
+         (result (gptel-backend-registry-fallback-chain-as-cons
+                  'executor (list (car chain)))))
+    (dolist (entry result)
+      (should-not (string= (car entry) first-backend)))))
+
 (provide 'test-gptel-ext-backend-registry)
 ;;; test-gptel-ext-backend-registry.el ends here

@@ -77,21 +77,20 @@ CALLBACK receives synthesized content."
 ;;; LLM Request Functions
 
 (defun gptel-benchmark--auto-select-model ()
-  "Return a reliable model for synthesis, preferring DeepSeek.
-When the default gptel-model is a rate-limited backend (e.g., MiniMax),
-synthesis calls all return nil. DeepSeek is preferred for reliability.
+  "Return a reliable model for synthesis via smart routing.
+Uses `gptel-backend-registry-select-for-task' to pick the first available
+backend for the 'researcher task type, skipping rate-limited backends.
 Returns (MODEL . BACKEND) or nil."
-  (let ((ds-backend (and (fboundp 'gptel-get-backend)
-                        (or (gptel-get-backend 'deepseek)
-                            (gptel-get-backend "deepseek")))))
-    (when ds-backend
-      (cons 'deepseek-chat ds-backend))))
+  (when (fboundp 'gptel-backend-registry-select-for-task)
+    (when-let ((selection (gptel-backend-registry-select-for-task 'researcher)))
+      ;; Registry returns (BACKEND-OBJECT . MODEL); caller expects (MODEL . BACKEND)
+      (cons (cdr selection) (car selection)))))
 
 (defun gptel-benchmark--call-llm-request (prompt callback)
   "Call `gptel-request' with PROMPT and CALLBACK.
 When `gptel-benchmark-llm-model' is non-nil, bind `gptel-model' dynamically.
-When nil, auto-select a reliable backend (DeepSeek) instead of the
-default which may be rate-limited (e.g., MiniMax).
+When nil, auto-select a reliable backend via smart routing instead of the
+default which may be rate-limited.
 Wraps CALLBACK with a timeout guard to prevent hangs when the gptel
 callback never fires (e.g., void-function nil bug in sentinel)."
   (let* ((auto-model (and (null gptel-benchmark-llm-model)

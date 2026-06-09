@@ -7146,11 +7146,13 @@ reflection logic may be broken"
                ;; ACT on alternative
                (pcase alt-fix
                  ("switch-grader-backend"
-                  (when (boundp 'gptel-auto-workflow--force-grader-backends)
-                    (setq gptel-auto-workflow--force-grader-backends
-                          '("deepseek-v4-flash" "deepseek-v4-pro" "qwen3.7-max"))
-                    (message "[self-heal]   → Forced grader backends: %S"
-                             gptel-auto-workflow--force-grader-backends)))
+                   (when (boundp 'gptel-auto-workflow--force-grader-backends)
+                     (setq gptel-auto-workflow--force-grader-backends
+                           (if (fboundp 'gptel-backend-registry-fallback-chain-as-cons)
+                               (mapcar #'cdr (gptel-backend-registry-fallback-chain-as-cons 'grader))
+                             '("deepseek-v4-flash" "deepseek-v4-pro" "qwen3.7-max")))
+                     (message "[self-heal]   → Forced grader backends: %S"
+                              gptel-auto-workflow--force-grader-backends)))
                  ("simplify-experiment-prompt"
                   (when (boundp 'gptel-auto-experiment-time-budget)
                     (setq gptel-auto-experiment-time-budget
@@ -7758,21 +7760,31 @@ Tests still run, but no LLM grading — changes marked for manual review.")
 Keys are backend names, values are plists with :count :total-latency :failures
 :cost.")
 
-(defvar gptel-auto-workflow--backend-cost-estimates
-  '(("MiniMax" . 0.003)
-    ("Copilot" . 0.002)
-    ("moonshot" . 0.005)
-    ("DeepSeek" . 0.001)
-    ("DashScope" . 0.004))
+(defvar gptel-auto-workflow--backend-cost-estimates nil
   "Estimated cost per grader call in USD.
+Dynamically derived from `gptel-backend-registry-pricing' when available.
 Used for cost-aware backend selection.")
+
+(defun gptel-auto-workflow--backend-cost (backend-name)
+  "Return estimated cost per call for BACKEND-NAME from the registry.
+Falls back to 0.003 if not in the registry."
+  (or (when (fboundp 'gptel-backend-registry-pricing)
+        (let* ((backend-sym (if (symbolp backend-name) backend-name (intern backend-name)))
+               (model (when (fboundp 'gptel-backend-registry-default-model)
+                        (gptel-backend-registry-default-model backend-sym))))
+          (when model
+            (let ((pricing (gptel-backend-registry-pricing backend-sym model)))
+              (+ (or (plist-get pricing :input) 0)
+                 (or (plist-get pricing :output) 0))))))
+      (cdr (assoc backend-name gptel-auto-workflow--backend-cost-estimates))
+      0.003))
 
 (defun gptel-auto-workflow--record-grader-metric (backend latency success-p)
   "Record grader metric for BACKEND.
 LATENCY is time in seconds. SUCCESS-P is t if grader returned valid output."
   (let* ((current (gethash backend gptel-auto-workflow--grader-health-metrics
                            (list :count 0 :total-latency 0 :failures 0 :cost 0.0)))
-         (cost-per-call (or (cdr (assoc backend gptel-auto-workflow--backend-cost-estimates)) 0.003)))
+         (cost-per-call (gptel-auto-workflow--backend-cost backend)))
     (plist-put current :count (1+ (plist-get current :count)))
     (plist-put current :total-latency (+ (plist-get current :total-latency) latency))
     (plist-put current :cost (+ (or (plist-get current :cost) 0.0) cost-per-call))
@@ -7843,19 +7855,16 @@ Low false-positive rate → lower threshold (catch more real problems)."
 (defvar gptel-auto-workflow--consecutive-failed-remediations 0
   "Counter for consecutive failed auto-remediation attempts.")
 
-(defvar gptel-auto-workflow--escalation-backends
-  '("Copilot" "moonshot" "DeepSeek")
-  "Backends to try when primary backend is failing.")
+(defvar gptel-auto-workflow--escalation-backends nil
+  "Backends to try when primary backend is failing.
+Dynamically derived from `gptel-backend-registry-fallback-chain-as-cons'.")
 
-(defvar gptel-auto-workflow--backend-name-to-symbol
-  '(("copilot" . gptel--copilot)
-    ("moonshot" . gptel--moonshot)
-    ("deepseek" . gptel--deepseek)
-    ("minimax" . gptel--minimax)
-    ("dashscope" . gptel--dashscope)
-    ("cf-gateway" . gptel--cf-gateway))
-  "Mapping from lowercase backend names to gptel backend symbols.
-Used for safe backend switching without assuming naming conventions.")
+(defun gptel-auto-workflow--escalation-backends ()
+  "Return escalation backend names from the registry fallback chain."
+  (or gptel-auto-workflow--escalation-backends
+      (if (fboundp 'gptel-backend-registry-fallback-chain-as-cons)
+          (mapcar #'car (gptel-backend-registry-fallback-chain-as-cons 'default))
+        '("Copilot" "moonshot" "DeepSeek"))))
 
 (defun gptel-auto-workflow--escalate-to-backend (diagnosis)
   "Escalate broken pipeline to alternative LLM backend.
@@ -7863,29 +7872,25 @@ Tries next backend in escalation chain, preferring cheaper options.
 Considers cost-per-call when multiple backends are available."
   (let* ((current-backend (when (boundp 'gptel-backend)
                             (gptel-backend-name gptel-backend)))
-         (candidates (remove current-backend gptel-auto-workflow--escalation-backends))
+         (escalation-list (gptel-auto-workflow--escalation-backends))
+         (candidates (remove current-backend escalation-list))
          ;; Sort candidates by cost (cheapest first) for cost-aware healing
          (sorted-candidates
           (sort candidates
                 (lambda (a b)
-                  (let ((cost-a (or (cdr (assoc a gptel-auto-workflow--backend-cost-estimates)) 0.003))
-                        (cost-b (or (cdr (assoc b gptel-auto-workflow--backend-cost-estimates)) 0.003)))
-                     (< cost-a cost-b)))))
-          (next-backend-name (car sorted-candidates)))
+                  (let ((cost-a (gptel-auto-workflow--backend-cost a))
+                        (cost-b (gptel-auto-workflow--backend-cost b)))
+                    (< cost-a cost-b)))))
+         (next-backend-name (car sorted-candidates)))
     (if next-backend-name
-        (let* ((lookup-key (downcase next-backend-name))
-               (backend-symbol (cdr (assoc lookup-key
-                                          gptel-auto-workflow--backend-name-to-symbol
-                                          #'string=)))
-               (backend-var (when backend-symbol
-                              (and (boundp backend-symbol)
-                                   (symbol-value backend-symbol)))))
-          (if backend-var
+        (let ((backend-obj (and (fboundp 'gptel-get-backend)
+                                (gptel-get-backend next-backend-name))))
+          (if backend-obj
               (progn
                 (message "[ESCALATION] Primary backend %s failing. Switching to %s for self-healing."
                          current-backend next-backend-name)
                 ;; Switch to alternative backend safely
-                (setq gptel-backend backend-var)
+                (setq gptel-backend backend-obj)
                 (message "[ESCALATION] Now using %s for grader and experiments." next-backend-name)
                 ;; Reset counter since we changed strategy
                 (setq gptel-auto-workflow--consecutive-failed-remediations 0)
@@ -7894,7 +7899,7 @@ Considers cost-per-call when multiple backends are available."
               (message "[ESCALATION] Backend %s not configured, skipping to next" next-backend-name)
               ;; Remove this backend from candidates and try next
               (setq gptel-auto-workflow--escalation-backends
-                    (remove next-backend-name gptel-auto-workflow--escalation-backends))
+                    (remove next-backend-name (gptel-auto-workflow--escalation-backends)))
               (gptel-auto-workflow--escalate-to-backend diagnosis))))
       (progn
         (message "[ESCALATION] All backends exhausted. Writing alert for human review.")

@@ -17,7 +17,6 @@
 (defvar package-archive-contents nil)
 (defvar gptel-backend nil)
 (defvar gptel-model nil)
-(defvar gptel--moonshot nil)
 (defconst gptel-auto-workflow-bootstrap--package-archives
   '(("melpa"        . "https://melpa.org/packages/")
     ("gnu"          . "https://elpa.gnu.org/packages/")
@@ -154,11 +153,13 @@
               (propertize (or name "unknown") 'font-lock-face 'font-lock-keyword-face)
               (propertize (format "%s" arg-values) 'font-lock-face 'font-lock-string-face))))
   (load-file (expand-file-name "lisp/modules/gptel-ext-backends.el" root))
-  ;; MiniMax quota exhausted until 2026-05-11; temporarily default to moonshot
-  ;; (DashScope/qwen3.6-plus was too cautious - inspection-thrash on code edits)
-  ;; Using kimi-k2.6 (capable model for executor code generation)
-  (setq gptel-backend gptel--moonshot
-        gptel-model 'kimi-k2.6)
+  ;; Smart routing: select first available backend for executor tasks via
+  ;; the fallback chain.  Skips rate-limited backends automatically.
+  ;; Falls through silently if registry/gptel-get-backend not yet loaded.
+  (when (fboundp 'gptel-backend-registry-select-for-task)
+    (when-let ((selection (gptel-backend-registry-select-for-task 'executor)))
+      (setq gptel-backend (car selection)
+            gptel-model (cdr selection))))
   ;; Auto-switch back to MiniMax if the stored quota-reset time has elapsed
   (when (fboundp 'gptel-auto-experiment--check-quota-reset-and-switch-back)
     (gptel-auto-experiment--check-quota-reset-and-switch-back))

@@ -137,18 +137,21 @@ subagent context for a single dispatch.")
   "Registry of available subagent types with their configurations.")
 
 (defun gptel-benchmark--slow-fallback-preset-p (preset)
-  "Return non-nil when PRESET points at a known slow fallback provider."
+  "Return non-nil when PRESET points at a slow backend.
+Uses :speed metadata from `gptel-backend-registry' when available."
   (let ((backend (plist-get preset :backend))
         (model (plist-get preset :model)))
-    (or (and (symbolp backend)
-             (memq backend '(moonshot CF-Gateway DeepSeek)))
-        (and (stringp backend)
-             (string-match-p "moonshot\\|CF-Gateway\\|DeepSeek" backend))
-        (and (symbolp model)
-             (string-match-p "kimi-k2\\.6\\|@cf/moonshotai/kimi-k2\\.6"
-                             (symbol-name model)))
-        (and (stringp model)
-             (string-match-p "kimi-k2\\.6\\|@cf/moonshotai/kimi-k2\\.6" model)))))
+    (if (fboundp 'gptel-backend-registry-get)
+        ;; Registry-based check: look up :speed for the backend/model pair
+        (let* ((backend-sym (if (symbolp backend) backend
+                              (when (stringp backend) (intern backend))))
+               (model-sym (if (symbolp model) model
+                            (when (stringp model) (intern model)))))
+          (eq 'slow (gptel-backend-registry-get backend-sym model-sym :speed)))
+      ;; Fallback: heuristic from model name when registry not loaded
+      (and (or (symbolp model) (stringp model))
+           (string-match-p "deepseek-v4-pro\\|kimi-k2\\.6\\|@cf/moonshotai/kimi-k2\\.6"
+                           (if (symbolp model) (symbol-name model) model))))))
 
 (defun gptel-benchmark--subagent-timeout (timeout preset)
   "Return effective TIMEOUT for benchmark subagent PRESET."

@@ -589,11 +589,11 @@ STRATEGY and TARGET filter the performance data.
    Weights auto-tune from VSM health when available (defaults 40/30/20/10).
    Penalty: unhealthy backends (3+ recent errors) drop to bottom."
    (let* ((static-fallbacks (if (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
-                                 gptel-auto-workflow-executor-rate-limit-fallbacks
-                               '(("DashScope" . "qwen3.6-plus")
-                                 ("moonshot" . "kimi-k2.6")
-    ("DeepSeek" . "deepseek-v4-pro")
-                                 ("MiniMax" . "MiniMax-M3"))))
+                                  gptel-auto-workflow-executor-rate-limit-fallbacks
+                                (if (fboundp 'gptel-backend-registry-fallback-chain-as-cons)
+                                    (gptel-backend-registry-fallback-chain-as-cons 'executor)
+                                  '(("DeepSeek" . "deepseek-v4-pro")
+                                    ("MiniMax" . "MiniMax-M3")))))
             (category (when target (gptel-auto-workflow--categorize-target target)))
            (category-override (when category (cdr (assoc category gptel-auto-workflow--category-backend-overrides))))
            ;; verbum data bypass: retrieval tasks (context docs, factual lookups)
@@ -885,20 +885,18 @@ the original fallback list — preventing mutation side effects."
   "Reset fallback chain to static order from executor config.
 Restores `gptel-auto-workflow-executor-rate-limit-fallbacks' to the
 value of `gptel-auto-workflow-headless-subagent-fallbacks'.
-Clears any stale health strikes for DashScope from health cache."
+Clears stale health strikes for ALL backends from health cache."
   (when (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
              (boundp 'gptel-auto-workflow-headless-subagent-fallbacks))
     (setq gptel-auto-workflow-executor-rate-limit-fallbacks
           (copy-tree gptel-auto-workflow-headless-subagent-fallbacks))
-    ;; Clear any stale health strikes for DashScope from health cache
+    ;; Clear stale health strikes for all backends in the chain
     (when (and (boundp 'gptel-auto-workflow--backend-lambda-health-cache)
                (hash-table-p gptel-auto-workflow--backend-lambda-health-cache))
       (maphash (lambda (k v)
-                 (when (and (symbolp k) (string-match-p "DashScope" (symbol-name k)))
-                   ;; EDGE CASE: v may be keyword not plist; guard plist-put
-                   (ignore-errors
-                     (puthash k (plist-put v :health :healthy)
-                              gptel-auto-workflow--backend-lambda-health-cache))))
+                 (ignore-errors
+                   (puthash k (plist-put v :health :healthy)
+                            gptel-auto-workflow--backend-lambda-health-cache)))
                gptel-auto-workflow--backend-lambda-health-cache))
     (message "[onto-router] Reset to executor static fallback order: %s"
              (mapconcat (lambda (e) (format "%s/%s" (car e) (cdr e)))
@@ -1260,10 +1258,10 @@ Uses fallback chain if BACKEND is nil (verifies all backends)."
 Returns plist with :overall status and per-backend results."
   (let ((fallbacks (if (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
                         gptel-auto-workflow-headless-subagent-fallbacks
-                      '(("DashScope" . "qwen3.6-plus")
-                        ("moonshot" . "kimi-k2.6")
-                        ("DeepSeek" . "deepseek-v4-pro")
-                        ("MiniMax" . "MiniMax-M3"))))
+                      (if (fboundp 'gptel-backend-registry-fallback-chain-as-cons)
+                          (gptel-backend-registry-fallback-chain-as-cons 'executor)
+                        '(("DeepSeek" . "deepseek-v4-pro")
+                          ("MiniMax" . "MiniMax-M3")))))
         (results nil)
         (healthy-count 0)
         (degraded-count 0)
@@ -2528,10 +2526,10 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
         ;; reorder-fallbacks-by-ontology) is picked up here too.
         (default-models (or (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
                                 gptel-auto-workflow-executor-rate-limit-fallbacks)
-             '(("DeepSeek" . "deepseek-v4-pro")
-               ("MiniMax" . "MiniMax-M3")
-               ("DashScope" . "qwen3.6-plus")
-               ("moonshot" . "kimi-k2.6"))))
+                             (and (fboundp 'gptel-backend-registry-fallback-chain-as-cons)
+                                  (gptel-backend-registry-fallback-chain-as-cons 'executor))
+                             '(("DeepSeek" . "deepseek-v4-pro")
+                               ("MiniMax" . "MiniMax-M3"))))
         ;; Pre-compute once for all backends
         (axis-rates-cache (when (fboundp 'gptel-auto-workflow--backend-per-axis-keep-rates)
                             (condition-case nil
@@ -2811,10 +2809,10 @@ profiles. Maps OV5's 4-category ontology to verbum's combinator ISA.
 Returns plist with :total :healthy :degraded :unknown :backends."
   (let ((fallbacks (if (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
                         gptel-auto-workflow-headless-subagent-fallbacks
-                      '(("DashScope" . "qwen3.6-plus")
-                        ("moonshot" . "kimi-k2.6")
-                        ("DeepSeek" . "deepseek-v4-pro")
-                        ("MiniMax" . "MiniMax-M3"))))
+                      (if (fboundp 'gptel-backend-registry-fallback-chain-as-cons)
+                          (gptel-backend-registry-fallback-chain-as-cons 'executor)
+                        '(("DeepSeek" . "deepseek-v4-pro")
+                          ("MiniMax" . "MiniMax-M3")))))
         (healthy-count 0)
         (degraded-count 0)
         (unknown-count 0)
