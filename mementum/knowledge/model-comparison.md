@@ -3,8 +3,13 @@
 
 ## Model Rankings (by keep-rate)
 
-- **DeepSeek/deepseek-v4-pro**: 3.8%
 - **MiniMax/MiniMax-M3**: 0.0%
+- **DeepSeek/deepseek-v4-pro**: 0.0%
+
+## MiniMax/MiniMax-M3 vs DeepSeek/deepseek-v4-pro (winner: **tie**)
+- MiniMax/MiniMax-M3: 0.0% keep-rate
+- DeepSeek/deepseek-v4-pro: 0.0% keep-rate
+- Shared targets: 1 | won 0, won 0, ties 1
 
 
-*Generated: 2026-06-08 23:06*
+*Generated: 2026-06-09 12:13*

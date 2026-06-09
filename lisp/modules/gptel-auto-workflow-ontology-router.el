@@ -1315,8 +1315,12 @@ Probation threshold auto-tunes from VSM health when available
                         (cons (float-time) threshold))
                   threshold))
               3))
-         (strikes (or (gethash backend gptel-auto-workflow--lambda-strike-count) 0))
-         (dead-until (gethash backend gptel-auto-workflow--lambda-dead-until)))
+         ;; Defensive: ensure hash-tables are valid before gethash
+         (strikes (or (and (hash-table-p gptel-auto-workflow--lambda-strike-count)
+                           (gethash backend gptel-auto-workflow--lambda-strike-count))
+                      0))
+         (dead-until (and (hash-table-p gptel-auto-workflow--lambda-dead-until)
+                          (gethash backend gptel-auto-workflow--lambda-dead-until))))
     (cond
      ;; DEAD: waiting for backoff timer
      ((and dead-until (> dead-until (float-time))) 4)
@@ -1327,7 +1331,8 @@ Probation threshold auto-tunes from VSM health when available
       ;; probation-threshold..4 strikes → PROBATION (canary tasks only)
       ;; Auto-recovery: if last strike was > 1h ago, degrade to level 2
       ((>= strikes probation-threshold)
-       (let ((last-strike (gethash backend gptel-auto-workflow--lambda-last-strike-time)))
+       (let ((last-strike (and (hash-table-p gptel-auto-workflow--lambda-last-strike-time)
+                               (gethash backend gptel-auto-workflow--lambda-last-strike-time))))
          (if (and last-strike
                   (> (float-time) (+ last-strike gptel-auto-workflow--probation-recovery-seconds)))
              2    ; auto-recovered: probation → degraded
@@ -2623,6 +2628,13 @@ next cycle to let backends stabilize.")
 HEALTHY → resets strikes, clears dead timer.
 DEGRADED → increments strikes, triggers actions at each level:
   1=WARNING log, 2=DEGRADED log, 3=PROBATION canary, 5=DEAD backoff."
+  ;; Defensive: ensure hash-tables are valid before operations
+  (unless (hash-table-p gptel-auto-workflow--lambda-strike-count)
+    (setq gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal)))
+  (unless (hash-table-p gptel-auto-workflow--lambda-dead-until)
+    (setq gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal)))
+  (unless (hash-table-p gptel-auto-workflow--lambda-last-strike-time)
+    (setq gptel-auto-workflow--lambda-last-strike-time (make-hash-table :test 'equal)))
   (let ((count (or (gethash backend gptel-auto-workflow--lambda-strike-count) 0))
         (old-level (gptel-auto-workflow--backend-health-level backend)))
     (pcase status
