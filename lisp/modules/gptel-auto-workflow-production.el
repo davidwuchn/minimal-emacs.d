@@ -416,7 +416,10 @@ Called when research context changes or run completes."
 
 (defun gptel-auto-workflow-evolution-auto-start ()
   "Auto-start evolution and GC timers if enabled.
-Researcher daemons get periodic research instead of evolution."
+Researcher daemons get periodic research instead of evolution.
+Lazy-loads heavy modules (strategic, evolution) as needed."
+  (require 'gptel-auto-workflow-strategic nil t)
+  (require 'gptel-auto-workflow-evolution nil t)
   (cond
    ;; Researcher daemon: start periodic research + strategy evolution
    ((and (fboundp 'gptel-auto-workflow--researcher-daemon-p)
@@ -438,9 +441,9 @@ Researcher daemons get periodic research instead of evolution."
    (t
     (gptel-auto-workflow-start-gc-timer))))
 
-;; τ Wisdom: start on load when daemon is active.
+;; τ Wisdom: deferred auto-start so heavy modules load after socket is ready.
 (when (daemonp)
-  (gptel-auto-workflow-evolution-auto-start))
+  (run-with-idle-timer 10 nil #'gptel-auto-workflow-evolution-auto-start))
 
 ;; ─── Pipeline Verification ───
 
