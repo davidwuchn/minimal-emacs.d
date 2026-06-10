@@ -3,7 +3,7 @@
 > **Bootstrapped**: 2026-06-06
 > **Session**: Research Analysis + Plan Diversity Metric
 > **Status**: ✅ **OV5 SELF-HEALING VERIFIED** — Pipeline detects, diagnoses, remediates, recovers
-> **Latest**: Plan-level search implemented — generates N diverse candidates before execution
+> **Latest**: Documentation updated — plan-level search, platform sandbox, smart routing, research papers
 > **Active Plan**: None — system is self-improving, pipeline running autonomously
 > **Pi5**: Running, self-healing working (grader crash → BLIND MODE → recovery)
 
@@ -24,6 +24,7 @@
 | **P2** | Strategy parse fix + column index corrections | @maintainer | **COMPLETE** |
 | **P2** | Routing stats caching (dedup + memo + pre-bind) | @maintainer | **COMPLETE** |
 | **P2** | Plan diversity metric (PlanSearch-inspired) | @maintainer | **COMPLETE** |
+| **P2** | Documentation updates (OUROBOROS-V5.md, BUSINESS_CONTEXT.md) | @maintainer | **COMPLETE** |
 
 ---
 
