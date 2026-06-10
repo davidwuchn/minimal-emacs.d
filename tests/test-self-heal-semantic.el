@@ -11,11 +11,7 @@
 
 (require 'ert)
 (require 'cl-lib)
-
-;; Load the module under test
-(unless (featurep 'gptel-auto-workflow-self-heal-semantic)
-  (load (expand-file-name "lisp/modules/gptel-auto-workflow-self-heal-semantic.el"
-                          default-directory)))
+(require 'gptel-auto-workflow-self-heal-semantic)
 
 ;; ── Helper: create a temp file with given content ──
 
@@ -689,7 +685,7 @@ This test ensures the warning is fixed."
     (with-temp-buffer
       (let ((byte-compile-current-buffer t)
             (byte-compile-error-on-warn nil))
-        (condition-case err
+        (condition-case nil
             (progn
               (byte-compile-file "lisp/modules/gptel-auto-workflow-self-heal-semantic.el")
               ;; Check for specific warnings
