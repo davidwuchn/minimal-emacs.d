@@ -150,9 +150,15 @@ Call when run ends or when configuration changes."
 
 (defun gptel-prefix-cache-get ()
   "Return current stable prefix content, computing if necessary.
-Safe to call multiple times — returns cached content after first computation."
-  (or (and gptel-prefix-cache--valid-p gptel-prefix-cache--content)
-      (gptel-prefix-cache-compute)))
+Safe to call multiple times — returns cached content after first computation.
+Tracks hit/miss statistics for cross-run analysis."
+  (let ((cached (and gptel-prefix-cache--valid-p gptel-prefix-cache--content)))
+    (if cached
+        (progn
+          (gptel-prefix-cache--record-hit)
+          cached)
+      (gptel-prefix-cache--record-miss)
+      (gptel-prefix-cache-compute))))
 
 (defun gptel-prefix-cache-stats ()
   "Return cache statistics as a human-readable string."
@@ -404,9 +410,10 @@ Returns compacted prompt string."
                  (concat compact-section "\n")
                  dynamic-prompt t t)
               (concat compact-section dynamic-prompt))))
-      (message "[prefix-cache] Compacted %d older results into summary"
-               (length older))
-      compacted)))
+       (gptel-prefix-cache--record-compaction)
+       (message "[prefix-cache] Compacted %d older results into summary"
+                (length older))
+       compacted)))
 
 (defun gptel-prefix-cache--summarize-results (results)
   "Summarize RESULTS into compact categories.
@@ -763,22 +770,24 @@ Only saves when `gptel-prefix-cache-persist-enabled' is non-nil."
   (when (and gptel-prefix-cache-persist-enabled
              gptel-prefix-cache--valid-p
              gptel-prefix-cache--content)
-    (let ((state
-           (list
-             ;; Main cache state
-             :version 1
-             :timestamp (current-time)
-             :run-id gptel-prefix-cache--run-id
-             :content gptel-prefix-cache--content
-             :valid-p gptel-prefix-cache--valid-p
-             :stats gptel-prefix-cache--stats
-            ;; Context configuration
-            :context-window gptel-prefix-cache--context-window-size
-            :compact-ratio gptel-prefix-cache--context-compact-ratio
-            ;; Compaction archive
-            :compaction-archive gptel-prefix-cache--compaction-archive
-            ;; Role caches
-            :role-caches
+     (let ((state
+            (list
+              ;; Main cache state
+              :version 2
+              :timestamp (current-time)
+              :run-id gptel-prefix-cache--run-id
+              :content gptel-prefix-cache--content
+              :valid-p gptel-prefix-cache--valid-p
+              :stats gptel-prefix-cache--stats
+             ;; Context configuration
+             :context-window gptel-prefix-cache--context-window-size
+             :compact-ratio gptel-prefix-cache--context-compact-ratio
+             ;; Compaction archive
+             :compaction-archive gptel-prefix-cache--compaction-archive
+             ;; Cross-run statistics (Phase 3)
+             :cross-run-stats gptel-prefix-cache--cross-run-stats
+             ;; Role caches
+             :role-caches
             (let ((role-data nil))
               (maphash
                (lambda (role entry)
@@ -814,11 +823,11 @@ Returns t if state was restored, nil otherwise."
                           (/ (float-time (time-subtract (current-time) timestamp))
                              3600.0)
                         9999))
-           (version (plist-get state :version)))
-      (cond
-       ((not (eq version 1))
-        (message "[prefix-cache] State file version mismatch: %s" version)
-        nil)
+            (version (plist-get state :version)))
+       (cond
+        ((not (memq version '(1 2)))
+         (message "[prefix-cache] State file version mismatch: %s" version)
+         nil)
        ((> age-hours gptel-prefix-cache-persist-max-age-hours)
         (message "[prefix-cache] State file stale (%.1f hours old), discarding"
                  age-hours)
@@ -836,8 +845,11 @@ Returns t if state was restored, nil otherwise."
               gptel-prefix-cache--context-compact-ratio
               (or (plist-get state :compact-ratio) 0.8)
               gptel-prefix-cache--compaction-archive
-              (plist-get state :compaction-archive))
-        ;; Restore role caches
+              (plist-get state :compaction-archive)
+              ;; Restore cross-run stats (added in version 2)
+              gptel-prefix-cache--cross-run-stats
+              (plist-get state :cross-run-stats))
+         ;; Restore role caches
         (clrhash gptel-prefix-cache--role-caches)
         (dolist (role-entry (plist-get state :role-caches))
           (let ((role (car role-entry))
@@ -861,12 +873,129 @@ Returns t if state was restored, nil otherwise."
     (delete-file gptel-prefix-cache-persist-file)
     (message "[prefix-cache] Persisted state cleared")))
 
+;; ─── Cross-Run Statistics (Phase 3) ───
+
+(defvar gptel-prefix-cache--cross-run-stats nil
+  "Plist of aggregated statistics across runs.
+Keys: :runs :total-hits :total-misses :total-compactions
+      :avg-prefix-size :avg-compute-time-ms :last-tune-timestamp")
+
+(defvar gptel-prefix-cache--hit-counter 0
+  "Counter for cache hits in current run.
+Incremented each time `gptel-prefix-cache-get' returns cached content.")
+
+(defvar gptel-prefix-cache--miss-counter 0
+  "Counter for cache misses in current run.")
+
+(defvar gptel-prefix-cache--compaction-counter 0
+  "Counter for compaction operations in current run.")
+
+(defvar gptel-prefix-cache--auto-tune-enabled t
+  "When non-nil, auto-tune compaction threshold based on performance.")
+
+(defvar gptel-prefix-cache--auto-tune-min-threshold 0.6
+  "Minimum compaction ratio (never compact below this).")
+
+(defvar gptel-prefix-cache--auto-tune-max-threshold 0.95
+  "Maximum compaction ratio (never compact above this).")
+
+(defvar gptel-prefix-cache--auto-tune-interval 10
+  "Number of runs between auto-tune evaluations.")
+
+(defun gptel-prefix-cache--record-hit ()
+  "Record a cache hit."
+  (cl-incf gptel-prefix-cache--hit-counter))
+
+(defun gptel-prefix-cache--record-miss ()
+  "Record a cache miss."
+  (cl-incf gptel-prefix-cache--miss-counter))
+
+(defun gptel-prefix-cache--record-compaction ()
+  "Record a compaction operation."
+  (cl-incf gptel-prefix-cache--compaction-counter))
+
+(defun gptel-prefix-cache-stats-current-run ()
+  "Return statistics for current run as a plist."
+  (let ((total (+ gptel-prefix-cache--hit-counter
+                  gptel-prefix-cache--miss-counter)))
+    (list :hits gptel-prefix-cache--hit-counter
+          :misses gptel-prefix-cache--miss-counter
+          :compactions gptel-prefix-cache--compaction-counter
+          :hit-rate (if (> total 0)
+                        (/ (float gptel-prefix-cache--hit-counter) total)
+                      0.0)
+          :prefix-size (or (plist-get gptel-prefix-cache--stats :size) 0)
+          :compute-time-ms (or (plist-get gptel-prefix-cache--stats :compute-time-ms) 0))))
+
+(defun gptel-prefix-cache--auto-tune-threshold ()
+  "Auto-tune compaction threshold based on cross-run statistics.
+Adjusts `gptel-prefix-cache--context-compact-ratio' to balance
+prefix cache stability vs. context window pressure.
+Strategy:
+- If hit rate < 0.5: lower threshold (compact less aggressively)
+- If hit rate > 0.8 AND compactions/run > 2: raise threshold (compact more)
+- If compactions/run = 0: lower threshold (prevent overflow)
+- Keep within [min-threshold, max-threshold]."
+  (when gptel-prefix-cache--auto-tune-enabled
+    (let* ((runs (or (plist-get gptel-prefix-cache--cross-run-stats :runs) 0))
+           (total-hits (or (plist-get gptel-prefix-cache--cross-run-stats :total-hits) 0))
+           (total-compactions (or (plist-get gptel-prefix-cache--cross-run-stats :total-compactions) 0))
+           (hit-rate (if (> runs 0) (/ (float total-hits) runs) 0.0))
+           (compactions-per-run (if (> runs 0) (/ (float total-compactions) runs) 0.0))
+           (current gptel-prefix-cache--context-compact-ratio)
+           (new current))
+      (cond
+       ;; Low hit rate: compact less aggressively to keep more context
+       ((< hit-rate 0.5)
+        (setq new (max gptel-prefix-cache--auto-tune-min-threshold
+                       (- current 0.05))))
+       ;; High hit rate with frequent compactions: compact more aggressively
+       ((and (> hit-rate 0.8) (> compactions-per-run 2.0))
+        (setq new (min gptel-prefix-cache--auto-tune-max-threshold
+                       (+ current 0.03))))
+       ;; No compactions: lower threshold slightly to prevent future overflow
+       ((and (> runs 5) (= compactions-per-run 0.0))
+        (setq new (max gptel-prefix-cache--auto-tune-min-threshold
+                       (- current 0.02)))))
+      (when (/= new current)
+        (setq gptel-prefix-cache--context-compact-ratio new)
+        (message "[prefix-cache] Auto-tuned compaction: %.0f%% → %.0f%% (hit-rate=%.2f, compactions/run=%.1f)"
+                 (* 100.0 current) (* 100.0 new) hit-rate compactions-per-run))
+      new)))
+
+(defun gptel-prefix-cache-stats-report ()
+  "Generate a human-readable statistics report."
+  (let* ((current (gptel-prefix-cache-stats-current-run))
+         (cross gptel-prefix-cache--cross-run-stats)
+         (runs (or (plist-get cross :runs) 0))
+         (total-hits (or (plist-get cross :total-hits) 0))
+         (total-compactions (or (plist-get cross :total-compactions) 0)))
+    (format (concat "=== Prefix Cache Statistics ===\n"
+                    "Current run: hits=%d misses=%d compactions=%d hit-rate=%.1f%%\n"
+                    "Prefix: %d chars, compute=%.0fms\n"
+                    "Cross-run (%d runs): total-hits=%d total-compactions=%d\n"
+                    "Compaction threshold: %.0f%% (auto-tune=%s)\n"
+                    "==============================")
+            (plist-get current :hits)
+            (plist-get current :misses)
+            (plist-get current :compactions)
+            (* 100.0 (plist-get current :hit-rate))
+            (plist-get current :prefix-size)
+            (plist-get current :compute-time-ms)
+            runs total-hits total-compactions
+            (* 100.0 gptel-prefix-cache--context-compact-ratio)
+            (if gptel-prefix-cache--auto-tune-enabled "on" "off"))))
+
 ;; ─── Integration Hooks ───
 
 (defun gptel-prefix-cache-on-run-start (&optional run-id)
   "Hook to call when a new run starts.
-Computes prefix cache for RUN-ID, optionally restoring persisted state."
-  (setq gptel-prefix-cache--compaction-archive nil)
+Computes prefix cache for RUN-ID, optionally restoring persisted state.
+Resets per-run counters."
+  (setq gptel-prefix-cache--compaction-archive nil
+        gptel-prefix-cache--hit-counter 0
+        gptel-prefix-cache--miss-counter 0
+        gptel-prefix-cache--compaction-counter 0)
   ;; Try to load persisted state first
   (unless (gptel-prefix-cache-load-from-file)
     ;; Fall back to computing fresh
@@ -874,7 +1003,23 @@ Computes prefix cache for RUN-ID, optionally restoring persisted state."
 
 (defun gptel-prefix-cache-on-run-end ()
   "Hook to call when run ends.
-Saves prefix cache state, then invalidates in-memory cache."
+Saves prefix cache state, aggregates statistics, auto-tunes threshold,
+then invalidates in-memory cache."
+  ;; Aggregate cross-run statistics
+  (let ((current (gptel-prefix-cache-stats-current-run)))
+    (setq gptel-prefix-cache--cross-run-stats
+          (list :runs (1+ (or (plist-get gptel-prefix-cache--cross-run-stats :runs) 0))
+                :total-hits (+ (plist-get current :hits)
+                               (or (plist-get gptel-prefix-cache--cross-run-stats :total-hits) 0))
+                :total-misses (+ (plist-get current :misses)
+                                 (or (plist-get gptel-prefix-cache--cross-run-stats :total-misses) 0))
+                :total-compactions (+ (plist-get current :compactions)
+                                      (or (plist-get gptel-prefix-cache--cross-run-stats :total-compactions) 0))
+                :last-tune-timestamp (current-time)))
+    ;; Auto-tune every N runs
+    (when (zerop (mod (or (plist-get gptel-prefix-cache--cross-run-stats :runs) 0)
+                      gptel-prefix-cache--auto-tune-interval))
+      (gptel-prefix-cache--auto-tune-threshold)))
   (gptel-prefix-cache-save-to-file)
   (gptel-prefix-cache-invalidate)
   (setq gptel-prefix-cache--compaction-archive nil))

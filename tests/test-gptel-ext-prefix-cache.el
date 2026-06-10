@@ -577,5 +577,121 @@
         (delete-file test-file))
     (test-prefix-cache--restore-state)))
 
+;; ─── Phase 3: Cross-Run Statistics Tests ───
+
+(ert-deftest test-prefix-cache-stats-hit-miss-tracking ()
+  "Test that hit/miss counters are tracked correctly."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (gptel-prefix-cache-invalidate)
+        (setq gptel-prefix-cache--hit-counter 0
+              gptel-prefix-cache--miss-counter 0)
+        ;; First get should be a miss (compute)
+        (let ((content (gptel-prefix-cache-get)))
+          (should content)
+          (should (= gptel-prefix-cache--miss-counter 1))
+          (should (= gptel-prefix-cache--hit-counter 0)))
+        ;; Second get should be a hit
+        (let ((content2 (gptel-prefix-cache-get)))
+          (should content2)
+          (should (= gptel-prefix-cache--miss-counter 1))
+          (should (= gptel-prefix-cache--hit-counter 1))))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-stats-current-run ()
+  "Test that current run statistics are computed correctly."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (gptel-prefix-cache-invalidate)
+        (setq gptel-prefix-cache--hit-counter 3
+              gptel-prefix-cache--miss-counter 1
+              gptel-prefix-cache--compaction-counter 2
+              gptel-prefix-cache--stats '(:size 5000 :compute-time-ms 12))
+        (let ((stats (gptel-prefix-cache-stats-current-run)))
+          (should (= (plist-get stats :hits) 3))
+          (should (= (plist-get stats :misses) 1))
+          (should (= (plist-get stats :compactions) 2))
+          (should (= (plist-get stats :hit-rate) 0.75))
+          (should (= (plist-get stats :prefix-size) 5000))
+          (should (= (plist-get stats :compute-time-ms) 12))))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-auto-tune-low-hit-rate ()
+  "Test that auto-tune lowers threshold when hit rate is low."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (let ((original-ratio gptel-prefix-cache--context-compact-ratio))
+        (setq gptel-prefix-cache--context-compact-ratio 0.8
+              gptel-prefix-cache--cross-run-stats
+              (list :runs 10 :total-hits 3 :total-compactions 5)
+              gptel-prefix-cache--auto-tune-enabled t)
+        (gptel-prefix-cache--auto-tune-threshold)
+        ;; Low hit rate (0.3) should lower threshold
+        (should (< gptel-prefix-cache--context-compact-ratio 0.8))
+        (should (>= gptel-prefix-cache--context-compact-ratio 0.6))
+        (setq gptel-prefix-cache--context-compact-ratio original-ratio))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-auto-tune-high-hit-rate ()
+  "Test that auto-tune raises threshold when hit rate is high and compactions frequent."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (let ((original-ratio gptel-prefix-cache--context-compact-ratio))
+        (setq gptel-prefix-cache--context-compact-ratio 0.8
+              gptel-prefix-cache--cross-run-stats
+              (list :runs 10 :total-hits 9 :total-compactions 30)
+              gptel-prefix-cache--auto-tune-enabled t)
+        (gptel-prefix-cache--auto-tune-threshold)
+        ;; High hit rate (0.9) with frequent compactions (3/run) should raise threshold
+        (should (> gptel-prefix-cache--context-compact-ratio 0.8))
+        (should (<= gptel-prefix-cache--context-compact-ratio 0.95))
+        (setq gptel-prefix-cache--context-compact-ratio original-ratio))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-stats-persistence ()
+  "Test that cross-run statistics are saved and loaded."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (let ((test-file (make-temp-file "prefix-cache-test-")))
+        (setq gptel-prefix-cache-persist-file test-file
+              gptel-prefix-cache-persist-enabled t)
+        (gptel-prefix-cache-invalidate)
+        (setq gptel-prefix-cache--cross-run-stats
+              (list :runs 5 :total-hits 20 :total-compactions 10))
+        (gptel-prefix-cache-compute "stats-test")
+        (gptel-prefix-cache-on-run-end)
+        ;; Load and verify stats
+        (gptel-prefix-cache-invalidate)
+        (setq gptel-prefix-cache--cross-run-stats nil)
+        (should (gptel-prefix-cache-load-from-file))
+        ;; Runs should be incremented (5 + 1)
+        (should (equal (plist-get gptel-prefix-cache--cross-run-stats :runs) 6))
+        ;; Total hits should be >= original (may include hits from compute/get)
+        (should (>= (plist-get gptel-prefix-cache--cross-run-stats :total-hits) 20))
+        (delete-file test-file))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-stats-report-format ()
+  "Test that statistics report is formatted correctly."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (setq gptel-prefix-cache--hit-counter 10
+              gptel-prefix-cache--miss-counter 2
+              gptel-prefix-cache--compaction-counter 1
+              gptel-prefix-cache--stats '(:size 4000 :compute-time-ms 5)
+              gptel-prefix-cache--cross-run-stats
+              (list :runs 3 :total-hits 25 :total-compactions 5)
+              gptel-prefix-cache--context-compact-ratio 0.8)
+        (let ((report (gptel-prefix-cache-stats-report)))
+          (should (string-match-p "Prefix Cache Statistics" report))
+          (should (string-match-p "hits=10" report))
+          (should (string-match-p "misses=2" report))
+          (should (string-match-p "hit-rate=83.3" report))
+          (should (string-match-p "Cross-run (3 runs)" report))))
+    (test-prefix-cache--restore-state)))
+
 (provide 'test-gptel-ext-prefix-cache)
 ;;; test-gptel-ext-prefix-cache.el ends here
