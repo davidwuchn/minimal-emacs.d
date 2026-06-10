@@ -4,9 +4,9 @@ valid-from: 2026-06-11T00:33
 
 # Insight: 2026-06-11 00:33
 
-**Proposal:** Address recurring empty-hypothesis failures in lisp/modules/gptel-auto-workflow-ontology-strategy.el: recurring failures
+**Proposal:** Address recurring empty-hypothesis failures in lisp/modules/gptel-benchmark-subagent.el: recurring failures
 **Component:** prompt-builder
-**Expected impact:** Reduce empty-hypothesis failures in lisp/modules/gptel-auto-workflow-ontology-strategy.el by ~70%
+**Expected impact:** Reduce empty-hypothesis failures in lisp/modules/gptel-benchmark-subagent.el by ~70%
 **Confidence:** 0.70
 **Risk:** medium
 **Validation rate:** 0.10

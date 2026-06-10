@@ -1,15 +1,15 @@
 ---
-valid-from: 2026-06-09T08:52
+valid-from: 2026-06-11T03:15
 ---
 
-# Mistake: 2026-06-09 08:52
+# Mistake: 2026-06-11 03:15
 
 **Failure type:** empty-hypothesis
 **Target:** staging-review
-**Category:** :programming (keep-rate: 0.0%)
-**Occurrences:** 9
+**Category:** :programming (keep-rate: 3.2%)
+**Occurrences:** 12
 **Example reasons:** none
-**Trend:** 2026-06-04T013900Z-dfe2 -> 2026-06-07T103150Z-0690
+**Trend:** 2026-06-03 -> 2026-06-07T153413Z-a3f6
 
 This pattern was detected by the monitoring agent as a systemic failure requiring investigation. Priority determined by category keep-rate (lower = higher priority).
 

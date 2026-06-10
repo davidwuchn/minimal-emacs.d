@@ -6,34 +6,34 @@ Synthesis verification:
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize multiple memory entries about a "prompt" failure type into a knowledge page. Let me analyze the data:
+The user wants me to synthesize several memory entries about a recurring "prompt" failure type into a comprehensive knowledge page. Let me analyze the data:
 
-1. All entries share "Failure type: prompt"
-2. Various targets in lisp/modules/ directory - all related to gptel system
-3. Categories mentioned: :programming (keep-rate: 3.5%), :agentic (keep-rate: 4.3%)
-4. Occurrences range from 3-5 per file
-5. These are auto-workflow generated systemic failure detections
+1. All entries share `failure type: prompt`
+2. Targets are all in `lisp/modules/` and are all `gptel-*` files
+3. They cluster into a few themes:
+   - Tools/agent: `gptel-tools-agent-prompt-build.el`, `gptel-tools-agent-benchmark.el`
+   - Benchmark: `gptel-benchmark-principles.el`
+   - Auto-workflow: `gptel-auto-workflow-strategic.el`, `gptel-auto-workflow-projects.el`, `gptel-auto-workflow-ontology-router.el`, `gptel-auto-workflow-evolution.el`
+4. Occurrences range from 3-5
+5. Categories where specified: :programming (3.5% keep-rate), :agentic (4.3% keep-rate)
+6. All triggered by monitoring agent as systemic failures
+7. Date range: late May to early June 2026
+8. All have "no example reasons" - which is itself a pattern
 
-Key insights:
-- Pattern targets gptel-related modules (gptel-tools-agent, gptel-benchmark, gptel-auto-workflow)
-- All are "prompt" type failures - suggesting prompt engineering issues
-- Low keep-rates (3.5%, 4.3%) suggest these generated content has low retention value
-- Multiple files affected across the system
+Let me create a knowledge page that:
+- Has frontmatter
+- Is at least 50 lines
+- Has concrete examples (tables, code, commands)
+- Has actionable patterns
+- Has cross-references
 
-Let me create a comprehensive knowledge page that:
-1. Has frontmatter
-2. Documents the pattern
-3. Shows concrete examples from the data
-4. Provides actionable patterns
-5. Cross-references related topics
-6. Minimum 50 lines of content
-
-I'll structure it as:
-- Frontmatter
-- Overview
-- Pattern Analysis (with table of affected files)
-- Failure characteristics
-- Common indicators
-- Diagnostic commands
+I should structure it as:
+- Overview of the pattern
+- Catalog of affected files
+- Pattern analysis (clustered by theme)
+- Root cause hypotheses
 - Actionable remediation patterns
+- Detection/observability improvements
 - Related topics
+
+Let me write this now.

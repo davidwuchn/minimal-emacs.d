@@ -1,38 +1,34 @@
 <!--
 Synthesis verification:
-- Confidence: 80%
+- Confidence: 40%
 - Sources: 38 memories
-- Warnings: No code examples or concrete references
-- Auto-approved: yes (passed)
+- Warnings: No code examples or concrete references, Very short content (26 lines)
+- Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize multiple research memories into a comprehensive knowledge page about research-research-persisted. Let me analyze the memories and extract the most valuable, actionable patterns.
+The user wants me to synthesize multiple research memories into a single knowledge page about "research-research-persisted". Let me analyze the memories:
 
-Looking at the memories, they all relate to:
-1. The "persisted-findings" research strategy for an auto-workflow system
-2. External research digests targeting Emacs-based AI agent improvements
-3. Common failure patterns: validation/timeout errors, 0-33% keep rates
-4. Recurring themes: gptel FSM patterns, mementum three-tier storage, nucleus attention magnets, layer error defense, self-evolution patterns, durable execution, DSPy-style optimization, Reflexion, MAST taxonomy, etc.
-5. Local fallback patterns when research daemon fails
+1. Multiple research findings from different dates (May-June 2026)
+2. They all share common patterns: persisted-findings strategy, own-repos-first research, external references, mementum-based synthesis
+3. The system has low keep rates (0-7% typically)
+4. Common themes: gptel FSM, mementum 3-tier memory, nucleus prompt notation, DSPy signatures, Reflexion self-reflection, layered error defense, circuit breaker, durable execution
+5. The local fallback pattern when research daemon is missing
 
-Key patterns to synthesize:
-- The persisted-findings strategy itself
-- The controller directive system (own-repo vs external, beta values, EMA confidence)
-- Recurring insights: FSM, mementum 3-tier, nucleus attention magnets, layered error defense, DSPy/Reflexion, MAST
-- Local fallback protocol
-- Outcome tracking (0/N kept)
-- The meta-learning signal
+Let me create a comprehensive knowledge page that synthesizes all of these into actionable patterns, concrete code examples, tables, and cross-references. I need to:
+- Start with frontmatter
+- Have 50+ lines of content
+- Include concrete examples
+- Be actionable, not just descriptive
+- Cross-reference related topics
 
-Let me structure this as a knowledge page with:
-1. Frontmatter
-2. Overview of the persisted-findings strategy
-3. The output schema (raw findings, digested insights, outcome)
-4. Common patterns discovered across cycles
-5. The local fallback protocol
-6. Controller directives & decision system
+Let me structure this:
+1. Overview - what is research-research-persisted
+2. The pipeline (own-repos-first strategy)
+3. The output format
+4. Key patterns discovered (gptel FSM, mementum 3-tier, etc.)
+5. Anti-patterns (low keep rate causes)
+6. The local-fallback pattern
 7. Actionable patterns table
-8. The 0% keep rate problem
-9. Meta-learning observations
-10. Cross-references
+8. Related topics
 
-I'll make sure to be concrete with examples, code snippets, and command patterns. Let me aim for 50+ lines of dense, useful content.
+Let me write this comprehensively.

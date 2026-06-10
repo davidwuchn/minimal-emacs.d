@@ -1,15 +1,15 @@
 ---
-valid-from: 2026-06-11T00:33
+valid-from: 2026-06-11T03:15
 ---
 
-# Mistake: 2026-06-11 00:33
+# Mistake: 2026-06-11 03:15
 
-**Failure type:** unknown
-**Target:** lisp/modules/gptel-auto-workflow-ontology-strategy.el
-**Category:** :agentic (keep-rate: 2.2%)
+**Failure type:** empty-hypothesis
+**Target:** lisp/modules/gptel-benchmark-subagent.el
+**Category:** :programming (keep-rate: 3.2%)
 **Occurrences:** 4
 **Example reasons:** none
-**Trend:** 2026-06-03T144308Z-6d2e -> 2026-06-04T151936Z-f7d6
+**Trend:** 2026-06-03T124039Z-c2cb -> 2026-06-04T151936Z-f7d6
 
 This pattern was detected by the monitoring agent as a systemic failure requiring investigation. Priority determined by category keep-rate (lower = higher priority).
 
