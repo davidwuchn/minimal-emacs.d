@@ -133,11 +133,18 @@ Only actual dotfiles (basenames starting with .) are excluded."
       (should (null (plist-get result :error))))))
 
 (ert-deftest test-daemon-repl/validate-brackets-unbalanced ()
-  "Unbalanced code returns :valid nil with an error message."
+  "Unbalanced code is detected; may be auto-fixed if fixer available."
   (let ((code "(defun foo () 42"))
     (let ((result (gptel-daemon-repl-validate-brackets code)))
-      (should-not (plist-get result :valid))
-      (should (stringp (plist-get result :error))))))
+      (if (plist-get result :fixed-content)
+          ;; Auto-fixed by self-heal-semantic
+          (progn
+            (should (plist-get result :valid))
+            (should-not (string= (plist-get result :fixed-content) code)))
+        ;; Could not fix — should report error
+        (progn
+          (should-not (plist-get result :valid))
+          (should (stringp (plist-get result :error))))))))
 
 (ert-deftest test-daemon-repl/before-save-autofix-gate-detects-change ()
   "The before-save hook gate compares :fixed-content with buffer-string,

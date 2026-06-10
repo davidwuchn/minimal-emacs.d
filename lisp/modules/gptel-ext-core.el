@@ -41,7 +41,8 @@
 
 (defun my/gptel-make-temp-file (prefix &optional dir-flag suffix)
   "Like `make-temp-file' but in var/tmp/ directory.
-PREFIX, DIR-FLAG, and SUFFIX are passed to `make-temp-file'."
+PREFIX, DIR-FLAG, and SUFFIX are passed to `make-temp-file'.
+Callers must clean up the returned temp file."
   (let ((temporary-file-directory (my/gptel-temp-dir)))
     (make-temp-file prefix dir-flag suffix)))
 
