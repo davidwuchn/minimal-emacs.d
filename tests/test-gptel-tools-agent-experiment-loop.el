@@ -125,5 +125,58 @@
     (should (stringp result))
     (should (string-match-p "SELF-HEAL" result))))
 
+;;; Plan Diversity Metric (inspired by PlanSearch arXiv:2409.03733)
+
+(ert-deftest test-loop/diversity-metric-exists ()
+  "Plan diversity metric should exist.
+Inspired by PlanSearch: plan diversity predicts performance gains."
+  (should (fboundp 'gptel-auto-experiment--hypothesis-diversity)))
+
+(ert-deftest test-loop/diversity-maximal-when-no-previous ()
+  "Diversity should be 1.0 (maximal) when no previous hypotheses exist."
+  (let ((diversity (gptel-auto-experiment--hypothesis-diversity
+                    "Add nil guard before calling car"
+                    nil)))
+    (should (= diversity 1.0))))
+
+(ert-deftest test-loop/diversity-minimal-for-identical ()
+  "Diversity should be 0.0 (minimal) when hypothesis is identical to previous."
+  (let* ((hypothesis "Add nil guard before calling car")
+         (previous-results
+          (list (list :hypothesis "Add nil guard before calling car"
+                      :target "lisp/modules/test.el"
+                      :kept nil)))
+         (diversity (gptel-auto-experiment--hypothesis-diversity
+                     hypothesis previous-results)))
+    ;; Identical hypothesis = 0 diversity
+    (should (= diversity 0.0))))
+
+(ert-deftest test-loop/diversity-high-for-different ()
+  "Diversity should be high when hypothesis is very different from previous."
+  (let* ((hypothesis "Add nil guard before calling car")
+         (previous-results
+          (list (list :hypothesis "Refactor data structure for performance"
+                      :target "lisp/modules/test.el"
+                      :kept nil)
+                (list :hypothesis "Improve error handling in validation"
+                      :target "lisp/modules/test.el"
+                      :kept nil)))
+         (diversity (gptel-auto-experiment--hypothesis-diversity
+                     hypothesis previous-results)))
+    ;; Very different hypotheses = high diversity (> 0.7)
+    (should (> diversity 0.7))))
+
+(ert-deftest test-loop/diversity-medium-for-partial-overlap ()
+  "Diversity should be medium when hypothesis partially overlaps with previous."
+  (let* ((hypothesis "Add nil guard before calling car")
+         (previous-results
+          (list (list :hypothesis "Add nil check before calling cdr"
+                      :target "lisp/modules/test.el"
+                      :kept nil)))
+         (diversity (gptel-auto-experiment--hypothesis-diversity
+                     hypothesis previous-results)))
+    ;; Partial overlap = medium diversity (0.3-0.7)
+    (should (and (> diversity 0.3) (< diversity 0.7)))))
+
 (provide 'test-gptel-tools-agent-experiment-loop)
 ;;; test-gptel-tools-agent-experiment-loop.el ends here

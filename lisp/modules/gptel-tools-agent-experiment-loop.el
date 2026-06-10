@@ -180,6 +180,40 @@ P1.2 FIX: Stricter enforcement with 2-token threshold (was 3)."
                 (when (>= shared 2)
                   (throw 'found prev-hyp))))))))))
 
+(defun gptel-auto-experiment--hypothesis-diversity (hypothesis previous-results)
+  "Compute diversity score (0.0-1.0) for HYPOTHESIS relative to PREVIOUS-RESULTS.
+Returns minimum similarity (maximum diversity) across all previous hypotheses.
+0.0 = identical to some previous hypothesis, 1.0 = completely novel.
+Uses Jaccard similarity on significant tokens (length >= 4).
+Inspired by PlanSearch (arXiv:2409.03733): plan diversity predicts
+performance."
+  (if (or (not hypothesis) (not previous-results) (not (listp previous-results)))
+      1.0  ; No previous results = maximally diverse
+    (let* ((normalized (replace-regexp-in-string
+                        "[^a-zA-Z0-9 ]" " " (downcase hypothesis)))
+           (tokens (delete-dups (split-string normalized "[ \t]+" t)))
+           (sig-tokens (cl-remove-if (lambda (tkn) (< (length tkn) 4)) tokens))
+           (min-similarity 1.0))
+      (if (null sig-tokens)
+          0.0  ; No significant tokens = no diversity signal
+        (dolist (prev previous-results)
+          (let ((prev-hyp (plist-get prev :hypothesis)))
+            (when (stringp prev-hyp)
+              (let* ((prev-norm (replace-regexp-in-string
+                                 "[^a-zA-Z0-9 ]" " " (downcase prev-hyp)))
+                     (prev-tokens (split-string prev-norm "[ \t]+" t))
+                     (prev-sig (cl-remove-if (lambda (tkn) (< (length tkn) 4)) prev-tokens))
+                     (shared 0))
+                (dolist (tkn sig-tokens)
+                  (when (member tkn prev-sig)
+                    (cl-incf shared)))
+                ;; Jaccard similarity: |intersection| / |union|
+                (let* ((union-size (length (delete-dups (append sig-tokens prev-sig))))
+                       (similarity (if (> union-size 0) (/ (float shared) union-size) 0.0)))
+                  (setq min-similarity (min min-similarity similarity)))))))
+        ;; Return diversity (1 - similarity)
+        (- 1.0 min-similarity)))))
+
 (defvar gptel-auto-experiment-max-validation-retries 1
   "Maximum retries when validation fails due to teachable patterns.
 Executor will be instructed to load relevant skill and regenerate.")
