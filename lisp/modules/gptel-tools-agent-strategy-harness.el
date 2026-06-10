@@ -75,6 +75,37 @@ Relative to the active run directory.")
 (defvar gptel-auto-workflow--strategy-interrupted nil
   "Non-nil when strategy evolution was interrupted by signal.")
 
+;;; Strategy DAG (APEX insight) ── Prerequisite edges prevent exploration collapse
+
+(defvar gptel-auto-workflow--strategy-dag (make-hash-table :test 'equal)
+  "Hash table mapping strategy name to list of prerequisite strategy names.
+APEX insight: strategies have prerequisites that must succeed before
+attempting dependent strategies. Prevents exploration from collapsing
+into complex strategies before their building blocks are validated.")
+
+(defun gptel-auto-workflow--strategy-prerequisites-met-p (strategy-name)
+  "Return non-nil if all prerequisites for STRATEGY-NAME have at least one success.
+Prerequisites are looked up in `gptel-auto-workflow--strategy-dag'.
+If no prerequisites defined, returns t (no gate)."
+  (let ((prereqs (gethash strategy-name gptel-auto-workflow--strategy-dag)))
+    (or (null prereqs)
+        (cl-every (lambda (prereq)
+                    (let ((perf (gptel-auto-workflow--get-strategy-performance prereq)))
+                      (> (plist-get perf :kept) 0)))
+                  prereqs))))
+
+(defun gptel-auto-workflow--strategy-dag-register (strategy-name prerequisites)
+  "Register PREREQUISITES (list of strategy names) for STRATEGY-NAME.
+Overwrites any existing prerequisites for this strategy."
+  (puthash strategy-name prerequisites gptel-auto-workflow--strategy-dag)
+  (message "[strategy-dag] %s -> %s" strategy-name prerequisites))
+
+(defun gptel-auto-workflow--strategy-filter-by-dag (strategies)
+  "Filter STRATEGIES to only those whose prerequisites are met."
+  (cl-remove-if-not #'gptel-auto-workflow--strategy-prerequisites-met-p strategies))
+
+;;; Strategy Registry
+
 (defvar gptel-auto-workflow--strategy-test-set-ratio 0.2
   "Fraction of targets held out for final test evaluation.
 During evolution, only the search set is used. The test set is
@@ -428,7 +459,8 @@ Uses the target's most common historical axis to select a per-axis
 strategy champion when available. Falls back to overall champion.
 Returns strategy name. Gives newly-evolved strategies a chance by
 preferring the active strategy when it has no evaluations yet."
-  (let* ((strategies (gptel-auto-workflow--discover-strategies))
+  (let* ((strategies (gptel-auto-workflow--strategy-filter-by-dag
+                       (gptel-auto-workflow--discover-strategies)))
          (axis (or (and (boundp 'gptel-auto-workflow--current-experiment-axis)
                          gptel-auto-workflow--current-experiment-axis)
                    (and target
