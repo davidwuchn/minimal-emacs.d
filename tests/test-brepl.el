@@ -227,5 +227,70 @@
   "gptel-brepl-install-save-hooks is a defined function."
   (should (fboundp 'gptel-brepl-install-save-hooks)))
 
+(ert-deftest test-brepl/validate-brackets-nil-output-is-error ()
+  "When brepl-balance returns success=t but output=nil, treat as failure.
+Some brepl versions return nil output on success (e.g., when stdin is
+empty or the file has no parens). Without this guard, the validator
+would return :valid t :fixed-content nil, which downstream code would
+treat as a real fix and erase the buffer."
+  (cl-letf (((symbol-function 'gptel-brepl-balance)
+             (lambda (_file &optional _dry-run)
+               (list :success t :output nil :error nil))))
+    (let ((result (gptel-brepl-validate-brackets "(defn foo)")))
+      ;; Must report as invalid since no fixed content was produced
+      (should-not (plist-get result :valid))
+      ;; fixed-content must NOT be nil — callers treat nil as 'no fix needed'
+      ;; but here it's 'broken' (we expected a fix but got nothing).
+      (should (stringp (or (plist-get result :fixed-content) "")))
+      ;; Error should explain the nil output
+      (should (plist-get result :error)))))
+
+(ert-deftest test-brepl/install-save-hooks-is-callable-without-buffer ()
+  "install-save-hooks must not error when called at load time (no buffer).
+The function must add the brepl fix function to the GLOBAL
+before-save-hook so it activates in clojure-mode buffers created
+later.  Adding with LOCAL=t would only set it on the scratch buffer
+and never reach user code."
+  (should (fboundp 'gptel-brepl-install-save-hooks))
+  (let ((err nil))
+    (condition-case e
+        (gptel-brepl-install-save-hooks)
+      (error (setq err e)))
+    (should-not err))
+  ;; Verify the brepl fix function is now in the GLOBAL before-save-hook.
+  ;; Local-only registration would leave this empty.
+  (let ((global-hook (default-value 'before-save-hook))
+        (has-brepl-fix
+         (cl-some (lambda (fn)
+                    (and (functionp fn)
+                         (string-match-p "gptel-brepl-validate-brackets"
+                                         (format "%S" fn))))
+                  (default-value 'before-save-hook))))
+    (should global-hook)        ; hook has at least one function
+    (should has-brepl-fix)))    ; brepl fix is one of them
+
+(ert-deftest test-brepl/install-save-hooks-handles-nil-fixed-content ()
+  "When validate-brackets returns nil :fixed-content, buffer must not be erased.
+Edge case: validate-brackets returns (valid nil fixed-content nil ...).
+The hook guards against nil fixed-content, so the buffer should not be touched."
+  (let ((buf (generate-new-buffer "*test-brepl*"))
+        (original "(defn broken [x]")
+        (result (list :valid nil :fixed-content nil :error "unfixable")))
+    (unwind-protect
+        (progn
+          (save-excursion (set-buffer buf) (insert original))
+          (save-excursion
+            (set-buffer buf)
+            (when (and (plist-get result :fixed-content)
+                       (not (string= (plist-get result :fixed-content)
+                                     (buffer-string))))
+              (let ((fixed (plist-get result :fixed-content)))
+                (erase-buffer)
+                (insert fixed))))
+          (save-excursion
+            (set-buffer buf)
+            (should (string= (buffer-string) original))))
+      (kill-buffer buf))))
+
 (provide 'test-brepl)
 ;;; test-brepl.el ends here

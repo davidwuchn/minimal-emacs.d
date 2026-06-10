@@ -125,7 +125,7 @@ Writes content to a temp file, runs `brepl balance --dry-run',
 and compares output with input.
 Returns plist:
   :valid t/nil
-  :fixed-content string (if auto-fixed)
+  :fixed-content string (if auto-fixed or already balanced)
   :error string (if invalid and unfixable)"
   (let ((temp-file (make-temp-file "brepl-validate-" nil ".clj")))
     (unwind-protect
@@ -137,10 +137,16 @@ Returns plist:
                 (list :valid nil :fixed-content nil
                       :error (or (plist-get result :error) "brepl balance failed"))
               (let ((output (plist-get result :output)))
-                (if (string= output file-content)
-                    (list :valid t :fixed-content file-content :error nil)
-                  ;; Fixed — output differs from input
-                  (list :valid t :fixed-content output :error nil))))))
+                (cond
+                 ;; No output produced — brepl success but empty result is
+                 ;; suspicious (e.g. CLI bug, stdin closed). Treat as failure.
+                 ((null output)
+                  (list :valid nil :fixed-content nil
+                        :error "brepl returned empty output"))
+                 ((string= output file-content)
+                  (list :valid t :fixed-content file-content :error nil))
+                 ;; Fixed — output differs from input
+                 (t (list :valid t :fixed-content output :error nil)))))))
       (delete-file temp-file))))
 
 (defun gptel-brepl-install-save-hooks ()
@@ -161,7 +167,7 @@ Only activates in `clojure-mode' buffers when
                         (erase-buffer)
                         (insert fixed)
                         (message "[brepl] Auto-fixed brackets before save"))))))
-              nil t)))
+              nil)))
 
 (provide 'gptel-ext-brepl)
 ;;; gptel-ext-brepl.el ends here
