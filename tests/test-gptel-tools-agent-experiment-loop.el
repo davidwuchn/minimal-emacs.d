@@ -221,7 +221,7 @@
   (should (fboundp 'gptel-auto-experiment--compute-relevance))
   (should (fboundp 'gptel-auto-experiment--jaccard))
   (should (fboundp 'gptel-auto-experiment--tokenize))
-  (should (fboundp 'gptel-auto-experiment--rank-relevant-experiments)))
+  (should (fboundp 'gptel-auto-experiment--rank-relevant)))
 
 (ert-deftest test-loop/jaccard-identical-is-one ()
   "Jaccard of identical token lists should be 1.0."
@@ -267,7 +267,7 @@
                       :hypothesis "Refactor data structure")
                 (list :target "lisp/modules/gptel-tools-agent-core.el"
                       :hypothesis "Improve main function error handling")))
-         (ranked (gptel-auto-experiment--rank-relevant-experiments
+         (ranked (gptel-auto-experiment--rank-relevant
                   target previous-results 3)))
     (should (<= (length ranked) 3))
     (should (string= (plist-get (cdar ranked) :target)

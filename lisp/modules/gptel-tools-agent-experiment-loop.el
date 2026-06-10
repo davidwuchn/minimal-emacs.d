@@ -351,10 +351,10 @@ Returns 0.0 (no overlap) to 1.0 (identical)."
     (cl-remove-if (lambda (tkn) (< (length tkn) 4))
                   (split-string normalized "[ \t/_-]+" t))))
 
-(defun gptel-auto-experiment--rank-relevant-experiments (target previous-results &optional n)
+(defun gptel-auto-experiment--rank-relevant (target previous-results &optional n)
   "Return top N most relevant experiments for TARGET from PREVIOUS-RESULTS.
 Returns list of (RELEVANCE . EXPERIMENT-PLIST) sorted by relevance descending.
-N defaults to 10.  AttnRes-inspired: selective aggregation over experiment history."
+N defaults to 10.  AttnRes-inspired: selective aggregation over history."
   (let* ((n (or n 10))
          (scored (mapcar (lambda (exp)
                            (cons (gptel-auto-experiment--compute-relevance target exp) exp))
