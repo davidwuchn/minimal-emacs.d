@@ -14,6 +14,9 @@
 (require 'subr-x)
 (require 'json)
 
+(declare-function gptel-auto-workflow--with-temporary-worktree
+                  "gptel-tools-agent-staging-baseline" (slug ref fn))
+
 ;; ── Issue accumulator ──
 
 (defvar gptel-auto-workflow--semantic-audit-log nil
@@ -229,11 +232,17 @@ Returns number of blocks found."
         (start-line 0))
     (with-temp-buffer
       (insert-file-contents file)
+      (emacs-lisp-mode)
       (goto-char (point-min))
       (while (not (eobp))
-        (let ((line (buffer-substring-no-properties
-                     (line-beginning-position) (line-end-position))))
-          (if (string-empty-p (string-trim line))
+        (let* ((line-start (line-beginning-position))
+               (line (buffer-substring-no-properties
+                      line-start (line-end-position)))
+               (inside-string-or-comment
+                (let ((state (syntax-ppss line-start)))
+                  (or (nth 3 state) (nth 4 state)))))
+          (if (and (string-empty-p (string-trim line))
+                   (not inside-string-or-comment))
               (progn
                 (when (= consecutive 0)
                   (setq start-line (line-number-at-pos)))
@@ -451,13 +460,14 @@ Returns count of risk nodes found."
                      (has-cleanup nil)
                      (is-wrapper nil))
                 (when (and defun-start defun-end)
-                  ;; Check if this is a wrapper function (returns temp file to caller)
-                  (save-excursion
-                    (goto-char defun-start)
-                    (when (looking-at "(\\(defun\\|cl-defun\\)\\s-+\\([^ )]+\\)")
-                      (let ((fn-name (match-string 2)))
-                        (when (string-match-p "temp-file" fn-name)
-                          (setq is-wrapper t)))))
+                   ;; Check if this is a wrapper/setup function. These return or
+                   ;; stash temp paths for paired teardown outside this defun.
+                   (save-excursion
+                     (goto-char defun-start)
+                     (when (looking-at "(\\(defun\\|cl-defun\\)\\s-+\\([^ )]+\\)")
+                       (let ((fn-name (match-string 2)))
+                         (when (string-match-p "\\(temp-file\\|setup-temp-repo\\)" fn-name)
+                           (setq is-wrapper t)))))
                   (unless is-wrapper
                     (save-excursion
                       (goto-char defun-start)
@@ -528,22 +538,29 @@ Returns nil if file doesn't exist or no risk nodes found."
             (goto-char (point-min))
             (while (re-search-forward (format "(%s\\b" resource-fn) nil t)
               (let* ((defun-start (save-excursion
-                                    (when (re-search-backward "^(defun\\b" nil t)
+                                    (when (re-search-backward "^(\\(defun\\|cl-defun\\)\\b" nil t)
                                       (point))))
                      (defun-end (when defun-start
                                   (save-excursion
                                     (goto-char defun-start)
                                     (ignore-errors (forward-sexp 1))
                                     (point))))
-                     (has-cleanup nil))
+                     (has-cleanup nil)
+                     (is-wrapper nil))
                 (when (and defun-start defun-end)
+                  (save-excursion
+                    (goto-char defun-start)
+                    (when (looking-at "(\\(defun\\|cl-defun\\)\\s-+\\([^ )]+\\)")
+                      (let ((fn-name (match-string 2)))
+                        (when (string-match-p "\\(temp-file\\|setup-temp-repo\\)" fn-name)
+                          (setq is-wrapper t)))))
                   (save-excursion
                     (goto-char defun-start)
                     (when (or (re-search-forward "(delete-file\\b" defun-end t)
                               (re-search-forward "(delete-directory\\b" defun-end t)
                               (re-search-forward "(unwind-protect\\b" defun-end t))
                       (setq has-cleanup t))))
-                (unless has-cleanup
+                (unless (or has-cleanup is-wrapper)
                   (cl-pushnew 'risk-node-resource types))))))
         ;; Check for API patterns
         (dolist (pattern '(("shell-command-to-string" . "condition-case")
@@ -554,7 +571,7 @@ Returns nil if file doesn't exist or no risk nodes found."
             (goto-char (point-min))
             (while (re-search-forward (format "(%s\\b" api-fn) nil t)
               (let* ((defun-start (save-excursion
-                                    (when (re-search-backward "^(defun\\b" nil t)
+                                    (when (re-search-backward "^(\\(defun\\|cl-defun\\)\\b" nil t)
                                       (point))))
                      (defun-end (when defun-start
                                   (save-excursion
@@ -781,12 +798,18 @@ never touches code structure."
         (blank-count 0))
     (with-temp-buffer
       (insert-file-contents file)
+      (emacs-lisp-mode)
       (goto-char (point-min))
       ;; Collect lines, compressing blank runs
       (while (not (eobp))
-        (let ((line (buffer-substring-no-properties
-                     (line-beginning-position) (line-end-position))))
-          (if (string-empty-p (string-trim line))
+        (let* ((line-start (line-beginning-position))
+               (line (buffer-substring-no-properties
+                      line-start (line-end-position)))
+               (inside-string-or-comment
+                (let ((state (syntax-ppss line-start)))
+                  (or (nth 3 state) (nth 4 state)))))
+          (if (and (string-empty-p (string-trim line))
+                   (not inside-string-or-comment))
               (progn
                 (setq blank-count (1+ blank-count))
                 (setq in-blank-run t))
@@ -891,12 +914,21 @@ Returns 1 if fixed, 0 otherwise."
            ((eq ch 40) (setq opens (1+ opens)))
            ((eq ch 41) (setq closes (1+ closes))))))))
     (cond
-     ;; Case 1: more opens than closes — append missing closes at EOF
-     ((> opens closes)
-      (let* ((missing (- opens closes))
-             (closes-str (make-string missing 41)))
-        (setq new-content (concat new-content "
-" closes-str))
+      ;; Case 1: more opens than closes — append missing closes at EOF
+      ((> opens closes)
+       (let* ((missing (- opens closes))
+              (closes-str (make-string missing 41))
+              (insert-pos (or (string-match "^\\s-*(provide\\s-+'" new-content)
+                              (string-match "^;;; .*ends here$" new-content))))
+        ;; Prefer inserting before the provide/end marker so provide remains
+        ;; top-level. Appending at EOF can make (provide ...) part of an
+        ;; unclosed defun body: load succeeds, but require fails.
+        (setq new-content
+              (if insert-pos
+                  (concat (substring new-content 0 insert-pos)
+                          closes-str "\n"
+                          (substring new-content insert-pos))
+                (concat new-content "\n" closes-str)))
         (with-temp-file file
           (insert new-content))
         (message "[self-heal-semantic] Appended %d missing close paren(s) at EOF in %s"
@@ -1077,6 +1109,107 @@ instead of fixing each failure individually."
 Adding a new auto-fixer is now a one-line change to this alist.
 Each fixer must take FILE as argument and return fix count (0 = no-op).")
 
+(defconst gptel-auto-workflow--self-heal-high-risk-file-pattern
+  (regexp-opt '("gptel-auto-workflow-self-heal-semantic.el"
+                "gptel-auto-workflow-monitoring-agent.el"
+                "gptel-auto-workflow-ontology-router.el"
+                "gptel-auto-workflow-evolution.el"
+                "gptel-tools-agent-worktree.el"))
+  "Files that should be healed through OV5 worktree/subagent validation.")
+
+(defun gptel-auto-workflow--self-heal-route-for-file (file)
+  "Return healing route plist for FILE.
+:mode is `direct' for normal files and `ov5-worktree' for high-risk
+workflow/self-heal files.  The monitor and daemon-repl can use this to
+decide which file to heal and how much validation is required."
+  (let ((name (file-name-nondirectory file)))
+    (if (string-match-p gptel-auto-workflow--self-heal-high-risk-file-pattern name)
+        (list :mode 'ov5-worktree
+              :reason 'high-risk-repair-engine
+              :file file)
+      (list :mode 'direct
+            :reason 'targeted-file
+            :file file))))
+
+(defun gptel-auto-workflow--self-heal-route-mode (file)
+  "Return only the self-heal route mode for FILE."
+  (plist-get (gptel-auto-workflow--self-heal-route-for-file file) :mode))
+
+(defun gptel-auto-workflow--self-heal-file-dispatch (file)
+  "Heal FILE using the route selected by `self-heal-route-for-file'.
+High-risk repair-engine files are deferred to
+`gptel-auto-workflow--self-heal-file-via-ov5' when available; otherwise no
+live-tree mutation is performed."
+  (let* ((route (gptel-auto-workflow--self-heal-route-for-file file))
+         (mode (plist-get route :mode)))
+    (pcase mode
+      ('direct
+       (gptel-auto-workflow--self-heal-file file))
+      ('ov5-worktree
+       (if (fboundp 'gptel-auto-workflow--self-heal-file-via-ov5)
+           (funcall 'gptel-auto-workflow--self-heal-file-via-ov5 file)
+         (append route (list :status 'deferred
+                             :reason 'ov5-worktree-adapter-missing
+                             :auto-fixed 0))))
+      (_
+       (append route (list :status 'unknown-route
+                           :auto-fixed 0))))))
+
+(defun gptel-auto-workflow--self-heal-file-via-ov5 (file)
+  "Heal FILE in an OV5 temporary worktree, then promote only if valid.
+This is the safe path for repair-engine files.  It refuses dirty target files
+because a HEAD worktree cannot faithfully represent uncommitted live edits."
+  (let* ((root (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                        (gptel-auto-workflow--worktree-base-root))
+                   default-directory))
+         (abs-file (expand-file-name file root))
+         (rel-file (file-relative-name abs-file root)))
+    (cond
+     ((not (fboundp 'gptel-auto-workflow--with-temporary-worktree))
+      (list :status 'deferred
+            :reason 'ov5-worktree-helper-missing
+            :file abs-file
+            :auto-fixed 0))
+     ((not (file-exists-p abs-file))
+      (list :status 'rejected
+            :reason 'file-missing
+            :file abs-file
+            :auto-fixed 0))
+     ((not (zerop (let ((default-directory root))
+                    (call-process "git" nil nil nil "diff" "--quiet" "--" rel-file))))
+      (list :status 'rejected
+            :reason 'dirty-target
+            :file abs-file
+            :auto-fixed 0))
+     (t
+      (gptel-auto-workflow--with-temporary-worktree
+       "self-heal" "HEAD"
+       (lambda (worktree)
+         (let* ((target (expand-file-name rel-file worktree))
+                (result (gptel-auto-workflow--self-heal-file target))
+                (fixed (plist-get result :auto-fixed)))
+           (if (<= fixed 0)
+               (append result (list :status 'no-change
+                                    :file abs-file
+                                    :worktree worktree))
+             (condition-case err
+                 (progn
+                   (with-temp-buffer
+                     (insert-file-contents target)
+                     (emacs-lisp-mode)
+                     (check-parens))
+                   (load-file target)
+                   (copy-file target abs-file t)
+                   (append result (list :status 'accepted
+                                        :file abs-file
+                                        :worktree worktree)))
+               (error
+                (append result (list :status 'rejected
+                                     :reason 'validation-failed
+                                     :error (error-message-string err)
+                                     :file abs-file
+                                     :worktree worktree))))))))))))
+
 (defun gptel-auto-workflow--self-heal-semantic ()
   "Layer 2+3 self-heal: detect AND fix semantic/operational bugs.
 Runs audit checks on all lisp/modules/*.el files, then applies safe
@@ -1092,16 +1225,19 @@ auto-fixers for detected issues (e.g., excessive blank lines)."
     ;; look up their fixers in the alist, and apply them.
     (dolist (entry (plist-get result :report))
       (let* ((file (plist-get entry :file))
-             (log (plist-get entry :log))
-             (present-types
-              (delete-dups
-               (delq nil (mapcar (lambda (r) (plist-get r :type)) log)))))
-        (dolist (issue-type present-types)
-          (let ((fixer (alist-get issue-type gptel-auto-workflow--semantic-fixer-alist)))
-            (when fixer
-              (let ((fixed (funcall fixer file)))
-                (when (> fixed 0)
-                  (cl-incf total-fixed fixed))))))))
+              (log (plist-get entry :log))
+              (present-types
+               (delete-dups
+                (delq nil (mapcar (lambda (r) (plist-get r :type)) log)))))
+        (if (eq 'ov5-worktree (gptel-auto-workflow--self-heal-route-mode file))
+            (let ((dispatch-result (gptel-auto-workflow--self-heal-file-dispatch file)))
+              (cl-incf total-fixed (or (plist-get dispatch-result :auto-fixed) 0)))
+          (dolist (issue-type present-types)
+            (let ((fixer (alist-get issue-type gptel-auto-workflow--semantic-fixer-alist)))
+              (when fixer
+                (let ((fixed (funcall fixer file)))
+                  (when (> fixed 0)
+                    (cl-incf total-fixed fixed)))))))))
     (when (> total-fixed 0)
       (message "[self-heal-semantic] Auto-fixed %d issue(s)" total-fixed))
     (plist-put result :auto-fixed total-fixed)

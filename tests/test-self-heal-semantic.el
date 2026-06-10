@@ -294,6 +294,26 @@ After fix: catches ALL errors via (error ...)."
           (should (= 0 (gptel-auto-workflow--audit-unbalanced-parens file))))
       (test-self-heal-semantic--cleanup file))))
 
+(ert-deftest test-self-heal-semantic/fix-missing-close-before-provide ()
+  "Missing close parens are inserted before provide so provide stays top-level."
+  (let* ((feature 'ov5-test-provide-top-level)
+         (content
+          (format "(defun ov5-test-provide-top-level-fn ()\n  42\n(provide '%s)\n;;; %s.el ends here\n"
+                  feature feature))
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (when (featurep feature)
+            (unload-feature feature t))
+          (should (= 1 (gptel-auto-workflow--audit-unbalanced-parens file)))
+          (should (= 1 (gptel-auto-workflow--fix-unbalanced-parens file)))
+          (should (= 0 (gptel-auto-workflow--audit-unbalanced-parens file)))
+          (load-file file)
+          (should (featurep feature)))
+      (when (featurep feature)
+        (unload-feature feature t))
+      (test-self-heal-semantic--cleanup file))))
+
 (ert-deftest test-self-heal-semantic/fix-no-op-when-balanced ()
   "Auto-fixer is no-op when parens are balanced."
   (let* ((content
@@ -377,6 +397,20 @@ After fix: catches ALL errors via (error ...)."
                   (setq current 0))
                 (forward-line 1))
               (should (<= max-consecutive 2)))))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/blank-lines-ignores-string-literals ()
+  "Audit/fixer must not mutate blank lines inside multiline strings."
+  (let* ((content
+          "(defconst ov5-test-html \"alpha\n\n\n\n\nbeta\")\n(provide 'ov5-test-html)\n")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (should (= 0 (gptel-auto-workflow--audit-blank-lines file)))
+          (should (= 0 (gptel-auto-workflow--fix-excessive-blank-lines file)))
+          (with-temp-buffer
+            (insert-file-contents file)
+            (should (string= content (buffer-string)))))
       (test-self-heal-semantic--cleanup file))))
 
 (ert-deftest test-self-heal-semantic/fix-blank-lines-idempotent ()
@@ -490,6 +524,55 @@ causing void-function errors when gptel-agent was not loaded."
   (should (assq 'unguarded-external-call gptel-auto-workflow--semantic-fixer-alist))
   (should (assq 'missing-provide gptel-auto-workflow--semantic-fixer-alist))
   (should (assq 'unbalanced-parens gptel-auto-workflow--semantic-fixer-alist)))
+
+(ert-deftest test-self-heal-semantic/routes-normal-file-direct ()
+  "Normal target files use direct targeted self-heal."
+  (should (eq 'direct
+              (gptel-auto-workflow--self-heal-route-mode
+               "lisp/modules/gptel-ext-context.el"))))
+
+(ert-deftest test-self-heal-semantic/routes-repair-engine-through-ov5 ()
+  "Self-heal/monitor/workflow files require OV5 worktree validation."
+  (dolist (file '("lisp/modules/gptel-auto-workflow-self-heal-semantic.el"
+                  "lisp/modules/gptel-auto-workflow-monitoring-agent.el"
+                  "lisp/modules/gptel-auto-workflow-ontology-router.el"))
+    (let ((route (gptel-auto-workflow--self-heal-route-for-file file)))
+      (should (eq 'ov5-worktree (plist-get route :mode)))
+      (should (eq 'high-risk-repair-engine (plist-get route :reason))))))
+
+(ert-deftest test-self-heal-semantic/ov5-adapter-defers-without-worktree-helper ()
+  "High-risk adapter does not mutate directly when worktree helper is missing."
+  (let ((orig-fboundp (symbol-function 'fboundp)))
+    (cl-letf (((symbol-function 'fboundp)
+               (lambda (sym)
+                 (and (not (eq sym 'gptel-auto-workflow--with-temporary-worktree))
+                      (funcall orig-fboundp sym)))))
+      (let ((result (gptel-auto-workflow--self-heal-file-via-ov5
+                     "lisp/modules/gptel-auto-workflow-self-heal-semantic.el")))
+        (should (eq 'deferred (plist-get result :status)))
+        (should (eq 'ov5-worktree-helper-missing (plist-get result :reason)))
+        (should (= 0 (plist-get result :auto-fixed)))))))
+
+(ert-deftest test-self-heal-semantic/bulk-self-heal-dispatches-high-risk-files ()
+  "Bulk self-heal must not run fixers directly on repair-engine files."
+  (let ((called nil)
+        (file "lisp/modules/gptel-auto-workflow-ontology-router.el"))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--semantic-audit-all)
+               (lambda ()
+                 (list :total-issues 1
+                       :report (list (list :file file
+                                           :issues 1
+                                           :log (list (list :type 'unbalanced-parens)))))))
+              ((symbol-function 'gptel-auto-workflow--self-heal-file-dispatch)
+               (lambda (dispatched-file)
+                 (setq called dispatched-file)
+                 (list :auto-fixed 1)))
+              ((symbol-function 'gptel-auto-workflow--fix-unbalanced-parens)
+               (lambda (_file)
+                 (error "direct fixer should not run for high-risk files"))))
+      (let ((result (gptel-auto-workflow--self-heal-semantic)))
+        (should (equal called file))
+        (should (= 1 (plist-get result :auto-fixed)))))))
 
 (ert-deftest test-self-heal-semantic/fixer-entries-are-functions ()
   "Each fixer in the registry must be a function symbol."

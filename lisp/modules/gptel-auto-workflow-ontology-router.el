@@ -592,13 +592,11 @@ STRATEGY and TARGET filter the performance data.
    4. CONFIDENCE — how much data backs this score?
    Weights auto-tune from VSM health when available (defaults 40/30/20/10).
    Penalty: unhealthy backends (3+ recent errors) drop to bottom."
-  (let ((cache-key (cons strategy target)))
-    (or (alist-get cache-key gptel-auto-workflow--reorder-cache nil nil #'equal)
-         (let ((result
-                (let* ((static-fallbacks (if (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
-                                  gptel-auto-workflow-executor-rate-limit-fallbacks
-                                (if (fboundp 'gptel-backend-registry-fallback-chain-as-cons)
-                                    (gptel-backend-registry-fallback-chain-as-cons 'executor)
+  (let ((result
+         (let* ((static-fallbacks (if (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+                                   gptel-auto-workflow-executor-rate-limit-fallbacks
+                                 (if (fboundp 'gptel-backend-registry-fallback-chain-as-cons)
+                                     (gptel-backend-registry-fallback-chain-as-cons 'executor)
                                   '(("DeepSeek" . "deepseek-v4-pro")
                                     ("MiniMax" . "MiniMax-M3")))))
             (category (when target (gptel-auto-workflow--categorize-target target)))
@@ -857,17 +855,17 @@ explore=%.0f%%)"
            ;; documented overrides (e.g. :programming → DeepSeek) work
            ;; from the very first run, not just after data accumulates.
            (if category-override
-               (let* ((override-entry (assoc category-override static-fallbacks))
-                      (rest (cl-remove category-override static-fallbacks
-                                       :key #'car :test #'string=)))
-                 (if override-entry
-                     (progn
-                       (message "[onto-router] Static override: %s → %s"
-                                category category-override)
-                       (cons override-entry rest))
-                     static-fallbacks))))))
-           (push (cons cache-key result) gptel-auto-workflow--reorder-cache)
-           result))))
+                (let* ((override-entry (assoc category-override static-fallbacks))
+                       (rest (cl-remove category-override static-fallbacks
+                                        :key #'car :test #'string=)))
+                  (if override-entry
+                      (progn
+                        (message "[onto-router] Static override: %s → %s"
+                                 category category-override)
+                        (cons override-entry rest))
+                    static-fallbacks))
+             static-fallbacks)))))))
+    result))
 
 ;; ─── Integration with Existing Fallback System ───
 
@@ -3554,6 +3552,9 @@ possible misclassification"
   '((:agentic        . "agent\\|workflow\\|strategy\\|evolution")
     (:programming    . "benchmark\\|fsm\\|retry\\|test\\|code\\|compile\\|^gptel-ext-")
     (:tool-calls     . "
+
+
+
 
 
 sandbox\\|^gptel-tools-\\(?:bash\\|grep\\|glob\\|edit\\|apply\\|preview\\|programmatic\\)")

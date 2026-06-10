@@ -336,8 +336,11 @@ Track metrics and call failure hook after all retries exhausted."
               (cond
                ;; Self-heal available and retries left: heal then retry eval
                ((and (< attempt max-retries)
-                     (fboundp 'gptel-auto-workflow--self-heal-file))
-                (let ((heal-result (gptel-auto-workflow--self-heal-file file)))
+                     (or (fboundp 'gptel-auto-workflow--self-heal-file-dispatch)
+                         (fboundp 'gptel-auto-workflow--self-heal-file)))
+                (let ((heal-result (if (fboundp 'gptel-auto-workflow--self-heal-file-dispatch)
+                                       (gptel-auto-workflow--self-heal-file-dispatch file)
+                                     (gptel-auto-workflow--self-heal-file file))))
                   (message "[daemon-repl] Targeted self-heal for %s (attempt %d/%d)"
                            (file-name-nondirectory file) attempt (1- max-retries))
                   (when (and (> (plist-get heal-result :auto-fixed) 0)
