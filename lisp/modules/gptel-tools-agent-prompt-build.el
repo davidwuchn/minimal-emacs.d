@@ -41,6 +41,7 @@
 (declare-function gptel-benchmark--detect-task-type "gptel-benchmark-principles")
 (declare-function gptel-backend-name "gptel")
 (declare-function gptel-auto-workflow--format-kept-risk-node-pairs "gptel-auto-workflow-self-heal-semantic" (&optional max-pairs))
+(declare-function gptel-auto-workflow--batch-anchor-read-report "gptel-auto-workflow-self-heal-semantic" (&optional report-file))
 
 
 (declare-function gptel-request "gptel-request")
@@ -4131,12 +4132,26 @@ from all OV5 signals combined."
          (let* ((past-pats (gptel-ai-behaviors--format-kept-patterns category)))
            (when past-pats
              (push (format "PAST PATTERNS (worked before):\n%s" past-pats) parts))))
-       ;; TSP: inject verified secure patterns from self-play training pairs
-       (when (fboundp 'gptel-auto-workflow--format-kept-risk-node-pairs)
-         (let ((risk-pats (gptel-auto-workflow--format-kept-risk-node-pairs)))
-           (when risk-pats
-             (push (format "VERIFIED SECURITY PATTERNS:\n%s" risk-pats) parts))))
-       (push (format "SCOPE: ONE function. Edit ONE line. Verify.") parts)
+        ;; TSP: inject verified secure patterns from self-play training pairs
+        (when (fboundp 'gptel-auto-workflow--format-kept-risk-node-pairs)
+          (let ((risk-pats (gptel-auto-workflow--format-kept-risk-node-pairs)))
+            (when risk-pats
+              (push (format "VERIFIED SECURITY PATTERNS:\n%s" risk-pats) parts))))
+        ;; Batch anchor: inject current failure patterns for guided evolution
+        (when (fboundp 'gptel-auto-workflow--batch-anchor-read-report)
+          (let ((batch-data (gptel-auto-workflow--batch-anchor-read-report)))
+            (when batch-data
+              (let ((types (plist-get batch-data :types))
+                    (top-type (plist-get batch-data :top-type))
+                    (top-count (plist-get batch-data :top-count)))
+                (push (format "CURRENT FAILURE PATTERNS (batch-anchor): %s"
+                              (mapconcat #'symbol-name types ", "))
+                      parts)
+                (when top-type
+                  (push (format "PRIORITY FIX TYPE: %s (%d occurrences)"
+                                top-type top-count)
+                        parts))))))
+        (push (format "SCOPE: ONE function. Edit ONE line. Verify.") parts)
       (mapconcat #'identity (nreverse parts) "\n"))))
 
 ;;; Cross-Target Pattern Transfer

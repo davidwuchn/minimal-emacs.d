@@ -1115,5 +1115,34 @@ This is the entry point for batch-anchored evolution."
           :batches batches
           :report report)))
 
+(defun gptel-auto-workflow--batch-anchor-read-report (&optional report-file)
+  "Read batch anchor report from REPORT-FILE.
+Defaults to `mementum/batch-anchor-report.md' under `user-emacs-directory'.
+Returns plist with :types (list of failure type symbols) and :top-type
+(the most frequent failure type), or nil if no report exists."
+  (let ((file (or report-file
+                  (expand-file-name "mementum/batch-anchor-report.md"
+                                    user-emacs-directory))))
+    (when (file-exists-p file)
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        (let ((types nil)
+              (top-type nil)
+              (top-count 0))
+          ;; Parse "## TYPE (N issues)" lines
+          (while (re-search-forward "^## \\([^ ]+\\) (\\([0-9]+\\) issues)" nil t)
+            (let* ((type-str (match-string 1))
+                   (count (string-to-number (match-string 2)))
+                   (type-sym (intern type-str)))
+              (push type-sym types)
+              (when (> count top-count)
+                (setq top-count count)
+                (setq top-type type-sym))))
+          (when types
+            (list :types (nreverse types)
+                  :top-type top-type
+                   :top-count top-count)))))))
+
 (provide 'gptel-auto-workflow-self-heal-semantic)
 ;;; gptel-auto-workflow-self-heal-semantic.el ends here
