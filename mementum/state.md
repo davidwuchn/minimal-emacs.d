@@ -11,6 +11,7 @@
 >   - Batch anchoring: Integrated into monitoring agent Phase 10, writes mementum/batch-anchor-report.md
 >   - Batch anchoring prompt integration: LLM prompts now include CURRENT FAILURE PATTERNS and PRIORITY FIX TYPE from batch reports
 >   - Boundary validator Phase 2: Fixed 6 default-directory fallbacks in evolution module, 2 condition-case syntax fixes
+>   - Prefix-cache Phase 3: Cross-run statistics (hit rate, compaction frequency), auto-tuning compaction threshold (60%-95% bounds)
 >   - All commits pushed to GitHub; Pi5 sync ongoing
 > **Active Plan**: None — codebase clean, tests green
 > **Pi5**: Running, self-healing working (grader crash → BLIND MODE → recovery)
@@ -120,12 +121,12 @@
 ### Result
 - `condition-case-unbound-err` issues: **167 → 0** (all were false positives from audit bugs)
 - `risk-node-resource` issues: **334 → 5** (remaining are helper function wrappers)
-- Test suite: **114 module-specific tests passing** (32 prefix-cache + 11 conversion-unit + 37 security + 34 monitoring)
-- Full suite: 51 self-heal + 5 strategy DAG + 8 brepl + 13 Pi5 + 11 platform + 37 security + 32 prefix-cache + 11 conversion-unit + 34 monitoring = **202 tests**
+- Test suite: **120 module-specific tests passing** (38 prefix-cache + 11 conversion-unit + 37 security + 34 monitoring)
+- Full suite: 51 self-heal + 5 strategy DAG + 8 brepl + 13 Pi5 + 11 platform + 37 security + 38 prefix-cache + 11 conversion-unit + 34 monitoring = **208 tests**
 - Watchdog: Now detects frozen daemon in ≤ 90s instead of ≤ 20 min
 - Risk-node training pairs: 4 missing functions implemented, JSONL persistence
 - Codebase: Clean, no unmerged files, no syntax errors
-- 12 commits pushed successfully
+- 13 commits pushed successfully
 
 ### New implementations (this session)
 1. **Batch anchoring** (MOSS insight): `gptel-auto-workflow--batch-anchor-audit-results` groups audit failures by type before evolution; `gptel-auto-workflow--batch-anchor-report` generates markdown for proposals; integrated into monitoring agent Phase 10 — writes `mementum/batch-anchor-report.md` after each cycle; integrated into prompt builder so LLM sees CURRENT FAILURE PATTERNS and PRIORITY FIX TYPE
@@ -137,6 +138,7 @@
 7. **Sibyl conversion units**: 415-line module with JSONL persistence, monthly rotation, orphan detection, TSV export. 11 tests. Integrated into ontology evolution.
 8. **TSP risk-node training pairs** (TSP insight): `gptel-auto-workflow--risk-node-types-in-file` analyzes files for risk patterns; `gptel-auto-workflow--risk-node-report-from-history` correlates risk nodes with experiment outcomes; `gptel-auto-workflow--update-risk-node-training-pair-outcomes` records pairs to JSONL; `gptel-auto-workflow--format-kept-risk-node-pairs` formats successful pairs for prompts.
 9. **Boundary validator Phase 2**: Fixed 6 `default-directory` fallbacks in evolution module to `user-emacs-directory`; fixed 2 pre-existing `condition-case` without handlers (byte-compile errors with `byte-compile-error-on-warn t`)
+10. **Prefix-cache Phase 3**: Cross-run statistics aggregation (hit rate, compaction frequency, token savings); auto-tuning compaction threshold based on observed performance (low hit rate → lower threshold, high hit rate + frequent compactions → raise threshold); persisted in version 2 state file; 38 tests
 
 ---
 
@@ -146,8 +148,8 @@
 1. **Monitor 18:00 pipeline run** — Verify [prefix-cache], [conversion-unit] messages appear in daemon log
 
 ### Near-Term (Choose one)
-2. **Prefix-cache Phase 3** — Cross-run statistics aggregation, compaction threshold auto-tuning
-3. **External integrations** — Slack/Zendesk/DataDog (needs API keys)
+2. **External integrations** — Slack/Zendesk/DataDog (needs API keys)
+3. **Monitor prefix-cache auto-tuning** — Verify threshold adjustments after 10+ pipeline runs
 
 ---
 
@@ -157,7 +159,7 @@
 - `lisp/modules/gptel-auto-workflow-self-heal-semantic.el`: 7 audit checks + auto-fixers
 - `lisp/modules/gptel-auto-workflow-monitoring-agent.el`: Monitoring agent (Phases 0-10)
 - `lisp/modules/gptel-auto-workflow-evolution.el`: Evolution cycle + ontology learning (104 file operations)
-- `lisp/modules/gptel-ext-prefix-cache.el`: Prefix cache module (610 lines, 32 tests)
+- `lisp/modules/gptel-ext-prefix-cache.el`: Prefix cache module (610 lines, 38 tests)
 - `lisp/modules/gptel-ext-conversion-unit.el`: Conversion unit module (415 lines, 11 tests)
 - `lisp/modules/gptel-tools-agent-base.el`: Workspace boundary validator
 - `mementum/knowledge/self-evolving-agent-research.md`: Research paper analysis
