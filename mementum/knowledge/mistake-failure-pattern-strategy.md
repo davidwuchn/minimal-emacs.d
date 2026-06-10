@@ -1,35 +1,34 @@
 <!--
 Synthesis verification:
-- Confidence: 40%
+- Confidence: 12%
 - Sources: 30 memories
-- Warnings: No code examples or concrete references, Very short content (27 lines)
+- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-strategy', Very short content (26 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize a set of memory records about "mistake-failure-pattern-strategy" into a comprehensive knowledge page. Let me analyze the memories:
+The user wants me to synthesize a bunch of mistake/failure pattern memories into a knowledge page. Let me analyze the patterns:
 
-1. All entries are "Failure type: strategy" detected by a monitoring agent
-2. They span two domains:
-   - **Staging workflow failures** (5 entries): staging-verification, staging-scope, staging-review, staging-push, staging-merge, staging-config
-   - **Lisp module failures** (~26 entries): various gptel-*.el and treesit-*.el files
-3. Categories include :programming (keep-rate 3.5% and 0.0%) and :agentic (keep-rate 4.3% and 1.4%)
-4. Occurrences range from 3 to 18
-5. Trends span 2026-06-02 to 2026-06-09
+1. All failures are categorized as "strategy" type
+2. They cluster into two main areas:
+   - Staging workflow failures (staging-verification, staging-scope, staging-review, staging-push, staging-merge, staging-config)
+   - Lisp module failures (various gptel-*.el and treesit-*.el files)
+3. Categories involved: :programming (keep-rate: 3.5%), :agentic (keep-rate: 4.3% and 1.4%)
+4. One notable: lisp/modules/gptel-auto-workflow-production.el has keep-rate: 1.4% (very low = high priority)
+5. lisp/modules/gptel-tools-agent-benchmark.el has keep-rate: 0.0% (highest priority!)
+6. Occurrences range from 3 to 18
+7. All have "Example reasons: none" - which is itself a meta-observation
 
-Key observations:
-- staging-review has highest occurrences (18) in :programming category
-- gptel-agent-runtime.el has 10 occurrences
-- gptel-auto-workflow-production.el has 9 occurrences with very low keep-rate 1.4% in :agentic
-- Most files are part of the gptel agent/auto-workflow system
-- Many are in :programming category with 3.5% keep-rate
+Key patterns:
+- High-frequency failures: staging-review (18), staging-config (9), gptel-auto-workflow-production.el (9), treesit-agent-tools-workspace.el (8), gptel-auto-workflow-mementum.el (7), gptel-auto-workflow-evolution.el (7)
+- Low keep-rates = high priority
+- All from early June 2026
 
 Let me build a comprehensive knowledge page with:
 - Frontmatter
-- Overview
-- Staging failure cluster analysis
-- Lisp module failure cluster analysis
-- Keep-rate priority matrix
-- Patterns and actionable insights
+- Executive summary
+- Tables of failures sorted by priority/keep-rate
+- Pattern analysis by cluster
+- Actionable strategies
 - Related topics
 
-I need to ensure 50+ lines of actual content with concrete examples, tables, and actionable patterns.
+Need to make it minimum 50 lines with concrete examples (code, tables, commands), actionable patterns, cross-references.
