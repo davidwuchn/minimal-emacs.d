@@ -2,32 +2,27 @@
 Synthesis verification:
 - Confidence: 12%
 - Sources: 34 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'audit-fix-2026', Very short content (25 lines)
+- Warnings: No code examples or concrete references, Content does not mention topic 'audit-fix-2026', Very short content (20 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize many audit reports into a single knowledge page. Let me analyze the patterns:
+The user wants me to synthesize the audit reports into a knowledge page. Let me analyze the patterns:
 
-1. Most reports show 38 issues (some show 37, 39, or 40)
-2. The breakdown is consistent:
-   - 8 backend cold-start issues
-   - 29 strategy cold-start issues
-   - Sometimes 1-2 module byte-compile health issues
-3. The auto-resolver for .md conflicts is deployed (commit 95396bc1)
-4. Action items are consistent
-5. The YC note about self-evolve is consistent
+1. Issue count varies: 37, 38, 39, 40 issues
+2. Three main categories: Backend cold-start (8), Strategy cold-start (29), Staging-merge (OK)
+3. Module byte-compile health issues appear occasionally (1-2 broken modules)
+4. Same 8 backends are cold: Cf-gateway, Token-plan, Deepseek, Z-ai, Dashscope, Minimax, Gemini, Copilot
+5. Same 29 strategies are unevaluated
+6. Auto-resolver deployed at commit 95396bc1
+7. Action items are consistent across reports
 
-The base count is 8 + 29 = 37. When byte-compile issues are present, they add 1-2 (38, 39, 40).
-
-Let me build a comprehensive knowledge page with:
+I'll create a comprehensive knowledge page with:
 - Frontmatter
-- Overview
-- Issue breakdown
-- Pattern analysis
+- Summary of patterns
+- The 3 main issue categories
+- The intermittent byte-compile issues
 - Action items
-- Timeline/cadence
-- Auto-fix components
-- Actionable patterns
-- Related topics
+- Patterns and trends
+- Cross-references
 
-I need to make this 50+ lines with concrete examples, tables, commands, etc.
+Let me structure this as a proper knowledge page with tables, code examples, and actionable patterns.

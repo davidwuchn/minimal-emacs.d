@@ -1,55 +1,38 @@
 <!--
 Synthesis verification:
-- Confidence: 24%
+- Confidence: 80%
 - Sources: 38 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'research-research-persisted'
-- Auto-approved: yes (flagged)
+- Warnings: No code examples or concrete references
+- Auto-approved: yes (passed)
 --->
 
-The user wants me to synthesize multiple research memories into a single knowledge page. Let me analyze the memories to identify common themes, patterns, and actionable insights.
+The user wants me to synthesize multiple research memories into a comprehensive knowledge page about research-research-persisted. Let me analyze the memories and extract the most valuable, actionable patterns.
 
-Key themes across the memories:
-1. **gptel FSM pattern** - state machine for pause/resume of multi-stage LLM requests
-2. **mementum three-tier storage** - state.md, memories, knowledge
-3. **nucleus prompt patterns** - attention magnets, EBNF grammar, prompt debugger, safe-compile
-4. **Layered error defense** - retry+jitter, classification, circuit breaker, fallback
-5. **Durable execution / checkpoint-resume** - persistent state, 92% latency reduction
-6. **MAST failure taxonomy** - 40% design, 35% inter-agent, 25% verification
-7. **DSPy signature/module/optimizer** - typed IO contracts, GEPA optimization
-8. **Reflexion verbal self-reflection** - 91% pass@1 on HumanEval
-9. **MCP integration via mcp.el** - mcp-hub pattern, mcp-make-text-tool bridge
-10. **Self-rewriting meta-prompt loop** - 4-step Reflect→Draft→Validate→Persist
-11. **DNS-based memory node discovery** - mementum protocol network
-12. **Logprob-based prompt validation** - nucleus theory
-13. **Trajectory-level intervention** - SE-Agent, NeurIPS 2025
-14. **KV cache management** - Continuum paper
-15. **Anti-sycophancy prompt patterns**
-16. **Context branching** - gptel-org-branching-context
-17. **magent durable child-agent jobs**
-18. **mcp.el lifecycle pattern**
-19. **Context-mode sandboxing** - 98% reduction via SQLite FTS5
-20. **"Think in Code" paradigm** - 100x token reduction
-21. **ZeroClaw/NullClaw** - provider-agnostic runtime, tool receipts, workspace boundaries
-22. **gptel + mcp.el setup** - org topic restriction
-23. **AI Cliff phenomenon** - context fixation
+Looking at the memories, they all relate to:
+1. The "persisted-findings" research strategy for an auto-workflow system
+2. External research digests targeting Emacs-based AI agent improvements
+3. Common failure patterns: validation/timeout errors, 0-33% keep rates
+4. Recurring themes: gptel FSM patterns, mementum three-tier storage, nucleus attention magnets, layer error defense, self-evolution patterns, durable execution, DSPy-style optimization, Reflexion, MAST taxonomy, etc.
+5. Local fallback patterns when research daemon fails
 
-Common problem patterns:
-- 0% keep rate on most persisted research
-- Researcher daemon dead/stale
-- Validation/timeout failures (10/10 recent commits)
-- 7% keep rate on auto-workflow
-- Pipeline defects when researcher daemon disappears
+Key patterns to synthesize:
+- The persisted-findings strategy itself
+- The controller directive system (own-repo vs external, beta values, EMA confidence)
+- Recurring insights: FSM, mementum 3-tier, nucleus attention magnets, layered error defense, DSPy/Reflexion, MAST
+- Local fallback protocol
+- Outcome tracking (0/N kept)
+- The meta-learning signal
 
-Actionable patterns to surface:
-1. **Self-Evolution Loop** - Reflect→Draft→Validate→Persist with persistent feedback
-2. **FSM-based Resumable Requests** - replace monolithic runners
-3. **Three-tier Memory Hierarchy** - state/memory/knowledge
-4. **Layered Error Defense** - 4 layers with circuit breaker
-5. **Reflection-on-Failure** - Reflexion pattern in mementum
-6. **DSPy-style Optimization** - signature/module/optimizer triad
-7. **Conditional Retry** - error reinsertion not blind retry
-8. **Safe-prompt Analysis** - structural analysis of untrusted content
-9. **Tool Receipts** - audit trail for tool execution
-10. **Context Branching for A/B** - org-mode sub-headers
+Let me structure this as a knowledge page with:
+1. Frontmatter
+2. Overview of the persisted-findings strategy
+3. The output schema (raw findings, digested insights, outcome)
+4. Common patterns discovered across cycles
+5. The local fallback protocol
+6. Controller directives & decision system
+7. Actionable patterns table
+8. The 0% keep rate problem
+9. Meta-learning observations
+10. Cross-references
 
-Let me create a comprehensive knowledge page that synthesizes all this.
+I'll make sure to be concrete with examples, code snippets, and command patterns. Let me aim for 50+ lines of dense, useful content.
