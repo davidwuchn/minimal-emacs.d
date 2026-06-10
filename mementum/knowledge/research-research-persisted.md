@@ -1,75 +1,55 @@
 <!--
 Synthesis verification:
-- Confidence: 80%
+- Confidence: 24%
 - Sources: 38 memories
-- Warnings: No code examples or concrete references
-- Auto-approved: yes (passed)
+- Warnings: No code examples or concrete references, Content does not mention topic 'research-research-persisted'
+- Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize the research memories into a knowledge page. Let me analyze the content:
+The user wants me to synthesize multiple research memories into a single knowledge page. Let me analyze the memories to identify common themes, patterns, and actionable insights.
 
-1. Multiple "persisted-findings" research sessions from auto-workflow
-2. Topics covered:
-   - gptel FSM pattern (state machines for resumable requests)
-   - mementum three-tier storage (state.md, memories, knowledge)
-   - nucleus prompt debugger / attention magnets
-   - mcp.el Emacs integration
-   - DSPy-style signatures and optimizers
-   - Reflexion self-reflection
-   - Three-tier watchdog (gastown)
-   - Hybrid search (vector + BM25)
-   - Self-wiring knowledge graphs
-   - Three-loop meta-learning
-   - Layered error defense (retry + circuit breaker + fallback)
-   - Durable execution / checkpointing
-   - MAST failure taxonomy
-   - Anti-sycophancy patterns
-   - Sub-agent delegation decision trees
-   - Inline diff preview
-   - MAST taxonomy
-   - gptel-org-branching-context
-   - MemGPT two-tier memory
-   - A-MEM Zettelkasten
-   - Logprob-based prompt validation
-   - DNS-based memory discovery
-   - Trajectory-level intervention (SE-Agent)
-   - KV cache for agentic pauses (Continuum)
-   - Conditional retry with error reinsertion
-   - Self-rewriting meta-prompt loop
-   - HyperAgents DGM-H
-   - Genesis agent self-verification
-   - Context mode sandbox
-   - GBrain self-wiring
-   - Efrit pure executor
-   - Gas town git-worktree
-   - nullclaw minimal binary
-   - psi statecharts
-   - DSPy GEPA
-   - GEPA reflective prompt evolution
-   - EvolveR self-evolution
-   - Local-fallback patterns (researcher daemon missing)
-   - Daemon orchestration boundaries
-   - Self-rewriting meta-prompt loop
-   - Reviewer pattern
-   - Signature+Module+Optimizer triad
-   - Mem0 graph-based memory
-   - Reflexion verbal self-reflection
-   - DEGRADED state circuit breaker
-   - Five failure categories
-   - Tool receipts
-   - Workspace boundaries
-   - Self-evolution trajectories
+Key themes across the memories:
+1. **gptel FSM pattern** - state machine for pause/resume of multi-stage LLM requests
+2. **mementum three-tier storage** - state.md, memories, knowledge
+3. **nucleus prompt patterns** - attention magnets, EBNF grammar, prompt debugger, safe-compile
+4. **Layered error defense** - retry+jitter, classification, circuit breaker, fallback
+5. **Durable execution / checkpoint-resume** - persistent state, 92% latency reduction
+6. **MAST failure taxonomy** - 40% design, 35% inter-agent, 25% verification
+7. **DSPy signature/module/optimizer** - typed IO contracts, GEPA optimization
+8. **Reflexion verbal self-reflection** - 91% pass@1 on HumanEval
+9. **MCP integration via mcp.el** - mcp-hub pattern, mcp-make-text-tool bridge
+10. **Self-rewriting meta-prompt loop** - 4-step Reflect→Draft→Validate→Persist
+11. **DNS-based memory node discovery** - mementum protocol network
+12. **Logprob-based prompt validation** - nucleus theory
+13. **Trajectory-level intervention** - SE-Agent, NeurIPS 2025
+14. **KV cache management** - Continuum paper
+15. **Anti-sycophancy prompt patterns**
+16. **Context branching** - gptel-org-branching-context
+17. **magent durable child-agent jobs**
+18. **mcp.el lifecycle pattern**
+19. **Context-mode sandboxing** - 98% reduction via SQLite FTS5
+20. **"Think in Code" paradigm** - 100x token reduction
+21. **ZeroClaw/NullClaw** - provider-agnostic runtime, tool receipts, workspace boundaries
+22. **gptel + mcp.el setup** - org topic restriction
+23. **AI Cliff phenomenon** - context fixation
 
-The topic is "research-research-persisted" - this is about the auto-workflow's persisted research findings system.
+Common problem patterns:
+- 0% keep rate on most persisted research
+- Researcher daemon dead/stale
+- Validation/timeout failures (10/10 recent commits)
+- 7% keep rate on auto-workflow
+- Pipeline defects when researcher daemon disappears
 
-Let me create a comprehensive knowledge page that synthesizes ALL of this into a single document with:
-- Frontmatter
-- Concrete examples
-- Actionable patterns
-- Code/table examples
-- Cross-references
-- Minimum 50 lines of content
+Actionable patterns to surface:
+1. **Self-Evolution Loop** - Reflect→Draft→Validate→Persist with persistent feedback
+2. **FSM-based Resumable Requests** - replace monolithic runners
+3. **Three-tier Memory Hierarchy** - state/memory/knowledge
+4. **Layered Error Defense** - 4 layers with circuit breaker
+5. **Reflection-on-Failure** - Reflexion pattern in mementum
+6. **DSPy-style Optimization** - signature/module/optimizer triad
+7. **Conditional Retry** - error reinsertion not blind retry
+8. **Safe-prompt Analysis** - structural analysis of untrusted content
+9. **Tool Receipts** - audit trail for tool execution
+10. **Context Branching for A/B** - org-mode sub-headers
 
-I need to be careful to write something useful. The topic is essentially about the auto-workflow's research system, with the many external research findings that have been gathered. Let me structure it as a knowledge page about the research system itself, with the patterns discovered.
-
-Let me start with frontmatter and write a comprehensive page.
+Let me create a comprehensive knowledge page that synthesizes all this.

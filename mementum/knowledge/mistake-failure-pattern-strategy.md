@@ -1,37 +1,30 @@
 <!--
 Synthesis verification:
-- Confidence: 40%
+- Confidence: 12%
 - Sources: 30 memories
-- Warnings: No code examples or concrete references, Very short content (29 lines)
+- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-strategy', Very short content (22 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize memories about mistake-failure-pattern-strategy into a knowledge page. Let me analyze the memories:
+The user wants me to synthesize a collection of mistake/failure pattern memories into a cohesive knowledge page. Let me analyze what I have:
 
-1. All are "strategy" failure type
-2. Targets include:
-   - Staging-related: staging-verification, staging-scope, staging-review, staging-push, staging-merge, staging-config
-   - Lisp modules: treesit-agent-tools-workspace, gptel-tools-agent-* (many), gptel-ext-tool-confirm, gptel-ext-backend-registry, gptel-benchmark-* (subagent, principles, core), gptel-auto-workflow-* (strategic, research-cache, projects, production-metrics, production, ontology-strategy, ontology-router, mementum, evolution, bare-path-diagnostic, approval-queue)
+1. All memories share a common `failure type: strategy`
+2. They target various files/modules in the gptel ecosystem and staging operations
+3. Categories include `:programming` (keep-rate ~3.5%) and `:agentic` (keep-rate ~1.4% to 4.3%)
+4. There are different severity levels based on keep-rates
+5. Targets fall into clusters:
+   - Staging operations (verification, scope, review, push, merge, config)
+   - Lisp modules (treesit-agent-tools, gptel-tools-agent, gptel-ext, gptel-benchmark, gptel-auto-workflow)
+6. Occurrence counts range from 3 to 18
+7. Most are from June 2026 timeframe
 
-3. Categories: :programming (3.5%, 0.0%), :agentic (1.4%, 4.3%)
-4. Occurrences range from 3 to 18
-5. Most are 2026-06-08 or 2026-06-09
-
-I need to:
-- Create frontmatter
-- Write 50+ lines of content
-- Include concrete examples
-- Provide actionable patterns
+Let me organize this into a comprehensive knowledge page with:
+- Frontmatter
+- Overview section
+- Target clustering
+- Severity analysis with tables
+- Code examples of patterns
+- Actionable remediation strategies
 - Cross-references
 
-Let me structure this:
-
-1. Overview
-2. Failure taxonomy (staging vs lisp modules)
-3. High-priority targets (by occurrence count)
-4. Category analysis (programming vs agentic)
-5. Patterns
-6. Actionable remediation
-7. Related
-
-Let me create a comprehensive page.
+I need to make sure I have at least 50 lines of actual content. Let me craft this carefully.

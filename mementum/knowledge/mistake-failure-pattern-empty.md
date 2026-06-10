@@ -1,40 +1,28 @@
 <!--
 Synthesis verification:
-- Confidence: 80%
+- Confidence: 12%
 - Sources: 8 memories
-- Warnings: No code examples or concrete references
-- Auto-approved: yes (passed)
+- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-empty', Very short content (20 lines)
+- Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize multiple memory entries about a "mistake-failure-pattern-empty" topic into a comprehensive knowledge page. Let me analyze the memories:
+The user wants me to synthesize multiple "empty-hypothesis" failure pattern memories into a comprehensive knowledge page. Let me analyze the data:
 
-All memories share a common pattern:
+Common pattern across all memories:
 - Failure type: empty-hypothesis
-- Various targets (staging-verification, staging-scope, staging-review, and several Lisp module files)
-- Categories: :programming or :agentic
-- Keep-rates: mostly 0.0%, some 2.0-2.2%
-- Multiple occurrences
-- No example reasons provided
-- All detected as systemic failures
+- Example reasons: none (this is the key insight - the hypothesis is EMPTY)
+- Category: mostly :agentic, some :programming
+- Keep-rate: 0.0% for most, 2.0-2.2% for some
+- Targets: mix of staging-* (process artifacts) and lisp/modules/* (code files)
+- All detected by monitoring agent as systemic failures
 
-I need to:
-1. Create a complete markdown knowledge page
-2. Start with frontmatter
-3. Have at least 50 lines of content
-4. Include concrete examples
-5. Include actionable patterns
-6. Cross-reference related topics
-7. Be comprehensive
+Let me build a comprehensive knowledge page with:
+1. Frontmatter
+2. Pattern definition
+3. Target analysis (staging vs module files)
+4. Category breakdown with table
+5. Diagnosis steps
+6. Actionable remediation patterns
+7. Cross-references
 
-Let me build this out properly with sections covering:
-- Overview/Summary
-- The pattern itself (empty-hypothesis)
-- Affected targets breakdown
-- Failure analysis
-- Detection signals
-- Actionable patterns/remediation
-- Tables of occurrences
-- Code examples
-- Related topics
-
-Let me draft this carefully.
+I need to make this at least 50 lines of actual content with concrete examples.
