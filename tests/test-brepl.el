@@ -185,5 +185,47 @@
   (should (boundp 'gptel-brepl-binary))
   (should (stringp gptel-brepl-binary)))
 
+;; ── Group 8: Bracket validation ──
+
+(ert-deftest test-brepl/validate-brackets-balanced ()
+  "validate-brackets returns :valid t for balanced Clojure code."
+  (let ((code "(defn foo [x] (+ x 1))"))
+    (cl-letf (((symbol-function 'gptel-brepl-balance)
+               (lambda (_file &optional _dry-run)
+                 (list :success t :output code :error nil))))
+      (let ((result (gptel-brepl-validate-brackets code)))
+        (should (plist-get result :valid))
+        (should (string= (plist-get result :fixed-content) code))))))
+
+(ert-deftest test-brepl/validate-brackets-unbalanced-fixed ()
+  "validate-brackets returns :valid t with :fixed-content when brepl fixes it."
+  (let ((broken "(defn foo [x] (+ x 1)")
+        (fixed  "(defn foo [x] (+ x 1))"))
+    (cl-letf (((symbol-function 'gptel-brepl-balance)
+               (lambda (_file &optional _dry-run)
+                 (list :success t :output fixed :error nil))))
+      (let ((result (gptel-brepl-validate-brackets broken)))
+        (should (plist-get result :valid))
+        (should (string= (plist-get result :fixed-content) fixed))
+        (should-not (string= (plist-get result :fixed-content) broken))))))
+
+(ert-deftest test-brepl/validate-brackets-fix-fails ()
+  "validate-brackets returns :valid nil when brepl can't fix."
+  (cl-letf (((symbol-function 'gptel-brepl-balance)
+             (lambda (_file &optional _dry-run)
+               (list :success nil :output nil :error "unfixable"))))
+    (let ((result (gptel-brepl-validate-brackets "((((")))
+      (should-not (plist-get result :valid))
+      (should (plist-get result :error)))))
+
+(ert-deftest test-brepl/validate-brackets-defcustom ()
+  "gptel-brepl-validate-brackets defcustom is defined and boolean."
+  (should (boundp 'gptel-brepl-validate-brackets))
+  (should (booleanp gptel-brepl-validate-brackets)))
+
+(ert-deftest test-brepl/install-save-hooks-exists ()
+  "gptel-brepl-install-save-hooks is a defined function."
+  (should (fboundp 'gptel-brepl-install-save-hooks)))
+
 (provide 'test-brepl)
 ;;; test-brepl.el ends here

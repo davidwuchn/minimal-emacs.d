@@ -15,6 +15,12 @@
   :type 'file
   :group 'gptel)
 
+(defcustom gptel-brepl-validate-brackets t
+  "When non-nil, auto-fix unbalanced brackets in Clojure files before save.
+Requires `clojure-mode' and the brepl CLI."
+  :type 'boolean
+  :group 'gptel)
+
 ;;; ── nREPL Port Discovery ──
 
 (defun gptel-brepl--find-port-file (dir)
@@ -112,6 +118,50 @@ Keys: :binary, :binary-exists, :port, :available."
         :binary-exists (and (executable-find gptel-brepl-binary) t)
         :port (gptel-brepl-nrepl-port)
         :available (gptel-brepl-available-p)))
+
+(defun gptel-brepl-validate-brackets (file-content)
+  "Validate brackets in FILE-CONTENT string of Clojure code.
+Writes content to a temp file, runs `brepl balance --dry-run',
+and compares output with input.
+Returns plist:
+  :valid t/nil
+  :fixed-content string (if auto-fixed)
+  :error string (if invalid and unfixable)"
+  (let ((temp-file (make-temp-file "brepl-validate-" nil ".clj")))
+    (unwind-protect
+        (progn
+          (with-temp-file temp-file
+            (insert file-content))
+          (let ((result (gptel-brepl-balance temp-file t)))
+            (if (not (plist-get result :success))
+                (list :valid nil :fixed-content nil
+                      :error (or (plist-get result :error) "brepl balance failed"))
+              (let ((output (plist-get result :output)))
+                (if (string= output file-content)
+                    (list :valid t :fixed-content file-content :error nil)
+                  ;; Fixed — output differs from input
+                  (list :valid t :fixed-content output :error nil))))))
+      (delete-file temp-file))))
+
+(defun gptel-brepl-install-save-hooks ()
+  "Install before-save hook for Clojure bracket auto-fix.
+Only activates in `clojure-mode' buffers when
+`gptel-brepl-validate-brackets' is non-nil."
+  (when gptel-brepl-validate-brackets
+    (add-hook 'before-save-hook
+              (lambda ()
+                (when (and (derived-mode-p 'clojure-mode)
+                           (fboundp 'gptel-brepl-validate-brackets))
+                  (let ((validation (gptel-brepl-validate-brackets
+                                     (buffer-string))))
+                    (when (and (plist-get validation :fixed-content)
+                               (not (string= (plist-get validation :fixed-content)
+                                             (buffer-string))))
+                      (let ((fixed (plist-get validation :fixed-content)))
+                        (erase-buffer)
+                        (insert fixed)
+                        (message "[brepl] Auto-fixed brackets before save"))))))
+              nil t)))
 
 (provide 'gptel-ext-brepl)
 ;;; gptel-ext-brepl.el ends here
