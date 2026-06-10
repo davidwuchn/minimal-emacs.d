@@ -7667,12 +7667,14 @@ Verification: byte-compiled cleanly, no warnings.\n\nDiff:\n+ \"Return 1.\"\n"))
                  (cancel-timer probe-timer)
                  (setq probe-done t)
                  (gptel-auto-workflow--probe-classify-result grade)))
-            (error
-             (cancel-timer probe-timer)
-             (setq probe-done t)
-             (setq probe-healthy nil)
-             (message "[self-heal] Probe: grader crashed — %s"
-                      (error-message-string probe-err))))
+             (error
+              (cancel-timer probe-timer)
+              (setq probe-done t)
+              (setq probe-healthy nil)
+              (let ((bt (with-output-to-string (backtrace))))
+                (message "[self-heal] Probe: grader crashed — %s"
+                         (error-message-string probe-err))
+                (message "[self-heal] Probe: BACKTRACE:\n%s" bt))))
            ;; Wait synchronously (max probe-timeout seconds)
            ;; CRITICAL: use accept-process-output, NOT sleep-for.
            ;; sleep-for blocks the event loop, preventing the async

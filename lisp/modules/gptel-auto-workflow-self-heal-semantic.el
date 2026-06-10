@@ -331,8 +331,9 @@ Returns count of such bugs."
                  (next-char (or (char-after match-end-pos) 0))
                  (has-binding t)
                  (case-end nil)
-                 (case-binds-err nil))
-            (cond
+                  (inside-condition-case nil)
+                  (case-binds-err nil))
+             (cond
              ((= next-char ?\)) (setq has-binding nil))
              ((memq next-char '(?\s ?\t ?\n ?\r))
               (let ((p (1+ match-end-pos))
@@ -350,19 +351,24 @@ Returns count of such bugs."
                                 (forward-sexp 1)
                                 (1- (point)))
                             (error nil)))
-             (when case-end
-               (save-excursion
-                 ;; Go to the enclosing condition-case form to check its variable binding
-                 (goto-char (match-beginning 0))
-                 (backward-up-list 1)  ; from (error up to (condition-case ...)
-                 (forward-char 1)      ; skip "("
-                 (forward-symbol 1)    ; skip "condition-case" (forward-word stops at -)
-                 (skip-syntax-forward " '")
-                 (let ((var-start (point)))
-                   (skip-syntax-forward "w_")
-                   (when (string= (buffer-substring var-start (point)) "err")
-                     (setq case-binds-err t)))))
-            (when (and (null has-binding) case-end (null case-binds-err))
+              (when case-end
+                (save-excursion
+                  ;; Go to the enclosing form to verify it's condition-case
+                  (goto-char (match-beginning 0))
+                  (backward-up-list 1)
+                  (let ((form-start (point)))
+                    (forward-char 1)
+                    (forward-symbol 1)
+                    (when (string= (buffer-substring (1+ form-start) (point))
+                                   "condition-case")
+                      (setq inside-condition-case t)
+                      ;; Check if condition-case binds err
+                      (skip-syntax-forward " '")
+                      (let ((var-start (point)))
+                        (skip-syntax-forward "w_")
+                        (when (string= (buffer-substring var-start (point)) "err")
+                          (setq case-binds-err t)))))))
+             (when (and inside-condition-case (null has-binding) (null case-binds-err))
               (save-excursion
                 (goto-char match-end-pos)
                 (when (re-search-forward "[^-_[:word:]]err[^-_[:word:]]" case-end t)
