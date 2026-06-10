@@ -338,13 +338,16 @@ validate-brackets succeeding for balanced code."
       (delete-file test-file))))
 
 (ert-deftest test-daemon-repl/retries-without-self-heal ()
-  "After-save eval retries max-retries times even when self-heal-file is unbound.
-Previously, the code gave up after 1 attempt if self-heal-file was not fbound,
-because the `if' condition required BOTH (< attempt max-retries) AND
-(fboundp 'gptel-auto-workflow--self-heal-file). The else branch gave up."
+  "After-save eval retries max-retries times even when no self-heal is available.
+The code uses `cond' with three branches: heal+retry, retry-only, give-up.
+BOTH self-heal-file and self-heal-file-dispatch must be unbound so the
+retry-only branch is reached."
   (let ((eval-count 0)
         (test-file (make-temp-file "daemon-repl-retry-" nil ".el"))
-        (heal-file-fbound (fboundp 'gptel-auto-workflow--self-heal-file)))
+        (heal-file-fn (when (fboundp 'gptel-auto-workflow--self-heal-file)
+                        (symbol-function 'gptel-auto-workflow--self-heal-file)))
+        (heal-dispatch-fn (when (fboundp 'gptel-auto-workflow--self-heal-file-dispatch)
+                            (symbol-function 'gptel-auto-workflow--self-heal-file-dispatch))))
     (unwind-protect
         (progn
           (with-temp-file test-file
@@ -357,9 +360,9 @@ because the `if' condition required BOTH (< attempt max-retries) AND
                     ;; Mock should-auto-eval-p to return t
                     ((symbol-function 'gptel-daemon-repl--should-auto-eval-p)
                      (lambda () t)))
-            ;; Ensure self-heal-file is NOT fbound for this test
-            (when heal-file-fbound
-              (fmakunbound 'gptel-auto-workflow--self-heal-file))
+            ;; Ensure no self-heal function is fbound
+            (fmakunbound 'gptel-auto-workflow--self-heal-file)
+            (fmakunbound 'gptel-auto-workflow--self-heal-file-dispatch)
             (unwind-protect
                 (progn
                   (gptel-daemon-repl-reset-metrics)
@@ -376,10 +379,11 @@ because the `if' condition required BOTH (< attempt max-retries) AND
                   (let ((metrics (gptel-daemon-repl-metrics)))
                     (should (= (plist-get metrics :eval-attempts) 1))
                     (should (= (plist-get metrics :eval-failures) 1))))
-              ;; Restore self-heal-file if it was bound
-              (when heal-file-fbound
-                (defalias 'gptel-auto-workflow--self-heal-file
-                  (symbol-function 'gptel-auto-workflow--self-heal-file))))))
+              ;; Restore self-heal functions if they were originally bound
+              (when heal-file-fn
+                (defalias 'gptel-auto-workflow--self-heal-file heal-file-fn))
+              (when heal-dispatch-fn
+                (defalias 'gptel-auto-workflow--self-heal-file-dispatch heal-dispatch-fn)))))
       (delete-file test-file))))
 
 (provide 'test-daemon-repl)
