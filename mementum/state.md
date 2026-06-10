@@ -3,7 +3,7 @@
 > **Bootstrapped**: 2026-06-06
 > **Session**: Research Analysis + Plan Diversity Metric
 > **Status**: ✅ **OV5 SELF-HEALING VERIFIED** — Pipeline detects, diagnoses, remediates, recovers
-> **Latest**: Plan diversity metric wired into experiment logging (observability active)
+> **Latest**: Plan-level search implemented — generates N diverse candidates before execution
 > **Active Plan**: None — system is self-improving, pipeline running autonomously
 > **Pi5**: Running, self-healing working (grader crash → BLIND MODE → recovery)
 
