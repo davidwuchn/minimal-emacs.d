@@ -695,13 +695,6 @@ Returns the new item ID."
 Impact
 
 
-
-
-
-
-
-
-
 |\n|----|--------|-----------|-----------------|--------|---------------|---------------|\n"
                (concat "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n"
                        "|----|--------|-----------|-----------------|--------|---------------|---------------|\n"
