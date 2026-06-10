@@ -7,6 +7,8 @@
 (ignore-errors (require 'gptel-auto-workflow-monitoring-agent))
 
 (declare-function gptel-auto-workflow--plist-get "gptel-tools-agent-base")
+(declare-function gptel-prefix-cache-on-run-start "gptel-ext-prefix-cache")
+(declare-function gptel-prefix-cache-on-run-end "gptel-ext-prefix-cache")
 (declare-function gptel-knowledge--frontier-select-targets "gptel-auto-workflow-knowledge-reasoning")
 (declare-function gptel-knowledge--dialectic-check "gptel-auto-workflow-knowledge-reasoning")
 (declare-function gptel-auto-workflow--gap-prioritize-targets "gptel-auto-workflow-evolution" (targets))
@@ -1401,12 +1403,15 @@ so cleanup never crashes before resetting state."
              (let ((final-phase (if gptel-auto-experiment--quota-exhausted
                                     "quota-exhausted"
                                   "complete")))
-               (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
-               (gptel-auto-workflow--stop-status-refresh-timer)
-               (setq gptel-auto-workflow--running nil
-                     gptel-auto-workflow--run-project-root nil
-                     gptel-auto-workflow--current-target nil
-                     gptel-auto-workflow--current-project nil)
+                (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+                (gptel-auto-workflow--stop-status-refresh-timer)
+                ;; Invalidate prefix cache when run ends
+                (when (fboundp 'gptel-prefix-cache-on-run-end)
+                  (gptel-prefix-cache-on-run-end))
+                (setq gptel-auto-workflow--running nil
+                      gptel-auto-workflow--run-project-root nil
+                      gptel-auto-workflow--current-target nil
+                      gptel-auto-workflow--current-project nil)
                (setq gptel-auto-workflow--stats
                      (plist-put gptel-auto-workflow--stats :phase final-phase))
                 (message "[auto-workflow] Complete: %d experiments, %d targets improved"
@@ -1445,6 +1450,14 @@ so cleanup never crashes before resetting state."
           (plist-put gptel-auto-workflow--stats :kept 0))
     (gptel-auto-workflow--persist-status)
     (message "[auto-workflow] Starting %s with %d targets" run-id (length validated-targets))
+    ;; Compute prefix cache for this run (DeepSeek-Reasonix style):
+    ;; Stable prefix (AGENTS.md + tools + mementum) computed once, reused
+    ;; across all experiments. Enables LLM prefix-cache hits.
+    (when (fboundp 'gptel-prefix-cache-on-run-start)
+      (condition-case err
+          (gptel-prefix-cache-on-run-start run-id)
+        (error
+         (message "[prefix-cache] Compute failed: %s" (error-message-string err)))))
     ;; Priority ordering: sort targets by keep-rate ascending (hardest first)
     (let* ((ordered-targets
             (if (fboundp 'gptel-auto-experiment--target-keep-rate-from-tsv)

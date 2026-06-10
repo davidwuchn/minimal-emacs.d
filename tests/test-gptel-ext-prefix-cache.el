@@ -1,0 +1,206 @@
+;;; test-gptel-ext-prefix-cache.el --- Tests for gptel-ext-prefix-cache -*- lexical-binding: t; -*-
+
+;; Tests for prefix-cache-stable prompt architecture.
+;; Core invariant: stable prefix stays byte-stable across experiments.
+
+;;; Code:
+
+(require 'ert)
+(require 'cl-lib)
+
+;; Load module under test
+(require 'gptel-ext-prefix-cache)
+
+;; ─── Test Helpers ───
+
+(defvar test-prefix-cache--original-content nil)
+(defvar test-prefix-cache--original-valid-p nil)
+(defvar test-prefix-cache--original-run-id nil)
+
+(defun test-prefix-cache--save-state ()
+  "Save current prefix cache state."
+  (setq test-prefix-cache--original-content gptel-prefix-cache--content
+        test-prefix-cache--original-valid-p gptel-prefix-cache--valid-p
+        test-prefix-cache--original-run-id gptel-prefix-cache--run-id))
+
+(defun test-prefix-cache--restore-state ()
+  "Restore saved prefix cache state."
+  (setq gptel-prefix-cache--content test-prefix-cache--original-content
+        gptel-prefix-cache--valid-p test-prefix-cache--original-valid-p
+        gptel-prefix-cache--run-id test-prefix-cache--original-run-id))
+
+;; ─── Tests ───
+
+(ert-deftest test-prefix-cache-invalidate ()
+  "Test that invalidate clears all cache state."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        ;; Set up fake cache
+        (setq gptel-prefix-cache--content "test content"
+              gptel-prefix-cache--valid-p t
+              gptel-prefix-cache--run-id "run-123"
+              gptel-prefix-cache--stats '(:size 100))
+        ;; Invalidate
+        (gptel-prefix-cache-invalidate)
+        ;; Verify cleared
+        (should (null gptel-prefix-cache--content))
+        (should (null gptel-prefix-cache--valid-p))
+        (should (null gptel-prefix-cache--run-id))
+        (should (null gptel-prefix-cache--stats)))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-compute-creates-content ()
+  "Test that compute creates cache content."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (gptel-prefix-cache-invalidate)
+        (let ((result (gptel-prefix-cache-compute "run-abc")))
+          ;; Should return non-empty string
+          (should (stringp result))
+          (should (> (length result) 0))
+          ;; Should contain marker
+          (should (string-match-p "STABLE PREFIX" result))
+          ;; Should contain dynamic marker
+          (should (string-match-p "DYNAMIC CONTENT" result))
+          ;; Cache should be valid
+          (should gptel-prefix-cache--valid-p)
+          (should (equal gptel-prefix-cache--run-id "run-abc"))
+          ;; Stats should be populated
+          (should gptel-prefix-cache--stats)
+          (should (> (plist-get gptel-prefix-cache--stats :size) 0))))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-compute-reuses-cache ()
+  "Test that compute reuses cache for same run-id."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (gptel-prefix-cache-invalidate)
+        ;; First compute
+        (let ((result1 (gptel-prefix-cache-compute "run-xyz")))
+          (should (stringp result1))
+          ;; Second compute with same run-id — should reuse
+          (let ((result2 (gptel-prefix-cache-compute "run-xyz")))
+            (should (string= result1 result2))
+            ;; Stats should still be from first compute
+            (should gptel-prefix-cache--stats))))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-compute-forces-recompute ()
+  "Test that force-recompute creates new cache."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (gptel-prefix-cache-invalidate)
+        (let ((_result1 (gptel-prefix-cache-compute "run-123")))
+          ;; Force recompute
+          (let ((result2 (gptel-prefix-cache-compute "run-123" t)))
+            ;; Content might be same but timestamp should update
+            (should (stringp result2))
+            (should gptel-prefix-cache--timestamp))))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-prepend-disabled ()
+  "Test that prepend returns dynamic prompt when disabled."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (let ((gptel-prefix-cache-enabled nil)
+            (dynamic "dynamic content"))
+        (should (string= (gptel-prefix-cache-prepend dynamic) dynamic)))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-prepend-enabled ()
+  "Test that prepend concatenates prefix + dynamic."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (gptel-prefix-cache-invalidate)
+        (gptel-prefix-cache-compute "run-test")
+        (let* ((dynamic "DYNAMIC PART")
+               (result (gptel-prefix-cache-prepend dynamic)))
+          ;; Result should contain both prefix and dynamic
+          (should (string-match-p "STABLE PREFIX" result))
+          (should (string-match-p "DYNAMIC PART" result))
+          ;; Dynamic part should be after the marker
+          (should (> (string-match-p "DYNAMIC PART" result)
+                       (string-match-p "DYNAMIC CONTENT" result)))))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-context-usage ()
+  "Test context usage estimation."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (gptel-prefix-cache-invalidate)
+        (gptel-prefix-cache-compute "run-test")
+        (let* ((dynamic "short dynamic prompt")
+               (usage (gptel-prefix-cache-context-usage dynamic)))
+          ;; Should return plist with expected keys
+          (should (plist-get usage :total))
+          (should (plist-get usage :prefix))
+          (should (plist-get usage :dynamic))
+          (should (numberp (plist-get usage :ratio)))
+          ;; Ratio should be between 0 and 1 for short prompt
+          (should (>= (plist-get usage :ratio) 0.0))
+          ;; Prefix should be larger than dynamic for our test
+          (should (>= (plist-get usage :prefix) (plist-get usage :dynamic)))))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-extract-dynamic ()
+  "Test extracting dynamic portion from full prompt."
+  (let* ((dynamic "THIS IS DYNAMIC")
+         (full (concat "=== STABLE PREFIX ===\n\n"
+                       "stable content\n\n"
+                       "=== DYNAMIC CONTENT (changes per experiment) ===\n\n"
+                       dynamic)))
+    (should (string= (gptel-prefix-cache-extract-dynamic full) dynamic))))
+
+(ert-deftest test-prefix-cache-extract-dynamic-no-marker ()
+  "Test extract-dynamic returns full prompt when no marker."
+  (let ((prompt "just a plain prompt"))
+    (should (string= (gptel-prefix-cache-extract-dynamic prompt) prompt))))
+
+(ert-deftest test-prefix-cache-stats ()
+  "Test stats formatting."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (gptel-prefix-cache-invalidate)
+        (should (string-match-p "No cache" (gptel-prefix-cache-stats)))
+        (gptel-prefix-cache-compute "run-stats")
+        (let ((stats (gptel-prefix-cache-stats)))
+          (should (string-match-p "[0-9]+ chars" stats))
+          (should (string-match-p "[0-9]+ sections" stats))
+          (should (string-match-p "run=run-stats" stats))))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-truncate-content ()
+  "Test content truncation helper."
+  ;; Short content — unchanged
+  (should (string= (gptel-prefix-cache--truncate-content "short" 100) "short"))
+  ;; Long content — truncated
+  (let ((long (make-string 200 ?x)))
+    (should (< (length (gptel-prefix-cache--truncate-content long 100)) 200))
+    (should (string-match-p "\\.\\.\\."
+                            (gptel-prefix-cache--truncate-content long 100)))))
+
+(ert-deftest test-prefix-cache-run-lifecycle ()
+  "Test run start/end lifecycle hooks."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (gptel-prefix-cache-invalidate)
+        ;; Start run
+        (gptel-prefix-cache-on-run-start "lifecycle-run")
+        (should gptel-prefix-cache--valid-p)
+        (should (equal gptel-prefix-cache--run-id "lifecycle-run"))
+        ;; End run
+        (gptel-prefix-cache-on-run-end)
+        (should (null gptel-prefix-cache--valid-p))
+        (should (null gptel-prefix-cache--content)))
+    (test-prefix-cache--restore-state)))
+
+(provide 'test-gptel-ext-prefix-cache)
+;;; test-gptel-ext-prefix-cache.el ends here

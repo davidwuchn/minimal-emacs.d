@@ -45,6 +45,10 @@
 
 (declare-function gptel-request "gptel-request")
 (declare-function my/gptel-get-model-metadata "gptel-ext-context-cache")
+(declare-function gptel-prefix-cache-get "gptel-ext-prefix-cache")
+(declare-function gptel-prefix-cache-prepend "gptel-ext-prefix-cache")
+(declare-function gptel-prefix-cache-context-usage "gptel-ext-prefix-cache")
+(declare-function gptel-prefix-cache-enabled "gptel-ext-prefix-cache")
 (declare-function gptel-auto-workflow--current-run-id "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--ensure-results-file "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--make-idempotent-callback "gptel-tools-agent-base")
@@ -1866,21 +1870,39 @@ explore a different part of the file.\n"
               (focus-line . ,focus-line)
               (sexp-check-command . ,sexp-check-command))))
       ;; Try category-specific template first; fall back to EDN resolve
-      (let ((cat-template (gptel-auto-workflow--load-prompt-template target)))
-        (if (and cat-template (> (length cat-template) 100))
-            ;; Category template available: substitute variables
-            (let ((result cat-template))
-              (dolist (pair variables)
-                (let ((key (car pair))
-                      (val (cdr pair)))
-                  (setq result
-                        (replace-regexp-in-string
-                         (concat "{{" (symbol-name key) "}}")
-                         (if (stringp val) val (format "%s" val))
-                         result t t))))
-              result)
-          ;; Fallback: deterministic EDN resolve
-          (gptel-auto-experiment--prompt-edn-resolve variables))))))
+      (let* ((cat-template (gptel-auto-workflow--load-prompt-template target))
+             (dynamic-prompt
+              (if (and cat-template (> (length cat-template) 100))
+                  ;; Category template available: substitute variables
+                  (let ((result cat-template))
+                    (dolist (pair variables)
+                      (let ((key (car pair))
+                            (val (cdr pair)))
+                        (setq result
+                              (replace-regexp-in-string
+                               (concat "{{" (symbol-name key) "}}")
+                               (if (stringp val) val (format "%s" val))
+                               result t t))))
+                    result)
+                ;; Fallback: deterministic EDN resolve
+                (gptel-auto-experiment--prompt-edn-resolve variables)))
+             ;; Prefix cache integration (DeepSeek-Reasonix style):
+             ;; Separate stable prefix (computed once per run) from dynamic suffix.
+             ;; The stable prefix includes AGENTS.md, tools, mementum —
+             ;; identical bytes across experiments enable LLM prefix cache hits.
+             (full-prompt
+              (if (and (fboundp 'gptel-prefix-cache-enabled)
+                       (fboundp 'gptel-prefix-cache-prepend)
+                       (gptel-prefix-cache-enabled))
+                  (progn
+                    (when (fboundp 'gptel-prefix-cache-context-usage)
+                      (let ((usage (gptel-prefix-cache-context-usage dynamic-prompt)))
+                        (when (plist-get usage :compaction-needed-p)
+                          (message "[prefix-cache] Context compaction needed: %.0f%% full"
+                                   (* 100 (plist-get usage :ratio))))))
+                    (gptel-prefix-cache-prepend dynamic-prompt))
+                dynamic-prompt)))
+        full-prompt))))
 
 (defun gptel-auto-experiment--get-topic-knowledge (target)
   "Get compressed topic-specific knowledge for TARGET.
