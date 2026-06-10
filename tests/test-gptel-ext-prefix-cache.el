@@ -445,6 +445,43 @@
           (should (< (length result) 20))))
     (test-prefix-cache--restore-state)))
 
+;; ─── Relevance Scoring Tests (AttnRes Phase 2) ───
+
+(ert-deftest test-prefix-cache-format-results-weighted ()
+  "Test weighted result formatting with relevance scores."
+  (let* ((results
+          (list
+           (cons 0.85
+                 (list :id "exp1" :hypothesis "Fix memory leak" :score-before 0.5 :score-after 0.8 :kept t))
+           (cons 0.42
+                 (list :id "exp2" :hypothesis "Refactor parser" :score-before 0.6 :score-after 0.6 :kept nil))))
+         (formatted (gptel-prefix-cache--format-results-weighted results)))
+    (should (string-match-p "rel=85%" formatted))
+    (should (string-match-p "rel=42%" formatted))
+    (should (string-match-p "KEPT" formatted))
+    (should (string-match-p "DISCARDED" formatted))))
+
+(ert-deftest test-prefix-cache-sections-with-relevance ()
+  "Test that sections-for-experiment includes relevance-weighted results."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (let* ((target "lisp/modules/gptel-ext-prefix-cache.el")
+             (previous
+              (list
+               (list :id "exp1" :target "lisp/modules/gptel-ext-prefix-cache.el"
+                     :hypothesis "Add caching" :score-before 0.5 :score-after 0.9 :kept t)
+               (list :id "exp2" :target "lisp/modules/other.el"
+                     :hypothesis "Refactor" :score-before 0.6 :score-after 0.4 :kept nil)))
+             (sections (gptel-prefix-cache-sections-for-experiment
+                        target 1 10 nil previous))
+             (recent-results (cdr (assoc "recent-results"
+                                         (mapcar (lambda (s) (cons (cadr s) (cddr s))) sections)))))
+        (should (string-match-p "Previous Results" recent-results))
+        ;; When rank-relevant is available, should show relevance scores
+        (when (fboundp 'gptel-auto-experiment--rank-relevant)
+          (should (string-match-p "rel=" recent-results))))
+    (test-prefix-cache--restore-state)))
+
 ;; ─── Persistence Tests (Gap 6) ───
 
 (ert-deftest test-prefix-cache-save-and-load ()

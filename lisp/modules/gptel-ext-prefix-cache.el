@@ -38,6 +38,8 @@
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--categorize-target "gptel-auto-workflow-ontology-router")
 (declare-function gptel-mementum--recall "gptel-auto-workflow-mementum" (query depth))
+(declare-function gptel-auto-experiment--rank-relevant "gptel-tools-agent-experiment-loop"
+                  (target previous-results &optional n))
 
 ;; ─── Customization ───
 
@@ -461,6 +463,33 @@ Returns string with: kept count, common failure modes, best hypothesis."
    results
    "\n"))
 
+(defcustom gptel-prefix-cache-relevant-results-count 10
+  "Number of most relevant previous results to include in prompt.
+Uses AttnRes-inspired relevance scoring (Jaccard similarity).
+Set to nil to include all results (legacy behavior)."
+  :type '(choice (const :tag "All results" nil)
+                 (integer :tag "Max relevant results"))
+  :group 'gptel-tools-agent)
+
+(defun gptel-prefix-cache--format-results-weighted (scored-results)
+  "Format SCORED-RESULTS as compact bullet list with relevance scores.
+SCORED-RESULTS is a list of (RELEVANCE . EXPERIMENT-PLIST) pairs."
+  (mapconcat
+   (lambda (pair)
+     (let* ((relevance (car pair))
+            (r (cdr pair))
+            (rel-pct (round (* 100 relevance))))
+       (format "- Exp %s [rel=%d%%]: %s | Score %.2f→%.2f | %s"
+               (or (plist-get r :id) "?")
+               rel-pct
+               (truncate-string-to-width
+                (or (plist-get r :hypothesis) "no hypothesis") 45 nil nil "...")
+               (or (plist-get r :score-before) 0.0)
+               (or (plist-get r :score-after) 0.0)
+               (if (plist-get r :kept) "KEPT" "DISCARDED"))))
+   scored-results
+   "\n"))
+
 ;; ─── Session Separation (Gap 4) ───
 
 (defvar gptel-prefix-cache--role-caches (make-hash-table :test 'equal)
@@ -672,11 +701,26 @@ Priority 1 = essential, 5 = optional."
                   (if analysis
                       (format "## Analysis\n%s" (plist-get analysis :patterns))
                       "")))
-    ;; Priority 3: Recent results
+    ;; Priority 3: Recent results (relevance-weighted if available)
     (cons 3 (cons "recent-results"
                   (if (and previous-results (> (length previous-results) 0))
-                      (format "## Previous Results\n%s"
-                              (gptel-prefix-cache--format-results previous-results))
+                      (let* ((use-relevance
+                              (and gptel-prefix-cache-relevant-results-count
+                                   (fboundp 'gptel-auto-experiment--rank-relevant)))
+                             (formatted
+                              (if use-relevance
+                                  (let ((scored (gptel-auto-experiment--rank-relevant
+                                                 target previous-results
+                                                 gptel-prefix-cache-relevant-results-count)))
+                                    (if scored
+                                        (format "## Previous Results (top %d by relevance)\n%s"
+                                                (length scored)
+                                                (gptel-prefix-cache--format-results-weighted scored))
+                                      (format "## Previous Results\n%s"
+                                              (gptel-prefix-cache--format-results previous-results))))
+                                (format "## Previous Results\n%s"
+                                        (gptel-prefix-cache--format-results previous-results)))))
+                        formatted)
                       "")))
    ;; Priority 4: Mementum
    (cons 4 (cons "mementum"
