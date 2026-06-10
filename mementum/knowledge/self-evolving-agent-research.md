@@ -125,7 +125,7 @@ Four highly relevant papers from May-June 2026 on self-evolving autonomous agent
 |-------|------------|-----------------|
 | MOSS | Batch anchoring before evolution | Group similar failures before proposing fixes |
 | MOSS | Deterministic multi-stage pipeline | Formalize evolution stages with explicit ordering |
-| Sibyl | Explicit trial-to-behavior conversion | Formalize ontology updates as auditable conversion units |
+| Sibyl | Explicit trial-to-behavior conversion | ✅ **IMPLEMENTED** — `gptel-ext-conversion-unit.el` tracks every ontology update as an auditable unit with trial-id, before/after state, timestamp, and validation status |
 | Sibyl | Recovered-failure registry | Track how failures were handled (blocked/downgraded/routed) |
 | APEX | Explicit strategy DAG | Add prerequisite edges to ontology to prevent exploration collapse |
 | APEX | Fork Discovery | Systematically identify unexplored ontology gaps |

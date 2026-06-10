@@ -297,6 +297,118 @@ Merges with existing registry (units with same ID are overwritten)."
     (format "[conversion-unit] Total: %d | Pending: %d | Validated: %d | Rejected: %d | Orphaned: %d"
             total pending validated rejected orphaned)))
 
+;; ─── Audit ───
+
+(defun gptel-conversion-unit-audit ()
+  "Validate conversion units against available trial evidence.
+Marks units as orphaned if their trial-id cannot be found in
+experiment results (TSV files).
+Returns count of orphaned units found."
+  (let ((orphaned-count 0)
+        (trial-ids (gptel-conversion-unit--collect-trial-ids)))
+    (maphash
+     (lambda (id unit)
+       (when (and (eq (gptel-conversion-unit-validation-status unit) 'pending)
+                  (not (member (gptel-conversion-unit-trial-id unit) trial-ids)))
+         (setf (gptel-conversion-unit-validation-status unit) 'orphaned)
+         (cl-incf orphaned-count)
+         (message "[conversion-unit] Orphaned: %s (trial %s not found)"
+                  id (gptel-conversion-unit-trial-id unit))))
+     gptel-conversion-unit--registry)
+    (message "[conversion-unit] Audit complete: %d orphaned" orphaned-count)
+    orphaned-count))
+
+(defun gptel-conversion-unit--collect-trial-ids ()
+  "Collect all trial IDs from experiment TSV files.
+Returns list of strings.  Expensive — call sparingly."
+  (let ((ids nil)
+        (root (or (and (fboundp 'gptel-auto-workflow--project-root)
+                       (gptel-auto-workflow--project-root))
+                  default-directory)))
+    (dolist (tsv-file (directory-files-recursively
+                        (expand-file-name "var/tmp/experiments" root)
+                        "results\\.tsv$"))
+      (with-temp-buffer
+        (insert-file-contents tsv-file)
+        (goto-char (point-min))
+        ;; Skip header
+        (forward-line)
+        (while (not (eobp))
+          (let* ((line (buffer-substring-no-properties
+                        (line-beginning-position)
+                        (line-end-position)))
+                 (cols (split-string line "\t")))
+            (when (> (length cols) 1)
+              (push (string-trim (car cols)) ids)))
+          (forward-line))))
+    (delete-dups ids)))
+
+;; ─── Export ───
+
+(defun gptel-conversion-unit-export-to-tsv (&optional file)
+  "Export all conversion units to TSV.
+Optional FILE defaults to var/tmp/conversion-units-export.tsv.
+Returns path to exported file."
+  (let* ((root (or (and (fboundp 'gptel-auto-workflow--project-root)
+                        (gptel-auto-workflow--project-root))
+                   default-directory))
+         (outfile (or file
+                      (expand-file-name "var/tmp/conversion-units-export.tsv" root))))
+    (make-directory (file-name-directory outfile) t)
+    (with-temp-file outfile
+      (insert "id\ttrial-id\tconversion-type\ttimestamp\tvalidation-status\tsource-file\tbefore-state\tafter-state\n")
+      (dolist (unit (gptel-conversion-unit-list))
+        (insert (format "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
+                        (gptel-conversion-unit-id unit)
+                        (gptel-conversion-unit-trial-id unit)
+                        (symbol-name (gptel-conversion-unit-conversion-type unit))
+                        (format-time-string "%Y-%m-%d %H:%M:%S"
+                                            (seconds-to-time
+                                             (gptel-conversion-unit-timestamp unit)))
+                        (symbol-name (gptel-conversion-unit-validation-status unit))
+                        (gptel-conversion-unit-source-file unit)
+                        (prin1-to-string (gptel-conversion-unit-before-state unit))
+                        (prin1-to-string (gptel-conversion-unit-after-state unit))))))
+    (message "[conversion-unit] Exported %d units to %s"
+             (gptel-conversion-unit-count) outfile)
+    outfile))
+
+;; ─── Integration Helpers ───
+
+(defun gptel-conversion-unit-record-repair (target current-cat suggested-cat delta)
+  "Record an ontology repair as a conversion unit.
+Called by `gptel-auto-workflow--repair-ontology' for each
+recategorization suggestion."
+  (gptel-conversion-unit-add
+   (format "repair-%s" target)
+   'repair
+   (list :target target :category current-cat)
+   (list :target target :category suggested-cat :delta delta)
+   "gptel-auto-workflow-ontology-router.el"
+   (list :delta delta)))
+
+(defun gptel-conversion-unit-record-drift (target category delta)
+  "Record a category drift detection as a conversion unit.
+Called by `gptel-auto-workflow--detect-category-drift' for each drift."
+  (gptel-conversion-unit-add
+   (format "drift-%s" target)
+   'drift
+   (list :target target :category category)
+   (list :target target :category category :delta delta)
+   "gptel-auto-workflow-ontology-router.el"
+   (list :delta delta)))
+
+(defun gptel-conversion-unit-record-evolution (changes-plist)
+  "Record an ontology evolution result as a conversion unit.
+Called by `gptel-auto-workflow--memory-schema-record-evolution'."
+  (gptel-conversion-unit-add
+   "evolution-cycle"
+   'evolution
+   nil
+   changes-plist
+   "gptel-auto-workflow-ontology-router.el"
+   nil))
+
 ;; ─── Provide ───
 
 (provide 'gptel-ext-conversion-unit)
