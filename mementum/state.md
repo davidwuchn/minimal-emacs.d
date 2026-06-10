@@ -9,6 +9,7 @@
 >   - Boundary validator: Hardened file path construction in 4 workflow modules (production, projects, beads, strategic)
 >   - TSP risk-node training pairs: 4 missing functions implemented, JSONL persistence, prompt integration
 >   - Batch anchoring: Integrated into monitoring agent Phase 10, writes mementum/batch-anchor-report.md
+>   - Boundary validator Phase 2: Fixed 6 default-directory fallbacks in evolution module, 2 condition-case syntax fixes
 >   - All commits pushed to GitHub; Pi5 sync ongoing
 > **Active Plan**: None — codebase clean, tests green
 > **Pi5**: Running, self-healing working (grader crash → BLIND MODE → recovery)
@@ -30,7 +31,8 @@
 | **P1** | Monitoring Agent: Complete (Phases 0-10) | @maintainer | **COMPLETE** |
 | **P1** | Research paper analysis (MOSS, Sibyl, APEX) | @maintainer | **COMPLETE** |
 | **P2** | Daemon watchdog hardening (Pi5 freeze after ~90 min) | @maintainer | **COMPLETE** |
-| **P2** | Boundary validator: file path construction hardening | @maintainer | **COMPLETE** |
+| **P2** | Boundary validator Phase 1: file path construction | @maintainer | **COMPLETE** |
+| **P2** | Boundary validator Phase 2: evolution fallbacks | @maintainer | **COMPLETE** |
 
 ---
 
@@ -122,7 +124,7 @@
 - Watchdog: Now detects frozen daemon in ≤ 90s instead of ≤ 20 min
 - Risk-node training pairs: 4 missing functions implemented, JSONL persistence
 - Codebase: Clean, no unmerged files, no syntax errors
-- 10 commits pushed successfully
+- 11 commits pushed successfully
 
 ### New implementations (this session)
 1. **Batch anchoring** (MOSS insight): `gptel-auto-workflow--batch-anchor-audit-results` groups audit failures by type before evolution; `gptel-auto-workflow--batch-anchor-report` generates markdown for proposals; integrated into monitoring agent Phase 10 — writes `mementum/batch-anchor-report.md` after each cycle
@@ -133,6 +135,7 @@
 6. **Prefix-cache architecture** (Reasonix): 610-line module with context state persistence, role caches, token budgeting, proactive compaction, relevance scoring. 32 tests.
 7. **Sibyl conversion units**: 415-line module with JSONL persistence, monthly rotation, orphan detection, TSV export. 11 tests. Integrated into ontology evolution.
 8. **TSP risk-node training pairs** (TSP insight): `gptel-auto-workflow--risk-node-types-in-file` analyzes files for risk patterns; `gptel-auto-workflow--risk-node-report-from-history` correlates risk nodes with experiment outcomes; `gptel-auto-workflow--update-risk-node-training-pair-outcomes` records pairs to JSONL; `gptel-auto-workflow--format-kept-risk-node-pairs` formats successful pairs for prompts.
+9. **Boundary validator Phase 2**: Fixed 6 `default-directory` fallbacks in evolution module to `user-emacs-directory`; fixed 2 pre-existing `condition-case` without handlers (byte-compile errors with `byte-compile-error-on-warn t`)
 
 ---
 
@@ -142,9 +145,9 @@
 1. **Monitor 18:00 pipeline run** — Verify [prefix-cache], [conversion-unit] messages appear in daemon log
 
 ### Near-Term (Choose one)
-2. **Boundary validator Phase 2** — Integrate `with-workspace-boundary` macro into evolution module's 104 file operations
-3. **Prefix-cache Phase 3** — Cross-run statistics aggregation, compaction threshold auto-tuning
-4. **Evolution proposal from batch reports** — Read `mementum/batch-anchor-report.md` in evolution cycle to guide batch-curated evolution
+2. **Prefix-cache Phase 3** — Cross-run statistics aggregation, compaction threshold auto-tuning
+3. **Evolution proposal from batch reports** — Read `mementum/batch-anchor-report.md` in evolution cycle to guide batch-curated evolution
+4. **External integrations** — Slack/Zendesk/DataDog (needs API keys)
 
 ---
 
