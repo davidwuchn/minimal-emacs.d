@@ -715,12 +715,22 @@ removes or changes logic."
     fixed))
 
 (cl-defun gptel-auto-workflow--semantic-audit-file (file &key (_auto-fix nil))
-  "Run all semantic audit checks on FILE."
+  "Run all semantic audit checks on FILE.
+Wraps each check in condition-case so a buggy check doesn't
+crash the whole audit (e.g., unbalanced-parens check throwing
+end-of-file error on broken files)."
   (gptel-auto-workflow--semantic-audit-reset)
   (let ((total-issues 0))
     (dolist (check gptel-auto-workflow--semantic-audit-checks)
-      (let ((issues (funcall (cdr check) file)))
-        (setq total-issues (+ total-issues issues))))
+      ;; Wrap each check in condition-case to isolate failures.
+      ;; A broken file (e.g., unbalanced parens) shouldn't crash the
+      ;; whole audit run.
+      (condition-case check-err
+          (let ((issues (funcall (cdr check) file)))
+            (setq total-issues (+ total-issues issues)))
+        (error
+         (message "[self-heal-semantic] Check %s failed on %s: %s"
+                  (car check) (file-name-nondirectory file) check-err))))
     (list :issues total-issues
           :log (nreverse (copy-sequence gptel-auto-workflow--semantic-audit-log)))))
 
