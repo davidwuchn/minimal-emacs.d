@@ -35,7 +35,7 @@
 (defvar gptel-auto-workflow-executor-rate-limit-fallbacks nil)
 (defvar gptel-auto-experiment-retry-delay nil)
 (defvar gptel-auto-experiment-rate-limit-max-retry-delay nil)
-(defvar gptel-auto-experiment--api-error-threshold nil)
+(defvar gptel-auto-experiment--api-error-threshold 5)
 (defvar gptel-auto-experiment--no-improvement-count nil)
 (defvar gptel-auto-experiment--api-error-count nil)
 (defvar gptel-auto-experiment-max-grader-retries nil)
