@@ -304,15 +304,20 @@ After fix: catches ALL errors via (error ...)."
           (should (= fixed 0)))
       (test-self-heal-semantic--cleanup file))))
 
-(ert-deftest test-self-heal-semantic/fix-skip-when-cannot-fix ()
-  "Auto-fixer does not modify file when paren balance cannot be determined
-or when closing > opening (would require deletion, not just addition)."
+(ert-deftest test-self-heal-semantic/fix-removes-excess-close-at-eof ()
+  "Auto-fixer removes excess close parens when closing > opening."
   (let* ((content
           "(defun foo ()\n  42))\n")
          (file (test-self-heal-semantic--tmp-file content)))
     (unwind-protect
-        (let ((fixed (gptel-auto-workflow--fix-unbalanced-parens file)))
-          (should (= fixed 0)))
+        (progn
+          (let ((fixed (gptel-auto-workflow--fix-unbalanced-parens file)))
+            (should (= fixed 1)))
+          ;; Verify the extra paren was removed
+          (let ((result (with-temp-buffer
+                          (insert-file-contents file)
+                          (buffer-string))))
+            (should (string= result "(defun foo ()\n  42)\n"))))
       (test-self-heal-semantic--cleanup file))))
 
 (ert-deftest test-self-heal-semantic/detects-unmatched-brackets ()

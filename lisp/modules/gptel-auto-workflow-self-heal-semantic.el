@@ -265,23 +265,52 @@ check-parens after loading the file as emacs-lisp.
 Returns 1 if unbalanced, 0 if balanced. Catches ALL parse errors
 (not just user-error) so that `end-of-file' and other balance errors
 are also reported."
-  (let ((issues 0))
+  (let ((issues 0)
+        (error-line 1))
     (condition-case err
         (with-temp-buffer
           (insert-file-contents file)
           (emacs-lisp-mode)
-          ;; check-parens raises user-error if unbalanced.
-          ;; Other parse errors (e.g., end-of-file) also indicate
-          ;; unbalanced parens, so catch all with 'error'.
           (check-parens))
       (error
        (setq issues 1)
+       (setq error-line
+             (or (gptel-auto-workflow--find-paren-balance-line file)
+                 1))
        (gptel-auto-workflow--semantic-audit-record
-        file 1
+        file error-line
         'unbalanced-parens
         (format "Unbalanced parens — %s"
                 (error-message-string err)))))
     issues))
+
+(defun gptel-auto-workflow--find-paren-balance-line (file)
+  "Find the line where paren balance goes negative in FILE.
+Returns line number, or nil if file is balanced."
+  (cl-block nil
+    (with-temp-buffer
+      (insert-file-contents file)
+      (goto-char (point-min))
+      (let ((balance 0)
+            (in-string nil)
+            (in-comment nil))
+        (while (not (eobp))
+          (let ((ch (char-after)))
+            (cond
+             ((and (not in-string) (eq ch 59))
+              (setq in-comment t))
+             ((and in-comment (eq ch 10))
+              (setq in-comment nil))
+             ((and (not in-comment) (eq ch 34))
+              (setq in-string (not in-string)))
+             ((and (not in-string) (not in-comment))
+              (cond ((eq ch 40) (setq balance (1+ balance)))
+                    ((eq ch 41)
+                     (setq balance (1- balance))
+                     (when (< balance 0)
+                        (cl-return (line-number-at-pos)))))))
+          (forward-char 1)))))))
+
 
 ;; ── Check 7: Missing provide statement ──
 
@@ -628,11 +657,11 @@ Returns 1 if fixed, 0 if no change needed."
     fixed))
 
 (defun gptel-auto-workflow--fix-unbalanced-parens (file)
-  "Append missing close parens at end of FILE if unbalanced.
-Handles the common case: more opening than closing parens/brackets
-introduced by editing. Returns 1 if fixed, 0 otherwise.
-Safe: only appends closes, never deletes code. Does NOT handle the
-case of more closes than opens (which requires deletion — too risky)."
+  "Fix unbalanced parens in FILE.
+Handles two cases:
+1. Missing close parens (more opens than closes) — appends at EOF
+2. Extra close parens (more closes than opens) — removes from error line
+Returns 1 if fixed, 0 otherwise."
   (let ((fixed 0)
         (opens 0)
         (closes 0)
@@ -659,17 +688,48 @@ case of more closes than opens (which requires deletion — too risky)."
           (cond
            ((eq ch 40) (setq opens (1+ opens)))
            ((eq ch 41) (setq closes (1+ closes))))))))
-    ;; Only fix if more opens than closes (append closes)
-    (when (> opens closes)
+    (cond
+     ;; Case 1: more opens than closes — append missing closes at EOF
+     ((> opens closes)
       (let* ((missing (- opens closes))
              (closes-str (make-string missing 41)))
-        (setq new-content (concat new-content "\n" closes-str))
+        (setq new-content (concat new-content "
+" closes-str))
         (with-temp-file file
           (insert new-content))
         (message "[self-heal-semantic] Appended %d missing close paren(s) at EOF in %s"
                  missing (file-name-nondirectory file))
         (setq fixed 1)))
+     ;; Case 2: more closes than opens — remove excess from error line
+     ((< opens closes)
+      (let* ((excess (- closes opens))
+             (error-line (gptel-auto-workflow--find-paren-balance-line file)))
+        (when error-line
+          (with-temp-buffer
+            (insert new-content)
+            (goto-char (point-min))
+            (forward-line (1- error-line))
+            (end-of-line)
+            ;; Remove excess close parens from end of line
+            (let ((end-pos (point))
+                  (start-pos (save-excursion
+                               (let ((count 0))
+                                 (while (and (> (point) (line-beginning-position))
+                                            (< count excess)
+                                            (eq (char-before) 41))
+                                   (backward-char 1)
+                                   (setq count (1+ count)))
+                                 (point)))))
+              (when (> (- end-pos start-pos) 0)
+                (delete-region start-pos end-pos)
+                 (let ((content (buffer-string)))
+                   (with-temp-file file
+                     (insert content)))
+                (message "[self-heal-semantic] Removed %d excess close paren(s) from line %d in %s"
+                         (- end-pos start-pos) error-line (file-name-nondirectory file))
+                (setq fixed 1))))))))
     fixed))
+
 
 (defun gptel-auto-workflow--fix-condition-case-unbound-err (file)
   "Fix condition-case nil handlers that reference err without binding.

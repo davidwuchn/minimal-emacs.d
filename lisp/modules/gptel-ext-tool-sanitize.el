@@ -503,4 +503,3 @@ Uses last-wins so the most recently registered struct takes precedence."
 
 (provide 'gptel-ext-tool-sanitize)
 ;;; gptel-ext-tool-sanitize.el ends here
-
