@@ -49,9 +49,10 @@
     (make-directory "mementum/memories" t)
     (make-directory "mementum/knowledge" t)
     (with-temp-file "mementum/state.md"
-      (insert "# Mementum State\n\n> Last session: test\n\n## In Progress\n\nTest integration.\n"))
+      (insert "# Mementum State\n\n> Last session: test\n\n## In Progress\n\nTest
+integration.\n"))
     (shell-command "git add .")
-    (shell-command "git commit -m 'init'")
+    (shell-command "git commit -m \='init\='")
     (setq gptel-benchmark-memory-dir
           (expand-file-name "mementum/" gptel-benchmark-test--temp-dir))
     (setq gptel-benchmark-memory-auto-commit nil)))

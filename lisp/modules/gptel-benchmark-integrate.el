@@ -182,7 +182,8 @@ for nil or malformed input."
 
 (defun gptel-benchmark--feed-forward-improvement (name type anti-patterns applied capabilities)
   "Store improvement result in memory for next cycle.
-Only creates memory when there's actual insight (anti-patterns or improvements)."
+Only creates memory when there's actual insight (anti-patterns or
+improvements)."
   (when (or (> (length anti-patterns) 0) (> applied 0))
     (gptel-benchmark-memory-create
      (format "evolve-%s-%s" type (format-time-string "%Y%m%d-%H%M%S"))
