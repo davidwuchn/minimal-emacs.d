@@ -60,6 +60,7 @@
 (declare-function gptel-auto-experiment--needs-inspection-thrash-recovery-p "gptel-tools-agent-prompt-analyze")
 (declare-function gptel-auto-experiment--select-large-target-focus "gptel-tools-agent-prompt-analyze")
 (declare-function gptel-auto-experiment--target-byte-size "gptel-tools-agent-prompt-analyze")
+(declare-function gptel-auto-experiment--hypothesis-diversity "gptel-tools-agent-experiment-loop")
 (declare-function gptel-auto-workflow--get-worktree-dir "gptel-tools-agent-subagent")
 ;;; gptel-tools-agent-prompt-build.el --- Prompt building - construction & logging -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
@@ -2091,6 +2092,29 @@ If :business-value-score is not set, computes from local signals."
                                              :risk-score (plist-get local-metrics :risk-score)
                                              :user-satisfaction-delta (plist-get local-metrics :user-satisfaction-delta)
                                              :support-tickets-reduced (plist-get local-metrics :support-tickets-reduced)))
+                             experiment))
+                       experiment))
+         ;; Compute plan diversity (PlanSearch arXiv:2409.03733)
+         ;; Measures how different this hypothesis is from previous attempts on same target.
+         ;; 0.0 = identical to some previous, 1.0 = maximally different.
+         ;; Logged for observability; future: use to select diverse plans before implementation.
+         (experiment (if (and target
+                              (fboundp 'gptel-auto-experiment--hypothesis-diversity)
+                              (fboundp 'gptel-auto-workflow--parse-all-results))
+                         (let* ((hypothesis (gptel-auto-workflow--plist-get experiment :hypothesis nil))
+                                (all-results (gptel-auto-workflow--parse-all-results))
+                                (target-results (cl-remove-if-not
+                                                 (lambda (r) (equal (plist-get r :target) target))
+                                                 all-results))
+                                (diversity (when (and hypothesis target-results)
+                                             (gptel-auto-experiment--hypothesis-diversity
+                                              hypothesis target-results))))
+                           (if diversity
+                               (progn
+                                 (message "[plan-diversity] %s: %.2f (vs %d previous)"
+                                          (truncate-string-to-width hypothesis 50 nil nil "...")
+                                          diversity (length target-results))
+                                 (plist-put experiment :diversity diversity))
                              experiment))
                        experiment))
          (file (gptel-auto-workflow--ensure-results-file run-id))
