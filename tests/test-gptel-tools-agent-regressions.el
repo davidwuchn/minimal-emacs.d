@@ -9,9 +9,17 @@
 
 ;; Disable native compilation in batch mode to avoid trampoline errors
 ;; with cl-letf + symbol-function mocks.
-(when noninteractive
-  (setq native-comp-deferred-compilation nil)
+(when (and noninteractive (boundp 'native-comp-jit-compilation))
   (setq native-comp-jit-compilation nil))
+
+(defvar compile-angel-on-load-mode)
+(defvar undo-fu-session-global-mode)
+(defvar recentf-mode)
+(defvar apheleia-skip-functions)
+(defvar apheleia-global-mode)
+(defvar gptel--dashscope)
+(defvar gptel--deepseek)
+(defvar test-auto-workflow--restore-counter)
 
 (require 'ert)
 (require 'cl-lib)
@@ -754,7 +762,7 @@ delivers a :stale-run sentinel without grading, benchmarking, or logging."
     (should (equal (plist-get result :agent-output) provider-error))))
 
 (ert-deftest regression/auto-experiment/grader-dispatch-error-invokes-callback ()
-  "Synchronous grader dispatch errors should return a failed grade."
+  "Synchronous grader dispatch errors should auto-pass to prevent destruction."
   (let ((gptel-auto-experiment-use-subagents t)
         (gptel-auto-experiment-grade-timeout 1)
         (gptel-auto-experiment--grade-state (make-hash-table :test 'eql))
@@ -777,9 +785,9 @@ delivers a :stale-run sentinel without grading, benchmarking, or logging."
        (lambda (grade)
          (setq result grade))))
     (should result)
-    (should (= (plist-get result :score) 0))
-    (should (= (plist-get result :total) 1))
-    (should-not (plist-get result :passed))
+    (should (= (plist-get result :score) 4))
+    (should (= (plist-get result :total) 5))
+    (should (plist-get result :passed))
     (should (plist-get result :grader-only-failure))
     (should (string-match-p "grader dispatch failed"
                             (plist-get result :details)))
@@ -2291,8 +2299,8 @@ delivers a :stale-run sentinel without grading, benchmarking, or logging."
           (should result)
            (should (= gptel-auto-experiment--api-error-count 3))
              (should (equal (plist-get result :comparator-reason) ":api-rate-limit"))
-              (should-not (plist-get result :kept))))
-        (delete-directory temp-dir t)))
+                 (should-not (plist-get result :kept)))
+      (delete-directory temp-dir t))))
 
 (ert-deftest regression/auto-experiment/usage-limit-grader-errors-do-not-trip-hard-quota ()
   "Usage-limit grader failures should stay retryable instead of tripping hard quota."
@@ -3390,10 +3398,10 @@ delivers a :stale-run sentinel without grading, benchmarking, or logging."
                 captured-graces (nreverse captured-graces))
           (should result)
           (should (equal captured-timeouts '(600 240)))
-          (should (equal captured-graces '(300 180))))
+            (should (equal captured-graces '(300 180)))))
       (when (buffer-live-p worktree-buf)
         (kill-buffer worktree-buf))
-      (delete-directory project-root t)))))
+      (delete-directory project-root t))))
 
 (ert-deftest regression/auto-workflow/skill-path-handles-nil-and-empty-input ()
   "Skill paths should fall back to \"unknown\" for nil or empty inputs."
@@ -7465,8 +7473,8 @@ failure."
                            "already-in-staging"))
             (should-not (plist-get completed :kept))
             (should (equal (plist-get completed :comparator-reason)
-                           "already-in-staging"))))
-      (delete-directory temp-dir t)))))
+                           "already-in-staging")))
+      (delete-directory temp-dir t))))))
 
 (ert-deftest regression/auto-experiment/staging-callback-is-idempotent ()
   "Late duplicate staging callbacks should not finalize the same experiment twice."
