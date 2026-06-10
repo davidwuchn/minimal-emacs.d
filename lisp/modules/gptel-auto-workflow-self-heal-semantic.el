@@ -681,7 +681,7 @@ Returns a string suitable for insertion into prompts."
               (condition-case nil
                   (let* ((json-object-type 'plist)
                          (pair (json-read-from-string line)))
-                    (when (eq (plist-get pair :outcome) 'success)
+                    (when (string= (plist-get pair :outcome) "success")
                       (push pair pairs)))
                 (error nil))))
           (forward-line 1))))

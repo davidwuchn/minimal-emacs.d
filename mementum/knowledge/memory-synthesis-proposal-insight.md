@@ -1,34 +1,29 @@
 <!--
 Synthesis verification:
-- Confidence: 12%
+- Confidence: 40%
 - Sources: 4 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'memory-synthesis-proposal-insight', Very short content (26 lines)
+- Warnings: No code examples or concrete references, Very short content (21 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize a series of memories about an "insight-proposal" workflow into a single knowledge page. The memories are about different proposal types (prompt-builder, grader, general, executor) in what appears to be a Lisp/Emacs gptel-based agent system.
+The user wants me to synthesize memories about the topic "memory-synthesis-proposal-insight" into a knowledge page. Looking at the memories provided, they are about an auto-workflow system that detects synthesis candidates from various insight proposals related to Lisp modules in gptel. The memories are meta-memories about synthesis proposals themselves.
 
-Let me analyze the source memories to understand the patterns:
+Let me analyze what's in these memories:
 
-1. **insight-proposal-prompt-builder** (14 memories) - High priority auto-synthesis
-   - Files: mementum.el, ontology-router.el, ontology-strategy.el, production.el, production-metrics.el, projects.el, benchmark-principles.el, tools-agent-benchmark.el, tools-agent-experiment-core.el, tools-agent-prompt-build.el, tools-agent-runtime.el, staging-review, staging-scope, staging-verification
+1. **insight-proposal-prompt-builder**: 14 memories about prompt-builder module - HIGH PRIORITY auto-synthesis
+2. **insight-proposal-grader-lisp**: 8 memories about grader-lisp module - HIGH PRIORITY auto-synthesis
+3. **insight-proposal-general-lisp**: 4 memories about general-lisp module - Standard priority
+4. **insight-proposal-executor-lisp**: 3 memories about executor-lisp module - Standard priority
 
-2. **insight-proposal-grader-lisp** (8 memories) - High priority
-   - Files: ontology-router.el, ontology-strategy.el, production.el, projects.el, strategic.el, tools-agent-benchmark.el, tools-agent-runtime.el, treesit-agent-tools-workspace.el
+The topic is "memory-synthesis-proposal-insight" - this is about how the auto-workflow system proposes memory synthesis based on detecting related memory clusters.
 
-3. **insight-proposal-general-lisp** (4 memories) - Standard
-   - Files: ontology-router.el, ontology-strategy.el, production-metrics.el, tools-agent-benchmark.el
+I need to create a knowledge page that captures:
+- The auto-synthesis detection pattern
+- The threshold logic (it appears to be based on memory count)
+- Priority classification (HIGH PRIORITY at certain counts, Standard at others)
+- The workflow categories involved (lisp-modules/gptel-auto-workflow/* and lisp-modules/gptel-tools-agent/*)
+- The Lisp module breakdown (prompt-builder, grader, executor, general)
+- The action items (synthesize knowledge page when threshold reached)
+- Concrete examples/patterns
 
-4. **insight-proposal-executor-lisp** (3 memories) - Standard
-   - Files: mementum.el, ontology-strategy.el, tools-agent-experiment-core.el
-
-I need to create a comprehensive knowledge page that synthesizes these into actionable patterns. Since the memories are mostly metadata placeholders without actual content, I'll need to reconstruct the likely patterns from the file structure and naming conventions.
-
-Let me build out a comprehensive knowledge page that covers:
-- The insight-proposal workflow architecture
-- Different proposal types (prompt-builder, grader, general, executor)
-- File/module structure
-- Cross-references
-- Actionable patterns
-
-I'll create detailed content with code examples, tables, and command patterns. The topic is about an insight proposal system that reviews and proposes changes/improvements based on analysis of code modules.
+Let me create a comprehensive knowledge page with frontmatter, 50+ lines, examples, and cross-references.

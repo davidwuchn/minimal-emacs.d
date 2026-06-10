@@ -8293,7 +8293,7 @@ Returns number of fixes."
   "Return t if FN-SYM is defined as a defun in the file named MODULE-NAME.
 Searches lisp/modules/ for the file.  Returns nil if file not found or
 function not defined there."
-  (let* (         (proj-root (or gptel-auto-workflow--self-heal-project-root
+  (let* ((proj-root (or gptel-auto-workflow--self-heal-project-root
                         (locate-dominating-file default-directory ".git")
                         user-emacs-directory))
          (file (cl-some (lambda (dir)
