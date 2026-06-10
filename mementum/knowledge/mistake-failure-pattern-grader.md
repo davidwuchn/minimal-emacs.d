@@ -1,53 +1,38 @@
 <!--
 Synthesis verification:
-- Confidence: 80%
+- Confidence: 24%
 - Sources: 6 memories
-- Warnings: No code examples or concrete references
-- Auto-approved: yes (passed)
+- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-grader'
+- Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize a set of mistake/failure pattern memories into a knowledge page about "mistake-failure-pattern-grader". Let me analyze the memories:
+The user wants me to synthesize memories about a mistake pattern called "grader-bypass" into a comprehensive knowledge page. Let me analyze the data:
 
-All 6 memories share these characteristics:
-- Same date: 2026-06-09 08:52
-- Same failure type: grader-bypass
-- Detected by monitoring agent as systemic failure
-- Priority determined by category keep-rate (lower = higher priority)
+1. All 6 memories share the same failure type: `grader-bypass`
+2. All have 3-4 occurrences
+3. Targets span two categories:
+   - `:programming` (keep-rate: 0.0%) - 2 instances (staging-merge, gptel-tools-agent-benchmark.el)
+   - `:agentic` (keep-rate: 4.3%) - 4 instances (gptel-auto-workflow-*.el files)
+4. Trend timestamps show progression
+5. No example reasons were recorded
+6. Detected by monitoring agent as systemic failure
 
-The targets vary:
-1. staging-merge (category: :programming, keep-rate: 0.0%, 3 occurrences)
-2. lisp/modules/gptel-tools-agent-benchmark.el (category: :programming, keep-rate: 0.0%, 3 occurrences)
-3. lisp/modules/gptel-auto-workflow-strategic.el (category: :agentic, keep-rate: 4.3%, 3 occurrences)
-4. lisp/modules/gptel-auto-workflow-projects.el (category: :agentic, keep-rate: 4.3%, 3 occurrences)
-5. lisp/modules/gptel-auto-workflow-production.el (category: :agentic, keep-rate: 4.3%, 3 occurrences)
-6. lisp/modules/gptel-auto-workflow-ontology-strategy.el (category: :agentic, keep-rate: 4.3%, 4 occurrences)
+Let me build a knowledge page that:
+- Has frontmatter
+- Has at least 50 lines of content
+- Includes concrete examples (code, tables, commands)
+- Provides actionable patterns
+- Cross-references related topics
 
-Key observations:
-- "grader-bypass" is the recurring failure type
-- Two categories affected: :programming (0.0% keep-rate - worst) and :agentic (4.3% keep-rate)
-- Multiple files in auto-workflow family are affected
-- Trend shows evolution from June 4 to June 5-6
-- 6 total memories, 19 total occurrences
+I'll organize it into:
+1. Overview
+2. Pattern signature
+3. Affected targets (table)
+4. Why it's dangerous
+5. Detection signals
+6. Reproduction pattern / code example
+7. Remediation patterns
+8. Prevention checklist
+9. Related topics
 
-I need to create a knowledge page with:
-- Frontmatter
-- 50+ lines of content
-- Concrete examples (code, tables, commands)
-- Actionable patterns
-- Cross-references to related topics
-
-Let me structure this:
-
-1. Title and frontmatter
-2. Overview
-3. Failure signature table
-4. Affected targets breakdown
-5. Category analysis
-6. Trend timeline
-7. Root cause hypotheses
-8. Detection patterns
-9. Actionable remediation patterns
-10. Code examples
-11. Cross-references
-
-Let me write this comprehensively.
+Let me write this out fully and richly.

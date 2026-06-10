@@ -1,35 +1,50 @@
 <!--
 Synthesis verification:
-- Confidence: 12%
+- Confidence: 24%
 - Sources: 8 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-empty', Very short content (27 lines)
+- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-empty'
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize multiple "empty-hypothesis" failure pattern memories into a comprehensive knowledge page. Let me analyze the data:
+The user wants me to synthesize multiple memory entries about a mistake/failure pattern called "empty-hypothesis" into a comprehensive knowledge page. Let me analyze the data:
 
-1. Multiple instances of "empty-hypothesis" failure type
-2. Targets span:
-   - Staging process targets: staging-verification (5 occ), staging-scope (4 occ), staging-review (9 occ)
-   - Module targets: gptel-tools-agent-experiment-core.el (4), gptel-tools-agent-benchmark.el (6), gptel-auto-workflow-projects.el (5), gptel-auto-workflow-ontology-strategy.el (4), gptel-auto-workflow-ontology-router.el (3)
-3. Categories: :agentic (0.0% keep-rate mostly, one 2.0%) and :programming (0.0% mostly, one 2.2%)
-4. All have "Example reasons: none" - this is itself a key pattern
-5. All detected on 2026-06-09 with various times, one on 2026-06-10
+**Pattern Analysis:**
+- All entries share `failure type: empty-hypothesis`
+- Categories involved: `:programming` and `:agentic`
+- Keep-rates are all very low (0.0% to 2.2%)
+- All have "none" for example reasons
+- Targets include:
+  - staging-verification (5 occurrences, :programming)
+  - staging-scope (4 occurrences, :programming)
+  - staging-review (9 occurrences, :programming)
+  - lisp/modules/gptel-tools-agent-experiment-core.el (4 occurrences, :agentic)
+  - lisp/modules/gptel-tools-agent-benchmark.el (6 occurrences, :programming)
+  - lisp/modules/gptel-auto-workflow-projects.el (5 occurrences, :agentic)
+  - lisp/modules/gptel-auto-workflow-ontology-strategy.el (4 occurrences, :agentic)
+  - lisp/modules/gptel-auto-workflow-ontology-router.el (3 occurrences, :agentic)
 
-Key observations:
-- The "empty-hypothesis" pattern is characterized by having no example reasons recorded
-- It affects both staging workflow targets AND specific lisp module files
-- Very low keep-rates (0.0-2.2%) suggest these are mostly noise/failed patterns
-- Pattern spans 2 categories but predominantly :agentic and :programming
-- Occurrence counts range 3-9, moderate frequency
+Total occurrences: 5+4+9+4+6+5+4+3 = 40
 
-Let me build a comprehensive knowledge page with:
-- Frontmatter
-- Overview of the pattern
-- Concrete data tables
-- Affected targets breakdown
-- Diagnostic patterns (the "none" example reasons being diagnostic)
-- Actionable patterns for handling
-- Cross-references
+Date range: 2026-06-02 to 2026-06-08
 
-I need to make this 50+ lines of actual content with concrete examples, tables, and actionable patterns.
+The pattern "empty-hypothesis" is a failure type where the system generates no hypothesis, no reasons are recorded, and keep-rate is essentially 0. This suggests the agent is failing silently - producing empty output without any diagnostic information.
+
+I need to:
+1. Create a comprehensive knowledge page (50+ lines)
+2. Include concrete examples (code, tables, commands)
+3. Provide actionable patterns
+4. Cross-reference related topics
+5. Use proper frontmatter
+
+Let me structure this:
+
+1. Overview of the pattern
+2. Failure characteristics
+3. Affected targets table
+4. Root cause analysis
+5. Diagnostic patterns
+6. Actionable fixes
+7. Prevention patterns
+8. Related topics
+
+Let me write this out fully.
