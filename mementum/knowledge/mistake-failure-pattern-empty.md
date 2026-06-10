@@ -1,28 +1,50 @@
 <!--
 Synthesis verification:
-- Confidence: 12%
+- Confidence: 24%
 - Sources: 8 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-empty', Very short content (20 lines)
+- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-empty'
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize multiple "mistake" memory entries into a single knowledge page. Let me analyze the data:
+The user wants me to synthesize multiple memory entries about a mistake/failure pattern called "empty-hypothesis" into a comprehensive knowledge page. Let me analyze the data:
 
-1. All entries share a common failure type: "empty-hypothesis"
-2. Categories are split between `:programming` and `:agentic`
-3. Targets are either stage-related (staging-verification, staging-scope, staging-review) or specific Emacs Lisp modules
-4. Keep-rates are mostly 0.0%, with a couple at 2.0-2.2%
-5. All have "Example reasons: none" - this is itself notable
-6. Occurrences range from 3-9
+**Pattern Analysis:**
+- All entries share `failure type: empty-hypothesis`
+- Categories involved: `:programming` and `:agentic`
+- Keep-rates are all very low (0.0% to 2.2%)
+- All have "none" for example reasons
+- Targets include:
+  - staging-verification (5 occurrences, :programming)
+  - staging-scope (4 occurrences, :programming)
+  - staging-review (9 occurrences, :programming)
+  - lisp/modules/gptel-tools-agent-experiment-core.el (4 occurrences, :agentic)
+  - lisp/modules/gptel-tools-agent-benchmark.el (6 occurrences, :programming)
+  - lisp/modules/gptel-auto-workflow-projects.el (5 occurrences, :agentic)
+  - lisp/modules/gptel-auto-workflow-ontology-strategy.el (4 occurrences, :agentic)
+  - lisp/modules/gptel-auto-workflow-ontology-router.el (3 occurrences, :agentic)
 
-The pattern is clearly about a failure mode where hypotheses end up empty - likely in an agentic context where the system is supposed to generate hypotheses or reasoning but produces nothing useful.
+Total occurrences: 5+4+9+4+6+5+4+3 = 40
 
-Let me build a comprehensive knowledge page with:
-- Frontmatter
-- Pattern description
-- Concrete examples (the data itself)
-- Tables summarizing occurrences
-- Actionable patterns for diagnosis and remediation
-- Cross-references
+Date range: 2026-06-02 to 2026-06-08
 
-I need to ensure 50+ lines of actual content. Let me make this thorough.
+The pattern "empty-hypothesis" is a failure type where the system generates no hypothesis, no reasons are recorded, and keep-rate is essentially 0. This suggests the agent is failing silently - producing empty output without any diagnostic information.
+
+I need to:
+1. Create a comprehensive knowledge page (50+ lines)
+2. Include concrete examples (code, tables, commands)
+3. Provide actionable patterns
+4. Cross-reference related topics
+5. Use proper frontmatter
+
+Let me structure this:
+
+1. Overview of the pattern
+2. Failure characteristics
+3. Affected targets table
+4. Root cause analysis
+5. Diagnostic patterns
+6. Actionable fixes
+7. Prevention patterns
+8. Related topics
+
+Let me write this out fully.

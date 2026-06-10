@@ -1,143 +1,90 @@
 ---
 name: brepl
-description: Bracket-fixing REPL for Elisp (brepl for OV5) — evaluate Elisp code in a running Emacs daemon, validate brackets before save, auto-evaluate files on change
-metadata:
-  molecules: [brepl, elisp, repl, emacsclient]
-  level: compound
+description: "Clojure REPL client (nREPL-based). Use for evaluating Clojure code, loading files, and fixing unbalanced brackets. Not the Elisp daemon-repl."
 ---
 
-# brepl for OV5
+# brepl — Clojure REPL Client
 
-brepl brings bracket-fixing REPL concepts from ClojureScript to Emacs Lisp in OV5. It enables AI agents to safely generate, validate, and evaluate Elisp code.
+> **Not the Elisp daemon-repl.** This is the Clojure `brepl` CLI tool (github.com/licht1stein/brepl), a babashka-based nREPL client. For the Elisp daemon eval module, see the `daemon-repl` skill.
 
-## Concepts
+## Overview
 
-- **Bracket fixing**: Validate and auto-fix unbalanced parentheses before saving `.el` files
-- **Daemon REPL**: Evaluate expressions via `emacsclient` in a running Emacs daemon
-- **Auto-eval**: Watch `.el` files and automatically evaluate them after save
-- **Self-heal integration**: On evaluation failure, trigger OV5 self-healing
+brepl is a REPL client for evaluating Clojure expressions via nREPL. It connects to an nREPL server using `.nrepl-port` or `BREPL_PORT` environment variable.
 
-## Usage
+## Heredoc Pattern — Default Approach
 
-### Evaluate Expression
+**Always use heredoc for brepl evaluation.** This eliminates quoting issues.
 
-```elisp
-(gptel-brepl-eval-expression "(+ 1 2 3)")
+### Syntax (Stdin — Recommended)
+
+```bash
+brepl <<'EOF'
+(your clojure code here)
+EOF
 ```
 
-Returns result as string, or signals error if daemon is not running.
+Use `<<'EOF'` (quoted) to prevent shell variable expansion.
 
-### Evaluate File
+### Alternative: Positional Argument (simple one-liners only)
 
-```elisp
-(gptel-brepl-eval-file "lisp/modules/foo.el")
+```bash
+brepl '(+ 1 2 3)'
 ```
 
-Loads the file in the daemon. Reports success/failure.
+### Load a File
 
-### Validate Brackets
-
-```elisp
-(gptel-brepl-validate-brackets "(defun foo () 42")
+```bash
+brepl -f src/myapp/core.clj
 ```
 
-Returns plist:
-- `:valid` — t if balanced
-- `:fixed-content` — auto-fixed string (if fixable)
-- `:error` — error message (if unfixable)
+### Fix Unbalanced Brackets
 
-### Check Status
+```bash
+# Fix file in place
+brepl balance src/myapp/core.clj
 
-```elisp
-(gptel-brepl-status)
+# Preview fix to stdout
+brepl balance src/myapp/core.clj --dry-run
 ```
 
-Returns plist with:
-- `:enabled` — is brepl active?
-- `:server-accessible` — is daemon socket reachable?
-- `:socket-dir` — where sockets are found
-- `:watches` — number of active directory watches
+## Examples
 
-### Interactive Status Buffer
-
-```elisp
-M-x gptel-brepl-show-status
+**Namespace reload + call:**
+```bash
+brepl <<'EOF'
+(require '[myapp.core] :reload)
+(myapp.core/some-function "test" 123)
+EOF
 ```
 
-Opens `*brepl-status*` buffer with full diagnostics.
-
-## Configuration
-
-```elisp
-(setq gptel-brepl-enabled t)              ; Master switch
-(setq gptel-brepl-eval-on-save t)         ; Auto-eval after save
-(setq gptel-brepl-validate-brackets t)    ; Fix brackets before save
-(setq gptel-brepl-socket-dir nil)         ; Auto-detect if nil
-(setq gptel-brepl-default-server "server") ; Server name
+**Run tests:**
+```bash
+brepl <<'EOF'
+(require '[clojure.test :refer [run-tests]])
+(require '[myapp.core-test] :reload)
+(run-tests 'myapp.core-test)
+EOF
 ```
 
-## Integration with OV5
-
-### Edit Tool Hook
-
-When an AI agent edits an `.el` file via the Edit tool:
-
-1. **Before save**: `gptel-brepl-validate-brackets` checks syntax
-2. **Auto-fix**: If unbalanced, fixes are applied automatically
-3. **After save**: File is evaluated via `emacsclient`
-4. **On failure**: `gptel-auto-workflow--self-heal-semantic` is triggered
-
-### Experiment Workflow
-
-When OV5 experiments generate new Elisp:
-
-```elisp
-;; After writing experiment output
-(gptel-brepl-eval-file experiment-file)
-;; → If error, self-heal fixes syntax/runtime issues
-;; → If success, file is ready for commit
+**Error inspection:**
+```bash
+brepl <<'EOF'
+*e
+(require '[clojure.repl :refer [pst]])
+(pst)
+EOF
 ```
 
-### Error Recovery
+## Critical Rules
 
-Evaluation errors trigger the self-healing pipeline:
+1. **Always use heredoc** — one pattern, no quoting surprises
+2. **Quote the delimiter** — `<<'EOF'` not `<<EOF`
+3. **No escaping needed** — write Clojure code naturally between delimiters
+4. **Multi-step operations** — combine multiple forms in one heredoc block
+5. **Ensure nREPL server is running** — brepl connects via `.nrepl-port` or `BREPL_PORT`
 
-1. brepl detects eval failure
-2. Calls `gptel-auto-workflow--self-heal-semantic` on the file
-3. Self-heal audits, fixes syntax, re-evaluates
-4. Loop continues until file loads cleanly
+## Prerequisites
 
-## Socket Discovery
-
-brepl auto-discovers Emacs daemon sockets:
-
-1. `/tmp/emacs$(id -u)/` — macOS/Linux default
-2. `${TMPDIR}/emacs$(id -u)/` — macOS with custom TMPDIR
-3. `~/.emacs.d/server/` — fallback
-
-Override with `gptel-brepl-socket-dir`.
-
-## File Watch
-
-brepl watches `lisp/modules/` for `.el` changes:
-
-```elisp
-(gptel-brepl-watch-directory "lisp/modules/")
-```
-
-Only evaluates:
-- `.el` files (not `.elc`, not autoloads)
-- Not in `tests/` directories
-- Not dotfiles
-
-## Requirements
-
-- Emacs daemon running (`emacs --daemon` or server-start)
-- `emacsclient` in PATH
-- `file-notify` support (for auto-eval watch)
-
-## Files
-
-- `lisp/modules/gptel-ext-brepl.el` — main module
-- `tests/test-brepl.el` — test suite
-- Loaded via `lisp/gptel-config.el`
+- `~/.local/bin/brepl` must be installed (babashka binary)
+- An nREPL server must be running (e.g., `clj -M:nrepl` or `lein repl`)
+- `.nrepl-port` file or `BREPL_PORT` env var must point to the server port

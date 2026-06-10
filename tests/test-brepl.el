@@ -1,8 +1,9 @@
-;;; test-brepl.el --- Tests for gptel-ext-brepl (brepl for OV5) -*- lexical-binding: t; -*-
+;;; test-brepl.el --- Regression tests for gptel-ext-brepl -*- lexical-binding: t; -*-
 
 (require 'ert)
+(require 'cl-lib)
 
-;; Load brepl
+;; Load brepl module
 (add-to-list 'load-path
              (expand-file-name "lisp/modules"
                                (file-name-directory (or load-file-name
@@ -10,84 +11,179 @@
                                                         default-directory))))
 (require 'gptel-ext-brepl)
 
-(ert-deftest test-brepl/socket-dir-found ()
-  "Socket directory is found on this system."
-  (let ((dir (gptel-brepl--socket-dir)))
-    (should (or (null dir) (stringp dir)))))
+;; ── Group 1: Binary detection ──
 
-(ert-deftest test-brepl/status-plist ()
-  "Status returns a valid plist."
+(ert-deftest test-brepl/binary-available-p-when-exists ()
+  "available-p returns non-nil when binary exists and port is found."
+  (cl-letf (((symbol-function 'executable-find) (lambda (_) "/usr/local/bin/brepl"))
+            ((symbol-function 'gptel-brepl-nrepl-port) (lambda () "7888")))
+    (should (gptel-brepl-available-p))))
+
+(ert-deftest test-brepl/available-p-nil-when-no-binary ()
+  "available-p returns nil when binary not found."
+  (cl-letf (((symbol-function 'executable-find) (lambda (_) nil))
+            ((symbol-function 'gptel-brepl-nrepl-port) (lambda () "7888")))
+    (should-not (gptel-brepl-available-p))))
+
+;; ── Group 2: nREPL port discovery ──
+
+(ert-deftest test-brepl/port-from-env-var ()
+  "nrepl-port returns value from BREPL_PORT env var."
+  (let ((old-env (getenv "BREPL_PORT")))
+    (unwind-protect
+        (progn
+          (setenv "BREPL_PORT" "7888")
+          (should (string= (gptel-brepl-nrepl-port) "7888")))
+      (setenv "BREPL_PORT" old-env))))
+
+(ert-deftest test-brepl/port-from-dotfile-in-cwd ()
+  "nrepl-port discovers port from .nrepl-port file in cwd."
+  (let ((tmpdir (make-temp-file "brepl-test-" t)))
+    (unwind-protect
+        (let ((default-directory tmpdir))
+          (with-temp-file (expand-file-name ".nrepl-port" tmpdir)
+            (insert "9999"))
+          (should (string= (gptel-brepl-nrepl-port) "9999")))
+      (delete-directory tmpdir t))))
+
+(ert-deftest test-brepl/port-from-dotfile-in-parent ()
+  "nrepl-port discovers port from .nrepl-port in parent directory."
+  (let ((tmpdir (make-temp-file "brepl-test-" t)))
+    (unwind-protect
+        (let ((subdir (expand-file-name "sub" tmpdir)))
+          (make-directory subdir)
+          (with-temp-file (expand-file-name ".nrepl-port" tmpdir)
+            (insert "5555"))
+          (let ((default-directory subdir))
+            (should (string= (gptel-brepl-nrepl-port) "5555"))))
+      (delete-directory tmpdir t))))
+
+(ert-deftest test-brepl/port-returns-nil-when-none ()
+  "nrepl-port returns nil when no env var and no .nrepl-port file."
+  (let ((tmpdir (make-temp-file "brepl-test-" t))
+        (old-env (getenv "BREPL_PORT")))
+    (unwind-protect
+        (let ((default-directory tmpdir))
+          (setenv "BREPL_PORT" nil)
+          (should-not (gptel-brepl-nrepl-port)))
+      (delete-directory tmpdir t)
+      (setenv "BREPL_PORT" old-env))))
+
+;; ── Group 3: Eval ──
+
+(ert-deftest test-brepl/eval-returns-plist-shape ()
+  "eval returns plist with :success t, :result string, :error nil."
+  (cl-letf (((symbol-function 'gptel-brepl--call)
+             (lambda (args) (list :success t :result "42" :error nil))))
+    (let ((result (gptel-brepl-eval "(+ 1 2 3)")))
+      (should (plist-get result :success))
+      (should (string= (plist-get result :result) "42"))
+      (should (null (plist-get result :error))))))
+
+(ert-deftest test-brepl/eval-error-returns-nil-success ()
+  "eval returns :success nil when brepl fails."
+  (cl-letf (((symbol-function 'gptel-brepl--call)
+             (lambda (args) (list :success nil :result nil :error "Syntax error"))))
+    (let ((result (gptel-brepl-eval "(+ 1 ")))
+      (should-not (plist-get result :success))
+      (should (stringp (plist-get result :error))))))
+
+(ert-deftest test-brepl/eval-passes-expr-as-arg ()
+  "eval passes expression string as argument to brepl."
+  (let ((captured nil))
+    (cl-letf (((symbol-function 'gptel-brepl--call)
+               (lambda (args) (setq captured args) (list :success t :result "nil" :error nil))))
+      (gptel-brepl-eval "(println \"hello\")")
+      (should (equal captured '("(println \"hello\")"))))))
+
+;; ── Group 4: Load file ──
+
+(ert-deftest test-brepl/load-file-returns-plist-shape ()
+  "load-file returns plist with :success, :result, :error."
+  (cl-letf (((symbol-function 'gptel-brepl--call)
+             (lambda (args) (list :success t :result "Loaded" :error nil))))
+    (let ((result (gptel-brepl-load-file "/tmp/test.clj")))
+      (should (plist-get result :success))
+      (should (string= (plist-get result :result) "Loaded"))
+      (should (null (plist-get result :error))))))
+
+(ert-deftest test-brepl/load-file-passes-f-flag ()
+  "load-file passes -f flag and file path to brepl."
+  (let ((captured nil))
+    (cl-letf (((symbol-function 'gptel-brepl--call)
+               (lambda (args) (setq captured args) (list :success t :result "" :error nil))))
+      (gptel-brepl-load-file "/tmp/test.clj")
+      (should (member "-f" captured))
+      (should (member "/tmp/test.clj" captured)))))
+
+;; ── Group 5: Balance ──
+
+(ert-deftest test-brepl/balance-returns-plist-shape ()
+  "balance returns plist with :success, :output, :error."
+  (cl-letf (((symbol-function 'gptel-brepl--call)
+             (lambda (args) (list :success t :result "fixed content" :error nil))))
+    (let ((result (gptel-brepl-balance "/tmp/test.clj")))
+      (should (plist-get result :success))
+      (should (string= (plist-get result :output) "fixed content"))
+      (should (null (plist-get result :error))))))
+
+(ert-deftest test-brepl/balance-dry-run-adds-flag ()
+  "balance with dry-run t passes --dry-run to brepl."
+  (let ((captured nil))
+    (cl-letf (((symbol-function 'gptel-brepl--call)
+               (lambda (args) (setq captured args) (list :success t :result "" :error nil))))
+      (gptel-brepl-balance "/tmp/test.clj" t)
+      (should (member "--dry-run" captured))
+      (should (member "balance" captured))
+      (should (member "/tmp/test.clj" captured)))))
+
+(ert-deftest test-brepl/balance-no-dry-run-flag ()
+  "balance without dry-run omits --dry-run flag."
+  (let ((captured nil))
+    (cl-letf (((symbol-function 'gptel-brepl--call)
+               (lambda (args) (setq captured args) (list :success t :result "" :error nil))))
+      (gptel-brepl-balance "/tmp/test.clj")
+      (should (member "balance" captured))
+      (should (member "/tmp/test.clj" captured))
+      (should-not (member "--dry-run" captured)))))
+
+;; ── Group 6: Status ──
+
+(ert-deftest test-brepl/status-returns-plist ()
+  "status returns a valid plist."
   (let ((status (gptel-brepl-status)))
-    (should (plistp status))
-    (should (booleanp (plist-get status :enabled)))
-    (should (booleanp (plist-get status :eval-on-save)))
-    (should (booleanp (plist-get status :validate-brackets)))))
+    (should (plistp status))))
 
-(ert-deftest test-brepl/validate-brackets-balanced ()
-  "Balanced code passes validation."
-  (with-temp-buffer
-    (emacs-lisp-mode)
-    (let ((code "(defun foo () 42)"))
-      (let ((result (gptel-brepl-validate-brackets code)))
-        (should (plist-get result :valid))
-        (should (string= (plist-get result :fixed-content) code))
-        (should (null (plist-get result :error)))))))
+(ert-deftest test-brepl/status-has-expected-keys ()
+  "status plist has :binary, :binary-exists, :port, :available keys."
+  (let ((status (gptel-brepl-status)))
+    (should (plist-member status :binary))
+    (should (plist-member status :binary-exists))
+    (should (plist-member status :port))
+    (should (plist-member status :available))
+    (should (booleanp (plist-get status :binary-exists)))
+    (should (booleanp (plist-get status :available)))))
 
-(ert-deftest test-brepl/validate-brackets-unbalanced ()
-  "Unbalanced code fails validation or gets auto-fixed."
-  (with-temp-buffer
-    (emacs-lisp-mode)
-    (let ((code "(defun foo () 42"))
-      (let ((result (gptel-brepl-validate-brackets code)))
-        ;; Either it's invalid (no fixer available) or it was auto-fixed
-        (if (plist-get result :valid)
-            ;; Auto-fixed case: self-heal fixer added closing paren
-            (progn
-              (should (stringp (plist-get result :fixed-content)))
-              (should-not (string= (plist-get result :fixed-content) code)))
-          ;; Unfixable case
-          (should (stringp (plist-get result :error))))))))
+(ert-deftest test-brepl/status-reflects-binary-path ()
+  "status :binary reflects the defcustom value."
+  (let ((status (gptel-brepl-status)))
+    (should (stringp (plist-get status :binary)))
+    (should (string= (plist-get status :binary) gptel-brepl-binary))))
 
-(ert-deftest test-brepl/eval-expression-fails-without-daemon ()
-  "Eval fails gracefully when no daemon is running."
-  :expected-result :failed  ; We expect this to fail without a daemon
-  (gptel-brepl-eval-expression "(+ 1 2 3)"))
+;; ── Group 7: Internal edge cases ──
 
-(ert-deftest test-brepl/discover-servers-returns-list ()
-  "Server discovery returns a list."
-  (let ((servers (gptel-brepl--discover-servers)))
-    (should (listp servers))
-    ;; Each entry should be a cons cell
-    (dolist (s servers)
-      (should (consp s))
-      (should (stringp (car s)))
-      (should (stringp (cdr s))))))
+(ert-deftest test-brepl/call-returns-error-when-no-binary ()
+  "--call returns :success nil when binary is not found."
+  (cl-letf (((symbol-function 'executable-find) (lambda (_) nil)))
+    (let ((result (gptel-brepl--call '("(+ 1 2)"))))
+      (should-not (plist-get result :success))
+      (should (stringp (plist-get result :error)))
+      (should (string-match-p "[Nn]ot found" (plist-get result :error))))))
 
-(ert-deftest test-brepl/should-auto-eval-predicate ()
-  "Auto-eval predicate filters correctly."
-  ;; Test regex exclusions directly without mode dependency
-  (let ((test-files '(("/tmp/test-project/lisp/modules/foo.el" . t)
-                      ("/tmp/test-project/tests/test-foo.el" . nil)
-                      ("/tmp/test-project/foo-autoloads.el" . nil)
-                      ("/tmp/test-project/var/elpa/pkg.el" . nil))))
-    (dolist (pair test-files)
-      (let ((file (car pair))
-            (expected (cdr pair)))
-        ;; Simulate the file checks from should-auto-eval-p
-        (let ((result (and (string-match-p "\\.el\\'" file)
-                           (not (string-match-p "/\\." file))
-                           (not (string-match-p "-autoloads\\.el\\'" file))
-                           (not (string-match-p "\\`test-" (file-name-nondirectory file)))
-                           (not (string-match-p "/tests?/" file))
-                           (not (string-match-p "/var/" file)))))
-          (should (eq result expected)))))))
-
-(ert-deftest test-brepl/after-save-hook-installed ()
-  "Save hooks are installed in emacs-lisp-mode buffers."
-  (with-temp-buffer
-    (emacs-lisp-mode)
-    (gptel-brepl-install-save-hooks)
-    (should (memq #'gptel-brepl--after-save-eval after-save-hook))))
+(ert-deftest test-brepl/defcustom-exists ()
+  "gptel-brepl-binary defcustom is defined and a string."
+  (should (boundp 'gptel-brepl-binary))
+  (should (stringp gptel-brepl-binary)))
 
 (provide 'test-brepl)
 ;;; test-brepl.el ends here

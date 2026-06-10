@@ -22,6 +22,7 @@
 (require 'gptel-ext-context)
 (require 'gptel-ext-context-cache)
 (require 'gptel-ext-security)
+(require 'gptel-ext-daemon-repl)
 (require 'gptel-ext-brepl)
 
 ;; Load tool-contract advice before registering any tools so local-only schema
