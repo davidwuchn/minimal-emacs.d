@@ -258,6 +258,20 @@ Reproduces the memory-schema bug: missing closing paren after fboundp guard."
           (should (>= issues 1)))
       (test-self-heal-semantic--cleanup file))))
 
+(ert-deftest test-self-heal-semantic/detects-extra-close-at-eof ()
+  "Detects extra close parens at EOF (e.g., ')))' after the form ends).
+Regression: ontology-router.el had ')))' at end of file which caused
+'End of file during parsing' error. The audit was using condition-case
+for user-error only, missing other parse errors like end-of-file.
+After fix: catches ALL errors via (error ...)."
+  (let* ((content
+          "(defun foo ()\n  42)\n\n)))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-unbalanced-parens file)))
+          (should (>= issues 1)))
+      (test-self-heal-semantic--cleanup file))))
+
 (ert-deftest test-self-heal-semantic/clean-balanced-parens ()
   "Files with balanced parens are clean."
   (let* ((content

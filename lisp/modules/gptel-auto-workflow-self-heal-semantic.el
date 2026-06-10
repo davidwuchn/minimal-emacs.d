@@ -260,22 +260,27 @@ Returns number of blocks found."
 (defun gptel-auto-workflow--audit-unbalanced-parens (file)
   "Audit FILE for unbalanced parens/brackets.
 Catches the `End of file during parsing' class of bugs where editing
-introduces a missing close paren. Uses Emacs's built-in check-parens
-after loading the file as emacs-lisp.
-Returns 1 if unbalanced, 0 if balanced."
+introduces a missing or extra close paren. Uses Emacs's built-in
+check-parens after loading the file as emacs-lisp.
+Returns 1 if unbalanced, 0 if balanced. Catches ALL parse errors
+(not just user-error) so that 'end-of-file' and other balance errors
+are also reported."
   (let ((issues 0))
-    (condition-case nil
+    (condition-case err
         (with-temp-buffer
           (insert-file-contents file)
           (emacs-lisp-mode)
-          ;; check-parens raises user-error if unbalanced
+          ;; check-parens raises user-error if unbalanced.
+          ;; Other parse errors (e.g., end-of-file) also indicate
+          ;; unbalanced parens, so catch all with 'error'.
           (check-parens))
-      (user-error
+      (error
        (setq issues 1)
        (gptel-auto-workflow--semantic-audit-record
         file 1
         'unbalanced-parens
-        "Unbalanced parens/brackets — Emacs cannot parse this file")))
+        (format "Unbalanced parens — %s"
+                (error-message-string err)))))
     issues))
 
 ;; ── Check 7: Missing provide statement ──
