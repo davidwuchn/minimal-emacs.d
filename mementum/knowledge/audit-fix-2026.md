@@ -2,27 +2,25 @@
 Synthesis verification:
 - Confidence: 12%
 - Sources: 33 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'audit-fix-2026', Very short content (20 lines)
+- Warnings: No code examples or concrete references, Content does not mention topic 'audit-fix-2026', Very short content (18 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize 30+ audit-fix memory reports into a comprehensive knowledge page. Let me analyze the patterns:
+The user wants me to synthesize multiple audit-fix memory reports into a single knowledge page. Let me analyze the patterns across these memories:
 
-1. All reports are essentially the same with slight variations
+1. All reports are from June 8-10, 2026
 2. Issue counts range from 37-40
-3. Common findings:
-   - Backend cold-start: 8/8 backends never used in 7d (always the same 8)
-   - Strategy cold-start: 29/29 strategies unevaluated (always the same 29)
-   - Staging-merge: OK with auto-resolver deployed (commit 95396bc1)
-   - Sometimes additional module byte-compile issues
-4. Same action items recurring
-5. The YC (Yellow Circle? Yu Chen?) note about self-evolution is identical
+3. Common issues:
+   - Backend cold-start: 8/8 backends never used in 7 days
+   - Strategy cold-start: 29/29 strategies unevaluated
+   - Staging-merge bottleneck: OK (0% of failures)
+   - Module byte-compile health: variable (1-2 modules broken)
+4. Action items consistent across reports
+5. Auto-resolver deployed at commit 95396bc1
 
-I need to create a knowledge page that:
-- Has 50+ lines of content
-- Concrete examples (code, tables, commands)
-- Actionable patterns
-- Cross-references
-- Full markdown with frontmatter
+The byte-compile issues vary:
+- 2026-06-09T15:00:09: gptel-auto-workflow-evolution.el
+- 2026-06-10T10:00:14: gptel-auto-workflow-recovery.el + gptel-auto-workflow-self-heal-semantic.el
+- 2026-06-10T15:00:07: gptel-auto-workflow-recovery.el
 
-Let me build a comprehensive page that synthesizes these recurring audit reports into actionable patterns.
+Let me create a comprehensive knowledge page that synthesizes these audit reports.

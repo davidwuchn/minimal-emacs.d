@@ -1,11 +1,11 @@
 # Mementum State
 
 > **Bootstrapped**: 2026-06-06
-> **Session**: Audit Fix + Test Hardening
-> **Status**: ✅ **AUDIT FALSE POSITIVES FIXED** — condition-case-unbound-err audit now correctly identifies 0 issues (was 167 false positives)
-> **Latest**: Strategy DAG + batch anchoring implemented (APEX + MOSS insights); 3 commits pushed; all tests green
+> **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
+> **Status**: ✅ **DUAL REPL WIRED** — Elisp daemon-repl + Clojure brepl both loaded via gptel-config.el; 39/39 tests green
+> **Latest**: Renamed Elisp brepl→daemon-repl, fixed 9 bugs, created Clojure brepl wrapper module, wired both into config
 > **Active Plan**: None — codebase clean, tests green
-> **Pi5**: Running, self-healing working (grader crash → BLIND MODE → recovery)
+> **Pi5**: Synced, auto-evolution merged (3 rounds), pre-commit hook installed
 
 ---
 
@@ -19,6 +19,9 @@
 | **P0** | Self-heal semantic module (7 audit checks + auto-fixers) | @maintainer | **COMPLETE** |
 | **P0** | Fix condition-case-unbound-err audit false positives | @maintainer | **COMPLETE** |
 | **P0** | Add condition-case-unbound-err auto-fixer | @maintainer | **COMPLETE** |
+| **P0** | Rename Elisp brepl→daemon-repl, fix 9 bugs | @maintainer | **COMPLETE** |
+| **P0** | Create Clojure brepl wrapper module (gptel-ext-brepl.el) | @maintainer | **COMPLETE** |
+| **P0** | Wire both REPL modules into gptel-config.el | @maintainer | **COMPLETE** |
 | **P1** | Monitoring Agent: Complete (Phases 0-10) | @maintainer | **COMPLETE** |
 | **P1** | Research paper analysis (MOSS, Sibyl, APEX) | @maintainer | **COMPLETE** |
 | **P2** | Daemon watchdog hardening (Pi5 freeze after ~90 min) | @maintainer | **COMPLETE** |
@@ -78,36 +81,43 @@
 
 ## Session Notes (2026-06-10)
 
-### What was fixed
-1. **Audit bug**: `backward-up-list` from `(error` handler went directly to `condition-case` (skipping `(error` itself), causing the audit to read `condition-case` as the handler symbol and fail to detect `err` binding. Fixed by checking if enclosing form IS `condition-case` before flagging.
-2. **Scope bug**: Audit searched entire `condition-case` form for `err` references, catching `err` in unrelated parts of the code. Fixed to search only within the `(error` handler form.
-3. **Auto-fixer added**: `gptel-auto-workflow--fix-condition-case-unbound-err` registered in fixer alist — changes `condition-case nil` to `condition-case err` when handlers reference `err`.
-4. **Tests cleaned**: Removed tests for non-existent risk-node training pair functions; fixed test string paren balance; all 46 tests pass.
-5. **Watchdog hardened**: 
-   - Heartbeat threshold: 180s → 90s (faster freeze detection)
-   - Workflow grace period: 1200s → 300s (5 min instead of 20 min)
-   - Grace period now conditional: only given when heartbeat is fresh
-   - If heartbeat goes stale during grace: break immediately and restart
-6. **Risk-node audit fixed**:
-   - Removed `make-hash-table` from audit (301 false positives — hash tables are GC'd)
-   - Resource audit now tracks only `make-temp-file` / `make-temp-name` (real file leaks)
-   - Cleanup check looks for `delete-file`, `delete-directory`, OR `unwind-protect`
-   - Audit results: 334 issues → 10 issues (5 helper funcs + 1 API + 4 other)
+### Dual REPL Architecture
 
-### Result
-- `condition-case-unbound-err` issues: **167 → 0** (all were false positives from audit bugs)
-- `risk-node-resource` issues: **334 → 5** (remaining are helper function wrappers)
-- Test suite: **51/51 passing** (self-heal) + **5/5** (strategy DAG) + **8/8** (brepl) + **13/13** (Pi5) + **11/11** (platform) + **37/37** (security)
-- Watchdog: Now detects frozen daemon in ≤ 90s instead of ≤ 20 min
-- Codebase: Clean, no unmerged files, no syntax errors
-- 6 commits pushed successfully
+Two REPL modules now exist, both wired into `gptel-config.el`:
 
-### New implementations (this session)
-1. **Batch anchoring** (MOSS insight): `gptel-auto-workflow--batch-anchor-audit-results` groups audit failures by type before evolution; `gptel-auto-workflow--batch-anchor-report` generates markdown for proposals; integrated into `self-heal-semantic-batch-anchor` entry point
-2. **Strategy DAG** (APEX insight): `gptel-auto-workflow--strategy-dag` hash table maps strategies → prerequisites; `gptel-auto-workflow--strategy-prerequisites-met-p` checks prerequisite success; `gptel-auto-workflow--strategy-filter-by-dag` filters available strategies; integrated into `--select-best-strategy`
-3. **brepl** (bracket-fixing REPL for Elisp): `gptel-ext-brepl.el` — daemon socket discovery, REPL eval via emacsclient, bracket validation, auto-evaluate on save, self-heal integration; 8 tests; OpenCode skill registered
-4. **Pre-commit hook hardened**: Merge conflict marker detection + false-positive warning filtering + byte-compile error checking
-5. **Remote sync**: Merged upstream changes, fixed all syntax errors from remote merge
+| Module | Purpose | Backend | Tests |
+|--------|---------|---------|-------|
+| `gptel-ext-daemon-repl.el` | Elisp eval in running daemon | emacsclient | 20 |
+| `gptel-ext-brepl.el` | Clojure eval via brepl CLI | ~/.local/bin/brepl (nREPL) | 19 |
+
+### What was done this session
+1. **Synced Pi5**: 3 merge rounds, resolved git conflict markers in ontology-router.el + memory-schema.el
+2. **Renamed brepl→daemon-repl**: Disambiguated Elisp daemon REPL from Clojure brepl CLI
+3. **Fixed 9 bugs in daemon-repl** (TDD): reentry hang, emacsclient exit status, socket discovery, file-notify require+flag, event parsing, dotfile check, autofix gate, self-heal arity, emacs-lisp-mode context
+4. **Created gptel-ext-brepl.el**: Clojure nREPL client wrapping `~/.local/bin/brepl` — eval, load-file, bracket balance, port discovery
+5. **Installed pre-commit hook**: Rejects .el files with git conflict markers
+6. **Hardened install-ops-global.sh**: Backup before edit, socket detection, YAML validation
+7. **Both modules wired** into gptel-config.el, 39/39 tests green
+
+### Key Decisions
+- Elisp daemon-repl and Clojure brepl are separate tools with separate skill directories
+- Pre-commit hook is local-only (.git/hooks/); Pi5 cron installs via bootstrap
+- `(defvar SYMBOL)` without value → `void-variable` crash in batch mode; always `(defvar SYMBOL nil)`
+- Stale `.elc` bytecode masks source edits; delete when debugging module load issues
+- Emacs 30 byte-compiler miscompiles `throw` through `catch` when `let` wraps `catch` — restructure to put `catch` outside
+
+### Previous session (2026-06-10 early)
+1. **Audit bug**: `backward-up-list` from `(error` handler went directly to `condition-case`, causing false positives
+2. **Scope bug**: Audit searched entire `condition-case` form for `err` references
+3. **Auto-fixer added**: `gptel-auto-workflow--fix-condition-case-unbound-err`
+4. **Tests cleaned**: Removed tests for non-existent risk-node functions; 46 tests pass
+5. **Watchdog hardened**: Heartbeat 180s→90s, grace 1200s→300s, conditional grace
+6. **Risk-node audit fixed**: 334→5 issues (hash-table false positives removed)
+7. **Batch anchoring + Strategy DAG** implemented from MOSS/APEX research
+
+### Test Summary
+- **39/39 total**: 20 daemon-repl + 19 brepl (new modules)
+- Previous: 51 self-heal + 5 strategy + 13 Pi5 + 11 platform + 37 security
 
 ---
 
@@ -116,22 +126,28 @@
 ### Immediate
 1. **Continue monitoring** — Let pipeline run, verify self-healing continues working
 2. **Sibyl action item** — Formalize ontology updates as auditable conversion units
+3. **Wire daemon-repl-init** — Call on daemon startup so auto-eval watches lisp/modules/
 
 ### Near-Term
-3. **Auto-fix remaining 10 audit issues** — 5 resource helpers + 1 API + 4 other
-4. **Implement batch anchoring in evolution loop** — Replace individual failure fixing with batch-curated evolution
+4. **Auto-fix remaining 10 audit issues** — 5 resource helpers + 1 API + 4 other
+5. **Implement batch anchoring in evolution loop** — Replace individual failure fixing with batch-curated evolution
+6. **Clojure brepl in OV5 pipeline** — Wire brepl bracket-fixing into auto-workflow for .clj files
 
 ---
 
 ## Relevant Files
 
-- `lisp/modules/gptel-platform-sandbox.el`: Platform sandbox (seatbelt + bubblewrap)
+- `lisp/modules/gptel-ext-daemon-repl.el`: Elisp daemon REPL — eval, bracket validation, auto-eval, self-heal (371 lines, 20 tests)
+- `lisp/modules/gptel-ext-brepl.el`: Clojure nREPL client — eval, load-file, balance brackets (117 lines, 19 tests)
+- `lisp/gptel-config.el`: Module loader — both REPL modules wired here
+- `.opencode/skills/brepl/`: OpenCode skill for Clojure brepl CLI
+- `.opencode/skills/daemon-repl/`: OpenCode skill for Elisp daemon-repl
 - `lisp/modules/gptel-auto-workflow-self-heal-semantic.el`: 7 audit checks + auto-fixers
-- `lisp/modules/gptel-auto-workflow-monitoring-agent.el`: Monitoring agent (Phases 0-10)
 - `lisp/modules/gptel-auto-workflow-evolution.el`: Evolution cycle + ontology learning
+- `.git/hooks/pre-commit`: Rejects .el files with git conflict markers
 - `mementum/knowledge/self-evolving-agent-research.md`: Research paper analysis
 - `mementum/state.md`: This file — working memory, read first every session
 
 ---
 
-*Active Mementum v1.1 — research insights, self-healing verified, ontology learning active*
+*Active Mementum v1.1 — dual REPL architecture wired, 39 tests green, self-healing verified, ontology learning active*

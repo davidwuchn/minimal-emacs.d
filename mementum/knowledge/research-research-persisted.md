@@ -6,95 +6,58 @@ Synthesis verification:
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize a set of research memory entries into a knowledge page. The memories are from a system that does external research for an Emacs-based AI agent auto-workflow. The research findings span multiple days (2026-05-22 through 2026-06-04) and cover:
+The user wants me to synthesize multiple research memories into a comprehensive knowledge page. Let me analyze what I have:
 
-1. FSM-based resumable requests (gptel)
-2. Three-tier knowledge hierarchy (mementum)
-3. Prompt linting/pre-execution (nucleus)
-4. Conditional retry with error reinsertion
-5. Layered error defense (retry+jitter, circuit breaker, fallback)
-6. Durable execution / checkpointing
-7. MAST failure taxonomy
-8. Graceful degradation hierarchy
-9. Self-rewriting meta-prompt loops
-10. Dual-agent critic pattern
-11. mcp.el integration (mcp-hub, mcp-make-text-tool)
-12. emacs-mcp-server sidecar pattern
-13. Self-evolving agents taxonomy
-14. HyperAgents / DGM-H
-15. DSPy signatures, modules, optimizers
-16. GEPA reflective prompt evolution
-17. EvolveR self-evolution
-18. Reflexion verbal self-reflection
-19. gptel context branching
-20. A-MEM Zettelkasten
-21. Mem0 graph-based memory
-22. MemGPT two-tier memory
-23. SE-Agent trajectory-level intervention
-24. Continuum KV cache for agentic pauses
-25. logprob-based prompt validation (nucleus attention magnets)
-26. DNS-based memory node discovery (mementum)
-27. Think-in-Code context reduction
-28. DEGRADED state circuit breaker
-29. Hybrid search fusion (vector + BM25)
-30. Self-wiring knowledge graph
-31. Three-loop meta-learning (HyperAgents)
-32. magent (jamie-cui) durable child-agent jobs
-33. Genesis agent self-verification (66 deterministic checks)
-34. psi statechart-driven architecture
-35. Gas Town three-tier watchdog (Witness/Deacon/Dogs)
-36. Tool receipts pattern
-37. Workspace boundaries
-38. vtable/swappable interfaces
-39. SQLITE FTS5 hybrid search
-40. Local research fallback patterns
-41. Sub-agent delegation decision tree
-42. Anti-sycophancy system prompt
-43. Inline diff preview/approve
-44. Conversation compaction
-45. Per-project memory (AGENTS.md/CLAUDE.md)
-46. MEMENTUM-LAMBDA.md nucleus notation encoding
-47. Attention magnets (5 tokens shift 20%→100%)
-48. M-x doctor for self-diagnostics
+1. Multiple research digest entries from auto-workflow runs
+2. Topics covered: FSM-based resumable requests, three-tier knowledge hierarchy, prompt linting, conditional retry with error reinsertion, self-rewriting meta-prompt loops, dual-agent critic, mcp.el, emacs-mcp-server, self-evolving agents, GEPA, EvolveR, gptel+mcp.el stack, layered error defense, durable execution, MAST failure taxonomy, magic UI patterns, Magent, gptel-agent, DSPy, Reflexion, context branching, attention magnets, logprob validation, trajectory-level intervention, KV cache, etc.
 
-The system tracks:
-- 0% keep rate on most persisted findings
-- 4% keep rate (2/56) on 2026-05-22 04:11
-- 33% keep rate (3/9) on 2026-05-22 12:10 (the best)
-- Researcher daemon dead since Jun 3
-- Pipeline defects around missing research files
-- Need for fail-fast on daemon disappearance
-- Structured research output format
-- Self-evolution observability through TSV metadata
+3. Common patterns:
+- Research methodology (own-repos-first, external fallback)
+- FSM-based resumable workflows
+- Three-tier memory (state/memories/knowledge)
+- Prompt linting/pre-execution validation
+- Conditional retry with error reinsertion
+- Circuit breaker pattern
+- Layered error defense
+- Self-evolution patterns (GEPA, Reflexion, EvolveR)
+- DSPy signature/module/optimizer
+- Context branching via org-mode
+- AI Cliff mitigation
+- Anti-sycophancy prompts
+- Tool hierarchies
+- Self-verification engines
+- DEGRADED state circuit breaker
+- Vtable interface for swappability
+- Hybrid search (vector + BM25)
+- Self-wiring knowledge graph
+- Three-loop meta-learning
+- Discovery infrastructure (DNS)
+- MEMENTUM-LAMBDA encoding
+- Stageable pause/resume
+- Safe-compile for untrusted prompts
+- A-MEM Zettelkasten
+- MemGPT two-tier memory
+- Sub-agent delegation decision trees
+- Inline diff preview
+- Overlay-based instruction tracking
+- Recursive Memory Harness (RMH)
+- Mem0 graph-based memory
+- MAST failure taxonomy
+- Star-architecture orchestrator
+- Logprob-based prompt validation
+- DNS-based memory node discovery
+- Trajectory-level intervention
+- KV cache for agentic pauses
+- Continuum paper
+- Anthropic building effective agents
+- SE-Agent/SCOPE
 
-The 1200 char cap is the internal digest limit, but the knowledge page can be much longer. The user wants 50+ lines of content, concrete examples, actionable patterns, cross-references, and a complete page.
+Let me organize this into a comprehensive knowledge page with:
+1. Title and frontmatter
+2. Research strategy section
+3. Key patterns section (grouped by category)
+4. Concrete code examples
+5. Actionable patterns
+6. Cross-references
 
-Let me organize this into a knowledge page that:
-1. Documents the persisted-findings strategy and its history
-2. Captures the patterns that have been discovered
-3. Notes the keep-rate problem
-4. Provides actionable guidance for future research
-5. Cross-references related topics
-
-I need to be careful to synthesize the content, not just dump it. The page should be useful as a knowledge artifact.
-
-Let me design the structure:
-
-1. Frontmatter
-2. Overview
-3. The Persisted-Findings Strategy (what it is, how it works)
-4. The Keep-Rate Problem (the core challenge)
-5. Pattern Catalog (organized by theme, not by date)
-   - Resumable execution (FSM, checkpointing, KV cache)
-   - Memory architecture (three-tier, hybrid, Zettelkasten)
-   - Self-evolution (Reflexion, GEPA, DSPy, EvolveR, trajectory mutation)
-   - Error recovery (layered defense, circuit breaker, conditional retry)
-   - Tool/Agent architecture (MCP hub, vtable, sidecar, verification)
-   - Context engineering (branching, compaction, think-in-code, logprob)
-   - Observability (failure taxonomy, three-tier watchdog, tool receipts)
-6. Source Effectiveness Data
-7. Pipeline Defects and Local Fallback
-8. Actionable Patterns (synthesis)
-9. Related topics
-
-Let me draft this now. I need 50+ lines of actual content with concrete examples.
+I need to make this 50+ lines of actual content with concrete examples. Let me structure it well.
