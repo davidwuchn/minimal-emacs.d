@@ -229,6 +229,9 @@ Criteria: has sections, has examples, has specific guidance, right length."
   '((:K "
 
 
+
+
+
 nil.safety\\|nil.guard\\|nil.check\\|guard[^a-z]\\|validat\\|proper-list-p\\|bound-and-true-p\\|filter.out\\|discard\\|remove
 nil\\|unless nil\\|when nil\\|error.*handling")
     (:I "passthrough\\|pass through\\|identity\\|reference\\|binding\\|same
@@ -238,8 +241,14 @@ into\\|DRY\\|dedup\\|unify\\|pipeline\\|sequence\\|decompose")
     (:C "
 
 
+
+
+
 reorder\\|flip\\|swap\\|passive\\|invert\\|reverse\\|before.*after\\|after.*before\\|reorganize")
     (:M "pattern\\|template\\|apply
+
+
+
 
 
 pattern\\|in.context\\|example.driven\\|analogy\\|match\\|few.shot\\|exemplar\\|similar
@@ -248,21 +257,36 @@ to")
     (:W "
 
 
+
+
+
 duplicat\\|double\\|mirror\\|same.*twice\\|self.*same\\|reuse\\|share.logic\\|merge.*duplicate\\|identical.*both")
     (:T "
+
+
+
 
 
 type.check\\|type.valid\\|annotation\\|type.assert\\|ensure.*type\\|cast\\|coerce\\|narrowing\\|widening")
     (:PHI "
 
 
+
+
+
 both.*and\\|parallel\\|coordinat\\|multi.property\\|multiple.*same\\|fork\\|split.*combine\\|apply.*two")
     (:D "
+
+
+
 
 
 deep.compos\\|multi.step\\|nested\\|complex.refactor\\|several.*changes?\\|multiple.*changes?\\|comprehensive")
     ;; Tier 3 — Structural (architecture-level)
     (:SCOPE "
+
+
+
 
 
 scope\\|visibility\\|access.control\\|local\\|global\\|lexical\\|dynamic.*bind\\|closure\\|environment")
@@ -271,13 +295,22 @@ of\\|compress\\|shorte\\|inline\\|expand")
     (:WHNF "
 
 
+
+
+
 done\\|finished\\|complete\\|final\\|normal.form\\|base.case\\|terminal\\|atomic\\|primitive\\|no.further")
     ;; Tier 4 — Meta (self-evolution itself)
     (:Y "
 
 
+
+
+
 recurs\\|self.refer\\|self.modif\\|self.improv\\|self.evol\\|fixed.point\\|loop\\|iterate\\|repeat.*until\\|while")
     (:QUOTE "
+
+
+
 
 
 document\\|comment\\|explain\\|describe\\|name\\|label\\|tag\\|categorize\\|classify\\|annotate\\|docstring"))

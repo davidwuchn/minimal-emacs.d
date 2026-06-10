@@ -1107,6 +1107,49 @@ auto-fixers for detected issues (e.g., excessive blank lines)."
     (plist-put result :auto-fixed total-fixed)
     result))
 
+(defun gptel-auto-workflow--self-heal-file (file)
+  "Targeted self-heal: audit and fix FILE only.
+Returns plist with :issues, :auto-fixed, :files-checked.
+Logs a conversion unit if fixes were applied and the conversion-unit
+module is available."
+  (let* ((result (gptel-auto-workflow--semantic-audit-file file))
+         (issues (plist-get result :issues))
+         (log (plist-get result :log))
+         (total-fixed 0))
+    (when (> issues 0)
+      (message "[self-heal-semantic] Found %d issues in %s"
+               issues (file-name-nondirectory file))
+      (let ((present-types
+             (delete-dups
+              (delq nil (mapcar (lambda (r) (plist-get r :type)) log)))))
+        (dolist (issue-type present-types)
+          (let ((fixer (alist-get issue-type gptel-auto-workflow--semantic-fixer-alist)))
+            (when fixer
+              (let ((fixed (funcall fixer file)))
+                (when (> fixed 0)
+                  (cl-incf total-fixed fixed))))))))
+    (when (> total-fixed 0)
+      (message "[self-heal-semantic] Auto-fixed %d issue(s) in %s"
+               total-fixed (file-name-nondirectory file))
+      ;; Log conversion unit for audit trail
+      (when (and (fboundp 'gptel-conversion-unit-add)
+                 (boundp 'gptel-conversion-unit-enabled)
+                 gptel-conversion-unit-enabled)
+        (condition-case nil
+            (gptel-conversion-unit-add
+             (format "self-heal-%s" (format-time-string "%Y%m%d%H%M%S"))
+             'repair
+             (list :file file
+                   :status 'audit-failed
+                   :issues issues)
+             (list :file file
+                   :status 'auto-fixed
+                   :fixes total-fixed))
+          (error nil))))
+    (list :issues issues
+          :auto-fixed total-fixed
+          :files-checked 1)))
+
 (defun gptel-auto-workflow--self-heal-semantic-batch-anchor ()
   "Run audit + batch anchoring for evolution proposal.
 Groups failures by type and returns a markdown report.

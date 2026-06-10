@@ -1,64 +1,34 @@
 <!--
 Synthesis verification:
-- Confidence: 80%
+- Confidence: 12%
 - Sources: 38 memories
-- Warnings: No code examples or concrete references
-- Auto-approved: yes (passed)
+- Warnings: No code examples or concrete references, Content does not mention topic 'research-research-persisted', Very short content (26 lines)
+- Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize multiple research memory entries into a single knowledge page about "research-research-persisted" topic. Let me analyze the memories:
+The user wants me to synthesize multiple research memory entries into a comprehensive knowledge page. Let me analyze what's in these memories:
 
-1. The memories are from an Emacs-based AI agent auto-workflow system
-2. They document research findings from the `persisted-findings` strategy
-3. Multiple research sessions (2026-05-22 through 2026-06-04) covering:
-   - Three-tier watchdog architecture
-   - Think-in-Code context reduction
-   - DEGRADED state circuit breaker
-   - Hybrid search fusion
-   - Self-wiring knowledge graph
-   - Three-loop meta-learning
-   - DSPy signatures/modules
-   - Reflexion verbal self-reflection
-   - gptel FSM pause/resume
-   - mementum three-tier storage
-   - nucleus prompt debugger
-   - Layered error defense
-   - Durable execution
-   - MAST failure taxonomy
-   - GEPA reflective prompt evolution
-   - EvolveR self-evolving agents
-   - DNS-based memory discovery
-   - Logprob-based prompt validation
-   - KV cache management
-   - And many more
+1. Multiple "Research" entries from 2026-06-04 covering persisted findings strategy
+2. Topics include: gptel FSM pattern, mementum three-tier storage, nucleus prompt debugger, conditional retry, DSPy, Reflexion, gptel context branching, three-tier watchdog, think-in-code context reduction, circuit breaker, hybrid search, self-wiring knowledge graph, etc.
+3. The research has a recurring pattern: own repos first (davidwuchn/*), then external sources
+4. Most outcomes are 0% keep rate - suggesting a quality issue
+5. There's a "local fallback" pattern when research daemon fails
+6. The system uses an auto-workflow with persisted-findings strategy
 
-4. The memories show:
-   - 0% keep rate is common (problems with the research pipeline)
-   - Local-fallback patterns when researcher daemon fails
-   - Pipeline defect issues
-   - Auto-workflow generates these research runs
-   - Need to preserve feedback loop with research hashes
-   - Structured machine-parseable outputs preferred
-   - Self-evolution observability is key
+Key themes I should synthesize:
+- The persisted-findings research pattern
+- The controller configuration (beta, EMA confidence, source directives)
+- Common research sources: nucleus, mementum, gptel own repos
+- Common patterns discovered: FSM checkpoints, three-tier memory, prompt linting, conditional retry, layered error defense, durable execution, MAST taxonomy
+- Local fallback procedure
+- The feedback loop: research hash → experiment row → results.tsv
+- Research quality measurement
 
-I need to:
-1. Create a knowledge page that synthesizes ALL of this
-2. Minimum 50 lines of actual content
-3. Concrete examples (code, tables, commands)
-4. Actionable patterns
-5. Cross-references to related topics
-6. Return full markdown page
+Let me create a comprehensive knowledge page that:
+1. Has frontmatter
+2. Is at least 50 lines of content
+3. Has concrete examples (code, tables, commands)
+4. Has actionable patterns
+5. Cross-references related topics
 
-Let me structure this as a comprehensive reference page for the `research-research-persisted` strategy and its findings, patterns, and anti-patterns.
-
-The page should cover:
-- What this research strategy is
-- Common patterns discovered across sessions
-- Anti-patterns and failure modes
-- Concrete techniques to apply
-- Source effectiveness data
-- Pipeline integration patterns
-- The "local fallback" pattern (most common observed)
-- Code examples for elisp integration
-
-Let me write this now.
+I need to synthesize this into a useful reference for understanding how the persisted-findings research strategy works.

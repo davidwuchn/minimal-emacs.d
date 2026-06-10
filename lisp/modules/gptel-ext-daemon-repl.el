@@ -41,6 +41,31 @@ If nil, auto-detect from standard locations:
   "Default Emacs server name to connect to.
 Used with emacsclient -s SERVER_NAME.")
 
+(defcustom gptel-daemon-repl-max-file-size 102400
+  "Maximum file size in bytes for auto-evaluation.
+Files larger than this are skipped."
+  :type 'integer
+  :group 'gptel)
+
+(defvar gptel-daemon-repl-eval-failure-hook nil
+  "Hook run when auto-evaluation fails after all retries.
+Each function is called with (FILE ERROR-MESSAGE RETRY-COUNT).")
+
+(defvar gptel-daemon-repl--metrics
+  (list :eval-attempts 0 :eval-successes 0 :eval-failures 0 :last-error nil)
+  "Metrics plist for daemon-repl auto-eval.
+Tracks attempts, successes, failures, and last error.")
+
+(defun gptel-daemon-repl-metrics ()
+  "Return current metrics plist."
+  (copy-sequence gptel-daemon-repl--metrics))
+
+(defun gptel-daemon-repl-reset-metrics ()
+  "Reset all metrics to zero."
+  (setq gptel-daemon-repl--metrics
+        (list :eval-attempts 0 :eval-successes 0 :eval-failures 0 :last-error nil))
+  (message "[daemon-repl] Metrics reset"))
+
 ;;; ── Server Discovery ──
 
 (defun gptel-daemon-repl--socket-dir ()
@@ -267,7 +292,8 @@ Returns the watch descriptor."
 
 (defun gptel-daemon-repl--should-auto-eval-p ()
   "Return t if current buffer should be auto-evaluated.
-Only evaluates .el files in the project (not tests, not generated files)."
+Only evaluates .el files in the project (not tests, not generated files,
+not files exceeding `gptel-daemon-repl-max-file-size')."
   (and gptel-daemon-repl-enabled
        gptel-daemon-repl-eval-on-save
        (derived-mode-p 'emacs-lisp-mode)
@@ -275,28 +301,63 @@ Only evaluates .el files in the project (not tests, not generated files)."
        (string-suffix-p ".el" (buffer-file-name))
        (not (string-match-p "\\`\\." (file-name-nondirectory (buffer-file-name)))) ; skip dotfiles
        (not (string-match-p "-autoloads\\.el\\'" (buffer-file-name)))
-        (not (string-match-p "\\`test-" (file-name-nondirectory (buffer-file-name))))
+       (not (string-match-p "\\`test-" (file-name-nondirectory (buffer-file-name))))
        (not (string-match-p "/tests?/" (buffer-file-name)))
-       (not (string-match-p "/var/" (buffer-file-name)))))       ; skip package files
+       (not (string-match-p "/var/" (buffer-file-name)))       ; skip package files
+       (let ((size (file-attribute-size (file-attributes (buffer-file-name)))))
+         (or (null size)
+             (<= size gptel-daemon-repl-max-file-size)))))       ; skip large files
 
 (defun gptel-daemon-repl--after-save-eval ()
   "Evaluate current .el file via daemon-repl after saving.
-Installed in `after-save-hook'."
+Installed in `after-save-hook'.
+If eval fails, trigger targeted self-heal on FILE only, then re-evaluate.
+Log conversion units for audit trail.
+Track metrics and call failure hook after all retries exhausted."
   (when (gptel-daemon-repl--should-auto-eval-p)
-    (let ((file (buffer-file-name)))
+    (let ((file (buffer-file-name))
+          (max-retries 3)
+          (attempt 0)
+          (error-msg nil))
       (message "[daemon-repl] Auto-evaluating %s..." (file-name-nondirectory file))
-      (condition-case err
-          (gptel-daemon-repl-eval-file file)
-        (error
-         (message "[daemon-repl] ✗ Auto-eval failed for %s: %s"
-                  (file-name-nondirectory file)
-                  (error-message-string err))
-         ;; Trigger self-heal if available
-         (when (fboundp 'gptel-auto-workflow--self-heal-semantic)
-           (message "[daemon-repl] Triggering self-heal for %s" file)
-           (condition-case nil
-               (funcall 'gptel-auto-workflow--self-heal-semantic)
-             (error nil))))))))
+      (cl-incf (plist-get gptel-daemon-repl--metrics :eval-attempts))
+      (catch 'done
+        (while (< attempt max-retries)
+          (condition-case err
+              (progn
+                (gptel-daemon-repl-eval-file file)
+                (cl-incf (plist-get gptel-daemon-repl--metrics :eval-successes))
+                (throw 'done t))
+            (error
+             (setq error-msg (error-message-string err))
+             (setq attempt (1+ attempt))
+             (message "[daemon-repl] ✗ Auto-eval failed for %s: %s"
+                      (file-name-nondirectory file) error-msg)
+             (if (and (< attempt max-retries)
+                      (fboundp 'gptel-auto-workflow--self-heal-file))
+                 (let ((heal-result (gptel-auto-workflow--self-heal-file file)))
+                   (message "[daemon-repl] Targeted self-heal for %s (attempt %d/%d)"
+                            (file-name-nondirectory file) attempt (1- max-retries))
+                   (when (and (> (plist-get heal-result :auto-fixed) 0)
+                              (fboundp 'gptel-conversion-unit-add))
+                     (gptel-conversion-unit-add
+                      (format "daemon-repl-%s" (format-time-string "%Y%m%d%H%M%S"))
+                      'repair
+                      (list :file file
+                            :status 'eval-failed
+                            :error error-msg
+                            :attempt attempt)
+                      (list :file file
+                            :status 'auto-fixed
+                            :fixes (plist-get heal-result :auto-fixed)))))
+               (cl-incf (plist-get gptel-daemon-repl--metrics :eval-failures))
+               (plist-put gptel-daemon-repl--metrics :last-error
+                          (list :file file :error error-msg :time (current-time)))
+               (message "[daemon-repl] ✗ Giving up on %s after %d attempts"
+                        (file-name-nondirectory file) max-retries)
+               (run-hook-with-args 'gptel-daemon-repl-eval-failure-hook
+                                   file error-msg max-retries)
+               (throw 'done nil)))))))))
 
 (defun gptel-daemon-repl-install-save-hooks ()
   "Install before-save and after-save hooks for brepl."
@@ -323,7 +384,8 @@ Installed in `after-save-hook'."
 
 (defun gptel-daemon-repl-status ()
   "Return brepl status as a plist."
-  (let ((socket (gptel-daemon-repl--default-server-socket)))
+  (let ((socket (gptel-daemon-repl--default-server-socket))
+        (metrics gptel-daemon-repl--metrics))
     (list :enabled gptel-daemon-repl-enabled
           :eval-on-save gptel-daemon-repl-eval-on-save
           :validate-brackets gptel-daemon-repl-validate-brackets
@@ -331,7 +393,10 @@ Installed in `after-save-hook'."
           :default-server gptel-daemon-repl-default-server
           :server-socket socket
           :server-accessible (and socket (gptel-daemon-repl--socket-file-p socket))
-          :watches (length gptel-daemon-repl--watch-descriptors))))
+          :watches (length gptel-daemon-repl--watch-descriptors)
+          :metrics (list :attempts (plist-get metrics :eval-attempts)
+                         :successes (plist-get metrics :eval-successes)
+                         :failures (plist-get metrics :eval-failures)))))
 
 (defun gptel-daemon-repl-show-status ()
   "Display brepl status in a buffer."
@@ -347,6 +412,11 @@ Installed in `after-save-hook'."
       (insert (format "Server socket:   %s\n" (or (plist-get status :server-socket) "Not found")))
       (insert (format "Server ready:    %s\n" (if (plist-get status :server-accessible) "✓" "✗")))
       (insert (format "Active watches:  %d\n" (plist-get status :watches)))
+      (let ((metrics (plist-get status :metrics)))
+        (insert "\nMetrics:\n")
+        (insert (format "  Eval attempts:  %d\n" (plist-get metrics :attempts)))
+        (insert (format "  Successes:      %d\n" (plist-get metrics :successes)))
+        (insert (format "  Failures:       %d\n" (plist-get metrics :failures))))
       (insert "\nAvailable servers:\n")
       (dolist (server (gptel-daemon-repl--discover-servers))
         (insert (format "  %s → %s\n" (car server) (cdr server))))

@@ -42,28 +42,20 @@
         gptel-benchmark-test--saved-auto-commit gptel-benchmark-memory-auto-commit)
   (setq gptel-benchmark-test--temp-dir
         (make-temp-file "benchmark-integration-" t))
-  ;; (delete-directory gptel-benchmark-test--temp-dir t) ; caller/teardown cleans up
-  (condition-case err
-      (let ((default-directory gptel-benchmark-test--temp-dir))
-        (shell-command "git init")
-        (shell-command "git config user.email 'test@test.com'")
-        (shell-command "git config user.name 'Test User'")
-        (make-directory "mementum/memories" t)
-        (make-directory "mementum/knowledge" t)
-        (with-temp-file "mementum/state.md"
-          (insert "# Mementum State\n\n> Last session: test\n\n## In Progress\n\nTest
-integration.
-"))
-        (shell-command "git add .")
-        (shell-command "git commit -m \='init\='")
-        (setq gptel-benchmark-memory-dir
-              (expand-file-name "mementum/" gptel-benchmark-test--temp-dir))
-        (setq gptel-benchmark-memory-auto-commit nil))
-    (error
-     (when (and gptel-benchmark-test--temp-dir
-                (file-exists-p gptel-benchmark-test--temp-dir))
-       (delete-directory gptel-benchmark-test--temp-dir t))
-     (signal (car err) (cdr err)))))
+  (let ((default-directory gptel-benchmark-test--temp-dir))
+    (shell-command "git init")
+    (shell-command "git config user.email 'test@test.com'")
+    (shell-command "git config user.name 'Test User'")
+    (make-directory "mementum/memories" t)
+    (make-directory "mementum/knowledge" t)
+    (with-temp-file "mementum/state.md"
+      (insert "# Mementum State\n\n> Last session: test\n\n## In Progress\n\nTest
+integration.\n"))
+    (shell-command "git add .")
+    (shell-command "git commit -m \='init\='")
+    (setq gptel-benchmark-memory-dir
+          (expand-file-name "mementum/" gptel-benchmark-test--temp-dir))
+    (setq gptel-benchmark-memory-auto-commit nil)))
 
 (defun gptel-benchmark-test--teardown-temp-repo ()
   "Remove temporary git repo."

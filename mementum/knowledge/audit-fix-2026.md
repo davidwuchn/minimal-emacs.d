@@ -6,36 +6,59 @@ Synthesis verification:
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize many audit-fix memories into a single knowledge page. Let me analyze the patterns:
+The user wants me to synthesize multiple self-audit report memories into a single comprehensive knowledge page. Let me analyze the patterns across all 30+ memories:
 
-1. All reports show 38 issues baseline (occasionally 37, 39, or 40)
-2. Backend cold-start: 8/8 backends never used in last 7d - consistent across all reports
-3. Strategy cold-start: 29/29 strategies unevaluated - consistent
-4. Staging-merge bottleneck: OK (0% failures) - auto-resolver deployed
-5. Module byte-compile health: intermittent issues with specific files
-6. Auto-resolver commit: 95396bc1
+1. **Recurring issues**: Almost every audit reports 38 issues with the same structure:
+   - 8/8 backend cold-start (8 backends never used in 7 days)
+   - 29/29 strategy cold-start (29 strategies unevaluated)
+   - Staging-merge: OK (0% failures) - auto-resolver deployed at commit 95396bc1
 
-Key variations in module health:
-- 2026-06-10T15:00:07: gptel-auto-workflow-recovery.el broken
-- 2026-06-10T10:00:14: 2 broken (recovery.el + self-heal-semantic.el) - 40 issues
-- 2026-06-09T15:00:09: gptel-auto-workflow-evolution.el broken - 39 issues
+2. **Variations**:
+   - 37 issues: 2 instances (2026-06-08)
+   - 38 issues: most common (majority)
+   - 39 issues: 2 instances (added 1 broken module)
+   - 40 issues: 1 instance (2026-06-10T10:00:14, added 2 broken modules)
+   - Module byte-compile health appears in some reports showing broken .el files:
+     - gptel-auto-workflow-recovery.el
+     - gptel-auto-workflow-self-heal-semantic.el
+     - gptel-auto-workflow-evolution.el
 
-Action items are consistent:
-- Cold backends on next cycle
-- 40% exploration rate may be too slow
-- Auto-resolver handles .md; source code needs review
+3. **Cold backends** (8 total, all never used in 7 days):
+   - Cf-gateway, Token-plan, Deepseek, Z-ai, Dashscope, Minimax, Gemini, Copilot
 
-YC insight: "self-evolve" must include META — auditing the system itself.
+4. **Cold strategies** (29 total unevaluated, first 10 shown):
+   - strategy-weighted-failures, strategy-weighted-failure-patterns
+   - strategy-surprise-based-retrieval, strategy-semantic-failure-clustering
+   - strategy-saturation-ordering, strategy-recency-weighted-skills
+   - strategy-recency-weighted-guidance, strategy-pattern-driven-skills
+   - strategy-outcome-reasoning, strategy-outcome-driven-sections
 
-Let me build a comprehensive knowledge page with:
+5. **Action items** (consistent across all):
+   - System should attempt cold backends on next cycle
+   - 40% exploration rate may be too slow to discover winners
+   - Staging-merge auto-resolver handles .md; source code still needs review
+
+6. **Key milestone**: Auto-resolver for .md conflicts deployed (commit 95396bc1)
+
+7. **YC note**: 'self-evolve' must include META — auditing the system itself
+
+I need to create a comprehensive knowledge page with:
 - Frontmatter
+- Minimum 50 lines of content
+- Concrete examples (code, tables, commands)
+- Actionable patterns
+- Cross-references
+- Full markdown page
+
+Let me structure this thoughtfully with:
 - Overview
-- Issue breakdown with tables
-- Backend list
-- Strategy list (first 10)
-- Module byte-compile health table
-- Action items / patterns
-- Timeline
+- The 38-issue baseline breakdown
+- Issue categories with tables
+- The audit issue classification (37, 38, 39, 40)
+- Module byte-compile failures over time
+- Auto-resolver details
+- Actionable patterns and resolution
+- Trend analysis (most audits return 38 issues — system is stable but not improving)
 - Related topics
 
-Need to be 50+ lines of content. Let me make this thorough.
+Let me count to make sure I have 50+ lines of actual content.

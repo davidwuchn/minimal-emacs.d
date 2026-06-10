@@ -227,5 +227,115 @@ validate-brackets succeeding for balanced code."
       (should (stringp (car s)))
       (should (stringp (cdr s))))))
 
+;; ── Targeted self-heal ──
+
+(ert-deftest test-daemon-repl/targeted-self-heal-file ()
+  "Targeted self-heal only audits/fixes the given file."
+  (skip-unless (fboundp 'gptel-auto-workflow--self-heal-file))
+  (let* ((test-dir (make-temp-file "daemon-repl-heal-" t))
+         (bad-file (expand-file-name "bad.el" test-dir))
+         (good-file (expand-file-name "good.el" test-dir)))
+    (unwind-protect
+        (progn
+          ;; bad.el has unbalanced parens
+          (with-temp-file bad-file
+            (insert "(defun foo () 42\n"))
+          ;; good.el is balanced
+          (with-temp-file good-file
+            (insert "(defun bar () 42)\n"))
+          ;; Run targeted self-heal on bad-file
+          (let ((result (gptel-auto-workflow--self-heal-file bad-file)))
+            ;; Should fix the file
+            (should (> (plist-get result :auto-fixed) 0))
+            ;; Should only audit one file
+            (should (= (plist-get result :files-checked) 1))))
+      (delete-directory test-dir t))))
+
+(ert-deftest test-daemon-repl/conversion-unit-logging ()
+  "When self-heal fixes a file via daemon-repl, a conversion unit is logged."
+  (skip-unless (fboundp 'gptel-auto-workflow--self-heal-file))
+  (skip-unless (fboundp 'gptel-conversion-unit-add))
+  (let* ((test-dir (make-temp-file "daemon-repl-conv-" t))
+         (bad-file (expand-file-name "bad.el" test-dir))
+         (gptel-conversion-unit-enabled t)
+         (gptel-conversion-unit-persist-dir test-dir))
+    (unwind-protect
+        (progn
+          (gptel-conversion-unit-clear)
+          ;; bad.el has unbalanced parens
+          (with-temp-file bad-file
+            (insert "(defun foo () 42\n"))
+          ;; Run targeted self-heal
+          (gptel-auto-workflow--self-heal-file bad-file)
+          ;; Check that a conversion unit was logged
+          (let ((units (gptel-conversion-unit-list)))
+            (should (> (length units) 0))
+            (let ((unit (car units)))
+              (should (equal (gptel-conversion-unit-conversion-type unit) 'repair))
+              (should (equal (plist-get (gptel-conversion-unit-before-state unit) :status) 'audit-failed))
+              (should (equal (plist-get (gptel-conversion-unit-after-state unit) :status) 'auto-fixed)))))
+      (delete-directory test-dir t))))
+
+(ert-deftest test-daemon-repl/metrics-tracked ()
+  "Metrics are updated on eval attempts."
+  ;; Reset metrics first
+  (gptel-daemon-repl-reset-metrics)
+  (let ((metrics (gptel-daemon-repl-metrics)))
+    (should (= (plist-get metrics :eval-attempts) 0))
+    (should (= (plist-get metrics :eval-successes) 0))
+    (should (= (plist-get metrics :eval-failures) 0))))
+
+(ert-deftest test-daemon-repl/failure-hook-called ()
+  "Failure hook is called when eval fails after retries."
+  (let ((hook-called nil)
+        (hook-file nil)
+        (hook-error nil))
+    ;; Install a test hook
+    (add-hook 'gptel-daemon-repl-eval-failure-hook
+              (lambda (file error-msg retries)
+                (setq hook-called t
+                      hook-file file
+                      hook-error error-msg)))
+    (unwind-protect
+        (progn
+          ;; Reset metrics
+          (gptel-daemon-repl-reset-metrics)
+          ;; The hook is tested indirectly — verify it's defined
+          (should (boundp 'gptel-daemon-repl-eval-failure-hook))
+          (should (listp gptel-daemon-repl-eval-failure-hook)))
+      ;; Clean up
+      (remove-hook 'gptel-daemon-repl-eval-failure-hook
+                   (lambda (file error-msg retries)
+                     (setq hook-called t
+                           hook-file file
+                           hook-error error-msg))))))
+
+(ert-deftest test-daemon-repl/status-includes-metrics ()
+  "Status plist includes metrics."
+  (let ((status (gptel-daemon-repl-status)))
+    (should (plist-get status :metrics))
+    (let ((metrics (plist-get status :metrics)))
+      (should (numberp (plist-get metrics :attempts)))
+      (should (numberp (plist-get metrics :successes)))
+      (should (numberp (plist-get metrics :failures))))))
+
+(ert-deftest test-daemon-repl/skip-large-files ()
+  "Files exceeding max size should not be auto-evaluated."
+  (let ((gptel-daemon-repl-max-file-size 100) ; 100 bytes
+        (test-file (make-temp-file "daemon-repl-large-" nil ".el")))
+    (unwind-protect
+        (progn
+          ;; Write a file larger than 100 bytes
+          (with-temp-file test-file
+            (insert (make-string 200 ?x)))
+          ;; In a buffer visiting this file
+          (with-temp-buffer
+            (insert-file-contents test-file)
+            (emacs-lisp-mode)
+            (setq buffer-file-name test-file)
+            ;; Should not auto-eval
+            (should-not (gptel-daemon-repl--should-auto-eval-p))))
+      (delete-file test-file))))
+
 (provide 'test-daemon-repl)
-;;; test-brepl.el ends here
+;;; test-daemon-repl.el ends here

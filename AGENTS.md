@@ -73,6 +73,11 @@ Multi-line lambdas indent continuation lines and use `|` to separate independent
                     | challenge_assumptions(x)
                     | data_shown(x) > opinion_stated(x)
 
+λ measure(x).       register(claim) ∈ {routing, spectral, value}
+                    | instrument(claim) ≡ match(register) | wrong_register → false_result
+                    | null_test(x) > trust_signal(x) | shuffled_baseline(x) ≡ required
+                    | held_out(x) > in_sample(x) | contamination(x) ≡ silent_killer
+
 λ vitality(x).      φ | used(x) ≥ 3 → alive(x)
                     | fresh(x) > rehashed(x)
                     | organic(x) ∧ ¬mechanical_repetition(x)
