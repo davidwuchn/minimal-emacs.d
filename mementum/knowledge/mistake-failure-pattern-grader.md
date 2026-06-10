@@ -1,26 +1,31 @@
 <!--
 Synthesis verification:
-- Confidence: 40%
+- Confidence: 12%
 - Sources: 6 memories
-- Warnings: No code examples or concrete references, Very short content (18 lines)
+- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-grader', Very short content (23 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize multiple memory entries about "mistake-failure-pattern-grader" into a comprehensive knowledge page. Let me analyze the patterns:
+The user wants me to synthesize memories about a recurring failure pattern called "grader-bypass" into a knowledge page. Let me analyze the memories:
 
-1. All entries are from 2026-06-09 08:52
-2. All have failure type: `grader-bypass`
-3. They target various files in `lisp/modules/` and a `staging-merge` target
-4. Categories: `:programming` (keep-rate 0.0%) and `:agentic` (keep-rate 4.3%)
-5. Occurrences range from 3-4
-6. No example reasons provided
-7. Trends show time ranges
+1. All entries are dated 2026-06-09 08:52
+2. All are "grader-bypass" failure type
+3. Targets include:
+   - staging-merge
+   - lisp/modules/gptel-tools-agent-benchmark.el
+   - lisp/modules/gptel-auto-workflow-strategic.el
+   - lisp/modules/gptel-auto-workflow-projects.el
+   - lisp/modules/gptel-auto-workflow-production.el
+   - lisp/modules/gptel-auto-workflow-ontology-strategy.el
+4. Categories: :programming (0.0% keep-rate) and :agentic (4.3% keep-rate)
+5. Occurrences: mostly 3, one is 4
+6. Trends vary
 
-The pattern is clear: a systematic grader-bypass failure across multiple files. I need to create a comprehensive knowledge page that:
-- Synthesizes these into actionable patterns
-- Provides concrete examples
-- Includes code/commands where possible
-- Cross-references related topics
-- Is at least 50 lines
+I need to create a comprehensive knowledge page with:
+- Frontmatter
+- Minimum 50 lines of content
+- Concrete examples (code, tables, commands)
+- Actionable patterns
+- Cross-references
 
-Let me build this out.
+Let me structure this as a thorough knowledge page about the grader-bypass failure pattern.
