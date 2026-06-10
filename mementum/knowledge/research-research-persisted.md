@@ -1,63 +1,64 @@
 <!--
 Synthesis verification:
-- Confidence: 24%
+- Confidence: 80%
 - Sources: 38 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'research-research-persisted'
-- Auto-approved: yes (flagged)
+- Warnings: No code examples or concrete references
+- Auto-approved: yes (passed)
 --->
 
-The user wants me to synthesize multiple research memories into a comprehensive knowledge page. Let me analyze what I have:
+The user wants me to synthesize multiple research memory entries into a single knowledge page about "research-research-persisted" topic. Let me analyze the memories:
 
-1. Multiple research digest entries from auto-workflow runs
-2. Topics covered: FSM-based resumable requests, three-tier knowledge hierarchy, prompt linting, conditional retry with error reinsertion, self-rewriting meta-prompt loops, dual-agent critic, mcp.el, emacs-mcp-server, self-evolving agents, GEPA, EvolveR, gptel+mcp.el stack, layered error defense, durable execution, MAST failure taxonomy, magic UI patterns, Magent, gptel-agent, DSPy, Reflexion, context branching, attention magnets, logprob validation, trajectory-level intervention, KV cache, etc.
+1. The memories are from an Emacs-based AI agent auto-workflow system
+2. They document research findings from the `persisted-findings` strategy
+3. Multiple research sessions (2026-05-22 through 2026-06-04) covering:
+   - Three-tier watchdog architecture
+   - Think-in-Code context reduction
+   - DEGRADED state circuit breaker
+   - Hybrid search fusion
+   - Self-wiring knowledge graph
+   - Three-loop meta-learning
+   - DSPy signatures/modules
+   - Reflexion verbal self-reflection
+   - gptel FSM pause/resume
+   - mementum three-tier storage
+   - nucleus prompt debugger
+   - Layered error defense
+   - Durable execution
+   - MAST failure taxonomy
+   - GEPA reflective prompt evolution
+   - EvolveR self-evolving agents
+   - DNS-based memory discovery
+   - Logprob-based prompt validation
+   - KV cache management
+   - And many more
 
-3. Common patterns:
-- Research methodology (own-repos-first, external fallback)
-- FSM-based resumable workflows
-- Three-tier memory (state/memories/knowledge)
-- Prompt linting/pre-execution validation
-- Conditional retry with error reinsertion
-- Circuit breaker pattern
-- Layered error defense
-- Self-evolution patterns (GEPA, Reflexion, EvolveR)
-- DSPy signature/module/optimizer
-- Context branching via org-mode
-- AI Cliff mitigation
-- Anti-sycophancy prompts
-- Tool hierarchies
-- Self-verification engines
-- DEGRADED state circuit breaker
-- Vtable interface for swappability
-- Hybrid search (vector + BM25)
-- Self-wiring knowledge graph
-- Three-loop meta-learning
-- Discovery infrastructure (DNS)
-- MEMENTUM-LAMBDA encoding
-- Stageable pause/resume
-- Safe-compile for untrusted prompts
-- A-MEM Zettelkasten
-- MemGPT two-tier memory
-- Sub-agent delegation decision trees
-- Inline diff preview
-- Overlay-based instruction tracking
-- Recursive Memory Harness (RMH)
-- Mem0 graph-based memory
-- MAST failure taxonomy
-- Star-architecture orchestrator
-- Logprob-based prompt validation
-- DNS-based memory node discovery
-- Trajectory-level intervention
-- KV cache for agentic pauses
-- Continuum paper
-- Anthropic building effective agents
-- SE-Agent/SCOPE
+4. The memories show:
+   - 0% keep rate is common (problems with the research pipeline)
+   - Local-fallback patterns when researcher daemon fails
+   - Pipeline defect issues
+   - Auto-workflow generates these research runs
+   - Need to preserve feedback loop with research hashes
+   - Structured machine-parseable outputs preferred
+   - Self-evolution observability is key
 
-Let me organize this into a comprehensive knowledge page with:
-1. Title and frontmatter
-2. Research strategy section
-3. Key patterns section (grouped by category)
-4. Concrete code examples
-5. Actionable patterns
-6. Cross-references
+I need to:
+1. Create a knowledge page that synthesizes ALL of this
+2. Minimum 50 lines of actual content
+3. Concrete examples (code, tables, commands)
+4. Actionable patterns
+5. Cross-references to related topics
+6. Return full markdown page
 
-I need to make this 50+ lines of actual content with concrete examples. Let me structure it well.
+Let me structure this as a comprehensive reference page for the `research-research-persisted` strategy and its findings, patterns, and anti-patterns.
+
+The page should cover:
+- What this research strategy is
+- Common patterns discovered across sessions
+- Anti-patterns and failure modes
+- Concrete techniques to apply
+- Source effectiveness data
+- Pipeline integration patterns
+- The "local fallback" pattern (most common observed)
+- Code examples for elisp integration
+
+Let me write this now.

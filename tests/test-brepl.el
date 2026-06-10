@@ -74,7 +74,7 @@
 (ert-deftest test-brepl/eval-returns-plist-shape ()
   "eval returns plist with :success t, :result string, :error nil."
   (cl-letf (((symbol-function 'gptel-brepl--call)
-             (lambda (args) (list :success t :result "42" :error nil))))
+             (lambda (_args) (list :success t :result "42" :error nil))))
     (let ((result (gptel-brepl-eval "(+ 1 2 3)")))
       (should (plist-get result :success))
       (should (string= (plist-get result :result) "42"))
@@ -83,7 +83,7 @@
 (ert-deftest test-brepl/eval-error-returns-nil-success ()
   "eval returns :success nil when brepl fails."
   (cl-letf (((symbol-function 'gptel-brepl--call)
-             (lambda (args) (list :success nil :result nil :error "Syntax error"))))
+             (lambda (_args) (list :success nil :result nil :error "Syntax error"))))
     (let ((result (gptel-brepl-eval "(+ 1 ")))
       (should-not (plist-get result :success))
       (should (stringp (plist-get result :error))))))
@@ -101,7 +101,7 @@
 (ert-deftest test-brepl/load-file-returns-plist-shape ()
   "load-file returns plist with :success, :result, :error."
   (cl-letf (((symbol-function 'gptel-brepl--call)
-             (lambda (args) (list :success t :result "Loaded" :error nil))))
+             (lambda (_args) (list :success t :result "Loaded" :error nil))))
     (let ((result (gptel-brepl-load-file "/tmp/test.clj")))
       (should (plist-get result :success))
       (should (string= (plist-get result :result) "Loaded"))
@@ -121,7 +121,7 @@
 (ert-deftest test-brepl/balance-returns-plist-shape ()
   "balance returns plist with :success, :output, :error."
   (cl-letf (((symbol-function 'gptel-brepl--call)
-             (lambda (args) (list :success t :result "fixed content" :error nil))))
+             (lambda (_args) (list :success t :result "fixed content" :error nil))))
     (let ((result (gptel-brepl-balance "/tmp/test.clj")))
       (should (plist-get result :success))
       (should (string= (plist-get result :output) "fixed content"))
