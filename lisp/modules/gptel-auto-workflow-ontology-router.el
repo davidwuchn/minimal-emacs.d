@@ -37,10 +37,6 @@ Each entry is ((strategy . target) . result).")
 (declare-function gptel-auto-workflow--memory-schema-record-evolution "gptel-auto-workflow-memory-schema")
 (declare-function gptel-auto-workflow--unified-graph-best-backend-for "gptel-auto-workflow-memory-schema")
 (declare-function gptel-auto-workflow--unified-graph-neighbors "gptel-auto-workflow-memory-schema")
-;; Sibyl conversion unit tracking
-(declare-function gptel-conversion-unit-record-repair "gptel-ext-conversion-unit" (target current-cat suggested-cat delta))
-(declare-function gptel-conversion-unit-record-drift "gptel-ext-conversion-unit" (target category delta))
-(declare-function gptel-conversion-unit-record-evolution "gptel-ext-conversion-unit" (changes-plist))
 
 (defvar gptel-auto-workflow-executor-rate-limit-fallbacks
   (mapcar (lambda (backend)
@@ -861,18 +857,17 @@ explore=%.0f%%)"
            ;; documented overrides (e.g. :programming → DeepSeek) work
            ;; from the very first run, not just after data accumulates.
            (if category-override
-                (let* ((override-entry (assoc category-override static-fallbacks))
-                       (rest (cl-remove category-override static-fallbacks
-                                        :key #'car :test #'string=)))
-                  (if override-entry
-                      (progn
-                        (message "[onto-router] Static override: %s → %s"
-                                 category category-override)
-                        (cons override-entry rest))
-                    static-fallbacks))
-                static-fallbacks)))))))
-            (push (cons cache-key result) gptel-auto-workflow--reorder-cache)
-            result))))
+               (let* ((override-entry (assoc category-override static-fallbacks))
+                      (rest (cl-remove category-override static-fallbacks
+                                       :key #'car :test #'string=)))
+                 (if override-entry
+                     (progn
+                       (message "[onto-router] Static override: %s → %s"
+                                category category-override)
+                       (cons override-entry rest))
+                     static-fallbacks))))))
+           (push (cons cache-key result) gptel-auto-workflow--reorder-cache)
+           result))))
 
 ;; ─── Integration with Existing Fallback System ───
 
@@ -3544,16 +3539,13 @@ Returns alist of (target . (category . delta)) for drifts > 20%."
                 (t-rate (if (> t-total 0) (/ (float (plist-get t-stats :kept)) t-total) 0))
                 (c-rate (if (> c-total 0) (/ (float (plist-get c-stats :kept)) c-total) 0))
                 (delta (- t-rate c-rate)))
-            (when (and (>= t-total 5) (> (abs delta) 0.2))
-              (push (list target category delta) drifts)
-              (message "[ontology-drift] ⚠ %s (%s) keep-rate %.0f%% vs category %.0f%% (Δ%+.0f%%) —
+           (when (and (>= t-total 5) (> (abs delta) 0.2))
+             (push (list target category delta) drifts)
+             (message "[ontology-drift] ⚠ %s (%s) keep-rate %.0f%% vs category %.0f%% (Δ%+.0f%%) —
 possible misclassification"
-                       (file-name-nondirectory target) category (* 100 t-rate) (* 100 c-rate) (* 100 delta))
-              ;; Sibyl: record drift as auditable conversion unit
-              (when (fboundp 'gptel-conversion-unit-record-drift)
-                (gptel-conversion-unit-record-drift target category delta)))))
-        target-stats)
-       drifts)))
+                      (file-name-nondirectory target) category (* 100 t-rate) (* 100 c-rate) (* 100 delta)))))
+       target-stats)
+      drifts)))
 
 ;; ─── Ontology Self-Repair ───
 ;; The ontology not only detects drift but automatically suggests fixes.
@@ -3606,15 +3598,12 @@ Returns alist of suggestions: (target . suggested-category)."
                            (when (and (> tot 5) (> rate best-rate))
                              (setq best-cat cat best-rate rate))))
                        cat-rates))
-             (when (and best-cat (not (eq best-cat current-cat)))
-               (push (list target current-cat best-cat delta) suggestions)
-               (message "[ontology-repair] 🔧 %s: %s → %s (Δ%+.0f%%, category keep-rate %.0f%%)"
-                        (file-name-nondirectory target) current-cat best-cat
-                        (* 100 delta) (* 100 best-rate))
-               ;; Sibyl: record repair as auditable conversion unit
-               (when (fboundp 'gptel-conversion-unit-record-repair)
-                 (gptel-conversion-unit-record-repair target current-cat best-cat delta))))))
-     suggestions)))
+            (when (and best-cat (not (eq best-cat current-cat)))
+              (push (list target current-cat best-cat delta) suggestions)
+              (message "[ontology-repair] 🔧 %s: %s → %s (Δ%+.0f%%, category keep-rate %.0f%%)"
+                       (file-name-nondirectory target) current-cat best-cat
+                       (* 100 delta) (* 100 best-rate))))))
+    suggestions)))
 
 ;; ─── JSON Encoding Helpers ───
 
@@ -3939,9 +3928,6 @@ Runs during the self-evolution cycle.  Results are stored in
         (when (fboundp 'gptel-auto-workflow--memory-schema-record-evolution)
           (ignore-errors
             (gptel-auto-workflow--memory-schema-record-evolution result)))
-        ;; Sibyl: record evolution cycle as auditable conversion unit
-        (when (fboundp 'gptel-conversion-unit-record-evolution)
-          (gptel-conversion-unit-record-evolution result))
         result))))))
 
 ;; ─── Per-Category Eight-Key Aggregation ───
