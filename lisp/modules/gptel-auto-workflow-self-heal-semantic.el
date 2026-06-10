@@ -448,16 +448,25 @@ Returns count of risk nodes found."
                                     (goto-char defun-start)
                                     (forward-sexp 1)
                                     (point))))
-                     (has-cleanup nil))
+                     (has-cleanup nil)
+                     (is-wrapper nil))
                 (when (and defun-start defun-end)
+                  ;; Check if this is a wrapper function (returns temp file to caller)
                   (save-excursion
                     (goto-char defun-start)
-                    ;; Check for delete-file, delete-directory, or unwind-protect
-                    (when (or (re-search-forward "(delete-file\\b" defun-end t)
-                              (re-search-forward "(delete-directory\\b" defun-end t)
-                              (re-search-forward "(unwind-protect\\b" defun-end t))
-                      (setq has-cleanup t))))
-                (unless has-cleanup
+                    (when (looking-at "(\\(defun\\|cl-defun\\)\\s-+\\([^ )]+\\)")
+                      (let ((fn-name (match-string 2)))
+                        (when (string-match-p "temp-file" fn-name)
+                          (setq is-wrapper t)))))
+                  (unless is-wrapper
+                    (save-excursion
+                      (goto-char defun-start)
+                      ;; Check for delete-file, delete-directory, or unwind-protect
+                      (when (or (re-search-forward "(delete-file\\b" defun-end t)
+                                (re-search-forward "(delete-directory\\b" defun-end t)
+                                (re-search-forward "(unwind-protect\\b" defun-end t))
+                        (setq has-cleanup t)))))
+                (unless (or has-cleanup is-wrapper)
                   (setq issues (1+ issues))
                   (gptel-auto-workflow--semantic-audit-record
                    file match-line
