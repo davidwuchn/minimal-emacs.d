@@ -1731,15 +1731,29 @@ approval queue)"
             ;; - Unguarded external calls (void-function prevention)
             ;; - Excessive blank lines (code hygiene)
             ;; - Hardcoded limits, score=0 bugs, let-binding functions
-            (ignore-errors
-              (when (fboundp 'gptel-auto-workflow--self-heal-semantic)
-                (let ((result (gptel-auto-workflow--self-heal-semantic)))
-                  (let ((issues (plist-get result :total-issues))
-                        (fixed (plist-get result :auto-fixed)))
-                    (when (> issues 0)
-                      (message "[monitoring] Phase 10: Semantic audit found %d issues, auto-fixed %d"
-                               issues (or fixed 0)))))))
-            (ignore (nreverse written)))))))))))
+             (ignore-errors
+               (when (fboundp 'gptel-auto-workflow--self-heal-semantic)
+                 (let ((result (gptel-auto-workflow--self-heal-semantic)))
+                   (let ((issues (plist-get result :total-issues))
+                         (fixed (plist-get result :auto-fixed)))
+                     (when (> issues 0)
+                       (message "[monitoring] Phase 10: Semantic audit found %d issues, auto-fixed %d"
+                                issues (or fixed 0)))))))
+             ;; Phase 10b: Batch-anchored evolution proposal
+             ;; Groups audit failures by type for curated evolution (MOSS insight)
+             (ignore-errors
+               (when (fboundp 'gptel-auto-workflow--self-heal-semantic-batch-anchor)
+                 (let* ((batch-result (gptel-auto-workflow--self-heal-semantic-batch-anchor))
+                        (report (plist-get batch-result :report))
+                        (batches (plist-get batch-result :batches)))
+                   (when (and report (> (hash-table-count batches) 0))
+                     (let ((report-file (expand-file-name "mementum/batch-anchor-report.md"
+                                                          user-emacs-directory)))
+                       (with-temp-file report-file
+                         (insert report))
+                       (message "[monitoring] Phase 10b: Batch anchor report written to %s (%d batches)"
+                                report-file (hash-table-count batches)))))))
+             (ignore (nreverse written)))))))))))
 
 (provide 'gptel-auto-workflow-monitoring-agent)
 ;;; gptel-auto-workflow-monitoring-agent.el ends here

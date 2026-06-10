@@ -6,58 +6,40 @@ Synthesis verification:
 - Auto-approved: yes (passed)
 --->
 
-The user wants me to synthesize multiple research memory dumps into a single knowledge page about "research-research-persisted". Looking at the memories, I can see they are all research digest outputs from an auto-workflow system, specifically the "persisted-findings" strategy. The key patterns emerging across all these memories are:
+The user wants me to synthesize the provided memories into a knowledge page about "research-research-persisted". Let me analyze the memories carefully.
 
-1. **Research pipeline architecture** - how the auto-workflow runs research
-2. **Source prioritization** - own repos (davidwuchn/*) first, then external
-3. **Budget allocation** - token budgets, char limits
-4. **Output format** - structured digests with JSON metadata
-5. **Failure patterns** - 0% keep rates, local-fallback issues
-6. **Local-fallback behavior** - when researcher daemon is missing
-7. **Key insights extracted** - FSM patterns, three-tier memory, etc.
-8. **Tracking and observability** - findings hashes, research hashes in results.tsv
+Looking at the memories, they are all "Research" entries from an auto-workflow system that:
+1. Persists research findings from external research tasks
+2. Targets specific Emacs Lisp files in the .emacs.d project
+3. Has very low keep rates (0% in most cases, 4% in one, 33% in another)
+4. Uses a "persisted-findings" strategy
+5. Has fallback behavior when research daemon fails
+6. References many external sources and own repos (davidwuchn/*)
 
-Let me synthesize this into a comprehensive knowledge page about the persisted-findings research strategy. I need to:
-- Include 50+ lines of content
-- Concrete examples (code, tables, commands)
-- Actionable patterns
-- Cross-references
-
-Let me identify the recurring themes:
-
-**Recurring techniques mentioned across memories:**
-1. gptel FSM pattern (STATE/TABLE/HANDLERS/INFO)
-2. mementum three-tier storage (state.md, memories, knowledge)
-3. nucleus prompt debugging
-4. Layered error defense (retry+jitter, classify, circuit breaker, fallback)
-5. DSPy signature+module pattern
-6. Reflexion verbal self-reflection
-7. GEPA reflective prompt evolution
-8. mcp.el integration
-9. gptel-org-branching-context
-10. Checkpoint-resume for durability
-11. Conditional retry with error reinsertion
-12. MemGPT two-tier memory
-13. A-MEM Zettelkasten
-14. MAST failure taxonomy
-15. Logprob-based prompt validation
-16. DNS-based memory discovery
-17. KV cache management
-
-**Pipeline defects identified:**
-- Researcher daemon disappearing (June 3+)
-- 0% keep rate consistently
-- Validation/timeout errors
-- Pipeline hardening needed
-- Self-healing patterns
-- Watchdog threshold lowering
-
-**Pipeline structure:**
-- research-hash: 16-char hex
-- targets: list of files
-- outcome: kept/total ratio
-- strategy: persisted-findings
-- local-fallback: when daemon missing
-- meta-learning: "Research quality measured by downstream experiment success"
-
-Let me write a comprehensive knowledge page.
+Key recurring patterns from the memories:
+- Own repos investigated: nucleus, mementum, gptel, context-mode, eca, zeroclaw, nullclaw, Ori-Mnemos, nullboiler, genesis-agent, efrit, gastown, psi
+- External sources: arxiv papers, blogs, gptel-agent, DSPy, Reflexion, mcp.el, GEPA, EvolveR, MAST, mksglu/context-mode, etz
+- Common techniques discovered:
+  - FSM-based resumable requests
+  - Three-tier memory hierarchy
+  - Prompt linting/pre-execution validation
+  - Conditional retry with error reinsertion
+  - Self-rewriting meta-prompt loops
+  - Layered error defense (VIGIL, circuit breaker)
+  - Durable execution / checkpointing
+  - Logprob-based prompt validation
+  - DNS-based memory node discovery
+  - Trajectory-level intervention
+  - KV cache management
+  - Three-tier watchdog architecture
+  - Think-in-code context reduction
+  - DEGRADED state circuit breaker
+  - Hybrid search fusion
+  - Self-wiring knowledge graph
+  - Three-loop meta-learning
+  - DSPy signature+module+optimizer
+  - Reflexion verbal self-reflection
+  - mcp.el hub pattern
+  - HyperAgents DGM-H
+  - self-evolution taxonomies
+  - grace
