@@ -825,5 +825,11 @@ A broken file (e.g., unbalanced parens) shouldn't crash the whole audit."
           (should (plist-get result :issues)))
       (test-self-heal-semantic--cleanup file))))
 
+(ert-deftest test-self-heal-semantic/ontology-router-no-dead-cache-var ()
+  "The removed reorder-cache variable must not be declared.
+Pi5 commit ab888cd86 removed the cache logic but left the defvar."
+  (require 'gptel-auto-workflow-ontology-router)
+  (should-not (boundp 'gptel-auto-workflow--reorder-cache)))
+
 (provide 'test-self-heal-semantic)
 ;;; test-self-heal-semantic.el ends here

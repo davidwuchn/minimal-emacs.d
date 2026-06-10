@@ -5,10 +5,6 @@
 (defvar gptel-auto-workflow--rate-limited-backends nil)
 (defvar gptel-ai-behaviors--best-concrete-tasks nil)
 (defvar gptel-auto-experiment--target-state-cache nil)
-(defvar gptel-auto-workflow--reorder-cache nil
-  "Memoized results of `gptel-auto-workflow--reorder-fallbacks-by-ontology'.
-Invalidated when `gptel-auto-workflow--results-cache' is cleared.
-Each entry is ((strategy . target) . result).")
 (declare-function gptel-auto-experiment--replay-grader-insights-from-tsv
   "gptel-auto-experiment-core")
 (declare-function gptel-auto-workflow--worktree-base-root
@@ -3552,9 +3548,6 @@ possible misclassification"
   '((:agentic        . "agent\\|workflow\\|strategy\\|evolution")
     (:programming    . "benchmark\\|fsm\\|retry\\|test\\|code\\|compile\\|^gptel-ext-")
     (:tool-calls     . "
-
-
-
 
 
 sandbox\\|^gptel-tools-\\(?:bash\\|grep\\|glob\\|edit\\|apply\\|preview\\|programmatic\\)")
