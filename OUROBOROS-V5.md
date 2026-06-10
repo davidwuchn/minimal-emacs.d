@@ -16,12 +16,12 @@
 | **Low cost** | ~$0.50-2.00/run across **8 backends** (4-5 actively routed) |
 | **Human oversight** | File-based approval queue, 7-day expiry, high-risk proposals routed to review |
 | **Production sensing** | Monitoring agent + production metrics; Sentry wired, external feedback still partial |
-| **Scale** | **105 modules** (60 byte-compiled, 45 no-byte-compile), **3,261 ERT tests** |
+| **Scale** | **120 modules** (76 byte-compiled, 44 no-byte-compile), **3,485 ERT tests** |
 | **Reality check** | **✅ YC Vision 100% complete** - all 5 layers operational, all 10 monitoring phases implemented (0-9), full self-improving loop |
 
 **Quick start:** Clone -> run pipeline -> review kept experiments next morning.
 
-**Cost:** ~$0.50-2.00/run. **Token efficiency:** 59% prompt compression via lambda notation. **Safety:** Git worktree isolation + **7 gates** - no change touches `main` without passing all gates. **Scale:** 105 modules, **3,261 ERT tests**, 8 backend definitions (4-5 actively routed). **YC Vision:** **✅ 100% complete** - all 5 layers operational (Sensor, Policy, Tools, Quality, Learning), all 10 monitoring phases implemented (Phase 0: health probes, Phase 1: failure analysis, Phase 2: proposal generation, Phase 3: test/deploy, Phase 4: architectural evolution, Phase 5: external sensors, Phase 6: approved execution, Phase 7: impact assessment, Phase 8: synthesis trigger, Phase 9: self-tuning), full self-improving loop with human oversight.
+**Cost:** ~$0.50-2.00/run. **Token efficiency:** 59% prompt compression via lambda notation. **Safety:** Git worktree isolation + **7 gates** - no change touches `main` without passing all gates. **Scale:** 120 modules, **3,485 ERT tests**, 8 backend definitions (4-5 actively routed). **YC Vision:** **✅ 100% complete** - all 5 layers operational (Sensor, Policy, Tools, Quality, Learning), all 10 monitoring phases implemented (Phase 0: health probes, Phase 1: failure analysis, Phase 2: proposal generation, Phase 3: test/deploy, Phase 4: architectural evolution, Phase 5: external sensors, Phase 6: approved execution, Phase 7: impact assessment, Phase 8: synthesis trigger, Phase 9: self-tuning), full self-improving loop with human oversight.
 
 - [Begin](#begin) - Clone, run, done
 - [Why OV5?](#why-ov5)
@@ -153,7 +153,7 @@ lambda vision(x).
 | Gate | Type | What it checks | What happens on failure |
 |------|------|---------------|------------------------|
 | **1. Category Routing** | Enforced | Best backend for this target right now? | Routes to strongest current performer; unhealthy backends dropped |
-| **2. Test Execution** | Enforced | Did **3,261 ERT tests** pass? | Experiment discarded, pattern learned |
+| **2. Test Execution** | Enforced | Did **3,485 ERT tests** pass? | Experiment discarded, pattern learned |
 | **3. AI Grading** | Enforced | Is the change well-structured and principled? | Scored 0.0-1.0, fed to analyzer |
 | **3.5 Complexity Gate** | Enforced | Did complexity rise >10% without proportional quality gain? | Experiment rejected with explicit reason |
 | **4. AI Review** | Downstream | Does it pass security, conventions, architecture? | Multi-agent review in staging path |
@@ -271,19 +271,21 @@ The GTM Mayor is not a scraper. It is a **self-adjusting appetite**: what it res
 The PMF Mayor executes. It tests, verifies, and feeds back.
 
 ```
-Select target -> Categorize -> Route backend (VSM-tuned + drift-aware) -> Select model (per-target history)
-      -> Inject nucleus persona -> Generate hypothesis -> Run 3261 tests -> AI grade
+Select target -> Categorize -> Route backend (smart routing) -> Select model (per-target history)
+      -> Inject nucleus persona -> Generate 5 diverse hypotheses -> Select highest-diversity -> Run 3485 tests -> AI grade
       -> Complexity gate -> AI review -> Merge or learn
           ↓
      Kept? -> pi Synthesis: semantic cluster -> inherit strategy -> auto-queue
 ```
+
+**Plan-level search** (inspired by PlanSearch): Before executing an experiment, the system generates 5 diverse hypotheses using Jaccard similarity to maximize diversity. The highest-diversity hypothesis is selected for execution. This prevents repeated exploration of similar solution spaces and improves the quality of kept experiments.
 
 Every experiment is an isolated git worktree. `main` is never touched directly. **Seven gates** stand between a hypothesis and a merge:
 
 | Gate | What it checks | What happens on failure |
 |------|---------------|------------------------|
 | **Category Routing** | Best backend for this target right now? | Routes to strongest current performer; unhealthy backends dropped |
-| **Test Execution** | Did **3,261 ERT tests** pass? | Experiment discarded, pattern learned |
+| **Test Execution** | Did **3,485 ERT tests** pass? | Experiment discarded, pattern learned |
 | **AI Grading** | Is the change well-structured and principled? | Scored 0.0-1.0, fed to analyzer |
 | **Complexity Gate** | Did complexity rise without proportional quality gain? | Experiment rejected with rationale |
 | **AI Review** | Does it pass security, conventions, architecture? | Multi-agent review with feedback |
@@ -396,6 +398,8 @@ Every cycle still runs through the nucleus layer. The parts below mostly live in
 ### Routing
 
 Scoring uses VSM-auto-tuned weights + recency decay (14d half-life) + per-axis KIBC boost. Researcher, analyzer, executor, grader, reviewer, and explorer backends are ranked by health and keep-rate; quarantined and cooldown backends are excluded. Every routing decision is logged with component scores so architectural evolution can judge whether routing itself needs to evolve.
+
+**Smart routing** (`gptel-backend-registry-select-for-task`) is the single entry point for all LLM calls. It eliminates hardcoded backend references by dynamically selecting the best backend based on task type, health status, and historical performance. The registry maintains fallback chains per task type, enabling automatic failover when backends become unavailable.
 
 ### Persona & Moderation
 
@@ -550,8 +554,9 @@ The pipeline's immune system:
 | Guard | Prevents |
 |-------|----------|
 | Git worktree isolation | `main` never touched directly |
-| **3,261 ERT tests** + timeout guard | Broken code caught before staging |
+| **3,485 ERT tests** + timeout guard | Broken code caught before staging |
 | **7-gate execution path** | Bad changes filtered before integration |
+| **Platform sandbox** | OS-level process containment (seatbelt/bubblewrap) |
 | Complexity gate | Code bloat masquerading as progress |
 | Ontology-aware provider routing | Unhealthy backends auto-penalized or excluded |
 | Per-target model preference | Historical performance selects stronger model |
@@ -590,7 +595,7 @@ The system detects when its own evaluators are broken and heals itself - no huma
 | **3. Dog-food principle** | Self-heal fixes its own warnings first | Self-reference tests the repair loop |
 | **4. Pre-commit enforcement** | `byte-compile-error-on-warn t` on staged `.el` files | Rejects warning-bearing commits |
 
-**Module discipline:** 105 modules are tracked in the current architecture: **60 byte-compiled**, **45 marked `no-byte-compile`**. The self-heal layer exists so the system fixes its own code before touching yours.
+**Module discipline:** 120 modules are tracked in the current architecture: **76 byte-compiled**, **44 marked `no-byte-compile`**. The self-heal layer exists so the system fixes its own code before touching yours.
 
 **Key principle:** timeout means "could not evaluate," not "code is bad." The grader treats timeouts as unknown, not as proof of failure. The monitoring agent is operational today: it runs after each experiment batch, throttled to 15-minute windows, and can emit low-risk remediations, notify-only routing changes, or approval-required structural proposals.
 
@@ -618,12 +623,29 @@ lambda self-heal(x).
 | Monitoring agent silent for many runs | Batch throttle window or hook not firing | Check after-experiment hook wiring and monitoring logs |
 | "prompt is empty" errors | Strategy analysis returned no patterns | Usually transient; if persistent, inspect evolution artifacts |
 | Daemon unresponsive | Test run blocking or stale socket | Wait briefly, then restart watchdog if needed |
+| Daemon frozen (heartbeat stale) | Main thread blocked on long API call | Heartbeat watchdog auto-restarts after 180s staleness |
 | Same error across all backends | Code issue, not provider | Read the error - often missing function or paren mismatch |
 | "all backends exhausted" | Quota exhausted on all providers | Check provider billing; system recovers when quotas return |
 | Worktree merge conflicts | Parallel experiments touched overlapping files | System auto-rebases; if persistent, prune worktrees and retry |
 | Context missing for a result | Sidecar capture failed at TSV boundary | Check `var/context/` write path and capture hook |
 | Keep-rate stuck at 0% after 50+ experiments | Targets do not match ontology categories or sensors are misleading routing | Review targets, categories, and recent routing audit |
 | Memory usage >2.5GB RSS | Long-running daemon accumulating state | Watchdog auto-restarts; inspect RSS guard behavior |
+
+---
+
+## Research Foundations
+
+OV5's architecture is informed by five key research papers:
+
+| Paper | Key Insight | OV5 Implementation |
+|-------|-------------|-------------------|
+| **MOSS** (2605.22794) | Source-level self-evolution is Turing-complete | Self-heal-semantic module fixes code at source level |
+| **Sibyl-AutoResearch** (2605.22343) | Trial-and-error harnesses need explicit conversion | Ontology captures trial outcomes as executable knowledge |
+| **APEX** (2605.21240) | Self-evolving agents suffer exploration collapse | Category saturation detection prevents collapse |
+| **RPG** (2509.16198) | Structured graphs > free-form NL for planning | Experiment dependency graph (planned) |
+| **PlanSearch** (2409.03733) | Plan diversity directly predicts performance gains | Plan-level search with Jaccard similarity metric |
+
+**Knowledge pages**: `mementum/knowledge/self-evolving-agent-research.md`, `mementum/knowledge/research-planning-graph-plansearch-ov5-gaps.md`
 
 ---
 
