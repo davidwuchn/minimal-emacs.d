@@ -23,7 +23,7 @@ All communication uses `emacsclient -s <socket> --eval '<expr>'`.
 ## OV5 Subsystems You Can Use
 
 ### Pipeline (auto-workflow)
-Runs experiment cycles: select targets → categorize → route backend → generate hypothesis → run 2061 tests → AI grade → AI review → merge or learn.
+Runs experiment cycles: select targets → categorize → route backend → generate hypothesis → run 3485 tests → AI grade → AI review → merge or learn.
 
 | Command | What it does |
 |---------|-------------|
@@ -44,6 +44,19 @@ Scores experiment output 0.0-1.0 on structure, correctness, Eight Keys. Results 
 
 ### Comparator
 Decides keep vs discard from score/quality deltas. Results visible in `results.tsv`.
+
+### Prefix Cache
+Separates stable prompt prefix (AGENTS.md + tools + mementum + architecture) from dynamic suffix (target + hypothesis + results). Keeps LLM prefix cache warm across experiments. Configured via `lisp/modules/gptel-ext-prefix-cache.el`.
+
+| Function | What it does |
+|----------|-------------|
+| `(gptel-prefix-cache-compute "run-id")` | Build stable prefix for run |
+| `(gptel-prefix-cache-prepend dynamic)` | Prepend stable prefix to dynamic content |
+| `(gptel-prefix-cache-context-usage dynamic)` | Report token usage ratio |
+| `(gptel-prefix-cache-compact-dynamic prompt results)` | Summarize older results at 80% threshold |
+| `(gptel-prefix-cache-build-with-budget sections)` | Assemble prompt within token budget |
+| `(gptel-prefix-cache-save-to-file)` | Persist state across daemon restarts |
+| `(gptel-prefix-cache-load-from-file)` | Restore persisted state |
 
 ### Evolution (self-evolve)
 Generates new strategies from failure patterns. Runs each cycle after experiments complete. Output in `===RESULT===`.
@@ -113,4 +126,4 @@ The ontology learns from every kept/discarded pair — your review feedback trai
 
 ## Safety
 
-OV5 never touches `main` directly. All experiments run in isolated git worktrees. A change only merges after passing 2061 tests + grader + reviewer + comparator + champion league. If you add a target, OV5 handles isolation automatically.
+OV5 never touches `main` directly. All experiments run in isolated git worktrees. A change only merges after passing 3485 tests + grader + reviewer + comparator + champion league. If you add a target, OV5 handles isolation automatically.

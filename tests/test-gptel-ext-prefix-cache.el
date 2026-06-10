@@ -277,5 +277,268 @@
                       (= gptel-prefix-cache--context-window-size 128000)))))
     (test-prefix-cache--restore-state)))
 
+;;; Session Separation Tests (Gap 4)
+
+(ert-deftest test-prefix-cache-role-compute ()
+  "Test per-role prefix cache computation."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (gptel-prefix-cache-invalidate)
+        (gptel-prefix-cache-compute "role-test-run")
+        ;; Compute executor prefix
+        (let ((executor-prefix (gptel-prefix-cache-compute-for-role 'executor)))
+          (should (stringp executor-prefix))
+          (should (> (length executor-prefix) 0))
+          ;; Should contain role-specific context
+          (should (string-match-p "Role: EXECUTOR" executor-prefix)))
+        ;; Compute grader prefix
+        (let ((grader-prefix (gptel-prefix-cache-compute-for-role 'grader)))
+          (should (stringp grader-prefix))
+          (should (> (length grader-prefix) 0))
+          (should (string-match-p "Role: GRADER" grader-prefix)))
+        ;; Should be cached
+        (should (gptel-prefix-cache-role-get 'executor))
+        (should (gptel-prefix-cache-role-get 'grader)))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-role-isolation ()
+  "Test that role caches are isolated from each other."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (gptel-prefix-cache-invalidate)
+        (gptel-prefix-cache-compute "isolation-run")
+        (let* ((exec-prefix (gptel-prefix-cache-compute-for-role 'executor))
+               (grad-prefix (gptel-prefix-cache-compute-for-role 'grader)))
+          ;; Different roles should have different prefixes
+          (should (not (string= exec-prefix grad-prefix)))
+          ;; Both should contain base content
+          (should (string-match-p "STABLE PREFIX" exec-prefix))
+          (should (string-match-p "STABLE PREFIX" grad-prefix))))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-role-invalidate ()
+  "Test role cache invalidation."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (gptel-prefix-cache-invalidate)
+        (gptel-prefix-cache-compute "invalidate-run")
+        (gptel-prefix-cache-compute-for-role 'executor)
+        (gptel-prefix-cache-compute-for-role 'grader)
+        ;; Both should exist
+        (should (gptel-prefix-cache-role-get 'executor))
+        (should (gptel-prefix-cache-role-get 'grader))
+        ;; Invalidate one
+        (gptel-prefix-cache-role-invalidate 'executor)
+        (should (not (gptel-prefix-cache-role-get 'executor)))
+        (should (gptel-prefix-cache-role-get 'grader))
+        ;; Invalidate all
+        (gptel-prefix-cache-role-invalidate t)
+        (should (not (gptel-prefix-cache-role-get 'grader))))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-role-prepend ()
+  "Test role-aware prompt prepending."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (let ((gptel-prefix-cache-role-aware t)
+            (dynamic "Fix the nil guard in this function."))
+        (gptel-prefix-cache-invalidate)
+        (gptel-prefix-cache-compute "prepend-run")
+        (let ((result (gptel-prefix-cache-prepend-for-role 'executor dynamic)))
+          ;; Should contain role prefix + dynamic content
+          (should (string-match-p "Role: EXECUTOR" result))
+          (should (string-match-p "Fix the nil guard" result))))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-role-stats ()
+  "Test role cache statistics."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (gptel-prefix-cache-invalidate)
+        (gptel-prefix-cache-compute "stats-run")
+        (gptel-prefix-cache-compute-for-role 'executor)
+        (gptel-prefix-cache-compute-for-role 'grader)
+        (let ((stats (gptel-prefix-cache-role-stats)))
+          (should (string-match-p "executor" stats))
+          (should (string-match-p "grader" stats))
+          (should (string-match-p "chars" stats))))
+    (test-prefix-cache--restore-state)))
+
+;;; Token Budget Tests (Gap 5)
+
+(ert-deftest test-prefix-cache-dynamic-budget ()
+  "Test dynamic token budget computation."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (gptel-prefix-cache-invalidate)
+        (gptel-prefix-cache-compute "budget-run")
+        ;; Set a known context window
+        (setq gptel-prefix-cache--context-window-size 10000)
+        (let ((budget (gptel-prefix-cache-compute-dynamic-budget)))
+          ;; Should be positive and less than context window
+          (should (numberp budget))
+          (should (> budget 0))
+          (should (< budget 10000))))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-build-with-budget ()
+  "Test budget-aware prompt building."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (gptel-prefix-cache-invalidate)
+        (gptel-prefix-cache-compute "build-run")
+        ;; Set small budget to force exclusion
+        (setq gptel-prefix-cache--context-window-size 500)
+        (setq gptel-prefix-cache--output-reservation 100)
+        (setq gptel-prefix-cache-dynamic-token-budget 100)
+        (let* ((sections
+                (list
+                 (cons 1 (cons "essential" "This is essential content."))
+                 (cons 5 (cons "optional" (make-string 500 ?x)))))
+               (result (gptel-prefix-cache-build-with-budget sections)))
+          ;; Essential should be included
+          (should (string-match-p "essential" result))
+          ;; Optional should be excluded (too long for budget)
+          (should (not (string-match-p "optional" result)))))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-build-all-when-no-budget ()
+  "Test that all sections included when budget disabled."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (let ((gptel-prefix-cache-dynamic-token-budget nil)
+            (sections
+             (list
+              (cons 1 (cons "first" "Content one."))
+              (cons 2 (cons "second" "Content two.")))))
+        (let ((result (gptel-prefix-cache-build-with-budget sections)))
+          (should (string-match-p "Content one" result))
+          (should (string-match-p "Content two" result))))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-priority-ordering ()
+  "Test that sections are included in priority order."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (gptel-prefix-cache-invalidate)
+        ;; Use large context window so prefix fits
+        (setq gptel-prefix-cache--context-window-size 100000)
+        (setq gptel-prefix-cache--output-reservation 1000)
+        ;; Budget that fits only 1-2 sections
+        (setq gptel-prefix-cache-dynamic-token-budget 5)
+        (let* ((sections
+                (list
+                 (cons 3 (cons "medium" "Medium"))
+                 (cons 1 (cons "high" "High"))
+                 (cons 5 (cons "low" "Low"))))
+               (result (gptel-prefix-cache-build-with-budget sections)))
+          ;; With tiny budget, only highest priority should fit
+          (should (string-match-p "High" result))
+          ;; Result should not contain all three
+          (should (< (length result) 20))))
+    (test-prefix-cache--restore-state)))
+
+;; ─── Persistence Tests (Gap 6) ───
+
+(ert-deftest test-prefix-cache-save-and-load ()
+  "Test that cache state can be saved and restored."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (let ((test-file (make-temp-file "prefix-cache-test-"))
+            (original-content nil))
+        ;; Setup: compute cache and role cache
+        (gptel-prefix-cache-invalidate)
+        (setq gptel-prefix-cache-persist-file test-file
+              gptel-prefix-cache-persist-enabled t
+              gptel-prefix-cache-persist-max-age-hours 24)
+        (gptel-prefix-cache-compute "test-run")
+        (setq original-content gptel-prefix-cache--content)
+        (gptel-prefix-cache-compute-for-role 'executor "test-run")
+        ;; Save state
+        (gptel-prefix-cache-save-to-file)
+        (should (file-exists-p test-file))
+        ;; Invalidate and load back
+        (gptel-prefix-cache-invalidate)
+        (gptel-prefix-cache-role-invalidate t)
+        (should (null gptel-prefix-cache--content))
+        (let ((result (gptel-prefix-cache-load-from-file)))
+          (should result)
+          (should (equal gptel-prefix-cache--content original-content))
+          (should gptel-prefix-cache--valid-p)
+          (should (equal gptel-prefix-cache--run-id "test-run"))
+          ;; Role cache should be restored
+          (should (gptel-prefix-cache-role-get 'executor)))
+        ;; Cleanup
+        (delete-file test-file))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-load-stale-state ()
+  "Test that stale persisted state is rejected."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (let ((test-file (make-temp-file "prefix-cache-test-")))
+        (setq gptel-prefix-cache-persist-file test-file
+              gptel-prefix-cache-persist-enabled t
+              gptel-prefix-cache-persist-max-age-hours 1)
+        ;; Create a fake stale state file (2 hours old)
+        (with-temp-file test-file
+          (prin1 (list :version 1
+                       :timestamp (time-subtract (current-time) (seconds-to-time 7200))
+                       :run-id "old-run"
+                       :content "stale content"
+                       :role-caches nil)
+                 (current-buffer)))
+        (should (null (gptel-prefix-cache-load-from-file)))
+        (should (null gptel-prefix-cache--content))
+        ;; File should be deleted
+        (should (not (file-exists-p test-file)))
+        (when (file-exists-p test-file)
+          (delete-file test-file)))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-load-version-mismatch ()
+  "Test that version mismatch is handled gracefully."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (let ((test-file (make-temp-file "prefix-cache-test-")))
+        (setq gptel-prefix-cache-persist-file test-file
+              gptel-prefix-cache-persist-enabled t)
+        (with-temp-file test-file
+          (prin1 (list :version 99
+                       :timestamp (current-time)
+                       :run-id "bad-version"
+                       :content "bad content")
+                 (current-buffer)))
+        (should (null (gptel-prefix-cache-load-from-file)))
+        (should (null gptel-prefix-cache--content))
+        (delete-file test-file))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-run-end-saves-state ()
+  "Test that run-end hook saves state before invalidating."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (let ((test-file (make-temp-file "prefix-cache-test-")))
+        (setq gptel-prefix-cache-persist-file test-file
+              gptel-prefix-cache-persist-enabled t)
+        (gptel-prefix-cache-invalidate)
+        (gptel-prefix-cache-compute "lifecycle-run")
+        ;; Run end hook should save then invalidate
+        (gptel-prefix-cache-on-run-end)
+        (should (not gptel-prefix-cache--valid-p))
+        (should (file-exists-p test-file))
+        ;; Should be restorable
+        (should (gptel-prefix-cache-load-from-file))
+        (should (equal gptel-prefix-cache--run-id "lifecycle-run"))
+        (delete-file test-file))
+    (test-prefix-cache--restore-state)))
+
 (provide 'test-gptel-ext-prefix-cache)
 ;;; test-gptel-ext-prefix-cache.el ends here
