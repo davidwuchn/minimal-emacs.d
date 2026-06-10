@@ -603,6 +603,105 @@ If role cache is disabled or empty, falls back to global prefix."
                 (string-join (sort lines #'string<) "\n"))
       "[prefix-cache] No role caches active")))
 
+;; ─── Token-Aware Prompt Building (Gap 5) ───
+
+(defcustom gptel-prefix-cache-dynamic-token-budget 4000
+  "Max tokens for dynamic content per experiment turn.
+Sections are included in priority order until this budget is exhausted.
+Set to nil to disable budget-aware prompt building."
+  :type '(choice (const :tag "Disabled" nil)
+                 (integer :tag "Token budget"))
+  :group 'gptel-tools-agent)
+
+(defvar gptel-prefix-cache--output-reservation 2000
+  "Tokens reserved for LLM output.
+Subtracted from context window when computing dynamic budget.")
+
+(defun gptel-prefix-cache-compute-dynamic-budget ()
+  "Compute token budget for dynamic content.
+Returns number of tokens available, or nil if budget management disabled.
+Formula: context-window - prefix-tokens - output-reservation."
+  (when (and gptel-prefix-cache-dynamic-token-budget
+             (> gptel-prefix-cache--context-window-size 0))
+    (let* ((prefix-tokens (gptel-prefix-cache-estimate-tokens
+                           gptel-prefix-cache--content))
+           (available (- gptel-prefix-cache--context-window-size
+                        prefix-tokens
+                        gptel-prefix-cache--output-reservation)))
+      (max 0 (min available gptel-prefix-cache-dynamic-token-budget)))))
+
+(defun gptel-prefix-cache-build-with-budget (sections)
+  "Build prompt from SECTIONS respecting token budget.
+SECTIONS is an alist of (priority . (name . content)) pairs.
+Priority: 1=highest (essential), 5=lowest (optional).
+Returns concatenated string of included sections.
+Logs which sections were included/excluded."
+  (let* ((budget (gptel-prefix-cache-compute-dynamic-budget))
+         (sorted (sort (copy-sequence sections)
+                       (lambda (a b) (< (car a) (car b)))))
+         (included nil)
+         (excluded nil)
+         (used-tokens 0))
+    (if (null budget)
+        ;; Budget management disabled: include all sections
+        (mapconcat (lambda (s) (cddr s)) sorted "\n\n")
+      (dolist (entry sorted)
+        (let* ((priority (car entry))
+               (name (cadr entry))
+               (content (cddr entry))
+               (tokens (gptel-prefix-cache-estimate-tokens content)))
+          (if (<= (+ used-tokens tokens) budget)
+              (progn
+                (push (cons name tokens) included)
+                (setq used-tokens (+ used-tokens tokens)))
+            (push (cons name tokens) excluded))))
+      (when excluded
+        (message "[prefix-cache] Budget %d tokens: included %d sections (%d tokens), excluded %d: %s"
+                 budget
+                 (length included) used-tokens
+                 (length excluded)
+                 (mapconcat (lambda (e) (car e)) excluded ", ")))
+      (mapconcat (lambda (s) (cddr s)) sorted "\n\n"))))
+
+(defun gptel-prefix-cache-sections-for-experiment (target experiment-id max-experiments analysis baseline previous-results)
+  "Return prioritized sections for experiment prompt.
+Returns alist of (priority . (name . content)) pairs.
+Priority 1 = essential, 5 = optional."
+  (list
+   ;; Priority 1: Essential
+   (cons 1 (cons "target"
+                 (format "## Target: %s\nExperiment %d/%d"
+                         target experiment-id max-experiments)))
+   ;; Priority 1: Hypothesis
+   (cons 1 (cons "hypothesis"
+                 (or (and (fboundp 'gptel-auto-experiment--select-diverse-hypothesis)
+                          (gptel-auto-experiment--select-diverse-hypothesis target previous-results))
+                     "Make targeted improvements")))
+   ;; Priority 2: Task hint
+   (cons 2 (cons "task-hint"
+                 (or (and (boundp 'gptel-auto-experiment--current-task-hint)
+                          gptel-auto-experiment--current-task-hint)
+                     "")))
+   ;; Priority 2: Analysis
+   (cons 2 (cons "analysis"
+                 (if analysis
+                     (format "## Analysis\n%s" (plist-get analysis :patterns))
+                     "")))
+   ;; Priority 3: Recent results
+   (cons 3 (cons "recent-results"
+                 (if (and previous-results (> (length previous-results) 0))
+                     (format "## Previous Results\n%s"
+                             (gptel-prefix-cache--format-results previous-results))
+                     "")))
+   ;; Priority 4: Mementum
+   (cons 4 (cons "mementum"
+                 (or (and (boundp 'gptel-auto-experiment--mementum-recall)
+                          gptel-auto-experiment--mementum-recall)
+                     "")))
+   ;; Priority 5: Git history
+   (cons 5 (cons "git-history"
+                 "Recent commits..."))))
+
 ;; ─── Provide ───
 
 (provide 'gptel-ext-prefix-cache)

@@ -368,5 +368,82 @@
           (should (string-match-p "chars" stats))))
     (test-prefix-cache--restore-state)))
 
+;;; Token Budget Tests (Gap 5)
+
+(ert-deftest test-prefix-cache-dynamic-budget ()
+  "Test dynamic token budget computation."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (gptel-prefix-cache-invalidate)
+        (gptel-prefix-cache-compute "budget-run")
+        ;; Set a known context window
+        (setq gptel-prefix-cache--context-window-size 10000)
+        (let ((budget (gptel-prefix-cache-compute-dynamic-budget)))
+          ;; Should be positive and less than context window
+          (should (numberp budget))
+          (should (> budget 0))
+          (should (< budget 10000))))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-build-with-budget ()
+  "Test budget-aware prompt building."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (gptel-prefix-cache-invalidate)
+        (gptel-prefix-cache-compute "build-run")
+        ;; Set small budget to force exclusion
+        (setq gptel-prefix-cache--context-window-size 500)
+        (setq gptel-prefix-cache--output-reservation 100)
+        (setq gptel-prefix-cache-dynamic-token-budget 100)
+        (let* ((sections
+                (list
+                 (cons 1 (cons "essential" "This is essential content."))
+                 (cons 5 (cons "optional" (make-string 500 ?x)))))
+               (result (gptel-prefix-cache-build-with-budget sections)))
+          ;; Essential should be included
+          (should (string-match-p "essential" result))
+          ;; Optional should be excluded (too long for budget)
+          (should (not (string-match-p "optional" result)))))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-build-all-when-no-budget ()
+  "Test that all sections included when budget disabled."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (let ((gptel-prefix-cache-dynamic-token-budget nil)
+            (sections
+             (list
+              (cons 1 (cons "first" "Content one."))
+              (cons 2 (cons "second" "Content two.")))))
+        (let ((result (gptel-prefix-cache-build-with-budget sections)))
+          (should (string-match-p "Content one" result))
+          (should (string-match-p "Content two" result))))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-priority-ordering ()
+  "Test that sections are included in priority order."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (gptel-prefix-cache-invalidate)
+        ;; Use large context window so prefix fits
+        (setq gptel-prefix-cache--context-window-size 100000)
+        (setq gptel-prefix-cache--output-reservation 1000)
+        ;; Budget that fits only 1-2 sections
+        (setq gptel-prefix-cache-dynamic-token-budget 5)
+        (let* ((sections
+                (list
+                 (cons 3 (cons "medium" "Medium"))
+                 (cons 1 (cons "high" "High"))
+                 (cons 5 (cons "low" "Low"))))
+               (result (gptel-prefix-cache-build-with-budget sections)))
+          ;; With tiny budget, only highest priority should fit
+          (should (string-match-p "High" result))
+          ;; Result should not contain all three
+          (should (< (length result) 20))))
+    (test-prefix-cache--restore-state)))
+
 (provide 'test-gptel-ext-prefix-cache)
 ;;; test-gptel-ext-prefix-cache.el ends here
