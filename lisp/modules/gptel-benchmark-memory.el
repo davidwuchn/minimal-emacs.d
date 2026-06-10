@@ -464,7 +464,7 @@ synthesize(Earth) -> knowledge(Metal) -> archive(Water)."
   (let* ((root (gptel-benchmark-memory--project-root))
          (mem-dir (expand-file-name "mementum/" root)))
     (let ((default-directory root))
-      (call-process "git" nil nil nil "add" mem-dir)
+      (condition-case err (call-process "git" nil nil nil "add" mem-dir))
       (call-process "git" nil nil nil "commit" "-m" message))))
 
 ;;; λ-Orient (OODA first action)

@@ -160,8 +160,8 @@ Implements: 🐍 → 刀 → ψ → 🐍"
 INPUT from previous cycle feeds forward."
   (list :input input
         :state (gptel-benchmark-memory-read-state)
-        :git-status (shell-command-to-string "git status --short 2>/dev/null || echo 'no-repo'")
-        :recent-evolution (shell-command-to-string "git log --grep='evolution' --oneline -5 2>/dev/null || echo ''")
+        :git-status (condition-case err (shell-command-to-string "git status --short 2>/dev/null || echo 'no-repo'"))
+        :recent-evolution (shell-command-to-string "git log --grep=\='evolution\=' --oneline -5 2>/dev/null || echo ''")
         :element-status (gptel-benchmark-diagnose-elements
                          (list (cons nil (list :overall-score 0.8))))))
 
@@ -235,7 +235,9 @@ This becomes input for next cycle."
   "Feed OUTPUT forward to next cycle with structured metadata.
 Implements: output → input transformation."
   (let* ((status (gptel-benchmark-evolution-status-report))
-         (metadata (format "## Evolution State\n\n- **Cycle**: %d\n- **Principle**: %s\n- **Capabilities**: %d/5\n- **Emergence Rate**: %.2f (%s)\n- **Corrections**: %d | **Emergences**: %d\n"
+         (metadata (format "## Evolution State\n\n- **Cycle**: %d\n- **Principle**: %s\n-
+**Capabilities**: %d/5\n- **Emergence Rate**: %.2f (%s)\n- **Corrections**: %d
+| **Emergences**: %d\n"
                            (plist-get status :cycle)
                            (plist-get gptel-benchmark-evolution-state :last-mutation)
                            (length (plist-get status :capabilities))
@@ -539,7 +541,7 @@ Uses 相生 cycle to predict evolution order."
 
 (defun gptel-benchmark-evolution-discover ()
   "Self-Discover mutation: query running system."
-  (let ((result (shell-command-to-string "git log --oneline -1")))
+  (let ((result (condition-case err (shell-command-to-string "git log --oneline -1"))))
     (message "[evolution] Discovered: %s" result)))
 
 (defun gptel-benchmark-evolution-self-improve ()

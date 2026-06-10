@@ -305,7 +305,7 @@ Uses call-process instead of shell commands for security."
      ((file-exists-p "package.json")
       (let ((res (with-temp-buffer
                    (or (and (executable-find "npm")
-                            (= 0 (call-process "npm" nil t nil "run" "lint" "--silent")))
+                            (= 0 (condition-case err (call-process "npm" nil t nil "run" "lint" "--silent"))))
                        (and (executable-find "npx")
                             (= 0 (call-process "npx" nil t nil "eslint" ".")))
                        "")
@@ -383,7 +383,7 @@ MSG is the original error message, FILE-PATH is the file being operated on."
     (let ((checkdoc-arguments-in-order-flag nil)
           (checkdoc-force-docstrings-flag nil)
           (issues nil))
-      (condition-case nil
+      (condition-case err nil
           (checkdoc-with-point
            (goto-char (point-min))
            (while (and (not (eobp)) (< (length issues) 50))

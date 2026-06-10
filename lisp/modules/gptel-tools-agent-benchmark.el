@@ -62,8 +62,8 @@ Always returns absolute path."
    
    ;; 3. Git common dir - returns main repo even from worktrees
    ((let* ((git-common (string-trim
-                        (shell-command-to-string
-                         "git rev-parse --git-common-dir 2>/dev/null || echo ''")))
+                        (condition-case err (shell-command-to-string
+                         "git rev-parse --git-common-dir 2>/dev/null || echo ''"))))
            (git-dir (when (and (not (string-empty-p git-common))
                                (file-directory-p (expand-file-name git-common)))
                       (expand-file-name git-common))))
@@ -289,10 +289,10 @@ Checks that the number of remaining changed files is within limits."
   (let* ((project-root (gptel-auto-workflow--project-root))
          (changed-files
           (if optimize-branch
-              (shell-command-to-string
+              (condition-case err (shell-command-to-string
                (format "cd %s && git diff main...%s --name-only --diff-filter=ACMR 2>/dev/null"
                        (shell-quote-argument project-root)
-                       (shell-quote-argument optimize-branch)))
+                       (shell-quote-argument optimize-branch))))
             (let ((worktree (gptel-auto-workflow--worktree-or-project-dir)))
               (shell-command-to-string
                (format "cd %s && git diff --name-only HEAD~1 2>/dev/null"
@@ -430,9 +430,9 @@ Loads gptel-benchmark-principles if not already available."
     (let* ((worktree (gptel-auto-workflow--worktree-or-project-dir)))
       (when (and worktree (file-directory-p worktree))
         (let* ((worktree-quoted (shell-quote-argument worktree))
-               (changed-files (shell-command-to-string
+               (changed-files (condition-case err (shell-command-to-string
                                (format "cd %s && git diff --name-only HEAD~1 2>/dev/null | grep '\\.el$'"
-                                       worktree-quoted))))
+                                       worktree-quoted)))))
           (when (string-match-p "\\.el$" (string-trim-right changed-files))
             (let ((total-score 0.0)
                   (file-count 0))

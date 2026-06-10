@@ -102,7 +102,7 @@ Returns the path to the converted file, or the original PATH on failure."
 Returns nil if unable to determine."
   (when (file-exists-p path)
     (with-temp-buffer
-      (when (= 0 (call-process "magick" nil t nil "identify" "-format" "%w %h" path))
+      (when (= 0 (condition-case err (call-process "magick" nil t nil "identify" "-format" "%w %h" path)))
         (goto-char (point-min))
         (when (looking-at "\\([0-9]+\\) \\([0-9]+\\)")
           (cons (string-to-number (match-string 1))

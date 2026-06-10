@@ -831,7 +831,7 @@ directly."
                                      (random 999999))
                              proj-root)))
           (message "[auto-workflow] Creating temp worktree for review fix: %s" tmp-worktree)
-          (if (= 0 (call-process "git" nil nil nil "worktree" "add" tmp-worktree optimize-branch))
+          (if (= 0 (condition-case err (call-process "git" nil nil nil "worktree" "add" tmp-worktree optimize-branch)))
               (unwind-protect
                   (if (not gptel-auto-workflow-research-before-fix)
                       (gptel-auto-workflow--fix-directly review-output callback tmp-worktree)

@@ -25,8 +25,8 @@ Uses cached value from load time, or detects from current directory."
   (or gptel-auto-workflow--git-learning-repo-root-cached
       (setq gptel-auto-workflow--git-learning-repo-root-cached
             (string-trim
-             (shell-command-to-string
-              "git rev-parse --show-toplevel 2>/dev/null || echo ''")))))
+             (condition-case err (shell-command-to-string
+              "git rev-parse --show-toplevel 2>/dev/null || echo ''"))))))
 
 ;; ─── Configuration ───
 
@@ -55,8 +55,8 @@ Always runs git commands from the main repo root to avoid worktree issues."
          (commits nil)
          (merge-commits
           (split-string
-           (shell-command-to-string
-            (concat git-cmd "log --grep='Merge optimize/' --format='%H|%s|%ci' --reverse"))
+           (condition-case err (shell-command-to-string
+            (concat git-cmd "log --grep='Merge optimize/' --format='%H|%s|%ci' --reverse")))
            "\n" t)))
     (dolist (merge merge-commits)
       ;; Match "Merge optimize/BRANCH-NAME ..." - branch name has no spaces

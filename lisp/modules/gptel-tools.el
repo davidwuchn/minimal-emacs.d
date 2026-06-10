@@ -16,7 +16,8 @@
 
 (defvar gptel-tools-after-register-hook nil
   "Hook run after `gptel-tools-register-all' completes.
-Use this to refresh presets or update buffers that depend on tool availability.")
+Use this to refresh presets or update buffers that depend on tool
+availability.")
 
 ;; Load individual tool modules
 ;; Load gptel-tools-code BEFORE gptel-tools-agent because the latter
@@ -128,7 +129,8 @@ Call this after gptel-agent-tools loads."
      :args '((:name "file_path" :type string :description "Path to the file to read")
              (:name "start_line" :type integer :optional t :description "Start line (1-indexed)")
              (:name "end_line" :type integer :optional t :description "End line (1-indexed)")
-             (:name "hashline" :type boolean :optional t :description "When true, prefix each line with hashline tag (e.g. '42:a3|content') for stable editing"))
+             (:name "hashline" :type boolean :optional t :description "When true, prefix each line with hashline tag (e.g. '42:a3|content') for
+stable editing"))
      :category "gptel-agent"
      :include t)
 
@@ -258,9 +260,11 @@ Call this after gptel-agent-tools loads."
 ;;; Utility Functions
 
 (defun my/gptel--read-file-safe (file-path &optional start-line end-line hashline)
-  "Read FILE-PATH safely, extracting text from PDFs, rejecting other binary files.
+  "Read FILE-PATH safely, extracting text from PDFs, rejecting other binary
+files.
 START-LINE and END-LINE specify the line range to read.
-When HASHLINE is non-nil, return content with hashline tags for stable editing.
+When HASHLINE is non-nil, return content with hashline tags for stable
+editing.
 PDF files are extracted using pdftotext if available."
   (let ((path (gptel-auto-workflow--expand-workspace-path file-path)))
     (cond
@@ -290,7 +294,7 @@ When HASHLINE is non-nil, return content with hashline tags."
     (if (not pdftotext)
         (format "Error: pdftotext not found. Install with: brew install poppler")
       (let ((text (with-temp-buffer
-                    (call-process pdftotext nil t nil "-layout" path "-")
+                    (condition-case err (call-process pdftotext nil t nil "-layout" path "-"))
                     (buffer-string))))
         (if (string-empty-p (string-trim text))
             (format "Error: Could not extract text from PDF: %s" (file-name-nondirectory path))
@@ -390,7 +394,8 @@ Wraps `gptel-agent--read-url' with better error recovery."
       (if (and (boundp 'url-http-end-of-headers)
                url-http-end-of-headers)
           (funcall orig-fn cb)
-        (funcall cb "Error: HTTP response headers not found. The search may have failed or been blocked."))
+        (funcall cb "Error: HTTP response headers not found. The search may have failed or been
+blocked."))
     (error
      (funcall cb (format "Error parsing search results: %s" (error-message-string err))))))
 

@@ -15,8 +15,8 @@ to avoid pinentry failures in headless daemon mode.  This mirrors
         decrypted)
     (when (file-exists-p authinfo)
       (with-temp-buffer
-        (when (zerop (call-process "gpg" nil t nil
-                                   "--batch" "--quiet" "--decrypt" authinfo))
+        (when (zerop (condition-case err (call-process "gpg" nil t nil
+                                   "--batch" "--quiet" "--decrypt" authinfo)))
           (goto-char (point-min))
           (while (re-search-forward
                   (format "^machine %s\\s-+login \\([^[:space:]]+\\)\\s-+password \\([^[:space:]]+\\)"
