@@ -89,4 +89,7 @@ __pycache__/
 *.pyc
 *.elc
 !.opencode/
-!.opencode/**/*.md
+!.opencode/AGENTS.md
+!.opencode/skills/
+!.opencode/skills/brepl/
+!.opencode/skills/brepl/SKILL.md
