@@ -288,7 +288,7 @@ buffer."
       (when (and (file-exists-p file)
                  (let ((line-count (if (executable-find "wc")
                                        (with-temp-buffer
-                                         (call-process "wc" nil t nil "-l" file)
+                                         (condition-case err (call-process "wc" nil t nil "-l" file))
                                          (string-to-number (string-trim (buffer-string))))
                                      (with-temp-buffer
                                        (insert-file-contents file)
@@ -336,9 +336,9 @@ string has the same content but different identity."
           (message "[auto-workflow] Using cached context for %s" proj-root)
           cached-context)
       (let* ((safe-root (shell-quote-argument proj-root))
-             (git-history (shell-command-to-string
+             (git-history (condition-case err (shell-command-to-string
                            (format "cd %s && git log --oneline -30 -- lisp/modules/ 2>/dev/null"
-                                   safe-root)))
+                                   safe-root))))
              (file-list-shell (shell-command-to-string
                                (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
                                        safe-root))))
@@ -390,7 +390,7 @@ MULTI-LAYER ANALYSIS: code patterns + experiment failures + git trends."
         (let* ((cmd (format "cd %s && git grep -nc '%s' -- lisp/modules/ 2>/dev/null"
                             (shell-quote-argument proj-root)
                             (car pattern)))
-               (output (string-trim (shell-command-to-string cmd))))
+               (output (string-trim (condition-case err (shell-command-to-string cmd)))))
           (when (and output (not (string-empty-p output)))
             (let ((count (string-to-number output)))
               (when (> count 0)

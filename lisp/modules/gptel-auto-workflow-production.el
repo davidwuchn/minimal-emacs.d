@@ -101,7 +101,7 @@ Skips when a workflow or cron job is active to avoid preempting experiments."
           (message "[auto-workflow] Evolution cycle complete."))
       (error
        (message "[auto-workflow] Evolution cycle error: %s" err)
-       (condition-case nil
+       (condition-case err nil
            (let* ((frames (backtrace-frames))
                   (bt (mapconcat (lambda (f) (format "  %S" f))
                                  (seq-take frames 50) "\n"))
@@ -1165,7 +1165,7 @@ Also persists the full report to var/metrics/ for historical tracking."
           (message "  Top backends: %s"
                    (mapconcat (lambda (b) (format "%s=%d" (car b) (cdr b)))
                               top-backends ", "))))
-      (message "  Approval Queue: %d pending, %d approved, %d deployed, %d rejected, %d expired"
+      (message "Approval Queue: %d pending, %d approved, %d deployed, %d rejected, %d expired"
                (plist-get aq :pending)
                (plist-get aq :approved)
                (plist-get aq :deployed)

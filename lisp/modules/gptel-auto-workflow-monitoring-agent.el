@@ -747,7 +747,7 @@ Patterns detected:
                "wrong-type-argument")))
     (when (and (file-exists-p log-file)
                (file-readable-p log-file))
-      (condition-case nil
+      (condition-case err nil
           (with-temp-buffer
             (insert-file-contents log-file nil (- (file-attribute-size
                                                     (file-attributes log-file))
@@ -1723,7 +1723,8 @@ Returns list of written mementum file paths, or nil if throttled/disabled."
                 ;; 9b: Generate new self-tuning proposals
                 (let ((tuning-proposals (gptel-auto-workflow--run-self-tuning)))
                   (when tuning-proposals
-                    (message "[monitoring] Phase 9: Generated %d new self-tuning proposals (routed to approval queue)"
+                    (message "[monitoring] Phase 9: Generated %d new self-tuning proposals (routed to
+approval queue)"
                              (length tuning-proposals))))))
             ;; Phase 10: Semantic self-heal — detect and fix code-level issues
             ;; Runs semantic audit on lisp/modules/*.el and auto-fixes:

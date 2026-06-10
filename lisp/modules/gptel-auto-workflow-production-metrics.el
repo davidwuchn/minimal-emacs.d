@@ -414,10 +414,10 @@ Business value heuristics:
            (bytecompile-output (when file-exists
                                  (ignore-errors
                                    (with-temp-buffer
-                                     (call-process (expand-file-name invocation-name
+                                     (condition-case err (call-process (expand-file-name invocation-name
                                                                        invocation-directory)
                                                    nil t nil
-                                                   "-Q" "--batch" "-f" "batch-byte-compile" abs-target)
+                                                   "-Q" "--batch" "-f" "batch-byte-compile" abs-target))
                                      (buffer-string)))))
            (has-warnings (and bytecompile-output
                               (string-match-p "Warning\\|warning" bytecompile-output)))

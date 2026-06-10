@@ -229,7 +229,7 @@ PATCH is a unified diff format string."
     (let ((temp-patch (gptel-benchmark-make-temp-file "benchmark-patch")))
       (with-temp-file temp-patch
         (insert patch))
-      (let ((result (call-process "patch" nil nil nil "-p1" "-i" temp-patch file)))
+      (let ((result (condition-case err (call-process "patch" nil nil nil "-p1" "-i" temp-patch file))))
         (delete-file temp-patch)
         (if (= result 0)
             (progn

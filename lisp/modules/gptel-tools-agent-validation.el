@@ -103,7 +103,7 @@ validation callers only need the exit code."
   "Return shell COMMAND output with validation timeout protection."
   (if-let* ((timeout (gptel-auto-experiment--process-timeout-seconds)))
       (gptel-auto-experiment--shell-command-native-timeout command timeout)
-    (shell-command-to-string command)))
+    (condition-case err (shell-command-to-string command))))
 
 (defun gptel-auto-experiment--invalid-cl-return-target-in-forms (forms &optional blocks)
   "Return the first invalid `cl-return-from' target in FORMS.

@@ -40,6 +40,9 @@
 (declare-function gptel-auto-workflow--graph-cohesion-for-target "gptel-auto-workflow-memory-schema")
 (declare-function gptel-benchmark--detect-task-type "gptel-benchmark-principles")
 (declare-function gptel-backend-name "gptel")
+(declare-function gptel-auto-workflow--format-kept-risk-node-pairs "gptel-auto-workflow-self-heal-semantic" (&optional max-pairs))
+
+
 (declare-function gptel-request "gptel-request")
 (declare-function my/gptel-get-model-metadata "gptel-ext-context-cache")
 (declare-function gptel-auto-workflow--current-run-id "gptel-tools-agent-base")
@@ -4098,10 +4101,15 @@ from all OV5 signals combined."
                  (bound-and-true-p gptel-ai-behaviors--kept-patterns)
                  (hash-table-p gptel-ai-behaviors--kept-patterns)
                  (> (hash-table-count gptel-ai-behaviors--kept-patterns) 0))
-        (let* ((past-pats (gptel-ai-behaviors--format-kept-patterns category)))
-          (when past-pats
-            (push (format "PAST PATTERNS (worked before):\n%s" past-pats) parts))))
-      (push (format "SCOPE: ONE function. Edit ONE line. Verify.") parts)
+         (let* ((past-pats (gptel-ai-behaviors--format-kept-patterns category)))
+           (when past-pats
+             (push (format "PAST PATTERNS (worked before):\n%s" past-pats) parts))))
+       ;; TSP: inject verified secure patterns from self-play training pairs
+       (when (fboundp 'gptel-auto-workflow--format-kept-risk-node-pairs)
+         (let ((risk-pats (gptel-auto-workflow--format-kept-risk-node-pairs)))
+           (when risk-pats
+             (push (format "VERIFIED SECURITY PATTERNS:\n%s" risk-pats) parts))))
+       (push (format "SCOPE: ONE function. Edit ONE line. Verify.") parts)
       (mapconcat #'identity (nreverse parts) "\n"))))
 
 ;;; Cross-Target Pattern Transfer

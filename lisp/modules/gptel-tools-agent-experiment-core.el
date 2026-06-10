@@ -63,6 +63,7 @@
 (declare-function my/gptel--run-agent-tool-with-timeout "gptel-tools-agent-subagent")
 (declare-function gptel-auto-experiment--validate-code "gptel-tools-agent-validation")
 (declare-function gptel-auto-workflow--assert-main-untouched "gptel-tools-agent-worktree")
+(declare-function gptel-auto-workflow--risk-node-types-in-file "gptel-auto-workflow-self-heal-semantic")
 (declare-function gptel-token-economics--predict-roi "gptel-token-economics")
 (declare-function gptel-auto-workflow-create-worktree "gptel-tools-agent-worktree")
 (declare-function gptel-auto-workflow--weight-score-with-production-metrics "gptel-auto-workflow-production-metrics")
@@ -150,7 +151,7 @@ This helps avoid wasted retry attempts on files that were already invalid."
          (if (fboundp 'gptel-auto-experiment--shell-command-to-string-timeboxed)
              (gptel-auto-experiment--shell-command-to-string-timeboxed
               "git diff --name-only HEAD 2>/dev/null")
-           (shell-command-to-string "git diff --name-only HEAD 2>/dev/null"))
+           (condition-case err (shell-command-to-string "git diff --name-only HEAD 2>/dev/null")))
          "\n" t)))))
 
 (defun gptel-auto-experiment--validate-all-modified-files (worktree)
@@ -284,8 +285,8 @@ threshold %.2f — aborting experiment %d/%d for %s"
                                                             (gptel-auto-workflow--worktree-base-root)))
                      (byte-compiles (when (and (file-exists-p source)
                                                (file-exists-p byte-compile-script))
-                                     (zerop (call-process "bash" nil nil nil
-                                                          byte-compile-script source))))
+                                     (zerop (condition-case err (call-process "bash" nil nil nil
+                                                          byte-compile-script source)))))
                      (syntax-ok (when (file-exists-p source)
                                   (with-temp-buffer
                                     (ignore-errors (insert-file-contents source))
@@ -315,9 +316,17 @@ threshold %.2f — aborting experiment %d/%d for %s"
           (_workflow-root (gptel-auto-workflow--resolve-run-root))
           (raw-callback callback)
           (result-callback-called nil)
+          ;; TSP-inspired: capture risk nodes in target file so outcomes can be
+          ;; correlated with fine-grained risk-node types.
+          (risk-nodes (when (and target (fboundp 'gptel-auto-workflow--risk-node-types-in-file))
+                        (let ((source (expand-file-name target experiment-worktree)))
+                          (gptel-auto-workflow--risk-node-types-in-file source))))
           (callback (lambda (result)
-                      (prog1 (funcall raw-callback result)
-                        (setq result-callback-called t))))
+                      (let ((enriched (if risk-nodes
+                                          (append result (list :risk-nodes risk-nodes))
+                                        result)))
+                        (prog1 (funcall raw-callback enriched)
+                          (setq result-callback-called t))))))
           ;; The subagent timeout wrapper owns executor timeout/abort behavior.
           (_my/gptel-agent-task-timeout experiment-timeout)
            (start-time (float-time))

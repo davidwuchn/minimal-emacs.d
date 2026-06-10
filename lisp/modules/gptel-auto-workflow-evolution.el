@@ -43,6 +43,8 @@
 (declare-function gptel-knowledge--floyd-warshall "gptel-auto-workflow-knowledge-reasoning" (nodes edges))
 (declare-function gptel-knowledge--experiment-causal-graph "gptel-auto-workflow-knowledge-reasoning" (results))
 (declare-function gptel-auto-workflow-self-audit--root "gptel-auto-workflow-self-audit" ())
+(declare-function gptel-auto-workflow--risk-node-report-from-history "gptel-auto-workflow-self-heal-semantic" (results &optional modules-dir))
+(declare-function gptel-auto-workflow--update-risk-node-training-pair-outcomes "gptel-auto-workflow-self-heal-semantic" (results))
 (declare-function gptel-auto-workflow--graph-same-community-p "gptel-auto-workflow-memory-schema" (target-a target-b))
 (declare-function gptel-knowledge--allen-detect-gaps "gptel-auto-workflow-knowledge-reasoning" (intervals))
 (declare-function gptel-knowledge--ontology-from-experiments "gptel-auto-workflow-knowledge-reasoning" (results))
@@ -196,8 +198,8 @@ Uses cached value from load time, or detects from current directory."
   (or gptel-auto-workflow--evolution-repo-root
       (setq gptel-auto-workflow--evolution-repo-root
             (string-trim
-             (shell-command-to-string
-              "git rev-parse --show-toplevel 2>/dev/null || echo ''")))))
+             (condition-case err (shell-command-to-string
+              "git rev-parse --show-toplevel 2>/dev/null || echo ''"))))))
 
 (defun gptel-auto-workflow--evolution-normalize-history (history)
   "Return HISTORY as a plist, accepting legacy alist JSON shapes."
@@ -482,8 +484,8 @@ Always runs git commands from the main repo root to avoid worktree issues."
                     "git "))
          (all-branches-raw
           (split-string
-           (shell-command-to-string
-            (concat git-cmd "branch -r --list 'origin/optimize/*'"))
+           (condition-case err (shell-command-to-string
+            (concat git-cmd "branch -r --list 'origin/optimize/*'")))
            "\n" t))
          (all-branches
           (cl-remove-if #'null
@@ -2723,7 +2725,38 @@ pipeline from hanging when a sub-function blocks indefinitely."
             (skill-graph-init))
           (skill-graph-evolve-from-experiments)
           (message "[skill-graph] Evolution complete"))
-      (error (message "[skill-graph] Evolution error: %s" (error-message-string err)))))
+       (error (message "[skill-graph] Evolution error: %s" (error-message-string err)))))
+  ;; TSP-inspired: correlate fine-grained risk nodes with experiment outcomes
+  ;; so the system learns which risky code patterns predict failure.
+  (when (fboundp 'gptel-auto-workflow--risk-node-report-from-history)
+    (condition-case err
+        (let ((results (gptel-auto-workflow--parse-all-results)))
+          (when results
+            (gptel-auto-workflow--risk-node-report-from-history results)
+            ;; Enrich parsed results with on-disk risk nodes and update
+            ;; training-pair outcomes (self-play negative examples).
+            (when (fboundp 'gptel-auto-workflow--update-risk-node-training-pair-outcomes)
+              (let ((enriched
+                     (condition-case inner-err
+                         (mapcar
+                          (lambda (r)
+                            (let* ((target (plist-get r :target))
+                                   (source (when target
+                                             (expand-file-name
+                                              (file-name-nondirectory target)
+                                              (or (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
+                                                       (gptel-auto-workflow--expand-workspace-path "lisp/modules"))
+                                                  "lisp/modules"))))
+                                   (risk-nodes (gptel-auto-workflow--risk-node-types-in-file source)))
+                              (append r (list :risk-nodes risk-nodes))))
+                          results)
+                       (error
+                        (message "[risk-node-training] Enrichment error: %s" (error-message-string inner-err))
+                        nil))))
+                (when enriched
+                  (gptel-auto-workflow--update-risk-node-training-pair-outcomes enriched))))))
+      (error (message "[risk-node-report] Evolution integration error: %s"
+                      (error-message-string err)))))
   (message "[auto-workflow] Self-evolution cycle complete.")
   ;; Operational metrics report (YC Vision evidence)
   (when (fboundp 'gptel-auto-workflow-operational-metrics-report)

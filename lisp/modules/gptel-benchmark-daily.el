@@ -363,7 +363,7 @@ Triggers synthesis for:
 
 (defun gptel-benchmark-daily-after-commit ()
   "Hook to run after git commit."
-  (let ((msg (shell-command-to-string "git log -1 --format=%s")))
+  (let ((msg (condition-case err (shell-command-to-string "git log -1 --format=%s"))))
     (when (string-match-p "λ\\|◈\\|Δ" msg)
       (message "[daily-bench] Learning commit detected - evolution cycle")
       (gptel-benchmark-evolution-cycle "commit-hook"))))

@@ -135,7 +135,7 @@ Uses latest checkpoint for each file."
           (insert (plist-get checkpoint :content)))
         (with-current-buffer diff-buffer
           (erase-buffer)
-          (call-process "diff" nil t nil "-u" temp-file file)
+          (condition-case err (call-process "diff" nil t nil "-u" temp-file file))
           (goto-char (point-min)))
         (delete-file temp-file)
         (display-buffer diff-buffer)))))
@@ -160,7 +160,7 @@ Returns list of checkpoints or nil if none exist."
   "Revert FILE using git checkout."
   (interactive "fFile to revert: ")
   (when (file-exists-p file)
-    (let ((result (call-process "git" nil nil nil "checkout" "--" file)))
+    (let ((result (condition-case err (call-process "git" nil nil nil "checkout" "--" file))))
       (if (= result 0)
           (message "[rollback] Git reverted %s" file)
         (message "[rollback] Git revert failed for %s" file)))))
@@ -170,7 +170,7 @@ Returns list of checkpoints or nil if none exist."
 WARNING: This is destructive and cannot be undone."
   (interactive "nCommits to reset: ")
   (when (y-or-n-p (format "Reset %d commits? This cannot be undone! " n))
-    (let ((result (call-process "git" nil nil nil "reset" "--hard" (format "HEAD~%d" n))))
+    (let ((result (condition-case err (call-process "git" nil nil nil "reset" "--hard" (format "HEAD~%d" n)))))
       (if (= result 0)
           (message "[rollback] Reset %d commits" n)
         (message "[rollback] Git reset failed")))))

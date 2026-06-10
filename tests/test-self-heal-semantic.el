@@ -634,5 +634,50 @@ Regression: the check was finding 331 false positives on top-level defvars."
           (should (= (length gptel-auto-workflow--semantic-audit-log) 0)))
       (test-self-heal-semantic--cleanup file))))
 
+;; ── Test 15: Condition-case unbound err audit ──
+
+(ert-deftest test-self-heal-semantic/condition-case-unbound-err-audit-positive ()
+  "Audit finds condition-case with nil binding that references err."
+  (let* ((content "(defun foo () (condition-case nil (risky-op) (error (message \"X: %s\" (error-message-string err)))))"
+)
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (gptel-auto-workflow--semantic-audit-reset)
+          (let ((issues (gptel-auto-workflow--audit-condition-case-unbound-err file)))
+            (should (= issues 1))))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/condition-case-unbound-err-audit-negative ()
+  "Audit does NOT flag condition-case that already binds err."
+  (let* ((content "(defun foo () (condition-case err (risky-op) (error (message \"X: %s\" (error-message-string err)))))"
+)
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (gptel-auto-workflow--semantic-audit-reset)
+          (let ((issues (gptel-auto-workflow--audit-condition-case-unbound-err file)))
+            (should (= issues 0))))
+      (test-self-heal-semantic--cleanup file))))
+
+
+
+(ert-deftest test-self-heal-semantic/no-fix-when-already-binds-err ()
+  "Fixer is idempotent: does not change condition-case that already binds err."
+  (let* ((content "(defun foo () (condition-case err (risky-op) (error (message \"X: %s\" (error-message-string err)))))"
+)
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (should (= (gptel-auto-workflow--fix-condition-case-unbound-err file) 0))
+          (let ((unchanged (with-temp-buffer
+                              (insert-file-contents file)
+                              (buffer-string))))
+            (should (string= unchanged content))))
+      (test-self-heal-semantic--cleanup file))))
+
+(provide 'test-self-heal-semantic)
+;;; test-self-heal-semantic.el ends here
+
 (provide 'test-self-heal-semantic)
 ;;; test-self-heal-semantic.el ends here
