@@ -199,12 +199,13 @@ proc_is_running() {
 }
 
 # Check heartbeat file staleness.
-# Returns 0 if heartbeat is fresh (< 180s old), 1 if stale or missing.
+# Returns 0 if heartbeat is fresh (< 90s old), 1 if stale or missing.
 # This detects a frozen daemon: if the Emacs main thread is blocked on an
 # API call, timers stop firing, and the heartbeat file goes stale.
+# Threshold reduced from 180s to 90s for faster freeze detection (~90min issue).
 check_heartbeat_staleness() {
     local hb_file="${1:-$DIR/var/tmp/daemon-heartbeat}"
-    local threshold="${2:-180}"
+    local threshold="${2:-90}"
     if [ ! -f "$hb_file" ]; then
         return 1
     fi
@@ -282,31 +283,41 @@ if daemon_responds; then
 fi
 
 # Daemon not responding. Check if a workflow is active — if so,
-# give it a generous grace period (API calls can take minutes).
+# give it a grace period, BUT only if heartbeat is fresh (daemon alive but busy).
+# If heartbeat is stale, the daemon is frozen — restart immediately.
 if workflow_active; then
-    echo "[$(date '+%H:%M:%S')] Workflow active — using 1200s grace period" >> "$LOG"
-    # The daemon may be initializing (process alive but no socket yet).
-    # Poll for the socket and responsiveness instead of returning immediately.
-    _deadline=$(($(date +%s) + 1200))
-    while [ $(date +%s) -lt $_deadline ]; do
-        if daemon_responds; then
-            echo "[$(date '+%H:%M:%S')] Daemon responsive after workflow wait" >> "$LOG"
-            exit 0  # Daemon came back
+    if ! check_heartbeat_staleness; then
+        echo "[$(date '+%H:%M:%S')] Workflow active BUT heartbeat stale — daemon frozen, skipping grace" >> "$LOG"
+    else
+        echo "[$(date '+%H:%M:%S')] Workflow active — using 300s grace (heartbeat fresh)" >> "$LOG"
+        # The daemon may be initializing (process alive but no socket yet).
+        # Poll for the socket and responsiveness instead of returning immediately.
+        _deadline=$(($(date +%s) + 300))
+        while [ $(date +%s) -lt $_deadline ]; do
+            if daemon_responds; then
+                echo "[$(date '+%H:%M:%S')] Daemon responsive after workflow wait" >> "$LOG"
+                exit 0  # Daemon came back
+            fi
+            # If heartbeat goes stale during grace, break immediately
+            if ! check_heartbeat_staleness; then
+                echo "[$(date '+%H:%M:%S')] Workflow grace: heartbeat went stale, breaking" >> "$LOG"
+                break
+            fi
+            # If the daemon process exists, keep waiting for the socket.
+            _pid=$(first_daemon_pid "$SERVER_NAME")
+            if [ -z "$_pid" ]; then
+                echo "[$(date '+%H:%M:%S')] Workflow grace: PID not found, breaking" >> "$LOG"
+                break  # Process is gone — not coming back
+            fi
+            if ! kill -0 "$_pid" 2>/dev/null; then
+                echo "[$(date '+%H:%M:%S')] Workflow grace: PID $_pid dead, breaking" >> "$LOG"
+                break
+            fi
+            sleep 5
+        done
+        if [ $(date +%s) -ge $_deadline ]; then
+            echo "[$(date '+%H:%M:%S')] Workflow grace period expired" >> "$LOG"
         fi
-        # If the daemon process exists, keep waiting for the socket.
-        _pid=$(first_daemon_pid "$SERVER_NAME")
-        if [ -z "$_pid" ]; then
-            echo "[$(date '+%H:%M:%S')] Workflow grace: PID not found, breaking" >> "$LOG"
-            break  # Process is gone — not coming back
-        fi
-        if ! kill -0 "$_pid" 2>/dev/null; then
-            echo "[$(date '+%H:%M:%S')] Workflow grace: PID $_pid dead, breaking" >> "$LOG"
-            break
-        fi
-        sleep 5
-    done
-    if [ $(date +%s) -ge $_deadline ]; then
-        echo "[$(date '+%H:%M:%S')] Workflow grace period expired" >> "$LOG"
     fi
 fi
 
