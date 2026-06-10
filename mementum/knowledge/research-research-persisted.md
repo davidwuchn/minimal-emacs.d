@@ -6,59 +6,41 @@ Synthesis verification:
 - Auto-approved: yes (passed)
 --->
 
-The user wants me to synthesize multiple research memory entries into a single knowledge page about "research-research-persisted" topic. Let me analyze the memories:
+The user wants me to synthesize multiple research memories into a comprehensive knowledge page about "research-research-persisted". Let me analyze the key themes from these memories:
 
-1. The memories are from an Emacs-based AI agent auto-workflow system
-2. They document research findings from the `persisted-findings` strategy
-3. Multiple research sessions (2026-05-22 through 2026-06-04) covering:
-   - Three-tier watchdog architecture
-   - Think-in-Code context reduction
-   - DEGRADED state circuit breaker
-   - Hybrid search fusion
-   - Self-wiring knowledge graph
-   - Three-loop meta-learning
-   - DSPy signatures/modules
-   - Reflexion verbal self-reflection
-   - gptel FSM pause/resume
-   - mementum three-tier storage
-   - nucleus prompt debugger
-   - Layered error defense
-   - Durable execution
-   - MAST failure taxonomy
-   - GEPA reflective prompt evolution
-   - EvolveR self-evolving agents
-   - DNS-based memory discovery
-   - Logprob-based prompt validation
-   - KV cache management
-   - And many more
+1. The research is from a persisted-findings strategy in an auto-workflow system
+2. It covers external research synthesis for an Emacs-based AI agent system
+3. Key topics include: own repos research (nucleus, mementum, gptel), external sources, AI agent patterns, self-evolution, error recovery, etc.
+4. The research covers:
+   - nucleus (attention magnets, lambda notation, EBNF grammar, prompt debugger)
+   - mementum (git memory protocol, three-tier storage, seven operations)
+   - gptel (LLM backend, FSM pattern, tool use, MCP integration, introspection)
+   - External: GEPA, EvolveR, DSPy, Reflexion, mcp.el, magent, gptel-agent
+   - Patterns: FSM-based resumable requests, three-tier knowledge hierarchy, prompt-linting, conditional retry, error reinsertion
+   - Local fallback patterns when researcher daemon fails
 
-4. The memories show:
-   - 0% keep rate is common (problems with the research pipeline)
-   - Local-fallback patterns when researcher daemon fails
-   - Pipeline defect issues
-   - Auto-workflow generates these research runs
-   - Need to preserve feedback loop with research hashes
-   - Structured machine-parseable outputs preferred
-   - Self-evolution observability is key
+The "research-research-persisted" topic is about how the auto-workflow persists and uses research findings. Key insights:
+- 0% keep rate is common (outcomes like 0/31, 0/20, 0/10, 0/6, 0/3 kept)
+- Research is often delivered as digests with [deep-external] prefix
+- JSON metadata at end of each digest
+- Strategy: persisted-findings
+- 1200 char output limit
+- Own-repos-first strategy: 53-87% own repos, 15-24% external
+- Beta (exploration) is very low: 0.03-0.06
+- The system has a feedback loop where experiments link to research hashes
+- Researcher daemon can fail → local fallback
+- Token budget typically 8000
+- EMA confidence threshold 65% to stop
+- Common failure modes: validation/timeout, blind retry
+- Sub-agents are used for research
 
-I need to:
-1. Create a knowledge page that synthesizes ALL of this
-2. Minimum 50 lines of actual content
-3. Concrete examples (code, tables, commands)
-4. Actionable patterns
-5. Cross-references to related topics
-6. Return full markdown page
+Let me synthesize this into a comprehensive knowledge page. I'll focus on:
+1. The persisted-findings strategy structure
+2. The research protocol (digests, JSON metadata, char limits)
+3. Source budget allocation (own vs external)
+4. The research ↔ experiment feedback loop
+5. Local fallback patterns
+6. Patterns discovered in research
+7. Concrete templates and examples
 
-Let me structure this as a comprehensive reference page for the `research-research-persisted` strategy and its findings, patterns, and anti-patterns.
-
-The page should cover:
-- What this research strategy is
-- Common patterns discovered across sessions
-- Anti-patterns and failure modes
-- Concrete techniques to apply
-- Source effectiveness data
-- Pipeline integration patterns
-- The "local fallback" pattern (most common observed)
-- Code examples for elisp integration
-
-Let me write this now.
+The output should be 50+ lines with concrete examples, actionable patterns, and cross-references.
