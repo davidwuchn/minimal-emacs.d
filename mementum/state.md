@@ -1,9 +1,9 @@
 # Mementum State
 
 > **Bootstrapped**: 2026-06-06
-> **Session**: Research Analysis + Self-Heal Verification
+> **Session**: Research Analysis + Plan Diversity Metric
 > **Status**: ✅ **OV5 SELF-HEALING VERIFIED** — Pipeline detects, diagnoses, remediates, recovers
-> **Latest**: Research papers analyzed (MOSS, Sibyl, APEX), mementum updated
+> **Latest**: RPG + PlanSearch papers analyzed, plan diversity metric implemented
 > **Active Plan**: None — system is self-improving, pipeline running autonomously
 > **Pi5**: Running, self-healing working (grader crash → BLIND MODE → recovery)
 
@@ -19,11 +19,15 @@
 | **P0** | Self-heal semantic module (7 audit checks + auto-fixers) | @maintainer | **COMPLETE** |
 | **P1** | Monitoring Agent: Complete (Phases 0-10) | @maintainer | **COMPLETE** |
 | **P1** | Research paper analysis (MOSS, Sibyl, APEX) | @maintainer | **COMPLETE** |
-| **P2** | Daemon watchdog hardening (Pi5 freeze after ~90 min) | @maintainer | **TODO** |
+| **P2** | Daemon watchdog hardening (heartbeat-based freeze detection) | @maintainer | **COMPLETE** |
+| **P2** | Smart routing: eliminate hardcoded LLM backends | @maintainer | **COMPLETE** |
+| **P2** | Strategy parse fix + column index corrections | @maintainer | **COMPLETE** |
+| **P2** | Routing stats caching (dedup + memo + pre-bind) | @maintainer | **COMPLETE** |
+| **P2** | Plan diversity metric (PlanSearch-inspired) | @maintainer | **COMPLETE** |
 
 ---
 
-## Research Insights (May 2026 Papers)
+## Research Insights (May-June 2026 Papers)
 
 ### MOSS: Source-Level Self-Evolution (2605.22794)
 - **Key insight**: Source-level adaptation is Turing-complete — strict superset of text-mutable scope
@@ -40,8 +44,22 @@
 - **OV5 alignment**: Category saturation detection prevents some collapse
 - **Action item**: Add explicit strategy DAG with prerequisite edges to ontology
 
-**Knowledge page**: `mementum/knowledge/self-evolving-agent-research.md`
-**Memory**: `mementum/memories/insight-source-level-evolution-turing-complete.md`
+### RPG: Repository Planning Graph (2509.16198)
+- **Key insight**: Replace free-form NL planning with explicit graph (nodes=capabilities, edges=dependencies)
+- **OV5 gap**: No structured planning representation, no two-level planning (proposal vs implementation)
+- **Action item**: Consider experiment dependency graph + graph-guided localization
+
+### PlanSearch: Planning in Natural Language (2409.03733)
+- **Key insight**: Plan diversity directly predicts performance gains from search
+- **OV5 gap**: One hypothesis per target, no diversity metric, no plan-level search
+- **Implemented**: `gptel-auto-experiment--hypothesis-diversity` (Jaccard similarity on tokens)
+- **Next step**: Wire into experiment logging, consider plan-level search over diverse candidates
+
+**Knowledge pages**:
+- `mementum/knowledge/self-evolving-agent-research.md` (MOSS, Sibyl, APEX)
+- `mementum/knowledge/research-planning-graph-plansearch-ov5-gaps.md` (RPG, PlanSearch)
+
+**Memory**: `mementum/memories/insight-plan-diversity-predicts-performance.md`
 
 ---
 
@@ -78,11 +96,11 @@
 
 ### Immediate
 1. **Continue monitoring** — Let pipeline run, verify self-healing continues working
-2. **Research action items** — Implement explicit strategy DAG (APEX insight)
+2. **Verify smart routing end-to-end** — Next cron cycle should use fallback chain for all LLM calls
 
 ### Near-Term
-3. **Daemon watchdog hardening (P2)** — Daemon freezes after ~90 min; watchdog misses window
-4. **Batch anchoring** — Group similar failures before proposing fixes (MOSS insight)
+3. **Batch anchoring** — Group similar failures before proposing fixes (MOSS insight)
+4. **Research action items** — Implement explicit strategy DAG with prerequisite edges (APEX insight)
 
 ---
 
