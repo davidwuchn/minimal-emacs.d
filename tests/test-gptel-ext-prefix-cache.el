@@ -693,5 +693,40 @@
           (should (string-match-p "Cross-run (3 runs)" report))))
     (test-prefix-cache--restore-state)))
 
+(ert-deftest test-prefix-cache-metrics-export ()
+  "Test that metrics are exported to JSON file."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (let ((metrics-dir (make-temp-file "prefix-cache-metrics-" t))
+            (original-worktree-root (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                                         (gptel-auto-workflow--worktree-base-root))))
+        ;; Override worktree root to temp dir
+        (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                   (lambda () metrics-dir)))
+          (setq gptel-prefix-cache--hit-counter 5
+                gptel-prefix-cache--miss-counter 1
+                gptel-prefix-cache--compaction-counter 2
+                gptel-prefix-cache--stats '(:size 3000 :compute-time-ms 3)
+                gptel-prefix-cache--cross-run-stats
+                (list :runs 2 :total-hits 10 :total-compactions 4)
+                gptel-prefix-cache--context-compact-ratio 0.75
+                gptel-prefix-cache--run-id "metrics-test")
+          (let ((file (gptel-prefix-cache-export-metrics)))
+            (should (file-exists-p file))
+            (let* ((json (with-temp-buffer
+                           (insert-file-contents file)
+                           (json-read)))
+                   (entry (aref json 0)))
+              (should (equal (cdr (assoc 'run-id entry)) "metrics-test"))
+              (should (equal (cdr (assoc 'hits entry)) 5))
+              (should (equal (cdr (assoc 'misses entry)) 1))
+              (should (equal (cdr (assoc 'compactions entry)) 2))
+              (should (equal (cdr (assoc 'prefix-size entry)) 3000))
+              (should (equal (cdr (assoc 'compact-ratio entry)) 0.75))
+              (should (equal (cdr (assoc 'cross-run-runs entry)) 2)))))
+        ;; Cleanup
+        (delete-directory metrics-dir t))
+    (test-prefix-cache--restore-state)))
+
 (provide 'test-gptel-ext-prefix-cache)
 ;;; test-gptel-ext-prefix-cache.el ends here

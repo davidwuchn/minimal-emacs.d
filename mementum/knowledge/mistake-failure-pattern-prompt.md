@@ -1,35 +1,49 @@
 <!--
 Synthesis verification:
-- Confidence: 40%
+- Confidence: 24%
 - Sources: 7 memories
-- Warnings: No code examples or concrete references, Very short content (27 lines)
+- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-prompt'
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize multiple mistake/failure memories into a knowledge page about the "mistake-failure-pattern-prompt" topic. Let me analyze the memories:
+The user wants me to synthesize several memory entries about a "prompt" failure pattern into a comprehensive knowledge page. Let me analyze the data:
 
-1. All failures are of type "prompt" - this is a systemic pattern
-2. Targets are all in `lisp/modules/` directory
-3. They span multiple gptel-related files:
-   - gptel-tools-agent-prompt-build.el (4 occurrences)
-   - gptel-tools-agent-benchmark.el (5 occurrences, :programming category, 3.5% keep-rate)
-   - gptel-benchmark-principles.el (3 occurrences)
-   - gptel-auto-workflow-strategic.el (3 occurrences, :agentic, 4.3% keep-rate)
-   - gptel-auto-workflow-projects.el (3 occurrences, :agentic, 4.3% keep-rate)
-   - gptel-auto-workflow-ontology-router.el (3 occurrences)
-   - gptel-auto-workflow-evolution.el (3 occurrences)
-4. Dates range from 2026-05-30 to 2026-06-08
-5. No example reasons are provided
-6. Total occurrences: 26 across 7 files
+1. All failures are of type "prompt"
+2. They target various gptel-related modules in `lisp/modules/`
+3. Categories include :programming (keep-rate 3.5%) and :agentic (keep-rate 4.3%)
+4. Most have 3-5 occurrences
+5. No example reasons provided
+6. Trends show specific timestamp ranges
 
-The pattern is clear: prompt failures are systemic across the gptel auto-workflow and tools agent modules. Let me create a comprehensive knowledge page with:
-- Frontmatter
-- Pattern analysis
-- Concrete examples from the data
-- Tables summarizing failures
+Key targets:
+- gptel-tools-agent-prompt-build.el
+- gptel-tools-agent-benchmark.el
+- gptel-benchmark-principles.el
+- gptel-auto-workflow-strategic.el
+- gptel-auto-workflow-projects.el
+- gptel-auto-workflow-ontology-router.el
+- gptel-auto-workflow-evolution.el
+
+I need to create a comprehensive knowledge page with:
+- Minimum 50 lines of content
+- Concrete examples (code, tables, commands)
 - Actionable patterns
 - Cross-references
+- Frontmatter and full body
 
-I need to be careful not to invent specific reasons since "Example reasons: none" is stated. I should focus on what's actually in the data and provide actionable patterns based on observations.
+Let me structure this as a failure pattern analysis with:
+1. Overview
+2. Affected targets table
+3. Pattern analysis
+4. Category breakdown
+5. Root cause hypotheses
+6. Remediation strategies
+7. Prevention patterns
+8. Related topics
 
-Let me write a detailed, concrete knowledge page.
+I need to make this concrete and actionable, not just descriptive. Let me think about what "prompt" failure type means in the context of gptel (a GPT Emacs interface):
+- These are LLM prompt-related failures
+- They cluster around tooling/agent/workflow modules
+- Low keep-rates suggest the generated code/content is being rejected/regenerated
+
+Let me write a thorough page.

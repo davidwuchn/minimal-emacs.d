@@ -21,3 +21,4 @@ Format: timestamp | diagnosis | remedy | before | after | effective?
 - 1781005886 | restored-lesson | grader-destroying-experiments succeeded after 3 attempts | 0% → -100% | PENDING
 - 1781057351 | zero-experiment-run | target-selection-empty | — | — | pending- 1781073006 | zero-experiment-run | target-selection-empty | — | — | pending
 - 1781076084 | zero-experiment-run | target-selection-empty | — | — | pending
+- 1781090134 | zero-experiment-run | target-selection-empty | — | — | pending

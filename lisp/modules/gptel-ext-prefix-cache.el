@@ -27,6 +27,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'json)
 
 ;; ─── Forward Declarations ───
 
@@ -959,7 +960,8 @@ Strategy:
                        (- current 0.02)))))
       (when (/= new current)
         (setq gptel-prefix-cache--context-compact-ratio new)
-        (message "[prefix-cache] Auto-tuned compaction: %.0f%% → %.0f%% (hit-rate=%.2f, compactions/run=%.1f)"
+        (message "[prefix-cache] Auto-tuned compaction: %.0f%% → %.0f%% (hit-rate=%.2f,
+compactions/run=%.1f)"
                  (* 100.0 current) (* 100.0 new) hit-rate compactions-per-run))
       new)))
 
@@ -985,6 +987,51 @@ Strategy:
             runs total-hits total-compactions
             (* 100.0 gptel-prefix-cache--context-compact-ratio)
             (if gptel-prefix-cache--auto-tune-enabled "on" "off"))))
+
+;; ─── Metrics Export ───
+
+(defun gptel-prefix-cache-export-metrics ()
+  "Export current run metrics to var/metrics/prefix-cache-stats.json.
+Creates the directory if needed. Appends to existing metrics array.
+Returns the metrics file path."
+  (let* ((metrics-dir (expand-file-name "var/metrics"
+                                          (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                                                   (gptel-auto-workflow--worktree-base-root))
+                                              user-emacs-directory)))
+         (metrics-file (expand-file-name "prefix-cache-stats.json" metrics-dir))
+         (current (gptel-prefix-cache-stats-current-run))
+         (cross gptel-prefix-cache--cross-run-stats)
+         (entry `((timestamp . ,(format-time-string "%Y-%m-%dT%H:%M:%S"))
+                  (run-id . ,(or gptel-prefix-cache--run-id "unknown"))
+                  (hits . ,(plist-get current :hits))
+                  (misses . ,(plist-get current :misses))
+                  (compactions . ,(plist-get current :compactions))
+                  (hit-rate . ,(plist-get current :hit-rate))
+                  (prefix-size . ,(plist-get current :prefix-size))
+                  (compute-time-ms . ,(plist-get current :compute-time-ms))
+                  (compact-ratio . ,gptel-prefix-cache--context-compact-ratio)
+                  (auto-tune-enabled . ,gptel-prefix-cache--auto-tune-enabled)
+                  (cross-run-runs . ,(or (plist-get cross :runs) 0))
+                  (cross-run-total-hits . ,(or (plist-get cross :total-hits) 0))
+                  (cross-run-total-compactions . ,(or (plist-get cross :total-compactions) 0)))))
+    (make-directory metrics-dir t)
+    (let ((existing
+           (if (file-exists-p metrics-file)
+               (condition-case nil
+                   (with-temp-buffer
+                     (insert-file-contents metrics-file)
+                     (json-read))
+                 (error (vector)))
+             (vector))))
+      (setq existing (vconcat existing (vector entry)))
+      ;; Keep only last 1000 entries to prevent unbounded growth
+      (when (> (length existing) 1000)
+        (setq existing (seq-subseq existing (- (length existing) 1000))))
+      (with-temp-file metrics-file
+        (insert (json-encode existing)))
+      (message "[prefix-cache] Metrics exported to %s (%d entries)"
+               metrics-file (length existing))
+      metrics-file)))
 
 ;; ─── Integration Hooks ───
 
@@ -1021,6 +1068,11 @@ then invalidates in-memory cache."
                       gptel-prefix-cache--auto-tune-interval))
       (gptel-prefix-cache--auto-tune-threshold)))
   (gptel-prefix-cache-save-to-file)
+  ;; Export metrics for observability
+  (when (fboundp 'json-encode)
+    (condition-case nil
+        (gptel-prefix-cache-export-metrics)
+      (error nil)))
   (gptel-prefix-cache-invalidate)
   (setq gptel-prefix-cache--compaction-archive nil))
 
