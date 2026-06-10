@@ -341,7 +341,8 @@ Should be called when backend is selected."
 
 (defun gptel-prefix-cache-sync-from-backend (backend model)
   "Sync context window from BACKEND/MODEL registry.
-BACKEND is a symbol (e.g. \='DeepSeek), MODEL is a symbol (e.g. \='deepseek-v4-pro).
+BACKEND is a symbol (e.g. \='DeepSeek).
+MODEL is a symbol (e.g. \='deepseek-v4-pro).
 Looks up context-window in `gptel-backend-registry' and sets it locally."
   (when (and backend model
              (fboundp 'gptel-backend-registry-context-window))
