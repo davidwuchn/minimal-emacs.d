@@ -194,12 +194,15 @@ Captured at load time to avoid worktree issues.")
 
 (defun gptel-auto-workflow--evolution-repo-root ()
   "Return the git repository root for self-evolution.
-Uses cached value from load time, or detects from current directory."
+Uses cached value from load time, or detects from current directory.
+Returns `user-emacs-directory' if git detection fails."
   (or gptel-auto-workflow--evolution-repo-root
       (setq gptel-auto-workflow--evolution-repo-root
             (string-trim
-             (condition-case err (shell-command-to-string
-              "git rev-parse --show-toplevel 2>/dev/null || echo ''"))))))
+             (condition-case nil
+                 (shell-command-to-string
+                  "git rev-parse --show-toplevel 2>/dev/null || echo ''")
+                (error ""))))))
 
 (defun gptel-auto-workflow--evolution-normalize-history (history)
   "Return HISTORY as a plist, accepting legacy alist JSON shapes."
@@ -482,11 +485,13 @@ Always runs git commands from the main repo root to avoid worktree issues."
          (git-cmd (if (and repo-root (not (string-empty-p repo-root)))
                       (format "git -C '%s' " repo-root)
                     "git "))
-         (all-branches-raw
-          (split-string
-           (condition-case err (shell-command-to-string
-            (concat git-cmd "branch -r --list 'origin/optimize/*'")))
-           "\n" t))
+          (all-branches-raw
+           (split-string
+            (condition-case nil
+                (shell-command-to-string
+                 (concat git-cmd "branch -r --list 'origin/optimize/*'"))
+              (error ""))
+            "\n" t))
          (all-branches
           (cl-remove-if #'null
                         (mapcar (lambda (b)
@@ -962,7 +967,7 @@ experiments."
   (interactive)
   (cl-block gptel-auto-workflow--evolution-consolidate-insights
   (let* ((repo-root (or (gptel-auto-workflow--evolution-repo-root)
-                        default-directory))
+                        user-emacs-directory))
          (memories-dir (expand-file-name "mementum/memories" repo-root))
          (knowledge-dir (expand-file-name "mementum/knowledge" repo-root))
          (archive-dir (expand-file-name "archive" memories-dir))
@@ -2920,7 +2925,7 @@ Connects benchmark-principles Eight Keys scoring to operational pipeline."
     ;; Housekeeping: full autonomous maintenance
     (condition-case nil
         (let* ((root (or (gptel-auto-workflow--worktree-base-root)
-                         (expand-file-name default-directory)))
+                         user-emacs-directory))
                (git-dir (expand-file-name ".git" root))
                (exps-dir (expand-file-name "var/tmp/experiments" root))
                (now (float-time))
@@ -3740,7 +3745,7 @@ Returns the keep-rate as a float, or 0.10 as a safe lower-bound fallback."
   "Return the path to the category champions persistence file."
   (expand-file-name "var/tmp/category-champions.sexp"
                     (or (gptel-auto-workflow--worktree-base-root)
-                        default-directory)))
+                        user-emacs-directory)))
 
 (defun gptel-auto-workflow--save-category-champions ()
   "Persist category champions to disk."
@@ -3769,7 +3774,7 @@ Returns the keep-rate as a float, or 0.10 as a safe lower-bound fallback."
 (defun gptel-auto-workflow--queue-strategy-benchmark (strategy-name axis)
   "Queue newly generated STRATEGY-NAME for benchmarking before production use.
 Writes to pending_eval.json for the meta-harness pipeline to process."
-  (let* ((root (or (gptel-auto-workflow--worktree-base-root) default-directory))
+  (let* ((root (or (gptel-auto-workflow--worktree-base-root) user-emacs-directory))
          (pending-file (expand-file-name "var/tmp/strategy-evaluations/pending_eval.json" root))
           (pending (if (file-exists-p pending-file)
                        (condition-case nil
@@ -6915,7 +6920,7 @@ Returns plist with :streak (count), :runs-checked, :total-experiments,
   (let* ((exp-dir (expand-file-name "var/tmp/experiments/"
                                      (or (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
                                               (gptel-auto-workflow--expand-workspace-path ""))
-                                         default-directory)))
+                                         user-emacs-directory)))
          (runs (when (file-directory-p exp-dir)
                  (sort
                   (cl-remove-if-not
@@ -8288,8 +8293,9 @@ Returns number of fixes."
   "Return t if FN-SYM is defined as a defun in the file named MODULE-NAME.
 Searches lisp/modules/ for the file.  Returns nil if file not found or
 function not defined there."
-  (let* ((proj-root (or gptel-auto-workflow--self-heal-project-root
-                        (locate-dominating-file default-directory ".git")))
+  (let* (         (proj-root (or gptel-auto-workflow--self-heal-project-root
+                        (locate-dominating-file default-directory ".git")
+                        user-emacs-directory))
          (file (cl-some (lambda (dir)
                           (let ((f (expand-file-name (concat module-name ".el")
                                                      (expand-file-name dir proj-root))))
