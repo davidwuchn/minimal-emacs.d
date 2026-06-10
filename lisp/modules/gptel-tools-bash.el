@@ -336,7 +336,8 @@ CALLBACK is called with the result string on completion."
                                                 (gptel-platform-sandbox--available-p))))
                     (unless sandbox-available
                       (when my/gptel-bash-platform-sandbox
-                        (message "[security] WARNING: Platform sandbox requested but not available — running unsandboxed")))
+                        (message "[security] WARNING: Platform sandbox requested but not available — running
+unsandboxed")))
                     (let ((pf (if sandbox-available
                                  (gptel-platform-sandbox--wrap-and-send
                                   (format "cd %s && { %s\n}" (shell-quote-argument context-dir) command)
