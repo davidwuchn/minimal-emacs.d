@@ -1,6 +1,6 @@
 ---
-title: "Research: DeepSeek-Reasonix Context Cache Architecture — Gaps in OV5"
-status: open
+title: "Research: DeepSeek-Reasonix Context Cache Architecture — Implemented in OV5"
+status: done
 category: research
 tags: [context-cache, prefix-cache, ov5, deepseek, reasonix, architecture]
 related: [research-planning-graph-plansearch-ov5, research-attention-residuals-ov5, research-openmythos-looped-ov5]
@@ -330,7 +330,57 @@ Restores prefix cache and recent experiment context.")
 
 ---
 
-## 5. Metrics to Track
+## 5. Implementation Status
+
+All 6 gaps have been implemented in `lisp/modules/gptel-ext-prefix-cache.el` (610 lines, 30 tests).
+
+| Gap | Implementation | Commit |
+|-----|---------------|--------|
+| Gap 1: Prefix-stable structure | `gptel-prefix-cache-compute`, `gptel-prefix-cache-prepend` | a1dd8ca10 |
+| Gap 2: Context window tracking | `gptel-prefix-cache-sync-from-backend` | b84f95d86 |
+| Gap 3: Proactive compaction | `gptel-prefix-cache-compact-dynamic` | b84f95d86 |
+| Gap 4: Session separation | `gptel-prefix-cache--role-caches`, per-role compute | 768e2d150 |
+| Gap 5: Token-aware building | `gptel-prefix-cache-build-with-budget` | 0ca83385a |
+| Gap 6: State persistence | `gptel-prefix-cache-save-to-file`, `load-from-file` | d6cc490e1 |
+
+### Architecture
+
+```
+┌─────────────────────────────────────────┐
+│  STABLE PREFIX (computed once per run)  │
+│  - AGENTS.md conventions                │
+│  - Tool schemas                         │
+│  - Standing mementum knowledge          │
+│  - OV5 architecture context             │
+│  ~4KB, byte-stable across experiments   │
+├─────────────────────────────────────────┤
+│  ROLE-SPECIFIC PREFIX (per subagent)    │
+│  - Executor: code improvement focus     │
+│  - Grader: evaluation focus             │
+│  - Reviewer: merge readiness focus      │
+│  - Comparator: keep/discard focus       │
+│  ~200 chars added to base prefix        │
+├─────────────────────────────────────────┤
+│  DYNAMIC SUFFIX (changes per experiment)│
+│  - Target file content                  │
+│  - Current hypothesis                   │
+│  - Recent results (last 3 verbatim)     │
+│  - Compacted older results (if >80%)    │
+│  Budget-managed: 4000 tokens default    │
+└─────────────────────────────────────────┘
+```
+
+### Key Invariants
+
+1. **Prefix never mutates mid-run** — only the dynamic suffix changes per experiment
+2. **Context window synced from backend** — DeepSeek 1M, moonshot 262k, Z-AI 200k
+3. **Compaction at 80% threshold** — summarizes older results into categories
+4. **Role isolation** — each subagent gets its own prefix cache
+5. **State persists across restarts** — saved to `var/tmp/prefix-cache-state.eld`
+
+---
+
+## 6. Metrics to Track
 
 After implementing these changes, track:
 
@@ -363,4 +413,4 @@ The gap is **architectural focus**, not missing infrastructure. Reasonix is desi
 
 ---
 
-*Gap count: 6 | Priority: P0 x2, P1 x2, P2 x2 | Next action: Implement prefix-stable prompt structure (Gap 1)*
+*Gap count: 6 | Status: All implemented | Module: `lisp/modules/gptel-ext-prefix-cache.el` | Tests: 30/30 passing*

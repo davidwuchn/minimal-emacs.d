@@ -4,6 +4,16 @@ set -euo pipefail
 
 repo_root="$(git rev-parse --show-toplevel)"
 
+# Check for merge conflict markers in staged files
+echo "pre-commit: checking for merge conflict markers..."
+conflict_files=$(git diff --cached --name-only --diff-filter=ACM | xargs -I{} grep -lE '^<<<<<<< |^=======|^>>>>>>> ' {} 2>/dev/null || true)
+if [[ -n "$conflict_files" ]]; then
+    echo "pre-commit: ERROR — merge conflict markers found in:" 
+    echo "$conflict_files"
+    echo "pre-commit: Resolve conflicts before committing."
+    exit 1
+fi
+
 # Check submodule sync first
 if [[ "${VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC:-0}" == "1" ]]; then
     echo "pre-commit: skipping cached submodule sync (VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1)"

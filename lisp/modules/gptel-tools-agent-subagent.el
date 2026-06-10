@@ -28,6 +28,11 @@ consumed by evolution cycle.")
 (defvar gptel-auto-workflow--current-validation-retry-active-grace nil)
 (defvar gptel-auto-experiment-delay-between nil)
 (defvar gptel-auto-experiment-auto-push nil)
+
+;; Forward declarations for prefix-cache role separation (Gap 4)
+(declare-function gptel-prefix-cache-prepend-for-role "gptel-ext-prefix-cache" (role dynamic-prompt))
+(declare-function gptel-prefix-cache-compute-for-role "gptel-ext-prefix-cache" (role &optional run-id force-recompute))
+(declare-function gptel-prefix-cache-role-aware "gptel-ext-prefix-cache")
 (defvar gptel-auto-workflow--run-id nil)
 ;; Forward declarations for functions from other modules
 (declare-function gptel-agent-update "gptel-agent-tools")
@@ -180,6 +185,14 @@ agent types (analyzer/executor/grader/comparator)."
     (let ((mode-ctx (gptel-ai-behaviors--format-pipeline-context agent-type)))
       (when mode-ctx
         (setq prompt (concat mode-ctx "\n" prompt))))
+    ;; Gap 4: Session separation — prepend role-specific stable prefix
+    (when (and (fboundp 'gptel-prefix-cache-prepend-for-role)
+               (bound-and-true-p gptel-prefix-cache-role-aware))
+      (let ((role-prefix (gptel-prefix-cache-compute-for-role agent-type)))
+        (when role-prefix
+          (setq prompt (concat role-prefix prompt))
+          (message "[prefix-cache] %s prompt: %d chars (role-aware)"
+                   agent-type (length prompt)))))
     ;; Check HARD CONSTRAINTS before dispatch — block if violated
     (when (fboundp 'gptel-ai-behaviors--check-subagent-preconditions)
       (let ((violation (gptel-ai-behaviors--check-subagent-preconditions agent-type prompt)))
@@ -1077,7 +1090,9 @@ BRANCH should be the short local branch name, e.g. optimize/foo-exp1."
         (paths nil)
         (branch-ref (format "refs/heads/%s" branch)))
     (unwind-protect
-        (when (= 0 (condition-case err (call-process "git" nil buffer nil "worktree" "list" "--porcelain")))
+        (when (= 0 (condition-case nil
+                       (call-process "git" nil buffer nil "worktree" "list" "--porcelain")
+                     (error 1)))
           (with-current-buffer buffer
             (dolist (entry (split-string (buffer-string) "\n\n+" t))
               (when (string-match-p (format "^branch %s$" (regexp-quote branch-ref))
@@ -1099,7 +1114,8 @@ Each item is a plist with keys :branch and :path."
           (format "\\`optimize/.+-%s\\(?:-r[[:alnum:]]+\\)?-exp[0-9]+\\'"
                   (regexp-quote suffix))))
     (unwind-protect
-        (when (= 0 (condition-case err (call-process "git" nil buffer nil "worktree" "list" "--porcelain")))
+        (when (= 0 (condition-case nil (call-process "git" nil buffer nil "worktree" "list" "--porcelain")
+                     (error 1)))
           (with-current-buffer buffer
             (dolist (entry (split-string (buffer-string) "\n\n+" t))
               (let (path branch)
@@ -1124,10 +1140,11 @@ Each item is a plist with keys :branch and :path."
           (format "\\`optimize/.+-%s\\(?:-r[[:alnum:]]+\\)?-exp[0-9]+\\'"
                   (regexp-quote suffix))))
     (unwind-protect
-        (when (= 0 (condition-case err (call-process "git" nil buffer nil
+        (when (= 0 (condition-case nil (call-process "git" nil buffer nil
                                  "for-each-ref"
                                  "--format=%(refname:short)"
-                                 "refs/heads/optimize")))
+                                 "refs/heads/optimize")
+                     (error 1)))
           (with-current-buffer buffer
             (dolist (branch (split-string (buffer-string) "\n" t))
               (when (string-match-p branch-pattern branch)

@@ -101,19 +101,19 @@ Skips when a workflow or cron job is active to avoid preempting experiments."
           (message "[auto-workflow] Evolution cycle complete."))
       (error
        (message "[auto-workflow] Evolution cycle error: %s" err)
-       (condition-case err nil
-           (let* ((frames (backtrace-frames))
-                  (bt (mapconcat (lambda (f) (format "  %S" f))
-                                 (seq-take frames 50) "\n"))
-                  (log-file (expand-file-name "var/tmp/cron/evolution-backtrace.log"
-                                              (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
-                                                       (gptel-auto-workflow--worktree-base-root))
-                                                  user-emacs-directory))))
-             (when (> (length bt) 0)
-               (message "[auto-workflow] Evolution cycle backtrace:\n%s" bt)
-               (make-directory (file-name-directory log-file) t)
-               (with-temp-file log-file
-                 (insert (format-time-string "%Y-%m-%d %H:%M:%S\n"))
+        (condition-case nil
+            (let* ((frames (backtrace-frames))
+                   (bt (mapconcat (lambda (f) (format "  %S" f))
+                                  (seq-take frames 50) "\n"))
+                   (log-file (expand-file-name "var/tmp/cron/evolution-backtrace.log"
+                                               (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                                                        (gptel-auto-workflow--worktree-base-root))
+                                                   user-emacs-directory))))
+              (when (> (length bt) 0)
+                (message "[auto-workflow] Evolution cycle backtrace:\n%s" bt)
+                (make-directory (file-name-directory log-file) t)
+                (with-temp-file log-file
+                  (insert (format-time-string "%Y-%m-%d %H:%M:%S\n"))
                  (insert (format "Error: %s\n" err))
                  (insert (format "Error type: %S\n" (car err)))
                  (insert (format "Error data: %S\n" (cdr err)))
@@ -693,6 +693,13 @@ Returns the new item ID."
               (replace-regexp-in-string
                "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual
 Impact
+
+
+
+
+
+
+
 
 
 |\n|----|--------|-----------|-----------------|--------|---------------|---------------|\n"

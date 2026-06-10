@@ -434,10 +434,10 @@ Returns count of risk nodes found."
       ;; Only temp files (make-temp-file/make-temp-name) need cleanup.
       (let ((resource-patterns '(("make-temp-file" . "delete-file")
                                  ("make-temp-name" . "delete-file"))))
-        (dolist (pattern resource-patterns)
-          (let ((resource-fn (car pattern)))
-            (goto-char (point-min))
-            (while (re-search-forward (format "(%s\\b" resource-fn) nil t)
+         (dolist (pattern resource-patterns)
+           (let ((resource-fn (car pattern)))
+             (goto-char (point-min))
+             (while (re-search-forward (format "(%s\\b" resource-fn) nil t)
               (let* ((match-line (line-number-at-pos (match-beginning 0)))
                      (defun-start (save-excursion
                                     (when (re-search-backward "^(defun\\b" nil t)
@@ -819,9 +819,49 @@ from the audit patterns embedded in the code."
               (push (list :file file :issues issues
                           :log (plist-get result :log))
                     report))))))
-    (list :total-issues total-issues
-          :files-checked (length files)
-          :report (nreverse report))))
+     (list :total-issues total-issues
+           :files-checked (length files)
+           :report (nreverse report))))
+
+;; ── Batch Anchoring (MOSS insight) ──
+
+(defun gptel-auto-workflow--batch-anchor-audit-results (audit-report)
+  "Group AUDIT-REPORT by failure type for batch evolution.
+Returns alist: ((TYPE . (issue1 issue2 ...)) ...).
+Groups by :type field, preserving original order within groups.
+MOSS paper insight: curate failure batches before evolution
+instead of fixing each failure individually."
+  (let ((batches (make-hash-table :test 'eq)))
+    (dolist (entry audit-report)
+      (dolist (issue (plist-get entry :log))
+        (let ((type (plist-get issue :type)))
+          (when type
+            (puthash type
+                     (cons (list :file (plist-get entry :file)
+                                :line (plist-get issue :line)
+                                :context (plist-get issue :context))
+                           (gethash type batches))
+                     batches)))))
+    (let (result)
+      (maphash (lambda (type issues)
+                 (push (cons type (nreverse issues)) result))
+               batches)
+      (sort result (lambda (a b) (> (length (cdr a)) (length (cdr b))))))))
+
+(defun gptel-auto-workflow--batch-anchor-report (batches)
+  "Format BATCHES as markdown report for evolution proposals."
+  (with-temp-buffer
+    (insert "# Batch Anchor Report\n\n")
+    (dolist (batch batches)
+      (let ((type (car batch))
+            (issues (cdr batch)))
+        (insert (format "## %s (%d issues)\n\n" type (length issues)))
+        (dolist (issue issues)
+          (insert (format "- `%s:%d`\n"
+                         (file-name-nondirectory (plist-get issue :file))
+                         (plist-get issue :line))))
+        (insert "\n")))
+    (buffer-string)))
 
 ;; ── Integration with existing self-heal pipeline ──
 
@@ -864,6 +904,23 @@ auto-fixers for detected issues (e.g., excessive blank lines)."
       (message "[self-heal-semantic] Auto-fixed %d issue(s)" total-fixed))
     (plist-put result :auto-fixed total-fixed)
     result))
+
+(defun gptel-auto-workflow--self-heal-semantic-batch-anchor ()
+  "Run audit + batch anchoring for evolution proposal.
+Groups failures by type and returns a markdown report.
+This is the entry point for batch-anchored evolution."
+  (interactive)
+  (let* ((result (gptel-auto-workflow--semantic-audit-all))
+         (batches (gptel-auto-workflow--batch-anchor-audit-results
+                   (plist-get result :report)))
+         (report (gptel-auto-workflow--batch-anchor-report batches)))
+    (message "[batch-anchor] %d issues -> %d batches"
+             (plist-get result :total-issues)
+             (length batches))
+    ;; Return both raw result and batch-anchored report
+    (list :audit result
+          :batches batches
+          :report report)))
 
 (provide 'gptel-auto-workflow-self-heal-semantic)
 ;;; gptel-auto-workflow-self-heal-semantic.el ends here

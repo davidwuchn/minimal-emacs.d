@@ -767,10 +767,12 @@ Returns alist of (ENTITY . ((SYNONYM . SCORE) ...)) with SCORE >= THRESHOLD
                    (dolist (rel-file files)
                      (let ((abs (expand-file-name rel-file root)))
                        (when (file-exists-p abs)
-                         (let ((output (condition-case err (shell-command-to-string
-                                        (mapconcat #'shell-quote-argument
-                                                   (list git-embed "similar" abs "-n" "5")
-                                                   " ")))))
+                          (let ((output (condition-case nil
+                                            (shell-command-to-string
+                                             (mapconcat #'shell-quote-argument
+                                                        (list git-embed "similar" abs "-n" "5")
+                                                        " "))
+                                          (error nil))))
                            (dolist (line (split-string output "\n" t))
                              (when (string-match
                                     "^\\([0-9.]+\\)\\s-+\\(.+\\)$" line)
@@ -1352,7 +1354,11 @@ w='+l.weight,color:{color:l.confidence===\='EXTRACTED\='?'#4fc3f7':l.confidence=
   new vis.Network(container,{nodes:nodes,edges:edges},{
 
 
+
+
 groups:{1:{color:{background:'#1565c0'}},2:{color:{background:'#2e7d32'}},3:{color:{background:'#6a1b9a'}}},
+
+
 
 
 physics:{stabilization:{iterations:100}},edges:{arrows:\='to\=',smooth:{type:\='curvedCW\='}}});

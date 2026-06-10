@@ -1890,18 +1890,23 @@ explore a different part of the file.\n"
              ;; Separate stable prefix (computed once per run) from dynamic suffix.
              ;; The stable prefix includes AGENTS.md, tools, mementum —
              ;; identical bytes across experiments enable LLM prefix cache hits.
-             (full-prompt
-              (if (and (fboundp 'gptel-prefix-cache-enabled)
-                       (fboundp 'gptel-prefix-cache-prepend)
-                       (gptel-prefix-cache-enabled))
-                  (progn
-                    (when (fboundp 'gptel-prefix-cache-context-usage)
-                      (let ((usage (gptel-prefix-cache-context-usage dynamic-prompt)))
-                        (when (plist-get usage :compaction-needed-p)
-                          (message "[prefix-cache] Context compaction needed: %.0f%% full"
-                                   (* 100 (plist-get usage :ratio))))))
-                    (gptel-prefix-cache-prepend dynamic-prompt))
-                dynamic-prompt)))
+              (compacted-prompt
+               (if (and (fboundp 'gptel-prefix-cache-context-usage)
+                        (fboundp 'gptel-prefix-cache-compact-dynamic))
+                   (let ((usage (gptel-prefix-cache-context-usage dynamic-prompt)))
+                     (if (plist-get usage :compaction-needed-p)
+                         (progn
+                           (message "[prefix-cache] Context compaction needed: %.0f%% full — compacting older results"
+                                    (* 100 (plist-get usage :ratio)))
+                           (gptel-prefix-cache-compact-dynamic dynamic-prompt previous-results))
+                       dynamic-prompt))
+                 dynamic-prompt))
+              (full-prompt
+               (if (and (fboundp 'gptel-prefix-cache-enabled)
+                        (fboundp 'gptel-prefix-cache-prepend)
+                        (gptel-prefix-cache-enabled))
+                   (gptel-prefix-cache-prepend compacted-prompt)
+                 compacted-prompt)))
         full-prompt))))
 
 (defun gptel-auto-experiment--get-topic-knowledge (target)
