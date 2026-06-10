@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # install-ops-global.sh - One-shot install of OpenCode Processing Skills + OV5 cowork
 # Usage: ./install-ops-global.sh
-# Requires: git, opencode with deepseek, github-copilot, and zhipuai-coding-plan providers
+# Requires: git, opencode with deepseek and github-copilot providers
 
 set -euo pipefail
 
 REPO_URL="https://github.com/DasDigitaleMomentum/opencode-processing-skills.git"
+OPS_REF="${OPS_REF:-main}"   # allow override: OPS_REF=v1.2.3 ./install-ops-global.sh
 TEMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
@@ -13,15 +14,21 @@ trap 'rm -rf "$TEMP_DIR"' EXIT
 SCRIPT_DIR="$(cd "$(dirname "$0")"; pwd)"
 EMACS_DIR="$(cd "$SCRIPT_DIR/.."; pwd)"
 
-# Socket path (per AGENTS.md S3: /tmp/emacs$(id -u)/)
-OV5_SOCKET="/tmp/emacs$(id -u)/ov5-auto-workflow"
+# Socket path: detect systemd runtime dir first, fall back to /tmp
+if [ -d "/run/user/$(id -u)/emacs" ]; then
+    OV5_SOCKET="/run/user/$(id -u)/emacs/ov5-auto-workflow"
+elif [ -S "/tmp/emacs$(id -u)/ov5-auto-workflow" ]; then
+    OV5_SOCKET="/tmp/emacs$(id -u)/ov5-auto-workflow"
+else
+    OV5_SOCKET="/tmp/emacs$(id -u)/ov5-auto-workflow"
+fi
 SKILL_SRC="${EMACS_DIR}/assistant/skills/ov5"
 OPENCODE_SKILLS="${HOME}/.config/opencode/skills/ov5"
 
 echo "=== OpenCode Processing Skills + OV5 Cowork - Global Install ==="
 
 # 1. Clone repo
-git clone --depth=1 "$REPO_URL" "$TEMP_DIR/ops"
+git clone --depth=1 --branch "$OPS_REF" "$REPO_URL" "$TEMP_DIR/ops"
 
 # 2. Create config.yaml
 cat > "$TEMP_DIR/ops/config.yaml" <<'EOF'
@@ -32,7 +39,7 @@ targets:
 
 delegate: deepseek/deepseek-v4-pro
 doc-explorer: deepseek/deepseek-v4-pro
-implementer: zhipuai-coding-plan/glm-5.1
+implementer: deepseek/deepseek-v4-pro
 legacy-curator: deepseek/deepseek-v4-pro
 
 additional_delegates:
@@ -65,15 +72,31 @@ if [[ "$(uname)" == "Darwin" ]]; then
 fi
 
 # 4. Run installer
-cd "$TEMP_DIR/ops" && bash install.sh || echo "WARNING: install.sh failed, continuing with model fixes"
+if ! cd "$TEMP_DIR/ops" && bash install.sh; then
+    echo "ERROR: OPS install.sh failed. Aborting to avoid corrupting agent configs."
+    echo "Check output above or retry with: OPS_REF=<known-good-tag> $0"
+    exit 1
+fi
 
 # 5. Fix models in agent files
 AGENTS_DIR="$HOME/.config/opencode/agents"
+OPENCODE_JSON="$HOME/.config/opencode/opencode.json"
+
+# 5a. Backup before any modification
+BACKUP_DIR="$HOME/.config/opencode/backups/$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$BACKUP_DIR"
+cp -r "$AGENTS_DIR" "$BACKUP_DIR/"
+[ -f "$OPENCODE_JSON" ] && cp "$OPENCODE_JSON" "$BACKUP_DIR/"
+echo "Backup created: $BACKUP_DIR"
 
 update_model() {
     local file="$1" model="$2"
     if [ -f "$file" ]; then
-        perl -pi -e 's|^model:.*|model: '"$model"'|' "$file"
+        # Only touch model: inside frontmatter (before second '---')
+        perl -i -pe '
+            if (/^---/) { $fm++; }
+            if ($fm < 2 && /^model:/) { $_ = "model: '"$model"'\n"; }
+        ' "$file"
     fi
 }
 
@@ -81,9 +104,14 @@ update_model() {
 for agent in maintainer maintainer-direct; do
     file="$AGENTS_DIR/$agent.md"
     if [ -f "$file" ]; then
-        # Portable: remove any existing model line, then insert after description.
-        # perl -i -pe applies the block to each line; $_ holds the current line.
-        perl -pi -e 'if (/^model:/) { $_ = ""; } elsif (/^description:/) { $_ = $_ . "model: deepseek/deepseek-v4-pro\noptions:\n  reasoningEffort: high\n"; }' "$file"
+        # Remove existing model line (frontmatter only)
+        perl -i -pe 'if (/^---/) { $fm++; } if ($fm < 2 && /^model:/) { $_ = ""; }' "$file"
+        # Insert model after description; avoid duplicating options block
+        if grep -q "^options:" "$file"; then
+            perl -pi -e 'if (/^description:/) { $_ = $_ . "model: deepseek/deepseek-v4-pro\n"; }' "$file"
+        else
+            perl -pi -e 'if (/^description:/) { $_ = $_ . "model: deepseek/deepseek-v4-pro\noptions:\n  reasoningEffort: high\n"; }' "$file"
+        fi
     fi
 done
 
@@ -112,7 +140,7 @@ if [ -f "$AGENTS_DIR/delegate-creative.md" ]; then
     update_model "$AGENTS_DIR/delegate-creative.md" "deepseek/deepseek-v4-pro"
 fi
 update_model "$AGENTS_DIR/doc-explorer.md"           "deepseek/deepseek-v4-pro"
-update_model "$AGENTS_DIR/implementer.md"           "zhipuai-coding-plan/glm-5.1"
+update_model "$AGENTS_DIR/implementer.md"           "deepseek/deepseek-v4-pro"
 # implementer-safe — ensure reasoningEffort: xhigh
 if [ -f "$AGENTS_DIR/implementer-safe.md" ]; then
     perl -pi -e 's|^model:.*|model: github-copilot/gpt-5.4-mini|' "$AGENTS_DIR/implementer-safe.md"
@@ -124,8 +152,17 @@ if [ -f "$AGENTS_DIR/implementer-safe.md" ]; then
 fi
 update_model "$AGENTS_DIR/legacy-curator.md"        "deepseek/deepseek-v4-pro"
 
+# 5b. Warn about unhandled delegate-* agents
+for f in "$AGENTS_DIR"/delegate-*.md; do
+    [ -f "$f" ] || continue
+    agent=$(basename "$f" .md)
+    case "$agent" in
+        delegate|delegate-fast|delegate-strong|delegate-gpt|delegate-opus|delegate-qwen|delegate-creative) ;;
+        *) echo "NOTE: Unhandled agent $f — verify model manually" ;;
+    esac
+done
+
 # 6. Set compaction and small model in opencode.json (pure jq, no python3)
-OPENCODE_JSON="$HOME/.config/opencode/opencode.json"
 if [ -f "$OPENCODE_JSON" ]; then
     if command -v jq >/dev/null 2>&1; then
         tmp_json="$(mktemp)"
@@ -139,6 +176,34 @@ if [ -f "$OPENCODE_JSON" ]; then
         echo "Install jq or manually add compaction config to $OPENCODE_JSON"
     fi
 fi
+
+# 6b. Validate agent frontmatter after edits (perl5, no python3)
+perl -e '
+use strict;
+use warnings;
+for my $f (@ARGV) {
+    open my $fh, "<", $f or next;
+    my $text = do { local $/; <$fh> };
+    close $fh;
+    if ($text =~ /^---\n(.*?)\n---/s) {
+        my $fm = $1;
+        my %keys;
+        while ($fm =~ /^(\w+):/mg) {
+            if ($keys{$1}++) {
+                print "WARNING: $f has duplicate key $1 in frontmatter\n";
+            }
+        }
+        # Check for unclosed quotes (count occurrences)
+        my $squote = () = $fm =~ /\x27/g;
+        my $dquote = () = $fm =~ /\x22/g;
+        if ($squote % 2 != 0 || $dquote % 2 != 0) {
+            print "WARNING: $f has unclosed quotes in frontmatter\n";
+        }
+    } else {
+        print "WARNING: $f missing frontmatter delimiters\n";
+    }
+}
+' "$AGENTS_DIR"/*.md 2>/dev/null || true
 
 # 7. OV5 Cowork Setup — OpenCode only
 COWORK_INSTRUCTIONS="# OV5
@@ -156,9 +221,9 @@ Socket: ${OV5_SOCKET}
 - \`(gptel-auto-workflow--current-target)\` — file being experimented on
 
 ## Results
-- \`tail ~/.emacs.d/var/log/emacs-*.log | grep -E \"kept|discard|RESULT\"\`
-- \`cat ~/.emacs.d/var/tmp/experiments/*/results.tsv | column -t\`
-- \`git -C ~/.emacs.d log --oneline -10\`
+- \`tail ${EMACS_DIR}/var/log/emacs-*.log | grep -E 'kept|discard|RESULT'\`
+- \`cat ${EMACS_DIR}/var/tmp/experiments/*/results.tsv | column -t\`
+- \`git -C ${EMACS_DIR} log --oneline -10\`
 
 ## Coworking pattern
 1. Review code, identify improvement
@@ -188,6 +253,6 @@ fi
 
 echo ""
 echo "=== Installation Complete ==="
-echo "Models: @maintainer→deepseek/deepseek-v4-pro, delegate→deepseek/deepseek-v4-pro, strong→gpt-5.4, gpt→gpt-5.5, opus→claude-opus-4.8, qwen→deepseek/deepseek-v4-pro, creative→deepseek/deepseek-v4-pro, fast→deepseek/deepseek-v4-flash, implementer→glm-5.1, implementer-safe→gpt-5.4-mini"
+echo "Models: @maintainer→deepseek/deepseek-v4-pro, delegate→deepseek/deepseek-v4-pro, strong→gpt-5.4, gpt→gpt-5.5, opus→claude-opus-4.8, qwen→deepseek/deepseek-v4-pro, creative→deepseek/deepseek-v4-pro, fast→deepseek/deepseek-v4-flash, implementer→deepseek/deepseek-v4-pro, implementer-safe→gpt-5.4-mini"
 echo "OV5 Cowork: OpenCode configured"
 echo "Next: Restart OpenCode, select @maintainer agent"
