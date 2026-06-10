@@ -445,5 +445,100 @@
           (should (< (length result) 20))))
     (test-prefix-cache--restore-state)))
 
+;; ─── Persistence Tests (Gap 6) ───
+
+(ert-deftest test-prefix-cache-save-and-load ()
+  "Test that cache state can be saved and restored."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (let ((test-file (make-temp-file "prefix-cache-test-"))
+            (original-content nil))
+        ;; Setup: compute cache and role cache
+        (gptel-prefix-cache-invalidate)
+        (setq gptel-prefix-cache-persist-file test-file
+              gptel-prefix-cache-persist-enabled t
+              gptel-prefix-cache-persist-max-age-hours 24)
+        (gptel-prefix-cache-compute "test-run")
+        (setq original-content gptel-prefix-cache--content)
+        (gptel-prefix-cache-compute-for-role 'executor "test-run")
+        ;; Save state
+        (gptel-prefix-cache-save-to-file)
+        (should (file-exists-p test-file))
+        ;; Invalidate and load back
+        (gptel-prefix-cache-invalidate)
+        (gptel-prefix-cache-role-invalidate t)
+        (should (null gptel-prefix-cache--content))
+        (let ((result (gptel-prefix-cache-load-from-file)))
+          (should result)
+          (should (equal gptel-prefix-cache--content original-content))
+          (should gptel-prefix-cache--valid-p)
+          (should (equal gptel-prefix-cache--run-id "test-run"))
+          ;; Role cache should be restored
+          (should (gptel-prefix-cache-role-get 'executor)))
+        ;; Cleanup
+        (delete-file test-file))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-load-stale-state ()
+  "Test that stale persisted state is rejected."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (let ((test-file (make-temp-file "prefix-cache-test-")))
+        (setq gptel-prefix-cache-persist-file test-file
+              gptel-prefix-cache-persist-enabled t
+              gptel-prefix-cache-persist-max-age-hours 1)
+        ;; Create a fake stale state file (2 hours old)
+        (with-temp-file test-file
+          (prin1 (list :version 1
+                       :timestamp (time-subtract (current-time) (seconds-to-time 7200))
+                       :run-id "old-run"
+                       :content "stale content"
+                       :role-caches nil)
+                 (current-buffer)))
+        (should (null (gptel-prefix-cache-load-from-file)))
+        (should (null gptel-prefix-cache--content))
+        ;; File should be deleted
+        (should (not (file-exists-p test-file)))
+        (when (file-exists-p test-file)
+          (delete-file test-file)))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-load-version-mismatch ()
+  "Test that version mismatch is handled gracefully."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (let ((test-file (make-temp-file "prefix-cache-test-")))
+        (setq gptel-prefix-cache-persist-file test-file
+              gptel-prefix-cache-persist-enabled t)
+        (with-temp-file test-file
+          (prin1 (list :version 99
+                       :timestamp (current-time)
+                       :run-id "bad-version"
+                       :content "bad content")
+                 (current-buffer)))
+        (should (null (gptel-prefix-cache-load-from-file)))
+        (should (null gptel-prefix-cache--content))
+        (delete-file test-file))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-run-end-saves-state ()
+  "Test that run-end hook saves state before invalidating."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (let ((test-file (make-temp-file "prefix-cache-test-")))
+        (setq gptel-prefix-cache-persist-file test-file
+              gptel-prefix-cache-persist-enabled t)
+        (gptel-prefix-cache-invalidate)
+        (gptel-prefix-cache-compute "lifecycle-run")
+        ;; Run end hook should save then invalidate
+        (gptel-prefix-cache-on-run-end)
+        (should (not gptel-prefix-cache--valid-p))
+        (should (file-exists-p test-file))
+        ;; Should be restorable
+        (should (gptel-prefix-cache-load-from-file))
+        (should (equal gptel-prefix-cache--run-id "lifecycle-run"))
+        (delete-file test-file))
+    (test-prefix-cache--restore-state)))
+
 (provide 'test-gptel-ext-prefix-cache)
 ;;; test-gptel-ext-prefix-cache.el ends here

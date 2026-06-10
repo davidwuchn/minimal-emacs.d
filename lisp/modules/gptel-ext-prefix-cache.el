@@ -461,20 +461,6 @@ Returns string with: kept count, common failure modes, best hypothesis."
    results
    "\n"))
 
-;; ─── Run Lifecycle Hooks ───
-
-(defun gptel-prefix-cache-on-run-start (&optional run-id)
-  "Hook to call when a new run starts.
-Computes prefix cache for RUN-ID."
-  (setq gptel-prefix-cache--compaction-archive nil)
-  (gptel-prefix-cache-compute run-id t))
-
-(defun gptel-prefix-cache-on-run-end ()
-  "Hook to call when run ends.
-Invalidates prefix cache."
-  (gptel-prefix-cache-invalidate)
-  (setq gptel-prefix-cache--compaction-archive nil))
-
 ;; ─── Session Separation (Gap 4) ───
 
 (defvar gptel-prefix-cache--role-caches (make-hash-table :test 'equal)
@@ -646,10 +632,9 @@ Logs which sections were included/excluded."
         ;; Budget management disabled: include all sections
         (mapconcat (lambda (s) (cddr s)) sorted "\n\n")
       (dolist (entry sorted)
-        (let* ((priority (car entry))
-               (name (cadr entry))
-               (content (cddr entry))
-               (tokens (gptel-prefix-cache-estimate-tokens content)))
+         (let* ((name (cadr entry))
+                (content (cddr entry))
+                (tokens (gptel-prefix-cache-estimate-tokens content)))
           (if (<= (+ used-tokens tokens) budget)
               (progn
                 (push (cons name tokens) included)
@@ -663,36 +648,36 @@ Logs which sections were included/excluded."
                  (mapconcat (lambda (e) (car e)) excluded ", ")))
       (mapconcat (lambda (s) (cddr s)) sorted "\n\n"))))
 
-(defun gptel-prefix-cache-sections-for-experiment (target experiment-id max-experiments analysis baseline previous-results)
+(defun gptel-prefix-cache-sections-for-experiment (target experiment-id max-experiments analysis previous-results)
   "Return prioritized sections for experiment prompt.
 Returns alist of (priority . (name . content)) pairs.
 Priority 1 = essential, 5 = optional."
   (list
-   ;; Priority 1: Essential
-   (cons 1 (cons "target"
-                 (format "## Target: %s\nExperiment %d/%d"
-                         target experiment-id max-experiments)))
-   ;; Priority 1: Hypothesis
-   (cons 1 (cons "hypothesis"
-                 (or (and (fboundp 'gptel-auto-experiment--select-diverse-hypothesis)
-                          (gptel-auto-experiment--select-diverse-hypothesis target previous-results))
-                     "Make targeted improvements")))
-   ;; Priority 2: Task hint
-   (cons 2 (cons "task-hint"
-                 (or (and (boundp 'gptel-auto-experiment--current-task-hint)
-                          gptel-auto-experiment--current-task-hint)
-                     "")))
-   ;; Priority 2: Analysis
-   (cons 2 (cons "analysis"
-                 (if analysis
-                     (format "## Analysis\n%s" (plist-get analysis :patterns))
-                     "")))
-   ;; Priority 3: Recent results
-   (cons 3 (cons "recent-results"
-                 (if (and previous-results (> (length previous-results) 0))
-                     (format "## Previous Results\n%s"
-                             (gptel-prefix-cache--format-results previous-results))
-                     "")))
+    ;; Priority 1: Essential
+    (cons 1 (cons "target"
+                  (format "## Target: %s\nExperiment %d/%d"
+                          target experiment-id max-experiments)))
+    ;; Priority 1: Hypothesis
+    (cons 1 (cons "hypothesis"
+                  (or (and (fboundp 'gptel-auto-experiment--select-diverse-hypothesis)
+                           (gptel-auto-experiment--select-diverse-hypothesis target previous-results))
+                      "Make targeted improvements")))
+    ;; Priority 2: Task hint
+    (cons 2 (cons "task-hint"
+                  (or (and (boundp 'gptel-auto-experiment--current-task-hint)
+                           gptel-auto-experiment--current-task-hint)
+                      "")))
+    ;; Priority 2: Analysis
+    (cons 2 (cons "analysis"
+                  (if analysis
+                      (format "## Analysis\n%s" (plist-get analysis :patterns))
+                      "")))
+    ;; Priority 3: Recent results
+    (cons 3 (cons "recent-results"
+                  (if (and previous-results (> (length previous-results) 0))
+                      (format "## Previous Results\n%s"
+                              (gptel-prefix-cache--format-results previous-results))
+                      "")))
    ;; Priority 4: Mementum
    (cons 4 (cons "mementum"
                  (or (and (boundp 'gptel-auto-experiment--mementum-recall)
@@ -701,6 +686,154 @@ Priority 1 = essential, 5 = optional."
    ;; Priority 5: Git history
    (cons 5 (cons "git-history"
                  "Recent commits..."))))
+
+;; ─── Context State Persistence (Gap 6) ───
+
+(defcustom gptel-prefix-cache-persist-enabled t
+  "When non-nil, save prefix cache state across daemon restarts.
+State is saved to `gptel-prefix-cache-persist-file' on run end
+and loaded on run start."
+  :type 'boolean
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-prefix-cache-persist-file
+  (expand-file-name "var/tmp/prefix-cache-state.eld"
+                    (or (and (fboundp 'gptel-auto-workflow--project-root)
+                             (gptel-auto-workflow--project-root))
+                        default-directory))
+  "File path for saving/loading prefix cache state.
+Uses Emacs Lisp data format (.eld)."
+  :type 'file
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-prefix-cache-persist-max-age-hours 24
+  "Maximum age in hours for persisted cache state.
+Older state is discarded as stale."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
+(defun gptel-prefix-cache-save-to-file ()
+  "Save current prefix cache state to disk.
+Includes main cache, role caches, context window, and compaction archive.
+Only saves when `gptel-prefix-cache-persist-enabled' is non-nil."
+  (when (and gptel-prefix-cache-persist-enabled
+             gptel-prefix-cache--valid-p
+             gptel-prefix-cache--content)
+    (let ((state
+           (list
+             ;; Main cache state
+             :version 1
+             :timestamp (current-time)
+             :run-id gptel-prefix-cache--run-id
+             :content gptel-prefix-cache--content
+             :valid-p gptel-prefix-cache--valid-p
+             :stats gptel-prefix-cache--stats
+            ;; Context configuration
+            :context-window gptel-prefix-cache--context-window-size
+            :compact-ratio gptel-prefix-cache--context-compact-ratio
+            ;; Compaction archive
+            :compaction-archive gptel-prefix-cache--compaction-archive
+            ;; Role caches
+            :role-caches
+            (let ((role-data nil))
+              (maphash
+               (lambda (role entry)
+                 (push (list role
+                             :content (plist-get entry :content)
+                             :run-id (plist-get entry :run-id)
+                             :valid-p (plist-get entry :valid-p)
+                             :stats (plist-get entry :stats))
+                       role-data))
+               gptel-prefix-cache--role-caches)
+              role-data))))
+      (condition-case save-err
+          (progn
+            (make-directory (file-name-directory gptel-prefix-cache-persist-file) t)
+            (with-temp-file gptel-prefix-cache-persist-file
+              (prin1 state (current-buffer)))
+            (message "[prefix-cache] State saved to %s (%d chars)"
+                     gptel-prefix-cache-persist-file
+                     (length gptel-prefix-cache--content)))
+        (error
+         (message "[prefix-cache] Save failed: %s" (error-message-string save-err)))))))
+
+(defun gptel-prefix-cache-load-from-file ()
+  "Load prefix cache state from disk if available and not stale.
+Returns t if state was restored, nil otherwise."
+  (when (and gptel-prefix-cache-persist-enabled
+             (file-exists-p gptel-prefix-cache-persist-file))
+    (let* ((state (with-temp-buffer
+                    (insert-file-contents gptel-prefix-cache-persist-file)
+                    (read (current-buffer))))
+           (timestamp (plist-get state :timestamp))
+           (age-hours (if timestamp
+                          (/ (float-time (time-subtract (current-time) timestamp))
+                             3600.0)
+                        9999))
+           (version (plist-get state :version)))
+      (cond
+       ((not (eq version 1))
+        (message "[prefix-cache] State file version mismatch: %s" version)
+        nil)
+       ((> age-hours gptel-prefix-cache-persist-max-age-hours)
+        (message "[prefix-cache] State file stale (%.1f hours old), discarding"
+                 age-hours)
+        (delete-file gptel-prefix-cache-persist-file)
+        nil)
+       (t
+        ;; Restore main cache
+        (setq gptel-prefix-cache--content (plist-get state :content)
+              gptel-prefix-cache--valid-p (plist-get state :valid-p)
+              gptel-prefix-cache--run-id (plist-get state :run-id)
+              gptel-prefix-cache--stats (plist-get state :stats)
+              gptel-prefix-cache--timestamp timestamp
+              gptel-prefix-cache--context-window-size
+              (or (plist-get state :context-window) 100000)
+              gptel-prefix-cache--context-compact-ratio
+              (or (plist-get state :compact-ratio) 0.8)
+              gptel-prefix-cache--compaction-archive
+              (plist-get state :compaction-archive))
+        ;; Restore role caches
+        (clrhash gptel-prefix-cache--role-caches)
+        (dolist (role-entry (plist-get state :role-caches))
+          (let ((role (car role-entry))
+                (entry (cdr role-entry)))
+            (puthash role
+                     (list :content (plist-get entry :content)
+                           :valid-p (plist-get entry :valid-p)
+                           :run-id (plist-get entry :run-id)
+                           :stats (plist-get entry :stats))
+                     gptel-prefix-cache--role-caches)))
+         (message "[prefix-cache] State restored from %s (%.1f hours old, %d roles)"
+                  gptel-prefix-cache-persist-file
+                  age-hours
+                  (hash-table-count gptel-prefix-cache--role-caches))
+         t)))))
+
+(defun gptel-prefix-cache-clear-persisted-state ()
+  "Delete persisted cache state file if it exists."
+  (when (and gptel-prefix-cache-persist-file
+             (file-exists-p gptel-prefix-cache-persist-file))
+    (delete-file gptel-prefix-cache-persist-file)
+    (message "[prefix-cache] Persisted state cleared")))
+
+;; ─── Integration Hooks ───
+
+(defun gptel-prefix-cache-on-run-start (&optional run-id)
+  "Hook to call when a new run starts.
+Computes prefix cache for RUN-ID, optionally restoring persisted state."
+  (setq gptel-prefix-cache--compaction-archive nil)
+  ;; Try to load persisted state first
+  (unless (gptel-prefix-cache-load-from-file)
+    ;; Fall back to computing fresh
+    (gptel-prefix-cache-compute run-id t)))
+
+(defun gptel-prefix-cache-on-run-end ()
+  "Hook to call when run ends.
+Saves prefix cache state, then invalidates in-memory cache."
+  (gptel-prefix-cache-save-to-file)
+  (gptel-prefix-cache-invalidate)
+  (setq gptel-prefix-cache--compaction-archive nil))
 
 ;; ─── Provide ───
 
