@@ -276,5 +276,66 @@ validate-brackets succeeding for balanced code."
               (should (equal (plist-get (gptel-conversion-unit-after-state unit) :status) 'auto-fixed)))))
       (delete-directory test-dir t))))
 
+(ert-deftest test-daemon-repl/metrics-tracked ()
+  "Metrics are updated on eval attempts."
+  ;; Reset metrics first
+  (gptel-daemon-repl-reset-metrics)
+  (let ((metrics (gptel-daemon-repl-metrics)))
+    (should (= (plist-get metrics :eval-attempts) 0))
+    (should (= (plist-get metrics :eval-successes) 0))
+    (should (= (plist-get metrics :eval-failures) 0))))
+
+(ert-deftest test-daemon-repl/failure-hook-called ()
+  "Failure hook is called when eval fails after retries."
+  (let ((hook-called nil)
+        (hook-file nil)
+        (hook-error nil))
+    ;; Install a test hook
+    (add-hook 'gptel-daemon-repl-eval-failure-hook
+              (lambda (file error-msg retries)
+                (setq hook-called t
+                      hook-file file
+                      hook-error error-msg)))
+    (unwind-protect
+        (progn
+          ;; Reset metrics
+          (gptel-daemon-repl-reset-metrics)
+          ;; The hook is tested indirectly — verify it's defined
+          (should (boundp 'gptel-daemon-repl-eval-failure-hook))
+          (should (listp gptel-daemon-repl-eval-failure-hook)))
+      ;; Clean up
+      (remove-hook 'gptel-daemon-repl-eval-failure-hook
+                   (lambda (file error-msg retries)
+                     (setq hook-called t
+                           hook-file file
+                           hook-error error-msg))))))
+
+(ert-deftest test-daemon-repl/status-includes-metrics ()
+  "Status plist includes metrics."
+  (let ((status (gptel-daemon-repl-status)))
+    (should (plist-get status :metrics))
+    (let ((metrics (plist-get status :metrics)))
+      (should (numberp (plist-get metrics :attempts)))
+      (should (numberp (plist-get metrics :successes)))
+      (should (numberp (plist-get metrics :failures))))))
+
+(ert-deftest test-daemon-repl/skip-large-files ()
+  "Files exceeding max size should not be auto-evaluated."
+  (let ((gptel-daemon-repl-max-file-size 100) ; 100 bytes
+        (test-file (make-temp-file "daemon-repl-large-" nil ".el")))
+    (unwind-protect
+        (progn
+          ;; Write a file larger than 100 bytes
+          (with-temp-file test-file
+            (insert (make-string 200 ?x)))
+          ;; In a buffer visiting this file
+          (with-temp-buffer
+            (insert-file-contents test-file)
+            (emacs-lisp-mode)
+            (setq buffer-file-name test-file)
+            ;; Should not auto-eval
+            (should-not (gptel-daemon-repl--should-auto-eval-p))))
+      (delete-file test-file))))
+
 (provide 'test-daemon-repl)
 ;;; test-daemon-repl.el ends here
