@@ -643,6 +643,7 @@ OV5's architecture is informed by five key research papers:
 | **Sibyl-AutoResearch** (2605.22343) | Trial-and-error harnesses need explicit conversion | Ontology captures trial outcomes as executable knowledge |
 | **APEX** (2605.21240) | Self-evolving agents suffer exploration collapse | Category saturation detection prevents collapse |
 | **RPG** (2509.16198) | Structured graphs > free-form NL for planning | Experiment dependency graph (planned) |
+| **AttnRes** (2603.15031) | Fixed-weight accumulation causes hidden-state dilution | Weighted experiment synthesis (planned) |
 | **PlanSearch** (2409.03733) | Plan diversity directly predicts performance gains | Plan-level search with Jaccard similarity metric |
 
 **Knowledge pages**: `mementum/knowledge/self-evolving-agent-research.md`, `mementum/knowledge/research-planning-graph-plansearch-ov5-gaps.md`

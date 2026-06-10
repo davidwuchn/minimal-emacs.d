@@ -3,7 +3,7 @@
 > **Bootstrapped**: 2026-06-06
 > **Session**: Research Analysis + Plan Diversity Metric
 > **Status**: ✅ **OV5 SELF-HEALING VERIFIED** — Pipeline detects, diagnoses, remediates, recovers
-> **Latest**: Documentation updated — plan-level search, platform sandbox, smart routing, research papers
+> **Latest**: AttnRes paper studied — experiments as transformer layers with attention residuals
 > **Active Plan**: None — system is self-improving, pipeline running autonomously
 > **Pi5**: Running, self-healing working (grader crash → BLIND MODE → recovery)
 
@@ -56,11 +56,17 @@
 - **Implemented**: `gptel-auto-experiment--hypothesis-diversity` (Jaccard similarity on tokens)
 - **Next step**: Wire into experiment logging, consider plan-level search over diverse candidates
 
+### AttnRes: Attention Residuals (2603.15031)
+- **Key insight**: Fixed-weight accumulation causes hidden-state dilution — applies to OV5 experiment weighting
+- **OV5 gap**: No inter-experiment attention, fixed-weight synthesis, no depth-uniformity monitoring
+- **Action item**: Add experiment relevance scoring (Jaccard), weighted context building, uniformity monitoring
+
 **Knowledge pages**:
 - `mementum/knowledge/self-evolving-agent-research.md` (MOSS, Sibyl, APEX)
 - `mementum/knowledge/research-planning-graph-plansearch-ov5-gaps.md` (RPG, PlanSearch)
+- `mementum/knowledge/research-attention-residuals-ov5.md` (AttnRes)
 
-**Memory**: `mementum/memories/insight-plan-diversity-predicts-performance.md`
+**Memory**: `mementum/memories/insight-experiments-are-transformer-layers.md`
 
 ---
 
