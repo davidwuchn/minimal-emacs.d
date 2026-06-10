@@ -2,6 +2,8 @@
 ;; Part of gptel-tools-agent split
 
 (require 'cl-lib)
+(require 'gptel-tools-agent-experiment-loop)
+(require 'gptel-tools-agent-error)
 (declare-function magit-git-success "magit-git")
 (declare-function gptel-auto-experiment--validate-code "gptel-tools-agent-validation")
 (declare-function gptel-backend-registry-default-model "gptel-ext-backend-registry" (backend))
@@ -33,7 +35,7 @@
 (defvar gptel-auto-experiment-max-aux-subagent-retries nil)
 (defvar gptel-auto-experiment-max-per-provider-attempts nil)
 (defvar gptel-auto-experiment-min-quality-gain-on-score-tie nil)
-(defvar gptel-auto-experiment-use-subagents)
+(defvar gptel-auto-experiment-use-subagents nil)
 (defvar gptel-auto-workflow--current-target nil)
 (defvar gptel-auto-workflow--project-root-override nil
   "Override for project root when running from non-git directory.")
