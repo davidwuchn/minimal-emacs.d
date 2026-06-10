@@ -905,5 +905,22 @@ auto-fixers for detected issues (e.g., excessive blank lines)."
     (plist-put result :auto-fixed total-fixed)
     result))
 
+(defun gptel-auto-workflow--self-heal-semantic-batch-anchor ()
+  "Run audit + batch anchoring for evolution proposal.
+Groups failures by type and returns a markdown report.
+This is the entry point for batch-anchored evolution."
+  (interactive)
+  (let* ((result (gptel-auto-workflow--semantic-audit-all))
+         (batches (gptel-auto-workflow--batch-anchor-audit-results
+                   (plist-get result :report)))
+         (report (gptel-auto-workflow--batch-anchor-report batches)))
+    (message "[batch-anchor] %d issues -> %d batches"
+             (plist-get result :total-issues)
+             (length batches))
+    ;; Return both raw result and batch-anchored report
+    (list :audit result
+          :batches batches
+          :report report)))
+
 (provide 'gptel-auto-workflow-self-heal-semantic)
 ;;; gptel-auto-workflow-self-heal-semantic.el ends here
