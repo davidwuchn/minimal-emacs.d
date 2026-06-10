@@ -857,17 +857,18 @@ explore=%.0f%%)"
            ;; documented overrides (e.g. :programming → DeepSeek) work
            ;; from the very first run, not just after data accumulates.
            (if category-override
-               (let* ((override-entry (assoc category-override static-fallbacks))
-                      (rest (cl-remove category-override static-fallbacks
-                                       :key #'car :test #'string=)))
-                 (if override-entry
-                     (progn
-                       (message "[onto-router] Static override: %s → %s"
-                                category category-override)
-                       (cons override-entry rest))
-                     static-fallbacks))))))
+                (let* ((override-entry (assoc category-override static-fallbacks))
+                       (rest (cl-remove category-override static-fallbacks
+                                        :key #'car :test #'string=)))
+                  (if override-entry
+                      (progn
+                        (message "[onto-router] Static override: %s → %s"
+                                 category category-override)
+                        (cons override-entry rest))
+                    static-fallbacks))
+                static-fallbacks)))))))
             (push (cons cache-key result) gptel-auto-workflow--reorder-cache)
-            result)))))))
+            result))))
 
 ;; ─── Integration with Existing Fallback System ───
 
@@ -3554,6 +3555,9 @@ possible misclassification"
   '((:agentic        . "agent\\|workflow\\|strategy\\|evolution")
     (:programming    . "benchmark\\|fsm\\|retry\\|test\\|code\\|compile\\|^gptel-ext-")
     (:tool-calls     . "
+
+
+
 
 
 sandbox\\|^gptel-tools-\\(?:bash\\|grep\\|glob\\|edit\\|apply\\|preview\\|programmatic\\)")
