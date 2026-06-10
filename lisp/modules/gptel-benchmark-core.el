@@ -623,7 +623,8 @@ Returns plist with suggested threshold adjustments."
 
 (defun gptel-benchmark-make-temp-file (prefix &optional dir-flag suffix)
   "Like `make-temp-file' but in project var/tmp/ directory.
-PREFIX, DIR-FLAG, and SUFFIX are passed to `make-temp-file'."
+PREFIX, DIR-FLAG, and SUFFIX are passed to `make-temp-file'.
+Callers must clean up the returned temp file."
   (let ((temporary-file-directory (gptel-benchmark--temp-dir)))
     (make-temp-file prefix dir-flag suffix)))
 

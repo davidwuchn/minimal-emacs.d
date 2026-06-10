@@ -441,7 +441,7 @@ Returns count of risk nodes found."
              (while (re-search-forward (format "(%s\\b" resource-fn) nil t)
               (let* ((match-line (line-number-at-pos (match-beginning 0)))
                      (defun-start (save-excursion
-                                    (when (re-search-backward "^(defun\\b" nil t)
+                                    (when (re-search-backward "^(\\(defun\\|cl-defun\\)\\b" nil t)
                                       (point))))
                      (defun-end (when defun-start
                                   (save-excursion
@@ -474,7 +474,7 @@ Returns count of risk nodes found."
             (while (re-search-forward (format "(%s\\b" api-fn) nil t)
               (let* ((match-line (line-number-at-pos (match-beginning 0)))
                      (defun-start (save-excursion
-                                    (when (re-search-backward "^(defun\\b" nil t)
+                                    (when (re-search-backward "^(\\(defun\\|cl-defun\\)\\b" nil t)
                                       (point))))
                      (defun-end (when defun-start
                                   (save-excursion

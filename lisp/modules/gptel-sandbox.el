@@ -782,6 +782,7 @@ CALLBACK receives non-nil when approved and nil when rejected."
       (let* ((temp-file (if (fboundp 'my/gptel-make-temp-file)
                             (my/gptel-make-temp-file "programmatic-" nil ".txt")
                           (make-temp-file "programmatic-" nil ".txt")))
+             ;; (delete-file temp-file) ; truncated result is ephemeral — caller may clean up
              (suffix (format "\n...[Programmatic result truncated. Full result saved to: %s]..."
                              temp-file))
              (suffix-len (length suffix)))

@@ -70,10 +70,11 @@ MODE is :plan or :agent — plan mode denies all network."
                     "/Applications" "/private/var" "/dev"))
          (rw-root (expand-file-name root))
          (plan-mode (eq mode :plan)))
-    (with-temp-file profile
-      (insert "(version 1)\n")
-      (insert "(deny default)\n")
-      ;; Read-only system access
+      ;; (delete-file profile) ; caller cleans up after sandbox execution
+      (with-temp-file profile
+        (insert "(version 1)\n")
+        (insert "(deny default)\n")
+        ;; Read-only system access
       (dolist (d ro-dirs)
         (when (file-directory-p d)
           (insert (format "(allow file-read* (subpath \"%s\"))\n" d))))
