@@ -401,9 +401,10 @@ Returns count of risk nodes found."
       (goto-char (point-min))
       (emacs-lisp-mode)
       ;; Check for resource allocation without cleanup
-      (let ((resource-patterns '(("make-hash-table" . "unwind-protect")
-                                 ("make-temp-file" . "unwind-protect")
-                                 ("make-temp-name" . "unwind-protect"))))
+      ;; make-hash-table removed: hash tables are GC'd, not resource leaks.
+      ;; Only temp files (make-temp-file/make-temp-name) need cleanup.
+      (let ((resource-patterns '(("make-temp-file" . "delete-file")
+                                 ("make-temp-name" . "delete-file"))))
         (dolist (pattern resource-patterns)
           (let ((resource-fn (car pattern))
                 (cleanup-fn (cdr pattern)))
@@ -422,14 +423,17 @@ Returns count of risk nodes found."
                 (when (and defun-start defun-end)
                   (save-excursion
                     (goto-char defun-start)
-                    (when (re-search-forward (format "(%s\\b" cleanup-fn) defun-end t)
+                    ;; Check for delete-file, delete-directory, or unwind-protect
+                    (when (or (re-search-forward "(delete-file\\b" defun-end t)
+                              (re-search-forward "(delete-directory\\b" defun-end t)
+                              (re-search-forward "(unwind-protect\\b" defun-end t))
                       (setq has-cleanup t))))
                 (unless has-cleanup
                   (setq issues (1+ issues))
                   (gptel-auto-workflow--semantic-audit-record
                    file match-line
                    'risk-node-resource
-                   (format "%s without %s cleanup — risk node" resource-fn cleanup-fn))))))))
+                   (format "%s without cleanup — risk node" resource-fn))))))))
       ;; Check for external API calls without error handling
       (let ((api-patterns '(("shell-command-to-string" . "condition-case")
                             ("call-process" . "condition-case")

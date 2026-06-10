@@ -582,7 +582,7 @@ condition-case nil with err reference in handler."
   "Detects resource allocation without cleanup (risk node).
 Inspired by TSP paper: fine-grained risk nodes where failures emerge."
   (let* ((content
-          "(defun foo ()\n  (let ((ht (make-hash-table :test 'equal)))\n    (puthash 'key 'value ht)\n    ht))")
+          "(defun foo ()\n  (let ((f (make-temp-file \"test-\")))\n    (message \"Created: %s\" f)\n    f))")
          (file (test-self-heal-semantic--tmp-file content)))
     (unwind-protect
         (let ((issues (gptel-auto-workflow--audit-risk-nodes file)))
@@ -602,7 +602,7 @@ Inspired by TSP paper: fine-grained risk nodes where failures emerge."
 (ert-deftest test-self-heal-semantic/clean-risk-node-with-cleanup ()
   "Files with proper cleanup are clean (no risk node)."
   (let* ((content
-          "(defun foo ()\n  (unwind-protect\n      (let ((ht (make-hash-table :test 'equal)))\n        (puthash 'key 'value ht)\n        ht)\n    (cleanup)))")
+          "(defun foo ()\n  (let ((f (make-temp-file \"test-\")))\n    (unwind-protect\n        (message \"Using: %s\" f)\n      (delete-file f))))")
          (file (test-self-heal-semantic--tmp-file content)))
     (unwind-protect
         (let ((issues (gptel-auto-workflow--audit-risk-nodes file)))
