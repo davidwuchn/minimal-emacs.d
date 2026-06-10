@@ -8,10 +8,10 @@
 ;; ═══════════════════════════════════════════════════════════════════════════
 
 ((nil
-  . ((gptel-auto-workflow-targets
+       . ((gptel-auto-workflow-targets
        . ("lisp/modules/gptel-auto-workflow-projects.el"
-          "lisp/modules/gptel-auto-workflow-strategic.el"
-          "lisp/modules/gptel-tools-agent-prompt-build.el"
+          "lisp/modules/gptel-agent-loop.el"
+          "lisp/modules/gptel-tools-apply.el"
           "lisp/modules/gptel-tools-agent-error.el"
           "lisp/modules/gptel-benchmark-subagent.el"))
       (gptel-auto-experiment-max-per-target . 2)

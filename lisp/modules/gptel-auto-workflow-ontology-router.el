@@ -866,8 +866,8 @@ explore=%.0f%%)"
                                 category category-override)
                        (cons override-entry rest))
                      static-fallbacks))))))
-           (push (cons cache-key result) gptel-auto-workflow--reorder-cache)
-           result))))
+            (push (cons cache-key result) gptel-auto-workflow--reorder-cache)
+            result)))))))
 
 ;; ─── Integration with Existing Fallback System ───
 
@@ -4119,5 +4119,3 @@ Primary: unified graph skill-cooccur edges.  Fallback: skill graph edges."
 
 (provide 'gptel-auto-workflow-ontology-router)
 ;;; gptel-auto-workflow-ontology-router.el ends here
-
-)))
