@@ -45,9 +45,6 @@ list/vector/append/length/car/cdr/nth/cons/assoc/alist-get/plist-get. String
 helpers:
 
 
-
-
-
 concat/format/split-string/string-join/string-trim/string-empty-p/string-match-p/substring."))
      :category "gptel-agent"
      :confirm t
