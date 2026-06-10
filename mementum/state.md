@@ -8,6 +8,7 @@
 >   - Sibyl auditable conversion units: Phases 1+2 complete, 11 tests passing, integrated into ontology evolution
 >   - Boundary validator: Hardened file path construction in 4 workflow modules (production, projects, beads, strategic)
 >   - TSP risk-node training pairs: 4 missing functions implemented, JSONL persistence, prompt integration
+>   - Batch anchoring: Integrated into monitoring agent Phase 10, writes mementum/batch-anchor-report.md
 >   - All commits pushed to GitHub; Pi5 sync ongoing
 > **Active Plan**: None — codebase clean, tests green
 > **Pi5**: Running, self-healing working (grader crash → BLIND MODE → recovery)
@@ -116,15 +117,15 @@
 ### Result
 - `condition-case-unbound-err` issues: **167 → 0** (all were false positives from audit bugs)
 - `risk-node-resource` issues: **334 → 5** (remaining are helper function wrappers)
-- Test suite: **80 module-specific tests passing** (32 prefix-cache + 11 conversion-unit + 37 security)
-- Full suite: 51 self-heal + 5 strategy DAG + 8 brepl + 13 Pi5 + 11 platform + 37 security + 32 prefix-cache + 11 conversion-unit = **168 tests**
+- Test suite: **114 module-specific tests passing** (32 prefix-cache + 11 conversion-unit + 37 security + 34 monitoring)
+- Full suite: 51 self-heal + 5 strategy DAG + 8 brepl + 13 Pi5 + 11 platform + 37 security + 32 prefix-cache + 11 conversion-unit + 34 monitoring = **202 tests**
 - Watchdog: Now detects frozen daemon in ≤ 90s instead of ≤ 20 min
 - Risk-node training pairs: 4 missing functions implemented, JSONL persistence
 - Codebase: Clean, no unmerged files, no syntax errors
-- 9 commits pushed successfully
+- 10 commits pushed successfully
 
 ### New implementations (this session)
-1. **Batch anchoring** (MOSS insight): `gptel-auto-workflow--batch-anchor-audit-results` groups audit failures by type before evolution; `gptel-auto-workflow--batch-anchor-report` generates markdown for proposals; integrated into `self-heal-semantic-batch-anchor` entry point
+1. **Batch anchoring** (MOSS insight): `gptel-auto-workflow--batch-anchor-audit-results` groups audit failures by type before evolution; `gptel-auto-workflow--batch-anchor-report` generates markdown for proposals; integrated into monitoring agent Phase 10 — writes `mementum/batch-anchor-report.md` after each cycle
 2. **Strategy DAG** (APEX insight): `gptel-auto-workflow--strategy-dag` hash table maps strategies → prerequisites; `gptel-auto-workflow--strategy-prerequisites-met-p` checks prerequisite success; `gptel-auto-workflow--strategy-filter-by-dag` filters available strategies; integrated into `--select-best-strategy`
 3. **brepl** (bracket-fixing REPL for Elisp): `gptel-ext-brepl.el` — daemon socket discovery, REPL eval via emacsclient, bracket validation, auto-evaluate on save, self-heal integration; 8 tests; OpenCode skill registered
 4. **Pre-commit hook hardened**: Merge conflict marker detection + false-positive warning filtering + byte-compile error checking
@@ -141,9 +142,9 @@
 1. **Monitor 18:00 pipeline run** — Verify [prefix-cache], [conversion-unit] messages appear in daemon log
 
 ### Near-Term (Choose one)
-2. **Batch anchoring integration** — Wire batch-anchored evolution into main evolution loop (replace individual failure fixing)
-3. **Boundary validator Phase 2** — Integrate `with-workspace-boundary` macro into evolution module's 104 file operations
-4. **Prefix-cache Phase 3** — Cross-run statistics aggregation, compaction threshold auto-tuning
+2. **Boundary validator Phase 2** — Integrate `with-workspace-boundary` macro into evolution module's 104 file operations
+3. **Prefix-cache Phase 3** — Cross-run statistics aggregation, compaction threshold auto-tuning
+4. **Evolution proposal from batch reports** — Read `mementum/batch-anchor-report.md` in evolution cycle to guide batch-curated evolution
 
 ---
 
