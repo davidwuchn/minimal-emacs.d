@@ -7,7 +7,7 @@
 (require 'cl-lib)
 
 (defvar gptel-auto-workflow--beads-dir
-  (expand-file-name "mementum/beads/")
+  (expand-file-name "mementum/beads/" user-emacs-directory)
   "Base directory for cross-mayor beads.")
 
 ;;; ─── Bead Schema ───

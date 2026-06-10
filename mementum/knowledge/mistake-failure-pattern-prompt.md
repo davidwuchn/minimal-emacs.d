@@ -2,24 +2,35 @@
 Synthesis verification:
 - Confidence: 12%
 - Sources: 7 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-prompt', Very short content (17 lines)
+- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-prompt', Very short content (28 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize multiple mistake/failure pattern memories about prompt-type failures in gptel-related Emacs modules into a single knowledge page. Let me analyze the patterns:
+The user wants me to synthesize a series of mistake/failure pattern memories into a comprehensive knowledge page. The memories are all about "failure type: prompt" affecting various gptel-related Emacs Lisp modules. Let me analyze the patterns:
 
-1. All failures are "prompt" type
-2. Multiple targets in `lisp/modules/gptel-*.el` files
-3. Common modules: gptel-tools-agent-prompt-build, gptel-tools-agent-benchmark, gptel-benchmark-principles, gptel-auto-workflow-strategic, gptel-auto-workflow-projects, gptel-auto-workflow-ontology-router, gptel-auto-workflow-evolution
-4. Categories: :programming (3.5% keep-rate), :agentic (4.3% keep-rate)
-5. Occurrences: 3-5
-6. The trend IDs suggest these are recurring failures
+1. **Common target pattern**: All failures target `lisp/modules/gptel-*.el` files - specifically modules in the gptel ecosystem
+2. **Failure type**: All are "prompt" failures - meaning issues with the prompts being used
+3. **Categories involved**: :programming (keep-rate 3.5%), :agentic (keep-rate 4.3%)
+4. **Occurrences**: Range from 3-5 per pattern
+5. **Trend data**: Various time ranges showing persistence
+6. **Common characteristics**: "Example reasons: none" - which is itself a metadata issue
 
-I need to:
-- Create frontmatter
-- Write 50+ lines of content
-- Include concrete examples (code, tables, commands)
-- Provide actionable patterns
-- Cross-reference related topics
+Key observations:
+- All targets are in `lisp/modules/gptel-*.el` 
+- Modules affected include: agent-prompt-build, agent-benchmark, benchmark-principles, auto-workflow-strategic, auto-workflow-projects, auto-workflow-ontology-router, auto-workflow-evolution
+- This suggests the failure is in shared prompt infrastructure
+- "Example reasons: none" indicates the failure detection system isn't capturing root causes
+- The dates cluster around 2026-06-07 to 2026-06-08
 
-Let me write a comprehensive knowledge page about this prompt failure pattern.
+Let me build a knowledge page with:
+- Frontmatter
+- Overview section
+- Pattern analysis
+- Affected modules table
+- Root cause hypotheses
+- Detection gaps (no example reasons)
+- Actionable remediation patterns
+- Code examples
+- Cross-references
+
+I need to make this 50+ lines minimum with concrete content.

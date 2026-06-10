@@ -887,9 +887,13 @@ When COMPLETION-CALLBACK is non-nil, call it after all projects finish."
           (gptel-auto-workflow--clear-rate-limited-backends)))
     (error
      (let ((bt (with-output-to-string (backtrace))))
-       (with-temp-file "/tmp/research-init-backtrace.txt"
-         (insert (format "Error: %S\n\nBacktrace:\n%s\n" err bt)))
-       (message "[research] Init error: %S — backtrace written to /tmp/research-init-backtrace.txt" err))))
+       (let ((backtrace-file (expand-file-name "var/tmp/research-init-backtrace.txt"
+                                               (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                                                        (gptel-auto-workflow--worktree-base-root))
+                                                   default-directory))))
+         (with-temp-file backtrace-file
+           (insert (format "Error: %S\n\nBacktrace:\n%s\n" err bt)))
+         (message "[research] Init error: %S — backtrace written to %s" err backtrace-file)))))
   (let ((projects (gptel-auto-workflow--normalized-projects)))
     (message "[research] Running for %d projects..." (length projects))
     (let ((results nil)

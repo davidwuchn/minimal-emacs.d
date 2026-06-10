@@ -305,7 +305,7 @@ Called when research context changes or run completes."
                              "var/tmp/self-evolution.md"
                              (if (fboundp 'gptel-auto-workflow--worktree-base-root)
                                  (gptel-auto-workflow--worktree-base-root)
-                               "/Users/davidwu/.emacs.d"))))
+                                user-emacs-directory))))
         (if (file-exists-p knowledge-file)
             (let ((size (nth 7 (file-attributes knowledge-file)))
                   (mtime (nth 5 (file-attributes knowledge-file))))
@@ -453,7 +453,10 @@ Checks:
 1. Research findings file exists and has content
 2. Research context is set for next auto-workflow run
 Returns t if all checks pass, nil with warnings otherwise."
-  (let* ((findings-file (expand-file-name "var/tmp/research-findings.md"))
+  (let* ((findings-file (expand-file-name "var/tmp/research-findings.md"
+                                          (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                                                   (gptel-auto-workflow--worktree-base-root))
+                                              user-emacs-directory)))
          (findings-ok nil)
          (context-ok nil)
          (issues nil))
@@ -1024,8 +1027,8 @@ Returns a plist suitable for logging or dashboard display."
          (root (file-name-as-directory root))
          ;; ── Experiments ──
          (results-files
-          (when (file-directory-p (concat root "var/tmp/experiments"))
-            (directory-files (concat root "var/tmp/experiments") t
+          (when (file-directory-p (expand-file-name "var/tmp/experiments" root))
+            (directory-files (expand-file-name "var/tmp/experiments" root) t
                              "results\\.tsv$" t)))
          (exp-total 0) (exp-kept 0) (exp-failed 0)
          (exp-decisions (make-hash-table :test 'equal))
@@ -1062,7 +1065,7 @@ Returns a plist suitable for logging or dashboard display."
     (let ((aq-pending 0) (aq-approved 0) (aq-rejected 0)
           (aq-deployed 0) (aq-expired 0))
       (dolist (subdir '("pending" "decisions"))
-        (let ((dir (concat root "var/approval-queue/" subdir "/")))
+        (let ((dir (expand-file-name (concat "var/approval-queue/" subdir "/") root)))
           (when (file-directory-p dir)
             (dolist (f (directory-files dir t "\\.sexp$"))
               (let ((entry (condition-case nil
@@ -1088,19 +1091,19 @@ Returns a plist suitable for logging or dashboard display."
                (error nil))))
         ;; ── Context DB ──
         (let ((ctx-count
-               (length (when (file-directory-p (concat root "var/context"))
-                         (directory-files (concat root "var/context") t "\\.sexp$")))))
+               (length (when (file-directory-p (expand-file-name "var/context" root))
+                         (directory-files (expand-file-name "var/context" root) t "\\.sexp$")))))
           ;; ── Disposable ──
           (let ((disp-count
-                 (length (when (file-directory-p (concat root "var/disposable"))
-                           (directory-files (concat root "var/disposable") t "\\.sexp$")))))
+                 (length (when (file-directory-p (expand-file-name "var/disposable" root))
+                           (directory-files (expand-file-name "var/disposable" root) t "\\.sexp$")))))
             ;; ── Mementum ──
             (let ((mem-count
-                   (length (when (file-directory-p (concat root "mementum/memories"))
-                             (directory-files (concat root "mementum/memories") t "\\.md$"))))
+                   (length (when (file-directory-p (expand-file-name "mementum/memories" root))
+                             (directory-files (expand-file-name "mementum/memories" root) t "\\.md$"))))
                   (know-count
-                   (length (when (file-directory-p (concat root "mementum/knowledge"))
-                             (directory-files (concat root "mementum/knowledge") t "\\.md$")))))
+                   (length (when (file-directory-p (expand-file-name "mementum/knowledge" root))
+                             (directory-files (expand-file-name "mementum/knowledge" root) t "\\.md$")))))
               ;; ── Build result ──
               (list
                :timestamp (format-time-string "%Y-%m-%dT%H:%M:%S")

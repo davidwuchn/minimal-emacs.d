@@ -2350,7 +2350,7 @@ static (%d) = %d targets"
 ;;; ─── AutoTTS Trace Collection & Controller ───
 
 (defvar gptel-auto-workflow--research-trace-dir
-  (expand-file-name "var/tmp/research-traces")
+  (expand-file-name "var/tmp/research-traces" user-emacs-directory)
   "Directory to save research traces for AutoTTS offline evaluation.")
 
 (defvar gptel-auto-workflow--active-strategy nil
