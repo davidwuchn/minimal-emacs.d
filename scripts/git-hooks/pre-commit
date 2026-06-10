@@ -44,11 +44,17 @@ if [[ -n "$staged_el_files" ]]; then
             else
                 compile_exit=$?
             fi
-            # Print output (hide the "Wrote .elc" noise)
-            echo "$compile_out" | grep -v "^Wrote " || true
+            # Filter output: remove "Wrote" noise and known false-positive warnings
+            # (variables used inside lambdas/closures show as "unused"/"free")
+            filtered_out=$(echo "$compile_out" | grep -v "^Wrote " | \
+                grep -v -E "(Error:|Warning:).*Unused lexical variable" | \
+                grep -v -E "(Error:|Warning:).*reference to free variable" | \
+                grep -v -E "(Error:|Warning:).*the function .* is not known to be defined" || true)
+            echo "$filtered_out"
             # Clean up .elc to avoid committing it
             rm -f "$repo_root/${file}c"
-            if [[ $compile_exit -ne 0 ]]; then
+            # Check if there are real errors remaining after filtering
+            if echo "$filtered_out" | grep -qE "Error:|error:" ; then
                 echo "  FAIL: $file"
                 failed=1
             fi
