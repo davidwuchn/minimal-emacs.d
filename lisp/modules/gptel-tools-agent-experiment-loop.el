@@ -648,7 +648,7 @@ Resolved from the project root via `gptel-auto-workflow--default-dir'.")
   "Write current epoch timestamp to the heartbeat file.
 OVERRIDE-PATH, if non-nil, is the absolute path to write to (for testing).
 Never signals — errors are silently swallowed so the timer stays alive."
-  (condition-case err
+  (condition-case nil
       (let ((path (or override-path
                       (expand-file-name
                        gptel-auto-workflow--heartbeat-file
