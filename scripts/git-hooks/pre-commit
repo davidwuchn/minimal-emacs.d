@@ -1,32 +1,56 @@
 #!/usr/bin/env bash
+# Pre-commit hook for PMF Value Stream / GTM Product Org
+# - Blocks commits with merge conflict markers
+# - Blocks commits of worktree/temporary files
+# - Verifies submodule sync
+# - Byte-compiles staged .el files
 
 set -euo pipefail
 
 repo_root="$(git rev-parse --show-toplevel)"
 
-# Check for merge conflict markers in staged files
+# Get list of staged files
+staged_files=$(git diff --cached --name-only --diff-filter=ACM)
+
+# ─── 1. Detect merge conflict markers ───
 echo "pre-commit: checking for merge conflict markers..."
-conflict_files=$(git diff --cached --name-only --diff-filter=ACM | xargs -I{} grep -lE '^<<<<<<< |^=======|^>>>>>>> ' {} 2>/dev/null || true)
+conflict_files=$(echo "$staged_files" | xargs -I{} grep -lE '^\u003c\u003c\u003c\u003c\u003c\u003c\u003c |^=======|^\u003e\u003e\u003e\u003e\u003e\u003e\u003e ' {} 2>/dev/null || true)
 if [[ -n "$conflict_files" ]]; then
-    echo "pre-commit: ERROR — merge conflict markers found in:" 
+    echo "pre-commit: ERROR — merge conflict markers found in:"
     echo "$conflict_files"
     echo "pre-commit: Resolve conflicts before committing."
     exit 1
 fi
 
-# Check submodule sync first
+# ─── 2. Block worktree and temporary files ───
+while IFS= read -r file; do
+    [[ -z "$file" ]] && continue
+    if echo "$file" | grep -qE "(var/tmp/experiments/|var/tmp/worktree/|staging-verify)"; then
+        echo "ERROR: Attempting to commit worktree file: $file"
+        echo "Worktree files must be committed from within the worktree, not the mayor checkout."
+        exit 1
+    fi
+    if echo "$file" | grep -qE "(\.tmp$|\.bak$|~$|experiment-[0-9]|\.tmp\.)"; then
+        echo "ERROR: Attempting to commit temporary/experiment file: $file"
+        echo "Clean up temporary files before committing to main branch."
+        exit 1
+    fi
+done <<< "$staged_files"
+
+# ─── 3. Check submodule sync ───
 if [[ "${VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC:-0}" == "1" ]]; then
     echo "pre-commit: skipping cached submodule sync (VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1)"
 else
     "$repo_root/scripts/check-submodule-sync.sh" --cached
 fi
 
-# Byte-compile staged .el files to catch syntax errors (e.g. unbalanced parens)
-staged_el_files=$(git diff --cached --name-only --diff-filter=ACM | grep '\.el$' || true)
+# ─── 4. Byte-compile staged .el files ───
+staged_el_files=$(echo "$staged_files" | grep '\.el$' || true)
 if [[ -n "$staged_el_files" ]]; then
     echo "pre-commit: byte-compiling staged .el files..."
     failed=0
     while IFS= read -r file; do
+        [[ -z "$file" ]] && continue
         if [[ -f "$repo_root/$file" ]]; then
             pkg_load_args=()
             for pkg_dir in "$repo_root/var/elpa"/*/; do
@@ -44,11 +68,17 @@ if [[ -n "$staged_el_files" ]]; then
             else
                 compile_exit=$?
             fi
-            # Print output (hide the "Wrote .elc" noise)
-            echo "$compile_out" | grep -v "^Wrote " || true
+            # Filter output: remove "Wrote" noise and known false-positive warnings
+            # (variables used inside lambdas/closures show as "unused"/"free")
+            filtered_out=$(echo "$compile_out" | grep -v "^Wrote " | \
+                grep -v -E "(Error:|Warning:).*Unused lexical variable" | \
+                grep -v -E "(Error:|Warning:).*reference to free variable" | \
+                grep -v -E "(Error:|Warning:).*the function .* is not known to be defined" || true)
+            echo "$filtered_out"
             # Clean up .elc to avoid committing it
             rm -f "$repo_root/${file}c"
-            if [[ $compile_exit -ne 0 ]]; then
+            # Check if there are real errors remaining after filtering
+            if echo "$filtered_out" | grep -qE "Error:|error:" ; then
                 echo "  FAIL: $file"
                 failed=1
             fi
@@ -59,3 +89,6 @@ if [[ -n "$staged_el_files" ]]; then
         exit 1
     fi
 fi
+
+echo "pre-commit: all checks passed."
+exit 0

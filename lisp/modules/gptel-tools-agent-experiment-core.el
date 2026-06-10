@@ -28,6 +28,7 @@
 (declare-function gptel-auto-workflow--truncate-hash "gptel-tools-agent-base")
 (declare-function gptel-auto-experiment--call-in-context "gptel-tools-agent-benchmark")
 (declare-function gptel-auto-experiment--code-quality-score "gptel-tools-agent-benchmark")
+(declare-function gptel-prefix-cache-sync-from-backend "gptel-ext-prefix-cache" (backend model))
 (declare-function gptel-benchmark--complexity-penalty "gptel-benchmark-subagent")
 (declare-function gptel-benchmark--calculate-complexity-before-after "gptel-benchmark-subagent")
 (declare-function gptel-auto-experiment--repeated-focus-match "gptel-tools-agent-benchmark")
@@ -151,7 +152,9 @@ This helps avoid wasted retry attempts on files that were already invalid."
          (if (fboundp 'gptel-auto-experiment--shell-command-to-string-timeboxed)
              (gptel-auto-experiment--shell-command-to-string-timeboxed
               "git diff --name-only HEAD 2>/dev/null")
-           (condition-case err (shell-command-to-string "git diff --name-only HEAD 2>/dev/null")))
+                       (condition-case nil
+                (shell-command-to-string "git diff --name-only HEAD 2>/dev/null")
+              (error nil)))
          "\n" t)))))
 
 (defun gptel-auto-experiment--validate-all-modified-files (worktree)
@@ -270,13 +273,13 @@ threshold %.2f — aborting experiment %d/%d for %s"
   (setq gptel-auto-workflow--current-target target)
   (let* ((worktree (gptel-auto-workflow-create-worktree target experiment-id))
          (experiment-worktree (or worktree default-directory))
-         (experiment-buffer (and worktree
-                                 (fboundp 'gptel-auto-workflow--get-worktree-buffer)
-                                 (ignore-errors
-                                   (gptel-auto-workflow--get-worktree-buffer
-                                    experiment-worktree))))
-          (experiment-branch (or (gptel-auto-workflow--get-current-branch target)
-                                 (gptel-auto-workflow--branch-name target experiment-id)))
+          (experiment-buffer (and worktree
+                                  (fboundp 'gptel-auto-workflow--get-worktree-buffer)
+                                  (ignore-errors
+                                    (gptel-auto-workflow--get-worktree-buffer
+                                     experiment-worktree))))
+           (experiment-branch (or (gptel-auto-workflow--get-current-branch target)
+                                  (gptel-auto-workflow--branch-name target experiment-id)))
           ;; Track target state before experiment (lightweight digital twin)
            (_target-state
             (when target
@@ -285,8 +288,9 @@ threshold %.2f — aborting experiment %d/%d for %s"
                                                             (gptel-auto-workflow--worktree-base-root)))
                      (byte-compiles (when (and (file-exists-p source)
                                                (file-exists-p byte-compile-script))
-                                     (zerop (condition-case err (call-process "bash" nil nil nil
-                                                          byte-compile-script source)))))
+                                      (zerop (condition-case nil (call-process "bash" nil nil nil
+                                                           byte-compile-script source)
+                                               (error nil)))))
                      (syntax-ok (when (file-exists-p source)
                                   (with-temp-buffer
                                     (ignore-errors (insert-file-contents source))
@@ -312,16 +316,16 @@ threshold %.2f — aborting experiment %d/%d for %s"
          ;; Capture the experiment timeout lexically because later analyzer
          ;; callbacks run after this outer let frame exits.
          (experiment-timeout gptel-auto-experiment-time-budget)
-          (run-id gptel-auto-workflow--run-id)
+           (run-id gptel-auto-workflow--run-id)
           (_workflow-root (gptel-auto-workflow--resolve-run-root))
           (raw-callback callback)
-          (result-callback-called nil)
+           (result-callback-called nil)
           ;; TSP-inspired: capture risk nodes in target file so outcomes can be
           ;; correlated with fine-grained risk-node types.
           (risk-nodes (when (and target (fboundp 'gptel-auto-workflow--risk-node-types-in-file))
                         (let ((source (expand-file-name target experiment-worktree)))
                           (gptel-auto-workflow--risk-node-types-in-file source))))
-          (callback (lambda (result)
+           (callback (lambda (result)
                       (let ((enriched (if risk-nodes
                                           (append result (list :risk-nodes risk-nodes))
                                         result)))
@@ -434,12 +438,22 @@ threshold %.2f — aborting experiment %d/%d for %s"
                                     "unknown")))
                           (if (stringp effective-model) effective-model
                             (format "%s" effective-model))))
-                (error
-                 (message "[auto-exp] Model capture failed: %s" (error-message-string err))
-                 (setq experiment-model
-                       (and (boundp 'gptel-model) gptel-model
-                            (symbol-name gptel-model)))))
-              ;; Layer 1 — Hard Block: Check action preconditions before execution
+                 (error
+                  (message "[auto-exp] Model capture failed: %s" (error-message-string err))
+                  (setq experiment-model
+                        (and (boundp 'gptel-model) gptel-model
+                             (symbol-name gptel-model)))))
+               ;; Gap 2: Sync context window from backend registry for prefix-cache tracking
+               (when (and experiment-backend experiment-model
+                          (fboundp 'gptel-prefix-cache-sync-from-backend))
+                 (condition-case err
+                     (let ((backend-sym (intern experiment-backend))
+                           (model-sym (intern experiment-model)))
+                       (gptel-prefix-cache-sync-from-backend backend-sym model-sym))
+                   (error
+                    (message "[prefix-cache] Context window sync failed: %s"
+                             (error-message-string err)))))
+               ;; Layer 1 — Hard Block: Check action preconditions before execution
               (let ((precondition-error
                      (when (fboundp 'gptel-auto-workflow--check-action-preconditions)
                        (gptel-auto-workflow--check-action-preconditions target))))

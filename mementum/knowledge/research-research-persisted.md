@@ -8,59 +8,54 @@ Synthesis verification:
 
 The user wants me to synthesize multiple research memory entries into a single knowledge page. Let me analyze what I have:
 
-1. Multiple "persisted-findings" research logs from 2026-06-02 through 2026-06-04
-2. All have 0% keep rate except one (2/56 = 4% and 3/9 = 33%)
-3. The research is about: AI agent workflows, Emacs Lisp AI integration, LLM self-evolution, prompt engineering, error recovery, benchmarking, knowledge systems
-4. Key patterns emerging across the research:
-   - gptel FSM pattern (pause/resume multi-stage requests)
-   - mementum three-tier storage (state.md/memories/knowledge)
-   - nucleus attention magnets, EBNF grammar, prompt debugger, safe-compile
-   - DSPy signature+module+optimizer pattern
-   - Reflexion verbal self-reflection
-   - Layered error defense (retry+jitter, classification, circuit breaker, fallback)
+1. Multiple research digests from 2026-05-22 to 2026-06-04
+2. Topics covered:
+   - gptel FSM pattern / state machine resume
+   - mementum three-tier storage
+   - nucleus attention magnets + prompt debugger
+   - DSPy signatures/modules/optimizers
+   - Reflexion self-reflection
+   - SE-Agent trajectory intervention
+   - GEPA reflective prompt evolution
+   - Layered error defense (retry+CB+fallback)
+   - gptel+mcp.el integration
+   - Multi-agent patterns (memGPT, A-MEM, Mem0)
    - MAST failure taxonomy
-   - gptel context branching
-   - Self-evolving agents (EvolveR, GEPA, HyperAgents)
-   - Three-tier watchdog (Witness/Deacon/Dogs)
-   - Think-in-code context reduction
+   - Durable execution / checkpointing
+   - KV cache for agentic pauses
+   - DNS-based memory discovery
+   - Logprob-based prompt validation
+   - Stageable request pause/resume
+   - Anti-sycophancy prompts
+   - Three-tier watchdog (gastown)
+   - Think-in-Code context reduction
    - DEGRADED state circuit breaker
-   - Hybrid search fusion
+   - Hybrid search (vector+BM25)
    - Self-wiring knowledge graph
-   - mcp.el hub pattern
-   - Durable execution/checkpointing
-   - Vtable/swappable architecture
-   - Tool receipts and workspace boundaries
-   - Local fallback for missing research daemon
-   - Research quality measured by downstream experiment success
+   - Three-loop meta-learning
+   - Self-rewriting meta-prompt loop
+   - Synchronous sidecar pattern
+   - Local fallback patterns (research pipeline defect)
+   - gptel-agent multi-agent pattern
+   - Trajectory-level intervention
 
-5. Key issues:
-   - 0% keep rate on most research
-   - Researcher daemon keeps failing
-   - Local fallback pattern when no research
-   - Need to preserve feedback loop with research hash
+The user wants:
+- Min 50 lines
+- Concrete examples (code, tables, commands)
+- Actionable patterns
+- Cross-references
+- Full markdown page inline
 
-Let me build a comprehensive knowledge page that synthesizes all of this. The topic is "research-research-persisted" - which seems to be about the persisted findings research process itself, with all the patterns discovered.
+Let me organize this into a knowledge page about "research-research-persisted" - the persisted findings strategy for the auto-workflow research system.
 
-I'll create a knowledge page that:
-1. Documents the research-persistence mechanism
-2. Captures the meta-patterns discovered across all research cycles
-3. Provides actionable patterns
-4. Cross-references related topics
-5. Has concrete examples (code, tables, commands)
+Key themes to organize:
+1. Overview of persisted-findings strategy
+2. Source taxonomy (own repos, external, fallback)
+3. Recurring patterns discovered
+4. Application patterns in Elisp
+5. Pipeline defect handling (local fallback)
+6. Confidence/budget framework
+7. Anti-patterns (what to skip)
+8. Cross-references
 
-The page needs to be at least 50 lines of content. Let me organize:
-
-- Frontmatter
-- Overview of the persisted-research mechanism
-- The Research Lifecycle (turn loop, controller decisions, EMA)
-- The Local Fallback Protocol
-- Patterns discovered across research cycles
-  - Own-repo patterns (nucleus, mementum, gptel)
-  - External patterns (DSPy, Reflexion, GEPA, etc.)
-  - Architecture patterns (FSM, three-tier memory, layered error defense)
-- Keep rate analysis
-- Actionable implementation patterns with code
-- The meta-lesson: research quality = downstream success
-- Related topics
-
-Let me write this comprehensively.
+Let me build a comprehensive page.
