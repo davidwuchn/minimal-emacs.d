@@ -97,14 +97,17 @@
 ### Result
 - `condition-case-unbound-err` issues: **167 → 0** (all were false positives from audit bugs)
 - `risk-node-resource` issues: **334 → 5** (remaining are helper function wrappers)
-- Test suite: **49/49 passing** (self-heal) + **5/5** (strategy DAG) + **13/13** (Pi5) + **11/11** (platform) + **37/37** (security)
+- Test suite: **51/51 passing** (self-heal) + **5/5** (strategy DAG) + **8/8** (brepl) + **13/13** (Pi5) + **11/11** (platform) + **37/37** (security)
 - Watchdog: Now detects frozen daemon in ≤ 90s instead of ≤ 20 min
 - Codebase: Clean, no unmerged files, no syntax errors
-- 3 commits pushed successfully
+- 6 commits pushed successfully
 
 ### New implementations (this session)
 1. **Batch anchoring** (MOSS insight): `gptel-auto-workflow--batch-anchor-audit-results` groups audit failures by type before evolution; `gptel-auto-workflow--batch-anchor-report` generates markdown for proposals; integrated into `self-heal-semantic-batch-anchor` entry point
 2. **Strategy DAG** (APEX insight): `gptel-auto-workflow--strategy-dag` hash table maps strategies → prerequisites; `gptel-auto-workflow--strategy-prerequisites-met-p` checks prerequisite success; `gptel-auto-workflow--strategy-filter-by-dag` filters available strategies; integrated into `--select-best-strategy`
+3. **brepl** (bracket-fixing REPL for Elisp): `gptel-ext-brepl.el` — daemon socket discovery, REPL eval via emacsclient, bracket validation, auto-evaluate on save, self-heal integration; 8 tests; OpenCode skill registered
+4. **Pre-commit hook hardened**: Merge conflict marker detection + false-positive warning filtering + byte-compile error checking
+5. **Remote sync**: Merged upstream changes, fixed all syntax errors from remote merge
 
 ---
 
