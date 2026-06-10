@@ -178,5 +178,60 @@ Inspired by PlanSearch: plan diversity predicts performance gains."
     ;; Partial overlap = medium diversity (0.3-0.7)
     (should (and (> diversity 0.3) (< diversity 0.7)))))
 
+;;; Plan-Level Search (PlanSearch arXiv:2409.03733)
+
+(ert-deftest test-loop/plan-search-generate-candidates-exists ()
+  "Plan-level search candidate generation should exist."
+  (should (fboundp 'gptel-auto-experiment--generate-candidate-hypotheses)))
+
+(ert-deftest test-loop/plan-search-select-diverse-exists ()
+  "Plan-level search selection should exist."
+  (should (fboundp 'gptel-auto-experiment--select-diverse-hypothesis)))
+
+(ert-deftest test-loop/plan-search-generates-multiple-candidates ()
+  "Should generate multiple candidate hypotheses."
+  (let ((candidates (gptel-auto-experiment--generate-candidate-hypotheses
+                     "lisp/modules/test.el" nil 5)))
+    ;; Should return a list of candidates
+    (should (listp candidates))
+    ;; Should have at least 1 candidate (may have up to 5)
+    (should (>= (length candidates) 1))
+    ;; Each candidate should have :hypothesis :source :diversity
+    (dolist (c candidates)
+      (should (plist-get c :hypothesis))
+      (should (plist-get c :source))
+      (should (numberp (plist-get c :diversity))))))
+
+(ert-deftest test-loop/plan-search-selects-diverse-hypothesis ()
+  "Should select a diverse hypothesis when available."
+  (let* ((previous-results
+          (list (list :hypothesis "Add nil guard before calling car"
+                      :target "lisp/modules/test.el"
+                      :kept nil)))
+         (selected (gptel-auto-experiment--select-diverse-hypothesis
+                    "lisp/modules/test.el" previous-results 0.3)))
+    ;; Should return a string (or nil if no diverse candidates)
+    (should (or (null selected) (stringp selected)))
+    ;; If selected, should be different from previous
+    (when selected
+      (should-not (string= selected "Add nil guard before calling car")))))
+
+(ert-deftest test-loop/plan-search-avoids-duplicates ()
+  "Should not select hypotheses already tested."
+  (let* ((previous-results
+          (list (list :hypothesis "Add nil guards before dangerous operations"
+                      :target "lisp/modules/test.el"
+                      :kept nil)
+                (list :hypothesis "Simplify complex conditional logic"
+                      :target "lisp/modules/test.el"
+                      :kept nil)))
+         (selected (gptel-auto-experiment--select-diverse-hypothesis
+                    "lisp/modules/test.el" previous-results 0.3)))
+    ;; Should not select exact duplicates
+    (when selected
+      (should-not (member selected
+                          '("Add nil guards before dangerous operations"
+                            "Simplify complex conditional logic"))))))
+
 (provide 'test-gptel-tools-agent-experiment-loop)
 ;;; test-gptel-tools-agent-experiment-loop.el ends here

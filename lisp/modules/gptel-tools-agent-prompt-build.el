@@ -61,6 +61,8 @@
 (declare-function gptel-auto-experiment--select-large-target-focus "gptel-tools-agent-prompt-analyze")
 (declare-function gptel-auto-experiment--target-byte-size "gptel-tools-agent-prompt-analyze")
 (declare-function gptel-auto-experiment--hypothesis-diversity "gptel-tools-agent-experiment-loop")
+(declare-function gptel-auto-experiment--select-diverse-hypothesis "gptel-tools-agent-experiment-loop")
+(declare-function gptel-auto-experiment--hypothesis-already-tested-p "gptel-tools-agent-experiment-loop")
 (declare-function gptel-auto-workflow--get-worktree-dir "gptel-tools-agent-subagent")
 ;;; gptel-tools-agent-prompt-build.el --- Prompt building - construction & logging -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
@@ -1549,7 +1551,12 @@ Implements section-level A/B testing to identify effective prompt components."
            (scores (gptel-auto-experiment--eight-keys-scores))
          (weakest-keys (when scores (gptel-auto-workflow--format-weakest-keys scores)))
          (mutation-templates (when skills (gptel-auto-workflow--extract-mutation-templates skills)))
-         (suggested-hypothesis (when skills (gptel-auto-workflow-skill-suggest-hypothesis skills)))
+         ;; Plan-level search: generate diverse candidates and select best
+         ;; Falls back to skill suggestion if plan search fails
+         (suggested-hypothesis
+          (or (when (fboundp 'gptel-auto-experiment--select-diverse-hypothesis)
+                (gptel-auto-experiment--select-diverse-hypothesis target previous-results))
+              (when skills (gptel-auto-workflow-skill-suggest-hypothesis skills))))
          (target-full-path (expand-file-name target worktree-path))
          (sexp-check-command
           (format

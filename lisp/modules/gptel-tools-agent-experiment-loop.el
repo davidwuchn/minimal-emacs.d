@@ -214,6 +214,100 @@ performance."
         ;; Return diversity (1 - similarity)
         (- 1.0 min-similarity)))))
 
+;;; Plan-Level Search (PlanSearch arXiv:2409.03733)
+
+(defun gptel-auto-experiment--generate-candidate-hypotheses (target previous-results &optional n-candidates)
+  "Generate N-CANDIDATES diverse hypothesis candidates for TARGET.
+Returns list of plists with :hypothesis :source :diversity.
+Sources: skill suggestions, mutation templates, previous successful hypotheses.
+N-CANDIDATES defaults to 5."
+  (let* ((n (or n-candidates 5))
+         (candidates nil)
+         (skill-hyp (when (fboundp 'gptel-auto-workflow-skill-suggest-hypothesis)
+                      (ignore-errors
+                        (gptel-auto-workflow-skill-suggest-hypothesis
+                         (when (fboundp 'gptel-auto-workflow-orient)
+                           (gptel-auto-workflow-orient))))))
+         (templates (when (fboundp 'gptel-auto-workflow--extract-mutation-templates)
+                      (ignore-errors
+                        (gptel-auto-workflow--extract-mutation-templates
+                         (when (fboundp 'gptel-auto-workflow-orient)
+                           (gptel-auto-workflow-orient))))))
+         ;; Get previous successful hypotheses for this target
+         (prev-success (cl-remove-if-not
+                        (lambda (r)
+                          (and (equal (plist-get r :target) target)
+                               (plist-get r :kept)))
+                        previous-results))
+         (prev-hypotheses (mapcar (lambda (r) (plist-get r :hypothesis))
+                                  (seq-take prev-success 3))))
+    ;; Collect candidates from different sources
+    (when (and skill-hyp (stringp skill-hyp) (> (length skill-hyp) 10))
+      (push (list :hypothesis skill-hyp :source "skill") candidates))
+    ;; Add mutation templates
+    (dolist (tmpl (seq-take (or templates nil) 2))
+      (when (and (stringp tmpl) (> (length tmpl) 10))
+        (push (list :hypothesis tmpl :source "template") candidates)))
+    ;; Add variations of previous successful hypotheses
+    (dolist (prev-hyp prev-hypotheses)
+      (when (and (stringp prev-hyp) (> (length prev-hyp) 10))
+        ;; Create variation by prepending "Improve: "
+        (let ((variation (format "Improve: %s" prev-hyp)))
+          (push (list :hypothesis variation :source "variation") candidates))))
+    ;; If we have fewer than N candidates, add generic ones
+    (when (< (length candidates) n)
+      (let ((generic-hyps
+             '("Add nil guards before dangerous operations"
+               "Simplify complex conditional logic"
+               "Extract repeated code into helper functions"
+               "Improve error messages for debugging"
+               "Add documentation for public functions")))
+        (dolist (hyp generic-hyps)
+          (when (< (length candidates) n)
+            (unless (cl-some (lambda (c) (string= (plist-get c :hypothesis) hyp))
+                             candidates)
+              (push (list :hypothesis hyp :source "generic") candidates))))))
+    ;; Compute diversity for each candidate
+    (setq candidates
+          (mapcar (lambda (c)
+                    (plist-put c :diversity
+                               (gptel-auto-experiment--hypothesis-diversity
+                                (plist-get c :hypothesis) previous-results)))
+                  candidates))
+    ;; Return top N by diversity
+    (seq-take (sort candidates (lambda (a b)
+                                 (> (plist-get a :diversity)
+                                    (plist-get b :diversity))))
+              n)))
+
+(defun gptel-auto-experiment--select-diverse-hypothesis (target previous-results &optional min-diversity)
+  "Select the most diverse hypothesis for TARGET.
+Returns hypothesis string or nil if no good candidates.
+MIN-DIVERSITY defaults to 0.3 (30% different from previous).
+Implements plan-level search from PlanSearch (arXiv:2409.03733)."
+  (let* ((min-div (or min-diversity 0.3))
+         (candidates (gptel-auto-experiment--generate-candidate-hypotheses
+                      target previous-results 5))
+         ;; Filter out duplicates (already tested)
+         (non-duplicates (cl-remove-if
+                          (lambda (c)
+                            (gptel-auto-experiment--hypothesis-already-tested-p
+                             (plist-get c :hypothesis) previous-results))
+                          candidates))
+         ;; Filter by minimum diversity
+         (diverse-enough (cl-remove-if
+                          (lambda (c) (< (plist-get c :diversity) min-div))
+                          non-duplicates)))
+    (when diverse-enough
+      (let* ((best (car diverse-enough))
+             (hyp (plist-get best :hypothesis))
+             (div (plist-get best :diversity))
+             (src (plist-get best :source)))
+        (message "[plan-search] Selected: %s (diversity=%.2f, source=%s)"
+                 (truncate-string-to-width hyp 50 nil nil "...")
+                 div src)
+        hyp))))
+
 (defvar gptel-auto-experiment-max-validation-retries 1
   "Maximum retries when validation fails due to teachable patterns.
 Executor will be instructed to load relevant skill and regenerate.")
