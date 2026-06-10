@@ -1347,6 +1347,9 @@ fetch('%s').then(r=>r.json()).then(data=>{
 label:l.type,title:l.confidence+'
 
 
+
+
+
 w='+l.weight,color:{color:l.confidence===\='EXTRACTED\='?'#4fc3f7':l.confidence===\='INFERRED\='?'#ffb74d':'#ef5350'}})));
   var container=document.getElementById(\='graph\=');
   new vis.Network(container,{nodes:nodes,edges:edges},{
