@@ -2162,12 +2162,19 @@ relationship tracking, and experiment-based edge evolution."
 
   (message "[evolution] Unified skill evolution complete"))
 
-(defun gptel-auto-workflow-evolution-run-cycle ()
+(defun gptel-auto-workflow-evolution-run-cycle (&optional timeout-seconds)
   "Run one full self-evolution cycle.
 Extract → Verify → Controller Evolution → Skill Evolution.
-Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
+Controller evolves from traces first so SKILL.md sees fresh strategy-guidance.
+Optional TIMEOUT-SECONDS limits cycle duration (default: 60).  Prevents the
+pipeline from hanging when a sub-function blocks indefinitely."
   (interactive)
   (cl-block gptel-auto-workflow-evolution-run-cycle
+  (with-timeout ((or timeout-seconds 60)
+                 (progn
+                   (message "[evolution] Cycle timed out after %ds — returning to pipeline"
+                            (or timeout-seconds 60))
+                   (cl-return-from gptel-auto-workflow-evolution-run-cycle "timeout")))
   (condition-case early-err
       (progn
   ;; Rebuild digital twin dependency graph
@@ -2736,7 +2743,7 @@ Controller evolves from traces first so SKILL.md sees fresh strategy-guidance."
             (list :metric "evolution-cycle" :value rate
                   :delta (- rate (or gptel-auto-workflow--champion-keep-rate 0))
                   :status (if (> rate 0) "keep" "skip")))))
-    (error nil)))
+     (error nil))))
 
  ;; ─── VSM Health Diagnostics (nucleus VSM pattern) ───
 
