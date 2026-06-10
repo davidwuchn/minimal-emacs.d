@@ -644,6 +644,7 @@ OV5's architecture is informed by five key research papers:
 | **APEX** (2605.21240) | Self-evolving agents suffer exploration collapse | Category saturation detection prevents collapse |
 | **RPG** (2509.16198) | Structured graphs > free-form NL for planning | Experiment dependency graph (planned) |
 | **AttnRes** (2603.15031) | Fixed-weight accumulation causes hidden-state dilution | Weighted experiment synthesis (planned) |
+| **OpenMythos** (RDT) | Looped transformers: recurrent depth, stability, adaptive compute | OV5 as recurrent system (6 gaps identified) |
 | **PlanSearch** (2409.03733) | Plan diversity directly predicts performance gains | Plan-level search with Jaccard similarity metric |
 
 **Knowledge pages**: `mementum/knowledge/self-evolving-agent-research.md`, `mementum/knowledge/research-planning-graph-plansearch-ov5-gaps.md`
