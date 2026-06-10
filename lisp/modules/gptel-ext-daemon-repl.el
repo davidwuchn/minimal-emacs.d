@@ -281,22 +281,47 @@ Only evaluates .el files in the project (not tests, not generated files)."
 
 (defun gptel-daemon-repl--after-save-eval ()
   "Evaluate current .el file via daemon-repl after saving.
-Installed in `after-save-hook'."
+Installed in `after-save-hook'.
+If eval fails, trigger targeted self-heal on FILE only, then re-evaluate.
+Log conversion units for audit trail."
   (when (gptel-daemon-repl--should-auto-eval-p)
-    (let ((file (buffer-file-name)))
+    (let ((file (buffer-file-name))
+          (max-retries 3)
+          (retries 0))
       (message "[daemon-repl] Auto-evaluating %s..." (file-name-nondirectory file))
-      (condition-case err
-          (gptel-daemon-repl-eval-file file)
-        (error
-         (message "[daemon-repl] ✗ Auto-eval failed for %s: %s"
-                  (file-name-nondirectory file)
-                  (error-message-string err))
-         ;; Trigger self-heal if available
-         (when (fboundp 'gptel-auto-workflow--self-heal-semantic)
-           (message "[daemon-repl] Triggering self-heal for %s" file)
-           (condition-case nil
-               (funcall 'gptel-auto-workflow--self-heal-semantic)
-             (error nil))))))))
+      (while (< retries max-retries)
+        (condition-case err
+            (progn
+              (gptel-daemon-repl-eval-file file)
+              ;; Success — exit retry loop
+              (setq retries max-retries))
+          (error
+           (message "[daemon-repl] ✗ Auto-eval failed for %s: %s"
+                    (file-name-nondirectory file)
+                    (error-message-string err))
+           (setq retries (1+ retries))
+           (if (< retries max-retries)
+               ;; Trigger targeted self-heal on this file only
+               (when (fboundp 'gptel-auto-workflow--self-heal-file)
+                 (message "[daemon-repl] Targeted self-heal for %s (attempt %d/%d)"
+                          (file-name-nondirectory file) retries (1- max-retries))
+                 (let ((heal-result (gptel-auto-workflow--self-heal-file file)))
+                   ;; Log conversion unit if fixes were applied
+                   (when (and (> (plist-get heal-result :auto-fixed) 0)
+                              (fboundp 'gptel-conversion-unit-add))
+                     (gptel-conversion-unit-add
+                      (format "daemon-repl-%s" (format-time-string "%Y%m%d%H%M%S"))
+                      'repair
+                      (list :file file
+                            :status 'eval-failed
+                            :error (error-message-string err)
+                            :attempt retries)
+                      (list :file file
+                            :status 'auto-fixed
+                            :fixes (plist-get heal-result :auto-fixed))))))
+              ;; Max retries reached
+              (message "[daemon-repl] ✗ Giving up on %s after %d attempts"
+                       (file-name-nondirectory file) max-retries))))))))
 
 (defun gptel-daemon-repl-install-save-hooks ()
   "Install before-save and after-save hooks for brepl."

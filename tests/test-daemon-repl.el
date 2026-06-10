@@ -227,5 +227,54 @@ validate-brackets succeeding for balanced code."
       (should (stringp (car s)))
       (should (stringp (cdr s))))))
 
+;; ── Targeted self-heal ──
+
+(ert-deftest test-daemon-repl/targeted-self-heal-file ()
+  "Targeted self-heal only audits/fixes the given file."
+  (skip-unless (fboundp 'gptel-auto-workflow--self-heal-file))
+  (let* ((test-dir (make-temp-file "daemon-repl-heal-" t))
+         (bad-file (expand-file-name "bad.el" test-dir))
+         (good-file (expand-file-name "good.el" test-dir)))
+    (unwind-protect
+        (progn
+          ;; bad.el has unbalanced parens
+          (with-temp-file bad-file
+            (insert "(defun foo () 42\n"))
+          ;; good.el is balanced
+          (with-temp-file good-file
+            (insert "(defun bar () 42)\n"))
+          ;; Run targeted self-heal on bad-file
+          (let ((result (gptel-auto-workflow--self-heal-file bad-file)))
+            ;; Should fix the file
+            (should (> (plist-get result :auto-fixed) 0))
+            ;; Should only audit one file
+            (should (= (plist-get result :files-checked) 1))))
+      (delete-directory test-dir t))))
+
+(ert-deftest test-daemon-repl/conversion-unit-logging ()
+  "When self-heal fixes a file via daemon-repl, a conversion unit is logged."
+  (skip-unless (fboundp 'gptel-auto-workflow--self-heal-file))
+  (skip-unless (fboundp 'gptel-conversion-unit-add))
+  (let* ((test-dir (make-temp-file "daemon-repl-conv-" t))
+         (bad-file (expand-file-name "bad.el" test-dir))
+         (gptel-conversion-unit-enabled t)
+         (gptel-conversion-unit-persist-dir test-dir))
+    (unwind-protect
+        (progn
+          (gptel-conversion-unit-clear)
+          ;; bad.el has unbalanced parens
+          (with-temp-file bad-file
+            (insert "(defun foo () 42\n"))
+          ;; Run targeted self-heal
+          (gptel-auto-workflow--self-heal-file bad-file)
+          ;; Check that a conversion unit was logged
+          (let ((units (gptel-conversion-unit-list)))
+            (should (> (length units) 0))
+            (let ((unit (car units)))
+              (should (equal (gptel-conversion-unit-conversion-type unit) 'repair))
+              (should (equal (plist-get (gptel-conversion-unit-before-state unit) :status) 'audit-failed))
+              (should (equal (plist-get (gptel-conversion-unit-after-state unit) :status) 'auto-fixed)))))
+      (delete-directory test-dir t))))
+
 (provide 'test-daemon-repl)
-;;; test-brepl.el ends here
+;;; test-daemon-repl.el ends here
