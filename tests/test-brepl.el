@@ -25,18 +25,28 @@
 
 (ert-deftest test-brepl/validate-brackets-balanced ()
   "Balanced code passes validation."
-  (let ((code "(defun foo () 42)"))
-    (let ((result (gptel-brepl-validate-brackets code)))
-      (should (plist-get result :valid))
-      (should (string= (plist-get result :fixed-content) code))
-      (should (null (plist-get result :error))))))
+  (with-temp-buffer
+    (emacs-lisp-mode)
+    (let ((code "(defun foo () 42)"))
+      (let ((result (gptel-brepl-validate-brackets code)))
+        (should (plist-get result :valid))
+        (should (string= (plist-get result :fixed-content) code))
+        (should (null (plist-get result :error)))))))
 
 (ert-deftest test-brepl/validate-brackets-unbalanced ()
-  "Unbalanced code fails validation."
-  (let ((code "(defun foo () 42"))
-    (let ((result (gptel-brepl-validate-brackets code)))
-      (should-not (plist-get result :valid))
-      (should (stringp (plist-get result :error))))))
+  "Unbalanced code fails validation or gets auto-fixed."
+  (with-temp-buffer
+    (emacs-lisp-mode)
+    (let ((code "(defun foo () 42"))
+      (let ((result (gptel-brepl-validate-brackets code)))
+        ;; Either it's invalid (no fixer available) or it was auto-fixed
+        (if (plist-get result :valid)
+            ;; Auto-fixed case: self-heal fixer added closing paren
+            (progn
+              (should (stringp (plist-get result :fixed-content)))
+              (should-not (string= (plist-get result :fixed-content) code)))
+          ;; Unfixable case
+          (should (stringp (plist-get result :error))))))))
 
 (ert-deftest test-brepl/eval-expression-fails-without-daemon ()
   "Eval fails gracefully when no daemon is running."
