@@ -3,7 +3,7 @@
 > **Bootstrapped**: 2026-06-06
 > **Session**: Audit Fix + Test Hardening
 > **Status**: ✅ **AUDIT FALSE POSITIVES FIXED** — condition-case-unbound-err audit now correctly identifies 0 issues (was 167 false positives)
-> **Latest**: Removed make-hash-table from risk-node audit (301 false positives); audit now tracks only temp-file leaks; all 47 tests pass
+> **Latest**: Strategy DAG + batch anchoring implemented (APEX + MOSS insights); 3 commits pushed; all tests green
 > **Active Plan**: None — codebase clean, tests green
 > **Pi5**: Running, self-healing working (grader crash → BLIND MODE → recovery)
 
@@ -30,7 +30,7 @@
 ### MOSS: Source-Level Self-Evolution (2605.22794)
 - **Key insight**: Source-level adaptation is Turing-complete — strict superset of text-mutable scope
 - **OV5 alignment**: Already does source-level evolution via self-heal-semantic + git worktrees
-- **Action item**: Formalize evolution pipeline as deterministic multi-stage with explicit ordering
+- **Action item**: ✅ **IMPLEMENTED** — Batch anchoring groups similar failures before evolution
 
 ### Sibyl-AutoResearch: Trial-and-Error Harnesses (2605.22343)
 - **Key insight**: Executable workflows don't produce research judgment; need explicit trial-to-behavior conversion
@@ -40,7 +40,7 @@
 ### APEX: Exploration Collapse (2605.21240)
 - **Key insight**: Self-evolving agents suffer from exploration collapse as memory grows
 - **OV5 alignment**: Category saturation detection prevents some collapse
-- **Action item**: Add explicit strategy DAG with prerequisite edges to ontology
+- **Action item**: ✅ **IMPLEMENTED** — Strategy DAG with prerequisite edges prevents complex strategies before building blocks validated
 
 **Knowledge page**: `mementum/knowledge/self-evolving-agent-research.md`
 **Memory**: `mementum/memories/insight-source-level-evolution-turing-complete.md`
@@ -97,9 +97,14 @@
 ### Result
 - `condition-case-unbound-err` issues: **167 → 0** (all were false positives from audit bugs)
 - `risk-node-resource` issues: **334 → 5** (remaining are helper function wrappers)
-- Test suite: **47/47 passing** (self-heal) + **13/13** (Pi5) + **11/11** (platform) + **37/37** (security)
+- Test suite: **49/49 passing** (self-heal) + **5/5** (strategy DAG) + **13/13** (Pi5) + **11/11** (platform) + **37/37** (security)
 - Watchdog: Now detects frozen daemon in ≤ 90s instead of ≤ 20 min
 - Codebase: Clean, no unmerged files, no syntax errors
+- 3 commits pushed successfully
+
+### New implementations (this session)
+1. **Batch anchoring** (MOSS insight): `gptel-auto-workflow--batch-anchor-audit-results` groups audit failures by type before evolution; `gptel-auto-workflow--batch-anchor-report` generates markdown for proposals; integrated into `self-heal-semantic-batch-anchor` entry point
+2. **Strategy DAG** (APEX insight): `gptel-auto-workflow--strategy-dag` hash table maps strategies → prerequisites; `gptel-auto-workflow--strategy-prerequisites-met-p` checks prerequisite success; `gptel-auto-workflow--strategy-filter-by-dag` filters available strategies; integrated into `--select-best-strategy`
 
 ---
 
@@ -107,10 +112,11 @@
 
 ### Immediate
 1. **Continue monitoring** — Let pipeline run, verify self-healing continues working
-2. **Research action items** — Implement explicit strategy DAG (APEX insight)
+2. **Sibyl action item** — Formalize ontology updates as auditable conversion units
 
 ### Near-Term
-3. **Batch anchoring** — Group similar failures before proposing fixes (MOSS insight)
+3. **Auto-fix remaining 10 audit issues** — 5 resource helpers + 1 API + 4 other
+4. **Implement batch anchoring in evolution loop** — Replace individual failure fixing with batch-curated evolution
 
 ---
 
