@@ -1,12 +1,13 @@
 # Mementum State
 
 > **Bootstrapped**: 2026-06-06
-> **Session**: Audit Fix + Test Hardening + Prefix Cache + Sibyl Conversion Units + Boundary Validator
-> **Status**: ✅ **ALL CLEAR** — condition-case-unbound-err audit clean, prefix-cache architecture live, Sibyl conversion units tracking ontology updates, boundary validator hardened
+> **Session**: Audit Fix + Test Hardening + Prefix Cache + Sibyl Conversion Units + Boundary Validator + TSP Risk Nodes
+> **Status**: ✅ **ALL CLEAR** — condition-case-unbound-err audit clean, prefix-cache architecture live, Sibyl conversion units tracking ontology updates, boundary validator hardened, TSP risk-node training pairs implemented
 > **Latest**: 
 >   - DeepSeek-Reasonix prefix-cache: 6 gaps implemented (Gaps 1-6), 32 tests passing
 >   - Sibyl auditable conversion units: Phases 1+2 complete, 11 tests passing, integrated into ontology evolution
 >   - Boundary validator: Hardened file path construction in 4 workflow modules (production, projects, beads, strategic)
+>   - TSP risk-node training pairs: 4 missing functions implemented, JSONL persistence, prompt integration
 >   - All commits pushed to GitHub; Pi5 sync ongoing
 > **Active Plan**: None — codebase clean, tests green
 > **Pi5**: Running, self-healing working (grader crash → BLIND MODE → recovery)
@@ -118,8 +119,9 @@
 - Test suite: **80 module-specific tests passing** (32 prefix-cache + 11 conversion-unit + 37 security)
 - Full suite: 51 self-heal + 5 strategy DAG + 8 brepl + 13 Pi5 + 11 platform + 37 security + 32 prefix-cache + 11 conversion-unit = **168 tests**
 - Watchdog: Now detects frozen daemon in ≤ 90s instead of ≤ 20 min
+- Risk-node training pairs: 4 missing functions implemented, JSONL persistence
 - Codebase: Clean, no unmerged files, no syntax errors
-- 8 commits pushed successfully
+- 9 commits pushed successfully
 
 ### New implementations (this session)
 1. **Batch anchoring** (MOSS insight): `gptel-auto-workflow--batch-anchor-audit-results` groups audit failures by type before evolution; `gptel-auto-workflow--batch-anchor-report` generates markdown for proposals; integrated into `self-heal-semantic-batch-anchor` entry point
@@ -129,6 +131,7 @@
 5. **Remote sync**: Merged upstream changes, fixed all syntax errors from remote merge
 6. **Prefix-cache architecture** (Reasonix): 610-line module with context state persistence, role caches, token budgeting, proactive compaction, relevance scoring. 32 tests.
 7. **Sibyl conversion units**: 415-line module with JSONL persistence, monthly rotation, orphan detection, TSV export. 11 tests. Integrated into ontology evolution.
+8. **TSP risk-node training pairs** (TSP insight): `gptel-auto-workflow--risk-node-types-in-file` analyzes files for risk patterns; `gptel-auto-workflow--risk-node-report-from-history` correlates risk nodes with experiment outcomes; `gptel-auto-workflow--update-risk-node-training-pair-outcomes` records pairs to JSONL; `gptel-auto-workflow--format-kept-risk-node-pairs` formats successful pairs for prompts.
 
 ---
 
@@ -138,10 +141,9 @@
 1. **Monitor 18:00 pipeline run** — Verify [prefix-cache], [conversion-unit] messages appear in daemon log
 
 ### Near-Term (Choose one)
-2. **TSP risk node enhancements** — Self-play tests and on-policy negative examples for risk-node training
-3. **Batch anchoring integration** — Wire batch-anchored evolution into main evolution loop (replace individual failure fixing)
-4. **Boundary validator Phase 2** — Integrate `with-workspace-boundary` macro into evolution module's 104 file operations
-5. **Prefix-cache Phase 3** — Cross-run statistics aggregation, compaction threshold auto-tuning
+2. **Batch anchoring integration** — Wire batch-anchored evolution into main evolution loop (replace individual failure fixing)
+3. **Boundary validator Phase 2** — Integrate `with-workspace-boundary` macro into evolution module's 104 file operations
+4. **Prefix-cache Phase 3** — Cross-run statistics aggregation, compaction threshold auto-tuning
 
 ---
 
