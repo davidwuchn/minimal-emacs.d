@@ -13,6 +13,7 @@ Project-specific agents and skills for Ouroboros V5 (OV5).
 - `run-pipeline` — Execute OV5 pipeline steps
 - `sync-mementum` — Sync mementum across machines
 - `ov5-status` — Check system health
+- `brepl` — Bracket-fixing REPL for Elisp (evaluate, validate, auto-eval)
 
 ## Global Agents Used
 

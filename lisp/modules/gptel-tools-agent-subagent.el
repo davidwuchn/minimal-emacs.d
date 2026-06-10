@@ -1090,7 +1090,9 @@ BRANCH should be the short local branch name, e.g. optimize/foo-exp1."
         (paths nil)
         (branch-ref (format "refs/heads/%s" branch)))
     (unwind-protect
-        (when (= 0 (condition-case err (call-process "git" nil buffer nil "worktree" "list" "--porcelain")))
+        (when (= 0 (condition-case nil
+                       (call-process "git" nil buffer nil "worktree" "list" "--porcelain")
+                     (error 1)))
           (with-current-buffer buffer
             (dolist (entry (split-string (buffer-string) "\n\n+" t))
               (when (string-match-p (format "^branch %s$" (regexp-quote branch-ref))
@@ -1112,7 +1114,8 @@ Each item is a plist with keys :branch and :path."
           (format "\\`optimize/.+-%s\\(?:-r[[:alnum:]]+\\)?-exp[0-9]+\\'"
                   (regexp-quote suffix))))
     (unwind-protect
-        (when (= 0 (condition-case err (call-process "git" nil buffer nil "worktree" "list" "--porcelain")))
+        (when (= 0 (condition-case nil (call-process "git" nil buffer nil "worktree" "list" "--porcelain")
+                     (error 1)))
           (with-current-buffer buffer
             (dolist (entry (split-string (buffer-string) "\n\n+" t))
               (let (path branch)
@@ -1137,10 +1140,11 @@ Each item is a plist with keys :branch and :path."
           (format "\\`optimize/.+-%s\\(?:-r[[:alnum:]]+\\)?-exp[0-9]+\\'"
                   (regexp-quote suffix))))
     (unwind-protect
-        (when (= 0 (condition-case err (call-process "git" nil buffer nil
+        (when (= 0 (condition-case nil (call-process "git" nil buffer nil
                                  "for-each-ref"
                                  "--format=%(refname:short)"
-                                 "refs/heads/optimize")))
+                                 "refs/heads/optimize")
+                     (error 1)))
           (with-current-buffer buffer
             (dolist (branch (split-string (buffer-string) "\n" t))
               (when (string-match-p branch-pattern branch)

@@ -767,10 +767,12 @@ Returns alist of (ENTITY . ((SYNONYM . SCORE) ...)) with SCORE >= THRESHOLD
                    (dolist (rel-file files)
                      (let ((abs (expand-file-name rel-file root)))
                        (when (file-exists-p abs)
-                         (let ((output (condition-case err (shell-command-to-string
-                                        (mapconcat #'shell-quote-argument
-                                                   (list git-embed "similar" abs "-n" "5")
-                                                   " ")))))
+                          (let ((output (condition-case nil
+                                            (shell-command-to-string
+                                             (mapconcat #'shell-quote-argument
+                                                        (list git-embed "similar" abs "-n" "5")
+                                                        " "))
+                                          (error nil))))
                            (dolist (line (split-string output "\n" t))
                              (when (string-match
                                     "^\\([0-9.]+\\)\\s-+\\(.+\\)$" line)
