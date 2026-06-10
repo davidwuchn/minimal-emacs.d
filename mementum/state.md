@@ -9,6 +9,7 @@
 >   - Boundary validator: Hardened file path construction in 4 workflow modules (production, projects, beads, strategic)
 >   - TSP risk-node training pairs: 4 missing functions implemented, JSONL persistence, prompt integration
 >   - Batch anchoring: Integrated into monitoring agent Phase 10, writes mementum/batch-anchor-report.md
+>   - Batch anchoring prompt integration: LLM prompts now include CURRENT FAILURE PATTERNS and PRIORITY FIX TYPE from batch reports
 >   - Boundary validator Phase 2: Fixed 6 default-directory fallbacks in evolution module, 2 condition-case syntax fixes
 >   - All commits pushed to GitHub; Pi5 sync ongoing
 > **Active Plan**: None — codebase clean, tests green
@@ -124,10 +125,10 @@
 - Watchdog: Now detects frozen daemon in ≤ 90s instead of ≤ 20 min
 - Risk-node training pairs: 4 missing functions implemented, JSONL persistence
 - Codebase: Clean, no unmerged files, no syntax errors
-- 11 commits pushed successfully
+- 12 commits pushed successfully
 
 ### New implementations (this session)
-1. **Batch anchoring** (MOSS insight): `gptel-auto-workflow--batch-anchor-audit-results` groups audit failures by type before evolution; `gptel-auto-workflow--batch-anchor-report` generates markdown for proposals; integrated into monitoring agent Phase 10 — writes `mementum/batch-anchor-report.md` after each cycle
+1. **Batch anchoring** (MOSS insight): `gptel-auto-workflow--batch-anchor-audit-results` groups audit failures by type before evolution; `gptel-auto-workflow--batch-anchor-report` generates markdown for proposals; integrated into monitoring agent Phase 10 — writes `mementum/batch-anchor-report.md` after each cycle; integrated into prompt builder so LLM sees CURRENT FAILURE PATTERNS and PRIORITY FIX TYPE
 2. **Strategy DAG** (APEX insight): `gptel-auto-workflow--strategy-dag` hash table maps strategies → prerequisites; `gptel-auto-workflow--strategy-prerequisites-met-p` checks prerequisite success; `gptel-auto-workflow--strategy-filter-by-dag` filters available strategies; integrated into `--select-best-strategy`
 3. **brepl** (bracket-fixing REPL for Elisp): `gptel-ext-brepl.el` — daemon socket discovery, REPL eval via emacsclient, bracket validation, auto-evaluate on save, self-heal integration; 8 tests; OpenCode skill registered
 4. **Pre-commit hook hardened**: Merge conflict marker detection + false-positive warning filtering + byte-compile error checking
@@ -146,8 +147,7 @@
 
 ### Near-Term (Choose one)
 2. **Prefix-cache Phase 3** — Cross-run statistics aggregation, compaction threshold auto-tuning
-3. **Evolution proposal from batch reports** — Read `mementum/batch-anchor-report.md` in evolution cycle to guide batch-curated evolution
-4. **External integrations** — Slack/Zendesk/DataDog (needs API keys)
+3. **External integrations** — Slack/Zendesk/DataDog (needs API keys)
 
 ---
 
