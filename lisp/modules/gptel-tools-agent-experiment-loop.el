@@ -308,6 +308,60 @@ Implements plan-level search from PlanSearch (arXiv:2409.03733)."
                  div src)
         hyp))))
 
+;;; Experiment Relevance Scoring (AttnRes arXiv:2603.15031)
+
+(defun gptel-auto-experiment--compute-relevance (target previous-experiment)
+  "Compute relevance score (0.0-1.0) for PREVIOUS-EXPERIMENT to TARGET.
+Uses Jaccard similarity on target path and hypothesis tokens.
+Inspired by AttnRes: selectively weight past experiments by content relevance,
+not just recency.  Replaces fixed-weight accumulation with learned attention.
+PREVIOUS-EXPERIMENT is a plist with :target and :hypothesis."
+  (let ((prev-target (plist-get previous-experiment :target))
+        (prev-hypothesis (plist-get previous-experiment :hypothesis)))
+    (if (or (not target) (not prev-target) (not (stringp prev-target))
+            (not (stringp prev-hypothesis)))
+        0.0
+      (let* ((target-tokens (gptel-auto-experiment--tokenize target))
+             (prev-target-tokens (gptel-auto-experiment--tokenize prev-target))
+             (hyp-tokens (gptel-auto-experiment--tokenize prev-hypothesis))
+             ;; Target similarity: how similar are the file paths?
+             (target-similarity (gptel-auto-experiment--jaccard
+                                 target-tokens prev-target-tokens))
+             ;; Hypothesis relevance: how relevant is the hypothesis to current target?
+             (hyp-relevance (gptel-auto-experiment--jaccard
+                             target-tokens hyp-tokens))
+             ;; Combined: 60% hypothesis relevance, 40% target similarity
+             (combined (+ (* 0.6 hyp-relevance) (* 0.4 target-similarity))))
+        combined))))
+
+(defun gptel-auto-experiment--jaccard (tokens1 tokens2)
+  "Compute Jaccard similarity between two token lists.
+Returns 0.0 (no overlap) to 1.0 (identical)."
+  (let ((t1 (delete-dups tokens1))
+        (t2 (delete-dups tokens2)))
+    (if (or (null t1) (null t2))
+        0.0
+      (let ((shared (cl-count-if (lambda (tkn) (member tkn t2)) t1))
+            (union (length (delete-dups (append t1 t2)))))
+        (if (> union 0) (/ (float shared) union) 0.0)))))
+
+(defun gptel-auto-experiment--tokenize (text)
+  "Tokenize TEXT into significant tokens (length >= 4, lowercase, alphanumeric)."
+  (let ((normalized (replace-regexp-in-string "[^a-zA-Z0-9./_-]" " " (downcase (or text "")))))
+    (cl-remove-if (lambda (tkn) (< (length tkn) 4))
+                  (split-string normalized "[ \t/_-]+" t))))
+
+(defun gptel-auto-experiment--rank-relevant-experiments (target previous-results &optional n)
+  "Return top N most relevant experiments for TARGET from PREVIOUS-RESULTS.
+Returns list of (RELEVANCE . EXPERIMENT-PLIST) sorted by relevance descending.
+N defaults to 10.  AttnRes-inspired: selective aggregation over experiment history."
+  (let* ((n (or n 10))
+         (scored (mapcar (lambda (exp)
+                           (cons (gptel-auto-experiment--compute-relevance target exp) exp))
+                         previous-results))
+         (relevant (cl-remove-if (lambda (pair) (< (car pair) 0.1)) scored)))
+    (seq-take (sort relevant (lambda (a b) (> (car a) (car b)))) n)))
+
 (defvar gptel-auto-experiment-max-validation-retries 1
   "Maximum retries when validation fails due to teachable patterns.
 Executor will be instructed to load relevant skill and regenerate.")

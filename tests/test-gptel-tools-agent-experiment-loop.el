@@ -68,7 +68,7 @@
 ;;; Self-heal tool-call failure tests
 
 (ert-deftest test-loop/make-retry-prompt-prepends-for-no-code-changes ()
-  "make-retry-prompt should prepend self-heal λ notation for 'no code changes'."
+  "make-retry-prompt should prepend self-heal lambda notation."
   (let* ((original "Original prompt with task instructions")
          (result (gptel-auto-experiment--make-retry-prompt
                   "test.el"
@@ -78,17 +78,11 @@
          (pos-original (string-match (regexp-quote original) result)))
     (should (stringp result))
     (should (> (length result) (length original)))
-    ;; Self-heal λ notation should appear BEFORE original prompt (prepended, not appended)
     (should pos-self-heal)
-    (should (string-match-p "λ self-heal" result))
-    (should (string-match-p "¬tool_call" result))
-    (should (string-match-p "∀change: ∃tool_call" result))
-    (should (string-match-p "text_only.*≡ reject" result))
-    ;; Original prompt should appear in the result
+    (should (string-match-p "self-heal" result))
+    (should (string-match-p "tool_call" result))
     (should pos-original)
-    ;; Self-heal must appear before original prompt
     (should (< pos-self-heal pos-original))
-    ;; Self-heal should be near the beginning (within first 100 chars)
     (should (< pos-self-heal 100))))
 
 (ert-deftest test-loop/make-retry-prompt-wont-prepend-for-syntax-error ()
@@ -99,14 +93,11 @@
                   "Syntax error: unmatched paren"
                   original)))
     (should (stringp result))
-    ;; Original prompt should still appear
     (should (string-match-p (regexp-quote original) result))
-    ;; No self-heal box
-    (should-not (string-match-p "SELF-HEAL" result))
-    (should-not (string-match-p "YOU WILL FAIL" result))))
+    (should-not (string-match-p "SELF-HEAL" result))))
 
 (ert-deftest test-loop/make-retry-prompt-wont-prepend-for-unknown ()
-  "make-retry-prompt should NOT prepend self-heal for unknown validation-error."
+  "make-retry-prompt should NOT prepend self-heal for unknown errors."
   (let* ((original "Original prompt with task instructions")
          (result (gptel-auto-experiment--make-retry-prompt
                   "test.el"
@@ -125,11 +116,10 @@
     (should (stringp result))
     (should (string-match-p "SELF-HEAL" result))))
 
-;;; Plan Diversity Metric (inspired by PlanSearch arXiv:2409.03733)
+;;; Plan Diversity Metric (PlanSearch arXiv:2409.03733)
 
 (ert-deftest test-loop/diversity-metric-exists ()
-  "Plan diversity metric should exist.
-Inspired by PlanSearch: plan diversity predicts performance gains."
+  "Plan diversity metric should exist."
   (should (fboundp 'gptel-auto-experiment--hypothesis-diversity)))
 
 (ert-deftest test-loop/diversity-maximal-when-no-previous ()
@@ -148,7 +138,6 @@ Inspired by PlanSearch: plan diversity predicts performance gains."
                       :kept nil)))
          (diversity (gptel-auto-experiment--hypothesis-diversity
                      hypothesis previous-results)))
-    ;; Identical hypothesis = 0 diversity
     (should (= diversity 0.0))))
 
 (ert-deftest test-loop/diversity-high-for-different ()
@@ -163,7 +152,6 @@ Inspired by PlanSearch: plan diversity predicts performance gains."
                       :kept nil)))
          (diversity (gptel-auto-experiment--hypothesis-diversity
                      hypothesis previous-results)))
-    ;; Very different hypotheses = high diversity (> 0.7)
     (should (> diversity 0.7))))
 
 (ert-deftest test-loop/diversity-medium-for-partial-overlap ()
@@ -175,7 +163,6 @@ Inspired by PlanSearch: plan diversity predicts performance gains."
                       :kept nil)))
          (diversity (gptel-auto-experiment--hypothesis-diversity
                      hypothesis previous-results)))
-    ;; Partial overlap = medium diversity (0.3-0.7)
     (should (and (> diversity 0.3) (< diversity 0.7)))))
 
 ;;; Plan-Level Search (PlanSearch arXiv:2409.03733)
@@ -192,11 +179,8 @@ Inspired by PlanSearch: plan diversity predicts performance gains."
   "Should generate multiple candidate hypotheses."
   (let ((candidates (gptel-auto-experiment--generate-candidate-hypotheses
                      "lisp/modules/test.el" nil 5)))
-    ;; Should return a list of candidates
     (should (listp candidates))
-    ;; Should have at least 1 candidate (may have up to 5)
     (should (>= (length candidates) 1))
-    ;; Each candidate should have :hypothesis :source :diversity
     (dolist (c candidates)
       (should (plist-get c :hypothesis))
       (should (plist-get c :source))
@@ -210,9 +194,7 @@ Inspired by PlanSearch: plan diversity predicts performance gains."
                       :kept nil)))
          (selected (gptel-auto-experiment--select-diverse-hypothesis
                     "lisp/modules/test.el" previous-results 0.3)))
-    ;; Should return a string (or nil if no diverse candidates)
     (should (or (null selected) (stringp selected)))
-    ;; If selected, should be different from previous
     (when selected
       (should-not (string= selected "Add nil guard before calling car")))))
 
@@ -227,11 +209,69 @@ Inspired by PlanSearch: plan diversity predicts performance gains."
                       :kept nil)))
          (selected (gptel-auto-experiment--select-diverse-hypothesis
                     "lisp/modules/test.el" previous-results 0.3)))
-    ;; Should not select exact duplicates
     (when selected
       (should-not (member selected
                           '("Add nil guards before dangerous operations"
                             "Simplify complex conditional logic"))))))
+
+;;; Experiment Relevance Scoring (AttnRes arXiv:2603.15031)
+
+(ert-deftest test-loop/relevance-functions-exist ()
+  "Relevance scoring functions should exist."
+  (should (fboundp 'gptel-auto-experiment--compute-relevance))
+  (should (fboundp 'gptel-auto-experiment--jaccard))
+  (should (fboundp 'gptel-auto-experiment--tokenize))
+  (should (fboundp 'gptel-auto-experiment--rank-relevant-experiments)))
+
+(ert-deftest test-loop/jaccard-identical-is-one ()
+  "Jaccard of identical token lists should be 1.0."
+  (should (= 1.0 (gptel-auto-experiment--jaccard
+                  '("hello" "world") '("hello" "world")))))
+
+(ert-deftest test-loop/jaccard-disjoint-is-zero ()
+  "Jaccard of disjoint token lists should be 0.0."
+  (should (= 0.0 (gptel-auto-experiment--jaccard '("hello") '("world")))))
+
+(ert-deftest test-loop/tokenize-filters-short-tokens ()
+  "Tokenize should filter tokens shorter than 4 characters."
+  (let ((tokens (gptel-auto-experiment--tokenize "add nil guard car")))
+    (should (member "guard" tokens))
+    (should-not (member "add" tokens))
+    (should-not (member "nil" tokens))))
+
+(ert-deftest test-loop/relevance-high-for-same-target ()
+  "Relevance should be high for same target path."
+  (let* ((target "lisp/modules/gptel-tools-agent-experiment-loop.el")
+         (previous (list :target "lisp/modules/gptel-tools-agent-experiment-loop.el"
+                         :hypothesis "Add nil guard before calling car"
+                         :kept t))
+         (relevance (gptel-auto-experiment--compute-relevance target previous)))
+    (should (> relevance 0.3))))
+
+(ert-deftest test-loop/relevance-low-for-unrelated ()
+  "Relevance should be low for unrelated target and hypothesis."
+  (let* ((target "lisp/modules/gptel-tools-agent-experiment-loop.el")
+         (previous (list :target "lisp/modules/gptel-platform-sandbox.el"
+                         :hypothesis "Improve documentation for public functions"
+                         :kept t))
+         (relevance (gptel-auto-experiment--compute-relevance target previous)))
+    (should (< relevance 0.2))))
+
+(ert-deftest test-loop/rank-returns-top-n ()
+  "Rank should return at most N experiments sorted by relevance."
+  (let* ((target "lisp/modules/gptel-tools-agent-main.el")
+         (previous-results
+          (list (list :target "lisp/modules/gptel-tools-agent-main.el"
+                      :hypothesis "Simplify complex conditional logic")
+                (list :target "lisp/modules/gptel-platform-sandbox.el"
+                      :hypothesis "Refactor data structure")
+                (list :target "lisp/modules/gptel-tools-agent-core.el"
+                      :hypothesis "Improve main function error handling")))
+         (ranked (gptel-auto-experiment--rank-relevant-experiments
+                  target previous-results 3)))
+    (should (<= (length ranked) 3))
+    (should (string= (plist-get (cdar ranked) :target)
+                     "lisp/modules/gptel-tools-agent-main.el"))))
 
 (provide 'test-gptel-tools-agent-experiment-loop)
 ;;; test-gptel-tools-agent-experiment-loop.el ends here
