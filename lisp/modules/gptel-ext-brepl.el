@@ -146,11 +146,10 @@ Returns plist:
             (insert file-content))
           ;; Try to byte-compile to check syntax
           (condition-case compile-err
-              (progn
+              (with-temp-buffer
                 (emacs-lisp-mode)
-                (with-temp-buffer
-                  (insert file-content)
-                  (check-parens))
+                (insert file-content)
+                (check-parens)
                 (list :valid t :fixed-content file-content :error nil))
             (error
              ;; Try auto-fix via self-heal-semantic if available
