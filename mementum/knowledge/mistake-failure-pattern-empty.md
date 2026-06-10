@@ -1,27 +1,47 @@
 <!--
 Synthesis verification:
-- Confidence: 12%
+- Confidence: 24%
 - Sources: 8 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-empty', Very short content (19 lines)
+- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-empty'
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize a set of memory entries about mistake/failure patterns into a comprehensive knowledge page. Let me analyze the data:
+The user wants me to synthesize multiple memory entries about an "empty-hypothesis" failure pattern into a knowledge page. Let me analyze the data:
 
-All entries share a common pattern: `empty-hypothesis` failure type. They target various files/components in a Lisp-based agentic system. The categories are split between `:programming` and `:agentic`, with very low keep-rates (0.0% to 2.2%).
+**Common Pattern:** All entries share the failure type "empty-hypothesis" but the targets are diverse:
+- staging-verification (5 occurrences, :programming)
+- staging-scope (4 occurrences, :programming)
+- staging-review (9 occurrences, :programming)
+- lisp/modules/gptel-tools-agent-experiment-core.el (4 occurrences, :agentic)
+- lisp/modules/gptel-tools-agent-benchmark.el (6 occurrences, :programming)
+- lisp/modules/gptel-auto-workflow-projects.el (5 occurrences, :agentic)
+- lisp/modules/gptel-auto-workflow-ontology-strategy.el (4 occurrences, :agentic)
+- lisp/modules/gptel-auto-workflow-ontology-router.el (3 occurrences, :agentic)
 
-Let me identify the key themes:
-1. **Empty hypothesis failures** - the pattern where the agent/system produces no actionable hypothesis
-2. Targets cluster in two areas:
-   - Staging operations (verification, scope, review)
-   - Lisp modules (gptel-auto-workflow-*, gptel-tools-agent-*)
-3. Categories: `:programming` and `:agentic` with near-zero keep rates
-4. Multiple occurrences (3-9 per target)
-5. Trending over June 2-8, 2026
+**Key observations:**
+- All have keep-rate of 0.0% or very low (2.0%, 2.2%)
+- "Example reasons: none" - this is a defining characteristic of "empty-hypothesis"
+- Occurrences range 3-9
+- Mix of :programming and :agentic categories
+- Targets include staging stages and Lisp modules
+- Trend timestamps span 2026-06-02 to 2026-06-10
 
-I need to write at least 50 lines of actual content with:
-- Concrete examples (code, tables, commands)
-- Actionable patterns
-- Cross-references
+**Synthesis approach:**
+- Create a comprehensive knowledge page
+- Explain what "empty-hypothesis" failure pattern is
+- Provide statistics table
+- Show concrete examples with the targets
+- Provide actionable diagnostic/fix patterns
+- Cross-reference related topics
 
-Let me build a comprehensive knowledge page.
+Let me build this out with at least 50 lines of content, including:
+1. Frontmatter
+2. Overview of the pattern
+3. Statistics table
+4. Failure anatomy (what makes a hypothesis "empty")
+5. Concrete examples per target
+6. Diagnostic patterns (how to detect)
+7. Remediation patterns (how to fix)
+8. Related topics
+
+Let me write this out properly with code examples and tables.
