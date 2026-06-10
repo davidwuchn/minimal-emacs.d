@@ -12,6 +12,7 @@
 
 (require 'cl-lib)
 (require 'subr-x)
+(require 'json)
 
 ;; ── Issue accumulator ──
 
@@ -491,8 +492,200 @@ Returns count of risk nodes found."
                   (gptel-auto-workflow--semantic-audit-record
                    file match-line
                    'risk-node-api
-                   (format "%s without %s — risk node" api-fn error-fn)))))))))
-    issues))
+                    (format "%s without %s — risk node" api-fn error-fn)))))))))
+     issues))
+
+;; ── Risk-node helpers (TSP-inspired training pairs) ──
+
+(defvar gptel-auto-workflow--risk-node-training-pairs-file
+  (expand-file-name "mementum/risk-node-training-pairs.jsonl"
+                    user-emacs-directory)
+  "JSONL file storing risk-node training pairs.")
+
+(defun gptel-auto-workflow--risk-node-types-in-file (file)
+  "Return list of risk node type symbols found in FILE.
+Types: risk-node-resource, risk-node-api.
+Returns nil if file doesn't exist or no risk nodes found."
+  (when (and file (file-exists-p file))
+    (let ((types nil))
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        (emacs-lisp-mode)
+        ;; Check for resource patterns
+        (dolist (pattern '(("make-temp-file" . "delete-file")
+                           ("make-temp-name" . "delete-file")))
+          (let ((resource-fn (car pattern)))
+            (goto-char (point-min))
+            (while (re-search-forward (format "(%s\\b" resource-fn) nil t)
+              (let* ((defun-start (save-excursion
+                                    (when (re-search-backward "^(defun\\b" nil t)
+                                      (point))))
+                     (defun-end (when defun-start
+                                  (save-excursion
+                                    (goto-char defun-start)
+                                    (ignore-errors (forward-sexp 1))
+                                    (point))))
+                     (has-cleanup nil))
+                (when (and defun-start defun-end)
+                  (save-excursion
+                    (goto-char defun-start)
+                    (when (or (re-search-forward "(delete-file\\b" defun-end t)
+                              (re-search-forward "(delete-directory\\b" defun-end t)
+                              (re-search-forward "(unwind-protect\\b" defun-end t))
+                      (setq has-cleanup t))))
+                (unless has-cleanup
+                  (cl-pushnew 'risk-node-resource types))))))
+        ;; Check for API patterns
+        (dolist (pattern '(("shell-command-to-string" . "condition-case")
+                           ("call-process" . "condition-case")
+                           ("url-retrieve-synchronously" . "condition-case")))
+          (let ((api-fn (car pattern))
+                (error-fn (cdr pattern)))
+            (goto-char (point-min))
+            (while (re-search-forward (format "(%s\\b" api-fn) nil t)
+              (let* ((defun-start (save-excursion
+                                    (when (re-search-backward "^(defun\\b" nil t)
+                                      (point))))
+                     (defun-end (when defun-start
+                                  (save-excursion
+                                    (goto-char defun-start)
+                                    (ignore-errors (forward-sexp 1))
+                                    (point))))
+                     (has-error-handling nil))
+                (when (and defun-start defun-end)
+                  (save-excursion
+                    (goto-char defun-start)
+                    (when (re-search-forward (format "(%s\\b" error-fn) defun-end t)
+                      (setq has-error-handling t))))
+                (unless has-error-handling
+                  (cl-pushnew 'risk-node-api types)))))))
+      types)))
+
+(defun gptel-auto-workflow--risk-node-report-from-history (results &optional modules-dir)
+  "Generate a markdown report correlating risk nodes with experiment outcomes.
+RESULTS is a list of plists from `gptel-auto-workflow--parse-all-results'.
+MODULES-DIR defaults to `lisp/modules' under the project root.
+Returns the report string."
+  (let* ((root (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                        (gptel-auto-workflow--worktree-base-root))
+                   user-emacs-directory))
+         (modules-dir (or modules-dir
+                          (expand-file-name "lisp/modules" root)))
+         (correlations (make-hash-table :test 'equal))
+         (total-with-risk 0)
+         (total-success 0)
+         (total-failure 0))
+    (dolist (r results)
+      (let* ((target (plist-get r :target))
+             (kept (plist-get r :kept))
+             (source (when target
+                       (expand-file-name (file-name-nondirectory target)
+                                         modules-dir)))
+             (risk-types (when (and source (file-exists-p source))
+                           (gptel-auto-workflow--risk-node-types-in-file source))))
+        (when risk-types
+          (cl-incf total-with-risk)
+          (if kept
+              (cl-incf total-success)
+            (cl-incf total-failure))
+          (dolist (type risk-types)
+            (let ((entry (gethash type correlations (list 0 0))))
+              (if kept
+                  (cl-incf (car entry))
+                (cl-incf (cadr entry)))
+              (puthash type entry correlations))))))
+    (with-temp-buffer
+      (insert "# Risk Node Correlation Report\n\n")
+      (insert (format "Generated: %s\n\n" (format-time-string "%Y-%m-%d %H:%M:%S")))
+      (insert (format "- Experiments with risk nodes: %d\n" total-with-risk))
+      (insert (format "- Successes: %d (%.1f%%)\n"
+                      total-success
+                      (if (> total-with-risk 0)
+                          (* 100.0 (/ total-success total-with-risk))
+                        0)))
+      (insert (format "- Failures: %d (%.1f%%)\n\n"
+                      total-failure
+                      (if (> total-with-risk 0)
+                          (* 100.0 (/ total-failure total-with-risk))
+                        0)))
+      (when (> (hash-table-count correlations) 0)
+        (insert "## By Risk Node Type\n\n")
+        (insert "| Type | Success | Failure | Success Rate |\n")
+        (insert "|------|---------|---------|-------------|\n")
+        (maphash (lambda (type counts)
+                   (let ((success (car counts))
+                         (failure (cadr counts))
+                         (total (+ (car counts) (cadr counts))))
+                     (insert (format "| %s | %d | %d | %.1f%% |\n"
+                                     type success failure
+                                     (if (> total 0)
+                                         (* 100.0 (/ success total))
+                                       0)))))
+                 correlations))
+      (buffer-string))))
+
+(defun gptel-auto-workflow--update-risk-node-training-pair-outcomes (results)
+  "Update training pair outcomes from enriched RESULTS.
+Each result plist should have :risk-nodes appended.
+Appends to `gptel-auto-workflow--risk-node-training-pairs-file'.
+Returns number of pairs recorded."
+  (let ((count 0)
+        (file gptel-auto-workflow--risk-node-training-pairs-file))
+    (make-directory (file-name-directory file) t)
+    (with-temp-buffer
+      (dolist (r results)
+        (let ((risk-nodes (plist-get r :risk-nodes))
+              (kept (plist-get r :kept))
+              (target (plist-get r :target))
+              (trial-id (plist-get r :trial-id)))
+          (when (and risk-nodes target)
+            (dolist (type risk-nodes)
+              (let ((pair `((type . ,type)
+                            (target . ,target)
+                            (outcome . ,(if kept 'success 'failure))
+                            (trial-id . ,(or trial-id "unknown"))
+                            (timestamp . ,(format-time-string "%Y-%m-%dT%H:%M:%S")))))
+                (insert (json-encode pair) "\n")
+                (cl-incf count))))))
+      (when (> count 0)
+        (write-region (point-min) (point-max) file 'append)))
+    (message "[risk-node-training] Recorded %d training pairs" count)
+    count))
+
+(defun gptel-auto-workflow--format-kept-risk-node-pairs (&optional max-pairs)
+  "Format kept (successful) risk-node training pairs for prompt inclusion.
+MAX-PAIRS limits how many to include (default 10).
+Returns a string suitable for insertion into prompts."
+  (let* ((file gptel-auto-workflow--risk-node-training-pairs-file)
+         (max-pairs (or max-pairs 10))
+         (pairs nil))
+    (when (file-exists-p file)
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        (while (not (eobp))
+          (let ((line (buffer-substring (line-beginning-position)
+                                        (line-end-position))))
+            (when (and (not (string-empty-p line))
+                       (string-prefix-p "{" line))
+              (condition-case nil
+                  (let* ((json-object-type 'plist)
+                         (pair (json-read-from-string line)))
+                    (when (eq (plist-get pair :outcome) 'success)
+                      (push pair pairs)))
+                (error nil))))
+          (forward-line 1))))
+    (if pairs
+        (let ((selected (cl-subseq pairs 0 (min max-pairs (length pairs)))))
+          (with-temp-buffer
+            (insert "## Successful Risk-Node Patterns (Learned)\n\n")
+            (dolist (p selected)
+              (insert (format "- %s in %s → success\n"
+                              (plist-get p :type)
+                              (plist-get p :target))))
+            (buffer-string)))
+      "")))
 
 ;; ── Auto-fixers (Layer 2+3: detect AND fix) ──
 
