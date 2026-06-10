@@ -1739,7 +1739,7 @@ treating as success"
                                      (when (fboundp 'gptel-token-economics--track-experiment)
                                        (gptel-token-economics--track-experiment exp-result))
                                      (funcall callback exp-result))))))))
-                   (funcall launch-executor)))))))))))
+                   (funcall launch-executor))))))))))
 
 
 (defconst gptel-auto-experiment--placeholder-hypothesis-exact-patterns

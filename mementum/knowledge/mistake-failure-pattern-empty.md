@@ -1,39 +1,29 @@
 <!--
 Synthesis verification:
-- Confidence: 24%
-- Sources: 8 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-empty'
+- Confidence: 40%
+- Sources: 10 memories
+- Warnings: No code examples or concrete references, Very short content (21 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize memories about a mistake/failure pattern called "empty-hypothesis" into a knowledge page. Let me analyze the data:
+The user wants me to synthesize multiple memory entries about a "mistake-failure-pattern-empty" topic into a comprehensive knowledge page. Let me analyze the memories:
 
-All memories share:
-- Failure type: empty-hypothesis
-- Various targets across :programming and :agentic categories
-- Keep-rates: mostly 0.0%, one at 2.2%
-- No example reasons provided
-- Various occurrence counts (3-9)
-- Trends showing recent dates in June 2026
+1. All entries are about "empty-hypothesis" failure type
+2. They target different things: staging-verification, staging-scope, staging-review, and various lisp modules
+3. Categories are mostly :programming (0.0% keep-rate) and :agentic (0.0-2.2% keep-rate)
+4. Occurrences range from 3-9
+5. All have "none" example reasons
+6. Detected between 2026-06-09 and 2026-06-10
 
-The targets break into:
-- Staging-related: staging-verification, staging-scope, staging-review
-- Lisp module files: gptel-tools-agent-experiment-core.el, gptel-tools-agent-benchmark.el, gptel-auto-workflow-projects.el, gptel-auto-workflow-ontology-strategy.el, gptel-auto-workflow-ontology-router.el
+The pattern: empty-hypothesis failures are systemic, occurring across multiple modules and staging-related targets. The keep-rates are very low (0-2.2%), suggesting these mistakes aren't producing useful learnings.
 
-I need to create a knowledge page with:
-1. Minimum 50 lines of actual content
-2. Concrete examples (code, tables, commands)
-3. Actionable patterns
-4. Cross-references to related topics
-5. Full markdown page inline
+Let me create a comprehensive knowledge page that:
+- Has frontmatter
+- Explains the pattern
+- Lists all affected targets
+- Provides actionable patterns for fixing
+- Has code examples where relevant
+- Cross-references related topics
+- Is at least 50 lines
 
-Let me structure this as a comprehensive knowledge page about the empty-hypothesis failure pattern, including:
-- Frontmatter
-- Overview/definition
-- Pattern analysis with tables
-- Affected targets breakdown
-- Root cause hypotheses (since reasons are empty)
-- Detection/mitigation patterns with code examples
-- Related topics
-
-Let me write this out fully.
+Let me write this out.

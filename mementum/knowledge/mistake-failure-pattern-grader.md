@@ -1,26 +1,26 @@
 <!--
 Synthesis verification:
-- Confidence: 40%
-- Sources: 6 memories
-- Warnings: No code examples or concrete references, Very short content (18 lines)
+- Confidence: 12%
+- Sources: 7 memories
+- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-grader', Very short content (18 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize memories about "mistake-failure-pattern-grader" into a knowledge page. Let me analyze the memories:
+The user wants me to synthesize multiple memory records about a "grader-bypass" failure pattern into a comprehensive knowledge page. Let me analyze the memories:
 
-1. All entries are dated 2026-06-09T08:52
-2. All have failure type "grader-bypass"
-3. Targets vary: staging-merge, and several lisp modules (gptel-tools-agent-benchmark.el, gptel-auto-workflow-strategic.el, gptel-auto-workflow-projects.el, gptel-auto-workflow-production.el, gptel-auto-workflow-ontology-strategy.el)
-4. Categories: :programming (0.0% keep-rate) and :agentic (4.3% keep-rate)
-5. Occurrences: 3-4 per target
-6. All detected by monitoring agent
-7. No example reasons provided
+1. All entries are tagged as "grader-bypass" failure type
+2. Categories: :programming (0.0% keep rate) and :agentic (2.0-4.3% keep rate)
+3. Targets include: staging-merge, lisp modules (gptel-tools-agent-experiment-core, gptel-tools-agent-benchmark, gptel-auto-workflow-strategic, gptel-auto-workflow-projects, gptel-auto-workflow-production, gptel-auto-workflow-ontology-strategy)
+4. Occurrences range from 3-5
+5. All show trend data showing progression over time
+6. The category keep-rates are extremely low, indicating these patterns are being discarded/avoided
 
-I need to create a knowledge page with:
+I need to create a comprehensive knowledge page with:
 - Frontmatter
 - At least 50 lines of content
 - Concrete examples
 - Actionable patterns
 - Cross-references
+- Tables where appropriate
 
-Let me build a comprehensive knowledge page about the grader-bypass failure pattern.
+Let me structure this as a proper knowledge page about the grader-bypass failure pattern.
