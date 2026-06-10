@@ -1,25 +1,41 @@
 <!--
 Synthesis verification:
-- Confidence: 40%
-- Sources: 16 memories
-- Warnings: No code examples or concrete references, Very short content (17 lines)
-- Auto-approved: yes (flagged)
+- Confidence: 80%
+- Sources: 14 memories
+- Warnings: No code examples or concrete references
+- Auto-approved: yes (passed)
 --->
 
-The user wants me to synthesize multiple memory entries about "insight-proposal-prompt-builder" into a comprehensive knowledge page. Let me analyze the patterns in the memories:
+The user wants me to synthesize multiple memory insights about "insight-proposal-prompt-builder" into a single knowledge page. Let me analyze the patterns in these memories:
 
-1. All entries are "Insight" records from auto-workflow monitoring
-2. They all relate to "prompt-builder" component
-3. They address either "empty-hypothesis failures" or "prompt failures"
-4. They target various modules in lisp/modules/ and staging environments
-5. They have varying confidence levels (0.60-0.80), validation rates, and impact percentages
-6. All have medium risk and tentative status
+1. All insights are about the `prompt-builder` component
+2. Most are "empty-hypothesis failures" in various staging pipelines and Lisp modules
+3. A few are "prompt failures" specifically
+4. The staging pipelines mentioned: staging-verification, staging-scope, staging-review
+5. The Lisp modules mentioned:
+   - gptel-tools-agent-runtime.el
+   - gptel-tools-agent-prompt-build.el
+   - gptel-tools-agent-experiment-core.el
+   - gptel-tools-agent-benchmark.el
+   - gptel-benchmark-principles.el
+   - gptel-auto-workflow-projects.el
+   - gptel-auto-workflow-production-metrics.el
+   - gptel-auto-workflow-production.el
+   - gptel-auto-workflow-ontology-strategy.el
+   - gptel-auto-workflow-ontology-router.el
+   - gptel-auto-workflow-mementum.el
+6. Confidence levels: 0.60, 0.70, 0.80
+7. Expected impact: 60%, 70%, 80% reduction
+8. Validation rates vary: 0.01 to 0.24
+9. All have medium risk and tentative status
 
-I need to create a knowledge page with:
+Let me organize this into a knowledge page with:
 - Frontmatter
-- Minimum 50 lines of content
-- Concrete examples (tables, code)
-- Actionable patterns
+- Overview/Summary
+- Failure patterns (empty-hypothesis vs prompt failures)
+- Affected modules categorized
+- Statistics table
+- Patterns and recommendations
 - Cross-references
 
-Let me structure this as a comprehensive knowledge page about these insight proposals targeting the prompt-builder component.
+Let me write this comprehensively with at least 50 lines of content, concrete examples, and actionable patterns.

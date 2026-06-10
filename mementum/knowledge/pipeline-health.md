@@ -19,4 +19,4 @@ Format: timestamp | diagnosis | remedy | before | after | effective?
 - 1781006364 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
 - 1781006363 | grader-destroying-experiments | grader-timeout=900 | 0% → -100% | PENDING
 - 1781005886 | restored-lesson | grader-destroying-experiments succeeded after 3 attempts | 0% → -100% | PENDING
-- 1781057351 | zero-experiment-run | target-selection-empty | — | — | pending
+- 1781057351 | zero-experiment-run | target-selection-empty | — | — | pending- 1781073006 | zero-experiment-run | target-selection-empty | — | — | pending

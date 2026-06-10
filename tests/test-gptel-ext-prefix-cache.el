@@ -202,5 +202,80 @@
         (should (null gptel-prefix-cache--content)))
     (test-prefix-cache--restore-state)))
 
+;;; Compaction Tests
+
+(ert-deftest test-prefix-cache-compact-dynamic ()
+  "Test dynamic prompt compaction with many previous results."
+  (let ((results
+         (list
+          (list :id 1 :hypothesis "fix nil guard" :score-before 0.5 :score-after 0.7 :kept t)
+          (list :id 2 :hypothesis "add error handling" :score-before 0.7 :score-after 0.6 :kept nil
+                :comparator-reason "score dropped")
+          (list :id 3 :hypothesis "refactor loop" :score-before 0.6 :score-after 0.8 :kept t)
+          (list :id 4 :hypothesis "optimize map" :score-before 0.8 :score-after 0.75 :kept nil
+                :comparator-reason "marginal improvement")
+          (list :id 5 :hypothesis "add tests" :score-before 0.75 :score-after 0.9 :kept t))))
+    (let ((compacted (gptel-prefix-cache-compact-dynamic "test prompt" results)))
+      ;; Should contain summary section
+      (should (string-match-p "Previous Experiment Summary" compacted))
+      ;; Should contain verbatim recent section
+      (should (string-match-p "Recent Experiments" compacted))
+      ;; Should still contain the original prompt
+      (should (string-match-p "test prompt" compacted)))))
+
+(ert-deftest test-prefix-cache-compact-dynamic-few-results ()
+  "Test that compaction is skipped with <=3 results."
+  (let ((results
+         (list
+          (list :id 1 :hypothesis "fix nil guard" :score-before 0.5 :score-after 0.7 :kept t)
+          (list :id 2 :hypothesis "add error handling" :score-before 0.7 :score-after 0.6 :kept nil))))
+    (let ((compacted (gptel-prefix-cache-compact-dynamic "test prompt" results)))
+      ;; Should return prompt unchanged
+      (should (string= compacted "test prompt")))))
+
+(ert-deftest test-prefix-cache-summarize-results ()
+  "Test result summarization."
+  (let ((results
+         (list
+          (list :id 1 :hypothesis "fix nil guard" :score-before 0.5 :score-after 0.7 :kept t)
+          (list :id 2 :hypothesis "add error handling" :score-before 0.7 :score-after 0.6 :kept nil
+                :comparator-reason "score dropped")
+          (list :id 3 :hypothesis "refactor loop" :score-before 0.6 :score-after 0.8 :kept t)
+          (list :id 4 :hypothesis "optimize map" :score-before 0.8 :score-after 0.75 :kept nil
+                :comparator-reason "score dropped"))))
+    (let ((summary (gptel-prefix-cache--summarize-results results)))
+      ;; Should contain counts
+      (should (string-match-p "Kept: 2" summary))
+      (should (string-match-p "Discarded: 2" summary))
+      ;; Should contain failure mode
+      (should (string-match-p "score dropped" summary))
+      ;; Should contain best hypothesis
+      (should (string-match-p "refactor loop" summary)))))
+
+(ert-deftest test-prefix-cache-compaction-on-run-start ()
+  "Test that compaction archive is cleared on run start."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (setq gptel-prefix-cache--compaction-archive '("old summary"))
+        (gptel-prefix-cache-on-run-start "run-1")
+        (should (null gptel-prefix-cache--compaction-archive)))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-sync-from-backend ()
+  "Test context window sync from backend registry."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (gptel-prefix-cache-invalidate)
+        ;; Test with a known backend/model
+        (when (fboundp 'gptel-backend-registry-context-window)
+          (gptel-prefix-cache-sync-from-backend 'DeepSeek 'deepseek-v4-pro)
+          (should (> gptel-prefix-cache--context-window-size 0))
+          ;; Should be 1M for DeepSeek
+          (should (or (= gptel-prefix-cache--context-window-size 1000000)
+                      (= gptel-prefix-cache--context-window-size 128000)))))
+    (test-prefix-cache--restore-state)))
+
 (provide 'test-gptel-ext-prefix-cache)
 ;;; test-gptel-ext-prefix-cache.el ends here

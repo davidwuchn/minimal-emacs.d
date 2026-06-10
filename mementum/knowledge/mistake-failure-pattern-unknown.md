@@ -1,25 +1,25 @@
 <!--
 Synthesis verification:
-- Confidence: 40%
+- Confidence: 12%
 - Sources: 4 memories
-- Warnings: No code examples or concrete references, Very short content (17 lines)
+- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-unknown', Very short content (17 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize the provided memories into a knowledge page about "mistake-failure-pattern-unknown". Let me analyze the memories:
+The user wants me to synthesize memories about a specific mistake/failure pattern into a knowledge page. The memories all share the same failure type ("unknown") and are related to gptel auto-workflow modules. Let me analyze:
 
-1. All 4 memories are about "Mistake" detection patterns
-2. All have "Failure type: unknown"
-3. Targets are all in `lisp/modules/` directory
-4. All are gptel-related Emacs Lisp modules
-5. Categories: :programming (0.0% keep-rate) and :agentic (2.0-4.3% keep-rate)
-6. Low keep-rates indicate these are problematic patterns
+- 4 memories about the same failure pattern
+- All "unknown" failure type
+- Targets: gptel-tools-agent-benchmark.el, gptel-auto-workflow-production-metrics.el, gptel-auto-workflow-ontology-strategy.el, gptel-auto-workflow-ontology-router.el
+- Categories: :programming (0.0% keep-rate), :agentic (varying 2.0-4.3% keep-rates)
+- Occurrences: 5, 6, 4, 3
+- Common pattern: lisp modules in gptel ecosystem, auto-workflow related
 
-Let me synthesize this into a comprehensive knowledge page with:
-- Frontmatter
-- Analysis of the pattern
-- Specific targets and their issues
-- Actionable patterns to address
-- Cross-references
+I need to:
+1. Create frontmatter
+2. Write 50+ lines of content
+3. Include concrete examples (code, tables, commands)
+4. Actionable patterns
+5. Cross-references
 
-I need to make this at least 50 lines of content, with concrete examples, actionable patterns, and cross-references.
+Let me build a comprehensive knowledge page.

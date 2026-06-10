@@ -1,26 +1,33 @@
 <!--
 Synthesis verification:
 - Confidence: 12%
-- Sources: 7 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-grader', Very short content (18 lines)
+- Sources: 6 memories
+- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-grader', Very short content (25 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize multiple memory records about a "grader-bypass" failure pattern into a comprehensive knowledge page. Let me analyze the memories:
+The user wants me to synthesize multiple memory entries about "grader-bypass" failures into a comprehensive knowledge page. Let me analyze the patterns:
 
-1. All entries are tagged as "grader-bypass" failure type
-2. Categories: :programming (0.0% keep rate) and :agentic (2.0-4.3% keep rate)
-3. Targets include: staging-merge, lisp modules (gptel-tools-agent-experiment-core, gptel-tools-agent-benchmark, gptel-auto-workflow-strategic, gptel-auto-workflow-projects, gptel-auto-workflow-production, gptel-auto-workflow-ontology-strategy)
-4. Occurrences range from 3-5
-5. All show trend data showing progression over time
-6. The category keep-rates are extremely low, indicating these patterns are being discarded/avoided
+1. All failures are type "grader-bypass"
+2. Targets span:
+   - `staging-merge` (programming, 0.0% keep-rate, 3 occurrences)
+   - `lisp/modules/gptel-tools-agent-benchmark.el` (programming, 0.0% keep-rate, 3 occurrences)
+   - `lisp/modules/gptel-auto-workflow-strategic.el` (agentic, 4.3% keep-rate, 3 occurrences)
+   - `lisp/modules/gptel-auto-workflow-projects.el` (agentic, 4.3% keep-rate, 3 occurrences)
+   - `lisp/modules/gptel-auto-workflow-production.el` (agentic, 4.3% keep-rate, 3 occurrences)
+   - `lisp/modules/gptel-auto-workflow-ontology-strategy.el` (agentic, 4.3% keep-rate, 4 occurrences)
 
-I need to create a comprehensive knowledge page with:
+3. All detected 2026-06-09T08:52
+4. Total occurrences across all targets: 3+3+3+3+3+4 = 19
+5. Categories: :programming (0.0% keep-rate - critical) and :agentic (4.3% keep-rate - also very low)
+6. The keep-rate is extremely low across the board, suggesting systemic failure
+
+Let me create a comprehensive knowledge page with:
 - Frontmatter
-- At least 50 lines of content
-- Concrete examples
-- Actionable patterns
+- Overview of the pattern
+- Tables of affected targets
+- Pattern analysis
+- Actionable patterns/mitigations
 - Cross-references
-- Tables where appropriate
 
-Let me structure this as a proper knowledge page about the grader-bypass failure pattern.
+I need at least 50 lines of content with concrete examples, tables, commands, etc.

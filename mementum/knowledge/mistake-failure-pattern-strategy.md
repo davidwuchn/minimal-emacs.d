@@ -2,33 +2,31 @@
 Synthesis verification:
 - Confidence: 12%
 - Sources: 30 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-strategy', Very short content (26 lines)
+- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-strategy', Very short content (24 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize a bunch of mistake/failure pattern memories into a knowledge page. Let me analyze the patterns:
+The user wants me to synthesize a series of mistake/failure pattern memories into a comprehensive knowledge page about strategy-type failures in an auto-workflow system. Let me analyze the data:
 
-1. All failures are categorized as "strategy" type
-2. They cluster into two main areas:
-   - Staging workflow failures (staging-verification, staging-scope, staging-review, staging-push, staging-merge, staging-config)
-   - Lisp module failures (various gptel-*.el and treesit-*.el files)
-3. Categories involved: :programming (keep-rate: 3.5%), :agentic (keep-rate: 4.3% and 1.4%)
-4. One notable: lisp/modules/gptel-auto-workflow-production.el has keep-rate: 1.4% (very low = high priority)
-5. lisp/modules/gptel-tools-agent-benchmark.el has keep-rate: 0.0% (highest priority!)
-6. Occurrences range from 3 to 18
-7. All have "Example reasons: none" - which is itself a meta-observation
+1. All entries are `failure type: strategy`
+2. Two main clusters:
+   - **Staging pipeline failures**: staging-verification, staging-scope, staging-review, staging-push, staging-merge, staging-config
+   - **Lisp module failures**: Many files under `lisp/modules/` related to gptel, agent, benchmark, auto-workflow systems
+3. Categories: `:programming` (keep-rate 3.5%), `:agentic` (keep-rate 1.4%-4.3%)
+4. Keep-rates are very low, indicating systemic issues
 
-Key patterns:
-- High-frequency failures: staging-review (18), staging-config (9), gptel-auto-workflow-production.el (9), treesit-agent-tools-workspace.el (8), gptel-auto-workflow-mementum.el (7), gptel-auto-workflow-evolution.el (7)
-- Low keep-rates = high priority
-- All from early June 2026
+I need to:
+- Create frontmatter
+- Provide 50+ lines of actual content
+- Include concrete examples (tables, commands, code)
+- Provide actionable patterns
+- Cross-reference related topics
 
-Let me build a comprehensive knowledge page with:
-- Frontmatter
-- Executive summary
-- Tables of failures sorted by priority/keep-rate
-- Pattern analysis by cluster
-- Actionable strategies
-- Related topics
+Let me build a comprehensive knowledge page that:
+- Identifies the pattern (strategy-type failures)
+- Categorizes the targets
+- Provides statistics
+- Offers actionable patterns for prevention
+- Includes cross-references
 
-Need to make it minimum 50 lines with concrete examples (code, tables, commands), actionable patterns, cross-references.
+Let me write this out fully.

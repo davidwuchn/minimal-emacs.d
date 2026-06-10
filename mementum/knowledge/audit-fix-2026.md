@@ -1,32 +1,27 @@
 <!--
 Synthesis verification:
-- Confidence: 12%
-- Sources: 22 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'audit-fix-2026', Very short content (24 lines)
+- Confidence: 40%
+- Sources: 24 memories
+- Warnings: No code examples or concrete references, Very short content (19 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize multiple memory entries about self-audit reports into a single knowledge page. All the memories are essentially the same self-audit report repeated at different timestamps, with two slightly different issue counts (37 vs 38). I need to:
+The user wants me to synthesize multiple self-audit report memories into a comprehensive knowledge page about the audit-fix-2026 topic. Let me analyze the patterns:
 
-1. Create a knowledge page with frontmatter
-2. Have minimum 50 lines of actual content
-3. Include concrete examples (code, tables, commands)
-4. Include actionable patterns
-5. Cross-reference related topics
-6. Return the full markdown inline
+1. All audits found 37-40 issues, mostly stable around 38
+2. Persistent issues: 8 cold backends, 29 unevaluated strategies
+3. One audit (2026-06-10T10:00:14) found 40 issues including 2 broken modules (byte-compile failures)
+4. Auto-resolver deployed (commit 95396bc1)
+5. Staging-merge bottleneck OK (0% failures)
+6. Three persistent action items: cold backend probing, exploration rate, source code review
 
-Let me analyze the data:
-- Issue count: 37 (June 8 early reports) → 38 (later reports)
-- 8 cold backends never used in 7d
-- 29 unevaluated strategies
-- Auto-resolver deployed at commit 95396bc1
-- 40% exploration rate noted as possibly too slow
-- YC note about self-evolve including META auditing
+I need to create:
+- Frontmatter with title, status, category, tags
+- Minimum 50 lines of content
+- Concrete examples (code, tables, commands)
+- Actionable patterns
+- Cross-references
 
-Let me build a comprehensive page covering:
-- Overview of the audit system
-- Issue inventory (backends, strategies, staging)
-- Timeline of audit reports
-- Action items and patterns
-- The META self-evolution principle
-- Related topics
+Let me structure this as a comprehensive knowledge page with sections for: overview, issue taxonomy, cold-start problem, strategy cold-start, byte-compile health, staging-merge, action items, historical trend table, audit report format spec, related topics.
+
+Let me make sure I include enough content and concrete examples.

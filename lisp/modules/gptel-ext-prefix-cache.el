@@ -339,6 +339,18 @@ Should be set from backend registry config.")
 Should be called when backend is selected."
   (setq gptel-prefix-cache--context-window-size tokens))
 
+(defun gptel-prefix-cache-sync-from-backend (backend model)
+  "Sync context window from BACKEND/MODEL registry.
+BACKEND is a symbol (e.g. 'DeepSeek), MODEL is a symbol (e.g. 'deepseek-v4-pro).
+Looks up context-window in `gptel-backend-registry' and sets it locally."
+  (when (and backend model
+             (fboundp 'gptel-backend-registry-context-window))
+    (let ((window (gptel-backend-registry-context-window backend model)))
+      (when window
+        (setq gptel-prefix-cache--context-window-size window)
+        (message "[prefix-cache] Context window set: %s/%s → %d tokens"
+                 backend model window)))))
+
 (defun gptel-prefix-cache-estimate-tokens (text)
   "Estimate token count for TEXT.
 Uses chars × tokens-per-char heuristic."
@@ -359,17 +371,108 @@ Returns plist: (:total :prefix :dynamic :ratio :compaction-needed-p)."
           :ratio ratio
           :compaction-needed-p (>= ratio gptel-prefix-cache--context-compact-ratio))))
 
+;; ─── Proactive Compaction (Gap 3) ───
+
+(defvar gptel-prefix-cache--compaction-archive nil
+  "List of compacted summaries from previous compactions.
+Each entry is a timestamped summary string.")
+
+(defun gptel-prefix-cache-compact-dynamic (dynamic-prompt previous-results)
+  "Compact DYNAMIC-PROMPT by summarizing older PREVIOUS-RESULTS.
+Keeps last 3 experiments verbatim; summarizes older ones into categories.
+Returns compacted prompt string."
+  (if (or (null previous-results)
+          (<= (length previous-results) 3))
+      dynamic-prompt
+    (let* ((recent (cl-subseq previous-results 0 3))
+           (older (nthcdr 3 previous-results))
+           (summary (gptel-prefix-cache--summarize-results older))
+            (compact-section
+             (concat "## Previous Experiment Summary (" (number-to-string (length older)) " compacted)\n"
+                     summary
+                     "\n\n## Recent Experiments (last 3, verbatim)\n"
+                     (gptel-prefix-cache--format-results recent)
+                     "\n\n"))
+           ;; Replace the previous results section in the dynamic prompt
+           (compacted
+            (if (string-match-p "## Previous Results" dynamic-prompt)
+                (replace-regexp-in-string
+                 "## Previous Results.*\(?:\n## \|\\'\)"
+                 (concat compact-section "\n")
+                 dynamic-prompt t t)
+              (concat compact-section dynamic-prompt))))
+      (message "[prefix-cache] Compacted %d older results into summary"
+               (length older))
+      compacted)))
+
+(defun gptel-prefix-cache--summarize-results (results)
+  "Summarize RESULTS into compact categories.
+Returns string with: kept count, common failure modes, best hypothesis."
+  (let ((kept 0)
+        (discarded 0)
+        (failures (make-hash-table :test 'equal))
+        (best-hypothesis nil)
+        (best-score 0.0))
+    (dolist (r results)
+      (if (plist-get r :kept)
+          (progn
+            (cl-incf kept)
+            (let ((score (or (plist-get r :score-after) 0.0)))
+              (when (> score best-score)
+                (setq best-score score
+                      best-hypothesis (plist-get r :hypothesis)))))
+        (cl-incf discarded)
+        (let ((reason (or (plist-get r :comparator-reason)
+                         (plist-get r :grader-reason)
+                         "unknown")))
+          (puthash reason (1+ (gethash reason failures 0)) failures))))
+    (concat
+     (format "- Kept: %d, Discarded: %d (%.0f%% keep rate)\n"
+             kept discarded
+             (if (> (+ kept discarded) 0)
+                 (* 100.0 (/ kept (float (+ kept discarded))))
+               0.0))
+     (when best-hypothesis
+       (format "- Best hypothesis: %.0f%% score → %s\n"
+               (* 100.0 best-score)
+               (truncate-string-to-width best-hypothesis 80 nil nil "...")))
+     (when (> (hash-table-count failures) 0)
+       (concat "- Common failure modes:\n"
+               (let ((lines nil))
+                 (maphash
+                  (lambda (reason count)
+                    (push (format "  - %s: %d×" reason count) lines))
+                  failures)
+                 (string-join (sort lines #'string<) "\n"))
+               "\n")))))
+
+(defun gptel-prefix-cache--format-results (results)
+  "Format RESULTS as compact bullet list."
+  (mapconcat
+   (lambda (r)
+     (format "- Exp %s: %s | Score %.2f→%.2f | %s"
+             (or (plist-get r :id) "?")
+             (truncate-string-to-width
+              (or (plist-get r :hypothesis) "no hypothesis") 50 nil nil "...")
+             (or (plist-get r :score-before) 0.0)
+             (or (plist-get r :score-after) 0.0)
+             (if (plist-get r :kept) "KEPT" "DISCARDED")))
+   results
+   "\n"))
+
 ;; ─── Run Lifecycle Hooks ───
 
 (defun gptel-prefix-cache-on-run-start (&optional run-id)
   "Hook to call when a new run starts.
 Computes prefix cache for RUN-ID."
+  (setq gptel-prefix-cache--compaction-archive nil)
   (gptel-prefix-cache-compute run-id t))
 
 (defun gptel-prefix-cache-on-run-end ()
   "Hook to call when run ends.
 Invalidates prefix cache."
-  (gptel-prefix-cache-invalidate))
+  (gptel-prefix-cache-invalidate)
+  (setq gptel-prefix-cache--compaction-archive nil))
 
 ;; ─── Provide ───
 

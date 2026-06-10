@@ -28,6 +28,7 @@
 (declare-function gptel-auto-workflow--truncate-hash "gptel-tools-agent-base")
 (declare-function gptel-auto-experiment--call-in-context "gptel-tools-agent-benchmark")
 (declare-function gptel-auto-experiment--code-quality-score "gptel-tools-agent-benchmark")
+(declare-function gptel-prefix-cache-sync-from-backend "gptel-ext-prefix-cache" (backend model))
 (declare-function gptel-benchmark--complexity-penalty "gptel-benchmark-subagent")
 (declare-function gptel-benchmark--calculate-complexity-before-after "gptel-benchmark-subagent")
 (declare-function gptel-auto-experiment--repeated-focus-match "gptel-tools-agent-benchmark")
@@ -434,12 +435,22 @@ threshold %.2f — aborting experiment %d/%d for %s"
                                     "unknown")))
                           (if (stringp effective-model) effective-model
                             (format "%s" effective-model))))
-                (error
-                 (message "[auto-exp] Model capture failed: %s" (error-message-string err))
-                 (setq experiment-model
-                       (and (boundp 'gptel-model) gptel-model
-                            (symbol-name gptel-model)))))
-              ;; Layer 1 — Hard Block: Check action preconditions before execution
+                 (error
+                  (message "[auto-exp] Model capture failed: %s" (error-message-string err))
+                  (setq experiment-model
+                        (and (boundp 'gptel-model) gptel-model
+                             (symbol-name gptel-model)))))
+               ;; Gap 2: Sync context window from backend registry for prefix-cache tracking
+               (when (and experiment-backend experiment-model
+                          (fboundp 'gptel-prefix-cache-sync-from-backend))
+                 (condition-case err
+                     (let ((backend-sym (intern experiment-backend))
+                           (model-sym (intern experiment-model)))
+                       (gptel-prefix-cache-sync-from-backend backend-sym model-sym))
+                   (error
+                    (message "[prefix-cache] Context window sync failed: %s"
+                             (error-message-string err)))))
+               ;; Layer 1 — Hard Block: Check action preconditions before execution
               (let ((precondition-error
                      (when (fboundp 'gptel-auto-workflow--check-action-preconditions)
                        (gptel-auto-workflow--check-action-preconditions target))))

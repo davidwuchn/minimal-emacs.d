@@ -2,17 +2,35 @@
 Synthesis verification:
 - Confidence: 40%
 - Sources: 7 memories
-- Warnings: No code examples or concrete references, Very short content (10 lines)
+- Warnings: No code examples or concrete references, Very short content (28 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize the provided memories about "mistake-failure-pattern-prompt" into a knowledge page. Let me analyze the patterns:
+The user wants me to synthesize multiple mistake/failure pattern memories into a knowledge page about the "mistake-failure-pattern-prompt" topic. Let me analyze the memories:
 
-1. All entries share the failure type "prompt"
-2. They target gptel-related Emacs Lisp modules
-3. They cluster into groups:
-   - gptel-tools modules (agent-prompt-build, agent-benchmark)
-   - gptel-benchmark modules (principles)
-   - gptel-auto-workflow modules (strategic, projects, ontology-router, evolution)
+1. All failures are of type "prompt"
+2. They all target files in `lisp/modules/gptel-*.el`
+3. They have varying occurrences (3-5)
+4. Some have categories like `:programming` (3.5% keep-rate) and `:agentic` (4.3% keep-rate)
+5. No example reasons are given
+6. They span different date ranges
 
-Let me create a comprehensive knowledge page that synthesizes these patterns, with concrete examples, actionable patterns, and cross-references. I need at least 50 lines of actual content.
+The pattern is clear: prompt failures in gptel module files, with a focus on:
+- `gptel-tools-agent-prompt-build.el` (4 occurrences)
+- `gptel-tools-agent-benchmark.el` (5 occurrences, programming category)
+- `gptel-benchmark-principles.el` (3 occurrences)
+- `gptel-auto-workflow-strategic.el` (3 occurrences, agentic category)
+- `gptel-auto-workflow-projects.el` (3 occurrences, agentic category)
+- `gptel-auto-workflow-ontology-router.el` (3 occurrences)
+- `gptel-auto-workflow-evolution.el` (3 occurrences)
+
+I'll create a comprehensive knowledge page that synthesizes this pattern. Let me build it with:
+- Frontmatter
+- Overview of the pattern
+- Affected targets table
+- Trend analysis
+- Common patterns
+- Actionable recommendations
+- Cross-references
+
+I need to make this 50+ lines, with concrete examples, actionable patterns, and cross-references.
