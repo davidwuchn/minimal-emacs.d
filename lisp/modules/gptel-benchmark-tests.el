@@ -55,7 +55,8 @@
 
 (ert-deftest gptel-benchmark-test-eight-keys-score ()
   "Test Eight Keys scoring."
-  (let* ((output "This approach builds on discoveries and adapts to new information. The goal is clear and measurable.")
+  (let* ((output "This approach builds on discoveries and adapts to new information. The goal is
+clear and measurable.")
          (scores (gptel-benchmark-eight-keys-score output)))
     (should (listp scores))
     (should (alist-get 'overall scores))
@@ -332,7 +333,8 @@
 
 (ert-deftest gptel-benchmark-test-skill-eight-keys-integration ()
   "Test that skill benchmark Eight Keys scoring works."
-  (let* ((output "This approach builds on discoveries and adapts to new information. The goal is clear and measurable.")
+  (let* ((output "This approach builds on discoveries and adapts to new information. The goal is
+clear and measurable.")
          (scores (gptel-benchmark-eight-keys-score output)))
     (should (alist-get 'overall scores))
     (should (> (alist-get 'overall scores) 0.0))))
