@@ -1,0 +1,117 @@
+;;; gptel-ext-brepl.el --- Clojure brepl REPL client (OV5) -*- lexical-binding: t; -*-
+
+;; Wraps the ~/.local/bin/brepl CLI (babashka-based nREPL client) for
+;; evaluating Clojure code, loading files, and fixing unbalanced brackets
+;; from within Emacs.  Follows the pattern of gptel-ext-daemon-repl.el:
+;; plist returns, call-process, [brepl] log prefix.
+
+(require 'cl-lib)
+(require 'subr-x)
+
+;;; Customization
+
+(defcustom gptel-brepl-binary "~/.local/bin/brepl"
+  "Path to the brepl CLI binary (babashka-based nREPL client)."
+  :type 'file
+  :group 'gptel)
+
+;;; ── nREPL Port Discovery ──
+
+(defun gptel-brepl--find-port-file (dir)
+  "Walk up from DIR looking for a .nrepl-port file.
+Returns the port number as a string, or nil if not found.
+NOTE: catch wraps let (not vice-versa) — Emacs 30 lexical-binding
+      compiler miscompiles throw-through-catch when let wraps catch."
+  (catch 'gptel-brepl--found
+    (let ((current (expand-file-name dir)))
+      (while current
+        (let ((port-file (expand-file-name ".nrepl-port" current)))
+          (when (file-readable-p port-file)
+            (with-temp-buffer
+              (insert-file-contents port-file)
+              (throw 'gptel-brepl--found (string-trim (buffer-string))))))
+        (let ((parent (file-name-directory (directory-file-name current))))
+          (if (string= parent current)
+              (setq current nil)
+            (setq current parent)))))))
+
+(defun gptel-brepl-nrepl-port ()
+  "Discover nREPL port from .nrepl-port file or BREPL_PORT env var.
+Returns the port number as a string, or nil if not discoverable."
+  (or (getenv "BREPL_PORT")
+      (gptel-brepl--find-port-file default-directory)))
+
+(defun gptel-brepl-available-p ()
+  "Return non-nil if brepl binary exists and nREPL port is discoverable."
+  (and (executable-find gptel-brepl-binary)
+       (gptel-brepl-nrepl-port)))
+
+;;; ── Internal: call-process wrapper ──
+
+(defun gptel-brepl--call (args)
+  "Run brepl synchronously with ARGS via `call-process'.
+Returns plist (:success t/nil :result string :error string).
+Log messages use prefix [brepl]."
+  (let ((binary (executable-find gptel-brepl-binary)))
+    (if (not binary)
+        (list :success nil :result nil
+              :error (format "[brepl] Binary not found: %s" gptel-brepl-binary))
+      (let ((stdout-buf (generate-new-buffer " *brepl-stdout*"))
+            (stderr-buf (generate-new-buffer " *brepl-stderr*")))
+        (unwind-protect
+            (condition-case err
+                (let ((exit-code (apply #'call-process
+                                        binary nil (list stdout-buf stderr-buf) nil args)))
+                  (let ((stdout (with-current-buffer stdout-buf (string-trim (buffer-string))))
+                        (stderr (with-current-buffer stderr-buf (string-trim (buffer-string)))))
+                    (message "[brepl] exit=%d args=%S" exit-code args)
+                    (if (= exit-code 0)
+                        (list :success t :result stdout
+                              :error (unless (string-empty-p stderr) stderr))
+                      (list :success nil :result stdout
+                            :error (if (string-empty-p stderr)
+                                       (format "[brepl] Exit code %d" exit-code)
+                                     stderr)))))
+              (error
+               (list :success nil :result nil
+                     :error (format "[brepl] call-process error: %s" (error-message-string err)))))
+          (kill-buffer stdout-buf)
+          (kill-buffer stderr-buf))))))
+
+;;; ── Public API ──
+
+(defun gptel-brepl-eval (expr)
+  "Evaluate Clojure expression EXPR via brepl.
+EXPR is a string of Clojure code.
+Returns plist (:success t/nil :result string :error string)."
+  (gptel-brepl--call (list expr)))
+
+(defun gptel-brepl-load-file (file)
+  "Load Clojure file FILE into the nREPL via \"brepl -f\".
+Returns plist (:success t/nil :result string :error string)."
+  (gptel-brepl--call (list "-f" (expand-file-name file))))
+
+(defun gptel-brepl-balance (file &optional dry-run)
+  "Fix unbalanced brackets in FILE via \"brepl balance\".
+When DRY-RUN is non-nil, preview changes to stdout instead of
+modifying the file in place.
+Returns plist (:success t/nil :output string :error string).
+Note: uses :output key (not :result) to distinguish from eval results."
+  (let* ((args (append '("balance")
+                       (when dry-run '("--dry-run"))
+                       (list (expand-file-name file))))
+         (result (gptel-brepl--call args)))
+    (list :success (plist-get result :success)
+          :output (plist-get result :result)
+          :error (plist-get result :error))))
+
+(defun gptel-brepl-status ()
+  "Return brepl status as a plist.
+Keys: :binary, :binary-exists, :port, :available."
+  (list :binary gptel-brepl-binary
+        :binary-exists (and (executable-find gptel-brepl-binary) t)
+        :port (gptel-brepl-nrepl-port)
+        :available (gptel-brepl-available-p)))
+
+(provide 'gptel-ext-brepl)
+;;; gptel-ext-brepl.el ends here
