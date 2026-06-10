@@ -28,6 +28,11 @@ consumed by evolution cycle.")
 (defvar gptel-auto-workflow--current-validation-retry-active-grace nil)
 (defvar gptel-auto-experiment-delay-between nil)
 (defvar gptel-auto-experiment-auto-push nil)
+
+;; Forward declarations for prefix-cache role separation (Gap 4)
+(declare-function gptel-prefix-cache-prepend-for-role "gptel-ext-prefix-cache" (role dynamic-prompt))
+(declare-function gptel-prefix-cache-compute-for-role "gptel-ext-prefix-cache" (role &optional run-id force-recompute))
+(declare-function gptel-prefix-cache-role-aware "gptel-ext-prefix-cache")
 (defvar gptel-auto-workflow--run-id nil)
 ;; Forward declarations for functions from other modules
 (declare-function gptel-agent-update "gptel-agent-tools")
@@ -180,6 +185,15 @@ agent types (analyzer/executor/grader/comparator)."
     (let ((mode-ctx (gptel-ai-behaviors--format-pipeline-context agent-type)))
       (when mode-ctx
         (setq prompt (concat mode-ctx "\n" prompt))))
+    ;; Gap 4: Session separation — prepend role-specific stable prefix
+    (when (and (fboundp 'gptel-prefix-cache-prepend-for-role)
+               (fboundp 'gptel-prefix-cache-role-aware)
+               gptel-prefix-cache-role-aware)
+      (let ((role-prefix (gptel-prefix-cache-compute-for-role agent-type)))
+        (when role-prefix
+          (setq prompt (concat role-prefix prompt))
+          (message "[prefix-cache] %s prompt: %d chars (role-aware)"
+                   agent-type (length prompt)))))
     ;; Check HARD CONSTRAINTS before dispatch — block if violated
     (when (fboundp 'gptel-ai-behaviors--check-subagent-preconditions)
       (let ((violation (gptel-ai-behaviors--check-subagent-preconditions agent-type prompt)))

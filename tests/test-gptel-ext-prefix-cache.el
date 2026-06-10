@@ -277,5 +277,96 @@
                       (= gptel-prefix-cache--context-window-size 128000)))))
     (test-prefix-cache--restore-state)))
 
+;;; Session Separation Tests (Gap 4)
+
+(ert-deftest test-prefix-cache-role-compute ()
+  "Test per-role prefix cache computation."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (gptel-prefix-cache-invalidate)
+        (gptel-prefix-cache-compute "role-test-run")
+        ;; Compute executor prefix
+        (let ((executor-prefix (gptel-prefix-cache-compute-for-role 'executor)))
+          (should (stringp executor-prefix))
+          (should (> (length executor-prefix) 0))
+          ;; Should contain role-specific context
+          (should (string-match-p "Role: EXECUTOR" executor-prefix)))
+        ;; Compute grader prefix
+        (let ((grader-prefix (gptel-prefix-cache-compute-for-role 'grader)))
+          (should (stringp grader-prefix))
+          (should (> (length grader-prefix) 0))
+          (should (string-match-p "Role: GRADER" grader-prefix)))
+        ;; Should be cached
+        (should (gptel-prefix-cache-role-get 'executor))
+        (should (gptel-prefix-cache-role-get 'grader)))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-role-isolation ()
+  "Test that role caches are isolated from each other."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (gptel-prefix-cache-invalidate)
+        (gptel-prefix-cache-compute "isolation-run")
+        (let* ((exec-prefix (gptel-prefix-cache-compute-for-role 'executor))
+               (grad-prefix (gptel-prefix-cache-compute-for-role 'grader)))
+          ;; Different roles should have different prefixes
+          (should (not (string= exec-prefix grad-prefix)))
+          ;; Both should contain base content
+          (should (string-match-p "STABLE PREFIX" exec-prefix))
+          (should (string-match-p "STABLE PREFIX" grad-prefix))))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-role-invalidate ()
+  "Test role cache invalidation."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (gptel-prefix-cache-invalidate)
+        (gptel-prefix-cache-compute "invalidate-run")
+        (gptel-prefix-cache-compute-for-role 'executor)
+        (gptel-prefix-cache-compute-for-role 'grader)
+        ;; Both should exist
+        (should (gptel-prefix-cache-role-get 'executor))
+        (should (gptel-prefix-cache-role-get 'grader))
+        ;; Invalidate one
+        (gptel-prefix-cache-role-invalidate 'executor)
+        (should (not (gptel-prefix-cache-role-get 'executor)))
+        (should (gptel-prefix-cache-role-get 'grader))
+        ;; Invalidate all
+        (gptel-prefix-cache-role-invalidate t)
+        (should (not (gptel-prefix-cache-role-get 'grader))))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-role-prepend ()
+  "Test role-aware prompt prepending."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (let ((gptel-prefix-cache-role-aware t)
+            (dynamic "Fix the nil guard in this function."))
+        (gptel-prefix-cache-invalidate)
+        (gptel-prefix-cache-compute "prepend-run")
+        (let ((result (gptel-prefix-cache-prepend-for-role 'executor dynamic)))
+          ;; Should contain role prefix + dynamic content
+          (should (string-match-p "Role: EXECUTOR" result))
+          (should (string-match-p "Fix the nil guard" result))))
+    (test-prefix-cache--restore-state)))
+
+(ert-deftest test-prefix-cache-role-stats ()
+  "Test role cache statistics."
+  (test-prefix-cache--save-state)
+  (unwind-protect
+      (progn
+        (gptel-prefix-cache-invalidate)
+        (gptel-prefix-cache-compute "stats-run")
+        (gptel-prefix-cache-compute-for-role 'executor)
+        (gptel-prefix-cache-compute-for-role 'grader)
+        (let ((stats (gptel-prefix-cache-role-stats)))
+          (should (string-match-p "executor" stats))
+          (should (string-match-p "grader" stats))
+          (should (string-match-p "chars" stats))))
+    (test-prefix-cache--restore-state)))
+
 (provide 'test-gptel-ext-prefix-cache)
 ;;; test-gptel-ext-prefix-cache.el ends here

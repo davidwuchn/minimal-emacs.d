@@ -474,6 +474,134 @@ Invalidates prefix cache."
   (gptel-prefix-cache-invalidate)
   (setq gptel-prefix-cache--compaction-archive nil))
 
+;; ─── Session Separation (Gap 4) ───
+
+(defvar gptel-prefix-cache--role-caches (make-hash-table :test 'equal)
+  "Hash table mapping role names to their prefix caches.
+Keys are role symbols: 'executor, 'grader, 'reviewer, 'comparator.
+Values are plists: (:content :valid-p :run-id :timestamp :stats).")
+
+(defcustom gptel-prefix-cache-role-aware t
+  "When non-nil, use per-role prefix caches for subagent isolation.
+Each subagent role (executor, grader, reviewer) gets its own stable prefix,
+preventing cross-contamination between roles."
+  :type 'boolean
+  :group 'gptel-tools-agent)
+
+(defvar gptel-prefix-cache--default-roles
+  '(executor grader reviewer comparator)
+  "List of subagent roles that get isolated prefix caches.")
+
+(defun gptel-prefix-cache-role-get (role)
+  "Get cached prefix for ROLE (symbol). Returns content string or nil."
+  (when role
+    (let ((entry (gethash role gptel-prefix-cache--role-caches)))
+      (when entry
+        (let ((content (plist-get entry :content))
+              (run-id (plist-get entry :run-id))
+              (valid-p (plist-get entry :valid-p)))
+          (when (and valid-p content
+                     (equal run-id gptel-prefix-cache--run-id))
+            content))))))
+
+(defun gptel-prefix-cache-role-set (role content)
+  "Set cached prefix CONTENT for ROLE."
+  (when role
+    (puthash role
+             (list :content content
+                   :valid-p t
+                   :run-id gptel-prefix-cache--run-id
+                   :timestamp (current-time)
+                   :stats (list :size (length content)))
+             gptel-prefix-cache--role-caches)))
+
+(defun gptel-prefix-cache-role-invalidate (role)
+  "Invalidate cache for ROLE, or all roles if ROLE is t."
+  (if (eq role t)
+      (clrhash gptel-prefix-cache--role-caches)
+    (remhash role gptel-prefix-cache--role-caches)))
+
+(defun gptel-prefix-cache--role-context (role)
+  "Return role-specific context string for ROLE.
+Each role gets tailored instructions that don't leak between sessions."
+  (pcase role
+    ('executor
+     (concat "## Role: EXECUTOR\n"
+             "You make concrete code improvements.\n"
+             "- Read target file, understand the hypothesis\n"
+             "- Make minimal, focused edits\n"
+             "- Verify changes compile and tests pass\n"
+             "- Output: edited code + summary of changes\n\n"))
+    ('grader
+     (concat "## Role: GRADER\n"
+             "You evaluate code changes objectively.\n"
+             "- Score 0.0-1.0 on structure, correctness, safety\n"
+             "- Check Eight Keys compliance\n"
+             "- Identify specific issues with file:line references\n"
+             "- Output: score + detailed feedback\n\n"))
+    ('reviewer
+     (concat "## Role: REVIEWER\n"
+             "You review changes for merge readiness.\n"
+             "- Verify tests pass, no regressions\n"
+             "- Check style and convention compliance\n"
+             "- Assess risk: safe / needs-more-testing / reject\n"
+             "- Output: approval decision + rationale\n\n"))
+    ('comparator
+     (concat "## Role: COMPARATOR\n"
+             "You decide keep vs discard.\n"
+             "- Compare before/after scores and quality\n"
+             "- Check for regressions or new issues\n"
+             "- Decision: kept / discarded + reason\n"
+             "- Output: decision + justification\n\n"))
+    (_ "")))
+
+(defun gptel-prefix-cache-compute-for-role (role &optional run-id force-recompute)
+  "Compute prefix cache for specific ROLE.
+If FORCE-RECOMPUTE is non-nil, invalidate existing cache first.
+Returns the computed prefix string for this role."
+  (when force-recompute
+    (gptel-prefix-cache-role-invalidate role))
+  (or (gptel-prefix-cache-role-get role)
+      (let* ((base-prefix (gptel-prefix-cache-compute run-id))
+             (role-context (gptel-prefix-cache--role-context role))
+             (role-prefix (concat base-prefix role-context)))
+        (gptel-prefix-cache-role-set role role-prefix)
+        (message "[prefix-cache] Computed %s prefix: %d chars"
+                 role (length role-prefix))
+        role-prefix)))
+
+(defun gptel-prefix-cache-prepend-for-role (role dynamic-prompt)
+  "Prepend role-specific stable prefix to DYNAMIC-PROMPT.
+If role cache is disabled or empty, falls back to global prefix."
+  (if (or (not gptel-prefix-cache-role-aware)
+          (not role))
+      (gptel-prefix-cache-prepend dynamic-prompt)
+    (let ((role-prefix (gptel-prefix-cache-role-get role)))
+      (if (and role-prefix (not (string-empty-p role-prefix)))
+          (concat role-prefix dynamic-prompt)
+        ;; Fallback: compute on demand
+        (let ((computed (gptel-prefix-cache-compute-for-role role)))
+          (if computed
+              (concat computed dynamic-prompt)
+            dynamic-prompt))))))
+
+(defun gptel-prefix-cache-role-stats ()
+  "Return statistics for all role caches as human-readable string."
+  (let ((lines nil))
+    (maphash
+     (lambda (role entry)
+       (let ((size (plist-get (plist-get entry :stats) :size))
+             (valid (if (plist-get entry :valid-p) "valid" "stale"))
+             (run (or (plist-get entry :run-id) "none")))
+         (push (format "  %s: %d chars (%s, run=%s)"
+                       role size valid run)
+               lines)))
+     gptel-prefix-cache--role-caches)
+    (if lines
+        (concat "[prefix-cache] Role caches:\n"
+                (string-join (sort lines #'string<) "\n"))
+      "[prefix-cache] No role caches active")))
+
 ;; ─── Provide ───
 
 (provide 'gptel-ext-prefix-cache)
