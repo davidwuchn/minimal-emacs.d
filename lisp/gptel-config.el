@@ -25,6 +25,10 @@
 (require 'gptel-ext-daemon-repl)
 (require 'gptel-ext-brepl)
 
+;; Initialize daemon-repl: auto-eval and bracket validation for .el files
+(when (fboundp 'gptel-daemon-repl-init)
+  (gptel-daemon-repl-init))
+
 ;; Load tool-contract advice before registering any tools so local-only schema
 ;; metadata like :normalize never leaks into provider-facing JSON schemas.
 (require 'nucleus-tools)
