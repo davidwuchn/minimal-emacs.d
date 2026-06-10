@@ -333,31 +333,37 @@ Track metrics and call failure hook after all retries exhausted."
              (setq attempt (1+ attempt))
              (message "[daemon-repl] ✗ Auto-eval failed for %s: %s"
                       (file-name-nondirectory file) error-msg)
-             (if (and (< attempt max-retries)
-                      (fboundp 'gptel-auto-workflow--self-heal-file))
-                 (let ((heal-result (gptel-auto-workflow--self-heal-file file)))
-                   (message "[daemon-repl] Targeted self-heal for %s (attempt %d/%d)"
-                            (file-name-nondirectory file) attempt (1- max-retries))
-                   (when (and (> (plist-get heal-result :auto-fixed) 0)
-                              (fboundp 'gptel-conversion-unit-add))
-                     (gptel-conversion-unit-add
-                      (format "daemon-repl-%s" (format-time-string "%Y%m%d%H%M%S"))
-                      'repair
-                      (list :file file
-                            :status 'eval-failed
-                            :error error-msg
-                            :attempt attempt)
-                      (list :file file
-                            :status 'auto-fixed
-                            :fixes (plist-get heal-result :auto-fixed)))))
-               (cl-incf (plist-get gptel-daemon-repl--metrics :eval-failures))
-               (plist-put gptel-daemon-repl--metrics :last-error
-                          (list :file file :error error-msg :time (current-time)))
-               (message "[daemon-repl] ✗ Giving up on %s after %d attempts"
-                        (file-name-nondirectory file) max-retries)
-               (run-hook-with-args 'gptel-daemon-repl-eval-failure-hook
-                                   file error-msg max-retries)
-               (throw 'done nil)))))))))
+              (cond
+               ;; Self-heal available and retries left: heal then retry eval
+               ((and (< attempt max-retries)
+                     (fboundp 'gptel-auto-workflow--self-heal-file))
+                (let ((heal-result (gptel-auto-workflow--self-heal-file file)))
+                  (message "[daemon-repl] Targeted self-heal for %s (attempt %d/%d)"
+                           (file-name-nondirectory file) attempt (1- max-retries))
+                  (when (and (> (plist-get heal-result :auto-fixed) 0)
+                             (fboundp 'gptel-conversion-unit-add))
+                    (gptel-conversion-unit-add
+                     (format "daemon-repl-%s" (format-time-string "%Y%m%d%H%M%S"))
+                     'repair
+                     (list :file file
+                           :status 'eval-failed
+                           :error error-msg
+                           :attempt attempt)
+                     (list :file file
+                           :status 'auto-fixed
+                           :fixes (plist-get heal-result :auto-fixed))))))
+               ;; Retries left but no self-heal: just retry eval
+               ((< attempt max-retries) nil)
+               ;; All retries exhausted: report failure
+               (t
+                (cl-incf (plist-get gptel-daemon-repl--metrics :eval-failures))
+                (plist-put gptel-daemon-repl--metrics :last-error
+                           (list :file file :error error-msg :time (current-time)))
+                (message "[daemon-repl] ✗ Giving up on %s after %d attempts"
+                         (file-name-nondirectory file) max-retries)
+                (run-hook-with-args 'gptel-daemon-repl-eval-failure-hook
+                                    file error-msg max-retries)
+                 (throw 'done nil))))))))))
 
 (defun gptel-daemon-repl-install-save-hooks ()
   "Install before-save and after-save hooks for brepl."

@@ -1,47 +1,40 @@
 <!--
 Synthesis verification:
-- Confidence: 24%
+- Confidence: 80%
 - Sources: 8 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-empty'
-- Auto-approved: yes (flagged)
+- Warnings: No code examples or concrete references
+- Auto-approved: yes (passed)
 --->
 
-The user wants me to synthesize multiple memory entries about an "empty-hypothesis" failure pattern into a knowledge page. Let me analyze the data:
+The user wants me to synthesize multiple memory entries about a "mistake-failure-pattern-empty" topic into a comprehensive knowledge page. Let me analyze the memories:
 
-**Common Pattern:** All entries share the failure type "empty-hypothesis" but the targets are diverse:
-- staging-verification (5 occurrences, :programming)
-- staging-scope (4 occurrences, :programming)
-- staging-review (9 occurrences, :programming)
-- lisp/modules/gptel-tools-agent-experiment-core.el (4 occurrences, :agentic)
-- lisp/modules/gptel-tools-agent-benchmark.el (6 occurrences, :programming)
-- lisp/modules/gptel-auto-workflow-projects.el (5 occurrences, :agentic)
-- lisp/modules/gptel-auto-workflow-ontology-strategy.el (4 occurrences, :agentic)
-- lisp/modules/gptel-auto-workflow-ontology-router.el (3 occurrences, :agentic)
+All memories share a common pattern:
+- Failure type: empty-hypothesis
+- Various targets (staging-verification, staging-scope, staging-review, and several Lisp module files)
+- Categories: :programming or :agentic
+- Keep-rates: mostly 0.0%, some 2.0-2.2%
+- Multiple occurrences
+- No example reasons provided
+- All detected as systemic failures
 
-**Key observations:**
-- All have keep-rate of 0.0% or very low (2.0%, 2.2%)
-- "Example reasons: none" - this is a defining characteristic of "empty-hypothesis"
-- Occurrences range 3-9
-- Mix of :programming and :agentic categories
-- Targets include staging stages and Lisp modules
-- Trend timestamps span 2026-06-02 to 2026-06-10
+I need to:
+1. Create a complete markdown knowledge page
+2. Start with frontmatter
+3. Have at least 50 lines of content
+4. Include concrete examples
+5. Include actionable patterns
+6. Cross-reference related topics
+7. Be comprehensive
 
-**Synthesis approach:**
-- Create a comprehensive knowledge page
-- Explain what "empty-hypothesis" failure pattern is
-- Provide statistics table
-- Show concrete examples with the targets
-- Provide actionable diagnostic/fix patterns
-- Cross-reference related topics
+Let me build this out properly with sections covering:
+- Overview/Summary
+- The pattern itself (empty-hypothesis)
+- Affected targets breakdown
+- Failure analysis
+- Detection signals
+- Actionable patterns/remediation
+- Tables of occurrences
+- Code examples
+- Related topics
 
-Let me build this out with at least 50 lines of content, including:
-1. Frontmatter
-2. Overview of the pattern
-3. Statistics table
-4. Failure anatomy (what makes a hypothesis "empty")
-5. Concrete examples per target
-6. Diagnostic patterns (how to detect)
-7. Remediation patterns (how to fix)
-8. Related topics
-
-Let me write this out properly with code examples and tables.
+Let me draft this carefully.

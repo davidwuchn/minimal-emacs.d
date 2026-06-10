@@ -1,11 +1,11 @@
 # Mementum State
 
 > **Bootstrapped**: 2026-06-06
-> **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
-> **Status**: ✅ **DUAL REPL WIRED** — Elisp daemon-repl + Clojure brepl both loaded via gptel-config.el; 39/39 tests green
-> **Latest**: Renamed Elisp brepl→daemon-repl, fixed 9 bugs, created Clojure brepl wrapper module, wired both into config
+> **Session**: Dual REPL + Pi5 Sync + Verbum Review
+> **Status**: ✅ **ALL GREEN** — 89/89 tests, Pi5 synced (7 rounds), verbum audit methodology captured
+> **Latest**: Synced Pi5 (conversion-units, prefix-cache Phase 3, batch anchoring). Fixed risk-node string-vs-symbol bug. Added λ measure(claim) gene. Reviewed verbum sessions 206-209.
 > **Active Plan**: None — codebase clean, tests green
-> **Pi5**: Synced, auto-evolution merged (3 rounds), pre-commit hook installed
+> **Pi5**: Synced 7 rounds, 3 .el conflict resolutions, auto-evolution pipeline active
 
 ---
 
@@ -22,9 +22,16 @@
 | **P0** | Rename Elisp brepl→daemon-repl, fix 9 bugs | @maintainer | **COMPLETE** |
 | **P0** | Create Clojure brepl wrapper module (gptel-ext-brepl.el) | @maintainer | **COMPLETE** |
 | **P0** | Wire both REPL modules into gptel-config.el | @maintainer | **COMPLETE** |
+| **P0** | Fix risk-node training pair filter (string vs symbol) | @maintainer | **COMPLETE** |
+| **P0** | Review verbum updates, add audit methodology | @maintainer | **COMPLETE** |
+| **P0** | Add λ measure(claim) gene to AGENTS.md | @maintainer | **COMPLETE** |
 | **P1** | Monitoring Agent: Complete (Phases 0-10) | @maintainer | **COMPLETE** |
-| **P1** | Research paper analysis (MOSS, Sibyl, APEX) | @maintainer | **COMPLETE** |
+| **P1** | Research paper analysis (MOSS, Sibyl, APEX, TSP) | @maintainer | **COMPLETE** |
+| **P1** | Sibyl conversion units (gptel-ext-conversion-unit.el) | Pi5 | **COMPLETE** |
+| **P1** | Prefix-cache Phase 3 (cross-run stats + auto-tuning) | Pi5 | **COMPLETE** |
+| **P1** | Batch anchoring integration (monitoring + prompt builder) | Pi5 | **COMPLETE** |
 | **P2** | Daemon watchdog hardening (Pi5 freeze after ~90 min) | @maintainer | **COMPLETE** |
+| **P2** | Wire daemon-repl-init on startup | Pi5 | **COMPLETE** |
 
 ---
 
@@ -83,7 +90,7 @@
 
 ### Dual REPL Architecture
 
-Two REPL modules now exist, both wired into `gptel-config.el`:
+Two REPL modules wired into `gptel-config.el`:
 
 | Module | Purpose | Backend | Tests |
 |--------|---------|---------|-------|
@@ -91,32 +98,37 @@ Two REPL modules now exist, both wired into `gptel-config.el`:
 | `gptel-ext-brepl.el` | Clojure eval via brepl CLI | ~/.local/bin/brepl (nREPL) | 19 |
 
 ### What was done this session
-1. **Synced Pi5**: 3 merge rounds, resolved git conflict markers in ontology-router.el + memory-schema.el
+1. **Synced Pi5 (7 rounds)**: Resolved 3 .el conflicts, merged auto-evolution artifacts
 2. **Renamed brepl→daemon-repl**: Disambiguated Elisp daemon REPL from Clojure brepl CLI
 3. **Fixed 9 bugs in daemon-repl** (TDD): reentry hang, emacsclient exit status, socket discovery, file-notify require+flag, event parsing, dotfile check, autofix gate, self-heal arity, emacs-lisp-mode context
-4. **Created gptel-ext-brepl.el**: Clojure nREPL client wrapping `~/.local/bin/brepl` — eval, load-file, bracket balance, port discovery
-5. **Installed pre-commit hook**: Rejects .el files with git conflict markers
-6. **Hardened install-ops-global.sh**: Backup before edit, socket detection, YAML validation
-7. **Both modules wired** into gptel-config.el, 39/39 tests green
+4. **Created gptel-ext-brepl.el**: Clojure nREPL client — eval, load-file, bracket balance
+5. **Reviewed Pi5 auto-evolution**: conversion-units (416 lines), prefix-cache Phase 3, batch anchoring
+6. **Fixed P1 bug in self-heal-semantic**: json-read-from-string returns string "success", code checked symbol 'success
+7. **Cleaned 5 stale .elc files**: Masking source edits from daemon-repl, evolution, prefix-cache, monitoring-agent, projects
+8. **Reviewed verbum (sessions 206-209)**: Audits #6 (φ-ratio REFUTED), #7 (sieve 1.03x REFUTED), #8 (rank-1 adjunction REFUTED)
+9. **Created verbum audit methodology knowledge page**: Null testing, held-out eval, register-matching, variance decomposition
+10. **Added λ measure(claim) gene** to AGENTS.md S5 identity
+
+### Pi5 Auto-Evolution Merged This Session
+- `gptel-ext-conversion-unit.el` (416 lines) — Sibyl conversion unit tracking
+- `gptel-ext-prefix-cache.el` Phase 3 — cross-run statistics + auto-tuning threshold
+- `gptel-auto-workflow-self-heal-semantic.el` — risk-node training pairs + batch anchor report
+- `gptel-auto-workflow-evolution.el` — boundary validator fallbacks + user-emacs-directory
+- `gptel-auto-workflow-production.el` — hardcoded path fixes + expand-file-name
+- `test-gptel-ext-conversion-unit.el` (233 lines) — 30 conversion unit tests
+- `test-gptel-ext-prefix-cache.el` (116 lines) — 10 prefix cache Phase 3 tests
 
 ### Key Decisions
 - Elisp daemon-repl and Clojure brepl are separate tools with separate skill directories
-- Pre-commit hook is local-only (.git/hooks/); Pi5 cron installs via bootstrap
 - `(defvar SYMBOL)` without value → `void-variable` crash in batch mode; always `(defvar SYMBOL nil)`
 - Stale `.elc` bytecode masks source edits; delete when debugging module load issues
-- Emacs 30 byte-compiler miscompiles `throw` through `catch` when `let` wraps `catch` — restructure to put `catch` outside
-
-### Previous session (2026-06-10 early)
-1. **Audit bug**: `backward-up-list` from `(error` handler went directly to `condition-case`, causing false positives
-2. **Scope bug**: Audit searched entire `condition-case` form for `err` references
-3. **Auto-fixer added**: `gptel-auto-workflow--fix-condition-case-unbound-err`
-4. **Tests cleaned**: Removed tests for non-existent risk-node functions; 46 tests pass
-5. **Watchdog hardened**: Heartbeat 180s→90s, grace 1200s→300s, conditional grace
-6. **Risk-node audit fixed**: 334→5 issues (hash-table false positives removed)
-7. **Batch anchoring + Strategy DAG** implemented from MOSS/APEX research
+- Emacs 30 byte-compiler miscompiles `throw` through `catch` when `let` wraps `catch`
+- json-read-from-string returns strings, not symbols — use `string=` not `eq` for JSON comparisons
+- Verbum attention magnets (φ, ∃, ∀) still valid for prompting; φ-as-LLM-constant NOT supported
+- Pi5 auto-evolution can introduce stale .elc between cron rounds — sweep periodically
 
 ### Test Summary
-- **39/39 total**: 20 daemon-repl + 19 brepl (new modules)
+- **89/89 total**: 20 daemon-repl + 19 brepl + 30 conversion-unit + 20 prefix-cache
 - Previous: 51 self-heal + 5 strategy + 13 Pi5 + 11 platform + 37 security
 
 ---
@@ -125,13 +137,12 @@ Two REPL modules now exist, both wired into `gptel-config.el`:
 
 ### Immediate
 1. **Continue monitoring** — Let pipeline run, verify self-healing continues working
-2. **Sibyl action item** — Formalize ontology updates as auditable conversion units
-3. **Wire daemon-repl-init** — Call on daemon startup so auto-eval watches lisp/modules/
+2. **Sibyl conversion units** — ✅ **DONE** — Pi5 implemented `gptel-ext-conversion-unit.el`
 
 ### Near-Term
-4. **Auto-fix remaining 10 audit issues** — 5 resource helpers + 1 API + 4 other
-5. **Implement batch anchoring in evolution loop** — Replace individual failure fixing with batch-curated evolution
-6. **Clojure brepl in OV5 pipeline** — Wire brepl bracket-fixing into auto-workflow for .clj files
+3. **Auto-fix remaining audit issues** — 5 resource helpers + 1 API + 4 other
+4. **Clojure brepl in OV5 pipeline** — Wire brepl bracket-fixing into auto-workflow for .clj files
+5. **Adopt verbum null-testing discipline** — Add shuffled baselines to ontology drift detection
 
 ---
 
@@ -139,15 +150,17 @@ Two REPL modules now exist, both wired into `gptel-config.el`:
 
 - `lisp/modules/gptel-ext-daemon-repl.el`: Elisp daemon REPL — eval, bracket validation, auto-eval, self-heal (371 lines, 20 tests)
 - `lisp/modules/gptel-ext-brepl.el`: Clojure nREPL client — eval, load-file, balance brackets (117 lines, 19 tests)
-- `lisp/gptel-config.el`: Module loader — both REPL modules wired here
+- `lisp/modules/gptel-ext-conversion-unit.el`: Sibyl conversion unit tracking (416 lines, 30 tests)
+- `lisp/modules/gptel-ext-prefix-cache.el`: Prefix cache with Phase 3 cross-run stats (1031 lines, 20 tests)
+- `lisp/gptel-config.el`: Module loader — all modules wired here
 - `.opencode/skills/brepl/`: OpenCode skill for Clojure brepl CLI
 - `.opencode/skills/daemon-repl/`: OpenCode skill for Elisp daemon-repl
-- `lisp/modules/gptel-auto-workflow-self-heal-semantic.el`: 7 audit checks + auto-fixers
-- `lisp/modules/gptel-auto-workflow-evolution.el`: Evolution cycle + ontology learning
-- `.git/hooks/pre-commit`: Rejects .el files with git conflict markers
-- `mementum/knowledge/self-evolving-agent-research.md`: Research paper analysis
+- `lisp/modules/gptel-auto-workflow-self-heal-semantic.el`: 7 audit checks + auto-fixers + risk-node training pairs
+- `lisp/modules/gptel-auto-workflow-evolution.el`: Evolution cycle + ontology learning + conversion units
+- `mementum/knowledge/verbum-audit-methodology.md`: Verbum audit #6/#7/#8 methodology + patterns
+- `mementum/knowledge/self-evolving-agent-research.md`: Research paper analysis (MOSS, Sibyl, APEX, TSP)
 - `mementum/state.md`: This file — working memory, read first every session
 
 ---
 
-*Active Mementum v1.1 — dual REPL architecture wired, 39 tests green, self-healing verified, ontology learning active*
+*Active Mementum v1.1 — 89 tests green, dual REPL wired, Pi5 synced, verbum audit methodology captured*

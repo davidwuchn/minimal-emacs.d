@@ -337,5 +337,50 @@ validate-brackets succeeding for balanced code."
             (should-not (gptel-daemon-repl--should-auto-eval-p))))
       (delete-file test-file))))
 
+(ert-deftest test-daemon-repl/retries-without-self-heal ()
+  "After-save eval retries max-retries times even when self-heal-file is unbound.
+Previously, the code gave up after 1 attempt if self-heal-file was not fbound,
+because the `if' condition required BOTH (< attempt max-retries) AND
+(fboundp 'gptel-auto-workflow--self-heal-file). The else branch gave up."
+  (let ((eval-count 0)
+        (test-file (make-temp-file "daemon-repl-retry-" nil ".el"))
+        (heal-file-fbound (fboundp 'gptel-auto-workflow--self-heal-file)))
+    (unwind-protect
+        (progn
+          (with-temp-file test-file
+            (insert "(+ 1 2)\n"))
+          ;; Mock eval-file to always signal error and count calls
+          (cl-letf (((symbol-function 'gptel-daemon-repl-eval-file)
+                     (lambda (_file)
+                       (cl-incf eval-count)
+                       (error "mock eval failure %d" eval-count)))
+                    ;; Mock should-auto-eval-p to return t
+                    ((symbol-function 'gptel-daemon-repl--should-auto-eval-p)
+                     (lambda () t)))
+            ;; Ensure self-heal-file is NOT fbound for this test
+            (when heal-file-fbound
+              (fmakunbound 'gptel-auto-workflow--self-heal-file))
+            (unwind-protect
+                (progn
+                  (gptel-daemon-repl-reset-metrics)
+                  ;; Simulate after-save-eval
+                  (let ((gptel-daemon-repl-enabled t)
+                        (gptel-daemon-repl-eval-on-save t))
+                    (with-temp-buffer
+                      (emacs-lisp-mode)
+                      (setq buffer-file-name test-file)
+                      (gptel-daemon-repl--after-save-eval)))
+                  ;; Should have retried 3 times (max-retries)
+                  (should (= eval-count 3))
+                  ;; Metrics should show 1 failure
+                  (let ((metrics (gptel-daemon-repl-metrics)))
+                    (should (= (plist-get metrics :eval-attempts) 1))
+                    (should (= (plist-get metrics :eval-failures) 1))))
+              ;; Restore self-heal-file if it was bound
+              (when heal-file-fbound
+                (defalias 'gptel-auto-workflow--self-heal-file
+                  (symbol-function 'gptel-auto-workflow--self-heal-file))))))
+      (delete-file test-file))))
+
 (provide 'test-daemon-repl)
 ;;; test-daemon-repl.el ends here
