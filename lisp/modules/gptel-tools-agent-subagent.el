@@ -187,8 +187,7 @@ agent types (analyzer/executor/grader/comparator)."
         (setq prompt (concat mode-ctx "\n" prompt))))
     ;; Gap 4: Session separation — prepend role-specific stable prefix
     (when (and (fboundp 'gptel-prefix-cache-prepend-for-role)
-               (fboundp 'gptel-prefix-cache-role-aware)
-               gptel-prefix-cache-role-aware)
+               (bound-and-true-p gptel-prefix-cache-role-aware))
       (let ((role-prefix (gptel-prefix-cache-compute-for-role agent-type)))
         (when role-prefix
           (setq prompt (concat role-prefix prompt))
