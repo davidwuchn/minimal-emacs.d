@@ -677,8 +677,35 @@ Regression: the check was finding 331 false positives on top-level defvars."
             (should (string= unchanged content))))
       (test-self-heal-semantic--cleanup file))))
 
-(provide 'test-self-heal-semantic)
-;;; test-self-heal-semantic.el ends here
+;; ── Test 16: Batch anchoring ──
+
+(ert-deftest test-self-heal-semantic/batch-anchor-groups-by-type ()
+  "Batch anchor groups audit issues by type."
+  (let* ((audit-report
+          (list (list :file "a.el"
+                      :log (list (list :type 'excessive-blank-lines
+                                       :line 10 :context nil)
+                                 (list :type 'missing-provide
+                                       :line 20 :context nil)))
+                (list :file "b.el"
+                      :log (list (list :type 'excessive-blank-lines
+                                       :line 15 :context nil)))))
+         (batches (gptel-auto-workflow--batch-anchor-audit-results audit-report)))
+    (should (= (length batches) 2))
+    ;; Most frequent first
+    (should (eq (caar batches) 'excessive-blank-lines))
+    (should (= (length (cdar batches)) 2))
+    (should (eq (caadr batches) 'missing-provide))
+    (should (= (length (cdadr batches)) 1))))
+
+(ert-deftest test-self-heal-semantic/batch-anchor-report-format ()
+  "Batch anchor report is valid markdown."
+  (let* ((batches '((excessive-blank-lines . ((:file "a.el" :line 10 :context nil)))))
+         (report (gptel-auto-workflow--batch-anchor-report batches)))
+    (should (stringp report))
+    (should (string-match-p "# Batch Anchor Report" report))
+    (should (string-match-p "excessive-blank-lines" report))
+    (should (string-match-p "a.el:10" report))))
 
 ;;; Byte-compile warning tests (TDD for Pi5 auto-evolution fixes)
 

@@ -101,7 +101,7 @@ Skips when a workflow or cron job is active to avoid preempting experiments."
           (message "[auto-workflow] Evolution cycle complete."))
       (error
        (message "[auto-workflow] Evolution cycle error: %s" err)
-       (condition-case err nil
+       (condition-case log-err
            (let* ((frames (backtrace-frames))
                   (bt (mapconcat (lambda (f) (format "  %S" f))
                                  (seq-take frames 50) "\n"))
@@ -119,7 +119,7 @@ Skips when a workflow or cron job is active to avoid preempting experiments."
                  (insert (format "Error data: %S\n" (cdr err)))
                  (insert "Backtrace (50 frames):\n" bt "\n"))))
          (error
-          (message "[auto-workflow] Backtrace logging also failed")))))
+          (message "[auto-workflow] Backtrace logging also failed: %s" (error-message-string log-err))))))
     ;; Mementum maintenance: rebuild index + synthesize candidates.
     ;; Runs every cycle (hourly) but is cheap when no new memories exist.
     ;; Enable auto-approve in headless so synthesis actually writes files.
@@ -693,6 +693,13 @@ Returns the new item ID."
               (replace-regexp-in-string
                "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual
 Impact
+
+
+
+
+
+
+
 
 
 |\n|----|--------|-----------|-----------------|--------|---------------|---------------|\n"

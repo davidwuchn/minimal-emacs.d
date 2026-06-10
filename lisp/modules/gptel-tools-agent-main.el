@@ -872,12 +872,13 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
                        (hash-table-p gptel-auto-workflow--backend-lambda-health-cache))
               (clrhash gptel-auto-workflow--backend-lambda-health-cache))
             (gptel-auto-workflow--safe-call "Cleanup" #'gptel-auto-workflow--cleanup-stale-state)
-            (gptel-auto-workflow--safe-call "Sync staging"
-              (lambda ()
-                (condition-case nil
-                    (with-timeout (30 (message "[auto-workflow] Sync staging timed out after 30s, skipping"))
-                      (gptel-auto-workflow--sync-staging-with-main))
-                  (error (message "[auto-workflow] Sync staging failed, continuing")))))
+             (gptel-auto-workflow--safe-call "Sync staging"
+               (lambda ()
+                 (condition-case nil
+                     (with-timeout (300 (message "[auto-workflow] Sync staging timed out after 300s, skipping"))
+                       (gptel-auto-workflow--sync-staging-with-main))
+                   ((error quit)
+                    (message "[auto-workflow] Sync staging failed or timed out, continuing")))))
             (gptel-auto-workflow--safe-call
              "Orphan scan"
              (lambda ()
