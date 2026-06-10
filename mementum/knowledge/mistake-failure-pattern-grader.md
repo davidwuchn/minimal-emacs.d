@@ -1,26 +1,49 @@
 <!--
 Synthesis verification:
-- Confidence: 40%
+- Confidence: 80%
 - Sources: 6 memories
-- Warnings: No code examples or concrete references, Very short content (18 lines)
-- Auto-approved: yes (flagged)
+- Warnings: No code examples or concrete references
+- Auto-approved: yes (passed)
 --->
 
-The user wants me to synthesize memories about "mistake-failure-pattern-grader" into a knowledge page. Let me analyze the memories:
+The user wants me to synthesize a set of mistake/failure pattern memories into a comprehensive knowledge page about "mistake-failure-pattern-grader". Let me analyze the memories:
 
-1. All entries are dated 2026-06-09T08:52
-2. All have failure type "grader-bypass"
-3. Targets vary: staging-merge, and several lisp modules (gptel-tools-agent-benchmark.el, gptel-auto-workflow-strategic.el, gptel-auto-workflow-projects.el, gptel-auto-workflow-production.el, gptel-auto-workflow-ontology-strategy.el)
-4. Categories: :programming (0.0% keep-rate) and :agentic (4.3% keep-rate)
-5. Occurrences: 3-4 per target
-6. All detected by monitoring agent
-7. No example reasons provided
+1. All memories are from 2026-06-09 08:52
+2. All have failure type: `grader-bypass`
+3. Targets vary across different files/modules:
+   - `staging-merge` (keep-rate: 0.0%, :programming)
+   - `lisp/modules/gptel-tools-agent-benchmark.el` (keep-rate: 0.0%, :programming)
+   - `lisp/modules/gptel-auto-workflow-strategic.el` (keep-rate: 4.3%, :agentic)
+   - `lisp/modules/gptel-auto-workflow-projects.el` (keep-rate: 4.3%, :agentic)
+   - `lisp/modules/gptel-auto-workflow-production.el` (keep-rate: 4.3%, :agentic)
+   - `lisp/modules/gptel-auto-workflow-ontology-strategy.el` (keep-rate: 4.3%, :agentic, 4 occurrences)
+4. Each has 3-4 occurrences
+5. Example reasons: none
+6. Trends show progression dates
 
-I need to create a knowledge page with:
-- Frontmatter
-- At least 50 lines of content
-- Concrete examples
-- Actionable patterns
-- Cross-references
+I need to:
+- Create a knowledge page with frontmatter
+- Minimum 50 lines of content
+- Include concrete examples (code, tables, commands)
+- Provide actionable patterns
+- Cross-reference related topics
+- Return full markdown
 
-Let me build a comprehensive knowledge page about the grader-bypass failure pattern.
+Let me create a comprehensive knowledge page that synthesizes these failures into actionable patterns. The pattern is "grader-bypass" which suggests these are cases where the grader/evaluation system is being bypassed, leading to poor quality outputs that should have been filtered.
+
+Key observations:
+- 6 different targets all sharing the same failure type
+- Two category buckets: :programming (0.0% keep rate) and :agentic (4.3% keep rate)
+- The :programming category has 0% keep rate - meaning all outputs were rejected
+- The :agentic category has 4.3% keep rate - meaning very few outputs were kept
+- All have empty "example reasons" - this is a metadata gap
+
+Let me structure this as a knowledge page with:
+1. Overview of the pattern
+2. Failure taxonomy with table
+3. Root cause analysis
+4. Concrete examples of what grader-bypass looks like
+5. Actionable patterns to prevent/detect
+6. Cross-references
+
+Let me write this comprehensively.

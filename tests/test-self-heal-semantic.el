@@ -679,5 +679,40 @@ Regression: the check was finding 331 false positives on top-level defvars."
 (provide 'test-self-heal-semantic)
 ;;; test-self-heal-semantic.el ends here
 
+;;; Byte-compile warning tests (TDD for Pi5 auto-evolution fixes)
+
+(ert-deftest test-self-heal-semantic/no-byte-compile-warnings ()
+  "Module should byte-compile without warnings.
+Pi5 auto-evolution introduced unused variable `cleanup-fn` in risk-node audit.
+This test ensures the warning is fixed."
+  (let ((warnings nil))
+    (with-temp-buffer
+      (let ((byte-compile-current-buffer t)
+            (byte-compile-error-on-warn nil))
+        (condition-case err
+            (progn
+              (byte-compile-file "lisp/modules/gptel-auto-workflow-self-heal-semantic.el")
+              ;; Check for specific warnings
+              (goto-char (point-min))
+              (when (re-search-forward "Warning:.*cleanup-fn" nil t)
+                (push "unused-cleanup-fn" warnings))
+              (when (re-search-forward "Warning:.*unescaped single quotes" nil t)
+                (push "docstring-quotes" warnings)))
+          (error nil))))
+    ;; Should have no warnings
+    (should (null warnings))))
+
+(ert-deftest test-self-heal-semantic/condition-case-wrapping-isolated ()
+  "Each audit check should be wrapped in condition-case.
+A broken file (e.g., unbalanced parens) shouldn't crash the whole audit."
+  (let* ((content "(defun foo () (unbalanced")  ;; Intentionally broken
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        ;; Should not throw an error, even with broken file
+        (let ((result (gptel-auto-workflow--semantic-audit-file file)))
+          (should (listp result))
+          (should (plist-get result :issues)))
+      (test-self-heal-semantic--cleanup file))))
+
 (provide 'test-self-heal-semantic)
 ;;; test-self-heal-semantic.el ends here

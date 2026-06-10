@@ -263,7 +263,7 @@ Catches the `End of file during parsing' class of bugs where editing
 introduces a missing or extra close paren. Uses Emacs's built-in
 check-parens after loading the file as emacs-lisp.
 Returns 1 if unbalanced, 0 if balanced. Catches ALL parse errors
-(not just user-error) so that 'end-of-file' and other balance errors
+(not just user-error) so that `end-of-file' and other balance errors
 are also reported."
   (let ((issues 0))
     (condition-case err
@@ -406,8 +406,7 @@ Returns count of risk nodes found."
       (let ((resource-patterns '(("make-temp-file" . "delete-file")
                                  ("make-temp-name" . "delete-file"))))
         (dolist (pattern resource-patterns)
-          (let ((resource-fn (car pattern))
-                (cleanup-fn (cdr pattern)))
+          (let ((resource-fn (car pattern)))
             (goto-char (point-min))
             (while (re-search-forward (format "(%s\\b" resource-fn) nil t)
               (let* ((match-line (line-number-at-pos (match-beginning 0)))
