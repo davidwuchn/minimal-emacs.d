@@ -57,7 +57,7 @@ additional_delegates:
     reasoningEffort: xhigh
   gpt:
     model: github-copilot/gpt-5.5
-    reasoningEffort: max
+    reasoningEffort: xhigh
   opus:
     model: github-copilot/claude-opus-4.8
   qwen:
@@ -136,7 +136,23 @@ done
 
 # Subagents
 update_model "$AGENTS_DIR/delegate.md"             "deepseek/deepseek-v4-pro"
+# delegate — ensure reasoningEffort: high
+if [ -f "$AGENTS_DIR/delegate.md" ]; then
+    if ! fm_grep "$AGENTS_DIR/delegate.md" "^options:"; then
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^model: deepseek/) { $_ .= "options:\n  reasoningEffort: high\n"; }' "$AGENTS_DIR/delegate.md"
+    else
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^  reasoningEffort:/) { $_ = "  reasoningEffort: high\n"; }' "$AGENTS_DIR/delegate.md"
+    fi
+fi
 update_model "$AGENTS_DIR/delegate-fast.md"          "deepseek/deepseek-v4-flash"
+# delegate-fast — ensure reasoningEffort: high
+if [ -f "$AGENTS_DIR/delegate-fast.md" ]; then
+    if ! fm_grep "$AGENTS_DIR/delegate-fast.md" "^options:"; then
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^model: deepseek/) { $_ .= "options:\n  reasoningEffort: high\n"; }' "$AGENTS_DIR/delegate-fast.md"
+    else
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^  reasoningEffort:/) { $_ = "  reasoningEffort: high\n"; }' "$AGENTS_DIR/delegate-fast.md"
+    fi
+fi
 # delegate-strong — ensure reasoningEffort: xhigh
 if [ -f "$AGENTS_DIR/delegate-strong.md" ]; then
     perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^model:/) { $_ = "model: github-copilot/gpt-5.4\n"; }' "$AGENTS_DIR/delegate-strong.md"
@@ -147,19 +163,53 @@ if [ -f "$AGENTS_DIR/delegate-strong.md" ]; then
     fi
 fi
 update_model "$AGENTS_DIR/delegate-gpt.md"           "github-copilot/gpt-5.5"
+# delegate-gpt — ensure reasoningEffort: xhigh
+if [ -f "$AGENTS_DIR/delegate-gpt.md" ]; then
+    if ! fm_grep "$AGENTS_DIR/delegate-gpt.md" "^options:"; then
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^model: github-copilot/) { $_ .= "options:\n  reasoningEffort: xhigh\n"; }' "$AGENTS_DIR/delegate-gpt.md"
+    else
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^  reasoningEffort:/) { $_ = "  reasoningEffort: xhigh\n"; }' "$AGENTS_DIR/delegate-gpt.md"
+    fi
+fi
 update_model "$AGENTS_DIR/delegate-opus.md"          "github-copilot/claude-opus-4.8"
-# delegate-qwen — restore meaningful description (OPS overwrites with generic)
+# delegate-qwen — restore meaningful description + ensure reasoningEffort: high
 if [ -f "$AGENTS_DIR/delegate-qwen.md" ]; then
     perl -pi -e 's|^description:.*|description: Delegate variant '"'"'qwen'"'"' with model deepseek/deepseek-v4-pro. Use for second opinions, cross-checking results, Chinese language tasks, and alternative perspectives on hard problems.|' "$AGENTS_DIR/delegate-qwen.md"
     update_model "$AGENTS_DIR/delegate-qwen.md" "deepseek/deepseek-v4-pro"
+    if ! fm_grep "$AGENTS_DIR/delegate-qwen.md" "^options:"; then
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^model: deepseek/) { $_ .= "options:\n  reasoningEffort: high\n"; }' "$AGENTS_DIR/delegate-qwen.md"
+    else
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^  reasoningEffort:/) { $_ = "  reasoningEffort: high\n"; }' "$AGENTS_DIR/delegate-qwen.md"
+    fi
 fi
-# delegate-creative — also fix stale description referencing minimax-cn-coding-plan
+# delegate-creative — fix stale description + ensure reasoningEffort: high
 if [ -f "$AGENTS_DIR/delegate-creative.md" ]; then
     perl -pi -e 's|^description:.*|description: Delegate variant '"'"'creative'"'"' with model deepseek/deepseek-v4-pro. Use for creative writing, brainstorming, content generation, and open-ended exploration.|' "$AGENTS_DIR/delegate-creative.md"
     update_model "$AGENTS_DIR/delegate-creative.md" "deepseek/deepseek-v4-pro"
+    if ! fm_grep "$AGENTS_DIR/delegate-creative.md" "^options:"; then
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^model: deepseek/) { $_ .= "options:\n  reasoningEffort: high\n"; }' "$AGENTS_DIR/delegate-creative.md"
+    else
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^  reasoningEffort:/) { $_ = "  reasoningEffort: high\n"; }' "$AGENTS_DIR/delegate-creative.md"
+    fi
 fi
 update_model "$AGENTS_DIR/doc-explorer.md"           "deepseek/deepseek-v4-pro"
+# doc-explorer — ensure reasoningEffort: high
+if [ -f "$AGENTS_DIR/doc-explorer.md" ]; then
+    if ! fm_grep "$AGENTS_DIR/doc-explorer.md" "^options:"; then
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^model: deepseek/) { $_ .= "options:\n  reasoningEffort: high\n"; }' "$AGENTS_DIR/doc-explorer.md"
+    else
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^  reasoningEffort:/) { $_ = "  reasoningEffort: high\n"; }' "$AGENTS_DIR/doc-explorer.md"
+    fi
+fi
 update_model "$AGENTS_DIR/implementer.md"           "deepseek/deepseek-v4-pro"
+# implementer — ensure reasoningEffort: high
+if [ -f "$AGENTS_DIR/implementer.md" ]; then
+    if ! fm_grep "$AGENTS_DIR/implementer.md" "^options:"; then
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^model: deepseek/) { $_ .= "options:\n  reasoningEffort: high\n"; }' "$AGENTS_DIR/implementer.md"
+    else
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^  reasoningEffort:/) { $_ = "  reasoningEffort: high\n"; }' "$AGENTS_DIR/implementer.md"
+    fi
+fi
 # implementer-safe — ensure reasoningEffort: xhigh
 if [ -f "$AGENTS_DIR/implementer-safe.md" ]; then
     perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^model:/) { $_ = "model: github-copilot/gpt-5.4-mini\n"; }' "$AGENTS_DIR/implementer-safe.md"
@@ -170,6 +220,32 @@ if [ -f "$AGENTS_DIR/implementer-safe.md" ]; then
     fi
 fi
 update_model "$AGENTS_DIR/legacy-curator.md"        "deepseek/deepseek-v4-pro"
+# legacy-curator — ensure reasoningEffort: high
+if [ -f "$AGENTS_DIR/legacy-curator.md" ]; then
+    if ! fm_grep "$AGENTS_DIR/legacy-curator.md" "^options:"; then
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^model: deepseek/) { $_ .= "options:\n  reasoningEffort: high\n"; }' "$AGENTS_DIR/legacy-curator.md"
+    else
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^  reasoningEffort:/) { $_ = "  reasoningEffort: high\n"; }' "$AGENTS_DIR/legacy-curator.md"
+    fi
+fi
+update_model "$AGENTS_DIR/lint.md"                   "deepseek/deepseek-v4-flash"
+# lint — ensure reasoningEffort: high
+if [ -f "$AGENTS_DIR/lint.md" ]; then
+    if ! fm_grep "$AGENTS_DIR/lint.md" "^options:"; then
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^model: deepseek/) { $_ .= "options:\n  reasoningEffort: high\n"; }' "$AGENTS_DIR/lint.md"
+    else
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^  reasoningEffort:/) { $_ = "  reasoningEffort: high\n"; }' "$AGENTS_DIR/lint.md"
+    fi
+fi
+update_model "$AGENTS_DIR/learnings-researcher.md"   "deepseek/deepseek-v4-flash"
+# learnings-researcher — ensure reasoningEffort: high
+if [ -f "$AGENTS_DIR/learnings-researcher.md" ]; then
+    if ! fm_grep "$AGENTS_DIR/learnings-researcher.md" "^options:"; then
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^model: deepseek/) { $_ .= "options:\n  reasoningEffort: high\n"; }' "$AGENTS_DIR/learnings-researcher.md"
+    else
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^  reasoningEffort:/) { $_ = "  reasoningEffort: high\n"; }' "$AGENTS_DIR/learnings-researcher.md"
+    fi
+fi
 
 # 6b. Warn about unhandled delegate-* agents
 for f in "$AGENTS_DIR"/delegate-*.md; do
