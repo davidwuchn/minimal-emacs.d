@@ -39,7 +39,7 @@
 (defvar gptel-auto-workflow--current-target nil)
 (defvar gptel-auto-workflow--project-root-override nil
   "Override for project root when running from non-git directory.")
-;; gptel-auto-workflow-use-staging: declared via defcustom in subagent.el (default t).
+(defvar gptel-auto-workflow-use-staging) ; declared via defcustom in subagent.el
 (defun gptel-auto-workflow--project-root ()
   "Return the MAIN project root directory.
 When in a worktree, returns the main repo root (parent of .git/worktrees).
