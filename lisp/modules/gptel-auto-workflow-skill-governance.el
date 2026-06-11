@@ -12,6 +12,11 @@
 (require 'json)
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--json-encode-plist "gptel-auto-workflow-ontology-router" (plist))
+(defvar gptel-auto-workflow-opencode-eval-enabled nil
+  "When non-nil, run opencode skill A/B evals during governance cycle.")
+(declare-function gptel-auto-workflow-skill-eval-parse-task "gptel-auto-workflow-skill-eval-opencode" (filepath))
+(declare-function gptel-auto-workflow-skill-eval-ab "gptel-auto-workflow-skill-eval-opencode" (skill-name task &optional n-runs))
+(declare-function gptel-auto-workflow-skill-eval-promote "gptel-auto-workflow-skill-eval-opencode" (skill-name ab-result))
 
 ;; ─── Semia Security Audit (Layer 2) ───
 
@@ -167,7 +172,8 @@ Returns (:status ok|error :skills N :broken-symlinks N :load-blockers N
       (list :status 'error :error "doctor_failed"))))
 
 (defun gptel-auto-workflow--skill-governance-dashboard (&optional days)
-  "Read the canary observation dashboard for the last DAYS (default 30)."
+  "Read the canary observation dashboard for the last DAYS (default 30).
+Also includes opencode eval stats if available."
   (interactive)
   (let* ((root (gptel-auto-workflow--skill-governance-tools-root))
          (dash (expand-file-name "skill-debug/bin/skill-dashboard.sh" root))
@@ -175,14 +181,24 @@ Returns (:status ok|error :skills N :broken-symlinks N :load-blockers N
          (cmd (format "cd %s && bash %s --days %d" root dash window))
          (result (if (file-exists-p dash)
                       (gptel-auto-workflow--skill-governance-json cmd)
-                    nil)))
-    (if result
-        (list :status 'ok
-              :observed (or (gethash :observed_count result) 0)
-              :not-observed (or (gethash :not_observed_count result) 0)
-              :observed-rate (or (gethash :observed_rate result) 0.0)
-              :raw result)
-      (list :status 'no_data))))
+                    nil))
+         (base (if result
+                   (list :status 'ok
+                         :observed (or (gethash :observed_count result) 0)
+                         :not-observed (or (gethash :not_observed_count result) 0)
+                         :observed-rate (or (gethash :observed_rate result) 0.0)
+                         :raw result)
+                 (list :status 'no_data))))
+    ;; Append opencode eval stats
+    (let* ((eval-dir (expand-file-name "var/tmp/skill-eval-opencode/results/"
+                                        (or (gptel-auto-workflow--worktree-base-root)
+                                            default-directory)))
+           (eval-count (if (file-directory-p eval-dir)
+                           (length (directory-files eval-dir t "\\.json\\'" t))
+                         0)))
+      (when (> eval-count 0)
+        (setq base (plist-put base :opencode-eval-runs eval-count)))
+      base)))
 
 ;; ─── Missing Implementation Functions ───
 
@@ -316,8 +332,9 @@ Returns plist (:success t|nil :compile-ok t|nil :anti-patterns N)."
 1. Health scan (skills-refiner)
 2. Semia security audit (static analysis)
 3. Inject canaries / Dashboard
-4. Skill-eval A/B tests
-5. Save report"
+4. Skill-eval A/B tests (Emacs-scope)
+5. Opencode skill A/B tests (when feature flag enabled)
+6. Save report"
   (interactive)
   (message "[skill-governance] Starting governance cycle...")
 
@@ -356,20 +373,28 @@ Returns plist (:success t|nil :compile-ok t|nil :anti-patterns N)."
       (message "[skill-governance] Dashboard: no observation data (inject canaries first)")))
 
   ;; Layer 4: Skill-eval A/B testing on recently evolved skills
-  (when (fboundp 'gptel-auto-workflow--evolution-get-recently-evolved-skills)
-    (let ((recent (gptel-auto-workflow--evolution-get-recently-evolved-skills))
-          (results nil))
-      (dolist (skill-name recent)
-        (let* ((target (gptel-auto-workflow--skill-eval-pick-target skill-name))
-               (ab (when target
-                     (gptel-auto-workflow--skill-eval-run-ab skill-name target 2))))
-          (when ab
-            (push ab results)
-            (message "[skill-governance] Skill-eval %s: delta=%.2f, %s"
-                     skill-name (plist-get ab :delta)
-                     (plist-get ab :recommendation)))))
-      (when results
-        (gptel-auto-workflow--skill-governance-save-ab-results results))))
+  (let ((recent (gptel-auto-workflow--evolution-get-recently-evolved-skills))
+        (results nil))
+    (dolist (skill-name recent)
+      (let* ((target (gptel-auto-workflow--skill-eval-pick-target skill-name))
+             (ab (when target
+                   (gptel-auto-workflow--skill-eval-run-ab skill-name target 2))))
+        (when ab
+          (push ab results)
+          (message "[skill-governance] Skill-eval %s: delta=%.2f, %s"
+                   skill-name (plist-get ab :delta)
+                   (plist-get ab :recommendation)))))
+    (when results
+      (gptel-auto-workflow--skill-governance-save-ab-results results)))
+
+  ;; Layer 5: Opencode skill A/B evals (feature-gated)
+  (when gptel-auto-workflow-opencode-eval-enabled
+    (message "[skill-governance] Running opencode skill eval cycle...")
+    (condition-case err
+        (gptel-auto-workflow--skill-governance-run-opencode-cycle)
+      (error
+       (message "[skill-governance] Opencode eval cycle error: %s"
+                (error-message-string err)))))
 
   ;; Save report
   (gptel-auto-workflow--skill-governance-run-scan-report))
@@ -397,6 +422,88 @@ Returns file path or nil if no suitable target found."
                  (lambda (a b)
                    (< (or (nth 7 (file-attributes a)) 0)
                       (or (nth 7 (file-attributes b)) 0)))))))))
+
+;; ─── Opencode Skill Eval Integration (Layer 6) ───
+
+(defcustom gptel-auto-workflow-opencode-eval-enabled nil
+  "When non-nil, run opencode skill A/B evals during governance cycle.
+Opencode evals test whether skill variants change agent behavior
+on controlled tasks.  Disabled by default to avoid unnecessary
+LLM costs; enable when skill evolution is active."
+  :type 'boolean
+  :group 'gptel-auto-workflow)
+
+(defcustom gptel-auto-workflow-opencode-eval-skills '("brepl" "daemon-repl" "ov5")
+  "List of skill names eligible for opencode A/B evaluation.
+Each skill must have a task corpus in `assistant/skills/_eval-tasks/'."
+  :type '(repeat string)
+  :group 'gptel-auto-workflow)
+
+(defun gptel-auto-workflow--evolution-get-recently-evolved-skills ()
+  "Return a list of skill names that were recently evolved.
+Scans the evolution history for skills modified in the last 24 hours.
+Returns the opencode eval skills list as a fallback."
+  (or (ignore-errors
+        (let* ((root (or (gptel-auto-workflow--worktree-base-root)
+                         default-directory))
+               (skills-dir (expand-file-name "assistant/skills" root))
+               (cutoff (- (float-time) 86400))
+               (recent nil))
+          (when (file-directory-p skills-dir)
+            (dolist (entry (directory-files skills-dir t nil t))
+              (let ((skill-file (expand-file-name "SKILL.md" entry)))
+                (when (and (file-exists-p skill-file)
+                           (> (float-time (nth 5 (file-attributes skill-file)))
+                              cutoff))
+                   (push (file-name-nondirectory entry) recent)))))
+          (nreverse recent)))
+      ;; Fallback: return the configured opencode eval skills
+      gptel-auto-workflow-opencode-eval-skills))
+
+(defun gptel-auto-workflow--skill-governance-run-opencode-cycle ()
+  "Run opencode skill A/B evals for eligible skills.
+For each skill in `gptel-auto-workflow-opencode-eval-skills':
+1. Load task corpus from `assistant/skills/_eval-tasks/'
+2. Run A/B comparison (baseline vs variant)
+3. If variant wins, enqueue for human approval
+4. Save results tagged with :platform \"opencode\""
+  (require 'gptel-auto-workflow-skill-eval-opencode nil t)
+  (when (fboundp 'gptel-auto-workflow-skill-eval-ab)
+    (let ((results nil))
+      (dolist (skill-name gptel-auto-workflow-opencode-eval-skills)
+        (message "[skill-governance] Opencode eval: %s" skill-name)
+        (condition-case err
+            (let* ((task-dir (or (and (boundp 'gptel-auto-workflow-skill-eval-task-dir)
+                                      gptel-auto-workflow-skill-eval-task-dir)
+                                (expand-file-name "assistant/skills/_eval-tasks/"
+                                                  (or (gptel-auto-workflow--worktree-base-root)
+                                                      default-directory))))
+                   (tasks (when (file-directory-p task-dir)
+                            (directory-files task-dir t
+                                             (format "%s.*\\.yaml\\'" (regexp-quote skill-name))
+                                             t)))
+                   (task-file (car tasks)))
+              (when task-file
+                (let* ((task (gptel-auto-workflow-skill-eval-parse-task task-file))
+                       (ab (when task
+                             (gptel-auto-workflow-skill-eval-ab skill-name task 2))))
+                  (when ab
+                    (push (plist-put ab :platform "opencode") results)
+                    (message "[skill-governance] Opencode %s: baseline=%.2f treatment=%.2f rec=%s"
+                             skill-name
+                             (or (plist-get ab :baseline-rate) 0)
+                             (or (plist-get ab :treatment-rate) 0)
+                             (plist-get ab :recommendation))
+                    ;; Auto-promote if variant wins
+                    (when (and (string= (plist-get ab :recommendation) "promote")
+                               (fboundp 'gptel-auto-workflow-skill-eval-promote))
+                      (gptel-auto-workflow-skill-eval-promote skill-name ab))))))
+          (error
+           (message "[skill-governance] Opencode eval error for %s: %s"
+                    skill-name (error-message-string err)))))
+      (when results
+        (gptel-auto-workflow--skill-governance-save-ab-results
+         (cons (list :platform "opencode" :count (length results)) results))))))
 
 (defun gptel-auto-workflow--skill-governance-save-ab-results (results)
   "Save A/B test RESULTS to var/tmp/skill-governance/ab-results.json."
