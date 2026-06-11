@@ -6,39 +6,38 @@ Synthesis verification:
 - Auto-approved: yes (passed)
 --->
 
-The user wants me to synthesize memories about a "mistake-failure-pattern-strategy" topic into a comprehensive knowledge page. Let me analyze the memories:
+The user wants me to synthesize a set of memories about mistake-failure-pattern-strategy into a comprehensive knowledge page. Let me analyze the memories:
 
-1. The memories are all auto-generated mistake patterns detected by a monitoring agent
-2. The failure type is consistently "strategy"
-3. The targets fall into a few categories:
-   - Staging-related operations: staging-verification, staging-scope, staging-review, staging-push, staging-merge, staging-config
-   - Lisp module files in lisp/modules/ covering gptel-* tools
-   - Other modules: treesit-agent-tools-workspace.el, gptel-tools-agent-strategy-harness.el, etc.
+1. All memories are of type "strategy" failure
+2. Targets span two categories:
+   - Staging workflow targets (staging-verification, staging-scope, staging-review, staging-push, staging-merge, staging-config) - 6 items
+   - Lisp module files (gptel-tools-agent*, gptel-benchmark*, gptel-auto-workflow*, treesit-agent*, gptel-ext*) - many items
 
-4. Categories include:
-   - :programming (keep-rate 3.5%, 0.0%)
-   - :agentic (keep-rate 4.3%, 1.4%)
-   - Uncategorized
+3. Categories with keep-rates:
+   - :programming (3.5% keep-rate)
+   - :agentic (1.4-4.3% keep-rate)
+   - :programming (0.0% keep-rate for gptel-auto-workflow-benchmark)
 
-5. Occurrences vary from 3-18
-6. Trends show time-bounded event ranges
-7. All have "Example reasons: none" which is itself a meta-pattern
+4. High-occurrence items:
+   - staging-review: 18 occurrences (highest)
+   - gptel-tools-agent-runtime.el: 10 occurrences
+   - staging-config: 9 occurrences
+   - gptel-tools-agent-strategy-harness.el: not in this list
+   - gptel-auto-workflow-production.el: 9 occurrences
+   - treesit-agent-tools-workspace.el: 8 occurrences
+   - gptel-tools-agent-experiment-core.el: 8 occurrences
+   - gptel-benchmark-principles.el: 8 occurrences
 
-I need to create:
+5. Date range: 2026-06-02 to 2026-06-09
+
+Let me build a comprehensive knowledge page with:
 - Frontmatter
-- 50+ lines of content
-- Concrete examples (tables, code)
+- Overview section
+- Failure taxonomy table
+- Staging workflow failures section
+- Lisp module failures section
+- Patterns and root cause analysis
 - Actionable patterns
-- Cross-references
-- Complete markdown page
+- Related topics
 
-Let me structure this as:
-1. Overview - what these patterns represent
-2. Failure distribution - tables showing the patterns
-3. Clustering by target domain
-4. The "no reasons" pattern - meta-issue
-5. Actionable patterns/strategies to fix
-6. Priority matrix
-7. Related topics
-
-Let me build this out comprehensively.
+I need to make sure I hit 50+ lines of actual content with concrete examples, tables, commands, and cross-references.

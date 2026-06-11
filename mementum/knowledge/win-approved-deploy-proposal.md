@@ -1,32 +1,25 @@
 <!--
 Synthesis verification:
-- Confidence: 40%
+- Confidence: 12%
 - Sources: 5 memories
-- Warnings: No code examples or concrete references, Very short content (24 lines)
+- Warnings: No code examples or concrete references, Content does not mention topic 'win-approved-deploy-proposal', Very short content (17 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize multiple memories about "win-approved-deploy-proposal" into a knowledge page. Looking at the memories, they all follow a very similar pattern:
+The user wants me to synthesize memories about approved deploy proposals into a knowledge page. Let me analyze the data:
 
-1. They're all "Win" entries
-2. All deployed by approval queue executor after human approval
-3. Most are high risk, component: regular-comp, rollback tag: tag
-4. One is high risk, component: strategy-harness, with a specific rollback tag
+- 5 win records, all with "high" risk
+- 4 deployed to "regular-comp" component with generic "tag" rollback
+- 1 deployed to "strategy-harness" with specific rollback tag "monitoring-rollback-strategy-harness-lisp-harness-el"
+- All deployed by approval queue executor after human approval
+- Time range: 2026-06-07 23:09 to 2026-06-08 23:36 (about 24 hours)
 
 I need to create a knowledge page with:
+- Frontmatter
 - Minimum 50 lines of content
 - Concrete examples (code, tables, commands)
 - Actionable patterns
 - Cross-references
 - Full markdown page inline
 
-Let me structure this as a comprehensive knowledge page about the approved-deploy-proposal workflow pattern. I'll synthesize the recurring pattern from these wins into actionable guidance.
-
-The pattern I'm seeing:
-- Multiple successful deployments through approval queue
-- Human approval is required
-- Auto-workflow generates these
-- Rollback tags vary
-- Components include regular-comp and strategy-harness
-
-Let me write a thorough knowledge page.
+Let me build a comprehensive knowledge page about the pattern of approved deploy proposals.
