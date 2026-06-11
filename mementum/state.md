@@ -148,6 +148,9 @@ Two REPL modules now exist, both wired into `gptel-config.el`:
 - Isolated `gptel-auto-workflow--audit-provide-inside-defun` into its own module and wired it into `gptel-auto-workflow-self-heal-semantic`.
 - Structural tests now pass: swallowed `provide` is detected and auto-fixed, good files stay clean.
 - Key insight: `syntax-ppss` can move point; wrap it in `save-excursion` inside search loops or the scan can repeat the same match forever.
+- Serialized Allium `gptel-request` fan-out behind a shared FIFO queue and aligned the diff target cap with `gptel-auto-workflow-max-targets-per-run` to prevent pipe exhaustion.
+- Verified with targeted ERT: 294 tests, 0 unexpected results.
+- Restarted auto-workflow; current status is running with run-id `2026-06-11T231229Z-92f2`.
 
 ### Immediate
 1. **Enable opencode eval on Pi5** — Set `gptel-auto-workflow-opencode-eval-enabled t` after monitoring first cron cycle

@@ -58,6 +58,10 @@
                                   (or load-file-name buffer-file-name default-directory))))
   (error (message "[test] mementum skipped: %s" (error-message-string err))))
 
+;; Mark dynamic variables that are defcustom'd in modules that may not be
+;; loaded during unit tests, so `let' bindings are properly dynamic.
+(defvar gptel-auto-workflow-max-targets-per-run)
+
 (ert-deftest regression/auto-workflow-evolution/insufficient-data-returns-skip-message ()
   "Pipeline callers should see a textual skip reason, not bare nil."
   :expected-result (if noninteractive :failed :passed)
@@ -573,7 +577,9 @@ When fboundp IS met (allium loaded by earlier test), the function dispatches
 to the async LLM path (tested implicitly by the real pipeline)."
   (let ((called-p nil) (sentinel nil)
         (distill-fn (and (fboundp 'gptel-auto-experiment--allium-distill)
-                         (symbol-function 'gptel-auto-experiment--allium-distill))))
+                         (symbol-function 'gptel-auto-experiment--allium-distill)))
+        (check-fn (and (fboundp 'gptel-auto-experiment--allium-check)
+                       (symbol-function 'gptel-auto-experiment--allium-check))))
     (unwind-protect
         (progn
           ;; Temporarily remove allium fboundp to force sync fallback path
@@ -587,10 +593,9 @@ to the async LLM path (tested implicitly by the real pipeline)."
           (should (equal sentinel (cons 99 99))))
       ;; Restore allium functions
       (when distill-fn
-        (fset 'gptel-auto-experiment--allium-distill distill-fn)
-        (when-let ((check-fn (and (fboundp 'gptel-auto-experiment--allium-check)
-                                  (symbol-function 'gptel-auto-experiment--allium-check))))
-          (fset 'gptel-auto-experiment--allium-check check-fn))))))
+        (fset 'gptel-auto-experiment--allium-distill distill-fn))
+      (when check-fn
+        (fset 'gptel-auto-experiment--allium-check check-fn)))))
 
 (ert-deftest regression/auto-workflow-evolution/allium-diff-keeps-hypothesis-cons-cells ()
   "Opposing-hypothesis diffing should pass hypotheses, not decision labels."
@@ -3441,5 +3446,65 @@ Before fix, :strategy was dropped and :research-strategy was misread from col 20
                (message "[regression] extracts-strategy-field skipped: %s"
                         (error-message-string err))))))
       (delete-directory root t))))
+
+;; ─── Allium Diff Target Cap Tests ───
+
+(ert-deftest regression/auto-workflow-evolution/allium-diff-honors-max-targets-per-run ()
+  "diff-opposing-hypotheses respects gptel-auto-workflow-max-targets-per-run.
+When 30 targets are available and max-targets-per-run is 3, at most 3
+should be diffed."
+  (let ((target-count 0)
+        (gptel-auto-workflow-max-targets-per-run 3)
+        ;; Generate 30 targets, each with kept AND discarded entries
+        (results
+         (cl-loop for i from 1 to 30
+                  nconc (list (list :target (format "lisp/target-%02d.el" i)
+                                    :decision "kept"
+                                    :hypothesis (format "kept-hypo-%d" i))
+                              (list :target (format "lisp/target-%02d.el" i)
+                                    :decision "discarded"
+                                    :hypothesis (format "discard-hypo-%d" i))))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () results))
+              ((symbol-function 'gptel-auto-experiment--allium-distill)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'gptel-auto-experiment--allium-check)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'gptel-auto-workflow--allium-diff-minimal-pairs)
+               (lambda (_kept _discarded callback)
+                 (setq target-count (1+ target-count))
+                 (funcall callback (cons 0 0)))))
+      (gptel-auto-workflow--allium-diff-opposing-hypotheses)
+      (should (<= target-count gptel-auto-workflow-max-targets-per-run))
+      (should (> target-count 0)))))
+
+(ert-deftest regression/auto-workflow-evolution/allium-diff-fallback-max-targets ()
+  "diff-opposing-hypotheses falls back to 20 when max-targets-per-run is unbound.
+With 5 targets each having both kept+discarded entries, and no budget variable
+bound, all 5 targets should be diffed (5 ≤ 20 fallback)."
+  (let ((target-count 0)
+        (results
+         (cl-loop for i from 1 to 5
+                  nconc (list (list :target (format "lisp/target-%02d.el" i)
+                                    :decision "kept"
+                                    :hypothesis (format "kept-hypo-%d" i))
+                              (list :target (format "lisp/target-%02d.el" i)
+                                    :decision "discarded"
+                                    :hypothesis (format "discard-hypo-%d" i))))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda () results))
+              ((symbol-function 'gptel-auto-experiment--allium-distill)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'gptel-auto-experiment--allium-check)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'gptel-auto-workflow--allium-diff-minimal-pairs)
+               (lambda (_kept _discarded callback)
+                 (setq target-count (1+ target-count))
+                 (funcall callback (cons 0 0)))))
+      ;; Ensure the variable is not accidentally bound
+      (when (boundp 'gptel-auto-workflow-max-targets-per-run)
+        (makunbound 'gptel-auto-workflow-max-targets-per-run))
+      (gptel-auto-workflow--allium-diff-opposing-hypotheses)
+      (should (= target-count 5)))))  ; 5 ≤ 20 fallback
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here

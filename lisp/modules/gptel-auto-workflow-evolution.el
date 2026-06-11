@@ -4914,7 +4914,9 @@ Only processes targets from the last 7 days to avoid analyzing stale data."
            (by-target (make-hash-table :test 'equal))
            (targets nil)
            (processed-count 0)
-           (max-targets 20))  ; Limit to avoid excessive processing
+           (max-targets (if (boundp 'gptel-auto-workflow-max-targets-per-run)
+                            gptel-auto-workflow-max-targets-per-run
+                          20)))  ; Limit to budget; fallback to previous cap
       (dolist (r recent-results)
         (let ((target (plist-get r :target))
               (hypothesis (plist-get r :hypothesis))
