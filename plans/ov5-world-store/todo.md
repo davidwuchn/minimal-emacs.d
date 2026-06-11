@@ -9,46 +9,48 @@ updated: "2026-06-11"
 
 > Tracking [OV5 World Store](plan.md)
 
-## Active Phase: 2 - TSV Migration
+## Active Phase: 3 - Context Unification
 
 ### Phase Context
 
-- **Scope**: [Phase 2](phases/phase-2.md)
-- **Implementation**: Phase 2 Plan (to be authored)
+- **Scope**: [Phase 3](phases/phase-3.md)
+- **Implementation**: Phase 3 Plan (to be authored)
 - **Latest Handover**: [Session 2026-06-11](handovers/session-2026-06-11.md)
 - **Relevant Docs**:
   - `mementum/state.md` — current system state
   - `clj/ov5/world_store.clj` — core namespace
+  - `clj/ov5/world_store/migration.clj` — migration namespace
   - `lisp/modules/gptel-ext-world-store.el` — Elisp bridge
 
 ### Pending
 
-- [ ] Parse all TSV files in `var/tmp/experiments/2026-*/`
-- [ ] Handle 5 schema versions (14, 20, 24, 27, 32 columns)
-- [ ] Map TSV columns to Datahike schema attributes
-- [ ] Write migration namespace `clj/ov5/world_store/migration.clj`
-- [ ] Write Elisp entry point `gptel-ext-world-store-migration.el`
-- [ ] Validate: row count match, sample verification
-- [ ] Make migration idempotent (upsert by experiment-id)
-- [ ] Log schema version distribution and unmappable fields
-- [ ] Write migration tests
+- [ ] Parse `var/context/*.sexp` files and link to experiment entities
+- [ ] Parse `var/approval-history.sexp` and link decisions to experiments
+- [ ] Parse `var/risk-patterns.sexp` and link to targets
+- [ ] Write unified entity lookup
+- [ ] Add context attributes to schema
+- [ ] Write context unification namespace
+- [ ] Write tests for context unification
 
 ### In Progress
 
-- [ ] Phase 1 complete — moving to Phase 2
+- [ ] Phase 2 complete — moving to Phase 3
 
 ### Completed
 
 - [x] Phase 1: Bootstrap
-  - [x] Research Datahike babashka compatibility → use pod v0.8.1697
-  - [x] Create `bb.edn` with Datahike pod
-  - [x] Write `clj/ov5/world_store.clj` — core namespace (schema, CRUD, query helpers)
-  - [x] Write `lisp/modules/gptel-ext-world-store.el` — Elisp bridge
-  - [x] Write `tests/test-world-store-bootstrap.el` — 8 tests, all green
-  - [x] Verify brepl can load and eval Datahike code
-  - [x] Define schema for experiment, backend, strategy, target
-  - [x] Test round-trip CRUD via brepl and Elisp
-  - [x] Byte-compile Elisp module
+  - [x] Datahike pod via babashka brepl
+  - [x] Schema defined (experiment/backend/strategy/target)
+  - [x] CRUD + query helpers
+  - [x] Elisp bridge
+  - [x] 8 bootstrap tests
+- [x] Phase 2: TSV Migration
+  - [x] 3 schema versions (30/39/43 columns)
+  - [x] Type coercion (double/long/keyword/string)
+  - [x] Run-ID namespacing for unique IDs
+  - [x] Deterministic UUID from path
+  - [x] 105 files → 124 rows → 87 experiments migrated
+  - [x] 3 migration tests (single, multi-schema, idempotent)
 
 ### Blocked
 
@@ -58,5 +60,5 @@ updated: "2026-06-11"
 
 ### 2026-06-11
 
-- Phase 1 COMPLETE: Datahike pod working via babashka brepl; schema defined; CRUD + query helpers functional; Elisp bridge connects/transacts/queries/looks-up entities; 8 bootstrap tests pass
-- Phase 2 identified as next: TSV migration from `var/tmp/experiments/2026-*/`
+- Phase 2 COMPLETE: TSV migration working; 87 experiments in World Store
+- Phase 3 identified as next: Context unification (.sexp sidecars, approval, risk)
