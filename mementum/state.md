@@ -3,8 +3,8 @@
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
 > **Status**: ✅ **GATE INTEGRITY SELF-AUDIT COMPLETE** — 46 defvar-override-defcustom violations fixed; pre-push test gate blocks broken code; 3 new self-audit checks detect pipeline bypasses
-> **Latest**: Fixed 46 defvar-with-value declarations that overrode defcustom defaults; added pre-push hook (Gate 1: test gate always-on, Gate 2: submodule sync skippable); 3 new self-audit checks (defvar-override, pipeline-gate, staging-bypass); fixed run-tests.sh false-positive on "Aborted:" prefix; fixed flaky grader timeout test; Pi5 completed opencode-skill-evolution (24 tests, eval pipeline end-to-end); 2945 tests, 0 unexpected
-> **Active Plan**: [OV5 World Store](../plans/ov5-world-store/plan.md) — Phase 1 (Bootstrap): install Datahike, define schema, basic CRUD via brepl
+> **Latest**: Phase 1 of OV5 World Store COMPLETE — Datahike pod (0.8.1697) via babashka brepl; schema defined (experiment/backend/strategy/target); CRUD + query helpers working; Elisp bridge `gptel-ext-world-store.el` with connect/transact/query/entity; 8 bootstrap tests all green; fixed Elisp→EDN plist conversion (keywordp vs plistp bug); fixed schema-flexibility string/keyword handling in keep-rate
+> **Active Plan**: [OV5 World Store](../plans/ov5-world-store/plan.md) — Phase 2 (TSV Migration): migrate all existing experiment TSVs (5 schema versions) to World Store
 > **Pi5**: Auto-evolution active; pre-push hook now blocks broken pushes to main; Pi5 auto-evolved boundary fixes (Preview Mode 2, Edit hashline, Code_Map/Inspect/Replace, plan-mode readonly enforcement)
 
 ---
@@ -131,10 +131,12 @@ Two REPL modules now exist, both wired into `gptel-config.el`:
 7. **Bulk self-heal hardened**: Entry point now routes high-risk files through dispatch instead of invoking fixers directly
 
 ### Test Summary
-- **self-heal-semantic**: 57/57 (added 4: bulk-dispatch, routing, ov5-adapter-defer, provide-top-level regression)
+- **self-heal-semantic**: 57/57
 - **daemon-repl**: 24/26 (2 existing skips)
-- **ontology-router**: 24/24 (all regressions recovered from corruption)
-- **Full unit suite**: 2803/2819 passing, 16 pre-existing failures (grader 7, preview 1, ordering 2, unrelated 6), 54 skips
+- **ontology-router**: 24/24
+- **self-audit**: 9/9 (added 3: defvar-override, pipeline-gate, staging-bypass)
+- **world-store**: 8/8 (Phase 1 bootstrap: connection, CRUD, query helpers)
+- **Full unit suite**: 2945 total, 0 unexpected, 29 skipped. All green.
 
 ---
 
