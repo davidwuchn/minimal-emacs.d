@@ -1,25 +1,27 @@
 <!--
 Synthesis verification:
-- Confidence: 12%
+- Confidence: 40%
 - Sources: 5 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'win-approved-deploy-proposal', Very short content (17 lines)
+- Warnings: No code examples or concrete references, Very short content (19 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize memories about approved deploy proposals into a knowledge page. Let me analyze the data:
+The user wants me to synthesize memories about "win-approved-deploy-proposal" into a knowledge page. Let me analyze the memories:
 
-- 5 win records, all with "high" risk
-- 4 deployed to "regular-comp" component with generic "tag" rollback
-- 1 deployed to "strategy-harness" with specific rollback tag "monitoring-rollback-strategy-harness-lisp-harness-el"
-- All deployed by approval queue executor after human approval
-- Time range: 2026-06-07 23:09 to 2026-06-08 23:36 (about 24 hours)
+1. Multiple "Win" entries showing approved and deployed proposals
+2. All are high-risk
+3. Components: mostly `regular-comp`, one `strategy-harness`
+4. Rollback tags: mostly `tag` (generic), one specific `monitoring-rollback-strategy-harness-lisp-harness-el`
+5. Deployed by approval queue executor after human approval
+6. Times: 2026-06-08 23:36, 23:10, 23:06, 22:35, 2026-06-07 23:09
 
-I need to create a knowledge page with:
-- Frontmatter
-- Minimum 50 lines of content
-- Concrete examples (code, tables, commands)
+The pattern shows: human approval → approval queue executor deploys → high-risk deploys that succeeded
+
+Let me create a comprehensive knowledge page that:
+- Has 50+ lines
+- Concrete examples/tables/commands
 - Actionable patterns
 - Cross-references
-- Full markdown page inline
+- Frontmatter + full body
 
-Let me build a comprehensive knowledge page about the pattern of approved deploy proposals.
+I'll structure it as a deployment runbook/knowledge page showing the pattern of approved deploys.
