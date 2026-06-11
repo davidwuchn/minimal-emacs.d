@@ -62,12 +62,21 @@
 ;; -----------------------------------------------------------------------------
 ;; Connection
 
+(defn- path-to-uuid
+  "Generate a deterministic UUID from a path string."
+  [path]
+  (let [bytes (.getBytes path java.nio.charset.StandardCharsets/UTF_8)
+        hash (java.security.MessageDigest/getInstance "MD5")
+        digest (.digest hash bytes)]
+    (java.util.UUID/nameUUIDFromBytes digest)))
+
 (defn connect
   "Connect to a Datahike store at `path`. Creates store if it doesn't exist.
    Returns the connection."
   [path]
-  (let [cfg {:store {:backend :file
-                     :id (java.util.UUID/randomUUID)
+  (let [uuid (path-to-uuid path)
+        cfg {:store {:backend :file
+                     :id uuid
                      :path path}
              :keep-history? true
              :schema-flexibility :read}]
