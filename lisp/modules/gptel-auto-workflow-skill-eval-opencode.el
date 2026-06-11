@@ -15,7 +15,266 @@ Tasks live alongside the skills they test in assistant/skills/_eval-tasks/."
   :type 'directory
   :group 'gptel-auto-workflow)
 
-;;; ─── Frontmatter Parser ───
+(defcustom gptel-auto-workflow-skill-eval-opencode-bin "opencode"
+  "Path to the opencode binary."
+  :type 'string
+  :group 'gptel-auto-workflow)
+
+(defcustom gptel-auto-workflow-skill-eval-timeout 300
+  "Timeout in seconds for a single opencode eval run."
+  :type 'integer
+  :group 'gptel-auto-workflow)
+
+(defcustom gptel-auto-workflow-skill-eval-results-dir
+  (expand-file-name "var/tmp/skill-eval-opencode/results/"
+                    (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                             (gptel-auto-workflow--worktree-base-root))
+                        user-emacs-directory))
+  "Directory for persisting skill eval results."
+  :type 'directory
+  :group 'gptel-auto-workflow)
+
+(defcustom gptel-auto-workflow-skill-eval-ab-threshold 0.05
+  "Minimum difference in success rate to recommend promote/reject."
+  :type 'float
+  :group 'gptel-auto-workflow)
+
+;;; ─── Transcript Parser ───
+
+(defun gptel-auto-workflow-skill-eval--parse-transcript-json (json-string)
+  "Parse opencode JSON output, return a flat transcript string.
+JSON-STRING is newline-delimited JSON from `opencode run --format json'.
+Extract text parts and tool calls.  Return a string for assertion
+checking."
+  (let ((lines (split-string json-string "\n"))
+        (parts nil))
+    (dolist (line lines)
+      (let ((trimmed (string-trim line)))
+        (when (string-match-p "^{" trimmed)
+          (let* ((parsed
+                  (condition-case nil
+                      (if (fboundp 'json-parse-string)
+                          (json-parse-string trimmed
+                                             :object-type 'plist
+                                             :null-object nil
+                                             :false-object nil)
+                        (gptel-auto-workflow-skill-eval--parse-json-regex trimmed))
+                    (error nil)))
+                 (ptype (when parsed (plist-get parsed :type))))
+            (when ptype
+              (cond
+               ((string= ptype "text")
+                (let ((text (plist-get parsed :text)))
+                  (when (and text (stringp text)
+                             (not (string-empty-p (string-trim text))))
+                    (push (string-trim text) parts))))
+               ((string= ptype "tool")
+                (let* ((tool-name (or (plist-get parsed :tool) "unknown"))
+                       (state (plist-get parsed :state))
+                       (output (when state (plist-get state :output)))
+                       (output-str (if (and output (stringp output))
+                                       (substring output 0 (min (length output) 200))
+                                     "")))
+                  (push (format "TOOL: %s OUTPUT: %s" tool-name output-str)
+                        parts)))))))))
+    (string-join (nreverse parts) "\n")))
+
+(defun gptel-auto-workflow-skill-eval--parse-json-regex (json-line)
+  "Fallback regex-based JSON parser for a single-line JSON object.
+Extracts :type, :text, :tool, and :state subkeys into a plist.
+Used when `json-parse-string' is unavailable."
+  (let ((result nil))
+    (when (string-match "\"type\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\"" json-line)
+      (setq result (plist-put result :type (match-string 1 json-line))))
+    (when (string-match "\"text\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\"" json-line)
+      (setq result (plist-put result :text (match-string 1 json-line))))
+    (when (string-match "\"tool\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\"" json-line)
+      (setq result (plist-put result :tool (match-string 1 json-line))))
+    (when (string-match "\"output\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\"" json-line)
+      (let ((output (match-string 1 json-line)))
+        (setq result (plist-put result :state (list :output output)))))
+    result))
+
+;;; ─── Opencode Executor ───
+
+(defun gptel-auto-workflow-skill-eval-run (task skill-variant-file)
+  "Run a single opencode eval with TASK and SKILL-VARIANT-FILE.
+TASK is a parsed task plist from `gptel-auto-workflow-skill-eval-parse-task'.
+SKILL-VARIANT-FILE is the path to the SKILL.md variant to test.
+Temporarily replaces the .opencode/skills/<skill> symlink to inject variant.
+Returns plist (:transcript STR :grade PLIST :duration FLOAT :exit-code INT)."
+  (let* ((skill-name (plist-get task :skill))
+         (prompt (plist-get task :prompt))
+         (project-root (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                                (gptel-auto-workflow--worktree-base-root))
+                           default-directory))
+         (symlink-path (expand-file-name (format ".opencode/skills/%s" skill-name)
+                                         project-root))
+         (original-target nil)
+         (temp-skill-dir nil)
+         (start-time (float-time))
+         (output-buf (generate-new-buffer " *opencode-eval*"))
+         exit-code
+         stdout-str)
+    (unwind-protect
+        (progn
+          ;; 1. Save original symlink target
+          (when (file-symlink-p symlink-path)
+            (setq original-target (file-symlink-p symlink-path)))
+          ;; 2. Create temp dir with SKILL.md -> variant
+          (setq temp-skill-dir (make-temp-file "opencode-skill-eval-" t))
+          (make-symbolic-link (expand-file-name skill-variant-file)
+                              (expand-file-name "SKILL.md" temp-skill-dir)
+                              t)
+          ;; 3. Replace symlink
+          (when (file-exists-p symlink-path)
+            (delete-file symlink-path))
+          (make-symbolic-link temp-skill-dir symlink-path t)
+          ;; 4. Run opencode
+          (let ((default-directory project-root))
+            (setq exit-code
+                  (call-process gptel-auto-workflow-skill-eval-opencode-bin
+                                nil output-buf nil
+                                "run" "--format" "json"
+                                "--dir" project-root
+                                prompt))
+            (setq stdout-str
+                  (with-current-buffer output-buf
+                    (buffer-string)))))
+      ;; Cleanup: restore original symlink
+      (when symlink-path
+        (when (file-exists-p symlink-path)
+          (delete-file symlink-path))
+        (when original-target
+          (make-symbolic-link original-target symlink-path t)))
+      (when (and temp-skill-dir (file-exists-p temp-skill-dir))
+        (delete-directory temp-skill-dir t))
+      (when (buffer-live-p output-buf)
+        (kill-buffer output-buf)))
+    (let* ((transcript (gptel-auto-workflow-skill-eval--parse-transcript-json
+                        (or stdout-str "")))
+           (grade (gptel-auto-workflow-skill-eval-grade task transcript))
+           (duration (- (float-time) start-time)))
+      (list :transcript transcript
+            :grade grade
+            :duration duration
+            :exit-code exit-code))))
+
+;;; ─── A/B Runner ───
+
+(defun gptel-auto-workflow-skill-eval--locate-treatment-variant (skill-name)
+  "Locate the treatment variant SKILL.md for SKILL-NAME.
+Checks `assistant/skills/_eval-tasks/{skill}-candidate.md' first,
+then `var/tmp/skill-eval-opencode/variants/{skill}-candidate.md'.
+Returns the file path if found, nil otherwise."
+  (let* ((root (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                        (gptel-auto-workflow--worktree-base-root))
+                   default-directory))
+         (candidates
+          (list (expand-file-name (format "assistant/skills/_eval-tasks/%s-candidate.md"
+                                          skill-name)
+                                  root)
+                (expand-file-name (format "var/tmp/skill-eval-opencode/variants/%s-candidate.md"
+                                          skill-name)
+                                  root))))
+    (cl-find-if #'file-exists-p candidates)))
+
+(defun gptel-auto-workflow-skill-eval--compute-success-rate (run-results)
+  "Compute the overall success rate from RUN-RESULTS plists.
+Returns a float 0.0-1.0."
+  (if (null run-results)
+      0.0
+    (let ((total-pass 0)
+          (total-assertions 0))
+      (dolist (r run-results)
+        (let ((grade (plist-get r :grade)))
+          (when grade
+            (cl-incf total-pass (or (plist-get grade :pass-count) 0))
+            (cl-incf total-assertions (or (plist-get grade :total) 0)))))
+      (if (> total-assertions 0)
+          (/ (float total-pass) total-assertions)
+        0.0))))
+
+(defun gptel-auto-workflow-skill-eval-ab (skill-name task &optional n-runs)
+  "Run A/B comparison for SKILL-NAME on TASK, N-RUNS per arm (default 3).
+Baseline uses `assistant/skills/{skill}/SKILL.md'.
+Treatment is found via `--locate-treatment-variant'.
+Return plist with :baseline-rate, :treatment-rate, :recommendation."
+  (or n-runs (setq n-runs 3))
+  (let* ((root (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                        (gptel-auto-workflow--worktree-base-root))
+                   default-directory))
+         (baseline-file (expand-file-name
+                         (format "assistant/skills/%s/SKILL.md" skill-name) root))
+         (treatment-file (gptel-auto-workflow-skill-eval--locate-treatment-variant
+                          skill-name))
+         baseline-results treatment-results)
+    ;; Run baseline
+    (dotimes (_ n-runs)
+      (push (gptel-auto-workflow-skill-eval-run task baseline-file)
+            baseline-results))
+    (setq baseline-results (nreverse baseline-results))
+    ;; Run treatment (if available)
+    (when treatment-file
+      (dotimes (_ n-runs)
+        (push (gptel-auto-workflow-skill-eval-run task treatment-file)
+              treatment-results))
+      (setq treatment-results (nreverse treatment-results)))
+    ;; Compute rates and recommendation
+    (let* ((baseline-rate
+            (gptel-auto-workflow-skill-eval--compute-success-rate baseline-results))
+           (treatment-rate
+            (if treatment-results
+                (gptel-auto-workflow-skill-eval--compute-success-rate treatment-results)
+              0.0))
+           (delta (- treatment-rate baseline-rate))
+           (recommendation
+            (cond
+             ((not treatment-file) "no-variant")
+             ((>= delta gptel-auto-workflow-skill-eval-ab-threshold) "promote")
+             ((<= delta (- gptel-auto-workflow-skill-eval-ab-threshold)) "reject")
+             (t "indeterminate"))))
+      (list :skill skill-name
+            :task (plist-get task :name)
+            :baseline-results baseline-results
+            :treatment-results treatment-results
+            :baseline-rate baseline-rate
+            :treatment-rate treatment-rate
+            :recommendation recommendation))))
+
+;;; ─── Result Persistence ───
+
+(defun gptel-auto-workflow-skill-eval-save-result (result)
+  "Save RESULT plist to a JSON file in the results directory.
+Returns the file path of the saved result."
+  (let* ((dir (expand-file-name gptel-auto-workflow-skill-eval-results-dir))
+         (skill (plist-get result :skill))
+         (variant (or (plist-get result :variant) "unknown"))
+         (ts (format-time-string "%Y%m%dT%H%M%S"))
+         (filename (format "%s-%s-%s.json" skill variant ts))
+         (filepath (expand-file-name filename dir))
+         (transcript (plist-get result :transcript))
+         (excerpt (if transcript
+                      (let ((s (string-trim transcript)))
+                        (if (> (length s) 500)
+                            (concat (substring s 0 500) "...")
+                          s))
+                    ""))
+         (grade (plist-get result :grade))
+         (duration (plist-get result :duration))
+         (data `(:skill ,skill :task ,(plist-get result :task)
+                   :timestamp ,ts :variant ,variant :duration ,duration
+                   :grade (:pass-count ,(plist-get grade :pass-count)
+                           :fail-count ,(plist-get grade :fail-count)
+                           :total ,(plist-get grade :total))
+                   :transcript-excerpt ,excerpt)))
+    (unless (file-exists-p dir)
+      (make-directory dir t))
+    (with-temp-file filepath
+      (insert (if (fboundp 'json-serialize)
+                  (json-serialize data)
+                (format "%S" data))))
+    filepath))
 
 (defun gptel-auto-workflow-skill-eval--parse-frontmatter (text)
   "Parse YAML-like frontmatter TEXT and return a plist.

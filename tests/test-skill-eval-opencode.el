@@ -149,6 +149,111 @@
       (should (plist-get task :skill))
       (should (plist-get task :prompt))
       (should (listp (plist-get task :expected)))
-      (should (listp (plist-get task :forbidden))))))
+       (should (listp (plist-get task :forbidden))))))
+
+;; ── Group 5: Transcript Parsing ──
+
+(ert-deftest test-skill-eval/parse-transcript-text ()
+  "Text event appears in transcript."
+  (let* ((json "{\"type\":\"text\",\"text\":\"Hello world\"}")
+         (result (gptel-auto-workflow-skill-eval--parse-transcript-json json)))
+    (should (string-match-p "Hello world" result))))
+
+(ert-deftest test-skill-eval/parse-transcript-tool ()
+  "Tool event produces TOOL: <name> OUTPUT: <output> in transcript."
+  (let* ((json "{\"type\":\"tool\",\"tool\":\"bash\",\"state\":{\"input\":{\"command\":\"ls\"},\"output\":\"file.txt\"}}")
+         (result (gptel-auto-workflow-skill-eval--parse-transcript-json json)))
+    (should (string-match-p "TOOL: bash" result))
+    (should (string-match-p "file.txt" result))))
+
+(ert-deftest test-skill-eval/parse-transcript-mixed ()
+  "Multiple events produce combined transcript."
+  (let* ((lines '("{\"type\":\"text\",\"text\":\"I will run ls.\"}"
+                   "{\"type\":\"tool\",\"tool\":\"bash\",\"state\":{\"input\":{\"command\":\"ls\"},\"output\":\"README.md\"}}"
+                   "{\"type\":\"text\",\"text\":\"Done.\"}"))
+         (json (string-join lines "\n"))
+         (result (gptel-auto-workflow-skill-eval--parse-transcript-json json)))
+    (should (string-match-p "I will run ls" result))
+    (should (string-match-p "TOOL: bash" result))
+    (should (string-match-p "Done" result))))
+
+(ert-deftest test-skill-eval/parse-transcript-empty ()
+  "Empty input produces empty transcript."
+  (let ((result (gptel-auto-workflow-skill-eval--parse-transcript-json "")))
+    (should (string= result ""))))
+
+;; ── Group 6: Result Persistence ──
+
+(ert-deftest test-skill-eval/save-result ()
+  "Save result to JSON file and verify contents."
+  (let* ((tmp-dir (make-temp-file "skill-eval-results-" t))
+         (gptel-auto-workflow-skill-eval-results-dir tmp-dir)
+         (result (list :skill "brepl" :task "brepl-basic" :variant "baseline"
+                       :grade (list :pass-count 3 :fail-count 1 :total 4)
+                       :duration 42.5
+                       :transcript "Using nrepl to evaluate Clojure...")))
+    (unwind-protect
+        (let ((saved-path (gptel-auto-workflow-skill-eval-save-result result)))
+          (should (file-exists-p saved-path))
+          (with-temp-buffer
+            (insert-file-contents saved-path)
+            (let ((content (buffer-string)))
+              (should (string-match-p "brepl" content))
+              (should (string-match-p "pass-count" content))
+              (should (string-match-p "42.5" content))))
+          (delete-file saved-path))
+      (ignore-errors (delete-directory tmp-dir t)))))
+
+;; ── Group 7: A/B Recommendations ──
+
+(defun test-skill-eval--mock-run (pass-count total)
+  "Return a mock run result with PASS-COUNT and TOTAL."
+  (list :transcript "mock transcript"
+        :grade (list :pass-count pass-count
+                     :fail-count (- total pass-count)
+                     :total total)
+        :duration 1.0))
+
+(ert-deftest test-skill-eval/ab-recommendation-promote ()
+  "Treatment clearly better than baseline -> promote."
+  (cl-letf* (((symbol-function 'gptel-auto-workflow-skill-eval--locate-treatment-variant)
+              (lambda (_) "/fake/treatment.md"))
+             ((symbol-function 'gptel-auto-workflow-skill-eval-run)
+              (lambda (_task file)
+                (if (string-match-p "treatment" (or file ""))
+                    (test-skill-eval--mock-run 4 4)
+                  (test-skill-eval--mock-run 1 4)))))
+    (let* ((task (list :name "test-task" :skill "brepl"
+                       :expected nil :forbidden nil))
+           (result (gptel-auto-workflow-skill-eval-ab "brepl" task 1)))
+      (should (string= (plist-get result :recommendation) "promote")))))
+
+(ert-deftest test-skill-eval/ab-recommendation-reject ()
+  "Treatment clearly worse than baseline -> reject."
+  (cl-letf* (((symbol-function 'gptel-auto-workflow-skill-eval--locate-treatment-variant)
+              (lambda (_) "/fake/treatment.md"))
+             ((symbol-function 'gptel-auto-workflow-skill-eval-run)
+              (lambda (_task file)
+                (if (string-match-p "treatment" (or file ""))
+                    (test-skill-eval--mock-run 1 4)
+                  (test-skill-eval--mock-run 4 4)))))
+    (let* ((task (list :name "test-task" :skill "brepl"
+                       :expected nil :forbidden nil))
+           (result (gptel-auto-workflow-skill-eval-ab "brepl" task 1)))
+      (should (string= (plist-get result :recommendation) "reject")))))
+
+(ert-deftest test-skill-eval/ab-recommendation-indeterminate ()
+  "Similar results -> indeterminate."
+  (let ((run-call-count 0))
+    (cl-letf (((symbol-function 'gptel-auto-workflow-skill-eval--locate-treatment-variant)
+               (lambda (_) "/fake/treatment.md"))
+              ((symbol-function 'gptel-auto-workflow-skill-eval-run)
+               (lambda (_task _file)
+                 (test-skill-eval--mock-run 3 4))))
+      (let* ((task (list :name "test-task" :skill "brepl"
+                         :expected nil :forbidden nil))
+             (result (gptel-auto-workflow-skill-eval-ab "brepl" task 1)))
+        (should (string= (plist-get result :recommendation)
+                         "indeterminate"))))))
 
 ;;; test-skill-eval-opencode.el ends here
