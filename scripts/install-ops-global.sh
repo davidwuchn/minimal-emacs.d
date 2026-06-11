@@ -105,6 +105,7 @@ additional_delegates:
     reasoningEffort: high
   creative:
     model: deepseek/deepseek-v4-pro
+    reasoningEffort: high
   fast:
     model: deepseek/deepseek-v4-flash
 
@@ -156,7 +157,7 @@ update_model() {
 fm_grep() {
     local file="$1" pattern="$2"
     # Extract frontmatter (between first two ---) and grep within it
-    perl -ne 'BEGIN { $fm = 0; } if (/^---/) { $fm++; } if ($fm == 1 && /'"$pattern"'/) { exit 0; } END { exit 1; }' "$file"
+    perl -ne 'BEGIN { $fm = 0; $found = 0; } if (/^---/) { $fm++; } if ($fm == 1 && /'"$pattern"'/) { $found = 1; } END { exit($found ? 0 : 1); }' "$file"
 }
 
 # Primary
