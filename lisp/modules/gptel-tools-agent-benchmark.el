@@ -194,7 +194,7 @@ through the staging gate."
        gptel-auto-workflow-use-staging
        (bound-and-true-p gptel-auto-workflow--headless)))
 
-(defcustom gptel-auto-experiment-max-changed-files 10
+(defcustom gptel-auto-experiment-max-changed-files 15
   "Maximum number of files an experiment can change.
 Prevents scope creep where executor touches many unrelated files.
 Set to 0 to disable the check."

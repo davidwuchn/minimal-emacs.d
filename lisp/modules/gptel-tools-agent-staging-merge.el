@@ -893,6 +893,12 @@ Returns non-nil on success."
 When BASE-REF is non-nil, prefer restoring the last known-good staging state.
 Falls back to rebuilding staging from the workflow base if BASE-REF cannot be
 restored."
+  ;; Tag current staging HEAD for recovery before reset (GAP 7 fix)
+  (condition-case nil
+      (let ((tag (format "recovery/staging-failed-%s" (format-time-string "%Y%m%d-%H%M%S"))))
+        (gptel-auto-workflow--git-cmd (format "git tag %s" (shell-quote-argument tag)) 30)
+        (message "[staging] Recovery tag created: %s" tag))
+    (error (message "[staging] WARNING: Failed to create recovery tag")))
   (cond
    ((and base-ref
          (gptel-auto-workflow--restore-staging-ref base-ref))

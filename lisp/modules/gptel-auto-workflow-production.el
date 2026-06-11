@@ -98,7 +98,12 @@ Skips when a workflow or cron job is active to avoid preempting experiments."
             (condition-case err
                 (gptel-auto-workflow--context-db-persist)
               (error (message "[auto-workflow] WARNING: context-db-persist failed: %s" err))))
-          (message "[auto-workflow] Evolution cycle complete."))
+          (message "[auto-workflow] Evolution cycle complete.")
+          ;; Execute approved proposals from approval queue (GAP 3 fix)
+          (condition-case err
+              (when (fboundp 'gptel-auto-workflow-approval-queue-execute-approved)
+                (gptel-auto-workflow-approval-queue-execute-approved))
+            (error (message "[auto-workflow] WARNING: approval-queue-execute failed: %s" err))))
       (error
        (message "[auto-workflow] Evolution cycle error: %s" err)
        (condition-case log-err
@@ -499,15 +504,54 @@ Requires a decision file in mementum/decisions/ with status: approved."
   (expand-file-name "mementum/decisions/"
                     (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
                              (gptel-auto-workflow--worktree-base-root))
-                        default-directory)))
+                         default-directory)))
+
+(defcustom gptel-auto-workflow-decision-auto-expiry-hours 24
+  "Hours after which a pending human decision is auto-approved.
+Set to 0 to disable auto-expiry."
+  :type 'integer
+  :group 'gptel)
 
 (defun gptel-auto-workflow--pending-decisions-p ()
   "Return non-nil if there are pending human decisions blocking PMF.
-Checks mementum/decisions/ for files with status: proposed."
+Checks mementum/decisions/ for files with status: proposed.
+Auto-expires decisions older than\n`gptel-auto-workflow-decision-auto-expiry-hours'."
   (when gptel-auto-workflow-human-decision-gate
     (let ((dir (gptel-auto-workflow--decisions-dir))
           (pending nil))
       (when (file-directory-p dir)
+        ;; Auto-expire old decisions (GAP 6 fix)
+        (when (> gptel-auto-workflow-decision-auto-expiry-hours 0)
+          (let ((expiry-secs (* gptel-auto-workflow-decision-auto-expiry-hours 3600))
+                (now (current-time)))
+            (dolist (file (directory-files dir t "\\.md$"))
+              (unless (string-match-p "TEMPLATE" (file-name-nondirectory file))
+                (let* ((attrs (file-attributes file))
+                       (mtime (file-attribute-modification-time attrs)))
+                  (when (and mtime (time-less-p (time-add mtime expiry-secs) now))
+                    (let* ((content (condition-case nil
+                                       (with-temp-buffer
+                                         (insert-file-contents file)
+                                         (buffer-string))
+                                     (error nil)))
+                           (status (when (and content (string-match "^status:\\s-*\\(.+\\)$" content))
+                                     (match-string 1 content))))
+                      (when (and status (string= (string-trim status) "proposed"))
+                        ;; Auto-approve expired decision
+                        (condition-case nil
+                            (progn
+                              (with-temp-buffer
+                                (insert-file-contents file)
+                                (goto-char (point-min))
+                                (when (re-search-forward "^status:\\s-*proposed" nil t)
+                                  (replace-match "status: auto-approved"))
+                                (write-region (point-min) (point-max) file nil 'silent))
+                              (message "[auto-workflow] Auto-approved expired decision: %s"
+                                       (file-name-nondirectory file)))
+                          (error
+                           (message "[auto-workflow] WARNING: Failed to auto-approve decision: %s"
+                                    (file-name-nondirectory file)))))))))))
+        ;; Check if any remain pending
         (dolist (file (directory-files dir t "\\.md$"))
           (unless (string-match-p "TEMPLATE" (file-name-nondirectory file))
             (let* ((content (condition-case nil
@@ -1205,6 +1249,7 @@ Also persists the full report to var/metrics/ for historical tracking."
                 (ignore-errors (delete-file f)))))
         (error nil))
       m)))
+)
 
 (provide 'gptel-auto-workflow-production)
 ;;; gptel-auto-workflow-production.el ends here
