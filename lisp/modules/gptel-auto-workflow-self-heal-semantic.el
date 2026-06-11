@@ -13,6 +13,7 @@
 (require 'cl-lib)
 (require 'subr-x)
 (require 'json)
+(require 'gptel-auto-workflow-audit-provide-inside-defun)
 
 (declare-function gptel-auto-workflow--with-temporary-worktree
                   "gptel-tools-agent-staging-baseline" (slug ref fn))
