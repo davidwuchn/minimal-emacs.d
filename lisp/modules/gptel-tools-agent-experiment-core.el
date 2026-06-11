@@ -1756,100 +1756,6 @@ treating as success"
                    (funcall launch-executor))))))))))
 
 
-(defconst gptel-auto-experiment--placeholder-hypothesis-exact-patterns
-  '("[What CODE change and why]"
-    "What CODE change and why")
-  "Exact hypothesis strings that indicate unresolved placeholder prompts.")
-
-(defun gptel-auto-experiment--placeholder-hypothesis-p (hypothesis)
-  "Return non-nil when HYPOTHESIS is still an unresolved prompt template."
-  (cond
-   ((not (stringp hypothesis)) t)
-   (t
-    (let ((trimmed (string-trim hypothesis)))
-      (or (string-empty-p trimmed)
-          (string-match-p "\\`\\[What\\b.*\\]\\'" trimmed)
-          (member trimmed gptel-auto-experiment--placeholder-hypothesis-exact-patterns))))))
-
-;; ─── Staging Recovery Sweep ───
-
-(defconst gptel-auto-experiment--staging-recovery-max-age-hours 72
-  "Maximum age (hours) for staging-pending recovery. Older experiments have
-likely been merged or abandoned — skip to avoid noise.")
-
-(defun gptel-auto-experiment--recover-stale-staging-pending ()
-  "Retry staging flow for experiments stuck in `staging-pending`.
-Scans all TSV files for rows still in `staging-pending` between 1h
-and `gptel-auto-experiment--staging-recovery-max-age-hours` old.
-Older entries are skipped (branches likely deleted/merged).
-Safe to call multiple times: already-merged branches are skipped."
-  (interactive)
-  (when (and gptel-auto-workflow-use-staging
-             (fboundp 'gptel-auto-workflow--staging-flow)
-             (fboundp 'gptel-auto-workflow--parse-all-results))
-    (let ((recovered 0)
-          (skipped 0)
-           (_gptel-auto-workflow--recovering-stale-staging t)
-          (now (float-time))
-          (results-dir (expand-file-name "var/tmp/experiments"
-                        (gptel-auto-workflow--worktree-base-root))))
-      (when (file-directory-p results-dir)
-        (dolist (run-dir (directory-files results-dir t "^202[0-9]-"))
-        (let* ((tsv-file (expand-file-name "results.tsv" run-dir))
-               (run-id (file-name-nondirectory run-dir)))
-          (when (file-exists-p tsv-file)
-            (let ((gptel-auto-workflow--run-id run-id))
-              (with-temp-buffer
-                (insert-file-contents tsv-file)
-                (forward-line 1)
-                (while (not (eobp))
-                  (let ((line (buffer-substring-no-properties
-                               (line-beginning-position) (line-end-position))))
-                    (unless (string-empty-p line)
-                      (let* ((fields (split-string line "\t"))
-                             (decision (nth 7 fields))
-                             (experiment-id (nth 0 fields))
-                             (target (nth 1 fields))
-                             (exp-ts (and (string-match
-                                           "\\([0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}T[0-9]\\{2\\}[0-9]\\{2\\}[0-9]\\{2\\}\\)Z"
-                                           run-id)
-                                          (float-time
-                                           (date-to-time (match-string 1 run-id)))))
-                             (age (if exp-ts (/ (- now exp-ts) 3600.0) 0)))
-                        (when (and (stringp decision)
-                                   (string= decision "staging-pending")
-                                   (stringp experiment-id)
-                                   (> age 1.0))
-                          (if (>= age gptel-auto-experiment--staging-recovery-max-age-hours)
-                              (setq skipped (1+ skipped))
-                            (condition-case err
-                                (let* ((exp-id (string-to-number experiment-id))
-                                       (branch (gptel-auto-workflow--branch-name
-                                                target exp-id)))
-                                  (if (zerop (call-process "git" nil nil nil
-                                                           "rev-parse" "--verify" branch))
-                                      (progn
-                                        (message "[staging-recovery] Retrying stale staging-pending: %s (age=%.1fh)"
-                                                 branch age)
-                                        (gptel-auto-workflow--staging-flow branch)
-                                        (setq recovered (1+ recovered)))
-                                    (message "[staging-recovery] Branch %s does not exist, skipping"
-                                             branch)
-                                    (setq skipped (1+ skipped))))
-                               (error
-                                (message "[staging-recovery] Recovery failed for %s/exp%s: %s"
-                                         target experiment-id
-                                         (error-message-string err)))))))))
-                  (forward-line 1))))))))
-      (when (> recovered 0)
-        (message "[staging-recovery] Recovered %d stale staging-pending experiments (skipped %d too old)"
-                 recovered skipped))
-      (when (> skipped 0)
-        (message "[staging-recovery] %d experiments are > %dh old — skipping (branches likely deleted)"
-                 skipped gptel-auto-experiment--staging-recovery-max-age-hours)))))
-
-;; ─── Generate→Validate→Refine Cycle ───
-
 (defun gptel-auto-experiment--refine (target validation-error grade-details
                                        _executor-prompt experiment-worktree
                                        baseline patterns actual-backend actual-model
@@ -1964,6 +1870,98 @@ Called when the grader passed but the benchmark/validation failed."
                                            :experiment-branch experiment-branch))))))))))
      refine-prompt target experiment-worktree nil nil nil
        (bound-and-true-p gptel-auto-experiment-active-grace)))))
+
+(defconst gptel-auto-experiment--placeholder-hypothesis-exact-patterns
+  '("[What CODE change and why]"
+    "What CODE change and why")
+  "Exact hypothesis strings that indicate unresolved placeholder prompts.")
+
+(defun gptel-auto-experiment--placeholder-hypothesis-p (hypothesis)
+  "Return non-nil when HYPOTHESIS is still an unresolved prompt template."
+  (cond
+   ((not (stringp hypothesis)) t)
+   (t
+    (let ((trimmed (string-trim hypothesis)))
+      (or (string-empty-p trimmed)
+          (string-match-p "\\`\\[What\\b.*\\]\\'" trimmed)
+          (member trimmed gptel-auto-experiment--placeholder-hypothesis-exact-patterns))))))
+
+;; ─── Staging Recovery Sweep ───
+
+(defconst gptel-auto-experiment--staging-recovery-max-age-hours 72
+  "Maximum age (hours) for staging-pending recovery. Older experiments have
+likely been merged or abandoned — skip to avoid noise.")
+
+(defun gptel-auto-experiment--recover-stale-staging-pending ()
+  "Retry staging flow for experiments stuck in `staging-pending`.
+Scans all TSV files for rows still in `staging-pending` between 1h
+and `gptel-auto-experiment--staging-recovery-max-age-hours` old.
+Older entries are skipped (branches likely deleted/merged).
+Safe to call multiple times: already-merged branches are skipped."
+  (interactive)
+  (when (and gptel-auto-workflow-use-staging
+             (fboundp 'gptel-auto-workflow--staging-flow)
+             (fboundp 'gptel-auto-workflow--parse-all-results))
+    (let ((recovered 0)
+          (skipped 0)
+           (_gptel-auto-workflow--recovering-stale-staging t)
+          (now (float-time))
+          (results-dir (expand-file-name "var/tmp/experiments"
+                        (gptel-auto-workflow--worktree-base-root))))
+      (when (file-directory-p results-dir)
+        (dolist (run-dir (directory-files results-dir t "^202[0-9]-"))
+        (let* ((tsv-file (expand-file-name "results.tsv" run-dir))
+               (run-id (file-name-nondirectory run-dir)))
+          (when (file-exists-p tsv-file)
+            (let ((gptel-auto-workflow--run-id run-id))
+              (with-temp-buffer
+                (insert-file-contents tsv-file)
+                (forward-line 1)
+                (while (not (eobp))
+                  (let ((line (buffer-substring-no-properties
+                               (line-beginning-position) (line-end-position))))
+                    (unless (string-empty-p line)
+                      (let* ((fields (split-string line "\t"))
+                             (decision (nth 7 fields))
+                             (experiment-id (nth 0 fields))
+                             (target (nth 1 fields))
+                             (exp-ts (and (string-match
+                                           "\\([0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}T[0-9]\\{2\\}[0-9]\\{2\\}[0-9]\\{2\\}\\)Z"
+                                           run-id)
+                                          (float-time
+                                           (date-to-time (match-string 1 run-id)))))
+                             (age (if exp-ts (/ (- now exp-ts) 3600.0) 0)))
+                        (when (and (stringp decision)
+                                   (string= decision "staging-pending")
+                                   (stringp experiment-id)
+                                   (> age 1.0))
+                          (if (>= age gptel-auto-experiment--staging-recovery-max-age-hours)
+                              (setq skipped (1+ skipped))
+                            (condition-case err
+                                (let* ((exp-id (string-to-number experiment-id))
+                                       (branch (gptel-auto-workflow--branch-name
+                                                target exp-id)))
+                                  (if (zerop (call-process "git" nil nil nil
+                                                           "rev-parse" "--verify" branch))
+                                      (progn
+                                        (message "[staging-recovery] Retrying stale staging-pending: %s (age=%.1fh)"
+                                                 branch age)
+                                        (gptel-auto-workflow--staging-flow branch)
+                                        (setq recovered (1+ recovered)))
+                                    (message "[staging-recovery] Branch %s does not exist, skipping"
+                                             branch)
+                                    (setq skipped (1+ skipped))))
+                               (error
+                                (message "[staging-recovery] Recovery failed for %s/exp%s: %s"
+                                         target experiment-id
+                                         (error-message-string err)))))))))
+                  (forward-line 1))))))))
+      (when (> recovered 0)
+        (message "[staging-recovery] Recovered %d stale staging-pending experiments (skipped %d too old)"
+                 recovered skipped))
+      (when (> skipped 0)
+        (message "[staging-recovery] %d experiments are > %dh old — skipping (branches likely deleted)"
+                 skipped gptel-auto-experiment--staging-recovery-max-age-hours)))))
 
 (defun gptel-auto-experiment--grader-bypass-commit-and-push
     (target hypothesis grade-score grade-total _baseline

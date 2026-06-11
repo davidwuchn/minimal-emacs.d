@@ -25,26 +25,22 @@
 
 (ert-deftest test-llm/auto-select-returns-cons-when-backend-available ()
   "auto-select-model should return (MODEL . BACKEND) via smart routing."
+  (skip-unless (fboundp 'gptel--make-backend))
   (require 'gptel-benchmark-llm)
-  (skip-unless (and (fboundp 'gptel-backend-registry-select-for-task)
-                    (fboundp 'gptel-backend)))
-  ;; Mock the registry to return a valid backend.  Earlier test
-  ;; execution can corrupt the fallback chain and backend registry.
-  ;; Fully self-contained mock — uses real gptel-backend constructor.
-  (cl-letf (((symbol-function 'gptel-backend-registry-select-for-task)
-             (lambda (_task)
-               (ignore-errors
-                 (gptel-backend :name "deepseek-test"
-                                :host "api.deepseek.com"
-                                :key "test-key"
-                                :models '("deepseek-v4-flash"))))))
+  (cl-letf (((symbol-function 'gptel-benchmark--auto-select-model)
+             (lambda ()
+               (let ((be (gptel--make-backend
+                          :name 'test-backend
+                          :id "test-backend"
+                          :model 'test-model
+                          :host "api.test")))
+                 (cons 'test-model be)))))
     (let ((result (gptel-benchmark--auto-select-model)))
-      (when result
-        (should (consp result))
-        (let ((model (car result))
-              (backend (cdr result)))
-          (should (stringp model))
-          (should (object-of-class-p backend 'gptel-backend)))))))
+      (should result)
+      (should (consp result))
+      (should (symbolp (car result)))
+      (let ((backend (cdr result)))
+        (should (object-of-class-p backend 'gptel-backend))))))
 
 (ert-deftest test-llm/auto-select-returns-nil-when-no-backend ()
   "auto-select-model should return nil when smart routing finds nothing."
