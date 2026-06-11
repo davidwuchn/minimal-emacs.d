@@ -747,8 +747,8 @@ Patterns detected:
                "wrong-type-argument")))
     (when (and (file-exists-p log-file)
                (file-readable-p log-file))
-      (condition-case err nil
-          (with-temp-buffer
+       (condition-case _err
+           (with-temp-buffer
             (insert-file-contents log-file nil (- (file-attribute-size
                                                     (file-attributes log-file))
                                                   (* 100 1024))

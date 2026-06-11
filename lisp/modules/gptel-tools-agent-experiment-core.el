@@ -329,9 +329,9 @@ threshold %.2f — aborting experiment %d/%d for %s"
                       (let ((enriched (if risk-nodes
                                           (append result (list :risk-nodes risk-nodes))
                                         result)))
-                        (prog1 (funcall raw-callback enriched)
-                          (setq result-callback-called t))))))
-          ;; The subagent timeout wrapper owns executor timeout/abort behavior.
+                         (prog1 (funcall raw-callback enriched)
+                           (setq result-callback-called t)))))
+           ;; The subagent timeout wrapper owns executor timeout/abort behavior.
           (_my/gptel-agent-task-timeout experiment-timeout)
            (start-time (float-time))
            (finished nil)
@@ -349,7 +349,7 @@ threshold %.2f — aborting experiment %d/%d for %s"
            (grader-retry-active nil)
            (experiment-backend nil)
            (experiment-model nil)
-           (launch-executor nil))
+            (launch-executor nil))
     (setq launch-executor
           (lambda ()
             (cond
@@ -1963,7 +1963,7 @@ Called when the grader passed but the benchmark/validation failed."
                                            :provisional-commit-hash provisional-commit-hash
                                            :experiment-branch experiment-branch))))))))))
      refine-prompt target experiment-worktree nil nil nil
-      (bound-and-true-p gptel-auto-experiment-active-grace))))
+       (bound-and-true-p gptel-auto-experiment-active-grace)))))
 
 (defun gptel-auto-experiment--grader-bypass-commit-and-push
     (target hypothesis grade-score grade-total _baseline
