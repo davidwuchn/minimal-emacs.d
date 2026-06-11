@@ -2,35 +2,24 @@
 Synthesis verification:
 - Confidence: 12%
 - Sources: 39 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'audit-fix-2026', Very short content (28 lines)
+- Warnings: No code examples or concrete references, Content does not mention topic 'audit-fix-2026', Very short content (17 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize multiple audit report memories into a single knowledge page. Let me analyze the patterns:
+The user wants me to synthesize a series of self-audit reports into a comprehensive knowledge page. The memories all follow a similar pattern - they are audit reports showing:
+- 38-40 issues found across multiple timestamps (June 8-11, 2026)
+- 8/8 backends cold-start (never used in 7 days)
+- 29/29 strategies unevaluated
+- Staging-merge bottleneck OK (0% failures)
+- Auto-resolver deployed (commit 95396bc1)
+- Action items about cold backends, exploration rate, source code review
+- Module byte-compile health issues that appear in some reports
 
-1. Most reports show 38 issues (baseline)
-2. Some show 39 issues (with 1 broken module)
-3. Some show 40 issues (with 2 broken modules)
-4. Earliest reports show 37 issues
+Let me create a comprehensive knowledge page that:
+1. Has proper frontmatter
+2. Is 50+ lines of content
+3. Has concrete examples (code, tables, commands)
+4. Actionable patterns
+5. Cross-references
 
-Pattern of broken modules:
-- gptel-auto-workflow-ontology-router.el
-- gptel-auto-workflow-self-heal-semantic.el
-- gptel-auto-workflow-recovery.el
-- gptel-auto-workflow-evolution.el
-
-The 8 cold backends are constant: Cf-gateway, Token-plan, Deepseek, Z-ai, Dashscope, Minimax, Gemini, Copilot
-The 29 cold strategies are constant.
-
-Auto-resolver deployed: commit 95396bc1
-
-Let me build a comprehensive knowledge page that:
-1. Synthesizes all the audit data
-2. Identifies the baseline (38 issues = 8 backends + 29 strategies + 1 staging)
-3. Shows the broken modules that occasionally appear
-4. Provides actionable patterns
-5. Cross-references related topics
-
-The math: 8 + 29 + 1 (staging-merge) = 38. With 1 broken module = 39. With 2 broken modules = 40.
-
-Let me build a comprehensive page now.
+I'll synthesize the recurring findings, the timeline, the specific issues, and the action items.
