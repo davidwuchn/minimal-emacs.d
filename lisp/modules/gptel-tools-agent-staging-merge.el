@@ -562,15 +562,34 @@ Returns (success-p . output)."
                           "Staging verification failed against main baseline"))
                       "\n"))
             (setq output (with-current-buffer output-buffer (buffer-string)))))
-        (kill-buffer output-buffer)
-        (setq result (and syntax-pass submodule-pass checks-pass))
-        (message "[auto-workflow] Staging verification: %s"
-                 (if result
-                     "PASS"
-                   (format "FAIL (%s)"
-                           (gptel-auto-workflow--summarize-staging-verification-output
-                            output))))
-        (cons result output)))))
+         (kill-buffer output-buffer)
+         (setq result (and syntax-pass submodule-pass checks-pass))
+         ;; Loud gate logging — unmissable in cron/daemon output
+         (let ((gate-status (if result "PASS" "FAIL"))
+               (gate-detail
+                (format "syntax=%s submodule=%s tests=%s verify=%s behavioral=%s"
+                        (if syntax-pass "OK" "FAIL")
+                        (if submodule-pass "OK" "FAIL")
+                        (cond ((not submodule-pass) "SKIP")
+                              ((not (and test-script (file-exists-p test-script))) "SKIP")
+                              ((eq test-result 0) "OK")
+                              (t (format "FAIL(exit=%s)" test-result)))
+                        (cond ((not submodule-pass) "SKIP")
+                              ((not (and verify-script (file-exists-p verify-script))) "SKIP")
+                              ((eq verify-result 0) "OK")
+                              (t (format "FAIL(exit=%s)" verify-result)))
+                        (cond ((null behavioral-result) "SKIP")
+                              ((car behavioral-result) "OK")
+                              (t "FAIL")))))
+           (message "╔══════════════════════════════════════════════════════╗")
+           (message "║ STAGING GATE: %s                               %s║"
+                    gate-status (make-string (- 39 (length gate-status)) ?\s))
+           (message "║ %s" gate-detail)
+           (when (not result)
+             (message "║ FAIL reason: %s"
+                      (gptel-auto-workflow--summarize-staging-verification-output output)))
+           (message "╚══════════════════════════════════════════════════════╝"))
+         (cons result output)))))
 
 (defun gptel-auto-workflow--verify-staging-fast-track ()
   "Run fast-track verification in the staging worktree.
@@ -748,12 +767,18 @@ commits are preserved."
             ;; always a clean fast-forward.
             (let ((push-result (gptel-auto-workflow--git-result
                                 (format "git push %s main" remote) 180)))
-              (if (and push-result (= 0 (cdr push-result)))
-                  (progn
-                    (message "[auto-workflow] ✓ Staging promoted to main")
-                    t)
-                (message "[auto-workflow] ✗ Push failed: %s" (car push-result))
-                nil)))
+               (if (and push-result (= 0 (cdr push-result)))
+                   (progn
+                     (message "╔══════════════════════════════════════════════════════╗")
+                     (message "║ PROMOTE TO MAIN: SUCCESS                           ║")
+                     (message "║ staging → main pushed to %s" remote)
+                     (message "╚══════════════════════════════════════════════════════╝")
+                     t)
+                 (message "╔══════════════════════════════════════════════════════╗")
+                 (message "║ PROMOTE TO MAIN: FAILED                            ║")
+                 (message "║ Push error: %s" (car push-result))
+                 (message "╚══════════════════════════════════════════════════════╝")
+                 nil)))
         (error
          (message "[auto-workflow] ✗ Auto-promote error: %s" (error-message-string err))
          nil)))))

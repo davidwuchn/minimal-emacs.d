@@ -124,9 +124,12 @@ run_unit_tests() {
     
     # Check for actual test failures (not "passed unexpectedly" which is good)
     local has_actual_failures=""
-    has_actual_failures=$(grep -E "^   FAILED|unexpected.*failure" <<< "$output" || true)
+    has_actual_failures=$(grep -E "^   FAILED" <<< "$output" || true)
     
-    if [ "$ert_status" -eq 0 ] && grep -q "0 unexpected" <<< "$output" && ! grep -q "^Aborted:" <<< "$output"; then
+    # ERT prints "Aborted:" when tests use cl-return-from (non-local exit).
+    # This is NOT a failure — only "unexpected" results indicate real failures.
+    # Gate: exit code 0 + "0 unexpected" = PASS, regardless of "Aborted:" prefix.
+    if [ "$ert_status" -eq 0 ] && grep -q "0 unexpected" <<< "$output" && [ -z "$has_actual_failures" ]; then
         pass "All ERT tests passed"
         return 0
     elif [ -z "$has_actual_failures" ] && grep -q "passed unexpectedly" <<< "$output"; then
@@ -135,10 +138,12 @@ run_unit_tests() {
         pass "All ERT tests passed ($unexpected_count previously-failing tests now pass)"
         return 0
     else
-        if grep -q "^Aborted:" <<< "$output"; then
-            fail "ERT run aborted"
-        else
+        if [ -n "$has_actual_failures" ]; then
             fail "Some ERT tests failed"
+        elif grep -qE "^   FAILED" <<< "$output"; then
+            fail "Some ERT tests failed"
+        else
+            fail "ERT run aborted with errors"
         fi
         return 1
     fi

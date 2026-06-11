@@ -1692,16 +1692,52 @@ if [ "$has_auto_gen" -eq 1 ]; then
         if git -C "$DIR" commit -m "$commit_msg" 2>/dev/null; then
             log "  ✓ Committed auto-generated outcomes"
 
-            # Push to origin/main
-            remote="$(git -C "$DIR" remote get-url origin 2>/dev/null || true)"
-            if [ -n "$remote" ]; then
-                if git -C "$DIR" push origin main 2>/dev/null; then
-                    log "  ✓ Pushed outcomes to origin/main"
+            # ─── Gate: run-tests.sh unit BEFORE pushing to main ───
+            # Pipeline Step 7 must never push broken code to main.
+            # This catches regressions in mementum/knowledge files that
+            # contain eval'd Elisp (e.g., defconst, defvar) and any
+            # other auto-generated code.
+            log "  ▶ Running test gate before push to main..."
+            TEST_SCRIPT="$DIR/scripts/run-tests.sh"
+            if [ -f "$TEST_SCRIPT" ]; then
+                TEST_OUTPUT="$(bash "$TEST_SCRIPT" unit 2>&1)" || true
+                # Extract summary line: "Ran N tests, M results as expected, X unexpected"
+                TEST_SUMMARY="$(echo "$TEST_OUTPUT" | grep -E '^Ran [0-9]+ tests' | tail -1)"
+                UNEXPECTED="$(echo "$TEST_OUTPUT" | grep -oE '[0-9]+ unexpected' | grep -oE '^[0-9]+' | head -1)"
+                if [ -z "$UNEXPECTED" ]; then
+                    # Fallback: check for "0 unexpected" explicitly
+                    if echo "$TEST_SUMMARY" | grep -q "0 unexpected"; then
+                        UNEXPECTED=0
+                    else
+                        UNEXPECTED="unknown"
+                    fi
+                fi
+                if [ "$UNEXPECTED" = "0" ]; then
+                    log "  ✓ TEST GATE PASSED: $TEST_SUMMARY"
                 else
-                    log "WARNING: git push failed — outcomes committed locally but not pushed"
+                    log "  ✗ TEST GATE FAILED: $UNEXPECTED unexpected failures"
+                    log "  ✗ REFUSING to push to origin/main"
+                    log "  ✗ Outcomes committed locally but NOT pushed"
+                    log "  ✗ Fix the test failures and push manually"
+                    # Skip the push entirely
+                    SKIP_PUSH=1
                 fi
             else
-                log "WARNING: no origin remote configured — outcomes committed locally"
+                log "  WARNING: $TEST_SCRIPT not found — skipping test gate"
+            fi
+
+            # Push to origin/main (only if test gate passed)
+            if [ "${SKIP_PUSH:-0}" = "0" ]; then
+                remote="$(git -C "$DIR" remote get-url origin 2>/dev/null || true)"
+                if [ -n "$remote" ]; then
+                    if git -C "$DIR" push origin main 2>/dev/null; then
+                        log "  ✓ Pushed outcomes to origin/main"
+                    else
+                        log "WARNING: git push failed — outcomes committed locally but not pushed"
+                    fi
+                else
+                    log "WARNING: no origin remote configured — outcomes committed locally"
+                fi
             fi
         else
             log "WARNING: git commit failed for auto-generated outcomes"
