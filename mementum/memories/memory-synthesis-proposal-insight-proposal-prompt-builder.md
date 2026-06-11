@@ -1,12 +1,12 @@
 ---
-valid-from: 2026-06-09T19:46
+valid-from: 2026-06-11T10:23
 ---
 
-# nil 2026-06-09 19:46
+# nil 2026-06-11 10:23
 
 **Topic:** insight-proposal-prompt-builder
 **Memory count:** 14
-**Source memories:** insight-proposal-prompt-builder-lisp-modules-gptel-auto-workflow-mementum-el.md, insight-proposal-prompt-builder-lisp-modules-gptel-auto-workflow-ontology-router-el.md, insight-proposal-prompt-builder-lisp-modules-gptel-auto-workflow-ontology-strategy-el.md, insight-proposal-prompt-builder-lisp-modules-gptel-auto-workflow-production-el.md, insight-proposal-prompt-builder-lisp-modules-gptel-auto-workflow-production-metrics-el.md, insight-proposal-prompt-builder-lisp-modules-gptel-auto-workflow-projects-el.md, insight-proposal-prompt-builder-lisp-modules-gptel-benchmark-principles-el.md, insight-proposal-prompt-builder-lisp-modules-gptel-tools-agent-benchmark-el.md, insight-proposal-prompt-builder-lisp-modules-gptel-tools-agent-experiment-core-el.md, insight-proposal-prompt-builder-lisp-modules-gptel-tools-agent-prompt-build-el.md, insight-proposal-prompt-builder-lisp-modules-gptel-tools-agent-runtime-el.md, insight-proposal-prompt-builder-staging-review.md, insight-proposal-prompt-builder-staging-scope.md, insight-proposal-prompt-builder-staging-verification.md
+**Source memories:** insight-proposal-prompt-builder-lisp-modules-gptel-auto-workflow-mementum-el.md, insight-proposal-prompt-builder-lisp-modules-gptel-auto-workflow-ontology-router-el.md, insight-proposal-prompt-builder-lisp-modules-gptel-auto-workflow-ontology-strategy-el.md, insight-proposal-prompt-builder-lisp-modules-gptel-auto-workflow-production-el.md, insight-proposal-prompt-builder-lisp-modules-gptel-auto-workflow-production-metrics-el.md, insight-proposal-prompt-builder-lisp-modules-gptel-auto-workflow-projects-el.md, insight-proposal-prompt-builder-lisp-modules-gptel-auto-workflow-strategic-el.md, insight-proposal-prompt-builder-lisp-modules-gptel-benchmark-principles-el.md, insight-proposal-prompt-builder-lisp-modules-gptel-benchmark-subagent-el.md, insight-proposal-prompt-builder-lisp-modules-gptel-tools-agent-benchmark-el.md, insight-proposal-prompt-builder-lisp-modules-gptel-tools-agent-experiment-core-el.md, insight-proposal-prompt-builder-lisp-modules-gptel-tools-agent-prompt-build-el.md, insight-proposal-prompt-builder-lisp-modules-gptel-tools-agent-runtime-el.md, insight-proposal-prompt-builder-staging-review.md
 
 Synthesis candidate detected: 14 memories on this topic exceed threshold. Consider creating a knowledge page to capture reusable patterns. HIGH PRIORITY: Auto-synthesis recommended.
 

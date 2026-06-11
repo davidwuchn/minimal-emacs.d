@@ -1,26 +1,41 @@
 <!--
 Synthesis verification:
-- Confidence: 12%
-- Sources: 40 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'audit-fix-2026', Very short content (18 lines)
-- Auto-approved: yes (flagged)
+- Confidence: 80%
+- Sources: 41 memories
+- Warnings: No code examples or concrete references
+- Auto-approved: yes (passed)
 --->
 
-The user wants me to synthesize 38+ audit report memories into a single knowledge page. Let me analyze the patterns:
+The user wants me to synthesize a bunch of self-audit report memories into a single knowledge page. Let me analyze the pattern:
 
-1. **Recurring issue**: 8/8 backends cold (never used in last 7d) - persistent across all reports
-2. **Recurring issue**: 29/29 strategies unevaluated - persistent
-3. **Staging-merge**: OK (0% failures) - auto-resolver deployed at commit 95396bc1
-4. **Module byte-compile health**: Occasionally 1-2 modules broken with "Unmatched bracket or quote"
-5. **Action items** are consistent: cold backends, 40% exploration rate, source code review
-6. **Issue counts vary**: 37, 38, 39, 40 issues
-7. **Time range**: 2026-06-08 to 2026-06-11
+1. There are 40+ self-audit reports spanning 2026-06-08 to 2026-06-11
+2. The reports are highly repetitive - same issues repeatedly
+3. Key recurring patterns:
+   - 38-40 issues found consistently
+   - 8 backends all cold (never used in last 7d)
+   - 29/29 strategies unevaluated
+   - Staging-merge auto-resolver deployed (commit 95396bc1) - 0% failures
+   - 40%% exploration rate noted as too slow
+   - Module byte-compile issues appear in some reports (gptel-auto-workflow-*)
+   - YC principle: "self-evolve" must include META - auditing the system itself
 
-The key insight is this is META-auditing - the system auditing itself. Let me create a comprehensive knowledge page that:
-- Documents the persistent issues
-- Tracks the auto-resolver deployment
-- Shows the variation in byte-compile failures
-- Provides actionable patterns
-- Cross-references related topics
+The variations I see:
+- Most reports: 38 issues
+- Some reports: 37 issues (early ones 2026-06-08)
+- 39 issues when 1 module broken
+- 40 issues when 2 modules broken
 
-Let me write this with 50+ lines of actual content, including tables, code examples, and patterns.
+Broken modules mentioned:
+- gptel-auto-workflow-ontology-router.el
+- gptel-auto-workflow-self-heal-semantic.el
+- gptel-auto-workflow-recovery.el
+- gptel-auto-workflow-evolution.el
+
+Let me create a knowledge page that synthesizes this into actionable patterns. I need:
+1. Minimum 50 lines of content
+2. Concrete examples (code, tables, commands)
+3. Actionable patterns
+4. Cross-references
+5. Full markdown page
+
+Let me build this. The topic is "audit-fix-2026" - it's about the self-audit mechanism and its findings over time.

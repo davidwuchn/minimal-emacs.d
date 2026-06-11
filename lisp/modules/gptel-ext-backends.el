@@ -148,9 +148,9 @@ ARGS are passed to `gptel-make-openai'."
     :endpoint "/v1/e68f70855c32831717611057ed23aa46/mindward/workers-ai/v1/chat/completions"
     :key (lambda () (my/gptel-api-key "gateway.ai.cloudflare.com"))
     :stream t
-    :models '((deepseek/deepseek-v4-pro
+    :models '((deepseek-v4-pro
                :request-params (:thinking (:type "enabled")))
-              (deepseek/deepseek-v4-flash
+              (deepseek-v4-flash
                :request-params (:thinking (:type "enabled")))
               (@cf/moonshotai/kimi-k2.6
                :request-params (:reasoning_effort "medium"))

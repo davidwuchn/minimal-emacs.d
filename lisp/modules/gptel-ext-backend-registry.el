@@ -54,17 +54,17 @@
  
      (CF-Gateway
       :host "gateway.ai.cloudflare.com"
-      :models (deepseek/deepseek-v4-pro deepseek/deepseek-v4-flash
+      :models (deepseek-v4-pro deepseek-v4-flash
                @cf/moonshotai/kimi-k2.6)
-      :default-model deepseek/deepseek-v4-pro
+      :default-model deepseek-v4-pro
       :model-metadata
-       ((deepseek/deepseek-v4-pro
+       ((deepseek-v4-pro
          :context-window 1000000
          :pricing-input 0.43 :pricing-output 0.86 :pricing-cache-hit 0.004
          :capabilities (reasoning code-generation)
          :speed slow
          :thinking-policy auto)
-        (deepseek/deepseek-v4-flash
+        (deepseek-v4-flash
          :context-window 1000000
          :pricing-input 0.14 :pricing-output 0.28 :pricing-cache-hit 0.003
          :capabilities (code-generation reasoning)
@@ -75,7 +75,7 @@
          :pricing-input 0.95 :pricing-output 4.00 :pricing-cache-hit 0.16
          :capabilities (code-generation tool-calls long-context reasoning vision)
          :speed medium
-         :thinking-policy always)))
+         :thinking-policy on)))
 
     (DashScope
      :host "coding.dashscope.aliyuncs.com"
