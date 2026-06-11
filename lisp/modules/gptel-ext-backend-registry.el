@@ -54,10 +54,22 @@
  
      (CF-Gateway
       :host "gateway.ai.cloudflare.com"
-      :models (\@cf/moonshotai/kimi-k2.6)
-      :default-model \@cf/moonshotai/kimi-k2.6
+      :models (deepseek-v4-pro deepseek-v4-flash @cf/moonshotai/kimi-k2.6)
+      :default-model deepseek-v4-pro
       :model-metadata
-       ((\@cf/moonshotai/kimi-k2.6
+       ((deepseek-v4-pro
+         :context-window 1000000
+         :pricing-input 0.43 :pricing-output 0.86 :pricing-cache-hit 0.004
+         :capabilities (reasoning code-generation)
+         :speed slow
+         :thinking-policy auto)
+        (deepseek-v4-flash
+         :context-window 1000000
+         :pricing-input 0.14 :pricing-output 0.28 :pricing-cache-hit 0.003
+         :capabilities (code-generation reasoning)
+         :speed fast
+         :thinking-policy auto)
+        (\@cf/moonshotai/kimi-k2.6
          :context-window 262144
          :pricing-cny-input 15 :pricing-cny-output 60
          :pricing-input 2.07 :pricing-output 8.28 :pricing-cache-hit 0.28
