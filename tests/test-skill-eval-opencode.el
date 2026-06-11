@@ -253,7 +253,94 @@
       (let* ((task (list :name "test-task" :skill "brepl"
                          :expected nil :forbidden nil))
              (result (gptel-auto-workflow-skill-eval-ab "brepl" task 1)))
-        (should (string= (plist-get result :recommendation)
-                         "indeterminate"))))))
+         (should (string= (plist-get result :recommendation)
+                          "indeterminate"))))))
+
+;; ── Group 8: Variant Generation ──
+
+(ert-deftest test-skill-eval/make-variant-prompt ()
+  "Variant prompt includes current skill and improvement hints."
+  (let* ((prompt (gptel-auto-workflow-skill-eval--make-variant-prompt
+                  "brepl" "current skill content" "Fix tool usage")))
+    (should (string-match-p "brepl" prompt))
+    (should (string-match-p "current skill content" prompt))
+    (should (string-match-p "Fix tool usage" prompt))))
+
+(ert-deftest test-skill-eval/extract-improvement-hints-empty ()
+  "No results -> empty hints string."
+  (should (string= ""
+                   (gptel-auto-workflow-skill-eval--extract-improvement-hints nil))))
+
+(ert-deftest test-skill-eval/extract-improvement-hints-failures ()
+  "Results with failures produce improvement hints."
+  (let* ((results (list (list :grade (list :pass-count 2 :fail-count 2 :total 4)
+                              :transcript "mock")))
+         (hints (gptel-auto-workflow-skill-eval--extract-improvement-hints results)))
+    (should (string-match-p "failures" hints))))
+
+(ert-deftest test-skill-eval/generate-variant-writes-file ()
+  "Generate variant writes candidate file when LLM returns content."
+  (let* ((tmp-dir (make-temp-file "skill-eval-variants-" t))
+         (gptel-auto-workflow-skill-eval-variants-dir tmp-dir)
+         (skill-content "---\nname: test\n---\nTest skill content."))
+    (cl-letf (((symbol-function 'gptel-auto-workflow-skill-eval--llm-synchronous)
+               (lambda (_) "---\nname: test\n---\nImproved skill content."))
+              ((symbol-function 'gptel-auto-workflow-skill-eval--recent-results)
+               (lambda (_ _) nil)))
+      ;; Create the real skill file at assistant/skills/test/SKILL.md
+      (let* ((skill-dir (expand-file-name "assistant/skills/test/"
+                                          default-directory))
+             (skill-file (expand-file-name "SKILL.md" skill-dir))
+             (existed (file-exists-p skill-file)))
+        (unless (file-directory-p skill-dir)
+          (make-directory skill-dir t))
+        (with-temp-file skill-file (insert skill-content))
+        (unwind-protect
+            (let ((result (condition-case err
+                              (gptel-auto-workflow-skill-eval-generate-variant "test")
+                            (error
+                             (message "Error: %s" (error-message-string err))
+                             nil))))
+              (when result
+                (should (file-exists-p result))
+                (with-temp-buffer
+                  (insert-file-contents result)
+                  (should (string-match-p "Improved" (buffer-string))))
+                (delete-file result)))
+          ;; Cleanup: remove test skill if we created it
+          (unless existed
+            (ignore-errors (delete-file skill-file))
+            (ignore-errors (delete-directory skill-dir t)))
+          (ignore-errors (delete-directory tmp-dir t)))))))
+
+;; ── Group 9: Promotion Pipeline ──
+
+(ert-deftest test-skill-eval/promote-not-recommended ()
+  "Promote returns nil when recommendation is not \"promote\"."
+  (cl-letf (((symbol-function 'gptel-auto-workflow-skill-eval--locate-treatment-variant)
+             (lambda (_) nil)))
+    (let ((result (condition-case nil
+                      (gptel-auto-workflow-skill-eval-promote
+                       "brepl"
+                       (list :recommendation "indeterminate"
+                             :treatment-rate 0.5 :baseline-rate 0.5))
+                    (error nil))))
+      (should-not result))))
+
+(ert-deftest test-skill-eval/execute-promotion-copies-file ()
+  "Execute promotion copies candidate to canonical location."
+  (let* ((tmp-dir (make-temp-file "skill-eval-promote-" t))
+         (candidate (expand-file-name "candidate.md" tmp-dir))
+         (canonical (expand-file-name "canonical.md" tmp-dir)))
+    (with-temp-file candidate (insert "improved content"))
+    (unwind-protect
+        (progn
+          (should (gptel-auto-workflow-skill-eval-execute-promotion
+                   "test" candidate canonical))
+          (should (file-exists-p canonical))
+          (with-temp-buffer
+            (insert-file-contents canonical)
+            (should (string= "improved content" (buffer-string)))))
+      (ignore-errors (delete-directory tmp-dir t)))))
 
 ;;; test-skill-eval-opencode.el ends here

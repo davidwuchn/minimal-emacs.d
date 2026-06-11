@@ -499,5 +499,228 @@ Returns a list of task plists (as produced by
           (push task tasks))))
     (nreverse tasks)))
 
+;;; ─── Variant Generator ───
+
+(defcustom gptel-auto-workflow-skill-eval-variants-dir
+  (expand-file-name "var/tmp/skill-eval-opencode/variants/"
+                    (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                             (gptel-auto-workflow--worktree-base-root))
+                        user-emacs-directory))
+  "Directory for skill variant candidate files."
+  :type 'directory
+  :group 'gptel-auto-workflow)
+
+(defun gptel-auto-workflow-skill-eval-generate-variant (skill-name)
+  "Generate a skill variant for SKILL-NAME using LLM.
+Reads the current SKILL.md and recent eval results, then
+prompts the LLM to produce an improved variant.
+Writes candidate to the variants directory.
+Returns the candidate file path, or nil on failure."
+  (let* ((root (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                        (gptel-auto-workflow--worktree-base-root))
+                   default-directory))
+         (current-skill (expand-file-name
+                         (format "assistant/skills/%s/SKILL.md" skill-name) root))
+         (candidate-file (expand-file-name
+                          (format "%s-candidate.md" skill-name)
+                          gptel-auto-workflow-skill-eval-variants-dir))
+         (current-content (when (file-exists-p current-skill)
+                            (with-temp-buffer
+                              (insert-file-contents current-skill)
+                              (buffer-string))))
+         (recent-results (gptel-auto-workflow-skill-eval--recent-results
+                          skill-name 5))
+         (improvement-hints
+          (gptel-auto-workflow-skill-eval--extract-improvement-hints
+           recent-results)))
+    (if (not current-content)
+        (progn
+          (message "[skill-eval] Current skill not found: %s" current-skill)
+          nil)
+      (let* ((prompt (gptel-auto-workflow-skill-eval--make-variant-prompt
+                      skill-name current-content improvement-hints))
+             (variant-content
+              (gptel-auto-workflow-skill-eval--llm-synchronous prompt)))
+        (when (and variant-content (stringp variant-content)
+                   (> (length (string-trim variant-content)) 50))
+          (unless (file-exists-p gptel-auto-workflow-skill-eval-variants-dir)
+            (make-directory gptel-auto-workflow-skill-eval-variants-dir t))
+          (with-temp-file candidate-file
+            (insert variant-content))
+          (message "[skill-eval] Variant written: %s" candidate-file)
+          candidate-file)))))
+
+(defun gptel-auto-workflow-skill-eval--make-variant-prompt
+  (skill-name current-content hints)
+  "Build the LLM prompt for generating a SKILL-NAME variant.
+CURRENT-CONTENT is the current SKILL.md text.
+HINTS is a string of improvement suggestions from eval results."
+  (format
+   "You are a prompt engineer. Improve the following opencode SKILL.md.
+
+SKILL NAME: %s
+
+CURRENT SKILL.md:
+```
+%s
+```
+
+RECENT EVAL RESULTS (what to improve):
+%s
+
+RULES:
+1. Keep the YAML frontmatter structure (--- delimited)
+2. Keep the same skill name and triggers
+3. Focus on the improvement areas identified in eval results
+4. Make instructions more specific and actionable
+5. Keep the total length under 300 lines
+6. Output ONLY the improved SKILL.md content, no commentary
+
+Improved SKILL.md:"
+   skill-name
+   (if (> (length current-content) 3000)
+       (concat (substring current-content 0 3000) "\n... (truncated)")
+     current-content)
+   (or hints "No specific improvements identified. General refinement.")))
+
+(defun gptel-auto-workflow-skill-eval--extract-improvement-hints (results)
+  "Extract improvement hints from RESULTS list.
+Each result is a plist from a completed eval run.
+Returns a human-readable string of improvement suggestions."
+  (if (null results)
+      ""
+    (let ((hints nil)
+          (fail-patterns nil))
+      (dolist (r results)
+        (let ((grade (plist-get r :grade)))
+          (when grade
+            (let ((fail-count (or (plist-get grade :fail-count) 0)))
+              (when (> fail-count 0)
+                (push (format "Run had %d/%d failures"
+                              fail-count (or (plist-get grade :total) 0))
+                      fail-patterns))))))
+      (when fail-patterns
+        (push (format "Common failures (%d runs): %s"
+                      (length fail-patterns)
+                      (string-join fail-patterns "; "))
+              hints))
+      (string-join hints "\n"))))
+
+(defun gptel-auto-workflow-skill-eval--recent-results (skill-name limit)
+  "Load the LIMIT most recent eval results for SKILL-NAME.
+Returns a list of result plists."
+  (let* ((dir (expand-file-name gptel-auto-workflow-skill-eval-results-dir))
+         (results nil))
+    (when (file-exists-p dir)
+      (let ((files (sort (directory-files dir t "\\.json\\'" t)
+                         (lambda (a b)
+                           (time-less-p
+                            (nth 5 (file-attributes b))
+                            (nth 5 (file-attributes a)))))))
+        (dolist (f files)
+          (when (< (length results) limit)
+            (condition-case nil
+                (with-temp-buffer
+                  (insert-file-contents f)
+                  (let ((data (json-parse-string (buffer-string)
+                                                 :object-type 'plist
+                                                 :null-object nil
+                                                 :false-object nil)))
+                    (when (and data
+                               (string= (plist-get data :skill) skill-name))
+                      (push (plist-get data :grade) results)
+                      ;; Also attach transcript-excerpt for hint extraction
+                      (setcar results
+                              (list :grade (car results)
+                                    :transcript (plist-get data
+                                                           :transcript-excerpt))))))
+              (error nil))))))
+    (nreverse results)))
+
+(defun gptel-auto-workflow-skill-eval--llm-synchronous (prompt)
+  "Call LLM synchronously with PROMPT and return the response text.
+Uses `gptel-request' if available, otherwise returns nil."
+  (when (fboundp 'gptel-request)
+    (let ((result nil)
+          (done nil))
+      (gptel-request prompt
+        :callback (lambda (response &rest _)
+                    (setq result response
+                          done t)))
+      ;; Wait up to 60 seconds
+      (let ((waited 0))
+        (while (and (not done) (< waited 60))
+          (sleep-for 0.5)
+          (cl-incf waited 0.5)))
+      result)))
+
+;;; ─── Promotion Pipeline ───
+
+(defun gptel-auto-workflow-skill-eval-promote (skill-name ab-result)
+  "Promote a winning skill variant to the canonical location.
+SKILL-NAME is the skill being evolved.
+AB-RESULT is the plist from `gptel-auto-workflow-skill-eval-ab'.
+Enqueues to the human approval queue if `recommendation' is \"promote\".
+Does nothing if recommendation is not \"promote\".
+Returns the queue entry if enqueued, nil otherwise."
+  (let ((recommendation (plist-get ab-result :recommendation))
+        (treatment-rate (plist-get ab-result :treatment-rate))
+        (baseline-rate (plist-get ab-result :baseline-rate)))
+    (when (not (string= recommendation "promote"))
+      (message "[skill-eval] Not promoting %s: recommendation=%s"
+               skill-name recommendation)
+      (cl-return-from gptel-auto-workflow-skill-eval-promote nil))
+    (let* ((root (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                          (gptel-auto-workflow--worktree-base-root))
+                     default-directory))
+           (candidate (gptel-auto-workflow-skill-eval--locate-treatment-variant
+                       skill-name))
+           (canonical (expand-file-name
+                       (format "assistant/skills/%s/SKILL.md" skill-name) root))
+           (delta (- treatment-rate baseline-rate)))
+      (when (not candidate)
+        (message "[skill-eval] No candidate variant for %s" skill-name)
+        (cl-return-from gptel-auto-workflow-skill-eval-promote nil))
+      ;; Enqueue for human approval
+      (when (fboundp 'gptel-auto-workflow-approval-queue-enqueue)
+        (let* ((rollback-tag (format "skill-%s-before-promote-%s"
+                                     skill-name
+                                     (format-time-string "%Y%m%d-%H%M%S")))
+               (proposal
+                (list :type "skill-promotion"
+                      :component (format "skill/%s" skill-name)
+                      :pattern-target (format "assistant/skills/%s/SKILL.md"
+                                              skill-name)
+                      :risk "medium"
+                      :source "skill-eval-opencode"
+                      :description (format
+                                    "Promote %s skill variant (treatment=%.2f baseline=%.2f delta=%.2f)"
+                                    skill-name treatment-rate baseline-rate delta)
+                      :action (list 'skill-promote
+                                    :skill skill-name
+                                    :candidate candidate
+                                    :canonical canonical)))
+               (entry
+                (gptel-auto-workflow-approval-queue-enqueue
+                 proposal rollback-tag)))
+          (when entry
+            (message "[skill-eval] Enqueued promotion for %s (id=%s)"
+                     skill-name (plist-get entry :id)))
+          entry)))))
+
+(defun gptel-auto-workflow-skill-eval-execute-promotion (skill-name
+                                                          candidate-file
+                                                          canonical-file)
+  "Execute the promotion: copy CANDIDATE-FILE to CANONICAL-FILE.
+SKILL-NAME is used for logging and git commit message.
+This function is called by the approval queue executor after
+human approval.  Returns t on success, nil on failure."
+  (ignore-errors
+    (copy-file candidate-file canonical-file t)
+    (delete-file candidate-file)
+    (message "[skill-eval] Promoted %s: %s -> %s"
+             skill-name candidate-file canonical-file)
+    t))
+
 (provide 'gptel-auto-workflow-skill-eval-opencode)
 ;;; gptel-auto-workflow-skill-eval-opencode.el ends here
