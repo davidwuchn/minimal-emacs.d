@@ -100,6 +100,7 @@ additional_delegates:
     reasoningEffort: xhigh
   opus:
     model: github-copilot/claude-opus-4.8
+    reasoningEffort: high
   qwen:
     model: deepseek/deepseek-v4-pro
     reasoningEffort: high
@@ -108,6 +109,7 @@ additional_delegates:
     reasoningEffort: high
   fast:
     model: deepseek/deepseek-v4-flash
+    reasoningEffort: high
 
 additional_implementers:
   safe:
