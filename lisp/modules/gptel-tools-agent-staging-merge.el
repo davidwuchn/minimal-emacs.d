@@ -406,7 +406,49 @@ Returns t if all changed files pass syntax check, nil otherwise."
                (push msg errors)
                (when (buffer-live-p output-buffer)
                  (with-current-buffer output-buffer
-                   (insert msg "\n")))))))))))
+                    (insert msg "\n")))))))))))
+
+(defcustom gptel-auto-workflow-fast-track-enabled t
+  "When non-nil, allow small verified experiments to skip full staging tests.
+Fast-track experiments still get syntax and behavioral checks."
+  :type 'boolean
+  :group 'gptel)
+
+(defcustom gptel-auto-workflow-fast-track-max-files 3
+  "Maximum number of changed files for fast-track eligibility."
+  :type 'integer
+  :group 'gptel)
+
+(defcustom gptel-auto-workflow-fast-track-max-lines 50
+  "Maximum number of changed lines for fast-track eligibility."
+  :type 'integer
+  :group 'gptel)
+
+(defun gptel-auto-workflow--fast-track-eligible-p (optimize-branch)
+  "Return non-nil if OPTIMIZE-BRANCH is eligible for fast-track staging.
+Fast-track skips full unit tests, doing syntax + behavioral only.
+Eligibility: few changed files AND few changed lines AND fast-track enabled."
+  (when gptel-auto-workflow-fast-track-enabled
+    (let* ((diff-stat (ignore-errors
+                        (gptel-auto-workflow--git-cmd
+                         (format "git diff --stat main...%s" (shell-quote-argument optimize-branch))
+                         30)))
+           (file-count (when (stringp diff-stat)
+                         (length (split-string diff-stat "\n" t))))
+           (insertions (when (stringp diff-stat)
+                         (string-to-number
+                          (or (and (string-match "\\([0-9]+\\) insertion" diff-stat)
+                                   (match-string 1 diff-stat))
+                              "0"))))
+           (deletions (when (stringp diff-stat)
+                        (string-to-number
+                         (or (and (string-match "\\([0-9]+\\) deletion" diff-stat)
+                                  (match-string 1 diff-stat))
+                             "0"))))
+           (total-lines (+ (or insertions 0) (or deletions 0))))
+      (and file-count
+           (<= file-count gptel-auto-workflow-fast-track-max-files)
+           (<= total-lines gptel-auto-workflow-fast-track-max-lines)))))
 
 (defun gptel-auto-workflow--verify-staging ()
   "Run verification in the staging worktree.
@@ -506,6 +548,39 @@ Returns (success-p . output)."
                            (gptel-auto-workflow--summarize-staging-verification-output
                             output))))
         (cons result output)))))
+
+(defun gptel-auto-workflow--verify-staging-fast-track ()
+  "Run fast-track verification in the staging worktree.
+Only checks syntax and behavioral tests — skips full unit tests.
+Returns (success-p . output)."
+  (let* ((worktree gptel-auto-workflow--staging-worktree-dir)
+         (output-buffer (generate-new-buffer "*staging-verify-fast*"))
+         result)
+    (if (not (and worktree (file-exists-p worktree)))
+        (progn
+          (message "[auto-workflow] Fast-track: staging worktree not found")
+          (cons nil "Staging worktree not found"))
+      (let ((default-directory worktree))
+        (message "[auto-workflow] Fast-track verification (syntax + behavioral only)...")
+        (let* ((syntax-pass (gptel-auto-workflow--check-el-syntax worktree output-buffer))
+               (behavioral-result
+                (when (and syntax-pass (featurep 'gptel-auto-workflow-behavioral-tests))
+                  (let ((changed-files (gptel-auto-workflow--staging-changed-files)))
+                    (when changed-files
+                      (gptel-auto-workflow--run-behavioral-tests changed-files)))))
+               (behavioral-pass (or (null behavioral-result)
+                                    (car behavioral-result)))
+               (_ (when behavioral-result
+                    (with-current-buffer output-buffer
+                      (goto-char (point-max))
+                      (unless (bolp) (insert "\n"))
+                      (insert (cdr behavioral-result) "\n"))))
+               (output (with-current-buffer output-buffer (buffer-string))))
+          (kill-buffer output-buffer)
+          (setq result (and syntax-pass behavioral-pass))
+          (message "[auto-workflow] Fast-track verification: %s"
+                   (if result "PASS" (format "FAIL (%s)" output)))
+          (cons result output))))))
 
 
 (defun gptel-auto-workflow--parse-remote-head (branch output)
@@ -1239,16 +1314,21 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                         'staging-worktree-failed optimize-branch "")
                        (gptel-auto-workflow--reset-staging-after-failure staging-base)
                        (funcall finish nil "staging-worktree-failed"))
-                  (let* ((verification (gptel-auto-workflow--verify-staging))
-                         (tests-passed (car verification))
-                         (output (or (cdr verification) "")))
-                    (if (not tests-passed)
-                        (progn
-                           (gptel-auto-workflow--log-staging-step-failure
-                            'staging-verification-failed optimize-branch output)
-                           (gptel-auto-workflow--reset-staging-after-failure staging-base)
-                           (funcall finish nil "staging-verification-failed"))
-                      (message "[auto-workflow] ✓ Staging verification PASSED")
+                   (let* ((fast-track (gptel-auto-workflow--fast-track-eligible-p optimize-branch))
+                          (verification (if fast-track
+                                            (gptel-auto-workflow--verify-staging-fast-track)
+                                          (gptel-auto-workflow--verify-staging)))
+                          (tests-passed (car verification))
+                          (output (or (cdr verification) "")))
+                     (when fast-track
+                       (message "[auto-workflow] Fast-track staging verification for %s (small change)" optimize-branch))
+                     (if (not tests-passed)
+                         (progn
+                            (gptel-auto-workflow--log-staging-step-failure
+                             'staging-verification-failed optimize-branch output)
+                            (gptel-auto-workflow--reset-staging-after-failure staging-base)
+                            (funcall finish nil "staging-verification-failed"))
+                       (message "[auto-workflow] ✓ Staging verification PASSED")
                       (if (gptel-auto-workflow--push-staging)
                           (funcall finish-publish nil)
                         (let* ((push-output gptel-auto-workflow--last-staging-push-output)
