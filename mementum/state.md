@@ -2,8 +2,8 @@
 
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
-> **Status**: ✅ **GATE INTEGRITY SELF-AUDIT COMPLETE** — 46 defvar-override-defcustom violations fixed; pre-push test gate blocks broken code; 3 new self-audit checks detect pipeline bypasses
-> **Latest**: Phase 1 of OV5 World Store COMPLETE — Datahike pod (0.8.1697) via babashka brepl; schema defined (experiment/backend/strategy/target); CRUD + query helpers working; Elisp bridge `gptel-ext-world-store.el` with connect/transact/query/entity; 8 bootstrap tests all green; fixed Elisp→EDN plist conversion (keywordp vs plistp bug); fixed schema-flexibility string/keyword handling in keep-rate
+> **Status**: ✅ **SELF-HEAL + ONTOLOGY REPAIRED** — high-risk routing blocks direct mutation of repair-engine files; ontology-router paren corruption fixed; stale cache removed
+> **Latest**: Phase 1 of OV5 World Store COMPLETE — Datahike pod (0.8.1697) via babashka brepl; schema defined (experiment/backend/strategy/target); CRUD + query helpers working; Elisp bridge `gptel-ext-world-store.el` with connect/transact/query/entity; 8 bootstrap tests all green; fixed Elisp→EDN plist conversion (keywordp vs plistp bug); fixed schema-flexibility string/keyword handling in keep-rate; self-audit false negative in defvar-override-detection fixed with case-sensitive placeholder filter; test-self-audit/ 15/15 green
 > **Active Plan**: [OV5 World Store](../plans/ov5-world-store/plan.md) — Phase 2 (TSV Migration): migrate all existing experiment TSVs (5 schema versions) to World Store
 > **Pi5**: Auto-evolution active; pre-push hook now blocks broken pushes to main; Pi5 auto-evolved boundary fixes (Preview Mode 2, Edit hashline, Code_Map/Inspect/Replace, plan-mode readonly enforcement)
 
@@ -94,15 +94,17 @@ Two REPL modules now exist, both wired into `gptel-config.el`:
 | `gptel-ext-brepl.el` | Clojure eval via brepl CLI | ~/.local/bin/brepl (nREPL) | 19 |
 
 ### What was done this session
-1. **Synced Pi5**: 3 merge rounds, resolved git conflict markers in ontology-router.el + memory-schema.el
-2. **Renamed brepl→daemon-repl**: Disambiguated Elisp daemon REPL from Clojure brepl CLI
-3. **Fixed 9 bugs in daemon-repl** (TDD): reentry hang, emacsclient exit status, socket discovery, file-notify require+flag, event parsing, dotfile check, autofix gate, self-heal arity, emacs-lisp-mode context
-4. **Created gptel-ext-brepl.el**: Clojure nREPL client wrapping `~/.local/bin/brepl` — eval, load-file, bracket balance, port discovery
-5. **Installed pre-commit hook**: Rejects .el files with git conflict markers
-6. **Hardened install-ops-global.sh**: Backup before edit, socket detection, YAML validation
-7. **Both modules wired** into gptel-config.el, 39/39 tests green
+1. **Fixed self-audit regression**: `gptel-auto-workflow-self-audit--check-defvar-override-defcustom` was filtering `some-var` as a false positive because the placeholder regex was evaluated case-insensitively; bound `case-fold-search` to `nil` in the filter and verified the full self-audit suite
+2. **Synced Pi5**: 3 merge rounds, resolved git conflict markers in ontology-router.el + memory-schema.el
+3. **Renamed brepl→daemon-repl**: Disambiguated Elisp daemon REPL from Clojure brepl CLI
+4. **Fixed 9 bugs in daemon-repl** (TDD): reentry hang, emacsclient exit status, socket discovery, file-notify require+flag, event parsing, dotfile check, autofix gate, self-heal arity, emacs-lisp-mode context
+5. **Created gptel-ext-brepl.el**: Clojure nREPL client wrapping `~/.local/bin/brepl` — eval, load-file, bracket balance, port discovery
+6. **Installed pre-commit hook**: Rejects .el files with git conflict markers
+7. **Hardened install-ops-global.sh**: Backup before edit, socket detection, YAML validation
+8. **Both modules wired** into gptel-config.el, 39/39 tests green
 
 ### Key Decisions
+- Case-sensitive placeholder filters should explicitly bind `case-fold-search` to `nil` when matching symbols
 - Elisp daemon-repl and Clojure brepl are separate tools with separate skill directories
 - Pre-commit hook is local-only (.git/hooks/); Pi5 cron installs via bootstrap
 - `(defvar SYMBOL)` without value → `void-variable` crash in batch mode; always `(defvar SYMBOL nil)`

@@ -1214,7 +1214,8 @@ Each violation plist: (:file :line :symbol :defvar-value :defcustom-file)."
     ;; Filter false positives: uppercase placeholder names (e.g., NAME in docstrings)
     (setq violations (cl-remove-if
                       (lambda (v)
-                        (let ((sym (plist-get v :symbol)))
+                        (let ((case-fold-search nil)
+                              (sym (plist-get v :symbol)))
                           (and sym (string-match-p "\\`[A-Z_-]+\\'" sym))))
                       violations))
     (list :violations (nreverse violations)
