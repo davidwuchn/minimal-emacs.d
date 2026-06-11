@@ -22,18 +22,58 @@ for cmd in git perl; do
     fi
 done
 
-# Socket path: detect systemd runtime dir first, fall back to /tmp
-if [ -d "/run/user/$(id -u)/emacs" ]; then
-    OV5_SOCKET="/run/user/$(id -u)/emacs/ov5-auto-workflow"
-elif [ -S "/tmp/emacs$(id -u)/ov5-auto-workflow" ]; then
-    OV5_SOCKET="/tmp/emacs$(id -u)/ov5-auto-workflow"
-else
-    OV5_SOCKET="/tmp/emacs$(id -u)/ov5-auto-workflow"
-fi
-SKILL_SRC="${EMACS_DIR}/assistant/skills/ov5"
-OPENCODE_SKILLS="${HOME}/.config/opencode/skills/ov5"
+# Socket path: /tmp/emacs$UID/ per AGENTS.md S3
+OV5_SOCKET="/tmp/emacs$(id -u)/pmf-value-stream"
+# 8. OV5 Cowork Setup — skill installation
+# Skills live in assistant/skills/ (OV5 evolves them there).
+# opencode loads them via .opencode/skills/ symlinks (if in repo) or
+# ~/.config/opencode/skills/ copies (if standalone).
 
-echo "=== OpenCode Processing Skills + OV5 Cowork - Global Install ==="
+SKILLS_TO_INSTALL="ov5 brepl daemon-repl"
+LOCAL_SKILLS_DIR="${EMACS_DIR}/.opencode/skills"
+GLOBAL_SKILLS_DIR="${HOME}/.config/opencode/skills"
+
+echo ""
+echo "=== OV5 Cowork Setup ==="
+
+for skill in $SKILLS_TO_INSTALL; do
+    SKILL_SRC="${EMACS_DIR}/assistant/skills/${skill}/SKILL.md"
+    if [[ ! -f "${SKILL_SRC}" ]]; then
+        echo "WARNING: ${skill}/SKILL.md not found at ${SKILL_SRC}"
+        continue
+    fi
+
+    # Check if already installed via .opencode/skills/ symlink (repo-local)
+    if [[ -L "${LOCAL_SKILLS_DIR}/${skill}" ]]; then
+        echo "${skill}: already symlinked in .opencode/skills/ → $(readlink "${LOCAL_SKILLS_DIR}/${skill}")"
+        continue
+    fi
+
+    # Check if already installed as real directory in .opencode/skills/
+    if [[ -d "${LOCAL_SKILLS_DIR}/${skill}" ]]; then
+        echo "${skill}: already exists in .opencode/skills/ (not symlink — consider converting)"
+        continue
+    fi
+
+    # Check if already installed in global ~/.config/opencode/skills/
+    if [[ -f "${GLOBAL_SKILLS_DIR}/${skill}/SKILL.md" ]]; then
+        echo "${skill}: already installed in ${GLOBAL_SKILLS_DIR}/${skill}/"
+        continue
+    fi
+
+    # Install: prefer repo-local symlink, fall back to global copy
+    if [[ -d "${LOCAL_SKILLS_DIR}" ]]; then
+        ln -s "../../assistant/skills/${skill}" "${LOCAL_SKILLS_DIR}/${skill}"
+        echo "${skill}: symlinked .opencode/skills/${skill} → assistant/skills/${skill}"
+    else
+        mkdir -p "${GLOBAL_SKILLS_DIR}/${skill}"
+        cp "${SKILL_SRC}" "${GLOBAL_SKILLS_DIR}/${skill}/SKILL.md"
+        echo "${skill}: copied → ${GLOBAL_SKILLS_DIR}/${skill}/SKILL.md"
+    fi
+done
+
+echo ""
+echo "=== Installation Complete ==="
 
 # 1. Clone repo
 echo "Cloning opencode-processing-skills ($OPS_REF)..."
@@ -312,52 +352,6 @@ for my $f (@ARGV) {
 }
 exit($warned > 0 ? 1 : 0);
 ' "$AGENTS_DIR"/*.md
-
-# 8. OV5 Cowork Setup — OpenCode only
-COWORK_INSTRUCTIONS="# OV5
-
-OV5 is a self-evolving Emacs daemon that runs automated code improvement experiments.
-Communicate with it via \`emacsclient\`.
-
-Socket: ${OV5_SOCKET}
-
-## Key commands
-- \`(gptel-auto-workflow-status)\` — pipeline phase, targets, keep-rate
-- \`(gptel-auto-workflow-run-async)\` — trigger a new experiment cycle
-- \`(gptel-auto-workflow--running)\` — is pipeline active?
-- \`(gptel-auto-workflow--rate-limited-backends)\` — which providers are rate-limited
-- \`(gptel-auto-workflow--current-target)\` — file being experimented on
-
-## Results
-- \`tail "${EMACS_DIR}/var/log/emacs-*.log" | grep -E 'kept|discard|RESULT'\`
-- \`cat "${EMACS_DIR}/var/tmp/experiments/*/results.tsv" | column -t\`
-- \`git -C "${EMACS_DIR}" log --oneline -10\`
-
-## Coworking pattern
-1. Review code, identify improvement
-2. Request experiment: \`(gptel-auto-workflow-run-async)\`
-3. OV5 runs experiment in isolated worktree (~30min)
-4. Review results: check git log + results.tsv
-5. Merge or refine — ontology learns from every outcome
-"
-
-echo ""
-echo "=== OV5 Cowork Setup ==="
-
-# 8a. OpenCode skill
-mkdir -p "${OPENCODE_SKILLS}"
-if [[ -f "${SKILL_SRC}/SKILL.md" ]]; then
-    cp "${SKILL_SRC}/SKILL.md" "${OPENCODE_SKILLS}/SKILL.md"
-    echo "OpenCode skill → ${OPENCODE_SKILLS}/SKILL.md"
-else
-    echo "WARNING: SKILL.md not found at ${SKILL_SRC}"
-fi
-
-# 8b. Write cowork instructions with runtime-specific paths
-if [[ -n "${COWORK_INSTRUCTIONS}" ]]; then
-    echo "${COWORK_INSTRUCTIONS}" > "${OPENCODE_SKILLS}/COWORK.md"
-    echo "Cowork instructions → ${OPENCODE_SKILLS}/COWORK.md"
-fi
 
 echo ""
 echo "=== Installation Complete ==="
