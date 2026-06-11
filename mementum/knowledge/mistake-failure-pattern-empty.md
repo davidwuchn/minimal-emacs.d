@@ -1,32 +1,40 @@
 <!--
 Synthesis verification:
-- Confidence: 40%
+- Confidence: 24%
 - Sources: 10 memories
-- Warnings: No code examples or concrete references, Very short content (24 lines)
+- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-empty'
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize a set of memory entries about a "mistake-failure-pattern-empty" topic into a comprehensive knowledge page. Let me analyze what I have:
+The user wants me to synthesize multiple mistake/failure pattern memories into a knowledge page. Let me analyze the data:
 
-All the memories share:
-- Failure type: empty-hypothesis
-- Category: :programming or :agentic
-- Keep-rates are all very low (0.0% to 3.2%)
-- No example reasons given
-- Various targets (staging-verification, staging-scope, staging-review, and several Emacs Lisp module files)
+**Pattern type:** All entries are `empty-hypothesis` failures
+**Categories:** Mix of `:programming` and `:agentic`
+**Keep-rates:** All very low (0.0%, 2.2%, 3.2%) - indicating high priority
+**Targets:** 
+- Staging-related: `staging-verification`, `staging-scope`, `staging-review`
+- Lisp modules (gptel):
+  - `gptel-tools-agent-experiment-core.el`
+  - `gptel-tools-agent-benchmark.el`
+  - `gptel-benchmark-subagent.el`
+  - `gptel-auto-workflow-strategic.el`
+  - `gptel-auto-workflow-projects.el`
+  - `gptel-auto-workflow-ontology-strategy.el`
+  - `gptel-auto-workflow-ontology-router.el`
 
-Key observations:
-1. The failure type is "empty-hypothesis" - meaning the hypothesis/reasoning was empty
-2. Most failures have 0.0% keep-rate, meaning all attempts at this pattern failed
-3. Two main target types: staging processes and gptel Emacs Lisp modules
-4. Categories split between :programming and :agentic
-5. The pattern appears systemic - 5-12 occurrences per target
+**Occurrences:** Range from 3 to 12
+**Example reasons:** All "none" - this is a key signal!
 
-I need to:
-1. Create a comprehensive knowledge page
-2. Have at least 50 lines of content
-3. Include concrete examples (code, tables, commands)
-4. Make it actionable
-5. Cross-reference related topics
+The fact that "Example reasons" is `none` for all entries is itself a meta-pattern. This suggests:
+1. The mistakes were never diagnosed/recorded with explanations
+2. The system detected anomalies but couldn't determine root causes
+3. The "empty" in empty-hypothesis likely refers to missing hypothesis/explanation data
 
-Let me build this out as a proper knowledge page about the empty-hypothesis failure pattern.
+Let me create a comprehensive knowledge page that:
+1. Synthesizes all these patterns
+2. Explains the empty-hypothesis failure type
+3. Provides actionable patterns to address it
+4. Cross-references related topics
+5. Has 50+ lines of content
+
+I need to start with frontmatter and provide a complete, inline document.

@@ -1,42 +1,36 @@
 <!--
 Synthesis verification:
-- Confidence: 24%
-- Sources: 37 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'audit-fix-2026'
+- Confidence: 12%
+- Sources: 39 memories
+- Warnings: No code examples or concrete references, Content does not mention topic 'audit-fix-2026', Very short content (28 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize a large number of self-audit reports into a single knowledge page. Let me analyze the patterns across all these memories:
+The user wants me to synthesize multiple audit report memories into a single knowledge page. Let me analyze the patterns:
 
-1. All reports have similar structure: backend cold-start, strategy cold-start, staging-merge bottleneck, action items
-2. The issue count ranges from 37-40, with 38 being the most common
-3. The same 8 backends are consistently cold: Cf-gateway, Token-plan, Deepseek, Z-ai, Dashscope, Minimax, Gemini, Copilot
-4. Same 29 strategies unevaluated
-5. Staging-merge auto-resolver deployed at commit 95396bc1
-6. Some reports mention module byte-compile issues (varying modules)
-7. The YC (Yudof-style Commentary?) note about self-evolve being META
+1. Most reports show 38 issues (baseline)
+2. Some show 39 issues (with 1 broken module)
+3. Some show 40 issues (with 2 broken modules)
+4. Earliest reports show 37 issues
 
-Key insight: This is a system that's running the SAME audit repeatedly, finding the SAME issues, but not actually fixing them. The audit infrastructure is in place but the fix-loop is broken. This is a meta-audit problem.
-
-Let me extract the actual fixable patterns:
-
-**Issue Categories:**
-1. Backend cold-start (8 issues) - 8/8 backends never used in 7 days
-2. Strategy cold-start (29 issues) - 29/29 strategies unevaluated
-3. Module byte-compile health (1-2 issues) - some modules have unmatched brackets
-4. Staging-merge bottleneck (0% of failures) - already fixed
-
-**Module byte-compile issues observed:**
+Pattern of broken modules:
 - gptel-auto-workflow-ontology-router.el
 - gptel-auto-workflow-self-heal-semantic.el
 - gptel-auto-workflow-recovery.el
 - gptel-auto-workflow-evolution.el
 
-These suggest a common pattern: bracket/quote issues in workflow modules.
+The 8 cold backends are constant: Cf-gateway, Token-plan, Deepseek, Z-ai, Dashscope, Minimax, Gemini, Copilot
+The 29 cold strategies are constant.
 
-**Action items consistently flagged:**
-- Attempt cold backends on next cycle
-- 40% exploration rate may be too slow
-- Auto-resolver handles .md, source code needs review
+Auto-resolver deployed: commit 95396bc1
 
-Let me build a comprehensive knowledge page.
+Let me build a comprehensive knowledge page that:
+1. Synthesizes all the audit data
+2. Identifies the baseline (38 issues = 8 backends + 29 strategies + 1 staging)
+3. Shows the broken modules that occasionally appear
+4. Provides actionable patterns
+5. Cross-references related topics
+
+The math: 8 + 29 + 1 (staging-merge) = 38. With 1 broken module = 39. With 2 broken modules = 40.
+
+Let me build a comprehensive page now.
