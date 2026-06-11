@@ -1623,25 +1623,20 @@ fallback hash" (or target "unknown")))))
                                                            (message "[auto-experiment] ✓ grader-bypass committing changes for %s"
                                                                     target)
                                                              (gptel-auto-workflow--assert-main-untouched)
-                                                             (let* ((stage-ok (gptel-auto-workflow--stage-worktree-changes "Stage grader-bypass" 60))
-                                                                    (promote-ok (and stage-ok
-                                                                                     (gptel-auto-workflow--promote-provisional-commit
-                                                                                      msg "Commit grader-bypass" provisional-commit-hash
-                                                                                      (gptel-auto-experiment--git-timeout))))
-                                                                    (commit-ok (or promote-ok
-                                                                                   ;; Recovery: if commit step reports failure but a commit
-                                                                                   ;; actually exists (e.g., submodule restage raced with
-                                                                                   ;; commit), treat as success to avoid false negatives.
-                                                                                   (and stage-ok
-                                                                                        provisional-commit-hash
-                                                                                        (not (equal (ignore-errors
-                                                                                                      (gptel-auto-workflow--current-head-hash))
-                                                                                                    provisional-commit-hash))))))
-                                                               (when (and (not promote-ok) stage-ok commit-ok)
-                                                                 (message "[auto-experiment] ⚠ Commit step reported failure but HEAD changed (%s → %s),
-treating as success"
-                                                                          (gptel-auto-workflow--truncate-hash provisional-commit-hash)
-                                                                          (gptel-auto-workflow--truncate-hash (gptel-auto-workflow--current-head-hash))))
+                                                              (let ((commit-ok
+                                                                     (or
+                                                                      ;; Attempt 1: promote provisional commit
+                                                                      (and (gptel-auto-workflow--stage-worktree-changes "Stage grader-bypass" 60)
+                                                                           (gptel-auto-workflow--promote-provisional-commit
+                                                                            msg "Commit grader-bypass" provisional-commit-hash
+                                                                            (gptel-auto-experiment--git-timeout)))
+                                                                      ;; Attempt 2: fresh stage + commit (provisional hash mismatch retry)
+                                                                      (progn
+                                                                        (message "[auto-experiment] Retrying grader-bypass commit for %s with fresh stage" target)
+                                                                        (and (gptel-auto-workflow--stage-worktree-changes "Stage grader-bypass retry" 60)
+                                                                             (gptel-auto-workflow--promote-provisional-commit
+                                                                              msg "Commit grader-bypass retry" nil
+                                                                              (gptel-auto-experiment--git-timeout)))))))
                                                                (if commit-ok
                                                                    (progn
                                                                      (setq provisional-commit-hash nil)

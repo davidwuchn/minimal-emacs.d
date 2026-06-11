@@ -1300,11 +1300,18 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                            :agent-output ""))
                     (funcall finish nil "protected-config-regression"))
                  (let* ((staging-base (gptel-auto-workflow--current-staging-head))
-                  (merge-result
-                   (progn
-                     (gptel-auto-workflow--git-result
-                      "git merge --abort 2>/dev/null; git checkout HEAD -- mementum/ assistant/ 2>/dev/null; true" 30)
-                     (gptel-auto-workflow--merge-to-staging optimize-branch)))
+                   (merge-result
+                    (or
+                     ;; Attempt 1
+                     (progn
+                       (gptel-auto-workflow--git-result
+                        "git merge --abort 2>/dev/null; git checkout HEAD -- mementum/ assistant/ 2>/dev/null; true" 30)
+                       (gptel-auto-workflow--merge-to-staging optimize-branch))
+                     ;; Attempt 2: sync staging and retry
+                     (progn
+                       (message "[auto-workflow] Retrying merge after staging sync...")
+                       (gptel-auto-workflow--sync-staging-from-main)
+                       (gptel-auto-workflow--merge-to-staging optimize-branch))))
                  (already-integrated-p (eq merge-result :already-integrated))
                  (finish-publish
                   (lambda (&optional retried)
