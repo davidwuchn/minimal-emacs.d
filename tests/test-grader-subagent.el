@@ -666,11 +666,17 @@ Result: Tests pass."))
 (ert-deftest grader/extract-mutation-templates-returns-list ()
   "Extract mutation templates should return list of template strings."
   (require 'gptel-tools-agent)
-  (let* ((target "lisp/modules/gptel-ext-retry.el")
-         (skills (gptel-auto-workflow-recall-skills target))
-         (templates (gptel-auto-workflow--extract-mutation-templates skills)))
-    (should (listp templates))
-    (when (and skills (> (length skills) 0))
+  ;; Mock skills with properly structured mutation skills containing
+  ;; hypothesis templates.  This avoids TMPDIR-dependent skill file loading.
+  (cl-letf (((symbol-function 'gptel-auto-workflow-recall-skills)
+             (lambda (_target)
+               (list :target-skill (list :content "## Next Hypothesis\n\nTest")
+                     :mutation-skills
+                     (list (list :content "## Hypothesis Templates\n```\n\"Add caching\"\n\"Lazy evaluation\"\n\"Simplify logic\"\n```\n"))))))
+    (let* ((target "lisp/modules/gptel-ext-retry.el")
+           (skills (gptel-auto-workflow-recall-skills target))
+           (templates (gptel-auto-workflow--extract-mutation-templates skills)))
+      (should (listp templates))
       (should (> (length templates) 0))
       (should (cl-some (lambda (tmpl) (string-match-p "caching" tmpl)) templates))
       (should (cl-some (lambda (tmpl) (string-match-p "Lazy" tmpl)) templates))
