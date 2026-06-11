@@ -500,8 +500,16 @@ Returns (success-p . output)."
         (message "[auto-workflow] Verifying staging...")
         (let* ((default-directory worktree)
               (syntax-pass (gptel-auto-workflow--check-el-syntax worktree output-buffer))
-              (submodules (when syntax-pass (gptel-auto-workflow--hydrate-staging-submodules worktree)))
-              (submodule-pass (and syntax-pass (= 0 (cdr submodules))))
+               ;; Retry hydration once on transient failure (worktree lock, network)
+               (submodules (when syntax-pass
+                             (let ((result (gptel-auto-workflow--hydrate-staging-submodules worktree)))
+                               (if (= 0 (cdr result))
+                                   result
+                                 (progn
+                                   (message "[auto-workflow] Retrying submodule hydration after 3s...")
+                                   (sleep-for 3)
+                                   (gptel-auto-workflow--hydrate-staging-submodules worktree))))))
+               (submodule-pass (and syntax-pass (= 0 (cdr submodules))))
               (submodule-note
                (and syntax-pass
                     (not submodule-pass)
