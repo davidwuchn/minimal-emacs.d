@@ -324,5 +324,16 @@ inner call-process error."
       (should-not (plist-get result :success))
       (should (string-match-p "Binary not found" (plist-get result :error))))))
 
+(ert-deftest test-brepl/validate-brackets-rejects-nil-content ()
+  "validate-brackets must handle nil content without throwing.
+The function uses (insert file-content) — passing nil raises
+wrong-type-argument char-or-string-p nil.  Callers may pass nil
+when reading from an empty buffer or a missing file.  Must return
+(:valid nil :error ...) instead of throwing."
+  (let ((result (gptel-brepl-validate-brackets nil)))
+    (should-not (plist-get result :valid))
+    (should (plist-get result :error))
+    (should (stringp (plist-get result :error)))))
+
 (provide 'test-brepl)
 ;;; test-brepl.el ends here
