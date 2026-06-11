@@ -831,5 +831,89 @@ Pi5 commit ab888cd86 removed the cache logic but left the defvar."
   (require 'gptel-auto-workflow-ontology-router)
   (should-not (boundp 'gptel-auto-workflow--reorder-cache)))
 
+;; ── Worktree test-suite validation gate ──
+
+(ert-deftest test-self-heal-semantic/run-ert-no-tests-dir ()
+  "run-ert-in-worktree returns (t . output) when no tests directory exists."
+  (let* ((tmpdir (make-temp-file "ov5-ert-test-" t))
+         (lisp-dir (expand-file-name "lisp/modules/" tmpdir)))
+    (unwind-protect
+        (progn
+          (make-directory lisp-dir t)
+          (with-temp-file (expand-file-name "test-mod.el" lisp-dir)
+            (insert "(defun test-mod-hello () 42)\n(provide 'test-mod)\n"))
+          (let ((result (gptel-auto-workflow--run-ert-in-worktree tmpdir)))
+            (should (car result))
+            (should (stringp (cdr result)))))
+      (delete-directory tmpdir t))))
+
+(ert-deftest test-self-heal-semantic/run-ert-no-script ()
+  "run-ert-in-worktree returns (t . output) when run-tests.sh is missing."
+  (let* ((tmpdir (make-temp-file "ov5-ert-test-" t))
+         (test-dir (expand-file-name "tests/" tmpdir))
+         (lisp-dir (expand-file-name "lisp/modules/" tmpdir)))
+    (unwind-protect
+        (progn
+          (make-directory lisp-dir t)
+          (make-directory test-dir t)
+          (with-temp-file (expand-file-name "test-mod.el" lisp-dir)
+            (insert "(defun test-mod-hello () 42)\n(provide 'test-mod)\n"))
+          (let ((result (gptel-auto-workflow--run-ert-in-worktree tmpdir)))
+            ;; No run-tests.sh = can't run tests = vacuously true
+            (should (car result))
+            (should (stringp (cdr result)))))
+      (delete-directory tmpdir t))))
+
+(ert-deftest test-self-heal-semantic/run-ert-calls-test-script ()
+  "run-ert-in-worktree calls scripts/run-tests.sh unit when it exists."
+  (let* ((tmpdir (make-temp-file "ov5-ert-test-" t))
+         (test-dir (expand-file-name "tests/" tmpdir))
+         (lisp-dir (expand-file-name "lisp/modules/" tmpdir))
+         (script-dir (expand-file-name "scripts/" tmpdir))
+         (called-with nil))
+    (unwind-protect
+        (progn
+          (make-directory lisp-dir t)
+          (make-directory test-dir t)
+          (make-directory script-dir t)
+          (with-temp-file (expand-file-name "test-mod.el" lisp-dir)
+            (insert "(defun test-mod-hello () 42)\n(provide 'test-mod)\n"))
+          (with-temp-file (expand-file-name "test-mod.el" test-dir)
+            (insert "(require 'ert)\n(require 'test-mod)\n(ert-deftest test-mod/pass () (should (= (test-mod-hello) 42)))\n"))
+          ;; Mock run-tests.sh that records args and exits 0
+          (with-temp-file (expand-file-name "run-tests.sh" script-dir)
+            (insert "#!/bin/bash\necho \"MOCK-RUN-TESTS $*\"\nexit 0\n"))
+          (chmod (expand-file-name "run-tests.sh" script-dir) #o755)
+          (let ((result (gptel-auto-workflow--run-ert-in-worktree tmpdir)))
+            (should (car result))
+            (should (string-match-p "MOCK-RUN-TESTS" (cdr result)))
+            (should (string-match-p "unit" (cdr result)))))
+      (delete-directory tmpdir t))))
+
+(ert-deftest test-self-heal-semantic/run-ert-rejects-on-failure ()
+  "run-ert-in-worktree returns (nil . output) when run-tests.sh exits non-zero."
+  (let* ((tmpdir (make-temp-file "ov5-ert-test-" t))
+         (test-dir (expand-file-name "tests/" tmpdir))
+         (lisp-dir (expand-file-name "lisp/modules/" tmpdir))
+         (script-dir (expand-file-name "scripts/" tmpdir)))
+    (unwind-protect
+        (progn
+          (make-directory lisp-dir t)
+          (make-directory test-dir t)
+          (make-directory script-dir t)
+          (with-temp-file (expand-file-name "test-mod.el" lisp-dir)
+            (insert "(defun test-mod-hello () 99)\n(provide 'test-mod)\n"))
+          (with-temp-file (expand-file-name "test-mod.el" test-dir)
+            (insert "(require 'ert)\n(require 'test-mod)\n(ert-deftest test-mod/fail () (should (= (test-mod-hello) 42)))\n"))
+          ;; Mock run-tests.sh that exits 1 (failure)
+          (with-temp-file (expand-file-name "run-tests.sh" script-dir)
+            (insert "#!/bin/bash\necho \"1 tests FAILED\"\nexit 1\n"))
+          (chmod (expand-file-name "run-tests.sh" script-dir) #o755)
+          (let ((result (gptel-auto-workflow--run-ert-in-worktree tmpdir)))
+            (should-not (car result))
+            (should (stringp (cdr result)))
+            (should (string-match-p "FAILED" (cdr result)))))
+      (delete-directory tmpdir t))))
+
 (provide 'test-self-heal-semantic)
 ;;; test-self-heal-semantic.el ends here

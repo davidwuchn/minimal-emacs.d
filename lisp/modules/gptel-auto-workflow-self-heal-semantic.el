@@ -1155,6 +1155,33 @@ live-tree mutation is performed."
        (append route (list :status 'unknown-route
                            :auto-fixed 0))))))
 
+(defun gptel-auto-workflow--run-ert-in-worktree (worktree-dir)
+  "Run ert test suite from WORKTREE-DIR via scripts/run-tests.sh unit.
+Returns (PASS-P . OUTPUT-STRING).
+When no tests/ directory exists, returns (t . \"no tests directory\")."
+  (let ((test-dir (expand-file-name "tests" worktree-dir))
+        (script (expand-file-name "scripts/run-tests.sh" worktree-dir)))
+    (cond
+     ((not (file-directory-p test-dir))
+      (cons t "no tests directory"))
+     ((not (file-executable-p script))
+      (cons t "no run-tests.sh in worktree"))
+     (t
+      (let* ((default-directory worktree-dir)
+             (output (shell-command-to-string
+                      (format "%s unit 2>&1" (shell-quote-argument script))))
+             (exit-code (string-to-number
+                         (with-temp-buffer
+                           (insert output)
+                           (goto-char (point-max))
+                           (if (re-search-backward "exit-code=\\([0-9]+\\)" nil t)
+                               (match-string 1)
+                             "0")))))
+        ;; shell-command-to-string returns output but doesn't give exit code directly.
+        ;; Check output for failure markers.
+        (cons (not (string-match-p "FAILED\\|failed\\|unexpected" output))
+              (string-trim output)))))))
+
 (defun gptel-auto-workflow--self-heal-file-via-ov5 (file)
   "Heal FILE in an OV5 temporary worktree, then promote only if valid.
 This is the safe path for repair-engine files.  It refuses dirty target files
@@ -1193,16 +1220,27 @@ because a HEAD worktree cannot faithfully represent uncommitted live edits."
                                     :file abs-file
                                     :worktree worktree))
              (condition-case err
-                 (progn
-                   (with-temp-buffer
-                     (insert-file-contents target)
-                     (emacs-lisp-mode)
-                     (check-parens))
-                   (load-file target)
-                   (copy-file target abs-file t)
-                   (append result (list :status 'accepted
-                                        :file abs-file
-                                        :worktree worktree)))
+                  (progn
+                    (with-temp-buffer
+                      (insert-file-contents target)
+                      (emacs-lisp-mode)
+                      (check-parens))
+                    (load-file target)
+                    ;; Run test suite in worktree to catch semantic bugs
+                    ;; that check-parens + load-file cannot detect.
+                    (let ((test-result (gptel-auto-workflow--run-ert-in-worktree worktree)))
+                      (if (car test-result)
+                          (progn
+                            (copy-file target abs-file t)
+                            (append result (list :status 'accepted
+                                                 :file abs-file
+                                                 :worktree worktree
+                                                 :test-output (cdr test-result))))
+                        (append result (list :status 'rejected
+                                             :reason 'test-suite-failed
+                                             :error (cdr test-result)
+                                             :file abs-file
+                                             :worktree worktree)))))
                (error
                 (append result (list :status 'rejected
                                      :reason 'validation-failed
