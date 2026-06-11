@@ -3,8 +3,8 @@
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
 > **Status**: ✅ **SELF-HEAL + ONTOLOGY REPAIRED** — high-risk routing blocks direct mutation of repair-engine files; ontology-router paren corruption fixed; stale cache removed
-> **Latest**: Phase 2 of OV5 World Store COMPLETE — TSV migration: 105 files, 124 rows, 87 experiments migrated to Datahike; handles 3 schema versions (30/39/43 columns); deterministic UUID from path fixes store identity mismatch; run-ID namespacing prevents duplicate ID collisions; 3 migration tests (single TSV, multi-schema, idempotent upsert) all green
-> **Active Plan**: [OV5 World Store](../plans/ov5-world-store/plan.md) — Phase 3 (Context Unification): merge .sexp sidecars, approval history, risk patterns into unified entities
+> **Latest**: Phase 3 of OV5 World Store COMPLETE — Context unification: schema extended with context/approval/risk attributes; plist→map conversion handles single and multiple plists; context sidecars linked by target; approval history linked by target; risk patterns linked by target; 3 context tests (sidecar, approval, risk) all green; full suite 2968 tests, 0 unexpected
+> **Active Plan**: [OV5 World Store](../plans/ov5-world-store/plan.md) — Phase 4 (Query Layer): replace parse-all-results with Datalog queries; add query helpers; benchmark latency
 > **Pi5**: Auto-evolution active; pre-push hook now blocks broken pushes to main; Pi5 auto-evolved boundary fixes (Preview Mode 2, Edit hashline, Code_Map/Inspect/Replace, plan-mode readonly enforcement)
 
 ---
@@ -137,8 +137,8 @@ Two REPL modules now exist, both wired into `gptel-config.el`:
 - **daemon-repl**: 24/26 (2 existing skips)
 - **ontology-router**: 24/24
 - **self-audit**: 9/9 (added 3: defvar-override, pipeline-gate, staging-bypass)
-- **world-store**: 11/11 (Phase 1: 8 bootstrap + Phase 2: 3 migration)
-- **Full unit suite**: 2965 total, 0 unexpected, 29 skipped. All green.
+- **world-store**: 14/14 (Phase 1: 8 bootstrap + Phase 2: 3 migration + Phase 3: 3 context)
+- **Full unit suite**: 2968 total, 0 unexpected, 29 skipped. All green.
 
 ---
 

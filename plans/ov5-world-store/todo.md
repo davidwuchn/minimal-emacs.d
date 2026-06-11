@@ -9,32 +9,34 @@ updated: "2026-06-11"
 
 > Tracking [OV5 World Store](plan.md)
 
-## Active Phase: 3 - Context Unification
+## Active Phase: 4 - Query Layer
 
 ### Phase Context
 
-- **Scope**: [Phase 3](phases/phase-3.md)
-- **Implementation**: Phase 3 Plan (to be authored)
+- **Scope**: [Phase 4](phases/phase-4.md)
+- **Implementation**: Phase 4 Plan (to be authored)
 - **Latest Handover**: [Session 2026-06-11](handovers/session-2026-06-11.md)
 - **Relevant Docs**:
   - `mementum/state.md` — current system state
   - `clj/ov5/world_store.clj` — core namespace
   - `clj/ov5/world_store/migration.clj` — migration namespace
+  - `clj/ov5/world_store/context.clj` — context unification namespace
   - `lisp/modules/gptel-ext-world-store.el` — Elisp bridge
 
 ### Pending
 
-- [ ] Parse `var/context/*.sexp` files and link to experiment entities
-- [ ] Parse `var/approval-history.sexp` and link decisions to experiments
-- [ ] Parse `var/risk-patterns.sexp` and link to targets
-- [ ] Write unified entity lookup
-- [ ] Add context attributes to schema
-- [ ] Write context unification namespace
-- [ ] Write tests for context unification
+- [ ] Profile all `parse-all-results` call sites
+- [ ] Write Datalog query equivalents for each usage pattern
+- [ ] Add query helpers (experiments-by-target/backend/strategy/decision)
+- [ ] Add metrics helpers (backend-keep-rate, strategy-keep-rate, etc.)
+- [ ] Update Elisp modules to use query layer
+- [ ] Add caching layer for expensive queries
+- [ ] Benchmark query latency vs TSV parsing
+- [ ] Write query layer tests
 
 ### In Progress
 
-- [ ] Phase 2 complete — moving to Phase 3
+- [ ] Phase 3 complete — moving to Phase 4
 
 ### Completed
 
@@ -46,11 +48,15 @@ updated: "2026-06-11"
   - [x] 8 bootstrap tests
 - [x] Phase 2: TSV Migration
   - [x] 3 schema versions (30/39/43 columns)
-  - [x] Type coercion (double/long/keyword/string)
-  - [x] Run-ID namespacing for unique IDs
-  - [x] Deterministic UUID from path
   - [x] 105 files → 124 rows → 87 experiments migrated
-  - [x] 3 migration tests (single, multi-schema, idempotent)
+  - [x] 3 migration tests
+- [x] Phase 3: Context Unification
+  - [x] Schema extensions for context/approval/risk
+  - [x] Plist→map conversion for EDN parsing
+  - [x] Context sidecar unification (by target)
+  - [x] Approval history unification (by target)
+  - [x] Risk pattern unification (by target)
+  - [x] 3 context tests
 
 ### Blocked
 
@@ -60,5 +66,5 @@ updated: "2026-06-11"
 
 ### 2026-06-11
 
-- Phase 2 COMPLETE: TSV migration working; 87 experiments in World Store
-- Phase 3 identified as next: Context unification (.sexp sidecars, approval, risk)
+- Phase 3 COMPLETE: Context unification working; schema extended with context/approval/risk attributes; plist→map conversion handles single and multiple plists; 3 context tests pass
+- Phase 4 identified as next: Query Layer — replace parse-all-results with Datalog queries
