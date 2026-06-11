@@ -136,27 +136,32 @@ Returns plist:
   :valid t/nil
   :fixed-content string (if auto-fixed or already balanced)
   :error string (if invalid and unfixable)"
-  (let ((temp-file (make-temp-file "brepl-validate-" nil ".clj")))
-    (unwind-protect
-        (progn
-          (with-temp-file temp-file
-            (insert file-content))
-          (let ((result (gptel-brepl-balance temp-file t)))
-            (if (not (plist-get result :success))
-                (list :valid nil :fixed-content nil
-                      :error (or (plist-get result :error) "brepl balance failed"))
-              (let ((output (plist-get result :output)))
-                (cond
-                 ;; No output produced — brepl success but empty result is
-                 ;; suspicious (e.g. CLI bug, stdin closed). Treat as failure.
-                 ((null output)
+  ;; Guard against nil/non-string input — (insert nil) throws
+  ;; wrong-type-argument char-or-string-p nil.
+  (if (not (stringp file-content))
+      (list :valid nil :fixed-content nil
+            :error (format "Expected string file-content, got %S" file-content))
+    (let ((temp-file (make-temp-file "brepl-validate-" nil ".clj")))
+      (unwind-protect
+          (progn
+            (with-temp-file temp-file
+              (insert file-content))
+            (let ((result (gptel-brepl-balance temp-file t)))
+              (if (not (plist-get result :success))
                   (list :valid nil :fixed-content nil
-                        :error "brepl returned empty output"))
-                 ((string= output file-content)
-                  (list :valid t :fixed-content file-content :error nil))
-                 ;; Fixed — output differs from input
-                 (t (list :valid t :fixed-content output :error nil)))))))
-      (delete-file temp-file))))
+                        :error (or (plist-get result :error) "brepl balance failed"))
+                (let ((output (plist-get result :output)))
+                  (cond
+                   ;; No output produced — brepl success but empty result is
+                   ;; suspicious (e.g. CLI bug, stdin closed). Treat as failure.
+                   ((null output)
+                    (list :valid nil :fixed-content nil
+                          :error "brepl returned empty output"))
+                   ((string= output file-content)
+                    (list :valid t :fixed-content file-content :error nil))
+                   ;; Fixed — output differs from input
+                   (t (list :valid t :fixed-content output :error nil)))))))
+        (delete-file temp-file)))))
 
 (defun gptel-brepl-install-save-hooks ()
   "Install before-save hook for Clojure bracket auto-fix.
