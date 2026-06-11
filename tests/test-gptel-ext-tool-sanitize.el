@@ -621,8 +621,7 @@
                             :description "edit"
                             :args nil
                             :async t))
-         (tool-call (list :name "Edit" :args '(:file_path "x.el")))
-         (info (list :tool-use (list tool-call)
+         (info (list :tool-use (list (list :name "Edit" :args '(:file_path "x.el")))
                      :tools (list edit-tool)
                      :buffer request-buffer))
          (fsm (gptel-make-fsm :info info)))
@@ -634,9 +633,10 @@
              (lambda (_fsm)
                (user-error "Tool Contract Violation (Edit): missing or null required argument `new_str`"))
              fsm))
-          (should (string-prefix-p "Error: Tool Contract Violation"
-                                   (plist-get tool-call :result)))
-          (should (string-match-p "new_str" (plist-get tool-call :result))))
+          (let* ((updated-tool-call (car (plist-get (gptel-fsm-info fsm) :tool-use)))
+                 (result (plist-get updated-tool-call :result)))
+            (should (string-prefix-p "Error: Tool Contract Violation" result))
+            (should (string-match-p "new_str" result))))
       (when (buffer-live-p request-buffer)
         (kill-buffer request-buffer)))))
 

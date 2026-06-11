@@ -93,13 +93,22 @@ the new default must be qwen3.7-plus (preferred over older model)."
 (ert-deftest test-registry/select-for-task-returns-cons ()
   "`gptel-backend-registry-select-for-task' should return (BACKEND . MODEL)."
   (skip-unless (fboundp 'gptel-backend-registry-select-for-task))
-  (let ((result (gptel-backend-registry-select-for-task 'executor)))
-    (when result
-      (should (consp result))
-      (should (or (object-of-class-p (car result) 'gptel-backend)
-                  ;; In batch mode gptel-get-backend may not resolve
-                  (null (car result))))
-      (should (symbolp (cdr result))))))
+  ;; Ensure fallback chain is initialized
+  (unless (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+               gptel-auto-workflow-executor-rate-limit-fallbacks)
+    (when (and (fboundp 'gptel-backend-registry-fallback-chain-as-cons)
+               (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks))
+      (setq gptel-auto-workflow-executor-rate-limit-fallbacks
+            (gptel-backend-registry-fallback-chain-as-cons 'executor))))
+  (let ((gptel-auto-workflow--rate-limited-backends nil)
+        (gptel-auto-workflow--run-failed-backends nil)
+        (gptel-auto-workflow--analyzer-failed-backends nil))
+    (let ((result (gptel-backend-registry-select-for-task 'executor)))
+      (when result
+        (should (consp result))
+        (should (or (object-of-class-p (car result) 'gptel-backend)
+                    (null (car result))))
+        (should (symbolp (cdr result)))))))
 
 (ert-deftest test-registry/select-for-task-skips-excluded ()
   "select-for-task should skip backends in exclude-backends."

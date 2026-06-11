@@ -81,7 +81,7 @@
 (defvar gptel-auto-experiment-validation-retry-time-budget nil)
 (defvar gptel-auto-workflow-git-timeout nil)
 (defvar gptel-auto-experiment--best-score nil)
-(defvar gptel-auto-experiment-auto-push nil)
+(defvar gptel-auto-experiment-auto-push t)
 (defvar gptel-auto-workflow-use-staging nil)
 (defvar gptel-auto-experiment--in-retry nil)
 (defvar gptel-auto-experiment--in-refine nil)

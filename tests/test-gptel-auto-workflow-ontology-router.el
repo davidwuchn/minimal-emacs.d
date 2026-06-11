@@ -47,18 +47,20 @@
                               (file-name-directory
                                (or load-file-name buffer-file-name default-directory))))
 
-;; Mock the existing fallback configuration (after load so defvar doesn't override)
-(setq gptel-auto-workflow-headless-subagent-fallbacks
-      '(("MiniMax" . "minimax-m2.7-highspeed")
-        ("moonshot" . "kimi-k2.6")
-        ("DashScope" . "qwen3.6-plus")
-        ("DeepSeek" . "deepseek-v4-flash")))
+;; Mock fallback values for tests — defined as constants (no top-level setq)
+(defvar test-onto-router--mock-headless-fallbacks
+  '(("MiniMax" . "minimax-m2.7-highspeed")
+    ("moonshot" . "kimi-k2.6")
+    ("DashScope" . "qwen3.6-plus")
+    ("DeepSeek" . "deepseek-v4-flash"))
+  "Mock headless fallback list for ontology-router tests.")
 
-(setq gptel-auto-workflow-executor-rate-limit-fallbacks
-      '(("DashScope" . "qwen3.6-plus")
-        ("DeepSeek" . "deepseek-v4-flash")
-        ("moonshot" . "kimi-k2.6")
-        ("MiniMax" . "minimax-m2.7-highspeed")))
+(defvar test-onto-router--mock-executor-fallbacks
+  '(("DashScope" . "qwen3.6-plus")
+    ("DeepSeek" . "deepseek-v4-flash")
+    ("moonshot" . "kimi-k2.6")
+    ("MiniMax" . "minimax-m2.7-highspeed"))
+  "Mock executor fallback list for ontology-router tests.")
 
 ;; ─── Performance Lookup Tests ───
 
@@ -97,7 +99,7 @@
 (ert-deftest regression/ontology-router/reorder-puts-best-first ()
   "Backend with highest keep-rate should be first in reordered list."
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
-         gptel-auto-workflow-headless-subagent-fallbacks)
+         test-onto-router--mock-headless-fallbacks)
         (mock-results
          (list
           (list :backend "DeepSeek" :decision "kept")
@@ -110,7 +112,7 @@
               ((symbol-function 'random) (lambda (_) 999)))  ; No exploration
       (let ((reordered (gptel-auto-workflow--reorder-fallbacks-by-ontology)))
         (should (string= "DeepSeek" (caar reordered)))
-        (should (string= (cdr (assoc "DeepSeek" gptel-auto-workflow-headless-subagent-fallbacks))
+        (should (string= (cdr (assoc "DeepSeek" test-onto-router--mock-headless-fallbacks))
                          (cdar reordered)))))))
 
 (ert-deftest regression/ontology-router/reorder-keeps-all-backends ()
@@ -136,18 +138,18 @@
 (ert-deftest regression/ontology-router/insufficient-data-uses-static ()
   "When insufficient data, should return static order unchanged."
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
-         gptel-auto-workflow-headless-subagent-fallbacks)
+         test-onto-router--mock-headless-fallbacks)
         (mock-results nil))
     (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
                (lambda () mock-results)))
       (let ((reordered (gptel-auto-workflow--reorder-fallbacks-by-ontology)))
         ;; Should match static order exactly
-        (should (equal reordered gptel-auto-workflow-headless-subagent-fallbacks))))))
+        (should (equal reordered test-onto-router--mock-headless-fallbacks))))))
 
 (ert-deftest regression/ontology-router/exploration-can-swap ()
   "With exploration enabled, top 2 backends can be swapped."
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
-         gptel-auto-workflow-headless-subagent-fallbacks)
+         test-onto-router--mock-headless-fallbacks)
         (mock-results
          (list
           (list :backend "DeepSeek" :decision "kept")
@@ -219,14 +221,16 @@
 
 (ert-deftest regression/ontology-router/apply-and-reset ()
   "Applying ontology order should modify fallback chain, reset should restore."
-  (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
-         (copy-tree gptel-auto-workflow-headless-subagent-fallbacks))
+  (let ((gptel-auto-workflow-headless-subagent-fallbacks
+         test-onto-router--mock-headless-fallbacks)
+        (gptel-auto-workflow-executor-rate-limit-fallbacks
+         (copy-tree test-onto-router--mock-headless-fallbacks))
         (mock-results
          (list
           (list :backend "DashScope" :decision "kept")
           (list :backend "DashScope" :decision "kept")
           (list :backend "DashScope" :decision "kept")))
-        (original-order (copy-tree gptel-auto-workflow-headless-subagent-fallbacks)))
+        (original-order (copy-tree test-onto-router--mock-headless-fallbacks)))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
                    (lambda () mock-results))
@@ -282,14 +286,16 @@ Guards against missing runtime dependencies (worktree-base-root)."
 
 (ert-deftest tdd/ontology-router/reset-restores-static-order ()
   "reset-fallback-order restores the static headless fallback list."
-  (let ((original gptel-auto-workflow-executor-rate-limit-fallbacks))
+  (let ((original gptel-auto-workflow-executor-rate-limit-fallbacks)
+        (gptel-auto-workflow-headless-subagent-fallbacks
+         test-onto-router--mock-headless-fallbacks))
     (unwind-protect
         (progn
           (setq gptel-auto-workflow-executor-rate-limit-fallbacks
                 '(("CustomBackend" . "custom-model")))
           (gptel-auto-workflow--reset-fallback-order)
           (should (equal gptel-auto-workflow-executor-rate-limit-fallbacks
-                         gptel-auto-workflow-headless-subagent-fallbacks)))
+                         test-onto-router--mock-headless-fallbacks)))
       (setq gptel-auto-workflow-executor-rate-limit-fallbacks original))))
 
 (ert-deftest tdd/ontology-router/categorize-programming-targets ()

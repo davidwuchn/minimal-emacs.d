@@ -98,8 +98,8 @@ Prevents excessive analysis overhead on the experiment pipeline."
 (defvar gptel-auto-workflow-monitoring-cycle-counter 0
   "Counter for monitoring cycles, used to run health probes every 3rd cycle.")
 
-(defvar gptel-auto-experiment--shared-retryable-error-patterns nil
-  "Shared retryable error patterns for auto-learning (defined by Pi5).")
+(defvar gptel-auto-experiment--shared-retryable-error-patterns)
+
 
 ;; ── Phase 0: Runtime Health Probes ──
 

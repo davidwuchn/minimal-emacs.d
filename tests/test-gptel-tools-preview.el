@@ -91,7 +91,8 @@
 (ert-deftest preview/bypass-p/enabled-default ()
   "Should not bypass when preview is enabled."
   (let ((gptel-tools-preview-enabled t)
-        (gptel-tools-preview--never-ask-again nil))
+        (gptel-tools-preview--never-ask-again nil)
+        (gptel-auto-workflow--headless nil))
     (should-not (my/gptel--preview-bypass-p))))
 
 (ert-deftest preview/bypass-p/disabled-by-user ()

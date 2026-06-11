@@ -34,7 +34,7 @@
 (declare-function gptel-auto-workflow--worktree-needs-submodule-hydration-p "gptel-tools-agent-worktree")
 (defvar gptel-auto-experiment-max-aux-subagent-retries nil)
 (defvar gptel-auto-experiment-max-per-provider-attempts nil)
-(defvar gptel-auto-experiment-min-quality-gain-on-score-tie nil)
+(defvar gptel-auto-experiment-min-quality-gain-on-score-tie 0.005)
 (defvar gptel-auto-experiment-use-subagents nil)
 (defvar gptel-auto-workflow--current-target nil)
 (defvar gptel-auto-workflow--project-root-override nil

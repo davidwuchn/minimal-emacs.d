@@ -15,23 +15,6 @@
 (defvar gptel-auto-workflow--current-target)
 (defvar gptel-ai-behaviors--subagent-failures)
 
-;; Reset globals that may have been corrupted by earlier test files
-(when (boundp 'gptel-auto-workflow--rate-limited-backends)
-  (setq gptel-auto-workflow--rate-limited-backends nil))
-(when (boundp 'gptel-auto-workflow--run-failed-backends)
-  (setq gptel-auto-workflow--run-failed-backends nil))
-(when (boundp 'gptel-auto-workflow--analyzer-failed-backends)
-  (setq gptel-auto-workflow--analyzer-failed-backends nil))
-(when (boundp 'gptel-auto-workflow--lambda-strike-count)
-  (setq gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal)))
-(when (boundp 'gptel-auto-workflow--lambda-dead-until)
-  (setq gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal)))
-;; Reset fallback order to static headless list
-(when (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
-           (boundp 'gptel-auto-workflow-headless-subagent-fallbacks))
-  (setq gptel-auto-workflow-executor-rate-limit-fallbacks
-        (copy-tree gptel-auto-workflow-headless-subagent-fallbacks)))
-
 ;;; Customization tests
 
 (ert-deftest test-subagent/timeout-default ()

@@ -26,15 +26,23 @@
 (ert-deftest test-llm/auto-select-returns-cons-when-backend-available ()
   "auto-select-model should return (MODEL . BACKEND) via smart routing."
   (require 'gptel-benchmark-llm)
-  ;; The function now uses gptel-backend-registry-select-for-task 'researcher
-  ;; which walks the fallback chain.  If gptel-get-backend resolves any
-  ;; backend, verify the return format (MODEL . BACKEND).
-  (when (fboundp 'gptel-get-backend)
-    (let ((result (gptel-benchmark--auto-select-model)))
-      (when result
-        (should (consp result))
-        (should (symbolp (car result)))
-        (should (object-of-class-p (cdr result) 'gptel-backend))))))
+  ;; Ensure fallback chain is initialized (may be nil if ontology-router
+  ;; module loaded first with defvar nil)
+  (unless (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
+               gptel-auto-workflow-executor-rate-limit-fallbacks)
+    (when (and (fboundp 'gptel-backend-registry-fallback-chain-as-cons)
+               (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks))
+      (setq gptel-auto-workflow-executor-rate-limit-fallbacks
+            (gptel-backend-registry-fallback-chain-as-cons 'executor))))
+  (let ((gptel-auto-workflow--rate-limited-backends nil)
+        (gptel-auto-workflow--run-failed-backends nil)
+        (gptel-auto-workflow--analyzer-failed-backends nil))
+    (when (fboundp 'gptel-get-backend)
+      (let ((result (gptel-benchmark--auto-select-model)))
+        (when result
+          (should (consp result))
+          (should (symbolp (car result)))
+          (should (object-of-class-p (cdr result) 'gptel-backend)))))))
 
 (ert-deftest test-llm/auto-select-returns-nil-when-no-backend ()
   "auto-select-model should return nil when smart routing finds nothing."

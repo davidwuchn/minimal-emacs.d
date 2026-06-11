@@ -27,7 +27,7 @@ consumed by evolution cycle.")
 (defvar gptel-agent--todos nil)
 (defvar gptel-auto-workflow--current-validation-retry-active-grace nil)
 (defvar gptel-auto-experiment-delay-between nil)
-(defvar gptel-auto-experiment-auto-push nil)
+(defvar gptel-auto-experiment-auto-push t)
 
 ;; Forward declarations for prefix-cache role separation (Gap 4)
 (declare-function gptel-prefix-cache-prepend-for-role "gptel-ext-prefix-cache" (role dynamic-prompt))

@@ -22,6 +22,36 @@
 (cl-defstruct (test-gptel-tool (:constructor test-gptel-tool-create))
   name args async confirm)
 
+(defvar test-gptel-confirm--saved-tool-name
+  (when (fboundp 'gptel-tool-name)
+    (symbol-function 'gptel-tool-name)))
+(defvar test-gptel-confirm--saved-tool-args
+  (when (fboundp 'gptel-tool-args)
+    (symbol-function 'gptel-tool-args)))
+(defvar test-gptel-confirm--saved-tool-async
+  (when (fboundp 'gptel-tool-async)
+    (symbol-function 'gptel-tool-async)))
+(defvar test-gptel-confirm--saved-tool-confirm
+  (when (fboundp 'gptel-tool-confirm)
+    (symbol-function 'gptel-tool-confirm)))
+(defvar test-gptel-confirm--saved-backend-name
+  (when (fboundp 'gptel-backend-name)
+    (symbol-function 'gptel-backend-name)))
+
+(defun test-gptel-confirm--restore-functions ()
+  "Restore original function bindings overridden by this test file."
+  (when (boundp 'test-gptel-confirm--saved-tool-name)
+    (defalias 'gptel-tool-name test-gptel-confirm--saved-tool-name))
+  (when (boundp 'test-gptel-confirm--saved-tool-args)
+    (defalias 'gptel-tool-args test-gptel-confirm--saved-tool-args))
+  (when (boundp 'test-gptel-confirm--saved-tool-async)
+    (defalias 'gptel-tool-async test-gptel-confirm--saved-tool-async))
+  (when (boundp 'test-gptel-confirm--saved-tool-confirm)
+    (defalias 'gptel-tool-confirm test-gptel-confirm--saved-tool-confirm))
+  (when (and (boundp 'test-gptel-confirm--saved-backend-name)
+             test-gptel-confirm--saved-backend-name)
+    (defalias 'gptel-backend-name test-gptel-confirm--saved-backend-name)))
+
 (defalias 'gptel-tool-name #'test-gptel-tool-name)
 (defalias 'gptel-tool-args #'test-gptel-tool-args)
 (defalias 'gptel-tool-async #'test-gptel-tool-async)
@@ -71,14 +101,14 @@
   "Return the current gptel-fsm struct."
   (test-coerce-fsm gptel--fsm-last))
 
-(defun test-programmatic-confirm-tool (tool-spec arg-values callback)
+(defun test-programmatic-confirm-tool (tool-spec _arg-values callback)
   "Confirm nested Programmatic TOOL-SPEC with ARG-VALUES, then run CALLBACK."
   (if (test-tool-permitted-p (test-gptel-tool-name tool-spec))
       (funcall callback t)
     ;; In test mode, auto-reject non-permitted tools
     (funcall callback nil)))
 
-(defun test-programmatic-aggregate-confirm (plan callback)
+(defun test-programmatic-aggregate-confirm (_plan callback)
   "Show aggregate confirmation UI for multi-step mutating Programmatic PLAN."
   ;; In test mode, always approve
   (funcall callback t))
@@ -310,6 +340,7 @@
 
 ;;; Footer
 
+(add-hook 'ert--run-end-functions #'test-gptel-confirm--restore-functions)
 (provide 'test-gptel-ext-tool-confirm)
 
 ;;; test-gptel-ext-tool-confirm.el ends here

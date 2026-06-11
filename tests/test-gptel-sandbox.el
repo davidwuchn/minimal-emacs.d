@@ -24,6 +24,30 @@
 (cl-defstruct (test-gptel-tool (:constructor test-gptel-tool-create))
   name args async confirm)
 
+(defvar test-gptel-sandbox--saved-tool-name
+  (when (fboundp 'gptel-tool-name)
+    (symbol-function 'gptel-tool-name)))
+(defvar test-gptel-sandbox--saved-tool-args
+  (when (fboundp 'gptel-tool-args)
+    (symbol-function 'gptel-tool-args)))
+(defvar test-gptel-sandbox--saved-tool-async
+  (when (fboundp 'gptel-tool-async)
+    (symbol-function 'gptel-tool-async)))
+(defvar test-gptel-sandbox--saved-tool-confirm
+  (when (fboundp 'gptel-tool-confirm)
+    (symbol-function 'gptel-tool-confirm)))
+
+(defun test-gptel-sandbox--restore-tool-functions ()
+  "Restore original gptel-tool-* function bindings."
+  (when (boundp 'test-gptel-sandbox--saved-tool-name)
+    (defalias 'gptel-tool-name test-gptel-sandbox--saved-tool-name))
+  (when (boundp 'test-gptel-sandbox--saved-tool-args)
+    (defalias 'gptel-tool-args test-gptel-sandbox--saved-tool-args))
+  (when (boundp 'test-gptel-sandbox--saved-tool-async)
+    (defalias 'gptel-tool-async test-gptel-sandbox--saved-tool-async))
+  (when (boundp 'test-gptel-sandbox--saved-tool-confirm)
+    (defalias 'gptel-tool-confirm test-gptel-sandbox--saved-tool-confirm)))
+
 (defalias 'gptel-tool-name #'test-gptel-tool-name)
 (defalias 'gptel-tool-args #'test-gptel-tool-args)
 (defalias 'gptel-tool-async #'test-gptel-tool-async)
@@ -344,6 +368,7 @@ An explicit nil argument must count as present, not as a missing required arg."
 
 ;;; Footer
 
+(add-hook 'ert--run-end-functions #'test-gptel-sandbox--restore-tool-functions)
 (provide 'test-gptel-sandbox)
 
 ;;; test-gptel-sandbox.el ends here
