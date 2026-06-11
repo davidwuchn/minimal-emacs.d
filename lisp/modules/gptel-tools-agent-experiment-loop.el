@@ -15,7 +15,6 @@
 (declare-function gptel-auto-experiment-benchmark "gptel-tools-agent-benchmark")
 (declare-function gptel-auto-experiment--aborted-agent-output-p "gptel-tools-agent-error")
 (declare-function gptel-auto-experiment--adaptive-max-experiments "gptel-tools-agent-error")
-(declare-function gptel-auto-experiment--placeholder-hypothesis-p "gptel-tools-agent-experiment-core")
 (declare-function my/gptel--sanitize-for-logging "gptel-tools-agent-git")
 (declare-function gptel-auto-workflow--stop-status-refresh-timer "gptel-tools-agent-main")
 (declare-function gptel-auto-workflow--clear-runtime-subagent-provider-overrides "gptel-tools-agent-prompt-build")
@@ -46,6 +45,22 @@
 (defvar gptel-auto-workflow--staging-worktree-dir nil)
 (defvar gptel-auto-workflow--run-project-root nil)
 (defvar gptel-auto-workflow--current-project nil)
+
+(defconst gptel-auto-experiment--placeholder-hypothesis-exact-patterns
+  '("[What CODE change and why]"
+    "What CODE change and why")
+  "Exact hypothesis strings that indicate unresolved placeholder prompts.")
+
+(defun gptel-auto-experiment--placeholder-hypothesis-p (hypothesis)
+  "Return non-nil when HYPOTHESIS is still an unresolved prompt template."
+  (cond
+   ((not (stringp hypothesis)) t)
+   (t
+    (let ((trimmed (string-trim hypothesis)))
+      (or (string-empty-p trimmed)
+          (string-match-p "\\`\\[What\\b.*\\]\\'" trimmed)
+          (member trimmed gptel-auto-experiment--placeholder-hypothesis-exact-patterns))))))
+
 (defun gptel-auto-experiment--extract-last-explicit-hypothesis (output pattern)
   "Return the last non-placeholder hypothesis in OUTPUT matching PATTERN."
   (when (and (stringp output)
@@ -219,7 +234,8 @@ performance."
 (defun gptel-auto-experiment--generate-candidate-hypotheses (target previous-results &optional n-candidates)
   "Generate N-CANDIDATES diverse hypothesis candidates for TARGET.
 Returns list of plists with :hypothesis :source :diversity.
-Sources: skill suggestions, mutation templates, previous successful hypotheses.
+Sources: skill suggestions, mutation templates, previous successful
+hypotheses.
 N-CANDIDATES defaults to 5."
   (let* ((n (or n-candidates 5))
          (candidates nil)

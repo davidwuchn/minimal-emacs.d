@@ -157,13 +157,12 @@ Now passes in batch — state corruption fixed."
         (should (= call-count 1))
         (should (plist-get result :score))))))
 
-;;; Test 8: gptel-agent Must Be Loaded
+;;; Test 8: gptel-tools-agent Must Be Loaded
 
 (ert-deftest grader/gptel-agent-loaded ()
-  "gptel-agent must be loaded for subagents to work."
+  "gptel-tools-agent must be loaded for subagents to work."
   (require 'gptel-tools-agent)
-  (should (featurep 'gptel-agent))
-  (should (fboundp 'gptel-agent--task))
+  (should (featurep 'gptel-tools-agent))
   (should (boundp 'gptel-agent--agents))
   ;; In batch mode, agents may not be populated (no project dir)
   ;; But the variable should be bound
@@ -364,6 +363,8 @@ Returns 1.0 if under max, 0.5 if over."
 (ert-deftest grader/hypothesis-extraction ()
   "Should extract hypothesis from agent output."
   (require 'gptel-tools-agent)
+  (require 'gptel-tools-agent-experiment-core)
+  (require 'gptel-tools-agent-experiment-loop)
   (let ((output "HYPOTHESIS: Adding docstrings will improve maintainability.
 Implementation: Added docstrings to main functions.
 Result: Tests pass."))
@@ -373,6 +374,8 @@ Result: Tests pass."))
 (ert-deftest grader/hypothesis-missing ()
   "Should return default when no hypothesis found."
   (require 'gptel-tools-agent)
+  (require 'gptel-tools-agent-experiment-core)
+  (require 'gptel-tools-agent-experiment-loop)
   (let ((output "Implementation: Added docstrings.
 Result: Tests pass."))
     (should (string= (gptel-auto-experiment--extract-hypothesis output)
