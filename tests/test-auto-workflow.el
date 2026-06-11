@@ -879,7 +879,6 @@ Verifies the command is wrapped in 'cd <dir> && {...'."
               ((symbol-function 'run-at-time) (lambda (&rest _) nil))
               ((symbol-function 'set-process-filter) (lambda (&rest _) nil))
               ((symbol-function 'my/gptel--ensure-persistent-bash) (lambda () nil))
-              ((symbol-function 'buffer-live-p) (lambda (_) nil))
               ((symbol-function 'process-buffer) (lambda (_) (current-buffer))))
       (let ((my/gptel--persistent-bash-process t))
         (my/gptel--agent-bash-async #'ignore "pwd")))
