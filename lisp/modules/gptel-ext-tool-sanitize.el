@@ -174,6 +174,26 @@ This protects async tool dispatch, where gptel does not wrap the initial
              (signal err-sym (if (proper-list-p err-data) err-data nil))
            (signal 'error (list "unhandled dispatch error"))))))))
 
+;;; Plan-Mode Readonly Enforcement (L3 Defense-in-Depth)
+
+(defconst my/gptel--plan-mode-blocked-tools
+  '("Bash" "Write" "Edit" "ApplyPatch" "Code_Replace" "Move" "Mkdir"
+    "RunAgent" "Programmatic")
+  "Physical-mutation tools blocked in gptel-plan preset.
+Plan mode is for exploration and planning only — no filesystem mutations.
+These tool names match the :name slot passed to `gptel-make-tool'.")
+
+(defconst my/gptel--plan-mode-allowed-tools
+  '("Read" "Grep" "Glob" "Code_Map" "Code_Inspect" "Code_Usages"
+    "TodoWrite" "Preview" "create_skill")
+  "Read-only and planning tools allowed in gptel-plan preset.
+Explicitly listed for documentation; the blocklist is authoritative.")
+
+(defun my/gptel--plan-mode-blocks-tool-p (tool-name)
+  "Return non-nil if TOOL-NAME is a physical-mutation tool blocked in plan mode."
+  (and (stringp tool-name)
+       (member tool-name my/gptel--plan-mode-blocked-tools)))
+
 (defun my/gptel--sanitize-tool-calls (fsm)
   "Remove nil/unknown-named tool calls from FSM before execution.
 
@@ -188,13 +208,20 @@ Recovery: if a tool is not in info :tools but IS registered in
 `gptel--known-tools' (i.e. a preset misconfiguration rather than
 hallucination), it is injected into info :tools so it can execute.
 This handles the case where the gptel-agent preset was applied before
-RunAgent was registered, leaving it out of the buffer's tool list."
+RunAgent was registered, leaving it out of the buffer's tool list.
+
+Plan-mode enforcement (L3 defense-in-depth): in gptel-plan preset,
+physical-mutation tools (Write, Edit, Bash, ApplyPatch, Code_Replace,
+Move, Mkdir) are silently replaced with error results so the model
+receives feedback without the tool executing."
   (when-let* ((info (and (fboundp 'gptel-fsm-info) (gptel-fsm-info fsm)))
               (tool-use (plist-get info :tool-use)))
     (let* ((tools (my/gptel--normalize-tool-list (plist-get info :tools)))
            (all-tools (when (boundp 'gptel--known-tools)
                         (cl-loop for (_ . entries) in gptel--known-tools
                                  append (my/gptel--normalize-tool-list entries))))
+           (plan-mode (and (boundp 'gptel--preset)
+                           (eq gptel--preset 'gptel-plan)))
            pruned)
       (unless (equal tools (plist-get info :tools))
         (setq info (plist-put info :tools tools))
@@ -202,16 +229,27 @@ RunAgent was registered, leaving it out of the buffer's tool list."
       (dolist (tc tool-use)
         (when (proper-list-p tc)
           (let* ((name (plist-get tc :name))
-               (matched-tool (and (stringp name)
-                                  (my/gptel--find-tool-fuzzy name tools)))
-               (direct-tool (and (stringp name)
-                                 (fboundp 'gptel-get-tool)
-                                 (ignore-errors (gptel-get-tool name))))
-               (fuzzy-match (and (stringp name) my/gptel-tool-repair-enabled
-                                 (my/gptel--find-tool-fuzzy name all-tools))))
-          (cond
-           (matched-tool
-            (my/gptel--repair-tool-call tc (gptel-tool-name matched-tool)))
+                 (matched-tool (and (stringp name)
+                                    (my/gptel--find-tool-fuzzy name tools)))
+                 (direct-tool (and (stringp name)
+                                   (fboundp 'gptel-get-tool)
+                                   (ignore-errors (gptel-get-tool name))))
+                 (fuzzy-match (and (stringp name) my/gptel-tool-repair-enabled
+                                   (my/gptel--find-tool-fuzzy name all-tools))))
+            (cond
+             ;; L3: Plan-mode blocks physical-mutation tools
+             ((and plan-mode
+                   (not (plist-get tc :result))
+                   (my/gptel--plan-mode-blocks-tool-p name))
+              (message "gptel: plan-mode blocked %S (physical mutation tool)" name)
+              (plist-put tc :result
+                         (format "Error: %s is not available in plan mode. "
+                                 "Use read-only tools (Read, Grep, Glob, Code_Map, Code_Inspect) "
+                                 "to explore the codebase and formulate a plan. "
+                                 "Switch to agent mode to execute changes." name))
+              (push tc pruned))
+             (matched-tool
+              (my/gptel--repair-tool-call tc (gptel-tool-name matched-tool)))
             ((or direct-tool fuzzy-match)
              (let* ((global-tool (or direct-tool fuzzy-match))
                     (correct-name (gptel-tool-name global-tool))

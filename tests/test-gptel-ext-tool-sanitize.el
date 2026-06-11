@@ -640,5 +640,111 @@
       (when (buffer-live-p request-buffer)
         (kill-buffer request-buffer)))))
 
+;;; Plan-Mode Readonly Enforcement Tests (L3 Defense-in-Depth)
+
+(ert-deftest sanitize/plan-mode/blocks-bash ()
+  "Bash must be blocked in plan mode."
+  (should (my/gptel--plan-mode-blocks-tool-p "Bash")))
+
+(ert-deftest sanitize/plan-mode/blocks-write ()
+  "Write must be blocked in plan mode."
+  (should (my/gptel--plan-mode-blocks-tool-p "Write")))
+
+(ert-deftest sanitize/plan-mode/blocks-edit ()
+  "Edit must be blocked in plan mode."
+  (should (my/gptel--plan-mode-blocks-tool-p "Edit")))
+
+(ert-deftest sanitize/plan-mode/blocks-applypatch ()
+  "ApplyPatch must be blocked in plan mode."
+  (should (my/gptel--plan-mode-blocks-tool-p "ApplyPatch")))
+
+(ert-deftest sanitize/plan-mode/blocks-code-replace ()
+  "Code_Replace must be blocked in plan mode."
+  (should (my/gptel--plan-mode-blocks-tool-p "Code_Replace")))
+
+(ert-deftest sanitize/plan-mode/blocks-move-and-mkdir ()
+  "Move and Mkdir must be blocked in plan mode."
+  (should (my/gptel--plan-mode-blocks-tool-p "Move"))
+  (should (my/gptel--plan-mode-blocks-tool-p "Mkdir")))
+
+(ert-deftest sanitize/plan-mode/blocks-runagent ()
+  "RunAgent must be blocked in plan mode."
+  (should (my/gptel--plan-mode-blocks-tool-p "RunAgent")))
+
+(ert-deftest sanitize/plan-mode/allows-read ()
+  "Read must be allowed in plan mode."
+  (should-not (my/gptel--plan-mode-blocks-tool-p "Read")))
+
+(ert-deftest sanitize/plan-mode/allows-grep ()
+  "Grep must be allowed in plan mode."
+  (should-not (my/gptel--plan-mode-blocks-tool-p "Grep")))
+
+(ert-deftest sanitize/plan-mode/allows-glob ()
+  "Glob must be allowed in plan mode."
+  (should-not (my/gptel--plan-mode-blocks-tool-p "Glob")))
+
+(ert-deftest sanitize/plan-mode/allows-code-inspect ()
+  "Code_Inspect must be allowed in plan mode."
+  (should-not (my/gptel--plan-mode-blocks-tool-p "Code_Inspect")))
+
+(ert-deftest sanitize/plan-mode/allows-code-map ()
+  "Code_Map must be allowed in plan mode."
+  (should-not (my/gptel--plan-mode-blocks-tool-p "Code_Map")))
+
+(ert-deftest sanitize/plan-mode/allows-todowrite ()
+  "TodoWrite must be allowed in plan mode (planning tool)."
+  (should-not (my/gptel--plan-mode-blocks-tool-p "TodoWrite")))
+
+(ert-deftest sanitize/plan-mode/allows-preview ()
+  "Preview must be allowed in plan mode."
+  (should-not (my/gptel--plan-mode-blocks-tool-p "Preview")))
+
+(ert-deftest sanitize/plan-mode/nil-nonstring-returns-nil ()
+  "Nil or non-string tool names are not blocked (guard)."
+  (should-not (my/gptel--plan-mode-blocks-tool-p nil))
+  (should-not (my/gptel--plan-mode-blocks-tool-p 42)))
+
+(ert-deftest sanitize/plan-mode/sanitize-blocks-in-plan-preset ()
+  "sanitize-tool-calls must set error result on Bash in plan mode."
+  (let* ((request-buffer (generate-new-buffer " *plan-test*"))
+         (tool-call (list :name "Bash" :args '(:command "rm -rf /")))
+         (info (list :tool-use (list tool-call)
+                     :tools (list (gptel-make-tool
+                                   :name "Bash"
+                                   :function #'ignore
+                                   :description "bash"
+                                   :args nil
+                                   :async t))
+                     :buffer request-buffer))
+         (fsm (gptel-make-fsm :info info))
+         (gptel--preset 'gptel-plan))
+    (unwind-protect
+        (progn
+          (my/gptel--sanitize-tool-calls fsm)
+          (should (string-match-p "not available in plan mode"
+                                  (or (plist-get tool-call :result) ""))))
+      (when (buffer-live-p request-buffer)
+        (kill-buffer request-buffer)))))
+
+(ert-deftest sanitize/plan-mode/sanitize-allows-read-in-plan ()
+  "sanitize-tool-calls must NOT block Read in plan mode."
+  (let* ((request-buffer (generate-new-buffer " *plan-test*"))
+         (tool-call (list :name "Read" :args '(:file_path "x.el")))
+         (info (list :tool-use (list tool-call)
+                     :tools (list (gptel-make-tool
+                                   :name "Read"
+                                   :function #'identity
+                                   :description "read"
+                                   :args nil))
+                     :buffer request-buffer))
+         (fsm (gptel-make-fsm :info info))
+         (gptel--preset 'gptel-plan))
+    (unwind-protect
+        (progn
+          (my/gptel--sanitize-tool-calls fsm)
+          (should-not (plist-get tool-call :result)))
+      (when (buffer-live-p request-buffer)
+        (kill-buffer request-buffer)))))
+
 (provide 'test-gptel-ext-tool-sanitize)
 ;;; test-gptel-ext-tool-sanitize.el ends here
