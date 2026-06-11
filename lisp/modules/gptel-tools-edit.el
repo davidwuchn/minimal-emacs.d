@@ -198,7 +198,9 @@ OLD_STR is hashline tag: \"line-num:hash\" or \"start-hash:end-hash\" for
 range.
 NEW_STR is replacement text.
 Returns success message or error string."
-  (let ((target (expand-file-name file_path)))
+  (let ((target (if (fboundp 'gptel-auto-workflow--expand-workspace-path)
+                    (gptel-auto-workflow--expand-workspace-path file_path)
+                  (expand-file-name file_path))))
     (condition-case err
         (cond
          ;; Range replacement: start-tag:end-tag format
