@@ -1,44 +1,41 @@
 <!--
 Synthesis verification:
-- Confidence: 24%
+- Confidence: 80%
 - Sources: 7 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-prompt'
-- Auto-approved: yes (flagged)
+- Warnings: No code examples or concrete references
+- Auto-approved: yes (passed)
 --->
 
-The user wants me to synthesize a series of mistake/failure pattern memories into a comprehensive knowledge page. Let me analyze the data:
+The user wants me to synthesize multiple memory entries about a "mistake-failure-pattern-prompt" topic into a comprehensive knowledge page. Let me analyze the memories:
 
-All entries share:
-- Failure type: `prompt`
-- Target: various files in `lisp/modules/` related to `gptel-*` and `gptel-tools-agent-*` and `gptel-auto-workflow-*`
-- No example reasons provided
-- Detected by monitoring agent
-- Various occurrence counts (3-5)
-- Some have category/keep-rate data
+1. All entries are "Failure type: prompt" - this is a consistent pattern
+2. Targets are all in `lisp/modules/` directory - specifically gptel-related modules
+3. Files affected:
+   - gptel-tools-agent-prompt-build.el (4 occurrences)
+   - gptel-tools-agent-benchmark.el (5 occurrences)
+   - gptel-benchmark-principles.el (3 occurrences)
+   - gptel-auto-workflow-strategic.el (3 occurrences)
+   - gptel-auto-workflow-projects.el (3 occurrences)
+   - gptel-auto-workflow-ontology-router.el (3 occurrences)
+   - gptel-auto-workflow-evolution.el (3 occurrences)
+4. Categories: :programming (3.5% keep-rate), :agentic (4.3% keep-rate)
+5. Trends show various date ranges across May-June 2026
+6. No example reasons provided - this is a gap
 
-Let me identify the affected files:
-1. `lisp/modules/gptel-tools-agent-prompt-build.el` - 4 occurrences
-2. `lisp/modules/gptel-tools-agent-benchmark.el` - 5 occurrences, :programming, 3.5% keep-rate
-3. `lisp/modules/gptel-benchmark-principles.el` - 3 occurrences
-4. `lisp/modules/gptel-auto-workflow-strategic.el` - 3 occurrences, :agentic, 4.3% keep-rate
-5. `lisp/modules/gptel-auto-workflow-projects.el` - 3 occurrences, :agentic, 4.3% keep-rate
-6. `lisp/modules/gptel-auto-workflow-ontology-router.el` - 3 occurrences
-7. `lisp/modules/gptel-auto-workflow-evolution.el` - 3 occurrences
+I need to:
+- Create frontmatter
+- Write 50+ lines of content
+- Include concrete examples (code, tables, commands)
+- Provide actionable patterns
+- Cross-reference related topics
+- Make it a complete knowledge page
 
-Common patterns:
-- All `failure-type: prompt`
-- All target gptel-related modules
-- Two clusters: tools-agent-* and auto-workflow-*
-- Keep-rates are very low (3.5%, 4.3%) indicating systemic issues
-- No "example reasons" — means the failure signals are not being attributed specific causes
+Let me synthesize this into a useful pattern guide. The key insight is that prompt-type failures are systemic in gptel modules. The low keep-rates (3.5%, 4.3%) suggest these are being filtered out at a high rate. The auto-workflow monitoring detected 4+ occurrences per file as a systemic threshold.
 
-Let me build a comprehensive page with:
-- Frontmatter
-- Overview/Summary
+I'll create a structured page covering:
+- Overview of the pattern
 - Affected files table
-- Pattern analysis
-- Actionable patterns
-- Diagnostic commands
+- Failure mechanics
+- Diagnosis patterns
+- Actionable remediation
 - Cross-references
-
-I need at least 50 lines of content with concrete examples, code, tables, commands, and cross-references.

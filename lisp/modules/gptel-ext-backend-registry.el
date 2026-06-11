@@ -72,11 +72,10 @@
          :thinking-policy auto)
         (\@cf/moonshotai/kimi-k2.6
          :context-window 262144
-         :pricing-cny-input 15 :pricing-cny-output 60
-         :pricing-input 2.07 :pricing-output 8.28 :pricing-cache-hit 0.28
-        :capabilities (code-generation tool-calls long-context reasoning)
-        :speed medium
-        :thinking-policy auto)))
+         :pricing-input 0.95 :pricing-output 4.00 :pricing-cache-hit 0.16
+         :capabilities (code-generation tool-calls long-context reasoning vision)
+         :speed medium
+         :thinking-policy always)))
 
     (DashScope
      :host "coding.dashscope.aliyuncs.com"

@@ -152,8 +152,9 @@ ARGS are passed to `gptel-make-openai'."
                :request-params (:thinking (:type "enabled")))
               (deepseek/deepseek-v4-flash
                :request-params (:thinking (:type "enabled")))
+              (@cf/moonshotai/kimi-k2.6
+               :request-params (:reasoning_effort "medium"))
               @cf/openai/gpt-oss-120b
-              @cf/moonshotai/kimi-k2.6
               @cf/zai-org/glm-4.7-flash
               @cf/openai/whisper
               @cf/openai/whisper-large-v3-turbo)))

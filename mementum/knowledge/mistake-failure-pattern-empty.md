@@ -1,40 +1,30 @@
 <!--
 Synthesis verification:
-- Confidence: 24%
+- Confidence: 40%
 - Sources: 10 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-empty'
+- Warnings: No code examples or concrete references, Very short content (22 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize multiple "empty-hypothesis" mistake memories into a comprehensive knowledge page. Let me analyze the patterns:
+The user wants me to synthesize multiple memory entries about a "mistake-failure-pattern-empty" topic into a comprehensive knowledge page. Let me analyze the memories:
 
 1. All failures are of type "empty-hypothesis"
-2. They affect different targets:
-   - Workflow staging areas: staging-verification, staging-scope, staging-review
-   - Specific module files: gptel-tools-agent-experiment-core.el, gptel-tools-agent-benchmark.el, gptel-benchmark-subagent.el, gptel-auto-workflow-strategic.el, gptel-auto-workflow-projects.el, gptel-auto-workflow-ontology-strategy.el, gptel-auto-workflow-ontology-router.el
-3. Categories are split between :programming and :agentic
-4. Keep-rates are very low (0.0% to 3.2%), indicating these are high-priority
-5. Occurrences range from 3-12
-6. All have empty example reasons
-7. Date range: 2026-06-02 to 2026-06-11
+2. They affect two main categories:
+   - staging operations: staging-verification, staging-scope, staging-review
+   - lisp modules: gptel-tools-agent-experiment-core, gptel-tools-agent-benchmark, gptel-benchmark-subagent, gptel-auto-workflow-strategic, gptel-auto-workflow-projects, gptel-auto-workflow-ontology-strategy, gptel-auto-workflow-ontology-router
+3. Categories involved: :programming and :agentic
+4. Keep-rates are all very low (0.0% to 3.2%)
+5. All have "Example reasons: none" - this is the "empty" aspect
+6. Occurrences range from 3 to 12
+7. The pattern is detected by monitoring agent
 
-The pattern: "empty-hypothesis" means the system generated hypotheses that were empty - likely the agent's reasoning or diagnostic output was blank/missing. This is a systemic issue affecting both workflow staging and specific module files.
+Key insight: "empty-hypothesis" failures with no example reasons means the system is detecting failures but unable to articulate why - this is a meta-failure pattern where diagnosis itself is failing.
 
-Let me build a knowledge page that:
-- Documents the pattern
-- Provides concrete examples
-- Shows actionable patterns to fix/avoid
-- Cross-references related topics
-- Has 50+ lines of content
-
-I'll structure it with:
+I need to create a knowledge page with:
 - Frontmatter
-- Overview
-- Pattern characterization
-- Affected targets table
-- Category breakdown
-- Root cause analysis
-- Detection signals
-- Actionable patterns (preventive, detective, corrective)
-- Example code/commands
-- Related topics
+- At least 50 lines of content
+- Concrete examples (code, tables, commands)
+- Actionable patterns
+- Cross-references
+
+Let me structure this well.
