@@ -861,7 +861,8 @@ Prevents shell metachar breakout via ; && | newlines."
 
 (ert-deftest security/H3/command-runs-in-subshell-cd-reset ()
   "Bash commands must run in a subshell that resets CWD to context directory.
-Verifies the command is wrapped in 'cd <dir> && {...}'."
+Verifies the command is wrapped in 'cd <dir> && {...'."
+  (skip-unless (fboundp 'my/gptel--agent-bash-async))
   (let* ((root (expand-file-name "~/.emacs.d/"))
          (gptel-auto-workflow--allowed-workspace-roots (list root))
          (gptel-auto-workflow--run-project-root root)

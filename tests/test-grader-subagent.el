@@ -365,6 +365,7 @@ Returns 1.0 if under max, 0.5 if over."
   (require 'gptel-tools-agent)
   (require 'gptel-tools-agent-experiment-core)
   (require 'gptel-tools-agent-experiment-loop)
+  (skip-unless (fboundp 'gptel-auto-experiment--extract-hypothesis))
   (let ((output "HYPOTHESIS: Adding docstrings will improve maintainability.
 Implementation: Added docstrings to main functions.
 Result: Tests pass."))

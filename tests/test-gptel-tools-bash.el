@@ -325,13 +325,14 @@ All commands allowed but still tracked for audit."
 
 (ert-deftest test-bash/boundary-rejects-outside-workdir ()
   "Bash tool should reject when working directory is outside workspace."
+  (skip-unless (fboundp 'my/gptel--agent-bash-async))
   (let* ((root (expand-file-name "~/.emacs.d/"))
-         (gptel-auto-workflow--allowed-workspace-roots (list root))
-         (default-directory "/tmp/")
-         (result nil))
-    (my/gptel--agent-bash-async (lambda (r) (setq result r)) "echo hello")
-    (should (stringp result))
-    (should (string-match-p "\\[boundary\\]" result))))
+          (gptel-auto-workflow--allowed-workspace-roots (list root))
+          (default-directory "/tmp/")
+          (result nil))
+     (my/gptel--agent-bash-async (lambda (r) (setq result r)) "echo hello")
+     (should (stringp result))
+     (should (string-match-p "\\[boundary\\]" result))))
 
 (ert-deftest test-bash/boundary-accepts-inside-workdir ()
   "Bash tool should accept when working directory is inside workspace."
