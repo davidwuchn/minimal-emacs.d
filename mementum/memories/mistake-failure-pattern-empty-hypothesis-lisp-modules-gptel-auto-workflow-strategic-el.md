@@ -1,12 +1,12 @@
 ---
-valid-from: 2026-06-11T00:33
+valid-from: 2026-06-11T19:01
 ---
 
-# Mistake: 2026-06-11 00:33
+# Mistake: 2026-06-11 19:01
 
 **Failure type:** empty-hypothesis
 **Target:** lisp/modules/gptel-auto-workflow-strategic.el
-**Category:** :agentic (keep-rate: 2.2%)
+**Category:** :agentic (keep-rate: 2.5%)
 **Occurrences:** 3
 **Example reasons:** none
 **Trend:** 2026-06-04T111503Z-63ac -> 2026-06-04T111503Z-63ac

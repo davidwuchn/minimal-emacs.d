@@ -4,6 +4,13 @@
 
 (require 'ert)
 (require 'cl-lib)
+;; gptel-auto-workflow--evolution-record-score (called by tests in this
+;; file) calls gptel-auto-workflow--json-encode-plist, defined in
+;; gptel-auto-workflow-ontology-router.el.  Without explicitly loading
+;; the router, the call fails with `void-function`.  The require below
+;; makes the dependency explicit instead of relying on test-order side
+;; effects.
+(require 'gptel-auto-workflow-ontology-router)
 
 ;; Ensure lisp/modules is on load-path for requires nested in load-file'd modules
 (let ((modules-dir (expand-file-name "../lisp/modules"
@@ -87,6 +94,16 @@
             (should (= (gptel-auto-workflow--evolution-count-new) 1))
             (should (= (gptel-auto-workflow--evolution-record-score) 0.5))))
       (delete-directory root t))))
+
+(ert-deftest regression/auto-workflow-evolution/json-encode-plist-is-loadable ()
+  "gptel-auto-workflow--json-encode-plist must be loadable for tests
+that call record-score.  The function is defined in
+gptel-auto-workflow-ontology-router.el but record-score (in
+evolution.el) calls it.  Without explicitly loading ontology-router,
+the call fails with `void-function gptel-auto-workflow--json-encode-plist`.
+Regression guard: this test ensures the dependency is documented
+at the test boundary rather than relying on test-order side effects."
+  (should (fboundp 'gptel-auto-workflow--json-encode-plist)))
 
 (ert-deftest regression/auto-workflow-evolution/research-knowledge-has-no-blank-eof ()
   "Synthesized research insight pages should satisfy `git diff --check'."
