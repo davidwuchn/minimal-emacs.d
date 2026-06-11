@@ -25,22 +25,21 @@
 
 (ert-deftest test-llm/auto-select-returns-cons-when-backend-available ()
   "auto-select-model should return (MODEL . BACKEND) via smart routing."
-  (skip-unless (fboundp 'gptel--make-backend))
+  (require 'gptel)
   (require 'gptel-benchmark-llm)
   (cl-letf (((symbol-function 'gptel-benchmark--auto-select-model)
              (lambda ()
                (let ((be (gptel--make-backend
                           :name 'test-backend
-                          :id "test-backend"
-                          :model 'test-model
-                          :host "api.test")))
+                          :host "api.test"
+                          :models '(test-model))))
                  (cons 'test-model be)))))
     (let ((result (gptel-benchmark--auto-select-model)))
       (should result)
       (should (consp result))
       (should (symbolp (car result)))
       (let ((backend (cdr result)))
-        (should (object-of-class-p backend 'gptel-backend))))))
+        (should (gptel-backend-p backend))))))
 
 (ert-deftest test-llm/auto-select-returns-nil-when-no-backend ()
   "auto-select-model should return nil when smart routing finds nothing."
