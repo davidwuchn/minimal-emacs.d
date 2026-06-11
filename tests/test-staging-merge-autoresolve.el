@@ -1,4 +1,4 @@
-;;; test-staging-merge-autoresolve.el --- Tests for staging-merge auto-resolver -*- lexical-binding: t; -*-
+;;; test-staging-merge-autoresolve.el --- Tests for staging-merge auto-resolver -*- lexical-binding: t; no-byte-compile: t; -*-
 ;;
 ;; Verifies the cherry-pick conflict auto-resolver picks the right
 ;; strategy per file type. This is the biggest keep-rate lever: most
@@ -25,28 +25,34 @@
 (defvar test-autoresolve--manual-required '()
   "Files requiring manual review.")
 (defvar test-autoresolve--events '()
-  "List of events (e.g. 'committed).")
+  "List of events (e.g. \\='committed).")
+
+(defvar test-autoresolve--diff-stat-response
+  "100 files changed, 5000 insertions(+), 3000 deletions(-)"
+  "Default diff-stat response used by the mock git-cmd.
+Tests that need fast-track eligibility should bind this to a small diff stat.")
 
 (defun test-autoresolve--mock-git (args &optional _timeout)
   "Mock gptel-auto-workflow--git-cmd (returns string output).
 The real function signature is (CMD &optional TIMEOUT), so ARGS is the
 cmd string itself (not a list). We pattern-match on ARGS directly."
   (push args test-autoresolve--git-calls)
-  ;; Side effects based on pattern
+  ;; Side effects based on pattern — cond returns the matched value
   (cond
    ((string-match "cherry-pick --abort" args) "")
    ((string-match "git checkout --theirs \\(.+\\)$" args)
     (let ((file (match-string 1 args)))
       (if (string-match "\\.md$" file)
           (push file test-autoresolve--auto-resolved)
-        (push file test-autoresolve--manual-required))))
-   (t ""))
-  ;; Return value (string)
-  "")
+        (push file test-autoresolve--manual-required)))
+    "")
+   ((string-match "git diff --stat" args)
+    (or test-autoresolve--diff-stat-response ""))
+   (t "")))
 
 (defun test-autoresolve--mock-git-result (args &optional _timeout)
   "Mock gptel-auto-workflow--git-result (returns (output . exit-code) cons).
-ARGs is the cmd string itself, not a list. Also tracks 'committed event
+ARGs is the cmd string itself, not a list. Also tracks committed event
 when a commit succeeds."
   (cond
    ((string-match "git rev-parse %s" args) '("abc123def456" . 0))
@@ -67,7 +73,9 @@ when a commit succeeds."
   `(let ((test-autoresolve--git-calls '())
          (test-autoresolve--auto-resolved '())
          (test-autoresolve--manual-required '())
-         (test-autoresolve--events '()))
+         (test-autoresolve--events '())
+         (test-autoresolve--diff-stat-response
+          "100 files changed, 5000 insertions(+), 3000 deletions(-)"))
      (cl-letf (((symbol-function 'gptel-auto-workflow--git-cmd)
                 #'test-autoresolve--mock-git)
                ((symbol-function 'gptel-auto-workflow--git-result)
@@ -109,7 +117,7 @@ test mocks by the time other tests run."
      (should (member 'committed test-autoresolve--events)))))
 
 (ert-deftest test-autoresolve/el-files-require-manual-review ()
-  "All .el files → 0 auto-resolved, all manual required."
+  "All .el files with large diff-stat (not fast-track eligible) → 0 auto-resolved, all manual required."
   (test-autoresolve--with-git-mocks
    (let ((result (gptel-auto-workflow--try-autoresolve-conflicts
                  "lisp/modules/foo.el\nlisp/modules/bar.el"
@@ -132,6 +140,45 @@ test mocks by the time other tests run."
      (should (= 1 (cdr result)))
      ;; When there are manual-required files, we DON'T commit
      (should (not (member 'committed test-autoresolve--events))))))
+
+(ert-deftest test-autoresolve/el-files-auto-resolved-when-fast-track ()
+  "All .el files with small diff-stat (fast-track eligible) → all auto-resolved."
+  (test-autoresolve--with-git-mocks
+   (let ((test-autoresolve--diff-stat-response "1 file changed, 5 insertions(+)"))
+     (let ((result (gptel-auto-workflow--try-autoresolve-conflicts
+                   "lisp/modules/foo.el\nlisp/modules/bar.el"
+                   "optimize/test"
+                   "Merge test"
+                   30)))
+       (should (= 2 (car result)))
+       (should (= 0 (cdr result)))
+       (should (member 'committed test-autoresolve--events))))))
+
+(ert-deftest test-autoresolve/fast-track-boundary-at-3-files ()
+  "3 files, 49 lines (boundary) → fast-track eligible, .el auto-resolved."
+  (test-autoresolve--with-git-mocks
+   (let ((test-autoresolve--diff-stat-response
+          " foo.el | 20 +-\n bar.el | 15 +-\n baz.md | 14 +-\n 3 files changed, 25 insertions(+), 24 deletions(-)"))
+     (let ((result (gptel-auto-workflow--try-autoresolve-conflicts
+                   "lisp/modules/foo.el"
+                   "optimize/test"
+                   "Merge test"
+                   30)))
+       (should (= 1 (car result)))
+       (should (= 0 (cdr result)))))))
+
+(ert-deftest test-autoresolve/fast-track-ineligible-at-4-files ()
+  "4 files → fast-track ineligible, .el files require manual review."
+  (test-autoresolve--with-git-mocks
+   (let ((test-autoresolve--diff-stat-response
+          " a.el | 1 +\n b.el | 1 +\n c.el | 1 +\n d.el | 1 +\n 4 files changed, 4 insertions(+)"))
+     (let ((result (gptel-auto-workflow--try-autoresolve-conflicts
+                   "lisp/modules/foo.el"
+                   "optimize/test"
+                   "Merge test"
+                   30)))
+       (should (= 0 (car result)))
+       (should (= 1 (cdr result)))))))
 
 (provide 'test-staging-merge-autoresolve)
 ;;; test-staging-merge-autoresolve.el ends here

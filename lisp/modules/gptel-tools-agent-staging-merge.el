@@ -446,8 +446,17 @@ Eligibility: few changed files AND few changed lines AND fast-track enabled."
                         (gptel-auto-workflow--git-cmd
                          (format "git diff --stat main...%s" (shell-quote-argument optimize-branch))
                          30)))
-           (file-count (when (stringp diff-stat)
-                         (length (split-string diff-stat "\n" t))))
+           (file-count (when (and (stringp diff-stat)
+                                     (> (length diff-stat) 0))
+                         (let ((per-file-count
+                                (cl-count-if (lambda (line) (string-match-p "|" line))
+                                             (split-string diff-stat "\n" t))))
+                           (if (> per-file-count 0)
+                               per-file-count
+                             ;; Fallback: extract from summary line (e.g., "1 file changed")
+                             (or (and (string-match "\\([0-9]+\\) file" diff-stat)
+                                      (string-to-number (match-string 1 diff-stat)))
+                                 0)))))
            (insertions (when (stringp diff-stat)
                          (string-to-number
                           (or (and (string-match "\\([0-9]+\\) insertion" diff-stat)
@@ -460,6 +469,7 @@ Eligibility: few changed files AND few changed lines AND fast-track enabled."
                              "0"))))
            (total-lines (+ (or insertions 0) (or deletions 0))))
       (and file-count
+           (> file-count 0)
            (<= file-count gptel-auto-workflow-fast-track-max-files)
            (<= total-lines gptel-auto-workflow-fast-track-max-lines)))))
 
