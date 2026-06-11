@@ -94,3 +94,6 @@ __pycache__/
 !.opencode/skills/*
 !plans/
 !plans/**/*.md
+!bb.edn
+!clj/
+!clj/**/*.clj
