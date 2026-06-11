@@ -172,6 +172,14 @@ if [ -f "$AGENTS_DIR/delegate-gpt.md" ]; then
     fi
 fi
 update_model "$AGENTS_DIR/delegate-opus.md"          "github-copilot/claude-opus-4.8"
+# delegate-opus — ensure reasoningEffort: high
+if [ -f "$AGENTS_DIR/delegate-opus.md" ]; then
+    if ! fm_grep "$AGENTS_DIR/delegate-opus.md" "^options:"; then
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^model: github-copilot/) { $_ .= "options:\n  reasoningEffort: high\n"; }' "$AGENTS_DIR/delegate-opus.md"
+    else
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^  reasoningEffort:/) { $_ = "  reasoningEffort: high\n"; }' "$AGENTS_DIR/delegate-opus.md"
+    fi
+fi
 # delegate-qwen — restore meaningful description + ensure reasoningEffort: high
 if [ -f "$AGENTS_DIR/delegate-qwen.md" ]; then
     perl -pi -e 's|^description:.*|description: Delegate variant '"'"'qwen'"'"' with model deepseek/deepseek-v4-pro. Use for second opinions, cross-checking results, Chinese language tasks, and alternative perspectives on hard problems.|' "$AGENTS_DIR/delegate-qwen.md"
