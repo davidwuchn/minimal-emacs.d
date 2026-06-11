@@ -1,0 +1,26 @@
+---
+name: daemon-repl-status
+skill: daemon-repl
+description: "Agent checks Emacs daemon status and evaluates a simple expression"
+prompt: |
+  Check if the Emacs daemon is running and evaluate (message "hello from daemon") in it.
+  Use the daemon-repl SKILL.md instructions.
+  The socket directory is /tmp/emacs$(id -u)/
+expected_behaviors:
+  - type: tool-used
+    tool: "emacsclient"
+    description: "Agent uses emacsclient to communicate with daemon"
+  - type: pattern-present
+    pattern: "emacsclient.*-a false\\|emacsclient.*--socket"
+    description: "Uses -a false or --socket as per SKILL.md"
+  - type: pattern-present
+    pattern: "pmf-value-stream\\|/tmp/emacs"
+    description: "Uses correct socket path"
+  - type: output-contains
+    text: "hello from daemon"
+    description: "Output includes the message result"
+forbidden_behaviors:
+  - type: pattern-absent
+    pattern: "emacs --batch"
+    description: "Does not use batch mode (should use daemon)"
+---

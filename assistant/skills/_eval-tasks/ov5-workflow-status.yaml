@@ -1,0 +1,23 @@
+---
+name: ov5-workflow-status
+skill: ov5
+description: "Agent checks OV5 auto-workflow status via the daemon"
+prompt: |
+  Check the current status of the OV5 auto-workflow pipeline.
+  How many experiments have been run? What is the keep rate?
+  Use the ov5 SKILL.md for the correct API functions.
+expected_behaviors:
+  - type: tool-used
+    tool: "emacsclient"
+    description: "Agent uses emacsclient to query the daemon"
+  - type: pattern-present
+    pattern: "gptel-auto-workflow-production.*status\\|auto-workflow.*status"
+    description: "Uses the correct API function to check workflow status"
+  - type: pattern-present
+    pattern: "heredoc\\|<<'EOF'\\|<<EOF"
+    description: "Uses heredoc pattern for multi-line Elisp as per SKILL.md"
+forbidden_behaviors:
+  - type: pattern-absent
+    pattern: "gptel-auto-workflow--blind-mode"
+    description: "Does not reference internal/unstable functions"
+---

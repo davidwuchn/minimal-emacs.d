@@ -1,0 +1,22 @@
+---
+name: brepl-basic
+skill: brepl
+description: "Agent evaluates a simple Clojure expression via brepl"
+prompt: |
+  Start a brepl session and evaluate (+ 1 2) in Clojure.
+  Use the brepl SKILL.md instructions for connecting to nREPL.
+expected_behaviors:
+  - type: tool-used
+    tool: "nrepl"
+    description: "Agent uses nREPL to evaluate Clojure"
+  - type: pattern-present
+    pattern: "nrepl-send-request\\|bb.*nrepl\\|brepl"
+    description: "Transcript shows nREPL protocol usage"
+  - type: output-contains
+    text: "3"
+    description: "Result includes the value 3"
+forbidden_behaviors:
+  - type: pattern-absent
+    pattern: "ert-run-tests-batch"
+    description: "Does not confuse Clojure REPL with Emacs test runner"
+---
