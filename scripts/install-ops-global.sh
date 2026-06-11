@@ -110,6 +110,9 @@ additional_delegates:
   fast:
     model: deepseek/deepseek-v4-flash
     reasoningEffort: high
+  safe:
+    model: github-copilot/gpt-5.4-mini
+    reasoningEffort: xhigh
 
 additional_implementers:
   safe:
@@ -243,6 +246,15 @@ if [ -f "$AGENTS_DIR/delegate-creative.md" ]; then
         perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^  reasoningEffort:/) { $_ = "  reasoningEffort: high\n"; }' "$AGENTS_DIR/delegate-creative.md"
     fi
 fi
+# delegate-safe — cheap fallback for simple tasks, ensure reasoningEffort: xhigh
+if [ -f "$AGENTS_DIR/delegate-safe.md" ]; then
+    update_model "$AGENTS_DIR/delegate-safe.md" "github-copilot/gpt-5.4-mini"
+    if ! fm_grep "$AGENTS_DIR/delegate-safe.md" "^options:"; then
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^model: github-copilot/) { $_ .= "options:\n  reasoningEffort: xhigh\n"; }' "$AGENTS_DIR/delegate-safe.md"
+    else
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^  reasoningEffort:/) { $_ = "  reasoningEffort: xhigh\n"; }' "$AGENTS_DIR/delegate-safe.md"
+    fi
+fi
 update_model "$AGENTS_DIR/doc-explorer.md"           "deepseek/deepseek-v4-pro"
 # doc-explorer — ensure reasoningEffort: high
 if [ -f "$AGENTS_DIR/doc-explorer.md" ]; then
@@ -303,7 +315,7 @@ for f in "$AGENTS_DIR"/delegate-*.md; do
     [ -f "$f" ] || continue
     agent=$(basename "$f" .md)
     case "$agent" in
-        delegate|delegate-fast|delegate-strong|delegate-gpt|delegate-opus|delegate-qwen|delegate-creative) ;;
+        delegate|delegate-fast|delegate-strong|delegate-gpt|delegate-opus|delegate-qwen|delegate-creative|delegate-safe) ;;
         *) echo "NOTE: Unhandled agent $f — verify model manually" ;;
     esac
 done
@@ -358,7 +370,7 @@ exit($warned > 0 ? 1 : 0);
 
 echo ""
 echo "=== Installation Complete ==="
-echo "Models: @maintainer→deepseek/deepseek-v4-pro, delegate→deepseek/deepseek-v4-pro, strong→gpt-5.4, gpt→gpt-5.5, opus→claude-opus-4.8, qwen→deepseek/deepseek-v4-pro, creative→deepseek/deepseek-v4-pro, fast→deepseek/deepseek-v4-flash, implementer→deepseek/deepseek-v4-pro, implementer-safe→gpt-5.4-mini"
+echo "Models: @maintainer→deepseek/deepseek-v4-pro, delegate→deepseek/deepseek-v4-pro, strong→gpt-5.4, gpt→gpt-5.5, opus→claude-opus-4.8, qwen→deepseek/deepseek-v4-pro, creative→deepseek/deepseek-v4-pro, fast→deepseek/deepseek-v4-flash, safe→gpt-5.4-mini, implementer→deepseek/deepseek-v4-pro, implementer-safe→gpt-5.4-mini"
 echo "OV5 Cowork: OpenCode configured"
 echo "Backup: $BACKUP_DIR"
 echo "Next: Restart OpenCode, select @maintainer agent"
