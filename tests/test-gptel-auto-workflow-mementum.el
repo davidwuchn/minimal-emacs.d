@@ -10,6 +10,7 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'gptel-auto-workflow-mementum)
+(require 'gptel-auto-workflow-evolution)
 
 ;;; Customization tests
 
