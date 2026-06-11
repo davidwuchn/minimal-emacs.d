@@ -148,5 +148,50 @@ alist of (\"BackendName\" . \"model-name\") string pairs."
     (dolist (entry result)
       (should-not (string= (car entry) first-backend)))))
 
+(ert-deftest test-registry/cf-gateway-deepseek-model-names-have-slash ()
+  "CF-Gateway DeepSeek models must use deepseek/deepseek- prefix (BYOK format).
+The plain deepseek-v4-pro without the deepseek/ prefix returns 400 'No such model'
+from the Workers AI endpoint.  The BYOK provider was registered with the slashed name."
+  (let ((entry (assoc 'CF-Gateway gptel-backend-registry))
+        (found-v4-pro nil)
+        (found-v4-flash nil))
+    (should entry)
+    (dolist (m (plist-get (cdr entry) :models))
+      (when (eq m 'deepseek/deepseek-v4-pro)
+        (setq found-v4-pro t))
+      (when (eq m 'deepseek/deepseek-v4-flash)
+        (setq found-v4-flash t))
+      ;; Must NOT have plain unslashed names
+      (when (memq m '(deepseek-v4-pro deepseek-v4-flash))
+        (ert-fail (format "Plain model name %s in CF-Gateway registry — must use deepseek/deepseek-v4-pro format" m))))
+    (should found-v4-pro)
+    (should found-v4-flash)
+    ;; Also check the backend definition
+    (when (boundp 'gptel--cf-gateway)
+      (let ((be-models (gptel-backend-models gptel--cf-gateway)))
+        (should (memq 'deepseek/deepseek-v4-pro be-models))
+        (should (memq 'deepseek/deepseek-v4-flash be-models))))))
+
+(ert-deftest test-registry/cf-gateway-default-model-is-slashed ()
+  "CF-Gateway default model must use the BYOK slashed format."
+  (let ((entry (assoc 'CF-Gateway gptel-backend-registry)))
+    (should entry)
+    (should (eq (plist-get (cdr entry) :default-model)
+                'deepseek/deepseek-v4-pro))))
+
+(ert-deftest test-registry/thinking-policy-valid-values ()
+  "All :thinking-policy values must be valid symbols: off, on, or auto."
+  (let ((valid '(off on auto))
+        (bad nil))
+    (dolist (be gptel-backend-registry)
+      (when-let* ((metadata (plist-get (cdr be) :model-metadata)))
+        (dolist (model-entry metadata)
+          (let* ((model (car model-entry))
+                 (policy (plist-get (cdr model-entry) :thinking-policy)))
+            (when (and policy (not (memq policy valid)))
+              (push (list (car be) model policy) bad))))))
+    (when bad
+      (ert-fail (format "Invalid :thinking-policy values found: %S (valid: %S)" bad valid)))))
+
 (provide 'test-gptel-ext-backend-registry)
 ;;; test-gptel-ext-backend-registry.el ends here
