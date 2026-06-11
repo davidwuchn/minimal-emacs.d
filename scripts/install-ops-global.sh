@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # install-ops-global.sh - One-shot install of OpenCode Processing Skills + OV5 cowork
 # Usage: ./install-ops-global.sh
-# Requires: git, opencode with deepseek and github-copilot providers
+# Requires: git, perl, opencode with deepseek and github-copilot providers
 
 set -euo pipefail
 
@@ -13,6 +13,14 @@ trap 'rm -rf "$TEMP_DIR"' EXIT
 # Detect emacs.d directory (supports non-standard paths)
 SCRIPT_DIR="$(cd "$(dirname "$0")"; pwd)"
 EMACS_DIR="$(cd "$SCRIPT_DIR/.."; pwd)"
+
+# Preflight dependency checks
+for cmd in git perl; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        echo "ERROR: Required command '$cmd' not found. Install it first." >&2
+        exit 1
+    fi
+done
 
 # Socket path: detect systemd runtime dir first, fall back to /tmp
 if [ -d "/run/user/$(id -u)/emacs" ]; then
@@ -28,6 +36,7 @@ OPENCODE_SKILLS="${HOME}/.config/opencode/skills/ov5"
 echo "=== OpenCode Processing Skills + OV5 Cowork - Global Install ==="
 
 # 1. Clone repo
+echo "Cloning opencode-processing-skills ($OPS_REF)..."
 git clone --depth=1 --branch "$OPS_REF" "$REPO_URL" "$TEMP_DIR/ops"
 
 # 2. Create config.yaml
@@ -71,24 +80,27 @@ if [[ "$(uname)" == "Darwin" ]]; then
     echo "Using perl5 for cross-platform text edits (macOS)"
 fi
 
-# 4. Run installer
-if ! cd "$TEMP_DIR/ops" && bash install.sh; then
-    echo "ERROR: OPS install.sh failed. Aborting to avoid corrupting agent configs."
-    echo "Check output above or retry with: OPS_REF=<known-good-tag> $0"
-    exit 1
-fi
-
-# 5. Fix models in agent files
+# 4. Backup BEFORE running external installer
 AGENTS_DIR="$HOME/.config/opencode/agents"
 OPENCODE_JSON="$HOME/.config/opencode/opencode.json"
-
-# 5a. Backup before any modification
 BACKUP_DIR="$HOME/.config/opencode/backups/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$BACKUP_DIR"
-cp -r "$AGENTS_DIR" "$BACKUP_DIR/"
+[ -d "$AGENTS_DIR" ] && cp -R "$AGENTS_DIR" "$BACKUP_DIR/"
 [ -f "$OPENCODE_JSON" ] && cp "$OPENCODE_JSON" "$BACKUP_DIR/"
 echo "Backup created: $BACKUP_DIR"
 
+# 5. Run installer (fixed: use explicit path, not cd+&&)
+echo "Running OPS install.sh..."
+if ! bash "$TEMP_DIR/ops/install.sh"; then
+    echo "ERROR: OPS install.sh failed. Backup at: $BACKUP_DIR" >&2
+    echo "Restore with: cp -R '$BACKUP_DIR/agents' '$AGENTS_DIR'" >&2
+    echo "Retry with: OPS_REF=<known-good-tag> $0" >&2
+    exit 1
+fi
+
+# 6. Fix models in agent files
+
+# Helper: update model: line in frontmatter only (before second ---)
 update_model() {
     local file="$1" model="$2"
     if [ -f "$file" ]; then
@@ -100,6 +112,13 @@ update_model() {
     fi
 }
 
+# Helper: scope grep to frontmatter only
+fm_grep() {
+    local file="$1" pattern="$2"
+    # Extract frontmatter (between first two ---) and grep within it
+    perl -ne 'BEGIN { $fm = 0; } if (/^---/) { $fm++; } if ($fm == 1 && /'"$pattern"'/) { exit 0; } END { exit 1; }' "$file"
+}
+
 # Primary
 for agent in maintainer maintainer-direct; do
     file="$AGENTS_DIR/$agent.md"
@@ -107,7 +126,7 @@ for agent in maintainer maintainer-direct; do
         # Remove existing model line (frontmatter only)
         perl -i -pe 'if (/^---/) { $fm++; } if ($fm < 2 && /^model:/) { $_ = ""; }' "$file"
         # Insert model after description; avoid duplicating options block
-        if grep -q "^options:" "$file"; then
+        if fm_grep "$file" "^options:"; then
             perl -pi -e 'if (/^description:/) { $_ = $_ . "model: deepseek/deepseek-v4-pro\n"; }' "$file"
         else
             perl -pi -e 'if (/^description:/) { $_ = $_ . "model: deepseek/deepseek-v4-pro\noptions:\n  reasoningEffort: high\n"; }' "$file"
@@ -120,11 +139,11 @@ update_model "$AGENTS_DIR/delegate.md"             "deepseek/deepseek-v4-pro"
 update_model "$AGENTS_DIR/delegate-fast.md"          "deepseek/deepseek-v4-flash"
 # delegate-strong — ensure reasoningEffort: xhigh
 if [ -f "$AGENTS_DIR/delegate-strong.md" ]; then
-    perl -pi -e 's|^model:.*|model: github-copilot/gpt-5.4|' "$AGENTS_DIR/delegate-strong.md"
-    if ! grep -q "^options:" "$AGENTS_DIR/delegate-strong.md"; then
-        perl -pi -e 's|^(model: github-copilot/gpt-5.4)$|$1\noptions:\n  reasoningEffort: xhigh|' "$AGENTS_DIR/delegate-strong.md"
+    perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^model:/) { $_ = "model: github-copilot/gpt-5.4\n"; }' "$AGENTS_DIR/delegate-strong.md"
+    if ! fm_grep "$AGENTS_DIR/delegate-strong.md" "^options:"; then
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^model: github-copilot/) { $_ .= "options:\n  reasoningEffort: xhigh\n"; }' "$AGENTS_DIR/delegate-strong.md"
     else
-        perl -pi -e 's|^  reasoningEffort:.*|  reasoningEffort: xhigh|' "$AGENTS_DIR/delegate-strong.md"
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^  reasoningEffort:/) { $_ = "  reasoningEffort: xhigh\n"; }' "$AGENTS_DIR/delegate-strong.md"
     fi
 fi
 update_model "$AGENTS_DIR/delegate-gpt.md"           "github-copilot/gpt-5.5"
@@ -143,16 +162,16 @@ update_model "$AGENTS_DIR/doc-explorer.md"           "deepseek/deepseek-v4-pro"
 update_model "$AGENTS_DIR/implementer.md"           "deepseek/deepseek-v4-pro"
 # implementer-safe — ensure reasoningEffort: xhigh
 if [ -f "$AGENTS_DIR/implementer-safe.md" ]; then
-    perl -pi -e 's|^model:.*|model: github-copilot/gpt-5.4-mini|' "$AGENTS_DIR/implementer-safe.md"
-    if ! grep -q "^options:" "$AGENTS_DIR/implementer-safe.md"; then
-        perl -pi -e 's|^(model: github-copilot/gpt-5.4-mini)$|$1\noptions:\n  reasoningEffort: xhigh|' "$AGENTS_DIR/implementer-safe.md"
+    perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^model:/) { $_ = "model: github-copilot/gpt-5.4-mini\n"; }' "$AGENTS_DIR/implementer-safe.md"
+    if ! fm_grep "$AGENTS_DIR/implementer-safe.md" "^options:"; then
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^model: github-copilot/) { $_ .= "options:\n  reasoningEffort: xhigh\n"; }' "$AGENTS_DIR/implementer-safe.md"
     else
-        perl -pi -e 's|^  reasoningEffort:.*|  reasoningEffort: xhigh|' "$AGENTS_DIR/implementer-safe.md"
+        perl -pi -e 'if (/^---/) { $fm++; } if ($fm < 2 && /^  reasoningEffort:/) { $_ = "  reasoningEffort: xhigh\n"; }' "$AGENTS_DIR/implementer-safe.md"
     fi
 fi
 update_model "$AGENTS_DIR/legacy-curator.md"        "deepseek/deepseek-v4-pro"
 
-# 5b. Warn about unhandled delegate-* agents
+# 6b. Warn about unhandled delegate-* agents
 for f in "$AGENTS_DIR"/delegate-*.md; do
     [ -f "$f" ] || continue
     agent=$(basename "$f" .md)
@@ -162,25 +181,33 @@ for f in "$AGENTS_DIR"/delegate-*.md; do
     esac
 done
 
-# 6. Set compaction and small model in opencode.json (pure jq, no python3)
+# 7. Set compaction and small model in opencode.json (pure jq, no python3)
 if [ -f "$OPENCODE_JSON" ]; then
     if command -v jq >/dev/null 2>&1; then
         tmp_json="$(mktemp)"
-        jq '
+        if jq '
           .small_model = "deepseek/deepseek-v4-flash" |
           .agent.compaction.model = "deepseek/deepseek-v4-flash"
-        ' "$OPENCODE_JSON" > "$tmp_json" && mv "$tmp_json" "$OPENCODE_JSON"
-        echo "Compaction + small_model set to deepseek/deepseek-v4-flash (via jq)"
+        ' "$OPENCODE_JSON" > "$tmp_json"; then
+            mv "$tmp_json" "$OPENCODE_JSON"
+            echo "Compaction + small_model set to deepseek/deepseek-v4-flash (via jq)"
+        else
+            rm -f "$tmp_json"
+            echo "ERROR: jq failed to update $OPENCODE_JSON" >&2
+            exit 1
+        fi
     else
         echo "WARNING: jq not found — skip setting compaction model"
         echo "Install jq or manually add compaction config to $OPENCODE_JSON"
     fi
 fi
 
-# 6b. Validate agent frontmatter after edits (perl5, no python3)
+# 7b. Validate agent frontmatter after edits (perl5, no python3)
+# Uses [-\w]+ to match hyphenated keys too.
 perl -e '
 use strict;
 use warnings;
+my $warned = 0;
 for my $f (@ARGV) {
     open my $fh, "<", $f or next;
     my $text = do { local $/; <$fh> };
@@ -188,24 +215,21 @@ for my $f (@ARGV) {
     if ($text =~ /^---\n(.*?)\n---/s) {
         my $fm = $1;
         my %keys;
-        while ($fm =~ /^(\w+):/mg) {
+        while ($fm =~ /^([-\w]+):/mg) {
             if ($keys{$1}++) {
                 print "WARNING: $f has duplicate key $1 in frontmatter\n";
+                $warned++;
             }
-        }
-        # Check for unclosed quotes (count occurrences)
-        my $squote = () = $fm =~ /\x27/g;
-        my $dquote = () = $fm =~ /\x22/g;
-        if ($squote % 2 != 0 || $dquote % 2 != 0) {
-            print "WARNING: $f has unclosed quotes in frontmatter\n";
         }
     } else {
         print "WARNING: $f missing frontmatter delimiters\n";
+        $warned++;
     }
 }
-' "$AGENTS_DIR"/*.md 2>/dev/null || true
+exit($warned > 0 ? 1 : 0);
+' "$AGENTS_DIR"/*.md
 
-# 7. OV5 Cowork Setup — OpenCode only
+# 8. OV5 Cowork Setup — OpenCode only
 COWORK_INSTRUCTIONS="# OV5
 
 OV5 is a self-evolving Emacs daemon that runs automated code improvement experiments.
@@ -221,9 +245,9 @@ Socket: ${OV5_SOCKET}
 - \`(gptel-auto-workflow--current-target)\` — file being experimented on
 
 ## Results
-- \`tail ${EMACS_DIR}/var/log/emacs-*.log | grep -E 'kept|discard|RESULT'\`
-- \`cat ${EMACS_DIR}/var/tmp/experiments/*/results.tsv | column -t\`
-- \`git -C ${EMACS_DIR} log --oneline -10\`
+- \`tail "${EMACS_DIR}/var/log/emacs-*.log" | grep -E 'kept|discard|RESULT'\`
+- \`cat "${EMACS_DIR}/var/tmp/experiments/*/results.tsv" | column -t\`
+- \`git -C "${EMACS_DIR}" log --oneline -10\`
 
 ## Coworking pattern
 1. Review code, identify improvement
@@ -236,7 +260,7 @@ Socket: ${OV5_SOCKET}
 echo ""
 echo "=== OV5 Cowork Setup ==="
 
-# 7a. OpenCode skill
+# 8a. OpenCode skill
 mkdir -p "${OPENCODE_SKILLS}"
 if [[ -f "${SKILL_SRC}/SKILL.md" ]]; then
     cp "${SKILL_SRC}/SKILL.md" "${OPENCODE_SKILLS}/SKILL.md"
@@ -245,7 +269,7 @@ else
     echo "WARNING: SKILL.md not found at ${SKILL_SRC}"
 fi
 
-# 7b. Write cowork instructions with runtime-specific paths
+# 8b. Write cowork instructions with runtime-specific paths
 if [[ -n "${COWORK_INSTRUCTIONS}" ]]; then
     echo "${COWORK_INSTRUCTIONS}" > "${OPENCODE_SKILLS}/COWORK.md"
     echo "Cowork instructions → ${OPENCODE_SKILLS}/COWORK.md"
@@ -255,4 +279,5 @@ echo ""
 echo "=== Installation Complete ==="
 echo "Models: @maintainer→deepseek/deepseek-v4-pro, delegate→deepseek/deepseek-v4-pro, strong→gpt-5.4, gpt→gpt-5.5, opus→claude-opus-4.8, qwen→deepseek/deepseek-v4-pro, creative→deepseek/deepseek-v4-pro, fast→deepseek/deepseek-v4-flash, implementer→deepseek/deepseek-v4-pro, implementer-safe→gpt-5.4-mini"
 echo "OV5 Cowork: OpenCode configured"
+echo "Backup: $BACKUP_DIR"
 echo "Next: Restart OpenCode, select @maintainer agent"
