@@ -43,9 +43,7 @@
 (declare-function my/gptel--subagent-cache-put "gptel-tools-agent")
 (declare-function my/gptel--transient-error-p "gptel-ext-retry")
 
-(defvar my/gptel-subagent-stream nil
-  "Whether to use streaming mode for subagent requests.
-Defined in gptel-tools-agent.el.")
+(defvar my/gptel-subagent-stream)
 
 (defvar gptel--fsm-last nil)
 (defvar gptel-agent--agents nil)

@@ -72,16 +72,16 @@
 ;; Part of gptel-tools-agent split
 
 (defvar gptel-auto-workflow--current-target nil)
-(defvar gptel-auto-experiment-time-budget nil)
+(defvar gptel-auto-experiment-time-budget)
 (defvar gptel-auto-workflow--run-id nil)
 (defvar gptel-auto-experiment--no-improvement-count nil)
 (defvar gptel-auto-experiment--grading-target nil)
 (defvar gptel-auto-experiment--grading-worktree nil)
-(defvar gptel-auto-experiment-validation-retry-active-grace nil)
-(defvar gptel-auto-experiment-validation-retry-time-budget nil)
-(defvar gptel-auto-workflow-git-timeout nil)
+(defvar gptel-auto-experiment-validation-retry-active-grace)
+(defvar gptel-auto-experiment-validation-retry-time-budget)
+(defvar gptel-auto-workflow-git-timeout)
 (defvar gptel-auto-experiment--best-score nil)
-(defvar gptel-auto-experiment-auto-push t)
+(defvar gptel-auto-experiment-auto-push)
 ;; gptel-auto-workflow-use-staging: declared via defcustom in subagent.el (default t).
 ;; Do NOT re-declare here — defvar would override the defcustom default.
 ;; Staging gate (verify-staging) must always be active for experiments.
@@ -96,7 +96,7 @@ Updated by the refine loop, consumed by the evolution cycle.")
 (defvar gptel-auto-experiment--target-state-cache (make-hash-table :test 'equal)
   "Cache of target file state before experiments: (:byte-compiles :syntax-ok).
 Checked before each run to detect pre-existing breakage.")
-(defvar gptel-auto-experiment-active-grace nil)
+(defvar gptel-auto-experiment-active-grace)
 (defvar gptel-auto-experiment--loaded-skills nil
   "Dynamic variable. Accumulates skill names loaded during an experiment.
 Pushed to by gptel-auto-workflow--load-skill, captured in experiment :skills.

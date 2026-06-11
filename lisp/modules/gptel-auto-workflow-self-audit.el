@@ -1208,9 +1208,15 @@ Each violation plist: (:file :line :symbol :defvar-value :defcustom-file)."
                                       :defvar-value
                                       (format "%S" value)
                                       :defcustom-file
-                                      (file-relative-name dc-file root))
-                                violations)))))
-                (error nil)))))))
+                                       (file-relative-name dc-file root))
+                                 violations)))))
+                 (error nil)))))))
+    ;; Filter false positives: uppercase placeholder names (e.g., NAME in docstrings)
+    (setq violations (cl-remove-if
+                      (lambda (v)
+                        (let ((sym (plist-get v :symbol)))
+                          (and sym (string-match-p "\\`[A-Z_-]+\\'" sym))))
+                      violations))
     (list :violations (nreverse violations)
           :violation-count (length violations))))
 
@@ -1228,24 +1234,26 @@ exists, and git push origin main appears AFTER the test gate."
         (progn
           (push "run-pipeline.sh not found" issues)
           (setq gate-details "Pipeline script missing"))
-      (with-temp-buffer
-        (insert-file-contents pipeline-file)
-        (let ((has-test-ref nil)
-              (has-skip-push nil)
-              (test-before-push nil))
-          (goto-char (point-min))
-          (setq has-test-ref (search-forward "run-tests.sh" nil t))
-          (when has-test-ref
-            (goto-char (point-min))
-            (setq has-skip-push (search-forward "SKIP_PUSH" nil t))
-            ;; Check ordering: test gate is before git push
-            (goto-char (point-min))
-            (let ((test-pos (search-forward "run-tests.sh" nil t))
-                  (push-pos nil))
-              (when test-pos
-                (goto-char test-pos)
-                (setq push-pos (search-forward "git push origin main" nil t))
-                (setq test-before-push (and push-pos t)))))
+          (with-temp-buffer
+         (insert-file-contents pipeline-file)
+         (let ((has-test-ref nil)
+               (has-skip-push nil)
+               (test-before-push nil))
+           (goto-char (point-min))
+           (setq has-test-ref (search-forward "run-tests.sh" nil t))
+           (when has-test-ref
+             (goto-char (point-min))
+             (setq has-skip-push (search-forward "SKIP_PUSH" nil t))
+             ;; Check ordering: test gate is before git push
+             ;; The push pattern may be "git -C ... push origin main" or "git push origin main"
+             (goto-char (point-min))
+             (let ((test-pos (search-forward "run-tests.sh" nil t))
+                   (push-pos nil))
+               (when test-pos
+                 (goto-char test-pos)
+                 ;; Match both "git push origin main" and "git -C ... push origin main"
+                 (setq push-pos (re-search-forward "git\\(\\s-+-C\\s-+[^ \t]+\\)?\\s-+push\\s-+origin\\s-+main" nil t))
+                 (setq test-before-push (and push-pos t)))))
           (setq has-test-gate (and has-test-ref has-skip-push test-before-push))
           (cond
            (has-test-gate

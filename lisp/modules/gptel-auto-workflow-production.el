@@ -165,7 +165,7 @@ List of experiment results sharing the same research context.
 Reset when research context changes.")
 
 (defvar gptel-auto-workflow--stats nil)
-(defvar gptel-auto-workflow-human-decision-gate nil)
+(defvar gptel-auto-workflow-human-decision-gate)
 (defun gptel-auto-workflow--experiment-complete-hook (experiment)
   "Hook called when EXPERIMENT completes.
 Records to mementum and triggers evolution if needed."
@@ -515,7 +515,8 @@ Set to 0 to disable auto-expiry."
 (defun gptel-auto-workflow--pending-decisions-p ()
   "Return non-nil if there are pending human decisions blocking PMF.
 Checks mementum/decisions/ for files with status: proposed.
-Auto-expires decisions older than\n`gptel-auto-workflow-decision-auto-expiry-hours'."
+Auto-expires decisions older
+than\n`gptel-auto-workflow-decision-auto-expiry-hours'."
   (when gptel-auto-workflow-human-decision-gate
     (let ((dir (gptel-auto-workflow--decisions-dir))
           (pending nil))
@@ -740,6 +741,15 @@ Returns the new item ID."
               (replace-regexp-in-string
                "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual
 Impact
+
+
+
+
+
+
+
+
+
 
 
 |\n|----|--------|-----------|-----------------|--------|---------------|---------------|\n"

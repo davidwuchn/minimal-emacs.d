@@ -23,7 +23,7 @@
 
 ;; External variables from gptel-tools-agent.el
 (defvar gptel-auto-workflow--worktree-state nil)
-(defvar gptel-auto-workflow-worktree-base nil)
+(defvar gptel-auto-workflow-worktree-base)
 (defvar gptel-auto-workflow--current-target nil)
 
 ;; Forward declarations for functions defined in gptel-tools-agent.el
@@ -44,7 +44,7 @@
 (defvar gptel-auto-experiment--quota-exhausted nil)
 (defvar gptel-auto-workflow--run-id nil)
 (defvar gptel-auto-workflow--status-run-id nil)
-(defvar gptel-auto-workflow-persistent-headless nil)
+(defvar gptel-auto-workflow-persistent-headless)
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--make-idempotent-callback "gptel-tools-agent")
 (declare-function gptel-agent--update-agents "gptel-agent")

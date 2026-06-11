@@ -29,7 +29,7 @@
 
 (defvar gptel-auto-workflow--active-strategy nil)
 (defvar gptel-auto-workflow--pending-outcome-updates nil)
-(defvar gptel-auto-workflow--outcome-evolution-threshold nil)
+(defvar gptel-auto-workflow--outcome-evolution-threshold)
 (defun gptel-auto-workflow--plist-dedup-put (plist key value)
   "Like `plist-put' but removes duplicate KEY before inserting.
 Prevents plist key accumulation across successive plist-put calls

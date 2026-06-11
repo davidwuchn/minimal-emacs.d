@@ -88,7 +88,7 @@ Used as fallback when `my/gptel-payload-byte-limit' would be too generous")
 (defvar gptel-send--handlers nil)
 (defvar gptel-request--handlers nil)
 (defvar gptel-auto-workflow--headless nil)
-(defvar gptel-auto-workflow-persistent-headless nil)
+(defvar gptel-auto-workflow-persistent-headless)
 (declare-function my/gptel--trim-context-images "gptel-ext-context-images")
 
 ;; --- Automatic Retry for Transient API Errors ---

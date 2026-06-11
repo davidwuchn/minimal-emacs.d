@@ -64,9 +64,7 @@
                   "gptel-auto-workflow-approval-queue")
 (declare-function gptel-auto-workflow-approval-queue--read-sexp-file
                   "gptel-auto-workflow-approval-queue")
-(defvar gptel-auto-workflow-approval-queue-dir
-  "var/approval-queue"
-  "Directory for approval queue files (relative to project root).")
+(defvar gptel-auto-workflow-approval-queue-dir)
 
 (declare-function gptel-auto-workflow--run-architectural-analysis
   "gptel-auto-workflow-architectural-evolution")

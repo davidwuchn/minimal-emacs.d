@@ -27,7 +27,7 @@
 (defvar gptel-auto-experiment--mementum-recall nil)
 (defvar gptel-auto-experiment--grader-insights nil)
 (defvar gptel-auto-experiment--executor-reasoning nil)
-(defvar gptel-auto-workflow-context-db-auto-capture nil)
+(defvar gptel-auto-workflow-context-db-auto-capture)
 (defvar gptel-task-type-model-defaults nil)
 (defvar gptel-auto-workflow-executor-rate-limit-fallbacks nil)
 (defvar gptel-backend-models nil)
@@ -86,11 +86,11 @@
 (defvar gptel-auto-experiment-large-target-byte-threshold nil)
 (defvar gptel-auto-workflow--last-prompt-sections nil)
 (defvar gptel-auto-workflow--current-research-context nil)
-(defvar gptel-auto-experiment-time-budget nil)
+(defvar gptel-auto-experiment-time-budget)
 ;; gptel-auto-workflow-use-staging: declared via defcustom in subagent.el (default t).
 (defvar gptel-auto-workflow--running nil)
 (defvar gptel-auto-workflow--stats nil)
-(defvar gptel-auto-experiment-validation-retry-active-grace nil)
+(defvar gptel-auto-experiment-validation-retry-active-grace)
 (defvar gptel-auto-workflow--legacy-validation-retry-active-grace nil)
 (defvar gptel-auto-workflow--current-validation-retry-active-grace nil)
 (defvar my/gptel-subagent-stream)
@@ -2625,9 +2625,7 @@ MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
       (my/gptel--sanitize-for-logging agent-output (or max-len 200))
     ""))
 
-(defvar gptel-auto-experiment-max-retries 5
-  "Maximum retries for executor on transient errors.
-Set to 5 to maximize usage of monthly subscription backends (MiniMax).")
+(defvar gptel-auto-experiment-max-retries)
 
 (defvar gptel-auto-experiment-max-grader-retries 2
   "Maximum local retries for transient grader failures.

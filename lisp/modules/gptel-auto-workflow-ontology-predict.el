@@ -30,10 +30,7 @@ Args: strategy target predicted threshold tokens."
   :type 'string
   :group 'gptel-auto-workflow)
 
-(defvar gptel-auto-workflow--ontology-reorder-exploration-rate 0.1
-  "Exploration rate for reorder decisions (0.0-1.0).
-When a strategy/target would normally be skipped by prediction,
-there is [rate]% chance it runs anyway to prevent cold-start death spirals.")
+(defvar gptel-auto-workflow--ontology-reorder-exploration-rate)
 
 ;; ─── Prediction Core ───
 

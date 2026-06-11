@@ -39,7 +39,7 @@
 (defvar gptel-auto-experiment--no-improvement-count nil)
 (defvar gptel-auto-experiment--api-error-count nil)
 (defvar gptel-auto-experiment-max-grader-retries nil)
-(defvar gptel-auto-experiment-max-retries nil)
+(defvar gptel-auto-experiment-max-retries)
 (defvar gptel-auto-experiment-max-per-provider-attempts nil)
 (defvar gptel-auto-experiment--quota-exhausted nil)
 (defvar gptel-auto-workflow--run-id nil)

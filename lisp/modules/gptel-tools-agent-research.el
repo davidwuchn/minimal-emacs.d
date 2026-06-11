@@ -3,14 +3,14 @@
 
 ;; Forward declarations for dynamic variables
 (defvar gptel-agent-dirs nil)
-(defvar gptel-auto-workflow-program-file nil)
+(defvar gptel-auto-workflow-program-file)
 (defvar gptel-auto-workflow--running nil)
-(defvar gptel-auto-workflow-skills-dir nil)
+(defvar gptel-auto-workflow-skills-dir)
 (defvar gptel-auto-workflow--current-project nil)
 (defvar gptel-auto-workflow--project-root-override nil)
 (defvar gptel-auto-workflow--run-project-root nil)
 (defvar gptel-auto-workflow--headless nil)
-(defvar gptel-mementum-headless-auto-approve 'draft)
+(defvar gptel-mementum-headless-auto-approve)
 (defun gptel-auto-workflow-update-mutation-skill (mutation-type all-results)
   "Update MUTATION-TYPE skill file with ALL-RESULTS."
   (let* ((skill-file (format "%s/mutations/%s.md"
