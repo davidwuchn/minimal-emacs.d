@@ -1,0 +1,30 @@
+---
+name: daemon-repl-no-daemon
+skill: daemon-repl
+description: "Agent handles the case when no Emacs daemon is running"
+prompt: |
+  Check the Emacs daemon status. The daemon may not be running.
+  Handle the situation gracefully — discover the socket directory,
+  check if the daemon is accessible, and report the status.
+  The socket directory is /tmp/emacs$(id -u)/
+expected_behaviors:
+  - type: tool-used
+    tool: "emacsclient"
+    description: "Agent uses emacsclient to communicate with daemon"
+  - type: pattern-present
+    pattern: "emacsclient.*-a false"
+    description: "Uses -a false to prevent auto-spawning daemon"
+  - type: pattern-present
+    pattern: "socket|connection refused|could not contact|emacs daemon"
+    description: "Shows socket discovery or connection error handling"
+  - type: output-contains
+    text: "running"
+    description: "Output reports daemon status (running or not running)"
+forbidden_behaviors:
+  - type: pattern-absent
+    pattern: '-a ""|--alternate-editor=""'
+    description: "Does not auto-spawn daemon (no empty alternate editor)"
+  - type: pattern-absent
+    pattern: "emacs --batch"
+    description: "Does not use batch mode (should use client)"
+---

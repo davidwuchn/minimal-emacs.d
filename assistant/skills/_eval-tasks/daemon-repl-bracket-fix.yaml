@@ -1,0 +1,27 @@
+---
+name: daemon-repl-bracket-fix
+skill: daemon-repl
+description: "Agent validates bracket balance in an Elisp file before saving"
+prompt: |
+  Validate the brackets in an Elisp expression that has unbalanced parentheses.
+  The expression is: (+ 1 (+ 2 3
+  Use the daemon-repl bracket validation and report the result.
+  The socket directory is /tmp/emacs$(id -u)/
+expected_behaviors:
+  - type: tool-used
+    tool: "emacsclient"
+    description: "Agent uses emacsclient with daemon-repl"
+  - type: pattern-present
+    pattern: "gptel-daemon-repl-validate-brackets"
+    description: "Uses the correct API function for bracket validation"
+  - type: pattern-present
+    pattern: "validate-bracket|bracket.*balance|unbalanced|balanced"
+    description: "Shows bracket checking or validation"
+  - type: output-contains
+    text: "unbalanced"
+    description: "Output reports the brackets are unbalanced"
+forbidden_behaviors:
+  - type: pattern-absent
+    pattern: "emacs --batch"
+    description: "Does not use batch mode (should use daemon)"
+---

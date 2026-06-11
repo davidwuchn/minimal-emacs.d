@@ -1,0 +1,29 @@
+---
+name: ov5-evolution-status
+skill: ov5
+description: "Agent checks OV5 evolution subsystem status and interprets the results"
+prompt: |
+  Check the OV5 evolution subsystem status and report on strategy health.
+  Use the ov5 SKILL.md for the correct API functions.
+  The daemon socket is pmf-value-stream at /tmp/emacs$(id -u)/
+expected_behaviors:
+  - type: tool-used
+    tool: "emacsclient"
+    description: "Agent uses emacsclient to query the daemon"
+  - type: pattern-present
+    pattern: "gptel-auto-workflow-evolution-status"
+    description: "Uses the correct API function for evolution status"
+  - type: pattern-present
+    pattern: "heredoc|<<'EOF'|<<EOF"
+    description: "Uses heredoc pattern for multi-line Elisp"
+  - type: pattern-present
+    pattern: "strategy|evolution|ontology|score"
+    description: "Output contains evolution-related data"
+forbidden_behaviors:
+  - type: pattern-absent
+    pattern: "gptel-auto-workflow--"
+    description: "Does not reference internal/unstable functions (-- prefix)"
+  - type: pattern-absent
+    pattern: "emacs --batch"
+    description: "Does not use batch mode (should use daemon)"
+---

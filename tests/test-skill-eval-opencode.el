@@ -343,4 +343,135 @@
             (should (string= "improved content" (buffer-string)))))
       (ignore-errors (delete-directory tmp-dir t)))))
 
+;; ── Group 10: Integration ──
+
+(ert-deftest test-skill-eval/integration-symlink-swap-restore ()
+  "Test symlink swap + restore mechanism without calling opencode."
+  (let* ((skills-dir (make-temp-file "skill-eval-skills-" t))
+         (original-dir (make-temp-file "skill-eval-orig-" t))
+         (symlink-path (expand-file-name "brepl" skills-dir))
+         (variant-file (make-temp-file "skill-eval-variant-" nil ".md"))
+         (temp-skill-dir nil)
+         (original-target nil))
+    (unwind-protect
+        (progn
+          ;; Write content into original and variant files
+          (with-temp-file (expand-file-name "SKILL.md" original-dir)
+            (insert "original skill content"))
+          (with-temp-file variant-file
+            (insert "variant skill content"))
+          ;; Create symlink: .opencode/skills/brepl -> original-dir
+          (make-symbolic-link original-dir symlink-path t)
+          (should (file-symlink-p symlink-path))
+          ;; Step 1: Save original symlink target
+          (setq original-target (file-symlink-p symlink-path))
+          (should original-target)
+          ;; Step 2: Create temp dir with SKILL.md -> variant file
+          (setq temp-skill-dir (make-temp-file "opencode-skill-eval-" t))
+          (make-symbolic-link (expand-file-name variant-file)
+                              (expand-file-name "SKILL.md" temp-skill-dir)
+                              t)
+          ;; Step 3: Replace symlink
+          (when (file-exists-p symlink-path)
+            (delete-file symlink-path))
+          (make-symbolic-link temp-skill-dir symlink-path t)
+          ;; Verify new symlink target is different from original
+          (let ((new-target (file-symlink-p symlink-path)))
+            (should new-target)
+            (should-not (string= new-target original-target)))
+          ;; Step 4: Restore original symlink
+          (when (file-exists-p symlink-path)
+            (delete-file symlink-path))
+          (when original-target
+            (make-symbolic-link original-target symlink-path t))
+          ;; Verify restored symlink matches original target
+          (should (file-symlink-p symlink-path))
+          (should (string= (file-symlink-p symlink-path) original-target)))
+      ;; Cleanup all temp files/dirs
+      (ignore-errors
+        (when (and symlink-path (file-exists-p symlink-path))
+          (delete-file symlink-path))
+        (when (and temp-skill-dir (file-exists-p temp-skill-dir))
+          (delete-directory temp-skill-dir t))
+        (when (and skills-dir (file-exists-p skills-dir))
+          (delete-directory skills-dir t))
+        (when (and original-dir (file-exists-p original-dir))
+          (delete-directory original-dir t))
+        (when (and variant-file (file-exists-p variant-file))
+          (delete-file variant-file))))))
+
+(ert-deftest test-skill-eval/integration-symlink-cleanup-on-error ()
+  "Test symlink restore happens even when an error is thrown."
+  (let* ((skills-dir (make-temp-file "skill-eval-skills-" t))
+         (original-dir (make-temp-file "skill-eval-orig-" t))
+         (symlink-path (expand-file-name "brepl" skills-dir))
+         (variant-file (make-temp-file "skill-eval-variant-" nil ".md"))
+         (original-target nil)
+         (restored nil))
+    (unwind-protect
+        (progn
+          ;; Setup: write content and create original symlink
+          (with-temp-file (expand-file-name "SKILL.md" original-dir)
+            (insert "original skill content"))
+          (with-temp-file variant-file
+            (insert "variant skill content"))
+          (make-symbolic-link original-dir symlink-path t)
+          (setq original-target (file-symlink-p symlink-path))
+          (should original-target)
+          ;; Simulate swap + error with unwind-protect cleanup
+          (let ((temp-skill-dir (make-temp-file "opencode-skill-eval-" t)))
+            (condition-case nil
+                (unwind-protect
+                    (progn
+                      ;; Swap symlink to variant temp dir
+                      (make-symbolic-link (expand-file-name variant-file)
+                                          (expand-file-name "SKILL.md" temp-skill-dir)
+                                          t)
+                      (when (file-exists-p symlink-path)
+                        (delete-file symlink-path))
+                      (make-symbolic-link temp-skill-dir symlink-path t)
+                      ;; Simulate failure
+                      (error "simulated failure"))
+                  ;; Cleanup: restore original symlink and remove temp dir
+                  (when (and symlink-path (file-exists-p symlink-path))
+                    (delete-file symlink-path))
+                  (when original-target
+                    (make-symbolic-link original-target symlink-path t))
+                  (when (and temp-skill-dir (file-exists-p temp-skill-dir))
+                    (delete-directory temp-skill-dir t))
+                  (setq restored t))
+              (error nil)))
+          ;; Verify: error was caught (restored is t) and symlink is back
+          (should restored)
+          (should (file-symlink-p symlink-path))
+          (should (string= (file-symlink-p symlink-path) original-target)))
+      ;; Final cleanup of all resources
+      (ignore-errors
+        (when (and symlink-path (file-exists-p symlink-path))
+          (delete-file symlink-path))
+        (when (and skills-dir (file-exists-p skills-dir))
+          (delete-directory skills-dir t))
+        (when (and original-dir (file-exists-p original-dir))
+          (delete-directory original-dir t))
+        (when (and variant-file (file-exists-p variant-file))
+          (delete-file variant-file))))))
+
+(ert-deftest test-skill-eval/integration-transcript-real-json ()
+  "Test transcript parser with realistic opencode JSON output."
+  (let* ((lines
+          '("{\"type\":\"text\",\"text\":\"I'll check the daemon status using emacsclient.\"}"
+            "{\"type\":\"tool\",\"tool\":\"Bash\",\"state\":{\"output\":\"(:running t :socket pmf-value-stream)\"}}"
+            "{\"type\":\"tool\",\"tool\":\"Bash\",\"state\":{\"output\":\"connection successful\"}}"
+            "{\"type\":\"text\",\"text\":\"The daemon is running on socket /tmp/emacs501/pmf-value-stream.\"}"))
+         (json (string-join lines "\n"))
+         (result (gptel-auto-workflow-skill-eval--parse-transcript-json json)))
+    (should (stringp result))
+    (should-not (string-empty-p result))
+    (should (string-match-p "emacsclient" result))
+    (should (string-match-p "TOOL: Bash" result))
+    (should (string-match-p "running t" result))
+    (should (string-match-p "connection successful" result))
+    (should (string-match-p "daemon is running" result))
+    (should (string-match-p "pmf-value-stream" result))))
+
 ;;; test-skill-eval-opencode.el ends here

@@ -1,0 +1,25 @@
+---
+name: brepl-error-handling
+skill: brepl
+description: "Agent evaluates code that intentionally throws an exception via brepl and handles it gracefully"
+prompt: |
+  Evaluate the expression (/ 1 0) via brepl. Handle any error gracefully.
+  Explain what the error means and what caused it.
+expected_behaviors:
+  - type: tool-used
+    tool: "nrepl"
+    description: "Agent uses nREPL/brepl to evaluate Clojure"
+  - type: pattern-present
+    pattern: "brepl.*<<'EOF'|heredoc.*brepl"
+    description: "Uses heredoc pattern for brepl as per SKILL.md"
+  - type: pattern-present
+    pattern: "ArithmeticException|DivideByZero|ExceptionInfo|clojure.lang"
+    description: "Transcript shows Clojure exception handling"
+  - type: output-contains
+    text: "zero"
+    description: "Output mentions division by zero"
+forbidden_behaviors:
+  - type: pattern-absent
+    pattern: "ert-run-tests-batch"
+    description: "Does not confuse Clojure REPL with Emacs test runner"
+---
