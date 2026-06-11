@@ -198,3 +198,30 @@ Only reloads for top-level frames (not Corfu child frames) and only once per fra
                          (error
                           (message "[server] Self-heal failed: %s"
                                     (error-message-string err))))))))))
+
+;; ─── Critical function corruption guard ───
+;; Self-heal: if pending-decisions-p returns a symbol instead of t/nil,
+;; the entire pipeline is blocked. Redefine from source if corrupted.
+;; This can happen when auto-evolution introduces subtle paren imbalance
+;; that shifts function definitions.
+(add-hook 'emacs-startup-hook
+          (lambda ()
+            (when (and (fboundp 'gptel-auto-workflow--pending-decisions-p)
+                       (not (daemonp)))
+              ;; Skip check in daemon — daemon loads this before production.el
+              t)
+            (when (and (fboundp 'gptel-auto-workflow--pending-decisions-p)
+                       (daemonp))
+              (let ((result (condition-case nil
+                                (gptel-auto-workflow--pending-decisions-p)
+                              (error 'ERR))))
+                (when (and (not (eq result t)) (not (eq result nil))
+                           (not (eq result 'ERR)))
+                  (message "[CRITICAL] pending-decisions-p corrupted (returns %s), reloading production.el" result)
+                  (load "lisp/modules/gptel-auto-workflow-production.el" t t)
+                  (let ((result2 (condition-case nil
+                                     (gptel-auto-workflow--pending-decisions-p)
+                                   (error 'ERR))))
+                    (if (or (eq result2 t) (eq result2 nil))
+                        (message "[CRITICAL] Fixed pending-decisions-p after reload")
+                      (message "[CRITICAL] FAILED to fix pending-decisions-p (still returns %s)" result2))))))))
