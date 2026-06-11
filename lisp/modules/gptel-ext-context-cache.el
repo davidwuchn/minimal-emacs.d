@@ -964,6 +964,7 @@ Description: %s"
   "Provider usage contracts: rate limits, pricing models, features, and notes.
 Use `my/gptel-show-provider-contract' to query.")
 
+
 (defun my/gptel-show-provider-contract (provider)
   "Show usage contract for PROVIDER."
   (interactive

@@ -200,7 +200,7 @@ legitimate subagent work. Set to nil to disable.\")")
 
 (ert-deftest test-self-heal-semantic/audit-checks-variable-defined ()
   "The audit checks alist is defined with all checks."
-  (should (= (length gptel-auto-workflow--semantic-audit-checks) 9))
+  (should (= (length gptel-auto-workflow--semantic-audit-checks) 10))
   (should (assq 'let-binding-function gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'hardcoded-limit gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'score-zero-bug gptel-auto-workflow--semantic-audit-checks))
@@ -209,7 +209,8 @@ legitimate subagent work. Set to nil to disable.\")")
   (should (assq 'unbalanced-parens gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'missing-provide gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'condition-case-unbound-err gptel-auto-workflow--semantic-audit-checks))
-  (should (assq 'risk-node gptel-auto-workflow--semantic-audit-checks)))
+  (should (assq 'risk-node gptel-auto-workflow--semantic-audit-checks))
+  (should (assq 'provide-inside-defun gptel-auto-workflow--semantic-audit-checks)))
 
 ;; ── Test 10: Missing provide detection ──
 
@@ -548,7 +549,8 @@ causing void-function errors when gptel-agent was not loaded."
   (should (assq 'excessive-blank-lines gptel-auto-workflow--semantic-fixer-alist))
   (should (assq 'unguarded-external-call gptel-auto-workflow--semantic-fixer-alist))
   (should (assq 'missing-provide gptel-auto-workflow--semantic-fixer-alist))
-  (should (assq 'unbalanced-parens gptel-auto-workflow--semantic-fixer-alist)))
+  (should (assq 'unbalanced-parens gptel-auto-workflow--semantic-fixer-alist))
+  (should (assq 'provide-inside-defun gptel-auto-workflow--semantic-fixer-alist)))
 
 (ert-deftest test-self-heal-semantic/routes-normal-file-direct ()
   "Normal target files use direct targeted self-heal."
@@ -982,6 +984,36 @@ exit code."
             (should-not (car result))
             (should (stringp (cdr result)))))
       (delete-directory tmpdir t))))
+
+;; ── Test 17: provide-inside-defun detection and fix ──
+
+(ert-deftest test-self-heal-semantic/detects-provide-inside-defun ()
+  "Detects (provide ...) swallowed inside a defun body.
+When a missing close paren causes provide to be inside the preceding defun,
+this audit check flags it so the self-heal fixer can restore top-level."
+  (let* ((content
+          "(defun foo ()\n  1\n(provide 'bar)\n;;; bar.el ends here\n")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (gptel-auto-workflow--semantic-audit-reset)
+          (let ((issues (gptel-auto-workflow--audit-provide-inside-defun file)))
+            (should (>= issues 1))))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/fixes-provide-inside-defun ()
+  "Auto-fixer inserts close parens before provide to restore top-level."
+  (let* ((content
+          "(defun foo ()\n  1\n(provide 'bar)\n;;; bar.el ends here\n")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (let ((fixed (gptel-auto-workflow--fix-provide-inside-defun file)))
+            (should (= fixed 1)))
+          ;; After fix, provide should be at top-level
+          (let ((issues-after (gptel-auto-workflow--audit-provide-inside-defun file)))
+            (should (= issues-after 0))))
+      (test-self-heal-semantic--cleanup file))))
 
 (provide 'test-self-heal-semantic)
 ;;; test-self-heal-semantic.el ends here
