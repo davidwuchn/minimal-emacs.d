@@ -915,5 +915,48 @@ Pi5 commit ab888cd86 removed the cache logic but left the defvar."
             (should (string-match-p "FAILED" (cdr result)))))
       (delete-directory tmpdir t))))
 
+;; ── Regression: real ERT output patterns ──
+
+(ert-deftest test-self-heal-semantic/run-ert-real-pass-output ()
+  "run-ert-in-worktree returns (t . _) when script outputs real ERT pass text.
+Real ERT output on pass contains '0 unexpected' — the gate must NOT
+interpret this as a failure.  This was a P0 bug: the regex 'unexpected'
+matched '0 unexpected' and inverted the gate."
+  (let* ((tmpdir (make-temp-file "ov5-ert-test-" t))
+         (test-dir (expand-file-name "tests/" tmpdir))
+         (script-dir (expand-file-name "scripts/" tmpdir)))
+    (unwind-protect
+        (progn
+          (make-directory test-dir t)
+          (make-directory script-dir t)
+          ;; Mock run-tests.sh that outputs real ERT pass text and exits 0
+          (with-temp-file (expand-file-name "run-tests.sh" script-dir)
+            (insert "#!/bin/bash\necho 'Ran 166 tests, 166 results as expected, 0 unexpected'\nexit 0\n"))
+          (chmod (expand-file-name "run-tests.sh" script-dir) #o755)
+          (let ((result (gptel-auto-workflow--run-ert-in-worktree tmpdir)))
+            (should (car result))
+            (should (stringp (cdr result)))))
+      (delete-directory tmpdir t))))
+
+(ert-deftest test-self-heal-semantic/run-ert-real-fail-output ()
+  "run-ert-in-worktree returns (nil . _) when script outputs real ERT fail text
+and exits non-zero.  Real ERT output on fail contains 'FAILED' and a non-zero
+exit code."
+  (let* ((tmpdir (make-temp-file "ov5-ert-test-" t))
+         (test-dir (expand-file-name "tests/" tmpdir))
+         (script-dir (expand-file-name "scripts/" tmpdir)))
+    (unwind-protect
+        (progn
+          (make-directory test-dir t)
+          (make-directory script-dir t)
+          ;; Mock run-tests.sh that outputs real ERT fail text and exits 1
+          (with-temp-file (expand-file-name "run-tests.sh" script-dir)
+            (insert "#!/bin/bash\necho '   FAILED  test-daemon-repl/retries-without-self-heal'\necho 'Ran 166 tests, 165 results as expected, 1 unexpected'\nexit 1\n"))
+          (chmod (expand-file-name "run-tests.sh" script-dir) #o755)
+          (let ((result (gptel-auto-workflow--run-ert-in-worktree tmpdir)))
+            (should-not (car result))
+            (should (stringp (cdr result)))))
+      (delete-directory tmpdir t))))
+
 (provide 'test-self-heal-semantic)
 ;;; test-self-heal-semantic.el ends here

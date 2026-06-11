@@ -13,8 +13,13 @@ OV5 self-heal-semantic has 7 audit checks but they are all *static pattern match
 
 All 5 passed check-parens + load-file. Only the test suite caught them.
 
-## Fix
-Added `gptel-auto-workflow--run-ert-in-worktree` — calls `scripts/run-tests.sh unit` in the worktree before promotion. The test suite is the held-out validation set (verbum methodology: register-matching, null testing).
+## Fix (wave 1)
+Added `gptel-auto-workflow--run-ert-in-worktree` — calls `scripts/run-tests.sh unit` in the worktree before promotion.
+
+## Fix (wave 2 — P0 regression)
+The gate had an inverted-logic bug: regex `"FAILED\\|failed\\|unexpected"` matched "0 unexpected" (the PASS string from ERT). Result: gate rejected ALL promotions, including correct ones. The mock tests didn't catch it because they used synthetic output, not real ERT text.
+
+Root cause: `shell-command-to-string` discards exit code, so the gate relied on output text parsing with a broken regex. Fix: replaced with `call-process` (captures stdout+stderr in buffer+file, returns exit code). Now pass/fail is based on exit code, not text matching.
 
 ## Pattern
 Auto-evolution pipelines need *runtime validation* (test execution), not just static validation (syntax checking). The gap between "parses correctly" and "behaves correctly" is where semantic bugs live.

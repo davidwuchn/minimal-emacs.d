@@ -1158,7 +1158,10 @@ live-tree mutation is performed."
 (defun gptel-auto-workflow--run-ert-in-worktree (worktree-dir)
   "Run ert test suite from WORKTREE-DIR via scripts/run-tests.sh unit.
 Returns (PASS-P . OUTPUT-STRING).
-When no tests/ directory exists, returns (t . \"no tests directory\")."
+When no tests/ directory exists, returns (t . \"no tests directory\").
+Uses `call-process' to capture both stdout+stderr AND the exit code,
+so the pass/fail decision is based on the script's exit status, not
+fragile output parsing."
   (let ((test-dir (expand-file-name "tests" worktree-dir))
         (script (expand-file-name "scripts/run-tests.sh" worktree-dir)))
     (cond
@@ -1168,19 +1171,20 @@ When no tests/ directory exists, returns (t . \"no tests directory\")."
       (cons t "no run-tests.sh in worktree"))
      (t
       (let* ((default-directory worktree-dir)
-             (output (shell-command-to-string
-                      (format "%s unit 2>&1" (shell-quote-argument script))))
-             (exit-code (string-to-number
-                         (with-temp-buffer
-                           (insert output)
-                           (goto-char (point-max))
-                           (if (re-search-backward "exit-code=\\([0-9]+\\)" nil t)
-                               (match-string 1)
-                             "0")))))
-        ;; shell-command-to-string returns output but doesn't give exit code directly.
-        ;; Check output for failure markers.
-        (cons (not (string-match-p "FAILED\\|failed\\|unexpected" output))
-              (string-trim output)))))))
+             (stdout-buf (generate-new-buffer " *ov5-ert-stdout*"))
+             (stderr-file (make-temp-file "ov5-ert-stderr-"))
+             (exit-code
+              (unwind-protect
+                  (call-process "bash" nil (list stdout-buf stderr-file) nil
+                                (shell-quote-argument script) "unit")
+                (with-current-buffer stdout-buf
+                  (goto-char (point-max))
+                  (insert-file-contents stderr-file))
+                (delete-file stderr-file)))
+             (output (string-trim
+                      (with-current-buffer stdout-buf (buffer-string)))))
+        (kill-buffer stdout-buf)
+        (cons (zerop exit-code) output))))))
 
 (defun gptel-auto-workflow--self-heal-file-via-ov5 (file)
   "Heal FILE in an OV5 temporary worktree, then promote only if valid.
