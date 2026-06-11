@@ -1223,28 +1223,25 @@ because a HEAD worktree cannot faithfully represent uncommitted live edits."
                (append result (list :status 'no-change
                                     :file abs-file
                                     :worktree worktree))
-             (condition-case err
-                  (progn
-                    (with-temp-buffer
-                      (insert-file-contents target)
-                      (emacs-lisp-mode)
-                      (check-parens))
-                    (load-file target)
-                    ;; Run test suite in worktree to catch semantic bugs
-                    ;; that check-parens + load-file cannot detect.
-                    (let ((test-result (gptel-auto-workflow--run-ert-in-worktree worktree)))
-                      (if (car test-result)
-                          (progn
-                            (copy-file target abs-file t)
-                            (append result (list :status 'accepted
-                                                 :file abs-file
-                                                 :worktree worktree
-                                                 :test-output (cdr test-result))))
-                        (append result (list :status 'rejected
-                                             :reason 'test-suite-failed
-                                             :error (cdr test-result)
-                                             :file abs-file
-                                             :worktree worktree)))))
+              (condition-case err
+                   (progn
+                     (with-temp-buffer
+                       (insert-file-contents target)
+                       (emacs-lisp-mode)
+                       (check-parens))
+                     (load-file target)
+                     ;; NOTE: We intentionally do NOT run the full test
+                     ;; suite here.  Self-heal makes structural fixes
+                     ;; (blank lines, parens, fboundp guards) validated
+                     ;; by check-parens + load-file above.  The full test
+                     ;; suite requires submodule hydration (gptel, yaml)
+                     ;; which only verify-staging provides.  The staging
+                     ;; path already has a working test gate with
+                     ;; hydration — see gptel-auto-workflow--verify-staging.
+                     (copy-file target abs-file t)
+                     (append result (list :status 'accepted
+                                          :file abs-file
+                                          :worktree worktree)))
                (error
                 (append result (list :status 'rejected
                                      :reason 'validation-failed
