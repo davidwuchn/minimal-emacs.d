@@ -63,13 +63,22 @@ Log messages use prefix [brepl]."
         (list :success nil :result nil
               :error (format "[brepl] Binary not found: %s" gptel-brepl-binary))
       (let ((stdout-buf (generate-new-buffer " *brepl-stdout*"))
-            (stderr-buf (generate-new-buffer " *brepl-stderr*")))
+            (stderr-file (make-temp-file "brepl-stderr-" nil ".log")))
         (unwind-protect
             (condition-case err
+                ;; DESTINATION = (stdout-buf stderr-file).  Per call-process
+                ;; docs, when DESTINATION is a list, STDERR-FILE must be
+                ;; nil, t, or a file-name STRING — NOT a buffer object.
+                ;; Pass a temp-file path so we can capture errors without
+                ;; binding to a buffer (which call-process rejects).
                 (let ((exit-code (apply #'call-process
-                                        binary nil (list stdout-buf stderr-buf) nil args)))
+                                        binary nil
+                                        (list stdout-buf stderr-file)
+                                        nil args)))
                   (let ((stdout (with-current-buffer stdout-buf (string-trim (buffer-string))))
-                        (stderr (with-current-buffer stderr-buf (string-trim (buffer-string)))))
+                        (stderr (with-temp-buffer
+                                  (insert-file-contents stderr-file)
+                                  (string-trim (buffer-string)))))
                     (message "[brepl] exit=%d args=%S" exit-code args)
                     (if (= exit-code 0)
                         (list :success t :result stdout
@@ -82,7 +91,7 @@ Log messages use prefix [brepl]."
                (list :success nil :result nil
                      :error (format "[brepl] call-process error: %s" (error-message-string err)))))
           (kill-buffer stdout-buf)
-          (kill-buffer stderr-buf))))))
+          (delete-file stderr-file))))))
 
 ;;; ── Public API ──
 

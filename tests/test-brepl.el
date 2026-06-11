@@ -292,5 +292,37 @@ The hook guards against nil fixed-content, so the buffer should not be touched."
             (should (string= (buffer-string) original))))
       (kill-buffer buf))))
 
+(ert-deftest test-brepl/call-process-destination-accepts-buffers ()
+  "gptel-brepl--call must format DESTINATION so call-process accepts it.
+Per `call-process` docs, DESTINATION can be a buffer or buffer name,
+or a list (REAL-BUFFER STDERR-FILE) where STDERR-FILE must be nil,
+t, or a file name string.  Passing two buffer objects (instead of
+buffer + string) fails with `wrong-type-argument stringp #<buffer>`.
+This regression test catches the bug found when calling
+gptel-brepl-eval/load-file/balance on a real missing file."
+  (let ((captured-destination nil))
+    (cl-letf (((symbol-function 'executable-find) (lambda (_) "/usr/bin/false"))
+              ((symbol-function 'call-process)
+               (lambda (program &optional infile destination display &rest args)
+                 (setq captured-destination destination)
+                 1)))
+      (gptel-brepl--call '("balance" "/tmp/test.clj"))
+      ;; If DESTINATION is a list (REAL-BUFFER . STDERR-FILE), STDERR-FILE
+      ;; must NOT be a buffer object — it must be nil, t, or a string.
+      (when (and captured-destination (listp captured-destination))
+        (let ((stderr-slot (cadr captured-destination)))
+          (when stderr-slot
+            (should (or (null stderr-slot) (stringp stderr-slot)))))))))
+
+(ert-deftest test-brepl/eval-call-process-fails-gracefully ()
+  "When brepl binary doesn't exist, eval should report failure, not error.
+A user calling (gptel-brepl-eval ...) with no brepl installed should
+get (:success nil :error \"Binary not found\") — not a confusing
+inner call-process error."
+  (cl-letf (((symbol-function 'executable-find) (lambda (_) nil)))
+    (let ((result (gptel-brepl-eval "(+ 1 2)")))
+      (should-not (plist-get result :success))
+      (should (string-match-p "Binary not found" (plist-get result :error))))))
+
 (provide 'test-brepl)
 ;;; test-brepl.el ends here
