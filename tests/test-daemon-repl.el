@@ -34,11 +34,15 @@
 
 (ert-deftest test-daemon-repl/eval-via-emacsclient-no-daemon ()
   "When no daemon is running, eval-via-emacsclient returns :success nil.
-This test also exercises the call-process exit-code path (P1 fix)."
-  :expected-result (if (executable-find "emacsclient") :passed :failed)
-  (let ((result (gptel-daemon-repl--eval-via-emacsclient "(+ 1 2 3)")))
-    (should-not (plist-get result :success))
-    (should (stringp (plist-get result :error)))))
+This test also exercises the call-process exit-code path (P1 fix).
+Mocks the socket detection to nil so the test is deterministic
+regardless of whether a real daemon is running in the environment."
+  (skip-unless (executable-find "emacsclient"))
+  (cl-letf (((symbol-function 'gptel-daemon-repl--default-server-socket)
+             (lambda () nil)))
+    (let ((result (gptel-daemon-repl--eval-via-emacsclient "(+ 1 2 3)")))
+      (should-not (plist-get result :success))
+      (should (stringp (plist-get result :error))))))
 
 ;; ── P1: Socket discovery wrong ──
 

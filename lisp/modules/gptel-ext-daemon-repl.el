@@ -147,31 +147,39 @@ If running inside the target daemon, evals directly to avoid reentry hang."
         (message "[daemon-repl] Running in target daemon — evaluating directly")
         (gptel-daemon-repl--eval-direct code))
     (let* ((socket (or server-socket (gptel-daemon-repl--default-server-socket)))
-           (args (append (when socket (list "-s" socket))
-                         '("-a" "false" "--eval")
-                         (list code)))
            (outbuf (generate-new-buffer " *daemon-repl-emacsclient*")))
-      (message "[daemon-repl] Evaluating via emacsclient...")
-      (unwind-protect
-          (condition-case proc-err
-              (let ((exit-code (apply #'call-process "emacsclient" nil outbuf nil args)))
-                (with-current-buffer outbuf
-                  (let ((output (string-trim (buffer-string))))
-                    (cond
-                     ((/= exit-code 0)
-                      (list :success nil :result nil
-                            :error (format "emacsclient exited %d: %s" exit-code output)))
-                     ((string= output "")
-                      (list :success nil :result nil
-                            :error "Empty response — daemon may not be running"))
-                     ((string-match-p "\\`Error:" output)
-                      (list :success nil :result nil :error output))
-                     (t
-                      (list :success t :result output :error nil))))))
-            (file-error
-             (list :success nil :result nil
-                   :error (format "emacsclient not found: %s" (error-message-string proc-err)))))
-        (kill-buffer outbuf)))))
+      ;; No socket found — don't even try emacsclient, which would
+      ;; silently fall back to the user's default daemon and produce
+      ;; confusing results when no target daemon is running.
+      (if (not socket)
+          (progn
+            (kill-buffer outbuf)
+            (list :success nil :result nil
+                  :error "No daemon socket — gptel-daemon-repl daemon not running"))
+        (let* ((args (append (list "-s" socket)
+                             '("-a" "false" "--eval")
+                             (list code))))
+          (message "[daemon-repl] Evaluating via emacsclient...")
+          (unwind-protect
+              (condition-case proc-err
+                  (let ((exit-code (apply #'call-process "emacsclient" nil outbuf nil args)))
+                    (with-current-buffer outbuf
+                      (let ((output (string-trim (buffer-string))))
+                        (cond
+                         ((/= exit-code 0)
+                          (list :success nil :result nil
+                                :error (format "emacsclient exited %d: %s" exit-code output)))
+                         ((string= output "")
+                          (list :success nil :result nil
+                                :error "Empty response — daemon may not be running"))
+                         ((string-match-p "\\`Error:" output)
+                          (list :success nil :result nil :error output))
+                         (t
+                          (list :success t :result output :error nil))))))
+                (file-error
+                 (list :success nil :result nil
+                       :error (format "emacsclient not found: %s" (error-message-string proc-err)))))
+            (kill-buffer outbuf)))))))
 
 (defun gptel-daemon-repl-eval-expression (expr &optional server)
   "Evaluate Elisp expression EXPR in the running Emacs daemon.
