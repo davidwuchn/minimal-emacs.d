@@ -71,6 +71,9 @@
 ;; Ontology-based experiment outcome prediction
 (condition-case nil (require 'gptel-auto-workflow-ontology-predict) (error (message "[gptel-config] ontology-predict unavailable")) nil)
 (require 'gptel-auto-workflow-mementum)
+;; Load pending-decisions BEFORE production to protect against corruption
+;; from any paren imbalance in the larger production module.
+(require 'gptel-auto-workflow-pending-decisions nil t)
 (require 'gptel-auto-workflow-production)
 
 ;; Enable daily benchmark integration (auto-collect metrics on skill/workflow runs)
