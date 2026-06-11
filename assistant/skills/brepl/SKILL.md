@@ -1,10 +1,12 @@
 ---
 name: brepl
-description: "Clojure REPL client (nREPL-based). Use for evaluating Clojure code, loading files, and fixing unbalanced brackets. Not the Elisp daemon-repl."
+description: "Clojure REPL client (nREPL-based, Babashka). Use for evaluating Clojure code, loading Clojure files, fixing unbalanced brackets, and interactive nREPL work. Not the Elisp daemon-repl."
 ---
 
-# brepl — Clojure REPL Client
+# brepl — Clojure nREPL Client
 
+> **MANDATORY: You MUST load this skill before using `brepl`.** This skill contains the heredoc patterns, prerequisites, and troubleshooting needed to use brepl correctly.
+>
 > **Not the Elisp daemon-repl.** This is the Clojure `brepl` CLI tool (github.com/licht1stein/brepl), a babashka-based nREPL client. For the Elisp daemon eval module, see the `daemon-repl` skill.
 
 ## Overview
@@ -24,6 +26,19 @@ EOF
 ```
 
 Use `<<'EOF'` (quoted) to prevent shell variable expansion.
+
+### Alternative: Captured Output with $(cat)
+
+When you need to capture brepl output into a variable or pipe it:
+
+```bash
+brepl "$(cat <<'EOF'
+(your clojure code here)
+EOF
+)"
+```
+
+Prefer the plain stdin heredoc (`<<'EOF'`) for most cases. Use the `$(cat)` wrapper only when you need to capture or redirect output.
 
 ### Alternative: Positional Argument (simple one-liners only)
 
@@ -88,3 +103,23 @@ EOF
 - `~/.local/bin/brepl` must be installed (babashka binary)
 - An nREPL server must be running (e.g., `clj -M:nrepl` or `lein repl`)
 - `.nrepl-port` file or `BREPL_PORT` env var must point to the server port
+
+## Troubleshooting
+
+### "No nREPL port found"
+
+brepl looks for the nREPL port in two places:
+
+1. **`.nrepl-port` file** — creates this file in the project root. Verify it exists and contains a valid port number:
+   ```bash
+   cat .nrepl-port
+   ```
+   If missing, restart your nREPL server (e.g., `clj -M:nrepl` or `lein repl`).
+
+2. **`BREPL_PORT` environment variable** — override the port:
+   ```bash
+   export BREPL_PORT=7888
+   ```
+   Useful when `.nrepl-port` is in a different directory or you're connecting to a remote nREPL.
+
+If neither works, confirm the nREPL server is actually running and listening on the expected port.

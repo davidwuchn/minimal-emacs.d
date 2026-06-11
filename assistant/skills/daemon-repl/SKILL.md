@@ -1,6 +1,6 @@
 ---
-name: brepl
-description: Daemon REPL for Elisp (daemon-repl for OV5) — evaluate Elisp code in a running Emacs daemon, validate brackets before save, auto-evaluate files on change
+name: daemon-repl
+description: "Daemon REPL for Elisp — evaluate Elisp code in a running Emacs daemon via emacsclient, validate brackets before save, auto-evaluate .el files on change. Use when you need to run Elisp from outside Emacs, check daemon status, or validate Elisp syntax."
 metadata:
   molecules: [daemon-repl, elisp, repl, emacsclient]
   level: compound
@@ -8,10 +8,36 @@ metadata:
 
 # Daemon REPL for OV5
 
-> **Not** the Clojure `brepl` CLI tool. This is the Elisp daemon REPL for OV5.
-> For Clojure nREPL, use `~/.local/bin/brepl` instead.
+> **Not the Clojure `brepl` CLI tool.** This is the Elisp daemon REPL for OV5. These two skills have similar names but different tools:
+> - `daemon-repl` (this skill) — Elisp evaluation via emacsclient
+> - `brepl` (see that skill) — Clojure nREPL client via babashka
 
 brepl brings bracket-fixing REPL concepts from ClojureScript to Emacs Lisp in OV5. It enables AI agents to safely generate, validate, and evaluate Elisp code.
+
+## Emacsclient Bash Pattern (for opencode agents)
+
+When calling from outside Emacs (e.g., from a shell or an agent), use this pattern:
+
+```bash
+emacsclient -s /tmp/emacs$(id -u)/pmf-value-stream -a false --eval "$(cat <<'EOF'
+(gptel-daemon-repl-status)
+EOF
+)"
+```
+
+**Safety rules:**
+- Always use `-a false` so `emacsclient` never auto-spawns a daemon.
+- Always use heredoc (`<<'EOF'`) for Elisp quoting — prevents shell variable expansion.
+- Wrap multi-form code in `progn`.
+
+For a different server name, replace `pmf-value-stream` with your daemon name. For the default `server` daemon:
+
+```bash
+emacsclient -s /tmp/emacs$(id -u)/server -a false --eval "$(cat <<'EOF'
+(gptel-daemon-repl-status)
+EOF
+)"
+```
 
 ## Concepts
 
@@ -22,7 +48,9 @@ brepl brings bracket-fixing REPL concepts from ClojureScript to Emacs Lisp in OV
 
 ## Usage
 
-### Evaluate Expression
+### Evaluate Expression (Elisp API)
+
+For Emacs-internal use:
 
 ```elisp
 (gptel-daemon-repl-eval-expression "(+ 1 2 3)")
@@ -30,7 +58,18 @@ brepl brings bracket-fixing REPL concepts from ClojureScript to Emacs Lisp in OV
 
 Returns result as string, or signals error if daemon is not running.
 
-### Evaluate File
+### Evaluate Expression (emacsclient)
+
+From outside Emacs:
+
+```bash
+emacsclient -s /tmp/emacs$(id -u)/server -a false --eval "$(cat <<'EOF'
+(gptel-daemon-repl-eval-expression "(+ 1 2 3)")
+EOF
+)"
+```
+
+### Evaluate File (Elisp API)
 
 ```elisp
 (gptel-daemon-repl-eval-file "lisp/modules/foo.el")
@@ -38,7 +77,16 @@ Returns result as string, or signals error if daemon is not running.
 
 Loads the file in the daemon. Reports success/failure.
 
-### Validate Brackets
+### Evaluate File (emacsclient)
+
+```bash
+emacsclient -s /tmp/emacs$(id -u)/server -a false --eval "$(cat <<'EOF'
+(gptel-daemon-repl-eval-file "lisp/modules/foo.el")
+EOF
+)"
+```
+
+### Validate Brackets (Elisp API)
 
 ```elisp
 (gptel-daemon-repl-validate-brackets "(defun foo () 42")
@@ -51,8 +99,19 @@ Returns plist:
 
 ### Check Status
 
+Elisp API:
+
 ```elisp
 (gptel-daemon-repl-status)
+```
+
+emacsclient:
+
+```bash
+emacsclient -s /tmp/emacs$(id -u)/server -a false --eval "$(cat <<'EOF'
+(gptel-daemon-repl-status)
+EOF
+)"
 ```
 
 Returns plist with:
@@ -112,11 +171,13 @@ Evaluation errors trigger the self-healing pipeline:
 
 ## Socket Discovery
 
-brepl auto-discovers Emacs daemon sockets:
+brepl auto-discovers Emacs daemon sockets in this order (from `gptel-ext-daemon-repl.el` lines 71-88):
 
-1. `/tmp/emacs$(id -u)/` — macOS/Linux default
-2. `${TMPDIR}/emacs$(id -u)/` — macOS with custom TMPDIR
-3. `~/.emacs.d/server/` — fallback
+1. `server-socket-dir` (Emacs 29+ built-in)
+2. `/run/user/$UID/emacs/` (XDG, Linux)
+3. `/tmp/emacs$UID/` (standard, macOS/Linux)
+4. `${TMPDIR}/emacs$UID/` (macOS with custom TMPDIR)
+5. `~/.emacs.d/server/` (fallback)
 
 Override with `gptel-daemon-repl-socket-dir`.
 
@@ -144,3 +205,9 @@ Only evaluates:
 - `lisp/modules/gptel-ext-daemon-repl.el` — main module
 - `tests/test-daemon-repl.el` — test suite
 - Loaded via `lisp/gptel-config.el`
+
+## Related Skills
+
+- `brepl` — Clojure nREPL client (separate tool, similar name — don't confuse)
+- `ov5` — OV5 cowork guide (pipeline, researcher, evolution)
+- `ov5-status` — focused system health check

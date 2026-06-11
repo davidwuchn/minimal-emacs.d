@@ -1,129 +1,175 @@
 ---
 name: ov5
-description: Cowork with OV5 (Ouroboros V5) — trigger experiments, review results, integrate feedback between coding agent and self-evolving pipeline
-metadata:
-  evolution-stats:
-    total-experiments: 870
-molecules: [auto-workflow]
-level: compound
+description: Inspect and operate OV5 (Ouroboros V5) through the live Emacs daemon. Use when checking auto-workflow status, starting guarded runs, reviewing experiment results, or querying researcher and evolution state.
 ---
 
-# OV5 Cowork
+# OV5
 
-OV5 is a self-regulating Emacs daemon that runs automated code improvement experiments. You (the coding agent) cowork with it: you write code, OV5 tests improvements independently via isolated git worktrees.
+## Overview
 
-## Socket
+OV5 is the live Ouroboros V5 self-improving system behind the `pmf-value-stream` Emacs daemon.
 
-```
-/run/user/1000/emacs/ov5-auto-workflow
-```
+Subsystems:
+1. **Pipeline (`auto-workflow`)**: select -> categorize -> route -> hypothesis -> tests -> grade -> review -> merge/learn
+2. **Researcher**: scans repos via `gh` API and refreshes research cache
+3. **Analyzer**: selects targets from TSV history and frontier/Pareto ranking
+4. **Grader**: scores 0.0-1.0 on structure, correctness, and Eight Keys
+5. **Comparator**: keep vs discard from score deltas
+6. **Evolution (`self-evolve`)**: generates new strategies from failure patterns
+7. **Monitoring**: 10 phases (0-9), Sentry wired, production sensing
+8. **Approval queue**: file-based, 7-day expiry for high-risk proposals
 
-All communication uses `emacsclient -s <socket> --eval '<expr>'`.
+Current architecture facts from `OUROBOROS-V5.md`: 120 modules (76 byte-compiled, 44 no-byte-compile), 3,485 ERT tests, 7 gates, 8 backend definitions (4-5 actively routed), ~20% keep-rate, ~59% prompt compression, and ~$0.50-2.00/run.
 
-## OV5 Subsystems You Can Use
+## Socket discovery
 
-### Pipeline (auto-workflow)
-Runs experiment cycles: select targets → categorize → route backend → generate hypothesis → run 3485 tests → AI grade → AI review → merge or learn.
+Use the main OV5 daemon: `pmf-value-stream`.
 
-| Command | What it does |
-|---------|-------------|
-| `(gptel-auto-workflow-status)` | Phase, targets, keep-rate, run-id |
-| `(gptel-auto-workflow-run-async)` | Start a new cycle |
-| `(gptel-auto-workflow--running)` | Is pipeline active? |
-| `(gptel-auto-workflow--rate-limited-backends)` | Which backends are rate-limited |
-| `(gptel-auto-workflow--current-target)` | File currently being experimented on |
+Preferred socket path:
 
-### Researcher
-Scans 17+ repos via gh API, fetches techniques that fill ontology knowledge gaps, produces Allium behavioral specs. Triggered by pipeline; not typically called directly.
-
-### Analyzer
-Selects experiment targets from TSV history, ranks by Pareto frontier size. Reads `gptel-auto-workflow--stats` for latest analysis.
-
-### Grader
-Scores experiment output 0.0-1.0 on structure, correctness, Eight Keys. Results logged in `===RESULT===` JSON blocks.
-
-### Comparator
-Decides keep vs discard from score/quality deltas. Results visible in `results.tsv`.
-
-### Prefix Cache
-Separates stable prompt prefix (AGENTS.md + tools + mementum + architecture) from dynamic suffix (target + hypothesis + results). Keeps LLM prefix cache warm across experiments. Configured via `lisp/modules/gptel-ext-prefix-cache.el`.
-
-| Function | What it does |
-|----------|-------------|
-| `(gptel-prefix-cache-compute "run-id")` | Build stable prefix for run |
-| `(gptel-prefix-cache-prepend dynamic)` | Prepend stable prefix to dynamic content |
-| `(gptel-prefix-cache-context-usage dynamic)` | Report token usage ratio |
-| `(gptel-prefix-cache-compact-dynamic prompt results)` | Summarize older results at 80% threshold |
-| `(gptel-prefix-cache-build-with-budget sections)` | Assemble prompt within token budget |
-| `(gptel-prefix-cache-save-to-file)` | Persist state across daemon restarts |
-| `(gptel-prefix-cache-load-from-file)` | Restore persisted state |
-
-### Evolution (self-evolve)
-Generates new strategies from failure patterns. Runs each cycle after experiments complete. Output in `===RESULT===`.
-
-## Key Workflows
-
-### Check pipeline health
-```elisp
-(gptel-auto-workflow-status)
-;; → (:running nil :kept 0 :total 5 :phase "idle" :run-id "...")
+```text
+/tmp/emacs$(id -u)/pmf-value-stream
 ```
 
-### Start a new experiment cycle
-```elisp
-(gptel-auto-workflow-run-async)
-;; → "started"
-```
+Resolution order:
+1. `$XDG_RUNTIME_DIR/emacs/pmf-value-stream`
+2. `${TMPDIR}/emacs$(id -u)/pmf-value-stream`
+3. `/tmp/emacs$(id -u)/pmf-value-stream`
 
-### Review last run results
+Quick check:
+
 ```bash
-cat var/tmp/experiments/*/results.tsv | column -t
-cat var/log/emacs-*.log | grep "kept\|discard\|RESULT" | tail -10
-git log --oneline -10
+ls "/tmp/emacs$(id -u)/"
 ```
 
-### Add a target file
-Set `gptel-auto-workflow-targets` in `.dir-locals.el`:
+## Mandatory `emacsclient` pattern
+
+Always use heredoc plus `-a false` for OV5 calls. See also the `daemon-repl` skill for shared emacsclient guidance.
+
+```bash
+emacsclient -s /tmp/emacs$(id -u)/pmf-value-stream -a false --eval "$(cat <<'EOF'
+(gptel-auto-workflow-status)
+EOF
+)"
+```
+
+Rules:
+- Always use `-a false` so `emacsclient` never auto-spawns a daemon.
+- Always use heredoc for Elisp quoting.
+- Wrap multi-form code in `progn`.
+
+## Public API
+
+| Form | Returns / use | Notes |
+|---|---|---|
+| `(gptel-auto-workflow-status)` | `(:running :kept :total :phase :run-id :results)` | Main status entrypoint. |
+| `(gptel-auto-workflow-run-async)` | Starts a run | Raw async start; returns `'started`. |
+| `(gptel-auto-workflow-run-async--guarded)` | Starts a guarded run | Preferred for automation. |
+| `(gptel-auto-workflow-log)` | Last 20 sanitized log lines | Filters `[auto-]` and `[nucleus]` messages. |
+| `(gptel-auto-workflow-read-persisted-status)` | Status from disk | Survives daemon restarts. |
+| `(gptel-auto-workflow-research-status)` | Researcher status plist | Cache freshness and timer state. |
+| `(gptel-auto-workflow-run-research)` | Refreshes research cache | Public researcher entrypoint. |
+| `(gptel-auto-workflow-evolution-status)` | Evolution subsystem status | Buffer-oriented / interactive. |
+
+### State vars (not functions)
+
+Use these with `bound-and-true-p`:
+
+- `(bound-and-true-p gptel-auto-workflow--running)`
+- `(bound-and-true-p gptel-auto-workflow--current-target)`
+
+## Key workflows
+
+### Check status
+
+```bash
+emacsclient -s /tmp/emacs$(id -u)/pmf-value-stream -a false --eval "$(cat <<'EOF'
+(gptel-auto-workflow-status)
+EOF
+)"
+```
+
+### Start a run (guarded)
+
+```bash
+emacsclient -s /tmp/emacs$(id -u)/pmf-value-stream -a false --eval "$(cat <<'EOF'
+(gptel-auto-workflow-run-async--guarded)
+EOF
+)"
+```
+
+If it returns `nil`, check for pending decisions in `mementum/decisions/` or an already-running workflow.
+
+### Review last run
+
+```bash
+emacsclient -s /tmp/emacs$(id -u)/pmf-value-stream -a false --eval "$(cat <<'EOF'
+(gptel-auto-workflow-log)
+EOF
+)"
+```
+
+Then inspect:
+- `var/tmp/cron/auto-workflow-status.sexp`
+- `var/tmp/experiments/*/results.tsv`
+- `git log --oneline -10`
+
+### Targets
+
+Auto-discovered from `lisp/modules/` (skips `-test.el`, `-disabled.el`, `/test/`). Override in `.dir-locals.el`:
+
 ```elisp
 ((emacs-lisp-mode . ((gptel-auto-workflow-targets . ("lisp/modules/foo.el")))))
 ```
 
-### Trigger researcher for a specific technique
-```elisp
-(require 'gptel-auto-workflow-strategic nil t)
-(gptel-auto-workflow-strategic-research "technique to research")
+### Researcher
+
+```bash
+emacsclient -s /tmp/emacs$(id -u)/pmf-value-stream -a false --eval "$(cat <<'EOF'
+(gptel-auto-workflow-run-research)
+EOF
+)"
 ```
 
-### Read experiment analysis
-```elisp
-(gptel-auto-workflow--plist-get
-  (gptel-auto-experiment--merge-analysis
-    (gptel-auto-workflow--read-analysis) previous-results)
-  :patterns)
-```
+## Avoid stale forms
 
-## Coworking Pattern
+- No `gptel-auto-workflow--rate-limited-backends` function exists.
+- No `gptel-auto-workflow--read-analysis` function exists.
+- No `gptel-auto-workflow-strategic-research` function exists.
 
-1. **You review code** → identify improvement opportunity
-2. **You request experiment** → `(gptel-auto-workflow-run-async)` or add target
-3. **OV5 runs experiment** → isolated worktree, 6 gates, ~30min
-4. **You review results** → `git log --oneline -10` `results.tsv`
-5. **You merge or refine** → if kept, review the diff; if discarded, adjust target config
-
-The ontology learns from every kept/discarded pair — your review feedback trains future experiments.
-
-## Filesystem Reference
+## Filesystem reference
 
 | Path | Purpose |
-|------|---------|
-| `var/log/emacs-*.log` | Full daemon log |
-| `var/tmp/experiments/*/results.tsv` | Experiment results TSV |
-| `var/tmp/experiments/*/optimize/` | Per-experiment output |
-| `var/tmp/cross-subsystem-state.json` | Persisted state across restarts |
-| `assistant/strategies/provider-routing/backend-preference.el` | Auto-evolved backend preferences |
-| `mementum/knowledge/backend-comparison.md` | Backend comparison |
-| `mementum/knowledge/model-comparison.md` | Model comparison |
+|---|---|
+| `var/tmp/cron/auto-workflow-status.sexp` | Persisted workflow status |
+| `var/tmp/cron/auto-workflow-messages-tail.txt` | Persisted message tail |
+| `var/tmp/experiments/*/results.tsv` | Per-run experiment results |
+| `var/tmp/experiments/*/optimize/` | Per-experiment worktree output |
+| `var/tmp/research-findings.md` | Researcher cache |
+| `var/tmp/cross-subsystem-state.json` | Cross-subsystem persisted state |
+| `var/approval-queue/pending/` | Pending high-risk proposals |
+| `var/approval-queue/decisions/` | Approved/rejected/expired proposals |
+| `mementum/decisions/` | Human decision gate |
+
+## Cron schedule
+
+```cron
+0 10,14,18 * * *  pipeline (3x daily)
+0 2 * * *         mementum
+0 3 * * *         instincts
+```
 
 ## Safety
 
-OV5 never touches `main` directly. All experiments run in isolated git worktrees. A change only merges after passing 3485 tests + grader + reviewer + comparator + champion league. If you add a target, OV5 handles isolation automatically.
+- Always use heredoc plus `-a false`.
+- Prefer `gptel-auto-workflow-run-async--guarded` for agent-driven starts.
+- OV5 never touches `main` directly — isolated git worktrees only.
+- 7 gates before merge: routing, tests, grading, complexity, review, pi synthesis, champion.
+- High-risk proposals → approval queue (7-day expiry).
+
+## Related skills
+
+- `daemon-repl` — shared emacsclient/heredoc patterns, Elisp evaluation
+- `brepl` — Clojure nREPL client (separate tool)
+- `ov5-status` — focused system health check
+- `ov5-handover` — session handover for OV5

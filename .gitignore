@@ -91,5 +91,4 @@ __pycache__/
 !.opencode/
 !.opencode/AGENTS.md
 !.opencode/skills/
-!.opencode/skills/brepl/
-!.opencode/skills/brepl/SKILL.md
+!.opencode/skills/*
