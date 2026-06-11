@@ -2559,15 +2559,19 @@ supplied on failure, use it as the downgrade reason."
                (symbol-name failure-reason-arg))
               (t
                "staging-flow-failed")))
-            (final-result
-             (if (or (not staging-reported-p) staging-succeeded)
-                 exp-result
-               (let ((failed-result (and (listp exp-result)
-                                         (plist-put (copy-sequence exp-result) :kept nil))))
-                 (when failed-result
-                   (setq failed-result (plist-put failed-result :decision nil))
-                   (setq failed-result (plist-put failed-result :comparator-reason failure-reason)))
-                 (or failed-result exp-result)))))
+             (final-result
+              (if (or (not staging-reported-p) staging-succeeded
+                      ;; Auto-promote failure means staging passed but main
+                      ;; push failed. Preserve :kept t — the experiment is
+                      ;; valuable and a human/next cycle can merge staging.
+                      (string= failure-reason "auto-promote-failed"))
+                  exp-result
+                (let ((failed-result (and (listp exp-result)
+                                          (plist-put (copy-sequence exp-result) :kept nil))))
+                  (when failed-result
+                    (setq failed-result (plist-put failed-result :decision nil))
+                    (setq failed-result (plist-put failed-result :comparator-reason failure-reason)))
+                  (or failed-result exp-result)))))
        (when (functionp log-fn)
          (funcall log-fn run-id final-result))
        (when (and callback (functionp callback))
