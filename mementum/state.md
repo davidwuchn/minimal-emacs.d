@@ -151,6 +151,7 @@ Two REPL modules now exist, both wired into `gptel-config.el`:
 - Serialized Allium `gptel-request` fan-out behind a shared FIFO queue and aligned the diff target cap with `gptel-auto-workflow-max-targets-per-run` to prevent pipe exhaustion.
 - Verified with targeted ERT: 294 tests, 0 unexpected results.
 - Restarted auto-workflow; current status is running with run-id `2026-06-11T231229Z-92f2`.
+- Cleaned `gptel-auto-experiment--kibcm-patterns`: embedded regex newlines were real matching chars, so phrase tests now guard `same entity`, `refactor into`, `instead of`, and `similar to`.
 
 ### Immediate
 1. **Enable opencode eval on Pi5** — Set `gptel-auto-workflow-opencode-eval-enabled t` after monitoring first cron cycle

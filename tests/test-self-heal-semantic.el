@@ -28,11 +28,36 @@ File name starts with `test-` so the let-binding check applies."
   (when (and file (file-exists-p file))
     (delete-file file)))
 
-;; ── Test 1: Regex embedded newlines detection (skipped - complex parser) ──
-;; The regex-string detection is complex to implement correctly without
-;; false positives. The kibcm-patterns bug was caught and fixed manually
-;; when the patterns broke test cases. For now, the other 3 checks provide
-;; good coverage.
+;; ── Test 1: Regex embedded newlines detection ──
+;; Regression guard: kibcm-patterns regex strings must contain no literal \n.
+;; Also exercise multi-word phrases that were broken by embedded newlines.
+;; (The kibcm-patterns bug was fixed — lines 227-245 of gptel-tools-agent-prompt-build.el.)
+
+(require 'gptel-tools-agent-prompt-build)
+
+(ert-deftest test-self-heal-semantic/kibcm-patterns-no-embedded-newlines ()
+  "No regex string in kibcm-patterns contains a literal newline."
+  (should (boundp 'gptel-auto-experiment--kibcm-patterns))
+  (dolist (entry gptel-auto-experiment--kibcm-patterns)
+    (let ((pattern (cadr entry)))
+      (should (stringp pattern))
+      (should-not (string-match-p "\n" pattern)))))
+
+(ert-deftest test-self-heal-semantic/kibcm-axis-refactor-into ()
+  "refactor into → :B (was broken by literal newline between words)."
+  (should (eq :B (gptel-auto-experiment--kibcm-axis "refactor into helper function"))))
+
+(ert-deftest test-self-heal-semantic/kibcm-axis-same-entity ()
+  "same entity → :I (was broken by literal newline between words)."
+  (should (eq :I (gptel-auto-experiment--kibcm-axis "same entity as before"))))
+
+(ert-deftest test-self-heal-semantic/kibcm-axis-instead-of ()
+  "instead of → :SUBST (was broken by literal newline between words)."
+  (should (eq :SUBST (gptel-auto-experiment--kibcm-axis "replace with instead of compress"))))
+
+(ert-deftest test-self-heal-semantic/kibcm-axis-similar-to ()
+  "similar to → :M (was broken by literal newline between words)."
+  (should (eq :M (gptel-auto-experiment--kibcm-axis "similar to the example"))))
 
 ;; ── Test 2: (let ...) binding functions detection ──
 
