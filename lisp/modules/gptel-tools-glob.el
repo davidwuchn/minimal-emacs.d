@@ -94,7 +94,7 @@ CALLBACK is called exactly once, even on abort (with error message)."
               (setq path "."))
             (unless (executable-find "tree")
               (error "Executable `tree' not found. This tool cannot be used"))
-            (let* ((full-path (expand-file-name path))
+             (let* ((full-path (gptel-auto-workflow--expand-workspace-path path))
                    (args (list "-l" "-f" "-i" "-I" ".git"
                                "--sort=mtime" "--ignore-case"
                                "--prune" "-P" pattern full-path))

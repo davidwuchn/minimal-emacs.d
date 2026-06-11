@@ -95,7 +95,7 @@ Returns an ordered list of symbols (functions/classes)."
 
 ;;; Code_Inspect Mock Implementation
 
-(defun test-gptel-code--inspect-symbol (node-name &optional file-path)
+(defun test-gptel-code--inspect-symbol (node-name &optional _file-path)
   "Mock Code_Inspect implementation.
 NODE-NAME is the exact name of the function/class to read.
 FILE-PATH is optional (searches project if omitted).
@@ -696,6 +696,42 @@ FILE-PATH determines the language."
           (should (string-match-p "Error: End of file during parsing" result))
           (should-not (file-exists-p (concat file "c"))))
       (ignore-errors (delete-directory tmp-dir t)))))
+
+(ert-deftest test-code/workspace-boundary/map-rejects-escape ()
+  "Code_Map must reject file paths that escape the workspace boundary."
+  (skip-unless (condition-case nil (progn (require 'gptel-tools-agent-base) t) (error nil)))
+  (cl-letf (((symbol-function 'gptel-auto-workflow--expand-workspace-path)
+             (lambda (p)
+               (if (string-prefix-p "/etc/" (expand-file-name p))
+                   (error "Path %s is outside allowed workspace roots" p)
+                 (expand-file-name p)))))
+    (should-error
+     (gptel-tools-code--map-file "/etc/passwd")
+     :type 'error)))
+
+(ert-deftest test-code/workspace-boundary/inspect-rejects-escape ()
+  "Code_Inspect must reject file paths that escape the workspace boundary."
+  (skip-unless (condition-case nil (progn (require 'gptel-tools-agent-base) t) (error nil)))
+  (cl-letf (((symbol-function 'gptel-auto-workflow--expand-workspace-path)
+             (lambda (p)
+               (if (string-prefix-p "/etc/" (expand-file-name p))
+                   (error "Path %s is outside allowed workspace roots" p)
+                 (expand-file-name p)))))
+    (should-error
+     (gptel-tools-code--inspect-node "some-fn" "/etc/shadow")
+     :type 'error)))
+
+(ert-deftest test-code/workspace-boundary/replace-rejects-escape ()
+  "Code_Replace must reject file paths that escape the workspace boundary."
+  (skip-unless (condition-case nil (progn (require 'gptel-tools-agent-base) t) (error nil)))
+  (cl-letf (((symbol-function 'gptel-auto-workflow--expand-workspace-path)
+             (lambda (p)
+               (if (string-prefix-p "/etc/" (expand-file-name p))
+                   (error "Path %s is outside allowed workspace roots" p)
+                 (expand-file-name p)))))
+    (should-error
+     (gptel-tools-code--replace-node "/etc/hosts" "some-node" "new-content")
+     :type 'error)))
 
 (provide 'test-gptel-tools-code)
 
