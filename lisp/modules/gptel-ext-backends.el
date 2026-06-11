@@ -148,13 +148,15 @@ ARGS are passed to `gptel-make-openai'."
     :endpoint "/v1/e68f70855c32831717611057ed23aa46/mindward/workers-ai/v1/chat/completions"
     :key (lambda () (my/gptel-api-key "gateway.ai.cloudflare.com"))
     :stream t
-    :models '(deepseek-v4-pro
-              deepseek-v4-flash
-              \@cf/openai/gpt-oss-120b
-              \@cf/moonshotai/kimi-k2.6
-              \@cf/zai-org/glm-4.7-flash
-              \@cf/openai/whisper
-              \@cf/openai/whisper-large-v3-turbo)))
+    :models '((deepseek/deepseek-v4-pro
+               :request-params (:thinking (:type "enabled")))
+              (deepseek/deepseek-v4-flash
+               :request-params (:thinking (:type "enabled")))
+              @cf/openai/gpt-oss-120b
+              @cf/moonshotai/kimi-k2.6
+              @cf/zai-org/glm-4.7-flash
+              @cf/openai/whisper
+              @cf/openai/whisper-large-v3-turbo)))
 
 ;; Many backends (CF-Gateway/kimi-k2.6, DeepSeek with thinking enabled)
 ;; return responses in reasoning_content instead of content, or as well
