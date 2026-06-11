@@ -165,7 +165,7 @@ List of experiment results sharing the same research context.
 Reset when research context changes.")
 
 (defvar gptel-auto-workflow--stats nil)
-(defvar gptel-auto-workflow-human-decision-gate)
+(defvar gptel-auto-workflow-human-decision-gate nil)
 (defun gptel-auto-workflow--experiment-complete-hook (experiment)
   "Hook called when EXPERIMENT completes.
 Records to mementum and triggers evolution if needed."
@@ -741,6 +741,9 @@ Returns the new item ID."
               (replace-regexp-in-string
                "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual
 Impact
+
+
+
 
 
 
