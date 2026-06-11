@@ -1032,6 +1032,7 @@ Returns provider name or nil."
   (when (boundp 'gptel-backend-registry)
     (catch 'found
       (dolist (entry gptel-backend-registry)
+
         (let* ((provider (car entry))
                (plist (cdr entry))
                (models (plist-get plist :models)))

@@ -965,6 +965,7 @@ Description: %s"
 Use `my/gptel-show-provider-contract' to query.")
 
 
+
 (defun my/gptel-show-provider-contract (provider)
   "Show usage contract for PROVIDER."
   (interactive

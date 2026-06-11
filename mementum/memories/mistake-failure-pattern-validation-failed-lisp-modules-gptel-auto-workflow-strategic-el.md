@@ -4,12 +4,12 @@ valid-from: 2026-06-12T03:05
 
 # Mistake: 2026-06-12 03:05
 
-**Failure type:** unknown
-**Target:** lisp/modules/gptel-tools-agent-runtime.el
+**Failure type:** validation-failed
+**Target:** lisp/modules/gptel-auto-workflow-strategic.el
 **Category:** :agentic (keep-rate: 1.6%)
-**Occurrences:** 3
+**Occurrences:** 7
 **Example reasons:** none
-**Trend:** 2026-06-04T100156Z-1c10 -> 2026-06-05T005714Z-0cd4
+**Trend:** 2026-06-04T040157Z-1671 -> 2026-06-04T073158Z-27bb
 
 This pattern was detected by the monitoring agent as a systemic failure requiring investigation. Priority determined by category keep-rate (lower = higher priority).
 

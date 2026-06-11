@@ -48,6 +48,7 @@
 (declare-function gptel-auto-workflow--create-staging-worktree "gptel-tools-agent-worktree")
 (declare-function gptel-auto-workflow--delete-staging-worktree "gptel-tools-agent-worktree")
 (declare-function gptel-auto-workflow--require-staging-branch "gptel-tools-agent-worktree")
+(declare-function ov5-world-store-branch-merge "gptel-ext-world-store-branch")
 (declare-function gptel-auto-workflow--shared-remote "gptel-tools-agent-worktree")
 (declare-function gptel-auto-workflow--sync-staging-from-main "gptel-tools-agent-worktree")
 
@@ -1368,7 +1369,14 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                           :agent-output ""))
                    (funcall finish nil "staging-merge-failed"))
                (when already-integrated-p
-                (message "[auto-workflow] Candidate changes already present in staging; verifying staged sync only"))
+                (message "[auto-workflow] Candidate changes already present in staging; verifying staged sync only")
+                ;; Merge experiment's World Store branch data into main (even when git changes already integrated)
+                (when (fboundp 'ov5-world-store-branch-merge)
+                  (condition-case ws-err
+                      (ov5-world-store-branch-merge optimize-branch "main")
+                    (error
+                     (message "[world-store] Branch merge failed (non-fatal): %s"
+                              (error-message-string ws-err))))))
               (let ((worktree (or gptel-auto-workflow--staging-worktree-dir
                                   (gptel-auto-workflow--create-staging-worktree))))
                 (if (not worktree)
@@ -1392,6 +1400,15 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                             (gptel-auto-workflow--reset-staging-after-failure staging-base)
                             (funcall finish nil "staging-verification-failed"))
                        (message "[auto-workflow] ✓ Staging verification PASSED")
+                       ;; Merge experiment's World Store branch data into main
+                       (when (fboundp 'ov5-world-store-branch-merge)
+                         (condition-case ws-err
+                             (let ((count (ov5-world-store-branch-merge optimize-branch "main")))
+                               (message "[world-store] Merged %s → main (%d new entities)"
+                                        optimize-branch (or count 0)))
+                           (error
+                            (message "[world-store] Branch merge failed (non-fatal): %s"
+                                     (error-message-string ws-err)))))
                       (if (gptel-auto-workflow--push-staging)
                           (funcall finish-publish nil)
                         (let* ((push-output gptel-auto-workflow--last-staging-push-output)

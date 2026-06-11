@@ -18,6 +18,7 @@ Returns 1 if swallowed, 0 if at top-level."
       (emacs-lisp-mode)
       (goto-char (point-min))
       (while (search-forward "(provide" nil t)
+
         (let* ((provide-pos (- (point) 8))
                (state (save-excursion
                         (syntax-ppss provide-pos))))

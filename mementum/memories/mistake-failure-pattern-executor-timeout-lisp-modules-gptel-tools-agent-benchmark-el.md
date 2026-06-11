@@ -1,15 +1,15 @@
 ---
-valid-from: 2026-06-12T03:05
+valid-from: 2026-06-11T15:00
 ---
 
-# Mistake: 2026-06-12 03:05
+# Mistake: 2026-06-11 15:00
 
-**Failure type:** unknown
-**Target:** lisp/modules/gptel-tools-agent-runtime.el
-**Category:** :agentic (keep-rate: 1.6%)
+**Failure type:** executor-timeout
+**Target:** lisp/modules/gptel-tools-agent-benchmark.el
+**Category:** :programming (keep-rate: 2.1%)
 **Occurrences:** 3
 **Example reasons:** none
-**Trend:** 2026-06-04T100156Z-1c10 -> 2026-06-05T005714Z-0cd4
+**Trend:** 2026-06-03T153157Z-1db0 -> 2026-06-03T164200Z-7f82
 
 This pattern was detected by the monitoring agent as a systemic failure requiring investigation. Priority determined by category keep-rate (lower = higher priority).
 

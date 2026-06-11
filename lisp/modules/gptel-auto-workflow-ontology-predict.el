@@ -14,6 +14,11 @@
 ;;; Code:
 
 (require 'gptel-auto-workflow-evolution)
+(require 'gptel-ext-world-store nil t)
+
+(declare-function world-store-query-with-fallback "gptel-ext-world-store-query")
+(declare-function world-store-query--experiments-by-filter "gptel-ext-world-store-query")
+(declare-function world-store-query-experiments-by-strategy-and-target "gptel-ext-world-store-query")
 
 (declare-function gptel-auto-experiment-run "gptel-tools-agent-experiment-core")
 
@@ -86,40 +91,71 @@ Returns float 0.0-1.0 based on:
       (when (string= (plist-get inst :name) target)
         (setq target-rate (or (plist-get inst :keep-rate) 0.0))))
     
-    ;; Pair history (3x weight)
-    (let* ((results (gptel-auto-workflow--parse-all-results))
-           (pair-kept 0)
-           (pair-total-local 0))
-      (dolist (r results)
-        (when (and (string= (or (plist-get r :strategy) "") strategy)
-                   (string= (or (plist-get r :target) "") target))
-          (setq pair-total-local (1+ pair-total-local))
-          (when (equal (plist-get r :decision) "kept")
-            (setq pair-kept (1+ pair-kept)))))
-      (when (> pair-total-local 0)
-        (setq pair-rate (/ (float pair-kept) pair-total-local)
-              pair-total pair-total-local)))
-    
-    ;; Recent trend (last 3 experiments for this strategy)
-    (let* ((results (gptel-auto-workflow--parse-all-results))
-           (recent nil)
-           (kept 0)
-           (total 0))
-      (dolist (r results)
-        (when (string= (or (plist-get r :strategy) "") strategy)
-          (push r recent)))
-      (setq recent (seq-take (sort recent
-                                   (lambda (a b)
-                                     (> (or (plist-get a :timestamp) 0)
-                                        (or (plist-get b :timestamp) 0))))
-                             3))
-      (setq total (length recent))
-      (dolist (r recent)
-        (when (equal (plist-get r :decision) "kept")
-          (setq kept (1+ kept))))
-      (when (> total 0)
-        (setq trend-rate (/ (float kept) total)
-              trend-count total)))
+    ;; Pair history (3x weight) + Recent trend combined into single store query
+    (world-store-query-with-fallback
+        (let* ((pair-results (world-store-query-experiments-by-strategy-and-target
+                              strategy target))
+               (strategy-results (world-store-query--experiments-by-filter
+                                  (list :strategy strategy)))
+               ;; Pair history
+               (pair-kept 0)
+               (pair-total-local (length pair-results)))
+          (dolist (r pair-results)
+            (when (equal (plist-get r :decision) "kept")
+              (setq pair-kept (1+ pair-kept))))
+          (when (> pair-total-local 0)
+            (setq pair-rate (/ (float pair-kept) pair-total-local)
+                  pair-total pair-total-local))
+          ;; Recent trend (last 3 experiments for this strategy)
+          (let* ((recent (seq-take (sort strategy-results
+                                        (lambda (a b)
+                                          (let ((ta (or (plist-get a :timestamp) (plist-get a :id) ""))
+                                                (tb (or (plist-get b :timestamp) (plist-get b :id) "")))
+                                            (string> (if (numberp ta) (number-to-string ta) ta)
+                                                     (if (numberp tb) (number-to-string tb) tb)))))
+                                   3))
+                 (total (length recent))
+                 (kept 0))
+            (dolist (r recent)
+              (when (equal (plist-get r :decision) "kept")
+                (setq kept (1+ kept))))
+            (when (> total 0)
+              (setq trend-rate (/ (float kept) total)
+                    trend-count total))))
+      ;; TSV fallback — pair history
+      (let* ((results (gptel-auto-workflow--parse-all-results))
+             (pair-kept 0)
+             (pair-total-local 0))
+        (dolist (r results)
+          (when (and (string= (or (plist-get r :strategy) "") strategy)
+                     (string= (or (plist-get r :target) "") target))
+            (setq pair-total-local (1+ pair-total-local))
+            (when (equal (plist-get r :decision) "kept")
+              (setq pair-kept (1+ pair-kept)))))
+        (when (> pair-total-local 0)
+          (setq pair-rate (/ (float pair-kept) pair-total-local)
+                pair-total pair-total-local))
+        ;; Recent trend (last 3 experiments for this strategy)
+        (let* ((recent nil)
+               (kept 0)
+               (total 0))
+          (dolist (r results)
+            (when (string= (or (plist-get r :strategy) "") strategy)
+              (push r recent)))
+          (setq recent (seq-take (sort recent
+                                       (lambda (a b)
+                                         (let ((ta (or (plist-get a :timestamp) (plist-get a :id) ""))
+                                               (tb (or (plist-get b :timestamp) (plist-get b :id) "")))
+                                           (string> (if (numberp ta) (number-to-string ta) ta)
+                                                    (if (numberp tb) (number-to-string tb) tb)))))
+                                 3))
+          (setq total (length recent))
+          (dolist (r recent)
+            (when (equal (plist-get r :decision) "kept")
+              (setq kept (1+ kept))))
+          (when (> total 0)
+            (setq trend-rate (/ (float kept) total)
+                  trend-count total))))
     
     ;; Weighted combination
     ;; Pair history (3x) + strategy rate (2x) + target rate (1x) + trend (1x)
@@ -138,7 +174,7 @@ Returns float 0.0-1.0 based on:
                             (* (or research-quality 0) (if has-research 2 0)))))
       (if (> total-weight 0)
           (/ weighted-sum total-weight)
-        0.5))))  ; No data = 50/50
+        0.5)))))  ; No data = 50/50
 
 ;; ─── Experiment Filtering ───
 
@@ -177,23 +213,34 @@ there's no data to predict from."
 (defun gptel-auto-workflow--check-anti-pattern (strategy target)
   "Check if STRATEGY + TARGET pair has 3+ consecutive failures.
 Returns t if should block (anti-pattern detected)."
-  (let ((results (gptel-auto-workflow--parse-all-results))
+  (let ((results (world-store-query-with-fallback
+                     (world-store-query-experiments-by-strategy-and-target
+                      strategy target)
+                   ;; TSV fallback — must filter by strategy+target to match
+                   ;; the WS-path contract
+                   (let ((all (gptel-auto-workflow--parse-all-results))
+                         (filtered nil))
+                     (dolist (r all)
+                       (when (and (string= (or (plist-get r :strategy) "") strategy)
+                                  (string= (or (plist-get r :target) "") target))
+                         (push r filtered)))
+                     (nreverse filtered))))
         (consecutive-failures 0))
     ;; Sort by timestamp descending
     (setq results (sort results
                          (lambda (a b)
-                           (> (or (plist-get a :timestamp) 0)
-                               (or (plist-get b :timestamp) 0)))))
-    ;; Count consecutive failures
+                           (let ((ta (or (plist-get a :timestamp) (plist-get a :id) ""))
+                                 (tb (or (plist-get b :timestamp) (plist-get b :id) "")))
+                             (string> (if (numberp ta) (number-to-string ta) ta)
+                                      (if (numberp tb) (number-to-string tb) tb))))))
+    ;; Count consecutive failures, but only for the strategy+target pair
     (catch 'streak-broken
       (dolist (r results)
-        (when (and (string= (or (plist-get r :strategy) "") strategy)
-                   (string= (or (plist-get r :target) "") target))
-          (if (or (equal (plist-get r :decision) "discarded")
-                  (equal (plist-get r :decision) "failed"))
-              (setq consecutive-failures (1+ consecutive-failures))
-            ;; Success breaks the streak
-            (throw 'streak-broken nil)))))
+        (if (or (equal (plist-get r :decision) "discarded")
+                (equal (plist-get r :decision) "failed"))
+            (setq consecutive-failures (1+ consecutive-failures))
+          ;; Success breaks the streak
+          (throw 'streak-broken nil))))
     (when (>= consecutive-failures 3)
       (message "[onto-anti] BLOCKED %s/%s: %d consecutive failures"
                strategy target consecutive-failures))

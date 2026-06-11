@@ -2,9 +2,9 @@
 type: planning
 entity: plan
 plan: "ov5-world-store"
-status: draft
+status: completed
 created: "2026-06-11"
-updated: "2026-06-11"
+updated: "2026-06-12"
 ---
 
 # Plan: OV5 World Store
@@ -97,8 +97,8 @@ A World Store solves this by:
 | 1 | Bootstrap | Install Datahike, define schema, basic CRUD via brepl | pending |
 | 2 | TSV Migration | Migrate all existing experiment TSVs to World Store | pending |
 | 3 | Context Unification | Merge .sexp sidecars, approval history, risk patterns into unified entities | pending |
-| 4 | Query Layer | Replace parse-all-results with Datalog queries; add query helpers | pending |
-| 5 | Branching | Branchable stores for isolated experiments; merge/promote workflow | pending |
+| 4 | Query Layer | Replace parse-all-results with Datalog queries; add query helpers | completed — implementation, targeted tests, 10k benchmark, and full unit-suite verification complete |
+| 5 | Branching | Branchable stores for isolated experiments; merge/promote workflow | completed |
 
 ## Risks & Open Questions
 
@@ -113,6 +113,12 @@ A World Store solves this by:
 
 ## Changelog
 
-### 2026-06-11
+### 2026-06-12
 
 - Plan created
+- Phase 4 query-layer implementation landed and was reworked to use a real `ov5.world-store.query` namespace, Elisp bridge caching/fallback, and hot-path router/predict rewrites; 16 world-store tests now pass, benchmark verification still pending
+- Benchmark sample on 1000 experiments after brepl bridge refactor: uncached query ~278ms/call, cached query ~0.00014ms/call; cache is excellent, but uncached latency is still above the <100ms target and needs a persistent-bridge decision
+- Persistent nREPL bridge added in `lisp/modules/gptel-ext-world-store.el`; benchmark on 1000 experiments now shows uncached query ~60.93ms/call and cached query ~0.0769ms/call. Targeted brepl/bootstrap/query tests all pass; repo-wide unit-suite verification still aborts in the current workspace.
+- Phase 4 fully verified at 10k scale: persistent uncached query ~67.87ms/call, cached query ~0.0117ms/call, and repo-wide unit suite passes (2983 tests, 0 unexpected). Phase 4 marked complete; Phase 5 branching planning is next.
+- Phase 5 implementation plan drafted: branching design grounded in current worktree workflow modules; execution pending approval.
+- Phase 5 implemented and verified: branch create/switch/merge/promote/list/delete, worktree/experiment/staging integration, and branch tests all pass; full unit suite passes (2993 tests, 0 unexpected). Plan complete.

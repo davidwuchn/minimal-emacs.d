@@ -70,14 +70,14 @@
         digest (.digest hash bytes)]
     (java.util.UUID/nameUUIDFromBytes digest)))
 
-(defn connect
-  "Connect to a Datahike store at `path`. Creates store if it doesn't exist.
-   Returns the connection."
-  [path]
-  (let [uuid (path-to-uuid path)
+(defn connect-to-path
+  "Connect to a Datahike store at `db-path`. Creates store if it doesn't exist.
+   Returns [conn config] without setting global state."
+  [db-path]
+  (let [uuid (path-to-uuid db-path)
         cfg {:store {:backend :file
                      :id uuid
-                     :path path}
+                     :path db-path}
              :keep-history? true
              :schema-flexibility :read}]
     (when-not (d/database-exists? cfg)
@@ -89,9 +89,16 @@
         (catch Exception _
           ;; Schema may already exist; that's fine
           nil))
-      (reset! store-conn conn)
-      (reset! store-config cfg)
-      conn)))
+      [conn cfg])))
+
+(defn connect
+  "Connect to a Datahike store at `path`. Creates store if it doesn't exist.
+   Returns the connection."
+  [path]
+  (let [[conn cfg] (connect-to-path path)]
+    (reset! store-conn conn)
+    (reset! store-config cfg)
+    conn))
 
 (defn disconnect
   "Disconnect from the current store."
@@ -164,6 +171,13 @@
            :where [?e :experiment/decision ?decision]]
          decision))
 
+(defn experiments-by-strategy
+  "Return all experiments for a given strategy name."
+  [strategy-name]
+  (query '[:find [(pull ?e [*]) ...] :in $ ?strategy
+           :where [?e :experiment/strategy ?strategy]]
+         strategy-name))
+
 ;; -----------------------------------------------------------------------------
 ;; Metrics
 
@@ -182,3 +196,34 @@
     (if (seq all)
       (float (/ (count kept) (count all)))
       0.0)))
+
+;; -----------------------------------------------------------------------------
+;; Serialization
+
+(defn entities-to-readable
+  "Convert a coll of entity maps into Elisp-readable plist vectors.
+   Each entity becomes a vector of alternating keywords and values.
+   Keywords have no namespace prefix.  Keyword values (:kept) become strings.
+   Always includes a :timestamp field: uses :experiment/timestamp if present,
+   otherwise derives it from :experiment/id (the run-id prefix is ISO 8601).
+   Returns: [[:id \"t1\" :backend \"MiniMax\" :timestamp \"2026-06-...\" ...] ...]"
+  [entities]
+  (mapv (fn [e]
+           (let [ts (or (:experiment/timestamp e)
+                        (:experiment/id e))
+                 e' (-> e
+                       (dissoc :db/id)
+                       (assoc :experiment/timestamp (str ts)))]
+             (vec (mapcat (fn [[k v]]
+                            [(keyword (name k))
+                             (if (keyword? v) (name v) v)])
+                          e'))))
+         entities))
+
+;; Ensure query namespace is available in the brepl session
+(try (load-file "clj/ov5/world_store/query.clj")
+     (catch Exception _ nil))
+
+;; Ensure branch namespace is available in the brepl session
+(try (load-file "clj/ov5/world_store/branch.clj")
+     (catch Exception _ nil))

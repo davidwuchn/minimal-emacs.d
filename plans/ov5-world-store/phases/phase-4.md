@@ -3,7 +3,7 @@ type: planning
 entity: phase
 plan: "ov5-world-store"
 phase: 4
-status: pending
+status: completed
 created: "2026-06-11"
 updated: "2026-06-11"
 ---
@@ -49,19 +49,19 @@ Replace `gptel-auto-workflow--parse-all-results` and other TSV-parsing hot paths
 
 ## Deliverables
 
-- [ ] `clj/ov5/world_store/query.clj` — query namespace
-- [ ] `lisp/modules/gptel-ext-world-store-query.el` — Elisp query bridge
-- [ ] Updated call sites: ontology-router, ontology-predict, staging-merge, etc.
-- [ ] `tests/test-world-store-query.el` — query tests
-- [ ] Benchmark report
+- [x] `clj/ov5/world_store/query.clj` — query namespace
+- [x] `lisp/modules/gptel-ext-world-store-query.el` — Elisp query bridge
+- [x] Updated call sites: ontology-router, ontology-predict, staging-merge, etc.
+- [x] `tests/test-world-store-query.el` — query tests
+- [x] Benchmark report
 
 ## Acceptance Criteria
 
-- [ ] `parse-all-results` eliminated from routing hot path (ontology-router, ontology-predict)
-- [ ] All query helpers return correct results verified against TSV ground truth
-- [ ] Query latency < 100ms for common routing queries (10k experiments)
-- [ ] Caching reduces repeated query latency by >50%
-- [ ] Full test suite still passes (2945 tests, 0 unexpected)
+- [x] `parse-all-results` eliminated from routing hot path (ontology-router, ontology-predict)
+- [x] All query helpers return correct results verified against TSV ground truth
+- [x] Query latency < 100ms for common routing queries (10k experiments)
+- [x] Caching reduces repeated query latency by >50%
+- [x] Full test suite still passes (2983 tests, 0 unexpected)
 
 ## Dependencies on Other Phases
 
@@ -78,3 +78,4 @@ Replace `gptel-auto-workflow--parse-all-results` and other TSV-parsing hot paths
 - Cache invalidation: clear on transaction, or time-based TTL
 - Keep TSV fallback for graceful degradation (configurable)
 - Benchmark on actual data (10k+ experiments)
+- Final implementation kept public `gptel-brepl-eval` / `gptel-brepl-load-file` / `gptel-brepl-balance` unchanged. The persistent nREPL client lives inside `gptel-ext-world-store.el` and is used only by the world-store bridge, which preserved the brepl unit tests while taking uncached query latency below 100ms on the 10k-experiment benchmark sample and passing the repo-wide unit suite.

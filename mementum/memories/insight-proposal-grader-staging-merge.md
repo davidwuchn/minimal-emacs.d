@@ -4,9 +4,9 @@ valid-from: 2026-06-12T03:05
 
 # Insight: 2026-06-12 03:05
 
-**Proposal:** Address recurring grader-bypass failures in lisp/modules/gptel-tools-agent-runtime.el: recurring failures
+**Proposal:** Address recurring grader-bypass failures in staging-merge: recurring failures
 **Component:** grader
-**Expected impact:** Reduce grader-bypass failures in lisp/modules/gptel-tools-agent-runtime.el by ~60%
+**Expected impact:** Reduce grader-bypass failures in staging-merge by ~60%
 **Confidence:** 0.60
 **Risk:** medium
 **Validation rate:** 0.17

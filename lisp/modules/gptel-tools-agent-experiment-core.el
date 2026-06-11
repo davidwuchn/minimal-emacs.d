@@ -67,6 +67,7 @@
 (declare-function gptel-auto-workflow--risk-node-types-in-file "gptel-auto-workflow-self-heal-semantic")
 (declare-function gptel-token-economics--predict-roi "gptel-token-economics")
 (declare-function gptel-auto-workflow-create-worktree "gptel-tools-agent-worktree")
+(declare-function ov5-world-store-branch-switch "gptel-ext-world-store-branch")
 (declare-function gptel-auto-workflow--weight-score-with-production-metrics "gptel-auto-workflow-production-metrics")
 ;;; gptel-tools-agent-experiment-core.el --- Single experiment execution -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
@@ -319,6 +320,15 @@ threshold %.2f — aborting experiment %d/%d for %s"
          ;; callbacks run after this outer let frame exits.
          (experiment-timeout gptel-auto-experiment-time-budget)
            (run-id gptel-auto-workflow--run-id)
+          ;; Switch World Store to experiment branch for isolated writes
+          (_ws-branch-switch
+           (when (and experiment-branch
+                      (fboundp 'ov5-world-store-branch-switch))
+             (condition-case ws-err
+                 (ov5-world-store-branch-switch experiment-branch)
+               (error
+                (message "[world-store] Branch switch failed (non-fatal): %s"
+                         (error-message-string ws-err))))))
           (_workflow-root (gptel-auto-workflow--resolve-run-root))
           (raw-callback callback)
            (result-callback-called nil)

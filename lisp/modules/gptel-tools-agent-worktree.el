@@ -27,6 +27,7 @@
 (declare-function gptel-auto-workflow--branch-worktree-paths "gptel-tools-agent-subagent")
 (declare-function gptel-auto-workflow--clear-worktree-state "gptel-tools-agent-subagent")
 (declare-function gptel-auto-workflow--current-staging-head "gptel-tools-agent-staging-merge")
+(declare-function ov5-world-store-branch-create "gptel-ext-world-store-branch")
 (declare-function gptel-auto-workflow--ensure-staging-submodules-ready "gptel-tools-agent-staging-baseline")
 (declare-function gptel-auto-workflow--hydrate-staging-submodules "gptel-tools-agent-staging-baseline")
 (declare-function gptel-auto-workflow--resolve-ancestor-submodule-merge-conflicts "gptel-tools-agent-staging-baseline")
@@ -217,6 +218,13 @@ If branch exists locally, deletes it first to avoid conflicts."
                   (error "failed to hydrate experiment submodules in %s" worktree-dir))))
             (kill-buffer stderr-buffer)
             (message "[auto-workflow] Created: %s" branch)
+            ;; Auto-create World Store branch for experiment isolation
+            (when (fboundp 'ov5-world-store-branch-create)
+              (condition-case ws-err
+                  (ov5-world-store-branch-create branch)
+                (error
+                 (message "[world-store] Branch auto-create failed (non-fatal): %s"
+                          (error-message-string ws-err)))))
             (puthash target (list :worktree-dir worktree-dir :current-branch branch)
                      gptel-auto-workflow--worktree-state)
             worktree-dir))

@@ -3,9 +3,9 @@ type: planning
 entity: phase
 plan: "ov5-world-store"
 phase: 5
-status: pending
+status: completed
 created: "2026-06-11"
-updated: "2026-06-11"
+updated: "2026-06-12"
 ---
 
 # Phase 5: Branching
@@ -44,25 +44,25 @@ Implement branchable stores for isolated experiments. Each experiment run can cr
 ## Prerequisites
 
 - [x] Phase 4 complete — query layer working
-- [ ] Understanding of OV5 worktree workflow (staging-merge, experiment-loop)
+- [x] Understanding of OV5 worktree workflow (staging-merge, experiment-loop)
 
 ## Deliverables
 
-- [ ] `clj/ov5/world_store/branch.clj` — branching namespace
-- [ ] `lisp/modules/gptel-ext-world-store-branch.el` — Elisp branch bridge
-- [ ] Integration with `gptel-tools-agent-staging-merge.el`
-- [ ] Integration with `gptel-tools-agent-experiment-loop.el`
-- [ ] `tests/test-world-store-branch.el` — branching tests
+- [x] `clj/ov5/world_store/branch.clj` — branching namespace
+- [x] `lisp/modules/gptel-ext-world-store-branch.el` — Elisp branch bridge
+- [x] Integration with `gptel-tools-agent-staging-merge.el`
+- [x] Integration with `gptel-tools-agent-experiment-loop.el`
+- [x] `tests/test-world-store-branch.el` — branching tests
 
 ## Acceptance Criteria
 
-- [ ] Can create branch, write experiment, query returns data
-- [ ] Main store unchanged after branch write
-- [ ] Merge branch into main: main now has branch data
-- [ ] Promotion: branch becomes new main, old main preserved
-- [ ] Worktree experiment auto-creates branch on start
-- [ ] Staging merge merges branch into main
-- [ ] Full test suite still passes (2945 tests, 0 unexpected)
+- [x] Can create branch, write experiment, query returns data
+- [x] Main store unchanged after branch write
+- [x] Merge branch into main: main now has branch data
+- [x] Promotion: branch becomes new main, old main preserved
+- [x] Worktree experiment auto-creates branch on start
+- [x] Staging merge merges branch into main
+- [x] Full test suite still passes (2993 tests, 0 unexpected)
 
 ## Dependencies on Other Phases
 
@@ -78,3 +78,4 @@ Implement branchable stores for isolated experiments. Each experiment run can cr
 - Branch names: `main`, `optimize-<target>-<timestamp>`, `experiment-<id>`
 - Promotion should be atomic: rename main → main-@timestamp, promote branch → main
 - Keep branch history for audit trail
+- Phase 5 implemented and verified; branch registry + integration hooks are complete.

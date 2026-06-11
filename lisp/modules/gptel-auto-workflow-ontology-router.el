@@ -9,6 +9,10 @@
   "gptel-auto-experiment-core")
 (declare-function gptel-auto-workflow--worktree-base-root
   "gptel-auto-workflow-projects")
+(declare-function world-store-query-with-fallback "gptel-ext-world-store-query")
+(declare-function world-store-query-backend-strategy-target-stats "gptel-ext-world-store-query")
+(declare-function world-store-query--experiments-by-filter "gptel-ext-world-store-query")
+(declare-function world-store-query-all-experiments "gptel-ext-world-store-query")
 
 ;; Copyright (C) 2024-2026  Self-Evolving Emacs Project
 
@@ -29,6 +33,7 @@
 (require 'gptel-auto-workflow-evolution)
 (require 'gptel-auto-workflow-skill-graph)
 (require 'gptel-ext-backend-registry)
+(require 'gptel-ext-world-store nil t)
 (declare-function gptel-auto-workflow--memory-schema-category-for-target "gptel-auto-workflow-memory-schema")
 (declare-function gptel-auto-workflow--memory-schema-record-evolution "gptel-auto-workflow-memory-schema")
 (declare-function gptel-auto-workflow--unified-graph-best-backend-for "gptel-auto-workflow-memory-schema")
@@ -317,23 +322,25 @@ Returns a plist with :kept :total :keep-rate :raw-kept :raw-total :raw-rate."
 (defun gptel-auto-workflow--get-backend-performance-stats (backend &optional strategy target)
   "Get performance stats for BACKEND, optionally filtered by STRATEGY/TARGET.
 Returns plist with :kept :total :keep-rate."
-  (let ((results (gptel-auto-workflow--parse-all-results))
-        (kept 0)
-        (total 0))
-    (dolist (r results)
-      (let ((r-backend (or (plist-get r :backend) "unknown"))
-            (r-strategy (plist-get r :strategy))
-            (r-target (plist-get r :target))
-            (r-decision (plist-get r :decision)))
-        (when (string= r-backend backend)
-          (when (or (null strategy) (string= r-strategy strategy))
-            (when (or (null target) (string= r-target target))
-              (setq total (1+ total))
-              (when (equal r-decision "kept")
-                (setq kept (1+ kept))))))))
-    (list :kept kept
-          :total total
-          :keep-rate (if (> total 0) (/ (float kept) total) nil))))
+  (world-store-query-with-fallback
+      (world-store-query-backend-strategy-target-stats backend strategy target)
+    (let ((results (gptel-auto-workflow--parse-all-results))
+          (kept 0)
+          (total 0))
+      (dolist (r results)
+        (let ((r-backend (or (plist-get r :backend) "unknown"))
+              (r-strategy (plist-get r :strategy))
+              (r-target (plist-get r :target))
+              (r-decision (plist-get r :decision)))
+          (when (string= r-backend backend)
+            (when (or (null strategy) (string= r-strategy strategy))
+              (when (or (null target) (string= r-target target))
+                (setq total (1+ total))
+                (when (equal r-decision "kept")
+                  (setq kept (1+ kept))))))))
+      (list :kept kept
+            :total total
+            :keep-rate (if (> total 0) (/ (float kept) total) nil)))))
 
 (defun gptel-auto-workflow--get-backend-keep-rate (backend &optional strategy target)
   "Get keep-rate for BACKEND from ontology, optionally filtered by
@@ -413,23 +420,40 @@ Used when memory schema has no graph data for the target."
 Optionally filter by STRATEGY.
 Aggregates across all targets matching CATEGORY.
 Returns plist with :kept :total :keep-rate."
-  (let ((results (gptel-auto-workflow--parse-all-results))
-        (kept 0)
-        (total 0))
-    (dolist (r results)
-      (let ((r-backend (or (plist-get r :backend) "unknown"))
-            (r-target (plist-get r :target))
-            (r-strategy (plist-get r :strategy))
-            (r-decision (plist-get r :decision)))
-        (when (and (string= r-backend backend)
-                   (eq (gptel-auto-workflow--categorize-target r-target) category)
-                   (or (null strategy) (string= r-strategy strategy)))
-          (setq total (1+ total))
-          (when (equal r-decision "kept")
-            (setq kept (1+ kept))))))
-    (list :kept kept
-          :total total
-          :keep-rate (if (> total 0) (/ (float kept) total) nil))))
+  (world-store-query-with-fallback
+      (let ((results (world-store-query--experiments-by-filter
+                      (list :backend backend)))
+            (kept 0)
+            (total 0))
+        (dolist (r results)
+          (let ((r-target (plist-get r :target))
+                (r-strategy (plist-get r :strategy))
+                (r-decision (plist-get r :decision)))
+            (when (and (eq (gptel-auto-workflow--categorize-target r-target) category)
+                       (or (null strategy) (string= r-strategy strategy)))
+              (setq total (1+ total))
+              (when (equal r-decision "kept")
+                (setq kept (1+ kept))))))
+        (list :kept kept
+              :total total
+              :keep-rate (if (> total 0) (/ (float kept) total) nil)))
+    (let ((results (gptel-auto-workflow--parse-all-results))
+          (kept 0)
+          (total 0))
+      (dolist (r results)
+        (let ((r-backend (or (plist-get r :backend) "unknown"))
+              (r-target (plist-get r :target))
+              (r-strategy (plist-get r :strategy))
+              (r-decision (plist-get r :decision)))
+          (when (and (string= r-backend backend)
+                     (eq (gptel-auto-workflow--categorize-target r-target) category)
+                     (or (null strategy) (string= r-strategy strategy)))
+            (setq total (1+ total))
+            (when (equal r-decision "kept")
+              (setq kept (1+ kept))))))
+      (list :kept kept
+            :total total
+            :keep-rate (if (> total 0) (/ (float kept) total) nil)))))
 
 ;; ─── Recent Performance (last N experiments) ───
 
@@ -446,24 +470,43 @@ Only considers the last
 `gptel-auto-workflow--ontology-recent-window' experiments.
 Returns plist with :kept :total :keep-rate,
 or nil if no recent data."
-  (let* ((all (gptel-auto-workflow--parse-all-results))
-         (recent (seq-take all (min (length all) gptel-auto-workflow--ontology-recent-window)))
-         (kept 0)
-         (total 0))
-    (dolist (r recent)
-      (let ((r-backend (or (plist-get r :backend) "unknown"))
-            (r-target (plist-get r :target))
-            (r-strategy (plist-get r :strategy))
-            (r-decision (plist-get r :decision)))
-        (when (and (string= r-backend backend)
-                   (eq (gptel-auto-workflow--categorize-target r-target) category)
-                   (or (null strategy) (string= r-strategy strategy)))
-          (setq total (1+ total))
-          (when (equal r-decision "kept")
-            (setq kept (1+ kept))))))
-    (list :kept kept
-          :total total
-          :keep-rate (if (> total 0) (/ (float kept) total) nil))))
+  (world-store-query-with-fallback
+      (let* ((results (world-store-query-recent-experiments
+                       gptel-auto-workflow--ontology-recent-window))
+             (kept 0)
+             (total 0))
+        (dolist (r results)
+          (let ((r-backend (or (plist-get r :backend) "unknown"))
+                (r-target (plist-get r :target))
+                (r-strategy (plist-get r :strategy))
+                (r-decision (plist-get r :decision)))
+            (when (and (string= r-backend backend)
+                       (eq (gptel-auto-workflow--categorize-target r-target) category)
+                       (or (null strategy) (string= r-strategy strategy)))
+              (setq total (1+ total))
+              (when (equal r-decision "kept")
+                (setq kept (1+ kept))))))
+        (list :kept kept
+              :total total
+              :keep-rate (if (> total 0) (/ (float kept) total) nil)))
+    (let* ((all (gptel-auto-workflow--parse-all-results))
+           (recent (seq-take all (min (length all) gptel-auto-workflow--ontology-recent-window)))
+           (kept 0)
+           (total 0))
+      (dolist (r recent)
+        (let ((r-backend (or (plist-get r :backend) "unknown"))
+              (r-target (plist-get r :target))
+              (r-strategy (plist-get r :strategy))
+              (r-decision (plist-get r :decision)))
+          (when (and (string= r-backend backend)
+                     (eq (gptel-auto-workflow--categorize-target r-target) category)
+                     (or (null strategy) (string= r-strategy strategy)))
+            (setq total (1+ total))
+            (when (equal r-decision "kept")
+              (setq kept (1+ kept))))))
+      (list :kept kept
+            :total total
+            :keep-rate (if (> total 0) (/ (float kept) total) nil)))))
 
 ;; ─── Category Baseline ───
 
@@ -472,19 +515,33 @@ or nil if no recent data."
 This is the baseline — individual backend performance is measured
 as delta from this baseline. Optional STRATEGY filter.
 Returns float 0.0-1.0, or nil if no data."
-  (let ((results (gptel-auto-workflow--parse-all-results))
-        (kept 0)
-        (total 0))
-    (dolist (r results)
-      (let ((r-target (plist-get r :target))
-            (r-strategy (plist-get r :strategy))
-            (r-decision (plist-get r :decision)))
-        (when (and (eq (gptel-auto-workflow--categorize-target r-target) category)
-                   (or (null strategy) (string= r-strategy strategy)))
-          (setq total (1+ total))
-          (when (equal r-decision "kept")
-            (setq kept (1+ kept))))))
-    (if (> total 0) (/ (float kept) total) nil)))
+  (world-store-query-with-fallback
+      (let ((results (world-store-query-all-experiments))
+            (kept 0)
+            (total 0))
+        (dolist (r results)
+          (let ((r-target (plist-get r :target))
+                (r-strategy (plist-get r :strategy))
+                (r-decision (plist-get r :decision)))
+            (when (and (eq (gptel-auto-workflow--categorize-target r-target) category)
+                       (or (null strategy) (string= r-strategy strategy)))
+              (setq total (1+ total))
+              (when (equal r-decision "kept")
+                (setq kept (1+ kept))))))
+        (if (> total 0) (/ (float kept) total) nil))
+    (let ((results (gptel-auto-workflow--parse-all-results))
+          (kept 0)
+          (total 0))
+      (dolist (r results)
+        (let ((r-target (plist-get r :target))
+              (r-strategy (plist-get r :strategy))
+              (r-decision (plist-get r :decision)))
+          (when (and (eq (gptel-auto-workflow--categorize-target r-target) category)
+                     (or (null strategy) (string= r-strategy strategy)))
+            (setq total (1+ total))
+            (when (equal r-decision "kept")
+              (setq kept (1+ kept))))))
+      (if (> total 0) (/ (float kept) total) nil))))
 
 ;; ─── Backend Quota Check ───
 
@@ -492,18 +549,31 @@ Returns float 0.0-1.0, or nil if no data."
   "Check BACKEND's current quota health from recent rate-limit data.
 Returns plist with :healthy (t/nil), :recent-errors (count),
 :last-error (timestamp string or nil)."
-  (let ((results (gptel-auto-workflow--parse-all-results))
-        (errors 0)
-        (last-error nil))
-    (dolist (r results)
-      (let ((r-backend (or (plist-get r :backend) "unknown"))
-            (r-error (plist-get r :rate-limit-error)))
-        (when (and (string= r-backend backend) r-error)
-          (setq errors (1+ errors))
-          (setq last-error (or (plist-get r :timestamp) last-error)))))
-    (list :healthy (< errors 3)
-          :recent-errors errors
-          :last-error last-error)))
+  (world-store-query-with-fallback
+      (let ((results (world-store-query--experiments-by-filter
+                      (list :backend backend)))
+            (errors 0)
+            (last-error nil))
+        (dolist (r results)
+          (let ((r-error (plist-get r :rate-limit-error)))
+            (when r-error
+              (setq errors (1+ errors))
+              (setq last-error (or (plist-get r :timestamp) last-error)))))
+        (list :healthy (< errors 3)
+              :recent-errors errors
+              :last-error last-error))
+    (let ((results (gptel-auto-workflow--parse-all-results))
+          (errors 0)
+          (last-error nil))
+      (dolist (r results)
+        (let ((r-backend (or (plist-get r :backend) "unknown"))
+              (r-error (plist-get r :rate-limit-error)))
+          (when (and (string= r-backend backend) r-error)
+            (setq errors (1+ errors))
+            (setq last-error (or (plist-get r :timestamp) last-error)))))
+      (list :healthy (< errors 3)
+            :recent-errors errors
+            :last-error last-error))))
 
 ;; ─── verbum Three-Phase Pipeline ───
 ;; From verbum's LLM-ISA decoder: each layer has a phase with measured
@@ -1420,25 +1490,46 @@ Shared across machines via git. Auto-committed after each evolution cycle.")
   "Compute keep-rates per (backend, kibcm-axis) pair from all results.
 Returns alist of ((backend axis) . keep-rate). Pairs with < 5 samples are
 excluded."
-  (let ((pairs (make-hash-table :test 'equal))
-        (rates nil))
-    (dolist (r (gptel-auto-workflow--parse-all-results))
-      (let ((backend (or (plist-get r :backend) "unknown"))
-            (axis (or (plist-get r :kibcm-axis) "?"))
-            (kept (equal (plist-get r :decision) "kept")))
-        (unless (member backend '("0" "unknown" ""))
-          (let* ((key (cons backend axis))
-                 (entry (or (gethash key pairs) (cons 0 0))))
-            (setcar entry (1+ (car entry)))
-            (when kept (setcdr entry (1+ (cdr entry))))
-            (puthash key entry pairs)))))
-    (maphash (lambda (key counts)
-               (let ((total (car counts))
-                     (kept (cdr counts)))
-                 (when (>= total 5)
-                   (push (cons key (/ (float kept) total)) rates))))
-             pairs)
-    rates))
+  (world-store-query-with-fallback
+      (let ((results (world-store-query-all-experiments))
+            (pairs (make-hash-table :test 'equal))
+            (rates nil))
+        (dolist (r results)
+          (let ((backend (or (plist-get r :backend) "unknown"))
+                (axis (or (plist-get r :kibcm-axis) "?"))
+                (kept (equal (plist-get r :decision) "kept")))
+            (unless (member backend '("0" "unknown" ""))
+              (let* ((key (cons backend axis))
+                     (entry (or (gethash key pairs) (cons 0 0))))
+                (setcar entry (1+ (car entry)))
+                (when kept (setcdr entry (1+ (cdr entry))))
+                (puthash key entry pairs)))))
+        (maphash (lambda (key counts)
+                   (let ((total (car counts))
+                         (kept (cdr counts)))
+                     (when (>= total 5)
+                       (push (cons key (/ (float kept) total)) rates))))
+                 pairs)
+        rates)
+    (let ((pairs (make-hash-table :test 'equal))
+          (rates nil))
+      (dolist (r (gptel-auto-workflow--parse-all-results))
+        (let ((backend (or (plist-get r :backend) "unknown"))
+              (axis (or (plist-get r :kibcm-axis) "?"))
+              (kept (equal (plist-get r :decision) "kept")))
+          (unless (member backend '("0" "unknown" ""))
+            (let* ((key (cons backend axis))
+                   (entry (or (gethash key pairs) (cons 0 0))))
+              (setcar entry (1+ (car entry)))
+              (when kept (setcdr entry (1+ (cdr entry))))
+              (puthash key entry pairs)))))
+      (maphash (lambda (key counts)
+                 (let ((total (car counts))
+                       (kept (cdr counts)))
+                   (when (>= total 5)
+                     (push (cons key (/ (float kept) total)) rates))))
+               pairs)
+      rates)))
 
 (defun gptel-auto-workflow--beta-mean (alpha beta)
   "Return mean of Beta(ALPHA, BETA) distribution."
@@ -1457,75 +1548,146 @@ posterior. Boost = expected lift over global, bounded [0.0, 0.25].
 Beta(1,1) prior = uniform: few samples = conservative boost.
 Persisted to `gptel-auto-workflow--preference-persist-file'."
   (interactive)
-  (let* ((all-results (gptel-auto-workflow--parse-all-results))
-         (alpha-pair (make-hash-table :test 'equal))
-         (beta-pair (make-hash-table :test 'equal))
-         (alpha-global (make-hash-table :test 'equal))
-         (beta-global (make-hash-table :test 'equal))
-         (changed nil))
-    (dolist (r all-results)
-      (let ((backend (or (plist-get r :backend) "unknown"))
-            (axis (or (plist-get r :kibcm-axis) "?"))
-            (kept (equal (plist-get r :decision) "kept")))
-        (unless (member backend '("0" "unknown" ""))
-          (unless (gethash backend alpha-global)
-            (puthash backend 1 alpha-global)
-            (puthash backend 1 beta-global))
-          (if kept
-              (cl-incf (gethash backend alpha-global))
-            (cl-incf (gethash backend beta-global)))
-          (let ((key (cons backend axis)))
-            (unless (gethash key alpha-pair)
-              (puthash key 1 alpha-pair)
-              (puthash key 1 beta-pair))
+  (world-store-query-with-fallback
+      (let* ((all-results (world-store-query-all-experiments))
+             (alpha-pair (make-hash-table :test 'equal))
+             (beta-pair (make-hash-table :test 'equal))
+             (alpha-global (make-hash-table :test 'equal))
+             (beta-global (make-hash-table :test 'equal))
+             (changed nil))
+        (dolist (r all-results)
+          (let ((backend (or (plist-get r :backend) "unknown"))
+                (axis (or (plist-get r :kibcm-axis) "?"))
+                (kept (equal (plist-get r :decision) "kept")))
+            (unless (member backend '("0" "unknown" ""))
+              (unless (gethash backend alpha-global)
+                (puthash backend 1 alpha-global)
+                (puthash backend 1 beta-global))
+              (if kept
+                  (cl-incf (gethash backend alpha-global))
+                (cl-incf (gethash backend beta-global)))
+              (let ((key (cons backend axis)))
+                (unless (gethash key alpha-pair)
+                  (puthash key 1 alpha-pair)
+                  (puthash key 1 beta-pair))
+                (if kept
+                    (cl-incf (gethash key alpha-pair))
+                  (cl-incf (gethash key beta-pair)))))))
+        (maphash
+         (lambda (key a-pair)
+           (let* ((backend (car key))
+                  (axis (cdr key))
+                  (b-pair (gethash key beta-pair))
+                  (total-pair (+ a-pair b-pair -2))
+                  (a-glob (gethash backend alpha-global))
+                  (b-glob (gethash backend beta-global))
+                  (pair-mean (gptel-auto-workflow--beta-mean a-pair b-pair))
+                  (global-mean (gptel-auto-workflow--beta-mean a-glob b-glob))
+                  (agent-type (pcase axis
+                                ("A" "analyzer")
+                                ("B" "executor")
+                                ("C" "reviewer")
+                                ("D" "executor")
+                                ("E" "grader")
+                                ("F" "executor")
+                                ("G" "reviewer")
+                                ("H" "analyzer")
+                                ("I" "comparator")
+                                (_ nil))))
+             (when (and agent-type (>= total-pair 5)
+                        (>= (abs (- pair-mean global-mean)) 0.03))
+               (let* ((existing (cl-find-if
+                                 (lambda (e)
+                                   (and (string= (nth 0 e) agent-type)
+                                        (string= (nth 1 e) backend)))
+                                 gptel-auto-workflow--task-backend-preference))
+                      (current (if (consp existing) (cddr existing) 0.0))
+                      (new (min 0.25 (max 0.0 (- pair-mean global-mean)))))
+                 (when (> (abs (- current new)) 0.005)
+                   (if existing
+                       (setcdr (cdr existing) new)
+                     (nconc gptel-auto-workflow--task-backend-preference
+                            (list (list agent-type backend new))))
+                   (setq changed t)
+                   (message
+                    "[preference] %s/%s on axis %s: boost %.3f -> %.3f (Bayesian lift=%.3f n=%d)"
+                    agent-type backend axis current new (- pair-mean global-mean) total-pair))))))
+         alpha-pair)
+        (when changed
+          (gptel-auto-workflow--persist-backend-preference)
+          (gptel-auto-workflow--commit-backend-preference)
+          (message "[preference] Evolved and committed backend preference"))
+        changed)
+    ;; TSV fallback
+    (let* ((all-results (gptel-auto-workflow--parse-all-results))
+           (alpha-pair (make-hash-table :test 'equal))
+           (beta-pair (make-hash-table :test 'equal))
+           (alpha-global (make-hash-table :test 'equal))
+           (beta-global (make-hash-table :test 'equal))
+           (changed nil))
+      (dolist (r all-results)
+        (let ((backend (or (plist-get r :backend) "unknown"))
+              (axis (or (plist-get r :kibcm-axis) "?"))
+              (kept (equal (plist-get r :decision) "kept")))
+          (unless (member backend '("0" "unknown" ""))
+            (unless (gethash backend alpha-global)
+              (puthash backend 1 alpha-global)
+              (puthash backend 1 beta-global))
             (if kept
-                (cl-incf (gethash key alpha-pair))
-              (cl-incf (gethash key beta-pair)))))))
-    (maphash
-     (lambda (key a-pair)
-       (let* ((backend (car key))
-              (axis (cdr key))
-              (b-pair (gethash key beta-pair))
-              (total-pair (+ a-pair b-pair -2))
-              (a-glob (gethash backend alpha-global))
-              (b-glob (gethash backend beta-global))
-              (pair-mean (gptel-auto-workflow--beta-mean a-pair b-pair))
-              (global-mean (gptel-auto-workflow--beta-mean a-glob b-glob))
-              (agent-type (pcase axis
-                            ("A" "analyzer")
-                            ("B" "executor")
-                            ("C" "reviewer")
-                            ("D" "executor")
-                            ("E" "grader")
-                            ("F" "executor")
-                            ("G" "reviewer")
-                            ("H" "analyzer")
-                            ("I" "comparator")
-                            (_ nil))))
-         (when (and agent-type (>= total-pair 5)
-                    (>= (abs (- pair-mean global-mean)) 0.03))
-           (let* ((existing (cl-find-if
-                             (lambda (e)
-                               (and (string= (nth 0 e) agent-type)
-                                    (string= (nth 1 e) backend)))
-                             gptel-auto-workflow--task-backend-preference))
-                  (current (if (consp existing) (cddr existing) 0.0))
-                  (new (min 0.25 (max 0.0 (- pair-mean global-mean)))))
-             (when (> (abs (- current new)) 0.005)
-               (if existing
-                   (setcdr (cdr existing) new)
-                 (nconc gptel-auto-workflow--task-backend-preference
-                        (list (list agent-type backend new))))
-               (setq changed t)
-               (message
-                "[preference] %s/%s on axis %s: boost %.3f -> %.3f (Bayesian lift=%.3f n=%d)"
-                agent-type backend axis current new (- pair-mean global-mean) total-pair))))))
-     alpha-pair)
-    (when changed
-      (gptel-auto-workflow--persist-backend-preference)
-      (gptel-auto-workflow--commit-backend-preference)
-      (message "[preference] Evolved and committed backend preference"))
-    changed))
+                (cl-incf (gethash backend alpha-global))
+              (cl-incf (gethash backend beta-global)))
+            (let ((key (cons backend axis)))
+              (unless (gethash key alpha-pair)
+                (puthash key 1 alpha-pair)
+                (puthash key 1 beta-pair))
+              (if kept
+                  (cl-incf (gethash key alpha-pair))
+                (cl-incf (gethash key beta-pair)))))))
+      (maphash
+       (lambda (key a-pair)
+         (let* ((backend (car key))
+                (axis (cdr key))
+                (b-pair (gethash key beta-pair))
+                (total-pair (+ a-pair b-pair -2))
+                (a-glob (gethash backend alpha-global))
+                (b-glob (gethash backend beta-global))
+                (pair-mean (gptel-auto-workflow--beta-mean a-pair b-pair))
+                (global-mean (gptel-auto-workflow--beta-mean a-glob b-glob))
+                (agent-type (pcase axis
+                              ("A" "analyzer")
+                              ("B" "executor")
+                              ("C" "reviewer")
+                              ("D" "executor")
+                              ("E" "grader")
+                              ("F" "executor")
+                              ("G" "reviewer")
+                              ("H" "analyzer")
+                              ("I" "comparator")
+                              (_ nil))))
+           (when (and agent-type (>= total-pair 5)
+                      (>= (abs (- pair-mean global-mean)) 0.03))
+             (let* ((existing (cl-find-if
+                               (lambda (e)
+                                 (and (string= (nth 0 e) agent-type)
+                                      (string= (nth 1 e) backend)))
+                               gptel-auto-workflow--task-backend-preference))
+                    (current (if (consp existing) (cddr existing) 0.0))
+                    (new (min 0.25 (max 0.0 (- pair-mean global-mean)))))
+               (when (> (abs (- current new)) 0.005)
+                 (if existing
+                     (setcdr (cdr existing) new)
+                   (nconc gptel-auto-workflow--task-backend-preference
+                          (list (list agent-type backend new))))
+                 (setq changed t)
+                 (message
+                  "[preference] %s/%s on axis %s: boost %.3f -> %.3f (Bayesian lift=%.3f n=%d)"
+                  agent-type backend axis current new (- pair-mean global-mean) total-pair))))))
+       alpha-pair)
+      (when changed
+        (gptel-auto-workflow--persist-backend-preference)
+        (gptel-auto-workflow--commit-backend-preference)
+        (message "[preference] Evolved and committed backend preference"))
+      changed)))
 
 (defun gptel-auto-workflow--persist-backend-preference ()
   "Persist current task-backend-preference to the git-tracked strategy file."
@@ -3014,10 +3176,15 @@ Higher confidence = more experiments with larger deltas agreed."
   "Rebuild holographic memory from all historical kept experiments.
 Called on startup or after major changes."
   (setq gptel-auto-workflow--holographic-memory nil)
-  (let ((results (gptel-auto-workflow--parse-all-results)))
-    (dolist (r results)
-      (when (equal (plist-get r :decision) "kept")
-        (gptel-auto-workflow--record-holographic-experiment r))))
+  (world-store-query-with-fallback
+      (let ((results (world-store-query-all-experiments)))
+        (dolist (r results)
+          (when (equal (plist-get r :decision) "kept")
+            (gptel-auto-workflow--record-holographic-experiment r))))
+    (let ((results (gptel-auto-workflow--parse-all-results)))
+      (dolist (r results)
+        (when (equal (plist-get r :decision) "kept")
+          (gptel-auto-workflow--record-holographic-experiment r)))))
   (message "[holographic] Rebuilt memory: %d target-axis pairs"
            (length gptel-auto-workflow--holographic-memory)))
 
@@ -3027,30 +3194,54 @@ Returns list of target names that are dead (no improvement across any
 backend).
 Defaults: 5 attempts, 0%% keep-rate."
   (let ((min-att (or min-attempts 5))
-        (max-rate (or max-keep-rate 0.0))
-        (results (gptel-auto-workflow--parse-all-results))
-        (by-target (make-hash-table :test 'equal))
-        (dead nil))
-    (dolist (r results)
-      (let ((target (plist-get r :target))
-            (decision (plist-get r :decision)))
-        (when target
-          (let ((entry (or (gethash target by-target) (cons 0 0))))
-            (setcar entry (1+ (car entry)))
-            (when (equal decision "kept")
-              (setcdr entry (1+ (cdr entry))))
-            (puthash target entry by-target)))))
-    (maphash (lambda (target entry)
-               (let* ((total (car entry))
-                     (kept (cdr entry))
-                     (rate (if (> total 0) (/ (float kept) total) 0.0)))
-                 (when (and (>= total min-att) (<= rate max-rate))
-                   (push (cons target rate) dead))))
-             by-target)
-    (when dead
-      (message "[holographic] %d dead targets detected (≥%d attempts, 0%% keep)"
-               (length dead) min-att))
-    dead))
+        (max-rate (or max-keep-rate 0.0)))
+    (world-store-query-with-fallback
+        (let ((results (world-store-query-all-experiments))
+              (by-target (make-hash-table :test 'equal))
+              (dead nil))
+          (dolist (r results)
+            (let ((target (plist-get r :target))
+                  (decision (plist-get r :decision)))
+              (when target
+                (let ((entry (or (gethash target by-target) (cons 0 0))))
+                  (setcar entry (1+ (car entry)))
+                  (when (equal decision "kept")
+                    (setcdr entry (1+ (cdr entry))))
+                  (puthash target entry by-target)))))
+          (maphash (lambda (target entry)
+                     (let* ((total (car entry))
+                            (kept (cdr entry))
+                            (rate (if (> total 0) (/ (float kept) total) 0.0)))
+                       (when (and (>= total min-att) (<= rate max-rate))
+                         (push (cons target rate) dead))))
+                   by-target)
+          (when dead
+            (message "[holographic] %d dead targets detected (≥%d attempts, 0%% keep)"
+                     (length dead) min-att))
+          dead)
+      (let ((results (gptel-auto-workflow--parse-all-results))
+            (by-target (make-hash-table :test 'equal))
+            (dead nil))
+        (dolist (r results)
+          (let ((target (plist-get r :target))
+                (decision (plist-get r :decision)))
+            (when target
+              (let ((entry (or (gethash target by-target) (cons 0 0))))
+                (setcar entry (1+ (car entry)))
+                (when (equal decision "kept")
+                  (setcdr entry (1+ (cdr entry))))
+                (puthash target entry by-target)))))
+        (maphash (lambda (target entry)
+                   (let* ((total (car entry))
+                          (kept (cdr entry))
+                          (rate (if (> total 0) (/ (float kept) total) 0.0)))
+                     (when (and (>= total min-att) (<= rate max-rate))
+                       (push (cons target rate) dead))))
+                 by-target)
+        (when dead
+          (message "[holographic] %d dead targets detected (≥%d attempts, 0%% keep)"
+                   (length dead) min-att))
+        dead))))
 
 ;; ─── Holographic Consensus Boost (verbum Phase 8) ───
 
@@ -3548,6 +3739,24 @@ possible misclassification"
   '((:agentic        . "agent\\|workflow\\|strategy\\|evolution")
     (:programming    . "benchmark\\|fsm\\|retry\\|test\\|code\\|compile\\|^gptel-ext-")
     (:tool-calls     . "
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 sandbox\\|^gptel-tools-\\(?:bash\\|grep\\|glob\\|edit\\|apply\\|preview\\|programmatic\\)")
