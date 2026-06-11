@@ -166,6 +166,9 @@ CALLBACK is called with the result string."
     (while (< idx (length hunks))
       (let* ((hunk (nth idx hunks))
              (path (expand-file-name (gptel-envelope-hunk-path hunk) root)))
+        (unless (string-prefix-p (expand-file-name root) (expand-file-name path))
+          (error "Envelope hunk path %s escapes project root %s"
+                 (gptel-envelope-hunk-path hunk) root))
         (condition-case err
             (pcase (gptel-envelope-hunk-type hunk)
               ('add
@@ -194,6 +197,11 @@ CALLBACK is called with the result string."
                  (let ((dest-path (if move-path
                                        (expand-file-name move-path root)
                                      path)))
+                   (when (and move-path
+                              (not (string-prefix-p (expand-file-name root)
+                                                     (expand-file-name dest-path))))
+                     (error "Envelope hunk move-path %s escapes project root %s"
+                            move-path root))
                    (when move-path
                      (make-directory (file-name-directory dest-path) 'parents))
                    (with-temp-file dest-path

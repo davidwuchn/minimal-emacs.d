@@ -504,6 +504,7 @@ MAX_ANSWER_CHARS limits output length with progressive shortening."
     (error "gptel-tools-code--map-file: file_path is nil"))
    ((not (stringp file_path))
     (error "gptel-tools-code--map-file: file_path must be a string, got %s" (type-of file_path))))
+  (let ((file_path (gptel-auto-workflow--expand-workspace-path file_path)))
   (condition-case err
       (with-timeout (5 (format "Error: Code_Map timed out after 5 seconds on %s" file_path))
         (with-current-buffer (find-file-noselect file_path)
@@ -534,7 +535,7 @@ MAX_ANSWER_CHARS limits output length with progressive shortening."
     (error (let* ((msg (error-message-string err))
                   (friendly (my/gptel--treesit-error-message msg file_path)))
              (or friendly
-                 (format "Error executing Code_Map on %s: %s\n\nACTION: Check file permissions and try again." file_path msg))))))
+                 (format "Error executing Code_Map on %s: %s\n\nACTION: Check file permissions and try again." file_path msg)))))))
 
 (defun gptel-tools-code--inspect-node (node_name &optional file_path max_answer_chars)
   "Extract the code block for NODE_NAME, optionally from FILE_PATH.
@@ -545,6 +546,7 @@ MAX_ANSWER_CHARS limits output length with progressive shortening."
     (error "gptel-tools-code--inspect-node: node_name is nil"))
    ((not (stringp node_name))
     (error "gptel-tools-code--inspect-node: node_name must be a string, got %s" (type-of node_name))))
+  (let ((file_path (when file_path (gptel-auto-workflow--expand-workspace-path file_path))))
   (condition-case err
       (with-timeout (10 (format "Error: Code_Inspect timed out for '%s'" node_name))
         (if file_path
@@ -589,7 +591,7 @@ MAX_ANSWER_CHARS limits output length with progressive shortening."
                    (concat msg (gptel-tools-code--ripgrep-unavailable-msg)))
                   ((string-match-p "timeout" msg)
                    (format "Error: Code_Inspect timed out after 10 seconds for '%s'\n\nACTION:\n  1. Provide explicit file_path to skip workspace search\n  2. Large project - search may take time\n  3. Try Code_Map on specific files first" node_name))
-                  (t (format "Error executing Code_Inspect: %s\n\nACTION: Check symbol name and file path, then try again." msg))))))))
+                  (t (format "Error executing Code_Inspect: %s\n\nACTION: Check symbol name and file path, then try again." msg)))))))))
 
 (defun gptel-tools-code--file-changed-externally-p ()
   "Check if the current buffer's file has been modified externally.
@@ -602,8 +604,8 @@ Returns t if file exists and is newer than buffer's view, nil otherwise."
   "Surgically replace NODE_NAME in FILE_PATH with NEW_CODE.
 Syncs buffer with disk, validates parser, guards against truncation."
   (gptel-tools-code--validate-replace-args file_path node_name new_code)
-  ;; Ensure absolute path to avoid visiting wrong buffer in worktrees
-  (let ((abs-path (expand-file-name file_path)))
+  ;; Ensure boundary validation + absolute path
+  (let ((abs-path (gptel-auto-workflow--expand-workspace-path file_path)))
     (condition-case err
         (with-timeout (5 (format "Error: Code_Replace timed out on %s" abs-path))
           (with-current-buffer (find-file-noselect abs-path)
