@@ -92,3 +92,5 @@ __pycache__/
 !.opencode/AGENTS.md
 !.opencode/skills/
 !.opencode/skills/*
+!plans/
+!plans/**/*.md

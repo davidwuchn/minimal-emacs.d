@@ -2,10 +2,10 @@
 
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
-> **Status**: ✅ **SELF-HEAL + ONTOLOGY REPAIRED** — high-risk routing blocks direct mutation of repair-engine files; ontology-router paren corruption fixed; stale cache removed
-> **Latest**: opencode-skill-evolution 4-phase plan COMPLETE (24 tests, eval pipeline end-to-end); GAP 1+2+5+8 pipeline fixes shipped (fast-track staging, .el auto-resolve); 88/88 skill-eval tests green; daemon-repl-init already wired in gptel-config.el; plans marked done (opencode-skill-evolution, workspace-boundary-validator)
-> **Active Plan**: None — all plans complete, codebase clean, tests green
-> **Pi5**: Synced, no divergence; Pi5 auto-evolved boundary fixes (Preview Mode 2, Edit hashline, Code_Map/Inspect/Replace, plan-mode readonly enforcement)
+> **Status**: ✅ **GATE INTEGRITY SELF-AUDIT COMPLETE** — 46 defvar-override-defcustom violations fixed; pre-push test gate blocks broken code; 3 new self-audit checks detect pipeline bypasses
+> **Latest**: Fixed 46 defvar-with-value declarations that overrode defcustom defaults; added pre-push hook (Gate 1: test gate always-on, Gate 2: submodule sync skippable); 3 new self-audit checks (defvar-override, pipeline-gate, staging-bypass); fixed run-tests.sh false-positive on "Aborted:" prefix; fixed flaky grader timeout test; Pi5 completed opencode-skill-evolution (24 tests, eval pipeline end-to-end); 2945 tests, 0 unexpected
+> **Active Plan**: [OV5 World Store](../plans/ov5-world-store/plan.md) — Phase 1 (Bootstrap): install Datahike, define schema, basic CRUD via brepl
+> **Pi5**: Auto-evolution active; pre-push hook now blocks broken pushes to main; Pi5 auto-evolved boundary fixes (Preview Mode 2, Edit hashline, Code_Map/Inspect/Replace, plan-mode readonly enforcement)
 
 ---
 
