@@ -474,7 +474,9 @@ Idempotent - safe to call multiple times."
 
                     ;; Mode 2: path + replacement → generate diff
                     ((and path replacement)
-                     (let* ((full-path (expand-file-name path))
+                     (let* ((full-path (if (fboundp 'gptel-auto-workflow--expand-workspace-path)
+                                          (gptel-auto-workflow--expand-workspace-path path)
+                                        (expand-file-name path)))
                             (orig (or original
                                       (when (file-readable-p full-path)
                                         (with-temp-buffer
