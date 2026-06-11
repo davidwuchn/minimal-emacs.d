@@ -366,7 +366,9 @@ returns first available (BACKEND-OBJECT . MODEL) or nil."
             (when-let* ((model (or (gptel-backend-registry-task-model task-type backend-sym)
                                    (gptel-backend-registry-default-model backend-sym)))
                         (backend-obj (and (fboundp 'gptel-get-backend)
-                                          (gptel-get-backend backend-name))))
+                                          (condition-case nil
+                                              (gptel-get-backend backend-name)
+                                            (user-error nil)))))
               (throw 'found (cons backend-obj model)))))))))
 
 (defun gptel-backend-registry-fallback-chain-as-cons (task-type &optional exclude-backends)
