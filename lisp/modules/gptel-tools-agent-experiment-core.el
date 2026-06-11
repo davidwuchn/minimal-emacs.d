@@ -82,7 +82,9 @@
 (defvar gptel-auto-workflow-git-timeout nil)
 (defvar gptel-auto-experiment--best-score nil)
 (defvar gptel-auto-experiment-auto-push t)
-(defvar gptel-auto-workflow-use-staging nil)
+;; gptel-auto-workflow-use-staging: declared via defcustom in subagent.el (default t).
+;; Do NOT re-declare here — defvar would override the defcustom default.
+;; Staging gate (verify-staging) must always be active for experiments.
 (defvar gptel-auto-experiment--in-retry nil)
 (defvar gptel-auto-experiment--in-refine nil)
 (defvar gptel-auto-experiment--think-intel nil

@@ -87,7 +87,7 @@
 (defvar gptel-auto-workflow--last-prompt-sections nil)
 (defvar gptel-auto-workflow--current-research-context nil)
 (defvar gptel-auto-experiment-time-budget nil)
-(defvar gptel-auto-workflow-use-staging nil)
+;; gptel-auto-workflow-use-staging: declared via defcustom in subagent.el (default t).
 (defvar gptel-auto-workflow--running nil)
 (defvar gptel-auto-workflow--stats nil)
 (defvar gptel-auto-experiment-validation-retry-active-grace nil)

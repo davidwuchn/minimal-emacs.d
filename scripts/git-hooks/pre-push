@@ -5,17 +5,79 @@ set -euo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 check_script="$repo_root/scripts/check-submodule-sync.sh"
 
-if [[ "${VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC:-0}" == "1" ]]; then
-    echo "pre-push: skipping submodule sync (VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1)"
-    exit 0
-fi
-
+# Read all refs being pushed (stdin from git)
+push_refs=()
 while read -r local_ref local_sha remote_ref remote_sha; do
     if [[ -z "${local_sha:-}" || "$local_sha" == "0000000000000000000000000000000000000000" ]]; then
         continue
     fi
-
-    "$check_script" --treeish "$local_sha"
+    push_refs+=("$local_ref|$local_sha|$remote_ref|$remote_sha")
 done
+
+# ── Gate 1: Test gate — block pushes to main when unit tests fail ──
+# Activated only for pushes to refs/heads/main.
+# Override: set SKIP_TEST_GATE=1 to bypass (emergency only).
+pushing_to_main=0
+for entry in "${push_refs[@]}"; do
+    IFS='|' read -r _ _ remote_ref _ <<< "$entry"
+    if [[ "$remote_ref" == "refs/heads/main" ]]; then
+        pushing_to_main=1
+        break
+    fi
+done
+
+if [[ "$pushing_to_main" -eq 1 ]]; then
+    if [[ "${SKIP_TEST_GATE:-0}" == "1" ]]; then
+        echo "pre-push: ⚠ SKIP_TEST_GATE=1 — test gate bypassed (emergency override)"
+    else
+        test_script="$repo_root/scripts/run-tests.sh"
+        if [[ ! -f "$test_script" ]]; then
+            echo "pre-push: WARNING: $test_script not found — skipping test gate"
+        else
+            echo ""
+            echo "╔══════════════════════════════════════════════════════════════╗"
+            echo "║  PRE-PUSH TEST GATE: Running unit tests before push to main ║"
+            echo "╚══════════════════════════════════════════════════════════════╝"
+            echo ""
+            test_output="$(timeout 300 bash "$test_script" unit 2>&1)" || true
+            unexpected="$(echo "$test_output" | grep -oE '[0-9]+ unexpected' | grep -oE '^[0-9]+' | head -1)"
+            if [[ -z "$unexpected" ]]; then
+                if echo "$test_output" | grep -q "0 unexpected"; then
+                    unexpected="0"
+                else
+                    unexpected="unknown"
+                fi
+            fi
+            if [[ "$unexpected" == "0" ]]; then
+                echo ""
+                echo "✓ TEST GATE PASSED: 0 unexpected failures"
+                echo ""
+            else
+                echo ""
+                echo "╔══════════════════════════════════════════════════════════════╗"
+                echo "║  ✗ PUSH BLOCKED: $unexpected unexpected test failures          ║"
+                echo "╠══════════════════════════════════════════════════════════════╣"
+                echo "║  Fix the failing tests and retry.                            ║"
+                echo "║  Emergency bypass: set SKIP_TEST_GATE=1 env var.             ║"
+                echo "╚══════════════════════════════════════════════════════════════╝"
+                echo ""
+                echo "$test_output" | grep -E "FAILED|unexpected" | head -20
+                echo ""
+                exit 1
+            fi
+        fi
+    fi
+fi
+
+# ── Gate 2: Submodule sync check ──
+# Skip when VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1 (staging worktrees lack submodules).
+if [[ "${VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC:-0}" == "1" ]]; then
+    echo "pre-push: skipping submodule sync (VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1)"
+else
+    for entry in "${push_refs[@]}"; do
+        IFS='|' read -r _ local_sha _ _ <<< "$entry"
+        "$check_script" --treeish "$local_sha"
+    done
+fi
 
 exit 0

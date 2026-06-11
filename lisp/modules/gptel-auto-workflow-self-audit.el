@@ -235,6 +235,9 @@ FILTER-FN is called on each value; only truthy results are kept."
            (sma (gptel-auto-workflow-self-audit--run-merge-check))
            (pricing (gptel-auto-workflow-self-audit--check-pricing-freshness))
            (kg (gptel-auto-workflow-self-audit--run-knowledge-gap-check))
+           (dvoc (gptel-auto-workflow-self-audit--check-defvar-override-defcustom))
+           (ptgc (gptel-auto-workflow-self-audit--check-pipeline-test-gate))
+           (sbc (gptel-auto-workflow-self-audit--check-staging-bypass))
            (cold (plist-get bca :cold))
            (cold-count (length cold))
            (unev (plist-get sca :unevaluated))
@@ -242,16 +245,22 @@ FILTER-FN is called on each value; only truthy results are kept."
            (bottleneck (plist-get sma :bottleneck-p))
            (pricing-stale (plist-get pricing :stale-count))
            (kg-count (plist-get kg :gap-count))
+           (dvoc-count (plist-get dvoc :violation-count))
+           (sbc-count (plist-get sbc :bypass-count))
+           (ptgc-fail (if (not (plist-get ptgc :has-test-gate)) 1 0))
            (issues (+ broken-count cold-count unev
                       (if bottleneck 1 0)
                       (if (> pricing-stale 0) 1 0)
-                      kg-count)))
+                      kg-count dvoc-count sbc-count ptgc-fail)))
       (list :module-health bcc
             :backend-cold-start bca
             :strategy-cold-start sca
             :staging-merge-bottleneck sma
             :pricing-freshness pricing
             :knowledge-gaps kg
+            :defvar-overrides dvoc
+            :pipeline-gate-integrity ptgc
+            :staging-bypass sbc
             :timestamp (format-time-string "%Y-%m-%dT%H:%M:%S")
             :issues issues
             :auto-fixable (+ broken-count cold-count unev)))))
@@ -403,7 +412,60 @@ Returns plist :gap-count, :isolated, :low-confidence, :self-refs, :mismatches."
      (if bottleneck
          "- ⚠ BOTTLENECK: auto-resolver handles .md; source code still needs review\n"
        "- ✓ Below threshold\n")
+      "\n")))
+
+(defun gptel-auto-workflow-self-audit--format-defvar-override-section (dvoc)
+  "Format defvar-override-defcustom section from DVOC plist."
+  (let ((count (plist-get dvoc :violation-count))
+        (violations (plist-get dvoc :violations)))
+    (if (= count 0)
+        "- ✓ No defvar-override-defcustom violations\n\n"
+      (concat
+       (format "### Gate integrity: defvar overriding defcustom (%d violations)\n" count)
+       (mapconcat
+        (lambda (v)
+          (format "- ⚠ %s:%d `%s' defvar=%s overrides defcustom in %s\n"
+                  (plist-get v :file)
+                  (plist-get v :line)
+                  (plist-get v :symbol)
+                  (plist-get v :defvar-value)
+                  (plist-get v :defcustom-file)))
+        violations "")
+       "\n"))))
+
+(defun gptel-auto-workflow-self-audit--format-pipeline-gate-section (ptgc)
+  "Format pipeline test gate section from PTGC plist."
+  (let ((has-gate (plist-get ptgc :has-test-gate))
+        (details (plist-get ptgc :gate-details))
+        (issues (plist-get ptgc :issues)))
+    (concat
+     "### Pipeline test gate\n"
+     (if has-gate
+         (format "- ✓ %s\n" details)
+       (format "- ⚠ %s\n" details))
+     (when issues
+       (mapconcat (lambda (i) (format "- ⚠ %s\n" i)) issues ""))
      "\n")))
+
+(defun gptel-auto-workflow-self-audit--format-staging-bypass-section (sbc)
+  "Format staging bypass section from SBC plist."
+  (let ((count (plist-get sbc :bypass-count))
+        (commits (plist-get sbc :bypass-commits))
+        (hours (plist-get sbc :hours)))
+    (if (= count 0)
+        (format "- ✓ No staging bypass detected (last %dh)\n\n" hours)
+      (concat
+       (format "### Staging bypass (%d direct-to-main commits in %dh)\n" count hours)
+       (mapconcat
+        (lambda (c)
+          (format "- ⚠ %s: \"%s\" by %s\n"
+                  (substring (plist-get c :hash) 0 7)
+                  (plist-get c :subject)
+                  (plist-get c :author)))
+        (seq-take commits 10) "")
+       (when (> count 10)
+         (format "- ... and %d more\n" (- count 10)))
+       "\n"))))
 
 (defun gptel-auto-workflow-self-audit--format-report (audit-result)
   "Format AUDIT-RESULT as a markdown section for the digest."
@@ -413,6 +475,9 @@ Returns plist :gap-count, :isolated, :low-confidence, :self-refs, :mismatches."
           (sma (plist-get audit-result :staging-merge-bottleneck))
           (bcc (plist-get audit-result :module-health))
           (kg (plist-get audit-result :knowledge-gaps))
+          (dvoc (plist-get audit-result :defvar-overrides))
+          (ptgc (plist-get audit-result :pipeline-gate-integrity))
+          (sbc (plist-get audit-result :staging-bypass))
           (issues (plist-get audit-result :issues))
           (ts (plist-get audit-result :timestamp)))
       (concat
@@ -426,6 +491,9 @@ Returns plist :gap-count, :isolated, :low-confidence, :self-refs, :mismatches."
        (gptel-auto-workflow-self-audit--format-strategy-section sca)
        (gptel-auto-workflow-self-audit--format-merge-section sma)
        (gptel-auto-workflow-self-audit--format-knowledge-gap-section kg)
+       (gptel-auto-workflow-self-audit--format-defvar-override-section dvoc)
+       (gptel-auto-workflow-self-audit--format-pipeline-gate-section ptgc)
+       (gptel-auto-workflow-self-audit--format-staging-bypass-section sbc)
        (format "**Audit score: %d issues found** (timestamp %s)\n"
                issues ts)
        "Memory written: mementum/memories/audit-fix-*.md\n"))))
@@ -598,13 +666,19 @@ Uses concat to avoid deeply nested insert/format calls in the write function."
          (sca (plist-get result :strategy-cold-start))
          (sma (plist-get result :staging-merge-bottleneck))
          (pricing (plist-get result :pricing-freshness))
+         (dvoc (plist-get result :defvar-overrides))
+         (ptgc (plist-get result :pipeline-gate-integrity))
+         (sbc (plist-get result :staging-bypass))
          (cold (plist-get bca :cold))
          (unev (plist-get sca :unevaluated))
          (bottleneck (plist-get sma :bottleneck-p))
          (broken (plist-get bcc :broken))
          (issues (plist-get result :issues))
          (pricing-stale (or (plist-get pricing :stale-count) 0))
-         (pricing-days (or (plist-get pricing :days-stale) 0)))
+         (pricing-days (or (plist-get pricing :days-stale) 0))
+         (dvoc-count (or (plist-get dvoc :violation-count) 0))
+         (ptgc-ok (or (plist-get ptgc :has-test-gate) nil))
+         (sbc-count (or (plist-get sbc :bypass-count) 0)))
     (concat
      ";; self-audit-result.el — structured audit findings\n"
      ";; Written by gptel-auto-workflow-self-audit-execute\n"
@@ -616,6 +690,9 @@ Uses concat to avoid deeply nested insert/format calls in the write function."
      (format "(staging-merge-bottleneck . %S)\n" bottleneck)
      (format "(pricing-stale . %d)\n" pricing-stale)
      (format "(pricing-days-stale . %d)\n" pricing-days)
+     (format "(defvar-override-violations . %d)\n" dvoc-count)
+     (format "(pipeline-test-gate . %S)\n" ptgc-ok)
+     (format "(staging-bypass-count . %d)\n" sbc-count)
      (when broken
        (format "(broken-modules . %S)\n" (mapcar #'car broken)))
      ";; Remediation actions for self-heal:\n"
@@ -1076,6 +1153,188 @@ Also flags if the knowledge page hasn't been updated in >30 days."
         (when (> days-stale 30)
           "\n⚠ Knowledge page >30 days stale — update from Bailian console")
         "\n→ Resolve: update registry OR update bailian-pricing.md")))))
+
+;;; Gate-integrity checks (OV5 pipeline control-flow)
+
+(defun gptel-auto-workflow-self-audit--check-defvar-override-defcustom ()
+  "Scan lisp/modules/*.el for (defvar SYM VALUE) that overrides a defcustom.
+Only flags defvars with a non-nil VALUE argument — forward-decl (defvar SYM)
+without a value is a legitimate declaration, not a violation.
+Returns plist (:violations :violation-count).
+Each violation plist: (:file :line :symbol :defvar-value :defcustom-file)."
+  (let* ((root (gptel-auto-workflow-self-audit--root))
+         (mod-dir (expand-file-name "lisp/modules" root))
+         (lisp-dir (expand-file-name "lisp" root))
+         (defcustoms (make-hash-table :test 'equal))
+         (violations '()))
+    ;; Collect all defcustom symbols from lisp/**/*.el
+    (when (file-directory-p lisp-dir)
+      (dolist (f (directory-files-recursively lisp-dir "\\.el$"))
+        (with-temp-buffer
+          (insert-file-contents f)
+          (goto-char (point-min))
+          (while (search-forward "(defcustom " nil t)
+            (goto-char (match-beginning 0))
+            (condition-case nil
+                (let ((form (read (current-buffer))))
+                  (when (and (consp form)
+                             (eq (car form) 'defcustom)
+                             (symbolp (nth 1 form)))
+                    (puthash (symbol-name (nth 1 form)) f defcustoms)))
+              (error nil))))))
+    ;; Scan modules for defvar with non-nil value
+    (when (file-directory-p mod-dir)
+      (dolist (f (directory-files mod-dir t "\\.el$"))
+        (with-temp-buffer
+          (insert-file-contents f)
+          (goto-char (point-min))
+          (while (search-forward "(defvar " nil t)
+            (goto-char (match-beginning 0))
+            (let ((line (line-number-at-pos (point))))
+              (condition-case nil
+                  (let ((form (read (current-buffer))))
+                    ;; form must be (defvar SYM VALUE ...) with >=3 elements
+                    (when (and (consp form)
+                               (eq (car form) 'defvar)
+                               (symbolp (nth 1 form))
+                               (>= (length form) 3))
+                      (let* ((sym (symbol-name (nth 1 form)))
+                             (value (nth 2 form))
+                             (dc-file (gethash sym defcustoms)))
+                        (when (and dc-file)  ; any value-bearing defvar with a defcustom
+                          (push (list :file (file-name-nondirectory f)
+                                      :line line
+                                      :symbol sym
+                                      :defvar-value
+                                      (format "%S" value)
+                                      :defcustom-file
+                                      (file-relative-name dc-file root))
+                                violations)))))
+                (error nil)))))))
+    (list :violations (nreverse violations)
+          :violation-count (length violations))))
+
+(defun gptel-auto-workflow-self-audit--check-pipeline-test-gate ()
+  "Check that run-pipeline.sh Step 7 has a test gate before pushing to main.
+Returns plist (:has-test-gate :gate-details :issues).
+:has-test-gate is t when: run-tests.sh is referenced, SKIP_PUSH variable
+exists, and git push origin main appears AFTER the test gate."
+  (let* ((root (gptel-auto-workflow-self-audit--root))
+         (pipeline-file (expand-file-name "scripts/run-pipeline.sh" root))
+         (has-test-gate nil)
+         (gate-details "")
+         (issues '()))
+    (if (not (file-exists-p pipeline-file))
+        (progn
+          (push "run-pipeline.sh not found" issues)
+          (setq gate-details "Pipeline script missing"))
+      (with-temp-buffer
+        (insert-file-contents pipeline-file)
+        (let ((has-test-ref nil)
+              (has-skip-push nil)
+              (test-before-push nil))
+          (goto-char (point-min))
+          (setq has-test-ref (search-forward "run-tests.sh" nil t))
+          (when has-test-ref
+            (goto-char (point-min))
+            (setq has-skip-push (search-forward "SKIP_PUSH" nil t))
+            ;; Check ordering: test gate is before git push
+            (goto-char (point-min))
+            (let ((test-pos (search-forward "run-tests.sh" nil t))
+                  (push-pos nil))
+              (when test-pos
+                (goto-char test-pos)
+                (setq push-pos (search-forward "git push origin main" nil t))
+                (setq test-before-push (and push-pos t)))))
+          (setq has-test-gate (and has-test-ref has-skip-push test-before-push))
+          (cond
+           (has-test-gate
+            (setq gate-details
+                  "Test gate (run-tests.sh + SKIP_PUSH) present before git push"))
+           ((not has-test-ref)
+            (setq gate-details "CRITICAL: No run-tests.sh reference in pipeline Step 7")
+            (push "Missing test invocation in Step 7" issues))
+           ((not has-skip-push)
+            (setq gate-details "WARNING: No SKIP_PUSH gate — test failures won't block push")
+            (push "Missing SKIP_PUSH gate variable" issues))
+           ((not test-before-push)
+            (setq gate-details "WARNING: git push found before test gate — ordering wrong")
+            (push "Test gate appears AFTER git push" issues))))))
+    (list :has-test-gate has-test-gate
+          :gate-details gate-details
+          :issues (nreverse issues))))
+
+(defun gptel-auto-workflow-self-audit--check-staging-bypass (&optional hours)
+  "Analyze recent git log for direct-to-main commits that bypassed staging.
+Scans last HOURS (default 24) for commits to main modifying lisp/modules/*.el.
+Classifies commits: subject containing \='staging\='/\='merge\='/\='PR\='/\='🔄\=' →
+via-staging.
+Returns plist (:bypass-commits :bypass-count :review-commits :hours).
+Each commit plist: (:hash :subject :author)."
+  (let* ((root (gptel-auto-workflow-self-audit--root))
+         (hours (or hours 24))
+         (bypass-commits '())
+         (review-commits '()))
+    (condition-case err
+        (let ((output
+               (shell-command-to-string
+                (format
+                 "git -C %s log --since=\"%d hours ago\" --name-only
+--pretty=format:\"%%H|%%s|%%an\" --diff-filter=AM -- 'lisp/modules/*.el'
+2>/dev/null"
+                 (shell-quote-argument root) hours))))
+          (with-temp-buffer
+            (insert output)
+            (goto-char (point-min))
+            (while (not (eobp))
+              (let ((line (string-trim
+                           (buffer-substring (point) (line-end-position)))))
+                (if (string-match "^[0-9a-f]\\{40\\}|\\(.*\\)|\\(.*\\)$" line)
+                    (let ((hash (substring line 0 40))
+                          (subject (match-string 1 line))
+                          (author (match-string 2 line)))
+                      (forward-line 1)
+                      ;; Check if any following lines are .el files
+                      (let ((has-el-change nil))
+                        (while (and (not (eobp))
+                                    ;; Stop at next commit header or empty
+                                    (not (string-match "^[0-9a-f]\\{40\\}|"
+                                                       (string-trim
+                                                        (buffer-substring
+                                                         (point) (line-end-position)))))
+                                    (not (string-empty-p
+                                          (string-trim
+                                           (buffer-substring
+                                            (point) (line-end-position))))))
+                          (let ((fline (string-trim
+                                        (buffer-substring
+                                         (point) (line-end-position)))))
+                            (when (string-match "\\.el$" fline)
+                              (setq has-el-change t)))
+                          (forward-line 1))
+                        (when has-el-change
+                          (if (or (string-match-p "staging" subject)
+                                  (string-match-p "merge" subject)
+                                  (string-match-p "PR" subject)
+                                  (string-match-p "🔄" subject)
+                                  (string-match-p "auto-evolved" subject))
+                              (push (list :hash hash :subject subject
+                                          :author author)
+                                    review-commits)
+                            (push (list :hash hash :subject subject
+                                        :author author)
+                                  bypass-commits)))))
+                  ;; Non-matching line: skip
+                  (forward-line 1))))))
+      (error
+       (message "[self-audit] Staging bypass check failed: %s"
+                (error-message-string err))))
+    (let ((bc (nreverse bypass-commits))
+          (rc (nreverse review-commits)))
+      (list :bypass-commits bc
+            :bypass-count (length bc)
+            :review-commits rc
+            :hours hours))))
 
 ;;; Token Economics (real per-model pricing from registry)
 

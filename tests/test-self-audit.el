@@ -335,5 +335,129 @@ nodes were never reported in the knowledge gap check."
     (should-not (string-match-p regex "foo.bar.baz"))
     (should-not (string-match-p regex ""))))
 
+;; ── Gate-integrity tests ──
+
+(ert-deftest test-self-audit/defvar-override-detection ()
+  "Detect (defvar SYM VALUE) that overrides a (defcustom SYM ...) elsewhere."
+  (test-self-audit--setup)
+  (unwind-protect
+      (let ((gptel-auto-workflow-self-audit-enabled t))
+        (fset 'gptel-auto-workflow-self-audit--root
+              #'test-self-audit--mock-root)
+        ;; Create two .el files: one with defcustom, one with defvar w/ value
+        (let ((mod-dir (expand-file-name "lisp/modules"
+                                          test-self-audit--tmp-dir)))
+          (make-directory mod-dir t)
+          ;; File A: defcustom with default t
+          (with-temp-file (expand-file-name "module-a.el" mod-dir)
+            (insert "(defcustom some-var t\n  \"Some var.\"\n  :type 'boolean)\n"))
+          ;; File B: defvar with value nil — flagged (any value-bearing defvar
+          (with-temp-file (expand-file-name "module-b.el" mod-dir)
+            (insert "(defvar some-var nil)\n"))
+          ;; File C: defvar with non-nil value — definitely flagged
+          (with-temp-file (expand-file-name "module-c.el" mod-dir)
+            (insert "(defvar other-var t)\n"))
+          ;; But other-var has NO defcustom — not flagged
+          ;; File D: forward-decl defvar without value — NOT a violation
+          (with-temp-file (expand-file-name "module-d.el" mod-dir)
+            (insert "(defvar some-var)\n"))
+          (let* ((dvoc (gptel-auto-workflow-self-audit--check-defvar-override-defcustom))
+                 (violations (plist-get dvoc :violations))
+                 (count (plist-get dvoc :violation-count)))
+            ;; module-b has (defvar some-var nil) — flagged (has value, is overriding)
+            (should (>= count 1))
+            (should
+             (seq-find
+              (lambda (v) (and (string= (plist-get v :file) "module-b.el")
+                          (string= (plist-get v :symbol) "some-var")))
+              violations))
+            ;; module-c has (defvar other-var t) but no defcustom — NOT flagged
+            (should-not
+             (seq-find
+              (lambda (v) (string= (plist-get v :symbol) "other-var"))
+              violations))
+            ;; module-d has forward-decl (defvar some-var) — NOT flagged
+            (should-not
+             (seq-find
+              (lambda (v) (string= (plist-get v :file) "module-d.el"))
+              violations)))))
+    (test-self-audit--teardown)))
+
+(ert-deftest test-self-audit/pipeline-test-gate-detection ()
+  "Verify pipeline test gate detection on run-pipeline.sh."
+  (test-self-audit--setup)
+  (unwind-protect
+      (let ((gptel-auto-workflow-self-audit-enabled t))
+        (fset 'gptel-auto-workflow-self-audit--root
+              #'test-self-audit--mock-root)
+        ;; Create scripts/ dir
+        (let ((scripts-dir (expand-file-name "scripts"
+                                              test-self-audit--tmp-dir)))
+          (make-directory scripts-dir t)
+          ;; Scenario 1: script WITH test gate
+          (let ((pipeline-file (expand-file-name "run-pipeline.sh" scripts-dir)))
+            (with-temp-file pipeline-file
+              (insert "# Step 7\n")
+              (insert "TEST_OUTPUT=\"$(bash run-tests.sh unit 2>&1)\"\n")
+              (insert "SKIP_PUSH=1\n")
+              (insert "if [ \"${SKIP_PUSH:-0}\" = \"0\" ]; then\n")
+              (insert "    git push origin main\n")
+              (insert "fi\n"))
+            (let* ((ptgc (gptel-auto-workflow-self-audit--check-pipeline-test-gate)))
+              (should (plist-get ptgc :has-test-gate))
+              (should (null (plist-get ptgc :issues)))))
+          ;; Scenario 2: script WITHOUT test gate (no run-tests.sh, no SKIP_PUSH)
+          (let ((pipeline-file2 (expand-file-name "run-pipeline.sh" scripts-dir)))
+            (with-temp-file pipeline-file2
+              (insert "# Step 7\n")
+              (insert "git push origin main\n"))
+            (let* ((ptgc (gptel-auto-workflow-self-audit--check-pipeline-test-gate)))
+              (should-not (plist-get ptgc :has-test-gate))
+              (should (> (length (plist-get ptgc :issues)) 0))))))
+    (test-self-audit--teardown)))
+
+(ert-deftest test-self-audit/staging-bypass-detection ()
+  "Verify staging bypass detection classifies commits correctly."
+  (test-self-audit--setup)
+  (unwind-protect
+      (let ((gptel-auto-workflow-self-audit-enabled t))
+        (fset 'gptel-auto-workflow-self-audit--root
+              #'test-self-audit--mock-root)
+        ;; Mock shell-command-to-string to return known git log output
+        (cl-letf (((symbol-function 'shell-command-to-string)
+                   (lambda (cmd)
+                     ;; Ignore the actual command; return fixed output
+                     "abc123abc123abc123abc123abc123abc123abc1|fix: something broken|author1
+lisp/modules/module-a.el
+
+def456def456def456def456def456def456def4|merge staging to main|author2
+lisp/modules/module-b.el
+
+9999999999999999999999999999999999999999|auto-evolved: test|bot
+lisp/modules/module-c.el
+
+eee111eee111eee111eee111eee111eee111eee1|direct hotfix|author3
+lisp/modules/module-d.el
+")))
+          (let* ((sbc (gptel-auto-workflow-self-audit--check-staging-bypass 24))
+                 (bypass (plist-get sbc :bypass-commits))
+                 (review (plist-get sbc :review-commits))
+                 (bypass-count (plist-get sbc :bypass-count)))
+            ;; "fix: something broken" — no staging signal → bypass
+            (should (= bypass-count 2))
+            ;; First bypass: abc123 (fix: something broken)
+            (should (member "abc123abc123abc123abc123abc123abc123abc1"
+                            (mapcar (lambda (c) (plist-get c :hash)) bypass)))
+            ;; Second bypass: eee111 (direct hotfix)
+            (should (member "eee111eee111eee111eee111eee111eee111eee1"
+                            (mapcar (lambda (c) (plist-get c :hash)) bypass)))
+            ;; Review commits: merge+staging and auto-evolved
+            (should (= (length review) 2))
+            (should (member "def456def456def456def456def456def456def4"
+                            (mapcar (lambda (c) (plist-get c :hash)) review)))
+            (should (member "9999999999999999999999999999999999999999"
+                            (mapcar (lambda (c) (plist-get c :hash)) review))))))
+    (test-self-audit--teardown)))
+
 (provide 'test-self-audit)
 ;;; test-self-audit.el ends here
