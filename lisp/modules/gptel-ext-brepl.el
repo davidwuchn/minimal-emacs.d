@@ -183,5 +183,78 @@ Only activates in `clojure-mode' buffers when
                         (message "[brepl] Auto-fixed brackets before save"))))))
               nil)))
 
+;;; ── Test Runner ──
+
+(defun gptel-brepl-run-tests (namespace)
+  "Run clojure.test tests for NAMESPACE via brepl.
+Returns plist (:success t/nil :tests N :failures N :errors N :error string :raw string)."
+  (let ((binary (executable-find gptel-brepl-binary)))
+    (if (not binary)
+        (list :success nil :tests 0 :failures 0 :errors 0
+              :error (format "[brepl] Binary not found: %s" gptel-brepl-binary)
+              :raw "")
+      (let* ((code (format "(require 'clojure.test) (clojure.test/run-tests '%s)" namespace))
+             (result (gptel-brepl--call (list "-e" code)))
+             (raw (or (plist-get result :result) "")))
+        (if (plist-get result :success)
+            (let ((parsed (gptel-brepl--parse-test-output raw)))
+              (append (list :success t :raw raw) parsed))
+          (let ((parsed (gptel-brepl--parse-test-output raw)))
+            (append (list :success nil :raw raw :error
+                          (or (plist-get result :error) "Tests failed"))
+                    parsed)))))))
+
+(defun gptel-brepl--parse-test-output (output)
+  "Parse clojure.test output string into plist (:tests N :failures N :errors N)."
+  (let ((tests 0) (failures 0) (errors 0))
+    (when (string-match "Ran \\([0-9]+\\) tests" output)
+      (setq tests (string-to-number (match-string 1 output))))
+    (when (string-match "\\([0-9]+\\) failures" output)
+      (setq failures (string-to-number (match-string 1 output))))
+    (when (string-match "\\([0-9]+\\) errors" output)
+      (setq errors (string-to-number (match-string 1 output))))
+    (list :tests tests :failures failures :errors errors)))
+
+;;; ── Lint ──
+
+(defun gptel-brepl-lint-file (file)
+  "Run clj-kondo on FILE and return findings.
+Returns plist (:success t/nil :findings list :error string).
+Each finding is (:file :line :level :message)."
+  (let ((kondo (executable-find "clj-kondo")))
+    (if (not kondo)
+        (list :success nil :findings nil
+              :error "clj-kondo not found in PATH")
+      (let* ((outbuf (generate-new-buffer " *clj-kondo-out*"))
+             (exit-code (condition-case nil
+                            (call-process kondo nil outbuf nil
+                                          "--lint" (expand-file-name file)
+                                          "--config" "{:output {:format :text}}")
+                          (error -1)))
+             (output (with-current-buffer outbuf (string-trim (buffer-string))))
+             (findings (gptel-brepl--parse-kondo-output output)))
+        (kill-buffer outbuf)
+        (if (zerop exit-code)
+            (list :success t :findings findings :error nil)
+          (list :success nil :findings findings
+                :error (if (string-empty-p output)
+                           (format "clj-kondo exited %d" exit-code)
+                         output)))))))
+
+(defun gptel-brepl--parse-kondo-output (output)
+  "Parse clj-kondo text output into findings list.
+Each finding: (:file string :line integer :level string :message string)."
+  (let ((findings nil))
+    (dolist (line (split-string output "\n" t))
+      (when (string-match
+             "\\`\\(.+?\\):\\([0-9]+\\):\\([0-9]+\\)?:?\\s-+\\([a-z]+\\):\\s-+\\(.+\\)\\'"
+             line)
+        (push (list :file (match-string 1 line)
+                    :line (string-to-number (match-string 2 line))
+                    :level (match-string 4 line)
+                    :message (match-string 5 line))
+              findings)))
+    (nreverse findings)))
+
 (provide 'gptel-ext-brepl)
 ;;; gptel-ext-brepl.el ends here

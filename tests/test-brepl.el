@@ -335,5 +335,80 @@ when reading from an empty buffer or a missing file.  Must return
     (should (plist-get result :error))
     (should (stringp (plist-get result :error)))))
 
+;; ── Group 7: test runner ──
+
+(ert-deftest test-brepl/run-tests-returns-success-on-exit-0 ()
+  "run-tests returns (:success t :tests N :failures 0 :errors 0) on clean run."
+  (cl-letf (((symbol-function 'gptel-brepl--call)
+             (lambda (_args)
+               (list :success t
+                     :result "\nTesting ov5.world-store\n\nRan 4 tests containing 7 assertions.\n0 failures, 0 errors.\n"
+                     :error nil))))
+    (let ((result (gptel-brepl-run-tests "ov5.world-store")))
+      (should (plist-get result :success))
+      (should (= 4 (plist-get result :tests)))
+      (should (= 0 (plist-get result :failures)))
+      (should (= 0 (plist-get result :errors))))))
+
+(ert-deftest test-brepl/run-tests-reports-failures ()
+  "run-tests parses test count and failure count from clojure.test output."
+  (cl-letf (((symbol-function 'gptel-brepl--call)
+             (lambda (_args)
+               (list :success nil
+                     :result "\nTesting ov5.broken\n\nFAIL in (bad-test) (core_test.clj:12)\nexpected: (= 1 2)\n  actual: (not (= 1 2))\n\nRan 5 tests containing 8 assertions.\n3 failures, 1 errors.\n"
+                     :error "Tests failed"))))
+    (let ((result (gptel-brepl-run-tests "ov5.broken")))
+      (should-not (plist-get result :success))
+      (should (= 5 (plist-get result :tests)))
+      (should (= 3 (plist-get result :failures)))
+      (should (= 1 (plist-get result :errors))))))
+
+(ert-deftest test-brepl/run-tests-no-tests-found ()
+  "run-tests handles empty test suite."
+  (cl-letf (((symbol-function 'gptel-brepl--call)
+             (lambda (_args)
+               (list :success t
+                     :result "\nTesting ov5.empty\n\nRan 0 tests containing 0 assertions.\n0 failures, 0 errors.\n"
+                     :error nil))))
+    (let ((result (gptel-brepl-run-tests "ov5.empty")))
+      (should (plist-get result :success))
+      (should (= 0 (plist-get result :tests))))))
+
+(ert-deftest test-brepl/run-tests-handles-binary-missing ()
+  "run-tests returns failure plist when binary not found."
+  (cl-letf (((symbol-function 'executable-find) (lambda (_) nil)))
+    (let ((result (gptel-brepl-run-tests "any.ns")))
+      (should-not (plist-get result :success))
+      (should (string-match-p "not found" (plist-get result :error))))))
+
+;; ── Group 8: lint file ──
+
+(ert-deftest test-brepl/lint-file-returns-clean-on-no-errors ()
+  "lint-file returns (:success t :errors 0) on clean file."
+  (cl-letf (((symbol-function 'call-process)
+             (lambda (&rest _args) 0)))
+    (let ((result (gptel-brepl-lint-file "/tmp/clean.clj")))
+      (should (plist-get result :success))
+      (should (= 0 (length (plist-get result :findings)))))))
+
+(ert-deftest test-brepl/lint-file-returns-findings-on-errors ()
+  "lint-file returns (:success nil :findings ...) when clj-kondo finds errors."
+  (cl-letf (((symbol-function 'call-process)
+             (lambda (program &optional infile destination display &rest args)
+               (when destination
+                 (with-current-buffer destination
+                   (insert "/tmp/dirty.clj:5:3: error: unused binding 'x'\n/tmp/dirty.clj:10:1: warning: missing else branch\n")))
+               3)))
+    (let ((result (gptel-brepl-lint-file "/tmp/dirty.clj")))
+      (should-not (plist-get result :success))
+      (should (= 2 (length (plist-get result :findings)))))))
+
+(ert-deftest test-brepl/lint-file-handles-kondo-missing ()
+  "lint-file returns error plist when clj-kondo not found."
+  (cl-letf (((symbol-function 'executable-find) (lambda (_) nil)))
+    (let ((result (gptel-brepl-lint-file "/tmp/x.clj")))
+      (should-not (plist-get result :success))
+      (should (string-match-p "not found" (plist-get result :error))))))
+
 (provide 'test-brepl)
 ;;; test-brepl.el ends here

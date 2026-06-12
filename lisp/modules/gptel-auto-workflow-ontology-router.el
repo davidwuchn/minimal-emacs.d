@@ -405,13 +405,16 @@ Used when memory schema has no graph data for the target."
           (string-match-p "\\`gptel-agent-" basename))
       :agentic)
      ((or (string-match-p "nucleus-presets" basename)
-          (string-match-p "nucleus-header" basename)
-          (string-match-p "init-" basename)
-          (string-match-p "tree-sitter\\|treesit" basename)
-          (string-match-p "skill-routing" basename)
-          (string-match-p "standalone" basename))
-      :natural-language)
-     (t :programming))))
+           (string-match-p "nucleus-header" basename)
+           (string-match-p "init-" basename)
+           (string-match-p "tree-sitter\\|treesit" basename)
+           (string-match-p "skill-routing" basename)
+           (string-match-p "standalone" basename))
+       :natural-language)
+      ;; Clojure targets — test via brepl/clojure.test, lint via clj-kondo
+      ((string-match-p "\\.clj\\'" target)
+       :clojure)
+      (t :programming))))
 
 ;; ─── Category-Level Performance Aggregation ───
 

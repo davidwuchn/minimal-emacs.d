@@ -13,15 +13,15 @@
 | **Zero-risk execution** | Git worktree isolation, **7 gates**, never touches `main` directly |
 | **Learning system** | Ontology + context database remember experiments, failures, and rationale |
 | **Token efficiency** | **59% prompt compression** via lambda notation and deterministic routing |
-| **Low cost** | ~$0.50-2.00/run across **8 backends** (4-5 actively routed) |
+| **Low cost** | ~$0.50-2.00/run across **12 backends** (4-5 actively routed) |
 | **Human oversight** | File-based approval queue, 7-day expiry, high-risk proposals routed to review |
 | **Production sensing** | Monitoring agent + production metrics; Sentry wired, external feedback still partial |
-| **Scale** | **120 modules** (76 byte-compiled, 44 no-byte-compile), **3,485 ERT tests** |
-| **Reality check** | **✅ YC Vision 100% complete** - all 5 layers operational, all 10 monitoring phases implemented (0-9), full self-improving loop |
+| **Scale** | **131 modules** (86 byte-compiled, 45 no-byte-compile), **~2,970 ERT tests** |
+| **Reality check** | **✅ YC Vision ~96% complete** — all 5 layers operational, all 10 monitoring phases implemented (0-9), full self-improving loop; sensor layer partial |
 
 **Quick start:** Clone -> run pipeline -> review kept experiments next morning.
 
-**Cost:** ~$0.50-2.00/run. **Token efficiency:** 59% prompt compression via lambda notation. **Safety:** Git worktree isolation + **7 gates** - no change touches `main` without passing all gates. **Scale:** 120 modules, **3,485 ERT tests**, 8 backend definitions (4-5 actively routed). **YC Vision:** **✅ 100% complete** - all 5 layers operational (Sensor, Policy, Tools, Quality, Learning), all 10 monitoring phases implemented (Phase 0: health probes, Phase 1: failure analysis, Phase 2: proposal generation, Phase 3: test/deploy, Phase 4: architectural evolution, Phase 5: external sensors, Phase 6: approved execution, Phase 7: impact assessment, Phase 8: synthesis trigger, Phase 9: self-tuning), full self-improving loop with human oversight.
+**Cost:** ~$0.50-2.00/run. **Token efficiency:** 59% prompt compression via lambda notation. **Safety:** Git worktree isolation + **7 gates** - no change touches `main` without passing all gates. **Scale:** 131 modules, **~2,970 ERT tests**, 12 backend definitions (4-5 actively routed). **YC Vision:** **✅ ~96% complete** — all 5 layers operational (Sensor, Policy, Tools, Quality, Learning), all 10 monitoring phases implemented (Phase 0: health probes, Phase 1: failure analysis, Phase 2: proposal generation, Phase 3: test/deploy, Phase 4: architectural evolution, Phase 5: external sensors, Phase 6: approved execution, Phase 7: impact assessment, Phase 8: synthesis trigger, Phase 9: self-tuning), full self-improving loop with human oversight; sensor layer still partial (Sentry wired, support/feedback stubs).
 
 - [Begin](#begin) - Clone, run, done
 - [Why OV5?](#why-ov5)
@@ -153,7 +153,7 @@ lambda vision(x).
 | Gate | Type | What it checks | What happens on failure |
 |------|------|---------------|------------------------|
 | **1. Category Routing** | Enforced | Best backend for this target right now? | Routes to strongest current performer; unhealthy backends dropped |
-| **2. Test Execution** | Enforced | Did **3,485 ERT tests** pass? | Experiment discarded, pattern learned |
+| **2. Test Execution** | Enforced | Did **~2,970 ERT tests** pass? | Experiment discarded, pattern learned |
 | **3. AI Grading** | Enforced | Is the change well-structured and principled? | Scored 0.0-1.0, fed to analyzer |
 | **3.5 Complexity Gate** | Enforced | Did complexity rise >10% without proportional quality gain? | Experiment rejected with explicit reason |
 | **4. AI Review** | Downstream | Does it pass security, conventions, architecture? | Multi-agent review in staging path |
@@ -285,7 +285,7 @@ Every experiment is an isolated git worktree. `main` is never touched directly. 
 | Gate | What it checks | What happens on failure |
 |------|---------------|------------------------|
 | **Category Routing** | Best backend for this target right now? | Routes to strongest current performer; unhealthy backends dropped |
-| **Test Execution** | Did **3,485 ERT tests** pass? | Experiment discarded, pattern learned |
+| **Test Execution** | Did **~2,970 ERT tests** pass? | Experiment discarded, pattern learned |
 | **AI Grading** | Is the change well-structured and principled? | Scored 0.0-1.0, fed to analyzer |
 | **Complexity Gate** | Did complexity rise without proportional quality gain? | Experiment rejected with rationale |
 | **AI Review** | Does it pass security, conventions, architecture? | Multi-agent review with feedback |
@@ -337,7 +337,7 @@ Grader-confirmed bug fixes survive the structural scoring model's blind spot. St
 
 ## Deterministic-First Architecture
 
-AI model calls are expensive (120s+ timeouts, 8 backends, retries). Where data already exists, compute directly:
+AI model calls are expensive (120s+ timeouts, 12 backends, retries). Where data already exists, compute directly:
 
 ```
 lambda select(x). deterministic(data) > AI(model)
@@ -394,6 +394,24 @@ Every cycle still runs through the nucleus layer. The parts below mostly live in
 | **Skill Graph** | Skill frontmatter -> compiled molecules -> executor workflows | "Which capabilities compose into effective workflows?" |
 | **Ontology Router** | Target file -> category -> backend ranking | "Which backend is best right now?" |
 | **Self-Healing Auditor** | Pipeline metrics -> diagnosis -> remediation | "Is the evaluator broken, and can I fix it without a human?" |
+| **Pipeline Statechart** | TSV history -> Markov-chain model | "What is the probability distribution of the next pipeline state?" |
+| **World Store** | Experiment data -> Datahike Datalog entities | "What are the structured facts across all experiments?" |
+
+### World Store (Datahike)
+
+The World Store is a **structured memory layer** built on Datahike 0.8.1697 — an immutable Datalog database with git-like semantics. It stores experiment facts (backends, strategies, targets, decisions, scores) as queryable entities, enabling:
+
+| Feature | Mechanism |
+|---------|-----------|
+| **Immutable facts** | Every experiment outcome is an append-only fact — full audit trail |
+| **Datalog queries** | Combine structured filters (category, date, backend) in a single query |
+| **Branch support** | Git-like branching for concurrent experiment analysis |
+| **Time-travel** | Query historical state — what was the keep-rate 3 weeks ago? |
+| **Elisp bridge** | `gptel-ext-world-store.el` (+ `-branch.el`, `-query.el`) — zero overhead access from Emacs |
+
+**Proximum** (Datahike's HNSW vector index) brings semantic search to the World Store. Memory chunks from mementum can be embedded and indexed alongside structured experiment facts — enabling Datalog queries that combine `WHERE backend = "DeepSeek" AND similarity > 0.8`.
+
+Datahike is wired via **Babashka nREPL** (the same infrastructure as the Clojure brepl). No separate database process or container. The `.db` file lives in `var/world-store/`. See `mementum/knowledge/deep-searcher-vs-ov5-gaps.md` for the strategic analysis of how this closes OV5's vector-memory gap using infrastructure already in the stack.
 
 ### Routing
 
@@ -445,7 +463,7 @@ The system does not just run experiments - it builds a **formal knowledge graph*
 | **Second-chance repair** | Soft-deleted patterns re-evaluated each cycle |
 | **Interval labelling schema** | O(1) subsumption over pattern hierarchy via preorder/postorder |
 | **Context database** | Sidecar `.sexp` files in `var/context/` store business rationale, causal chain, learned, decision rationale |
-| **Backend performance analysis** | Experiments tracked across 8 backends -> keep-rate and combination learning |
+| **Backend performance analysis** | Experiments tracked across 12 backends -> keep-rate and combination learning |
 | **Pre-flight prediction** | Anti-pattern detection, target saturation, prediction thresholds |
 | **Ontology vs LLM decider** | Data-availability x complexity x EMA confidence -> ontology or LLM |
 | **Category-based routing** | Targets classified into ontology categories -> backend ranking per category |
@@ -554,7 +572,7 @@ The pipeline's immune system:
 | Guard | Prevents |
 |-------|----------|
 | Git worktree isolation | `main` never touched directly |
-| **3,485 ERT tests** + timeout guard | Broken code caught before staging |
+| **~2,970 ERT tests** + timeout guard | Broken code caught before staging |
 | **7-gate execution path** | Bad changes filtered before integration |
 | **Platform sandbox** | OS-level process containment (seatbelt/bubblewrap) |
 | Complexity gate | Code bloat masquerading as progress |
@@ -595,7 +613,7 @@ The system detects when its own evaluators are broken and heals itself - no huma
 | **3. Dog-food principle** | Self-heal fixes its own warnings first | Self-reference tests the repair loop |
 | **4. Pre-commit enforcement** | `byte-compile-error-on-warn t` on staged `.el` files | Rejects warning-bearing commits |
 
-**Module discipline:** 120 modules are tracked in the current architecture: **76 byte-compiled**, **44 marked `no-byte-compile`**. The self-heal layer exists so the system fixes its own code before touching yours.
+**Module discipline:** 131 modules are tracked in the current architecture: **86 byte-compiled**, **45 marked `no-byte-compile`**. The self-heal layer exists so the system fixes its own code before touching yours.
 
 **Key principle:** timeout means "could not evaluate," not "code is bad." The grader treats timeouts as unknown, not as proof of failure. The monitoring agent is operational today: it runs after each experiment batch, throttled to 15-minute windows, and can emit low-risk remediations, notify-only routing changes, or approval-required structural proposals.
 
@@ -646,8 +664,9 @@ OV5's architecture is informed by five key research papers:
 | **AttnRes** (2603.15031) | Fixed-weight accumulation causes hidden-state dilution | Weighted experiment synthesis (planned) |
 | **OpenMythos** (RDT) | Looped transformers: recurrent depth, stability, adaptive compute | OV5 as recurrent system (6 gaps identified) |
 | **PlanSearch** (2409.03733) | Plan diversity directly predicts performance gains | Plan-level search with Jaccard similarity metric |
+| **DeepSearcher** (Zilliz, 2026) | Agentic RAG over private data: vector DB + chunking + iterative retrieval + reranking | Gap analysis: Datahike + Proximum closes OV5's vector-memory gap using existing stack |
 
-**Knowledge pages**: `mementum/knowledge/self-evolving-agent-research.md`, `mementum/knowledge/research-planning-graph-plansearch-ov5-gaps.md`
+**Knowledge pages**: `mementum/knowledge/self-evolving-agent-research.md`, `mementum/knowledge/research-planning-graph-plansearch-ov5-gaps.md`, `mementum/knowledge/deep-searcher-vs-ov5-gaps.md`
 
 ---
 

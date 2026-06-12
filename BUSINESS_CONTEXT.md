@@ -1,7 +1,7 @@
 # Business Context: OV5 Implementation of YC Vision
 
 > **YC Vision**: Recursive self-improving AI loops that learn from every outcome
-> **OV5 Implementation**: 100% complete (all 5 layers operational, all 10 phases implemented including self-modification)
+> **OV5 Implementation**: ~96% complete (all 5 layers operational, all 10 phases implemented including self-modification; sensor layer partial — Sentry wired, support/feedback stubs)
 > **Status**: Fully operational, self-evolution cycle running with 10-phase monitoring agent (Phases 0-9)
 
 ---
@@ -144,7 +144,7 @@ All happens while employees sleep
 
 ## Current Assessment
 
-**OV5 completion level:** ~98% of YC vision (all 5 layers operational, feedback loop closed with post-deploy impact assessment)
+**OV5 completion level:** ~96% of YC vision (all 5 layers operational, feedback loop closed with post-deploy impact assessment)
 - ✅ **Sensor layer**: Production metrics via Sentry API, monitoring agent classifies failure patterns
 - ✅ **Policy layer**: Risk-based decision classification, approval queue, auto-deploy for low-risk
 - ✅ **Tools layer**: Knowledge reasoning (Floyd-Warshall, Allen interval, Horn SAT), context database with business rationale
@@ -154,13 +154,13 @@ All happens while employees sleep
 - ✅ **Phase 7 (Post-deploy impact)**: Tracks baseline metrics, waits 3 cycles, assesses impact, writes verdict mementum
 - 🔄 **External sensors**: Sentry operational; Slack/Zendesk stubs (need API keys)
 
-**Remaining 2%:**
+**Remaining 4%:**
 - Wire ontology router into monitoring agent (smarter experiment selection)
-- Add synthesis trigger (≥3 memories → propose knowledge page)
-- Allow self-modification of monitoring code (with human approval)
+- Add synthesis trigger (3 memories propose knowledge page)
 - Wire real user feedback/support ticket APIs (need Slack/Zendesk API keys)
+- Add Proximum vector search to mementum memory retrieval (Datahike already wired)
 
-**Tests:** 2587 tests, 2584 pass (3 pre-existing failures unrelated to YC work)
+**Tests:** ~2,970 tests, 0 unexpected, 29 skipped. All green.
 
 ## The Subtractive Engineering Principle
 
@@ -186,7 +186,7 @@ OV5's quality pipeline has **4 enforced gates** in the experiment hot path and *
 | Gate | Type | What It Checks | What Happens on Failure |
 |------|------|---------------|------------------------|
 | **1. Category Routing** | Enforced | Best backend for this target RIGHT NOW? | Routes to strongest current performer |
-| **2. Test Execution** | Enforced | Did 3485 ERT tests pass? | Experiment discarded |
+| **2. Test Execution** | Enforced | Did ~2,970 ERT tests pass? | Experiment discarded |
 | **3. AI Grading** | Enforced | Is the change well-structured and principled? | Scored 0.0-1.0, fed to analyzer |
 | **3.5 Complexity Gate** | Enforced | Did complexity increase >10% without quality gain? | **Experiment rejected with reason** |
 | **4. AI Review** | Downstream | Does it pass security, conventions, architecture? | Multi-agent review in staging path |
@@ -397,7 +397,7 @@ Each cycle produces:
 | Fixing the same nil-guard bug in 12 files | Mark the target once; the system propagates the fix | 12× leverage on every pattern |
 | Code reviewing PRs for style consistency | Review kept experiments (the ontology already blocked style violations) | Review time drops 60% — focus on architecture, not syntax |
 | Writing docs for your patterns | The ontology records every kept/discarded experiment as executable knowledge | Documentation that never goes stale |
-| Wondering "did I break anything?" | 3485 ERT tests run before every merge | Ship with confidence, not hope |
+| Wondering "did I break anything?" | ~2,970 ERT tests run before every merge | Ship with confidence, not hope |
 | Spending 4h on a refactor | The system experiments with 5 approaches; you review the winner | 5× more exploration, same time budget |
 
 ### The Innovation Flywheel
@@ -421,15 +421,15 @@ That's the innovation path. Not "AI writes code for you." **Your company becomes
 
 ### The Numbers That Matter
 
-These come from 6 months of continuous operation across 8 backends and 12 architectures:
+These come from 6 months of continuous operation across 12 backends and 12 architectures:
 
 | Metric | OV5 | Manual improvement | Why it matters |
 |--------|-----|-------------------|----------------|
 | **Experiments/month** | 100+ | 2-3 refactors | More iteration than a human team does in a quarter |
 | **Keep-rate** | 20% | N/A | 1 in 5 experiments is production-ready; the other 4 teach the system what not to do |
-| **Test coverage** | 3485 ERT tests per merge | Varies | Zero regression risk — every automated change passes the full suite |
+| **Test coverage** | ~2,970 ERT tests per merge | Varies | Zero regression risk — every automated change passes the full suite |
 | **Prompt compression** | 59% | N/A | Lambda notation costs less; same capability, lower API spend |
-| **Backend diversity** | 8 providers | 1 (your IDE) | Automatic failover when a provider rate-limits or goes down |
+| **Backend diversity** | 12 providers | 1 (your IDE) | Automatic failover when a provider rate-limits or goes down |
 | **Token efficiency** | Tracking with ROI correlation | N/A | Measure ROI per token spent, optimize spend based on business value |
 
 **What 20% keep-rate means:** The system wastes API calls so you don't waste time. You review only what passes all **7 gates**. The 80% that fail aren't wasted — they train the ontology to avoid those patterns next time. After 50 experiments per category, the system stops making the same mistakes.
@@ -496,7 +496,7 @@ OV5 serves five distinct jobs, one for each layer of the YC Vision framework. Ea
 | **"See what's breaking before users complain"** | SRE / Eng lead | Production errors discovered in post-mortems, not in real time | **1. Sensor** | Production metrics pipeline (Sentry API), monitoring agent classifies failure patterns | Failure detection latency ↓, MTTR ↓ | Monitoring agent learns failure signatures → proposes fixes before recurrence |
 | **"Let the system decide what's safe to ship"** | CTO / Eng VP | Every change requires human review, even trivial nil-guard fixes | **2. Policy** | Risk-based decision classification (low/medium/high), approval queue for high-risk only, auto-deploy for low-risk | Auto-deploy rate ↑, human review time ↓ | Decision classification learns from approval history → risk patterns sharpen |
 | **"Give every engineer a senior mentor's instincts"** | Team lead | Junior devs repeat the same mistakes seniors already learned to avoid | **3. Tools** | Knowledge reasoning (Floyd-Warshall causal chains, Allen interval gap detection), context database with business rationale | Pattern re-introduction rate ↓, code quality per PR ↑ | Context database accumulates decision rationale → mentorship deepens with every experiment |
-| **"Ship with confidence, not hope"** | Solo dev / Team | "Did I break anything?" — uncertainty after every change | **4. Quality Gate** | 7 gates (3485 tests, AI grader, complexity gate, review, π Synthesis, champion league, category routing) | Regressions per merge → 0, keep-rate → 20% | Ontology learns what your codebase accepts/rejects → false positives ↓, keep-rate ↑ |
+| **"Ship with confidence, not hope"** | Solo dev / Team | "Did I break anything?" — uncertainty after every change | **4. Quality Gate** | 7 gates (~2,970 tests, AI grader, complexity gate, review, π Synthesis, champion league, category routing) | Regressions per merge → 0, keep-rate → 20% | Ontology learns what your codebase accepts/rejects → false positives ↓, keep-rate ↑ |
 | **"Make the codebase smarter than the people in it"** | Engineering VP | Institutional knowledge walks out the door when seniors leave | **5. Learning** | Self-evolution cycle, pattern synthesis, architectural evolution, code regeneration with institutional knowledge | Onboarding time ↓, ontology accuracy ↑ | Every experiment adds to the ontology → compounding knowledge that survives attrition |
 
 **The alignment:** Each YC layer solves a distinct job. The jobs form a stack — Sensors detect, Policy decides, Tools reason, Quality validates, Learning compounds. A team that adopts all five layers gets a self-improving company; a team that adopts one layer still gets immediate value from that layer alone.
@@ -586,7 +586,7 @@ Each stage activates additional YC layers:
 | "What if the system executes malicious code?" | **Platform sandbox** (seatbelt on macOS, bubblewrap on Linux) provides OS-level process containment. Experiments run in isolated namespaces with restricted filesystem access. |
 | "What if the ontology learns wrong patterns?" | Category drift detection (>20% deviation flagged). Eight-keys scoring catches overfitting. Holdout evaluation prevents self-deception. |
 | "What if it doesn't work for our codebase?" | It runs on every `.el` file by default. 4 ontology categories cover all file types. No special integration needed. |
-| "What if a backend goes down?" | 8 backends defined (4-5 actively routed) with automatic failover. Subagent routing self-tunes: unhealthy backends get health strikes → probation → exclusion. Auto-recovery after 1h without new strikes. |
+| "What if a backend goes down?" | 12 backends defined (4-5 actively routed) with automatic failover. Subagent routing self-tunes: unhealthy backends get health strikes → probation → exclusion. Auto-recovery after 1h without new strikes. |
 | "What if we don't use Emacs?" | The architecture is backend-agnostic (5 LLM providers, any language). The Emacs surface is the first implementation, not the last. Future: GitHub Action + hosted API. |
 
 ### The Pitch
@@ -797,7 +797,7 @@ YC's data: companies running AI loops see **5× revenue per person** compared to
 | **Code regeneration** | ✅ Operational | Context-driven prompt override, institutional knowledge injection |
 | **External sensors** | 🔄 Partial | Sentry API wired; user feedback and support tickets are stubs |
 | **Closed-loop feedback** | ✅ Enabled | Context informs decisions |
-| **Tests** | 3485 passing, 0 unexpected | All systems functional |
+| **Tests** | ~2,970 passing, 0 unexpected | All systems functional |
 
 ### Evolution Cycle Status
 
