@@ -147,6 +147,12 @@ were created after the hiding but before restoration."
                      (eq mode-line-format nil))
             (kill-local-variable 'mode-line-format)))))))
 
+;; --- Auto-workflow: register external projects ---
+(when (boundp 'gptel-auto-workflow-projects)
+  (let ((creatoros (expand-file-name "~/workspace/creatoros")))
+    (when (file-directory-p creatoros)
+      (add-to-list 'gptel-auto-workflow-projects creatoros))))
+
 ;; Run after all init is complete
 (add-hook 'emacs-startup-hook #'my/fix-mode-line-for-all-buffers 100)
 
