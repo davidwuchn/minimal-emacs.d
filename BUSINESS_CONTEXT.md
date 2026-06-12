@@ -788,6 +788,21 @@ OV5's GTM Mayor is a 种草 intelligence engine:
 
 **Same OV5 infrastructure. Different products. Different price points. Same 80% code reuse.**
 
+### The Unique OV5 Moat
+
+A competitor can copy the feature. They can't copy the 500 experiments that taught OV5 why it works.
+
+| Capability | What it means for TikTok | What it means for 小红书 |
+|---|---|---|
+| **Self-improving** | Product matching gets smarter with every sale/no-sale feedback. Week 50 picks are 3× more accurate than week 1. | 种草 detection gets earlier. OV5 learns which signals predict a product blowing up before competitors notice. |
+| **Cross-platform intelligence** | "This product is already 种草'd on 小红书 with 92% positive sentiment — promote it now before it saturates." | "TikTok creators sold 10K units of this product last week. 小红书 audience hasn't seen it yet — first-mover advantage." |
+| **Self-healing** | Amazon API changes? OV5 rewrites the scraper overnight. Zero human intervention. | 小红书 changes page structure? OV5 detects the break, experiments on fixes, deploys the winning one. |
+| **Memory (mementum)** | Never recommends a product that already failed 3× for creators in the same niche. Failure database compounds. | Never flags a fake-review pattern twice. Knows which KOLs' 种草 actually converts vs just generates likes. |
+| **Runs itself** | Competitors (Jungle Scout, Helium 10, 蝉妈妈) need engineering teams. OV5 runs autonomously — 100+ experiments/month, 20% keep-rate, zero headcount. | Same. Brand intelligence that doesn't require a data team. |
+| **Ontology as IP** | 500 experiments later: the system knows which product categories, price points, and demographics convert. That knowledge IS the company. | 500 experiments later: the system knows 种草 patterns across beauty, skincare, fashion, food — which signals predict purchase intent. That's not a database. That's proprietary intelligence. |
+
+**The moat:** Every experiment OV5 runs feeds the ontology. The ontology IS the business.
+
 | Package | What it enables | Who it's for |
 |---------|----------------|--------------|
 | **OV5 GitHub Action** | Run experiments on any repo in CI | "I don't use Emacs but I want this" |
