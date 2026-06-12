@@ -432,8 +432,9 @@ Usage:
         (message "[auto-workflow] Skipping: %s" (string-join (car active) ", "))
         (cl-return-from gptel-auto-workflow-run-async nil)))
     ;; Human decision gate: block if pending decisions exist
+    ;; Uses truthiness (not eq t) — pending-decisions-p contract is "return non-nil"
     (when (and (fboundp 'gptel-auto-workflow--pending-decisions-p)
-               (eq t (gptel-auto-workflow--pending-decisions-p)))
+               (gptel-auto-workflow--pending-decisions-p))
       (setq gptel-auto-workflow--stats
             (list :phase "blocked" :total 0 :kept 0))
       (gptel-auto-workflow--persist-status)

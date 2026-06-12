@@ -2329,33 +2329,45 @@ pipeline from hanging when a sub-function blocks indefinitely."
             ;; No experiments to analyze — trigger them instead.
             ;; This enables local development machines to run experiments,
             ;; not just Pi5 (which runs via cron).
-            (message "[evolution] No new experiments to analyze. Triggering experiment run...")
-             (condition-case trigger-err
-                 (progn
-                   (require 'gptel-tools-agent-main nil t)
-                   (when (fboundp 'gptel-auto-workflow-run-async)
-                     (gptel-auto-workflow-run-async
-                      nil
-                      (lambda (&optional _results)
-                        (gptel-auto-workflow-evolution-run-cycle)))))
-               (error (message "[evolution] Experiment run error: %s — retrying without lesson restore
+            ;; Preflight: check human-decision gate before triggering experiments.
+            ;; Uses truthiness (matching gptel-tools-agent-main.el gate check).
+            (if (and (fboundp 'gptel-auto-workflow--pending-decisions-p)
+                     (gptel-auto-workflow--pending-decisions-p))
+                (progn
+                  (setq gptel-auto-workflow--stats
+                        (list :phase "blocked" :total 0 :kept 0))
+                  (gptel-auto-workflow--persist-status)
+                  (message "[evolution] BLOCKED: Pending human decision — not triggering experiments")
+                  (gptel-auto-workflow--persist-next-cycle-hints)
+                  (cl-return-from gptel-auto-workflow-evolution-run-cycle "blocked-pending-decisions"))
+              ;; Gate clear — proceed with experiment trigger
+              (message "[evolution] No new experiments to analyze. Triggering experiment run...")
+               (condition-case trigger-err
+                   (progn
+                     (require 'gptel-tools-agent-main nil t)
+                     (when (fboundp 'gptel-auto-workflow-run-async)
+                       (gptel-auto-workflow-run-async
+                        nil
+                        (lambda (&optional _results)
+                          (gptel-auto-workflow-evolution-run-cycle)))))
+                 (error (message "[evolution] Experiment run error: %s — retrying without lesson restore
 (continuing cycle)"
-                               (if (stringp trigger-err)
-                                   trigger-err
-                                 (prin1-to-string trigger-err)))
-                      ;; Retry: the error may be from setup (self-heal lesson restore),
-                      ;; not from the experiment itself. Try once more with a direct call.
-                      (condition-case retry-err
-                          (when (and (fboundp 'gptel-auto-workflow-run-async)
-                                     (not gptel-auto-workflow--running))
-                            (gptel-auto-workflow-run-async
-                             nil
-                             (lambda (&optional _results)
-                               (gptel-auto-workflow-evolution-run-cycle))))
-                        (error (message "[evolution] Retry also failed: %s" retry-err)))))
-            ;; Persist hints before returning
-            (gptel-auto-workflow--persist-next-cycle-hints)
-            (cl-return-from gptel-auto-workflow-evolution-run-cycle "triggered-experiments")))
+                                 (if (stringp trigger-err)
+                                     trigger-err
+                                   (prin1-to-string trigger-err)))
+                        ;; Retry: the error may be from setup (self-heal lesson restore),
+                        ;; not from the experiment itself. Try once more with a direct call.
+                        (condition-case retry-err
+                            (when (and (fboundp 'gptel-auto-workflow-run-async)
+                                       (not gptel-auto-workflow--running))
+                              (gptel-auto-workflow-run-async
+                               nil
+                               (lambda (&optional _results)
+                                 (gptel-auto-workflow-evolution-run-cycle))))
+                          (error (message "[evolution] Retry also failed: %s" retry-err)))))
+              ;; Persist hints before returning
+              (gptel-auto-workflow--persist-next-cycle-hints)
+              (cl-return-from gptel-auto-workflow-evolution-run-cycle "triggered-experiments"))))
     (error (message "[evolution] Warning: new-experiments check failed, continuing cycle")))
   ;; Consume pipeline env vars for research-aware evolution
   (let ((research-quality (getenv "PIPELINE_RESEARCH_QUALITY"))
