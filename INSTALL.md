@@ -14,6 +14,9 @@
 | **jq** | any | `jq --version` | `brew install jq` (macOS) or `apt install jq` (Linux) |
 | **GNU sed** | any | macOS only | `brew install gnu-sed` (script has BSD compat fallback) |
 | **OpenCode CLI** | latest | `opencode --version` | [opencode.dev](https://opencode.dev) |
+| **Babashka** | 1.x+ | `bb --version` | `brew install borkdude/brew/babashka` or [babashka.org](https://babashka.org) |
+| **clj-kondo** | any | `clj-kondo --version` | `brew install borkdude/brew/clj-kondo` |
+| **zprint** (optional) | any | `zprint --version` | `brew install zprint` |
 
 **macOS note:** The install scripts handle BSD sed compatibility automatically. GNU sed is recommended but not required.
 
@@ -245,6 +248,32 @@ tail -50 var/log/emacs-*.log
 
 ---
 
+## Step 11: Create External Projects (Optional)
+
+OV5 can manage any Clojure project. Use the bootstrap script:
+
+```bash
+cd ~/.emacs.d
+./scripts/ov5-project-init.sh ~/workspace/myapp "My App"
+```
+
+This creates a complete OV5-managed project with:
+- Clojure project files (`bb.edn`, `deps.edn`, `.gitignore`)
+- OV5 target configuration (`.dir-locals.el`)
+- CI pipeline (`scripts/run-tests.sh` — lint + format + test)
+- OpenCode configuration (`.opencode/` with skills)
+- Mementum memory (`mementum/state.md`)
+- AI agent bootstrap (`AGENTS.md`)
+- Automatic registration in OV5's `post-init.el`
+
+**After running:** Restart the Emacs daemon. OV5 will discover the project on next experiment cycle.
+
+**Worked example:** [CreatorOS](https://github.com/davidwuchn/creatoros) — a TikTok product-matching engine. See its `AGENTS.md` for the self-regulation framework and `CREATOROS.md` for the full product spec.
+
+**Verify:** Restart daemon, then check projects: `emacsclient --eval '(length gptel-auto-workflow-projects)'` should show 2+.
+
+---
+
 ## Troubleshooting
 
 ### Clone Issues
@@ -350,8 +379,9 @@ OV5 has three configuration layers:
 | `~/.emacs.d/var/context/` | Context database sidecars |
 | `~/.emacs.d/var/approval-queue/` | Approval queue for high-risk proposals |
 | `~/.emacs.d/mementum/` | AI memory system |
-| `~/.emacs.d/lisp/modules/` | OV5 modules (39 files) |
+| `~/.emacs.d/lisp/modules/` | OV5 modules (131 files) |
 | `~/.emacs.d/packages/` | Git submodule packages |
+| `~/workspace/*/` | External OV5-managed projects (created by `ov5-project-init.sh`)
 
 ---
 
@@ -386,6 +416,9 @@ cd ~/.emacs.d
 ./scripts/setup-packages.sh
 ./scripts/setup-eca-links.sh
 ./scripts/install-ops-global.sh  # optional
+
+# Create an external project (optional)
+./scripts/ov5-project-init.sh ~/workspace/myapp "My App"
 
 # Daily operation
 ./scripts/run-pipeline.sh        # run experiments
