@@ -44,7 +44,8 @@ Set to 0 to disable rate limiting."
   :type 'integer
   :group 'gptel-tools-agent)
 
-(defvar gptel-auto-workflow--fix-attempt-history nil
+(defvar gptel-auto-workflow--fix-attempt-history
+  (make-hash-table :test 'equal)
   "Hash table mapping (FILE . FIXER-NAME) → float-time of last attempt.
 Reset at the start of each self-heal cycle.")
 
