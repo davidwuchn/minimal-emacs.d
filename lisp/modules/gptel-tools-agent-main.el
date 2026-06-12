@@ -1363,7 +1363,8 @@ so cleanup never crashes before resetting state."
                                       "queued")
                                 "idle")))
       (gptel-auto-workflow--persist-status)
-      (clrhash gptel-auto-workflow--worktree-state))
+      (when (hash-table-p gptel-auto-workflow--worktree-state)
+        (clrhash gptel-auto-workflow--worktree-state)))
     (when (> cleaned 0)
       (message "[auto-workflow] Cleaned %d stale items" cleaned))))
 
