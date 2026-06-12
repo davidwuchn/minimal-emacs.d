@@ -424,8 +424,8 @@ it when the current transient implementation is too old."
                  (or proj-root
                      (gptel-auto-workflow--default-dir)))))
          (dir (or (gptel-auto-workflow--elpa-package-dir root "transient")
-                  (when (not (fboundp 'transient--set-layout))
-                    (gptel-auto-workflow--install-elpa-package root 'transient)))))
+                  ;; Defer install to pipeline time (blocks init on network I/O)
+                  nil)))
     (when-let* ((dir dir)
                 (lib (cl-find-if #'file-readable-p
                                  (list (expand-file-name "transient.elc" dir)
