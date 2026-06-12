@@ -278,17 +278,16 @@ The hook guards against nil fixed-content, so the buffer should not be touched."
         (result (list :valid nil :fixed-content nil :error "unfixable")))
     (unwind-protect
         (progn
-          (save-excursion (set-buffer buf) (insert original))
-          (save-excursion
-            (set-buffer buf)
+          (with-current-buffer buf
+            (insert original))
+          (with-current-buffer buf
             (when (and (plist-get result :fixed-content)
                        (not (string= (plist-get result :fixed-content)
                                      (buffer-string))))
               (let ((fixed (plist-get result :fixed-content)))
                 (erase-buffer)
                 (insert fixed))))
-          (save-excursion
-            (set-buffer buf)
+          (with-current-buffer buf
             (should (string= (buffer-string) original))))
       (kill-buffer buf))))
 
@@ -303,9 +302,9 @@ gptel-brepl-eval/load-file/balance on a real missing file."
   (let ((captured-destination nil))
     (cl-letf (((symbol-function 'executable-find) (lambda (_) "/usr/bin/false"))
               ((symbol-function 'call-process)
-               (lambda (program &optional infile destination display &rest args)
-                 (setq captured-destination destination)
-                 1)))
+               (lambda (_program &optional _infile destination _display &rest _args)
+                  (setq captured-destination destination)
+                  1)))
       (gptel-brepl--call '("balance" "/tmp/test.clj"))
       ;; If DESTINATION is a list (REAL-BUFFER . STDERR-FILE), STDERR-FILE
       ;; must NOT be a buffer object — it must be nil, t, or a string.
@@ -385,7 +384,9 @@ when reading from an empty buffer or a missing file.  Must return
 
 (ert-deftest test-brepl/lint-file-returns-clean-on-no-errors ()
   "lint-file returns (:success t :errors 0) on clean file."
-  (cl-letf (((symbol-function 'call-process)
+  (cl-letf (((symbol-function 'executable-find)
+             (lambda (_) "/usr/bin/clj-kondo"))
+            ((symbol-function 'call-process)
              (lambda (&rest _args) 0)))
     (let ((result (gptel-brepl-lint-file "/tmp/clean.clj")))
       (should (plist-get result :success))
@@ -393,12 +394,14 @@ when reading from an empty buffer or a missing file.  Must return
 
 (ert-deftest test-brepl/lint-file-returns-findings-on-errors ()
   "lint-file returns (:success nil :findings ...) when clj-kondo finds errors."
-  (cl-letf (((symbol-function 'call-process)
-             (lambda (program &optional infile destination display &rest args)
-               (when destination
-                 (with-current-buffer destination
-                   (insert "/tmp/dirty.clj:5:3: error: unused binding 'x'\n/tmp/dirty.clj:10:1: warning: missing else branch\n")))
-               3)))
+  (cl-letf (((symbol-function 'executable-find)
+             (lambda (_) "/usr/bin/clj-kondo"))
+             ((symbol-function 'call-process)
+              (lambda (_program &optional _infile destination _display &rest _args)
+                (when destination
+                  (with-current-buffer destination
+                    (insert "/tmp/dirty.clj:5:3: error: unused binding 'x'\n/tmp/dirty.clj:10:1: warning: missing else branch\n")))
+                3)))
     (let ((result (gptel-brepl-lint-file "/tmp/dirty.clj")))
       (should-not (plist-get result :success))
       (should (= 2 (length (plist-get result :findings)))))))
