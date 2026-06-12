@@ -396,6 +396,48 @@ Returns 1 if missing, 0 if present."
                  suggested)))))
   issues))
 
+;; ── Check 10: Bare (defvar FOO) without initial value ──
+
+(defun gptel-auto-workflow--audit-void-defvars (file)
+  "Audit FILE for bare (defvar SYMBOL) without an initial value.
+Bare defvars do not make the variable special under lexical-binding,
+causing void-variable errors at runtime.  Returns count of bare defvars."
+  (let ((issues 0))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (goto-char (point-min))
+      (while (re-search-forward "^(defvar[ \t]+\\([a-z][a-z0-9-]*\\)" nil t)
+        (let ((var-name (match-string 1))
+              (line-no (line-number-at-pos))
+              (is-bare nil))
+          ;; Skip whitespace after the var name
+          (skip-syntax-forward " ")
+          ;; Check if the close paren follows immediately (same line) or
+          ;; on the next line with only whitespace between.
+          (cond
+            ((eq (char-after) ?\))
+             (setq is-bare t))
+            ((eq (char-after) ?\n)
+             (forward-line 1)
+             (skip-syntax-forward " ")
+             (when (eq (char-after) ?\))
+               (setq is-bare t))))
+          (when is-bare
+            (setq issues (1+ issues))
+            (gptel-auto-workflow--semantic-audit-record
+             file line-no
+             'void-defvar
+             (format "Bare (defvar %s) — add nil to prevent void-variable errors"
+                     var-name)))
+          ;; Move past this form to avoid re-matching the same defvar.
+          ;; If bare, we advanced to the close paren during detection;
+          ;; otherwise, move to the next line.
+          (if is-bare
+              (when (eq (char-after) ?\))
+                (forward-char 1))
+            (forward-line 1)))))
+    issues))
+
 (defvar gptel-auto-workflow--semantic-audit-checks
   '((let-binding-function . gptel-auto-workflow--audit-let-binding-functions)
     (hardcoded-limit . gptel-auto-workflow--audit-hardcoded-limits)
@@ -406,7 +448,8 @@ Returns 1 if missing, 0 if present."
     (missing-provide . gptel-auto-workflow--audit-missing-provide)
     (condition-case-unbound-err . gptel-auto-workflow--audit-condition-case-unbound-err)
     (risk-node . gptel-auto-workflow--audit-risk-nodes)
-    (provide-inside-defun . gptel-auto-workflow--audit-provide-inside-defun))
+    (provide-inside-defun . gptel-auto-workflow--audit-provide-inside-defun)
+    (void-defvar . gptel-auto-workflow--audit-void-defvars))
   "Alist of audit check name (symbol) to audit function.")
 
 ;; ── Check 8: condition-case with unbound err ──
@@ -1232,7 +1275,8 @@ instead of fixing each failure individually."
     (missing-provide . gptel-auto-workflow--fix-missing-provide)
     (unbalanced-parens . gptel-auto-workflow--fix-unbalanced-parens)
     (condition-case-unbound-err . gptel-auto-workflow--fix-condition-case-unbound-err)
-    (provide-inside-defun . gptel-auto-workflow--fix-provide-inside-defun))
+    (provide-inside-defun . gptel-auto-workflow--fix-provide-inside-defun)
+    (void-defvar . gptel-auto-workflow--fix-void-defvars))
   "Alist mapping audit issue type (symbol) to its auto-fixer function.
 Adding a new auto-fixer is now a one-line change to this alist.
 Each fixer must take FILE as argument and return fix count (0 = no-op).")

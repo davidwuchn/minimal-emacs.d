@@ -200,7 +200,7 @@ legitimate subagent work. Set to nil to disable.\")")
 
 (ert-deftest test-self-heal-semantic/audit-checks-variable-defined ()
   "The audit checks alist is defined with all checks."
-  (should (= (length gptel-auto-workflow--semantic-audit-checks) 10))
+  (should (= (length gptel-auto-workflow--semantic-audit-checks) 11))
   (should (assq 'let-binding-function gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'hardcoded-limit gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'score-zero-bug gptel-auto-workflow--semantic-audit-checks))
@@ -210,7 +210,8 @@ legitimate subagent work. Set to nil to disable.\")")
   (should (assq 'missing-provide gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'condition-case-unbound-err gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'risk-node gptel-auto-workflow--semantic-audit-checks))
-  (should (assq 'provide-inside-defun gptel-auto-workflow--semantic-audit-checks)))
+  (should (assq 'provide-inside-defun gptel-auto-workflow--semantic-audit-checks))
+  (should (assq 'void-defvar gptel-auto-workflow--semantic-audit-checks)))
 
 ;; ── Test 10: Missing provide detection ──
 
@@ -625,7 +626,13 @@ causing void-function errors when gptel-agent was not loaded."
         (should (= 1 (plist-get result :auto-fixed)))))))
 
 (ert-deftest test-self-heal-semantic/fixer-entries-are-functions ()
-  "Each fixer in the registry must be a function symbol."
+  "Each fixer in the registry must be a function symbol.
+Cross-module fixers (e.g., in gptel-auto-workflow-evolution) are
+loaded on demand if not yet fboundp."
+  ;; The void-defvar fixer lives in evolution.el; ensure it's loaded.
+  (unless (fboundp 'gptel-auto-workflow--fix-void-defvars)
+    (load (expand-file-name "lisp/modules/gptel-auto-workflow-evolution.el"
+                            default-directory)))
   (dolist (entry gptel-auto-workflow--semantic-fixer-alist)
     (let ((fixer (cdr entry)))
       (should (symbolp fixer))

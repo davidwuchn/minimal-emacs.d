@@ -57,8 +57,8 @@
 (declare-function gptel-auto-workflow--load-research-traces "gptel-auto-workflow-research-benchmark" ())
 (declare-function gptel-backend-name "gptel-request" (backend))
 
-(defvar gptel-auto-workflow--champion-keep-rate)
-(defvar gptel-backend)
+(defvar gptel-auto-workflow--champion-keep-rate nil)
+(defvar gptel-backend nil)
 
 ;; ─── Semantica AgentMemory: formalize mementum layers ───
 
@@ -143,7 +143,7 @@ Populated by VSM health check, consumed by cross-subsystem feedback.")
 Used by `gptel-auto-workflow--probe-classify-result' to communicate
 grader health back to the caller's lexical scope.")
 
-(defvar gptel-auto-workflow--evolution-last-kept-target)
+(defvar gptel-auto-workflow--evolution-last-kept-target nil)
 
 (defun gptel-auto-workflow--eight-keys-convergence-score ()
   "Compute Eight Keys convergence score from kept experiments.
@@ -7596,8 +7596,8 @@ reflection logic may be broken"
 (defvar gptel-auto-workflow--blind-mode nil)
 
 ;; Dynamic variables from gptel package
-(defvar gptel-max-tokens)
-(defvar gptel-temperature)
+(defvar gptel-max-tokens nil)
+(defvar gptel-temperature nil)
 
 ;; Functions defined in other modules
 (declare-function gptel-auto-workflow--default-model-for-backend "gptel-tools-agent-prompt-build")
@@ -8638,6 +8638,65 @@ WARNINGS is alist of (LINE . TEXT).  Returns number of fixes."
       (kill-buffer (current-buffer)))
     fixes))
 
+(defun gptel-auto-workflow--fix-void-defvars (file)
+  "Fix bare (defvar FOO) patterns in FILE by adding nil as initial value.
+Skips any defvar where a corresponding (defcustom FOO ...) exists
+in the same file, since the defcustom provides the default.
+Returns number of fixes applied."
+  (let ((fixes 0)
+        (fix-positions nil))
+    (with-current-buffer (find-file-noselect file)
+      (emacs-lisp-mode)
+      (goto-char (point-min))
+      (while (re-search-forward "^(defvar[ \t]+\\([a-z][a-z0-9-]*\\)" nil t)
+        (let* ((var-name (match-string 1))
+               (line-end (point))
+               (is-bare nil)
+               (close-pos nil))
+          (skip-syntax-forward " ")
+          (cond
+            ((eq (char-after) ?\))
+             (setq is-bare t
+                   close-pos (point)))
+            ((eq (char-after) ?\n)
+             (forward-line 1)
+             (skip-syntax-forward " ")
+             (when (eq (char-after) ?\))
+               (setq is-bare t
+                     close-pos (point)))))
+          (when is-bare
+            ;; Check if a defcustom with the same name exists in this file.
+            ;; If it does, skip — the defcustom provides the default value.
+            (let ((has-defcustom nil))
+              (save-excursion
+                (goto-char (point-min))
+                (let ((defcustom-pattern
+                       (format "(defcustom[ \t\n]+%s\\b"
+                               (regexp-quote var-name))))
+                  (when (re-search-forward defcustom-pattern nil t)
+                    (setq has-defcustom t))))
+              (unless has-defcustom
+                (push close-pos fix-positions))))
+          ;; Move past this form to avoid re-matching the same defvar.
+          ;; close-pos is at the closing paren.  Move past it for bare,
+          ;; or to the next line for defvars with values.
+          (if close-pos
+              (goto-char (1+ close-pos))
+            (goto-char line-end)
+            (forward-line 1))))
+      ;; Apply fixes from bottom to top so earlier positions stay valid
+      (dolist (pos (sort fix-positions #'>))
+        (goto-char pos)
+        (insert " nil")
+        (setq fixes (1+ fixes)))
+      (when (> fixes 0)
+        (save-buffer))
+      (kill-buffer (current-buffer)))
+    (when (> fixes 0)
+      (message "[self-heal] void-defvar: %d fix(es) in %s"
+               fixes (file-name-nondirectory file)))
+    fixes))
+
 (cl-defun gptel-auto-workflow--self-heal-byte-compiler-llm (warnings)
   "Escalate stubborn WARNINGS in self to LLM backend.
 LLM fixes self-heal function itself when mechanical fixers fail.
@@ -8809,14 +8868,15 @@ paren balance, its changes are reverted.  Returns (FIX-COUNT . REMAINING)."
     (when warnings
       (message "[self-heal] %s: %d warnings" (file-name-nondirectory file) (length warnings))
       (dolist (fixer (list
-                      #'gptel-auto-workflow--fix-docstring-width
-                      #'gptel-auto-workflow--fix-unescaped-quotes
-                      (lambda (_file) (gptel-auto-workflow--fix-unused-variables file warnings))
-                      (lambda (_file) (gptel-auto-workflow--fix-free-variables file warnings))
-                      (lambda (_file) (gptel-auto-workflow--fix-unknown-functions file warnings))
-                      (lambda (_file) (gptel-auto-workflow--fix-condition-case-no-handlers file warnings))
-                      (lambda (_file) (gptel-auto-workflow--fix-arg-mismatch file warnings))
-                      #'gptel-auto-workflow--fix-let-needs-let*))
+                       #'gptel-auto-workflow--fix-docstring-width
+                       #'gptel-auto-workflow--fix-unescaped-quotes
+                       (lambda (_file) (gptel-auto-workflow--fix-unused-variables file warnings))
+                       (lambda (_file) (gptel-auto-workflow--fix-free-variables file warnings))
+                       (lambda (_file) (gptel-auto-workflow--fix-unknown-functions file warnings))
+                       (lambda (_file) (gptel-auto-workflow--fix-condition-case-no-handlers file warnings))
+                       (lambda (_file) (gptel-auto-workflow--fix-arg-mismatch file warnings))
+                       #'gptel-auto-workflow--fix-let-needs-let*
+                       #'gptel-auto-workflow--fix-void-defvars))
         (cl-incf fix-count
                  (gptel-auto-workflow--run-fixer-with-rollback file fixer))))
     (cons fix-count (if (gptel-auto-workflow--check-parens file)
