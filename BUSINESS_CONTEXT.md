@@ -154,11 +154,13 @@ All happens while employees sleep
 - ✅ **Phase 7 (Post-deploy impact)**: Tracks baseline metrics, waits 3 cycles, assesses impact, writes verdict mementum
 - 🔄 **External sensors**: Sentry operational; Slack/Zendesk stubs (need API keys)
 
-**Remaining 4%:**
-- Wire ontology router into monitoring agent (smarter experiment selection)
-- Add synthesis trigger (3 memories propose knowledge page)
+**Remaining ~4%:**
+- Add Proximum vector search to mementum memory retrieval (Datahike already wired — blocked on BB pod)
+- Build CreatorOS demo on external codebase (prove OV5 works on non-Emacs code)
+- MCP server: expose OV5 tools to external AI agents (Claude/Cursor/OpenCode)
 - Wire real user feedback/support ticket APIs (need Slack/Zendesk API keys)
-- Add Proximum vector search to mementum memory retrieval (Datahike already wired)
+
+**Clojure toolchain:** ✅ Complete — test (clojure.test), lint (clj-kondo), format (zprint), fix (ns-ordering, unused-require), categorize (:clojure), test runner (run-tests.sh clj). brepl 47/47 tests.
 
 **Tests:** ~2,970 tests, 0 unexpected, 29 skipped. All green.
 
