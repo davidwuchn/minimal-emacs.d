@@ -70,6 +70,8 @@
   "gptel-auto-workflow-architectural-evolution")
 (declare-function gptel-auto-workflow--self-heal-semantic
   "gptel-auto-workflow-self-heal-semantic")
+(declare-function gptel-auto-workflow--statechart-analyze
+  "gptel-auto-workflow-pipeline-statechart")
 
 ;; ── Configuration ──
 
@@ -1544,6 +1546,31 @@ Returns list of written mementum file paths, or nil if throttled/disabled."
             (error
              (message "[monitoring] Auto-learn skipped: %s"
                       (error-message-string auto-learn-err))))
+          ;; Phase 1c: Pipeline statechart analysis (Markov-chain gate tracking)
+          (condition-case statechart-err
+              (when (fboundp 'gptel-auto-workflow--statechart-analyze)
+                (let ((analysis (gptel-auto-workflow--statechart-analyze)))
+                  (message "[statechart] Bottleneck: %s | keep-rate: %.2f%% | φ-deviation: %+.4f | n=%d"
+                           (or (plist-get analysis :bottleneck) "none")
+                           (* 100 (plist-get analysis :expected-keep-rate))
+                           (plist-get analysis :phi-deviation)
+                           (plist-get analysis :total-experiments))
+                  ;; Log significant φ deviation to mementum
+                  (when (and (> (abs (plist-get analysis :phi-deviation)) 0.05)
+                             (fboundp 'gptel-auto-workflow--mementum-write-memory))
+                    (condition-case nil
+                        (gptel-auto-workflow--mementum-write-memory
+                         '🔁
+                         "statechart-phi-deviation"
+                         (format "Pipeline keep-rate deviates from φ model: expected-max=%.4f actual=%.4f deviation=%.4f bottleneck=%s"
+                                 (plist-get analysis :phi-keep-rate-max)
+                                 (plist-get analysis :expected-keep-rate)
+                                 (plist-get analysis :phi-deviation)
+                                 (or (plist-get analysis :bottleneck) "none")))
+                      (error nil)))))
+            (error
+             (message "[statechart] Analysis error: %s"
+                      (error-message-string statechart-err))))
           ;; Persist each pattern to mementum (Phase 1)
           (dolist (pattern patterns)
             (let* ((ftype (plist-get pattern :type))

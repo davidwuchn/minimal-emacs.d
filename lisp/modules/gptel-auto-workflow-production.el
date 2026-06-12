@@ -18,6 +18,8 @@
 (declare-function gptel-auto-workflow--bead-file-from-research "gptel-auto-workflow-beads")
 (declare-function gptel-auto-workflow--bead-list "gptel-auto-workflow-beads")
 (declare-function gptel-auto-workflow--memory-status "gptel-auto-workflow-mementum")
+(declare-function gptel-auto-workflow--statechart-rebuild-and-persist "gptel-auto-workflow-pipeline-statechart")
+(declare-function gptel-auto-workflow--statechart-drift-check "gptel-auto-workflow-pipeline-statechart")
 
 ;; ─── Configuration ───
 
@@ -232,6 +234,25 @@ Records to mementum and triggers evolution if needed."
     (condition-case err
         (gptel-auto-workflow--monitoring-cycle)
       (error (message "[monitoring] Monitoring cycle error: %s" err))))
+
+  ;; Rebuild pipeline statechart every N experiments (Markov-chain gate tracking)
+  (let ((exp-id (or (plist-get experiment :id) 0)))
+    (when (and (fboundp 'gptel-auto-workflow--statechart-rebuild-and-persist)
+               (> exp-id 0)
+               (zerop (% exp-id gptel-auto-workflow-statechart-rebuild-interval)))
+      (condition-case err
+          (progn
+            (gptel-auto-workflow--statechart-rebuild-and-persist)
+            (when (fboundp 'gptel-auto-workflow--statechart-drift-check)
+              (let ((drift (gptel-auto-workflow--statechart-drift-check)))
+                (when (plist-get drift :drifted)
+                  (message "[statechart] ⚠ DRIFT detected in gates: %s"
+                           (mapconcat #'symbol-name
+                                      (plist-get drift :drifted-gates)
+                                      ", "))))))
+        (error
+         (message "[statechart] Rebuild/drift error: %s"
+                  (error-message-string err))))))
 
   ;; Run evolution every N experiments
   (let ((exp-id (or (plist-get experiment :id) 0)))
