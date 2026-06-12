@@ -181,7 +181,13 @@ Records to mementum and triggers evolution if needed."
     (condition-case err
         (gptel-auto-workflow--capture-experiment-context experiment)
       (error
-       (message "[auto-workflow] Context capture error: %s" err))))
+        (message "[auto-workflow] Context capture error: %s" err))))
+
+  ;; Write provenance.json sidecar for reproducibility
+  (condition-case err
+      (gptel-auto-workflow--write-experiment-provenance experiment)
+    (error
+     (message "[provenance] Hook error: %s" (error-message-string err))))
 
   ;; Persist context database after each experiment
   (when (fboundp 'gptel-auto-workflow--context-db-persist)
@@ -233,6 +239,48 @@ Records to mementum and triggers evolution if needed."
                (zerop (% exp-id 5))
                (fboundp 'gptel-auto-workflow-evolution-run-cycle))
       (run-with-idle-timer 30 nil #'gptel-auto-workflow--maybe-run-evolution))))
+
+(defun gptel-auto-workflow--write-experiment-provenance (experiment)
+  "Write provenance.json sidecar for EXPERIMENT.
+Writes to var/context/<experiment-id>-provenance.json capturing
+git SHA, Emacs version, backend, model, and token counts.
+Non-blocking: wrapped in condition-case to never halt the pipeline."
+  (condition-case err
+      (let* ((exp-id (plist-get experiment :id))
+             (root (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+                            (gptel-auto-workflow--worktree-base-root))
+                       default-directory))
+             (context-dir (expand-file-name "var/context" root))
+             (file (expand-file-name (format "%s-provenance.json" exp-id) context-dir))
+             (prompt-chars (or (plist-get experiment :prompt-chars) 0))
+             (output-chars (or (plist-get experiment :output-chars) 0))
+             (git-sha (string-trim
+                       (or (condition-case nil
+                               (shell-command-to-string "git rev-parse HEAD")
+                             (error ""))
+                           "")))
+             (provenance
+              `((experiment_id . ,(format "%s" exp-id))
+                (git_sha . ,git-sha)
+                (emacs_version . ,emacs-version)
+                (backend . ,(or (plist-get experiment :backend) "unknown"))
+                (model . ,(or (plist-get experiment :model) "unknown"))
+                (finish_reason . "unknown")
+                (token_counts
+                 (prompt . ,(/ (float prompt-chars) 4.0))
+                 (completion . ,(/ (float output-chars) 4.0)))
+                (timestamp_utc . ,(format-time-string "%Y-%m-%dT%H:%M:%SZ" nil t))
+                (worktree_sha . ,git-sha)
+                (decision . ,(or (plist-get experiment :decision) "unknown"))
+                (duration_s . ,(or (plist-get experiment :duration) 0)))))
+        (make-directory context-dir t)
+        (with-temp-file file
+          (require 'json)
+          (insert (json-encode provenance))))
+    (error
+     (message "[provenance] Write error for exp %s: %s"
+              (plist-get experiment :id)
+              (error-message-string err)))))
 
 (defun gptel-auto-workflow--record-research-batch ()
   "Record accumulated research batch to mementum.
