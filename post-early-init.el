@@ -57,7 +57,9 @@
       (setq server-name dn)))
   ;; Purge stale .elc files to ensure daemon loads latest source.
   (let ((modules-dir (expand-file-name "lisp/modules"
-                                       (or (getenv "MINIMAL_EMACS_USER_DIR")
+                                       (or (and (boundp 'minimal-emacs-user-directory)
+                                                minimal-emacs-user-directory)
+                                           (getenv "MINIMAL_EMACS_USER_DIR")
                                            user-emacs-directory)))
         (cleaned 0))
     (when (file-directory-p modules-dir)
