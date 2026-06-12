@@ -28,6 +28,8 @@
 
 (require 'cl-lib)
 
+(defvar gptel-auto-workflow--running) ;; from production.el — pipeline active flag
+
 ;; Forward declarations for optional cross-module calls
 (declare-function gptel-auto-workflow-code-regeneration--execute
   "gptel-auto-workflow-code-regeneration")
@@ -1507,7 +1509,9 @@ value:** %s\n\nApplied after human approval via approval queue."
 (defun gptel-auto-workflow--monitoring-cycle ()
   "Run one monitoring cycle: analyze failures and persist patterns to mementum.
 Throttled to max 1 cycle per cycle-interval seconds.
+Skips synthesis when pipeline is idle (--running is nil).
 Returns list of written mementum file paths, or nil if throttled/disabled."
+  (cl-block gptel-auto-workflow--monitoring-cycle
   (when gptel-auto-workflow-monitoring-enabled
     (let* ((now (float-time))
            (elapsed (- now
@@ -1522,6 +1526,10 @@ Returns list of written mementum file paths, or nil if throttled/disabled."
         (setq gptel-auto-workflow-monitoring-last-cycle-time now)
         (setq gptel-auto-workflow-monitoring-cycle-counter
               (1+ gptel-auto-workflow-monitoring-cycle-counter))
+        ;; Skip synthesis when pipeline is idle to avoid mementum churn
+        (unless gptel-auto-workflow--running
+          (message "[monitoring] Pipeline idle — skipping synthesis phases")
+          (cl-return-from gptel-auto-workflow--monitoring-cycle nil))
         ;; Phase 0: Run health probes every 3rd cycle
         (when (= (mod gptel-auto-workflow-monitoring-cycle-counter 3) 0)
           (ignore-errors
@@ -1778,7 +1786,8 @@ approval queue)"
                          (insert report))
                        (message "[monitoring] Phase 10b: Batch anchor report written to %s (%d batches)"
                                 report-file (hash-table-count batches)))))))
-             (ignore (nreverse written)))))))))))
+              (ignore (nreverse written))))))))))))
+
 
 (provide 'gptel-auto-workflow-monitoring-agent)
 ;;; gptel-auto-workflow-monitoring-agent.el ends here
