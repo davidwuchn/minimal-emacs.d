@@ -176,6 +176,18 @@ Localized pricing maximizes total addressable market without leaving revenue on 
 | Middle East | 50 | $39 | $1,950 |
 | **Total** | **1,500** | **$35** | **$50,000** |
 
+### Revenue Projection (All Three Products)
+
+| Month | Amazon | CreatorOS | SeedSight | Combined |
+|-------|--------|-----------|-----------|----------|
+| 1 | $5,000 | $2,500 | $0 | $7,500 |
+| 3 | $25,000 | $10,000 | $0 | $35,000 |
+| 6 | $50,000 | $25,000 | $5,000 | $80,000 |
+| 12 | $250,000 | $50,000 | $20,000 | $320,000 |
+| 24 | $500,000 | $175,000 | $100,000 | $775,000 |
+
+**Strategy:** Amazon first (fastest revenue, proven market). CreatorOS second (largest TAM). SeedSight third (highest margin). All from the same codebase. All $200/month total operating cost.
+
 ---
 
 ## GTM Strategy
@@ -281,7 +293,7 @@ Same OV5 codebase. Same scoring engine. Same data pipeline.
 | Core value | "What to promote today" | "Who's winning the 种草 war" |
 | Revenue at scale | $50K/mo (1,500 creators) | $500K/mo (100 enterprise brands) |
 
-### Architecture: One Engine, Two Products
+### Architecture: One Engine, Three Products
 
 ```
                         ┌──────────────────────────────────────┐
@@ -299,24 +311,38 @@ Same OV5 codebase. Same scoring engine. Same data pipeline.
                         │  Experiment ──► improves daily       │
                         │  Mementum   ──► remembers forever    │
                         │  12 Backends──► auto-failover AI     │
-                        └──────┬──────────────────┬───────────┘
-                               │                  │
-              ┌────────────────▼──┐    ┌──────────▼──────────────┐
-              │   CREATOROS       │    │      SEEDSIGHT          │
-              │   (TikTok B2C)    │    │    (RedNote B2B)        │
-              │                   │    │                         │
-              │  "What should I   │    │  "Who's winning the     │
-              │   promote today?" │    │   种草 war?"             │
-              │                   │    │                         │
-              │  $19-99/mo        │    │  $530-3,960/mo          │
-              │  1,500 users      │    │  100 enterprise brands  │
-              │  → $50K/mo        │    │  → $500K/mo             │
-              └───────────────────┘    └─────────────────────────┘
+                        └──┬──────────────┬───────────┬───────┘
+                           │              │           │
+          ┌────────────────▼──┐ ┌─────────▼──────┐ ┌──▼──────────────────┐
+          │   AMAZON SELLER   │ │   CREATOROS    │ │      SEEDSIGHT      │
+          │   (FBA B2C)       │ │   (TikTok B2C) │ │    (RedNote B2B)    │
+          │                   │ │                │ │                     │
+          │  "Which product   │ │  "What should  │ │  "Who's winning the │
+          │   should I sell   │ │   I promote    │ │   种草 war?"         │
+          │   next?"          │ │   today?"      │ │                     │
+          │                   │ │                │ │                     │
+          │  $49-99/mo        │ │  $19-99/mo     │ │  $530-3,960/mo      │
+          │  5,000 sellers    │ │  1,500 creators│ │  100 enterprises    │
+          │  → $250K/mo       │ │  → $50K/mo     │ │  → $500K/mo         │
+          └───────────────────┘ └────────────────┘ └─────────────────────┘
 ```
 
-**One codebase. One scoring engine. One data pipeline. Two products. Two price points. Zero additional infrastructure cost to add the second product.**
+**One codebase. One scoring engine. One data pipeline. Three products. Three price points. Zero additional infrastructure cost per product.**
 
-The engine is language-agnostic — adding a new data source (e.g., Shopee for SEA, Mercado Libre for LATAM) is a configuration change, not a rewrite. Adding a new product surface (e.g., YouTube Shorts, Instagram Reels) reuses the same infrastructure.
+The Amazon product is the simplest to build — OV5 already has the complete Amazon data pipeline for CreatorOS. Adding an Amazon seller tool is exposing the same data through a different lens: sellers want "which product to list next" instead of "which product to promote next." Same engine, different question, different customer.
+
+### Why Three Products
+
+| | Amazon | TikTok | RedNote |
+|---|---|---|---|
+| **Customer** | FBA sellers | Content creators | Brands |
+| **Problem** | "What to sell?" | "What to promote?" | "What's trending?" |
+| **Market size** | 5M+ sellers | 30M+ creators | 300K+ brands |
+| **Competitors** | Jungle Scout ($100M+) | None | None |
+| **Revenue potential** | $250K/mo (5K users) | $50K/mo (1.5K users) | $500K/mo (100 users) |
+| **Risk** | Competitive market | First mover | First mover |
+
+**The strategy:** Launch Amazon first (proven market, fastest revenue). Use profits to fund CreatorOS (largest TAM). Add SeedSight (highest per-customer revenue). All three from the same codebase.
 
 ---
 
