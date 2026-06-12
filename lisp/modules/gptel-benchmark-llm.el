@@ -356,13 +356,13 @@ Returns synthesized knowledge content directly. TIMEOUT-SECONDS defaults to
           (unless done
             (setq done t))))
       (while (and (not done) (< (float-time) deadline))
-        (read-event nil nil 1)))
+        (sit-for 1))
     (unless done
       (message "[llm] Timeout waiting for synthesis after %ss" (or timeout-seconds 300))
       (when (and (buffer-live-p request-buffer)
                  (fboundp 'gptel-abort))
         (ignore-errors (gptel-abort request-buffer))))
-    result))
+    result)))
 
 ;;; Provide
 
