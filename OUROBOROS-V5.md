@@ -10,6 +10,7 @@
 |--------------|--------------|
 | **Self-improving company** | Recursive AI loops that learn from every outcome |
 | **Automatic code improvement** | 100+ experiments/month, ~20% keep-rate, monitoring agent watching failures |
+| **Multi-language** | Complete Clojure toolchain (test/lint/format/fix), 39 dialects target every platform |
 | **Zero-risk execution** | Git worktree isolation, **7 gates**, never touches `main` directly |
 | **Learning system** | Ontology + context database remember experiments, failures, and rationale |
 | **Token efficiency** | **59% prompt compression** via lambda notation and deterministic routing |
@@ -678,4 +679,8 @@ Current truth: **Sensor is partial**, **architectural evolution is live**, **cod
 
 ---
 
-Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d). Extended with gptel, nucleus statecharts, mementum memory, verbum operational taxonomy, Semantica ontology, AutoGo competitive gating, LogMap indexing and repair, Allium behavioral compilers, context-aware regeneration, and monitoring-driven architectural evolution. **37 patterns** across multiple frameworks. The art grows with its practitioner.
+Built on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d). Extended with gptel, nucleus statecharts, mementum memory, verbum operational taxonomy, Semantica ontology, AutoGo competitive gating, LogMap indexing and repair, Allium behavioral compilers, context-aware regeneration, and monitoring-driven architectural evolution. **37 patterns** across multiple frameworks.
+
+**Clojure-first experiment loop** (2026): OV5 now has a complete Clojure toolchain — test (`clojure.test` via bb), lint (`clj-kondo`), format (`zprint`), fix (ns-ordering + unused-require removal). See `clj/creatoros/` for a working demo (profit calculator + product scoring engine, 28 tests). This proves OV5 operates on non-Emacs code using a single language with 39 dialects targeting every platform. See `mementum/knowledge/clojure-first-multiplatform-architecture.md` for the strategic decision.
+
+The art grows with its practitioner.
