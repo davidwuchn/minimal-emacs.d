@@ -241,6 +241,50 @@ Localized pricing maximizes total addressable market without leaving revenue on 
 
 ---
 
+## SeedSight: The B2B Variant (RedNote / 小红书)
+
+Same OV5 infrastructure. Different product. Different price point.
+
+### What RedNote Is
+
+小红书 is a consumer decision search engine — 300M+ MAU, 70% female, 90% Gen Z. Users search "best sunscreen for sensitive skin" and read reviews before buying. Brands spend ¥50K-500K per KOL campaign. They need to know what's being 种草'd (recommended) and who's winning the narrative.
+
+### What SeedSight Does
+
+OV5's GTM Mayor scans RedNote public content for brand intelligence:
+
+| Brand question | OV5 answers with | Data source |
+|---------------|-----------------|-------------|
+| What's being 种草'd in my category? | Product mention velocity, sentiment, trend direction | RedNote public content |
+| Who's talking about my brand vs competitors? | Share-of-voice analysis, KOL attribution | RedNote notes + KOL profiles |
+| Is something about to blow up? | 种草 acceleration alerts (3+ sigma) | GTM Mayor trend detection |
+| Which KOLs should I work with? | Rank by 种草 effectiveness × trust × category fit | Ontology router + Allium |
+
+### Business Model: B2B at 10× B2C Pricing
+
+| Tier | Monthly Price | Who |
+|------|--------------|-----|
+| Starter | $530 (¥3,888) | Single brand, 1 category |
+| Growth | $1,220 (¥8,888) | Multi-brand, KOL discovery, alerts |
+| Enterprise | $3,960 (¥28,888) | Agency/MCN, white-label, API |
+
+**Why this works:** A single RedNote KOL campaign costs $7K-70K. $530/mo for intelligence that makes that spend smarter is trivial. RedNote's own revenue is $3.7B/year — almost entirely from brand advertising. Brands already pay for access. They'll pay for intelligence.
+
+### Two Platforms, Two Strategies
+
+Same OV5 codebase. Same scoring engine. Same data pipeline.
+
+| | CreatorOS | SeedSight |
+|---|---|---|
+| Target | TikTok creators (B2C) | RedNote brands (B2B) |
+| Price | $19-99/mo | $530-3,960/mo |
+| Core value | "What to promote today" | "Who's winning the 种草 war" |
+| Revenue at scale | $50K/mo (1,500 creators) | $500K/mo (100 enterprise brands) |
+
+Full strategy: `mementum/knowledge/seedsight-xiaohongshu-brand-intelligence.md`
+
+---
+
 ## T — Team
 
 ### Who Builds This

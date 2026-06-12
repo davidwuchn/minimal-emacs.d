@@ -36,6 +36,7 @@
 
 **For step-by-step installation:** See [INSTALL.md](INSTALL.md)
 **For business context, GTM narrative, JTBD, and YC framing:** See [BUSINESS_CONTEXT.md](BUSINESS_CONTEXT.md)
+**For the worked product example (IPOPTM + investor deck):** See **[CREATOROS.md](CREATOROS.md)**
 
 ---
 

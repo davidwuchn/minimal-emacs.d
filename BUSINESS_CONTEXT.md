@@ -683,112 +683,15 @@ The architecture is provider-agnostic and language-agnostic. The Emacs surface i
 
 ---
 
-## The Product: CreatorOS — TikTok Product Intelligence
+## The Product: CreatorOS
 
-A TikTok creator analytics platform that answers one question: **"What should I promote today?"**
+OV5's first external demo is **CreatorOS** — a TikTok product intelligence tool for international creators. It answers one question: "What should I promote today?" Built on OV5's existing infrastructure (GTM Mayor, ontology, World Store, experiment loop), 80% of the code already exists. The full product specification — IPOPTM framework, YC Vision alignment, GTM strategy, PMF signals, and financial model — is in **[CREATOROS.md](CREATOROS.md)**.
 
-OV5's existing infrastructure already does most of the work. The GTM Mayor scans external sources. The ontology classifies findings. The World Store persists facts. The experiment loop improves matching daily. We just repoint them at product data.
+For the elevator pitch: CreatorOS scans Amazon, Reddit, AliExpress, and Google Trends to match products to creator audiences with margins, suppliers, and risk scores. $49-99/mo. 88% margins. Break-even at 6 users. OV5 runs the entire operation — $200/month flat. See the full deck in CREATOROS.md.
 
-### How OV5 Powers the Product-Matching Engine
+### Two Products from One Engine
 
-```
-OV5's GTM Mayor scans:
-  Amazon → BSR trends, review velocity, price history
-  Reddit → "holy grail" products, sentiment, mention frequency
-  AliExpress → wholesale pricing, MOQ, supplier reliability  
-  Google Trends → search volume trajectory, category growth
-  TikTok hashtags → trending products, video appearance frequency
-
-OV5's Ontology cross-references:
-  Product × creator-niche × margin-band × virality-score
-
-OV5's Experiment Loop improves daily:
-  "Did creator promote the recommended product?"
-  "Did the product sell?"
-  → Keep-rate feeds back into matching algorithm
-```
-
-### Example Product Matrix
-
-For a beauty creator with 280K followers, OV5 generates:
-
-| # | Product | Cost | Retail | Margin | Risk | Signals |
-|---|---------|------|--------|--------|------|---------| 
-| 1 | Korean sunscreen stick | $8 | $29 | 67% | LOW | Reddit "holy grail" 4mo, Amazon BSR #127→34, 3 suppliers |
-| 2 | Jade roller set | $3 | $22 | 73% | MED | TikTok #guasha 2.1B views, market plateauing |
-| 3 | LED face mask | $45 | $149 | 70% | HIGH | Amazon +340% YoY, 14% return rate |
-
-**No TikTok API needed.** All data comes from public sources — Amazon, Reddit, AliExpress, Google Trends, TikTok web hashtag pages. Zero dependency on TikTok's restricted API.
-
-### OV5 Advantage: 80% Already Built
-
-| What's needed | OV5 already has |
-|--------------|----------------|
-| Data pipeline | GTM Mayor scans external sources |
-| Analysis engine | Ontology router classifies findings |
-| Structured storage | Datahike World Store (git-like, immutable) |
-| Code improvement | 100+ experiments/month autonomously |
-| Memory | Mementum remembers every product analysis |
-| Backend routing | 12-backend auto-failover for LLM calls |
-| Test infrastructure | clojure.test runner + clj-kondo lint |
-| **New code needed** | Product-specific data extraction + dashboard (~15%.clj files) |
-
-### Business Model: Flat SaaS, No Revenue Share
-
-| Tier | Price | Creator size | What they get |
-|------|-------|-------------|---------------|
-| Free | $0 | <10K followers | 1 product pick/week |
-| Pro | $49/mo | 10K-500K | 5 picks/week, competitor cross-ref, supplier links |
-| Scale | $99/mo | 500K+ | Unlimited, audience overlap, trend alerts, API |
-| MCN | $499/mo | Agencies (10+ creators) | Multi-creator dashboard, white-label |
-
-**Break-even:** 5 Pro users ($245/mo) covers OV5's operational cost (~$200/mo). Every user above that is profit. The ontology compounds — month 6 recommendations are 3× more accurate than week 1.
-
-### The Pitch to Creators (网红)
-
-> *"Stop guessing what to promote. Our AI scans Amazon, Reddit, and AliExpress 24/7 to tell you which products your audience will buy — with margins, suppliers, and risk scores. $49/month. First pick free. If your revenue doesn't grow in 30 days, cancel anytime."*
-
----
-
-## The B2B Play: SeedSight for 小红书 (RedNote)
-
-TikTok is entertainment → impulse buys → creator tools. 小红书 is different.
-
-**小红书 is a consumer decision search engine.** 70% female, 90% Gen Z, 300M+ MAU. Users search "best sunscreen for sensitive skin" and read notes before buying. They don't scroll for entertainment — they research. This is 种草 (grass-planting): authentic product recommendations that seed purchase intent.
-
-**The customer is not creators — it's brands.** 小红书's own revenue ($3.7B/year) comes from brand advertising. Brands spend ¥50K-500K per KOL campaign. They need to know: what's being 种草'd? Who's winning the narrative? Which KOLs actually drive sales?
-
-OV5's GTM Mayor is a 种草 intelligence engine:
-
-| Brand question | OV5 answers with | Data source |
-|---------------|-----------------|-------------|
-| What's being 种草'd in my category? | Product mention velocity, sentiment, trend direction | 小红书 public content |
-| Who's talking about my brand vs competitors? | Share-of-voice analysis, KOL attribution | 小红书 notes + KOL profiles |
-| Is something about to blow up? | 种草 acceleration alerts (3+ sigma above baseline) | GTM Mayor trend detection |
-| Which KOLs should I work with? | Rank by 种草 effectiveness × audience trust × category fit | Ontology router + Allium |
-
-**Business model: B2B at 10× creator pricing.**
-
-| Tier | Price | Who |
-|------|-------|-----|
-| Starter | ¥3,888/mo (~$530) | Single brand, 1 category |
-| Growth | ¥8,888/mo (~$1,220) | Multi-brand, KOL discovery, alerts |
-| Enterprise | ¥28,888/mo (~$3,960) | Agency/MCN, white-label, API |
-
-**Why this works:** A single 小红书 KOL campaign costs ¥50K-500K. ¥3,888/mo for intelligence that makes that spend smarter is a rounding error. Brands already pay 小红书 for advertising. They'll pay for intelligence.
-
-**OV5 builds 80% of it.** GTM Mayor scans content. Ontology classifies brands/products/sentiment. World Store persists facts. Experiment loop improves accuracy daily. New code: ~15 .clj files for 小红书-specific extraction + dashboard.
-
-### Two Platforms, Two Strategies
-
-| | CreatorOS (TikTok) | SeedSight (小红书) |
-|---|---|---|
-| Target | Creators (B2C) | Brands (B2B) |
-| Price | $49-99/mo | $530-3,960/mo |
-| Core value | "What to promote" | "Who's winning 种草" |
-| Revenue at 100 customers | $5-10K/mo | $50-400K/mo |
-
-**Same OV5 infrastructure. Different products. Different price points. Same 80% code reuse.**
+OV5 runs two products from the same infrastructure: **CreatorOS** (B2C, TikTok product intelligence, $19-99/mo) and **SeedSight** (B2B, RedNote brand intelligence, $530-3,960/mo). Same scoring engine. Same data pipeline. Different markets. Different price points. Full specs, GTM strategy, PMF signals, and financial models in **[CREATOROS.md](CREATOROS.md)**.
 
 ### The Unique OV5 Moat
 
