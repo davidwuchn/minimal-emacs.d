@@ -253,6 +253,26 @@ CreatorOS is built and operated by OV5 — a self-improving AI system that imple
 
 15 minutes per day: review what the system shipped overnight, approve high-risk proposals, set strategic direction for new markets.
 
+### The Technology Behind It
+
+CreatorOS runs on OV5's production infrastructure: 131 modules, ~2,970 automated tests, 12 AI providers with automatic failover, self-healing code repair, and a compounding memory system that remembers every product recommendation ever made. The system has been running 100+ experiments/month for 6+ months with a 20% keep-rate. Built in a single language that targets 39 platforms through compiled dialects — one codebase, every device. Zero marginal cost to add users, countries, or platforms.
+
+### What Competitors Need vs What CreatorOS Needs
+
+| | Traditional Startup | CreatorOS (OV5) |
+|---|---|---|
+| Backend engineers | 2-3 ($300-450K/yr) | 0 |
+| Frontend engineers | 1-2 ($150-300K/yr) | 0 |
+| Data scientist | 1 ($150-200K/yr) | 0 |
+| DevOps | 1 ($120-180K/yr) | 0 |
+| QA | 1 ($100-150K/yr) | 0 |
+| Monthly burn | $70-110K | $200 |
+| Time to first feature | 2-4 weeks | Overnight |
+| Time to fix bug | Hours-days | Minutes (self-healing) |
+| Memory of past decisions | Human turnover risk | Permanent (ontology) |
+
+**OV5 replaces 5-8 engineers. Annual savings: $820K-1.3M. Monthly operating cost: $200 flat.**
+
 ---
 
 ## Why This Architecture Wins
@@ -293,6 +313,46 @@ A competitor can copy the feature — scan Amazon, score products, match creator
 | Break-even | 6 paying users | SaaS median: 100+ users |
 
 **OV5 runs the entire operation.** No engineering team. No data team. No DevOps. The system researches, builds, tests, deploys, monitors, and heals itself. One human oversees direction 15 minutes/day. The cost curve is flat. The revenue curve scales with users.
+
+### Proof-of-Pattern: The Launch Fast Precedent
+
+CreatorOS follows the same multi-surface architecture as **Launch Fast** ([launchfastlegacyx.com](https://launchfastlegacyx.com/)) — a profitable Amazon seller Chrome extension. Launch Fast proved the model works:
+
+| What Launch Fast proved | CreatorOS applies the same pattern |
+|------------------------|-----------------------------------|
+| Chrome extension overlays product data inline | Same for TikTok: overlay product intelligence on creator dashboards |
+| Web dashboard for deep research | Same: multi-country dashboard for creator analytics |
+| Flat SaaS pricing ($41-166/mo) | Same: $49-99/mo with localized pricing |
+| No API dependency (public data only) | Same: Amazon, Reddit, AliExpress data — zero platform dependency |
+| Profitable at small scale | Same: break-even at 6 users, 88% margins |
+
+The model works. CreatorOS applies it to a 50× larger market (30M international creators vs ~5M Amazon sellers).
+
+### Built on OV5: One Codebase, 39 Platforms
+
+CreatorOS is written in a single language that targets every platform through 39 compiled dialects. This means:
+
+- **Chrome extension** → compiled to JavaScript (same code, different target)
+- **Web dashboard** → compiled to JavaScript (same code, different target)
+- **Backend API** → runs natively
+- **Mobile app (future)** → compiled to iOS/Android via ClojureDart
+- **Desktop app (future)** → compiled to native via Jank/Carp
+
+One codebase. One test suite. One deployment pipeline. Every platform. This eliminates the multi-platform tax that kills most startups — no separate iOS team, Android team, web team. See `mementum/knowledge/clojure-first-multiplatform-architecture.md`.
+
+### Competitor Deep-Dive
+
+| Competitor | Category | Serves | Monthly Price | Gap CreatorOS Fills |
+|------------|----------|--------|--------------|---------------------|
+| Jungle Scout | Amazon seller tools | Amazon FBA sellers only | $49-84/mo | No TikTok, no multi-country, no creator focus |
+| Helium 10 | Amazon seller tools | Amazon FBA sellers only | $79-279/mo | Same gaps — Amazon-only, seller-focused |
+| 蝉妈妈 (Chanmama) | Chinese analytics | Douyin creators (China only) | ¥399-1,999/mo | China-only, no international data, no product picks |
+| 飞瓜 (Feigua) | Chinese analytics | Douyin/Kuaishou (China only) | ¥299-1,499/mo | China-only, analytics not product intelligence |
+| Sprout Social | Social media management | Enterprise social teams | $249-499/mo | No commerce, scheduling-focused |
+| Hootsuite | Social media management | Enterprise social teams | $99-249/mo | No commerce, scheduling-focused |
+| **CreatorOS** | **Creator commerce intelligence** | **International TikTok creators** | **$19-99/mo** | **First multi-country product intelligence tool** |
+
+**The gap:** Every existing tool either serves Amazon sellers (who have products but no audience) or Chinese creators (who have analytics but are region-locked). No tool serves international TikTok creators who need to match products to audiences across multiple countries. CreatorOS is the first.
 
 ---
 
