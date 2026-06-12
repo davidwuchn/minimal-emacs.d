@@ -185,9 +185,12 @@ High prediction always runs; low prediction runs with exploration rate
 to prevent cold-start death spiral where no experiments run because
 there's no data to predict from."
   (let* ((predicted (gptel-auto-workflow--predict-outcome strategy target))
-         ;; Round to avoid floating-point precision issues near threshold
-         (predicted-rounded (/ (round (* predicted 100)) 100.0))
-         (threshold-rounded (/ (round (* gptel-auto-workflow--prediction-threshold 100)) 100.0)))
+          ;; Round to avoid floating-point precision issues near threshold
+          (predicted-rounded (/ (round (* predicted 100)) 100.0))
+          (threshold-rounded (/ (round (* gptel-auto-workflow--prediction-threshold 100)) 100.0))
+          (exploration-rate (if (boundp 'gptel-auto-workflow--ontology-reorder-exploration-rate)
+                                gptel-auto-workflow--ontology-reorder-exploration-rate
+                              0.15)))
     (if (>= predicted-rounded threshold-rounded)
         (progn
           (message "[onto-predict] %s/%s: predicted %.2f ≥ threshold %.2f → RUN"
@@ -196,7 +199,7 @@ there's no data to predict from."
           t)
       ;; Below threshold — allow with exploration rate to collect data
       (if (< (random 100)
-             (round (* gptel-auto-workflow--ontology-reorder-exploration-rate 100)))
+             (round (* exploration-rate 100)))
           (progn
             (message "[onto-predict] %s/%s: predicted %.2f < threshold %.2f → RUN (exploration)"
                      strategy target predicted-rounded
