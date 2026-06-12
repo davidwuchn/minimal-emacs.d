@@ -72,9 +72,13 @@ Returns nil (allow) if rate limiting is disabled or no history exists."
 (defvar gptel-auto-workflow--semantic-audit-log nil
   "List of semantic audit issues found.")
 
+(defvar gptel-auto-workflow--daemon-hang-done nil
+  "Set to t after daemon-hang check runs to skip per-file re-check.")
+
 (defun gptel-auto-workflow--semantic-audit-reset ()
   "Clear the semantic audit log."
-  (setq gptel-auto-workflow--semantic-audit-log nil))
+  (setq gptel-auto-workflow--semantic-audit-log nil
+        gptel-auto-workflow--daemon-hang-done nil))
 
 (defvar gptel-auto-workflow--semantic--top-level-cache
   (make-hash-table :test 'equal)
@@ -439,6 +443,39 @@ causing void-variable errors at runtime.  Returns count of bare defvars."
             (forward-line 1)))))
     issues))
 
+;; ── Check 11: Daemon subprocess hang ──
+
+(defun gptel-auto-workflow--audit-daemon-hang--impl ()
+  "Check if pmf-value-stream daemon is hung on orphaned subprocesses."
+  (condition-case nil
+      (let ((uid (user-uid))
+            (daemon-pid nil)
+            (sock (format "/tmp/emacs%d/pmf-value-stream" (user-uid))))
+        (with-temp-buffer
+          (when (eq 0 (call-process "pgrep" nil t nil
+                                     "-f" "pmf-value-stream"))
+            (setq daemon-pid (string-trim (buffer-string)))))
+        (unless daemon-pid (cl-return-from gptel-auto-workflow--audit-daemon-hang--impl 0))
+        (when (eq 0 (call-process "timeout" nil nil nil "2"
+                                   "emacsclient" "-s" sock "-e" "t"))
+          (cl-return-from gptel-auto-workflow--audit-daemon-hang--impl 0))
+        (with-temp-buffer
+          (unless (eq 0 (call-process "pgrep" nil t nil
+                                       "-P" daemon-pid "curl"))
+            (cl-return-from gptel-auto-workflow--audit-daemon-hang--impl 0))
+          (when (string-empty-p (string-trim (buffer-string)))
+            (cl-return-from gptel-auto-workflow--audit-daemon-hang--impl 0)))
+        (message "[self-heal] Daemon %s unresponsive with orphaned curl — subprocess hang"
+                 daemon-pid)
+        1)
+    (error 0)))
+
+(defun gptel-auto-workflow--audit-daemon-hang (file)
+  "Audit for daemon subprocess hang. FILE accepted for dispatch, ignored."
+  (when gptel-auto-workflow--daemon-hang-done (cl-return-from gptel-auto-workflow--audit-daemon-hang 0))
+  (setq gptel-auto-workflow--daemon-hang-done t)
+  (gptel-auto-workflow--audit-daemon-hang--impl))
+
 (defvar gptel-auto-workflow--semantic-audit-checks
   '((let-binding-function . gptel-auto-workflow--audit-let-binding-functions)
     (hardcoded-limit . gptel-auto-workflow--audit-hardcoded-limits)
@@ -450,7 +487,8 @@ causing void-variable errors at runtime.  Returns count of bare defvars."
     (condition-case-unbound-err . gptel-auto-workflow--audit-condition-case-unbound-err)
     (risk-node . gptel-auto-workflow--audit-risk-nodes)
     (provide-inside-defun . gptel-auto-workflow--audit-provide-inside-defun)
-    (void-defvar . gptel-auto-workflow--audit-void-defvars))
+    (void-defvar . gptel-auto-workflow--audit-void-defvars)
+    (daemon-hang . gptel-auto-workflow--audit-daemon-hang))
   "Alist of audit check name (symbol) to audit function.")
 
 ;; ── Check 8: condition-case with unbound err ──
