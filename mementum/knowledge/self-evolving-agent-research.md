@@ -2,8 +2,8 @@
 title: Self-Evolving Agent Research Papers (May-June 2026)
 status: active
 category: research
-tags: self-evolution, autonomous-agents, MOSS, Sibyl, APEX, TSP, SkillOpt, exploration-collapse, source-level-evolution, secure-code, skill-self-evolution
-related: OV5 architecture, ontology graph, mementum protocol, self-heal-semantic
+tags: self-evolution, autonomous-agents, MOSS, Sibyl, APEX, TSP, SkillOpt, verbum, exploration-collapse, source-level-evolution, secure-code, skill-self-evolution, crystal-equation
+related: OV5 architecture, ontology graph, mementum protocol, self-heal-semantic, verbum-ov5-gap-analysis, verbum-audit-methodology
 created: 2026-06-09
 updated: 2026-06-12
 ---
@@ -163,6 +163,21 @@ Four highly relevant papers from May-June 2026 on self-evolving autonomous agent
 - Multi-rollout contrastive reflection (compare high- vs low-scoring attempts of the same task)
 - Multi-objective reward (accuracy + tokens + latency)
 
+## 6. verbum: Distilling the Lambda Compiler (198+ sessions)
+
+**Key Insight:** Three converging lines — math (Montague, DisCoCat), empirics (nucleus P(λ)=90.7%), architecture (MERA negative result) — point at one object: the language compressor is a typed lambda calculus interpreter. verbum extracts that interpreter as a portable tensor artifact.
+
+**Core innovations:**
+- **Crystal equation** λ_k = C·φ^(−s·β_k): governs LLM computation geometry; r=0.998 KIBC across 200× range
+- **Computing fraction** s=n/(n+1): predicts eigenvalue ratios from combinator count (<0.04% err)
+- **Statechart**: 2n-state absorbing Markov chain; halt probability, reduction length derive from φ
+- **Score Matching Loss**: per-layer cos sim prevents compensating errors; 35% better than CE-only
+- **2-Mirror TQ**: sign-magnitude quantization, recon_cos=0.970 @ 4.0 bits vs Q4 0.95 @ 4.5 bits
+
+**Latest (June 2026):** Continuations working at tensor level (15 tests green). 3-family function shape discovered in routing register: Composition (B,D,S), Selection/Identity (K,I,C), Recursion (Y,W,WHNF). Map=Y∘B, fold=Y∘(C/B)+K. Functions visible only in routing register — validating the two-registers theory.
+
+**OV5 transferable gaps (7):** See [verbum-ov5-gap-analysis.md](verbum-ov5-gap-analysis.md). P0: provenance.json per experiment, pipeline statechart. P1: per-gate score vectors, Kronecker factorization.
+
 ## Summary: Action Items for OV5
 
 | Paper | Key Lesson | OV5 Action Item |
@@ -182,6 +197,9 @@ Four highly relevant papers from May-June 2026 on self-evolving autonomous agent
 | SkillOpt | Slow-update protected region | Add cross-epoch guidance field to canonical skills |
 | SkillOpt | Rejected-edit buffer | Track rejected skill edits to avoid re-proposing them |
 | SkillOpt | SkillOpt-Sleep nightly consolidation | Harvest session transcripts, replay recurring tasks, gate updates, stage for adoption |
+| verbum | Per-experiment provenance | Add provenance.json with git SHA, pkg versions per experiment |
+| verbum | Pipeline statechart | Build formal statechart from TSV data to predict bottlenecks |
+| verbum | Per-gate score vectors | Prevent compensating errors with 7-dim gate-score vectors |
 
 ## OV5's Unique Advantages
 
@@ -194,4 +212,4 @@ Four highly relevant papers from May-June 2026 on self-evolving autonomous agent
 
 ---
 
-*Synthesized from arXiv papers 2605.22794, 2605.22343, 2605.21240, 2606.03489v1, 2605.23904 and the Microsoft SkillOpt repository (https://github.com/microsoft/SkillOpt)*
+*Synthesized from arXiv papers 2605.22794, 2605.22343, 2605.21240, 2606.03489v1, 2605.23904, Microsoft SkillOpt, and the verbum project (github.com/davidwuchn/verbum, 198+ sessions)*
