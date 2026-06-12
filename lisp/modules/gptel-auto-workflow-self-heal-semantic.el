@@ -18,6 +18,54 @@
 (declare-function gptel-auto-workflow--with-temporary-worktree
                   "gptel-tools-agent-staging-baseline" (slug ref fn))
 
+;; ── Dirty-tree gate helper ──
+
+(defcustom gptel-auto-workflow--self-heal-dirty-tree-gate t
+  "When non-nil, refuse to self-heal when the working tree has uncommitted changes."
+  :type 'boolean
+  :group 'gptel-tools-agent)
+
+(defun gptel-auto-workflow--git-status-porcelain ()
+  "Return output of `git status --porcelain', or empty string on error.
+Uses a 10-second timeout via `with-timeout'.  If git is unavailable
+or the command times out, returns \"\" so callers can proceed."
+  (condition-case nil
+      (with-timeout (10 "")
+        (replace-regexp-in-string
+         "[ \t\n\r]+\\'" ""
+         (shell-command-to-string "git status --porcelain")))
+    (error "")))
+
+;; ── Fixer rate limiting ──
+
+(defcustom gptel-auto-workflow--fixer-rate-limit-minutes 60
+  "Minutes before re-attempting the same fixer on the same file.
+Set to 0 to disable rate limiting."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
+(defvar gptel-auto-workflow--fix-attempt-history nil
+  "Hash table mapping (FILE . FIXER-NAME) → float-time of last attempt.
+Reset at the start of each self-heal cycle.")
+
+(defun gptel-auto-workflow--fixer-rate-limit-p (file fixer-name)
+  "Return t if FIXER-NAME was attempted on FILE too recently.
+Returns nil (allow) if rate limiting is disabled or no history exists."
+  (when (and gptel-auto-workflow--fix-attempt-history
+             (> gptel-auto-workflow--fixer-rate-limit-minutes 0))
+    (let* ((key (cons file fixer-name))
+           (last-time (gethash key gptel-auto-workflow--fix-attempt-history))
+           (cutoff (- (float-time)
+                      (* 60 gptel-auto-workflow--fixer-rate-limit-minutes))))
+      (and last-time (> last-time cutoff)))))
+
+(defun gptel-auto-workflow--fixer-rate-limit-record (file fixer-name)
+  "Record that FIXER-NAME was attempted on FILE at the current time."
+  (when (and gptel-auto-workflow--fix-attempt-history
+             (> gptel-auto-workflow--fixer-rate-limit-minutes 0))
+    (puthash (cons file fixer-name) (float-time)
+             gptel-auto-workflow--fix-attempt-history)))
+
 ;; ── Issue accumulator ──
 
 (defvar gptel-auto-workflow--semantic-audit-log nil
@@ -717,18 +765,56 @@ Returns a string suitable for insertion into prompts."
 
 ;; ── Auto-fixers (Layer 2+3: detect AND fix) ──
 
-(defun gptel-auto-workflow--fix-validate-and-write (buffer file &optional original-content)
+(cl-defun gptel-auto-workflow--fix-validate-and-write
+    (buffer file &optional original-content &key no-load-check no-subprocess-check)
   "Validate BUFFER's paren balance via `check-parens', then write to FILE.
 BUFFER must contain the proposed new file content in `emacs-lisp-mode'.
-If `check-parens' passes, write BUFFER to FILE and return t.
-If `check-parens' fails and ORIGINAL-CONTENT is non-nil (a string),
-restore FILE to ORIGINAL-CONTENT so the broken fix is discarded.
+If `check-parens' passes, write BUFFER to FILE.
+
+After writing, unless NO-LOAD-CHECK is non-nil, attempt to `load-file'
+the written file.  If loading fails, restore FILE to ORIGINAL-CONTENT
+and return nil.
+
+After load-file check, unless NO-SUBPROCESS-CHECK is non-nil, spawn a
+batch Emacs subprocess to load the file in a sandbox.  If the subprocess
+exits non-zero, restore FILE to ORIGINAL-CONTENT and return nil.
+
 In all failure cases, log a warning and return nil."
   (with-current-buffer buffer
     (condition-case err
         (progn
           (check-parens)
           (write-region (point-min) (point-max) file)
+          ;; Post-write: load-file validation (in-process)
+          (unless no-load-check
+            (condition-case load-err
+                (progn
+                  (load-file file)
+                  t)
+              (error
+               (message "[self-heal-semantic] Load-file validation FAILED for %s: %s -- discarding fix"
+                        (file-name-nondirectory file) (error-message-string load-err))
+               (when original-content
+                 (with-temp-file file
+                   (insert original-content)))
+               (cl-return-from gptel-auto-workflow--fix-validate-and-write nil))))
+          ;; Post-write: subprocess sandbox validation
+          (unless no-subprocess-check
+            (let ((exit-code
+                   (condition-case nil
+                       (call-process
+                        "emacs" nil nil nil
+                        "--batch" "-Q"
+                        "--eval"
+                        (format "(condition-case err (progn (load-file %S) (kill-emacs 0)) (error (kill-emacs 1)))" file))
+                     (error -1))))
+              (unless (zerop exit-code)
+                (message "[self-heal-semantic] Subprocess load FAILED for %s (exit=%d) -- discarding fix"
+                         (file-name-nondirectory file) exit-code)
+                (when original-content
+                  (with-temp-file file
+                    (insert original-content)))
+                (cl-return-from gptel-auto-workflow--fix-validate-and-write nil))))
           t)
       (error
        (message "[self-heal-semantic] Fix validation FAILED for %s: %s -- discarding fix"
@@ -927,11 +1013,12 @@ Returns 1 if fixed, 0 if no change needed."
       (let ((original (with-temp-buffer
                         (insert-file-contents file)
                         (buffer-string))))
-        (with-temp-buffer
+         (with-temp-buffer
           (emacs-lisp-mode)
           (insert new-content)
           (when (gptel-auto-workflow--fix-validate-and-write
-                 (current-buffer) file original)
+                 (current-buffer) file original
+                 :no-load-check t :no-subprocess-check t)
             (message "[self-heal-semantic] Added (provide '%s) to %s"
                      feature (file-name-nondirectory file))))))
     fixed))
@@ -1302,45 +1389,95 @@ Self-heal must never modify files with unresolved conflicts."
     (goto-char (point-min))
     (re-search-forward "^[ \t]*<<<<<<<" nil t)))
 
-(defun gptel-auto-workflow--self-heal-semantic ()
+(cl-defun gptel-auto-workflow--self-heal-semantic (&key dry-run no-dirty-check no-git-snapshot)
   "Layer 2+3 self-heal: detect AND fix semantic/operational bugs.
 Runs audit checks on all lisp/modules/*.el files, then applies safe
-auto-fixers for detected issues (e.g., excessive blank lines)."
+auto-fixers for detected issues (e.g., excessive blank lines).
+
+Keyword arguments:
+  :dry-run — When t, run audits only, skip all fixers.
+  :no-dirty-check — When t, skip the dirty-tree gate.
+  :no-git-snapshot — When t, skip pre-fix git snapshot commits."
   (interactive)
-  (let ((result (gptel-auto-workflow--semantic-audit-all))
-        (total-fixed 0)
-        (skipped-conflict 0))
-    (when (> (plist-get result :total-issues) 0)
-      (message "[self-heal-semantic] Found %d issues"
-               (plist-get result :total-issues)))
-    ;; ── Auto-fix phase: data-driven dispatch via fixer-alist ──
-    ;; For each file with issues, find which issue types are present,
-    ;; look up their fixers in the alist, and apply them.
-    (dolist (entry (plist-get result :report))
-      (let* ((file (plist-get entry :file))
-              (log (plist-get entry :log))
-              (present-types
-               (delete-dups
-                (delq nil (mapcar (lambda (r) (plist-get r :type)) log)))))
-        ;; Guard: never touch files with unresolved git conflicts.
-        (if (gptel-auto-workflow--self-heal-file-has-conflict-p file)
-            (progn
-              (message "[self-heal-semantic] Skipping %s: unresolved merge conflict"
-                       (file-name-nondirectory file))
-              (cl-incf skipped-conflict))
-          (if (eq 'ov5-worktree (gptel-auto-workflow--self-heal-route-mode file))
-              (let ((dispatch-result (gptel-auto-workflow--self-heal-file-dispatch file)))
-                (cl-incf total-fixed (or (plist-get dispatch-result :auto-fixed) 0)))
-            (dolist (issue-type present-types)
-              (let ((fixer (alist-get issue-type gptel-auto-workflow--semantic-fixer-alist)))
-                (when fixer
-                  (let ((fixed (funcall fixer file)))
-                    (when (> fixed 0)
-                      (cl-incf total-fixed fixed))))))))))
-    (when (> total-fixed 0)
-      (message "[self-heal-semantic] Auto-fixed %d issue(s)" total-fixed))
-    (plist-put result :auto-fixed total-fixed)
-    result))
+  ;; Reset rate-limit history for each self-heal cycle
+  (setq gptel-auto-workflow--fix-attempt-history
+        (make-hash-table :test 'equal))
+  ;; ── Dirty-tree gate (Step 1 safety layer) ──
+  (let ((dirty-result
+         (unless no-dirty-check
+           (let ((porcelain (gptel-auto-workflow--git-status-porcelain)))
+             (when (and gptel-auto-workflow--self-heal-dirty-tree-gate
+                        (not (string-empty-p porcelain)))
+               (message "[self-heal-semantic] WARNING: dirty working tree — refusing self-heal")
+               (list :status 'dirty-tree
+                     :reason "uncommitted changes in working tree"
+                     :total-issues 0
+                     :files-checked 0))))))
+    (if dirty-result
+        dirty-result
+      (let ((result (gptel-auto-workflow--semantic-audit-all))
+            (total-fixed 0)
+            (skipped-conflict 0)
+            (snapshotted-files nil))
+        (when (> (plist-get result :total-issues) 0)
+          (message "[self-heal-semantic] Found %d issues"
+                   (plist-get result :total-issues)))
+        ;; ── Pre-fix git snapshot (Step 5 safety layer) ──
+        (unless (or dry-run no-git-snapshot)
+          (dolist (entry (plist-get result :report))
+            (let* ((file (plist-get entry :file))
+                   (fname (file-name-nondirectory file)))
+              (when (not (member file snapshotted-files))
+                ;; Run git from the file's directory so the correct repo is found.
+                (condition-case nil
+                    (let ((default-directory (file-name-directory file)))
+                      (call-process "git" nil nil nil "add" "--" file)
+                      (condition-case nil
+                          (call-process "git" nil nil nil "commit" "-m"
+                                        (format "[self-heal] snapshot before auto-fix: %s"
+                                                fname))
+                        (error
+                         (message "[self-heal-semantic] git commit failed for snapshot of %s"
+                                  fname))))
+                  (error
+                   (message "[self-heal-semantic] git add failed for snapshot of %s"
+                            fname)))
+                (push file snapshotted-files)))))
+        ;; ── Auto-fix phase: data-driven dispatch via fixer-alist ──
+        ;; Skip entirely when dry-run is t (Step 4 safety layer)
+        (unless dry-run
+          (dolist (entry (plist-get result :report))
+            (let* ((file (plist-get entry :file))
+                   (log (plist-get entry :log))
+                   (present-types
+                    (delete-dups
+                     (delq nil (mapcar (lambda (r) (plist-get r :type)) log)))))
+              ;; Guard: never touch files with unresolved git conflicts.
+              (if (gptel-auto-workflow--self-heal-file-has-conflict-p file)
+                  (progn
+                    (message "[self-heal-semantic] Skipping %s: unresolved merge conflict"
+                             (file-name-nondirectory file))
+                    (cl-incf skipped-conflict))
+                (if (eq 'ov5-worktree (gptel-auto-workflow--self-heal-route-mode file))
+                    (let ((dispatch-result (gptel-auto-workflow--self-heal-file-dispatch file)))
+                      (cl-incf total-fixed (or (plist-get dispatch-result :auto-fixed) 0)))
+                  (dolist (issue-type present-types)
+                    (let ((fixer (alist-get issue-type gptel-auto-workflow--semantic-fixer-alist)))
+                      (when fixer
+                        ;; Rate limiting (Step 3 safety layer)
+                        (if (gptel-auto-workflow--fixer-rate-limit-p file fixer)
+                            (message
+                             "[self-heal-semantic] Skipping %s on %s: rate-limited (last attempt < %d min ago)"
+                             fixer (file-name-nondirectory file)
+                             gptel-auto-workflow--fixer-rate-limit-minutes)
+                          (let ((fixed (funcall fixer file)))
+                            (when (> fixed 0)
+                              (gptel-auto-workflow--fixer-rate-limit-record file fixer)
+                              (cl-incf total-fixed fixed))))))))))))
+        (when (> total-fixed 0)
+          (message "[self-heal-semantic] Auto-fixed %d issue(s)" total-fixed))
+        (plist-put result :auto-fixed total-fixed)
+        result))))
 
 (defun gptel-auto-workflow--self-heal-file (file)
   "Targeted self-heal: audit and fix FILE only.
@@ -1360,9 +1497,16 @@ module is available."
         (dolist (issue-type present-types)
           (let ((fixer (alist-get issue-type gptel-auto-workflow--semantic-fixer-alist)))
             (when fixer
-              (let ((fixed (funcall fixer file)))
-                (when (> fixed 0)
-                  (cl-incf total-fixed fixed))))))))
+              ;; Rate limiting (Step 3 safety layer)
+              (if (gptel-auto-workflow--fixer-rate-limit-p file fixer)
+                  (message
+                   "[self-heal-semantic] Skipping %s on %s: rate-limited (last attempt < %d min ago)"
+                   fixer (file-name-nondirectory file)
+                   gptel-auto-workflow--fixer-rate-limit-minutes)
+                (let ((fixed (funcall fixer file)))
+                  (when (> fixed 0)
+                    (gptel-auto-workflow--fixer-rate-limit-record file fixer)
+                    (cl-incf total-fixed fixed)))))))))
     (when (> total-fixed 0)
       (message "[self-heal-semantic] Auto-fixed %d issue(s) in %s"
                total-fixed (file-name-nondirectory file))

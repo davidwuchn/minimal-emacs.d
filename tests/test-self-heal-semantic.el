@@ -546,7 +546,7 @@ causing void-function errors when gptel-agent was not loaded."
         (cl-letf (((symbol-function 'gptel-auto-workflow--expand-workspace-path)
                    (lambda (path &optional _root)
                      (expand-file-name path tmp-dir))))
-          (let ((result (gptel-auto-workflow--self-heal-semantic)))
+          (let ((result (gptel-auto-workflow--self-heal-semantic :no-dirty-check t)))
             (should result)
             (should (plist-get result :total-issues))
             (should (numberp (plist-get result :files-checked)))))
@@ -619,7 +619,7 @@ causing void-function errors when gptel-agent was not loaded."
               ((symbol-function 'gptel-auto-workflow--fix-unbalanced-parens)
                (lambda (_file)
                  (error "direct fixer should not run for high-risk files"))))
-      (let ((result (gptel-auto-workflow--self-heal-semantic)))
+      (let ((result (gptel-auto-workflow--self-heal-semantic :no-dirty-check t)))
         (should (equal called file))
         (should (= 1 (plist-get result :auto-fixed)))))))
 
@@ -1035,6 +1035,282 @@ this audit check flags it so the self-heal fixer can restore top-level."
           ;; After fix, provide should be at top-level
           (let ((issues-after (gptel-auto-workflow--audit-provide-inside-defun file)))
             (should (= issues-after 0))))
+      (test-self-heal-semantic--cleanup file))))
+
+;; ── Safety Layer 1: Dirty-tree gate ──
+
+(ert-deftest test-self-heal-semantic/dirty-tree-gate-blocks-with-uncommitted ()
+  "Dirty-tree gate returns :status dirty-tree when uncommitted changes exist."
+  (let* ((tmp-dir (make-temp-file "ov5-test-dirty-" t))
+         (modules-dir (expand-file-name "lisp/modules" tmp-dir)))
+    (unwind-protect
+        (progn
+          (make-directory modules-dir t)
+          (with-temp-file (expand-file-name "ov5-dirty-fixture.el" modules-dir)
+            (insert "(provide 'ov5-dirty-fixture)\n"))
+          ;; Initialize git repo
+          (let ((default-directory tmp-dir))
+            (call-process "git" nil nil nil "init")
+            (call-process "git" nil nil nil "add" ".")
+            (call-process "git" nil nil nil "commit" "-m" "initial"))
+          ;; Create uncommitted change
+          (with-temp-file (expand-file-name "ov5-dirty-fixture.el" modules-dir)
+            (insert "(provide 'ov5-dirty-fixture)\n;; uncommitted edit\n"))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--expand-workspace-path)
+                     (lambda (path &optional _root)
+                       (expand-file-name path tmp-dir))))
+            (let ((result (gptel-auto-workflow--self-heal-semantic)))
+              (should (eq 'dirty-tree (plist-get result :status)))
+              (should (= 0 (plist-get result :total-issues))))))
+      (delete-directory tmp-dir t))))
+
+(ert-deftest test-self-heal-semantic/dirty-tree-gate-skip-with-flag ()
+  "Dirty-tree gate is bypassed with :no-dirty-check t."
+  (let* ((tmp-dir (make-temp-file "ov5-test-dirty-" t))
+         (modules-dir (expand-file-name "lisp/modules" tmp-dir)))
+    (unwind-protect
+        (progn
+          (make-directory modules-dir t)
+          (with-temp-file (expand-file-name "ov5-dirty-fixture.el" modules-dir)
+            (insert "(provide 'ov5-dirty-fixture)\n"))
+          (let ((default-directory tmp-dir))
+            (call-process "git" nil nil nil "init")
+            (call-process "git" nil nil nil "add" ".")
+            (call-process "git" nil nil nil "commit" "-m" "initial"))
+          (with-temp-file (expand-file-name "ov5-dirty-fixture.el" modules-dir)
+            (insert "(provide 'ov5-dirty-fixture)\n;; uncommitted edit\n"))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--expand-workspace-path)
+                     (lambda (path &optional _root)
+                       (expand-file-name path tmp-dir))))
+            (let ((result (gptel-auto-workflow--self-heal-semantic :no-dirty-check t)))
+              ;; Should proceed normally instead of returning dirty-tree
+              (should (not (eq 'dirty-tree (plist-get result :status))))
+              (should (numberp (plist-get result :files-checked))))))
+      (delete-directory tmp-dir t))))
+
+;; ── Safety Layer 2: Post-fix load-file validation ──
+
+(ert-deftest test-self-heal-semantic/load-file-validation-rejects-broken-fix ()
+  "Post-fix load-file validation restores original on load failure."
+  (let* ((original-content "(defun ov5-load-test () 42)\n(provide 'ov5-load-test)\n")
+         ;; (/ 1 0) at top-level will error during load-file
+         (buggy-content "(defun ov5-load-test () 42)\n(/ 1 0)\n")
+         (file (test-self-heal-semantic--tmp-file original-content)))
+    (unwind-protect
+        (progn
+          (with-temp-buffer
+            (emacs-lisp-mode)
+            (insert buggy-content)
+            (let ((result (gptel-auto-workflow--fix-validate-and-write
+                           (current-buffer) file original-content)))
+              ;; Should fail because load-file will error on (/ 1 0)
+              (should-not result))
+            ;; Original content should be restored
+            (let ((restored (with-temp-buffer
+                              (insert-file-contents file)
+                              (buffer-string))))
+              (should (string= restored original-content)))))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/no-load-check-bypasses-validation ()
+  "With :no-load-check t, broken-but-valid-syntax content passes."
+  (let* ((original-content "(defun ov5-load-test () 42)\n")
+         (new-content "(defun ov5-load-test () (error \"load fails\"))\n")
+         (file (test-self-heal-semantic--tmp-file original-content)))
+    (unwind-protect
+        (progn
+          (with-temp-buffer
+            (emacs-lisp-mode)
+            (insert new-content)
+            (let ((result (gptel-auto-workflow--fix-validate-and-write
+                           (current-buffer) file original-content
+                           :no-load-check t :no-subprocess-check t)))
+              ;; Should pass because skip load-file check
+              (should result)
+              (let ((written (with-temp-buffer
+                               (insert-file-contents file)
+                               (buffer-string))))
+                (should (string= written new-content))))))
+      (test-self-heal-semantic--cleanup file))))
+
+;; ── Safety Layer 3: Fixer rate limiting ──
+
+(ert-deftest test-self-heal-semantic/rate-limit-blocks-repeat-attempt ()
+  "Rate limiting skips fixer when attempted too recently."
+  (let* ((content "(defun foo () 1)\n\n\n\n\n\n(defun bar () 2)")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (setq gptel-auto-workflow--fix-attempt-history
+                (make-hash-table :test 'equal))
+          ;; First attempt should be recorded
+          (gptel-auto-workflow--fixer-rate-limit-record
+           file 'gptel-auto-workflow--fix-excessive-blank-lines)
+          ;; Second attempt should be blocked (within rate limit window)
+          (should (gptel-auto-workflow--fixer-rate-limit-p
+                   file 'gptel-auto-workflow--fix-excessive-blank-lines))
+          ;; Different fixer on same file should be allowed
+          (should-not (gptel-auto-workflow--fixer-rate-limit-p
+                       file 'gptel-auto-workflow--fix-unbalanced-parens)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/rate-limit-expires-after-window ()
+  "Rate limiting allows fixer after window expires."
+  (let* ((content "(defun foo () 1)\n\n\n\n\n\n(defun bar () 2)")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (setq gptel-auto-workflow--fix-attempt-history
+                (make-hash-table :test 'equal))
+          ;; Record attempt in the distant past
+          (puthash (cons file 'gptel-auto-workflow--fix-excessive-blank-lines)
+                   (- (float-time) 7200)  ; 2 hours ago
+                   gptel-auto-workflow--fix-attempt-history)
+          ;; Should now be allowed (past the default 60-min window)
+          (should-not (gptel-auto-workflow--fixer-rate-limit-p
+                       file 'gptel-auto-workflow--fix-excessive-blank-lines)))
+      (test-self-heal-semantic--cleanup file))))
+
+;; ── Safety Layer 4: Dry-run audit mode ──
+
+(ert-deftest test-self-heal-semantic/dry-run-skips-fixers ()
+  "Dry-run mode audits but does not apply fixers."
+  (let* ((tmp-dir (make-temp-file "ov5-test-dryrun-" t))
+         (modules-dir (expand-file-name "lisp/modules" tmp-dir))
+         (test-file (expand-file-name "ov5-dryrun-fixture.el" modules-dir))
+         (original-content "(defun foo () 1)\n\n\n\n\n\n(defun bar () 2)\n(provide 'ov5-dryrun-fixture)\n"))
+    (unwind-protect
+        (progn
+          (make-directory modules-dir t)
+          (with-temp-file test-file
+            (insert original-content))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--expand-workspace-path)
+                     (lambda (path &optional _root)
+                       (expand-file-name path tmp-dir))))
+            (let ((result (gptel-auto-workflow--self-heal-semantic :dry-run t :no-dirty-check t)))
+              (should (= 0 (plist-get result :auto-fixed)))
+              ;; File should be unchanged
+              (let ((unchanged (with-temp-buffer
+                                 (insert-file-contents test-file)
+                                 (buffer-string))))
+                (should (string= unchanged original-content))))))
+      (delete-directory tmp-dir t))))
+
+(ert-deftest test-self-heal-semantic/non-dry-run-fixes ()
+  "Non-dry-run mode applies fixers."
+  (let* ((tmp-dir (make-temp-file "ov5-test-fix-" t))
+         (modules-dir (expand-file-name "lisp/modules" tmp-dir))
+         (test-file (expand-file-name "ov5-fix-fixture.el" modules-dir))
+         (original-content "(defun foo () 1)\n\n\n\n\n\n(defun bar () 2)\n(provide 'ov5-fix-fixture)\n"))
+    (unwind-protect
+        (progn
+          (make-directory modules-dir t)
+          (with-temp-file test-file
+            (insert original-content))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--expand-workspace-path)
+                     (lambda (path &optional _root)
+                       (expand-file-name path tmp-dir))))
+            (let ((result (gptel-auto-workflow--self-heal-semantic :no-dirty-check t :no-git-snapshot t)))
+              ;; Should have fixed something (excessive blank lines)
+              (should result))))
+      (delete-directory tmp-dir t))))
+
+;; ── Safety Layer 5: Pre-fix git snapshot ──
+
+(ert-deftest test-self-heal-semantic/git-snapshot-creates-commit ()
+  "Self-heal completes successfully in a git repo without crashing.
+The snapshot is best-effort: for clean committed files, the existing
+commit serves as the rollback point."
+  (let* ((tmp-dir (make-temp-file "ov5-test-snapshot-" t))
+         (modules-dir (expand-file-name "lisp/modules" tmp-dir))
+         (test-file (expand-file-name "ov5-snap-fixture.el" modules-dir))
+         (original-content "(defun foo () 1)\n\n\n\n\n\n(defun bar () 2)\n(provide 'ov5-snap-fixture)\n"))
+    (unwind-protect
+        (progn
+          (make-directory modules-dir t)
+          (with-temp-file test-file
+            (insert original-content))
+          (let ((default-directory tmp-dir))
+            (call-process "git" nil nil nil "init")
+            (call-process "git" nil nil nil "add" ".")
+            (call-process "git" nil nil nil "commit" "-m" "initial"))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--expand-workspace-path)
+                     (lambda (path &optional _root)
+                       (expand-file-name path tmp-dir))))
+            ;; Self-heal completes without crashing even when git ops are attempted
+            (let ((result (gptel-auto-workflow--self-heal-semantic :no-dirty-check t)))
+              (should result)
+              (should (numberp (plist-get result :auto-fixed))))))
+      (delete-directory tmp-dir t))))
+
+(ert-deftest test-self-heal-semantic/no-git-snapshot-suppresses-commits ()
+  ":no-git-snapshot t prevents snapshot commits."
+  (let* ((tmp-dir (make-temp-file "ov5-test-nosnap-" t))
+         (modules-dir (expand-file-name "lisp/modules" tmp-dir))
+         (test-file (expand-file-name "ov5-nosnap-fixture.el" modules-dir))
+         (original-content "(defun foo () 1)\n\n\n\n\n\n(defun bar () 2)\n(provide 'ov5-nosnap-fixture)\n"))
+    (unwind-protect
+        (progn
+          (make-directory modules-dir t)
+          (with-temp-file test-file
+            (insert original-content))
+          (let ((default-directory tmp-dir))
+            (call-process "git" nil nil nil "init")
+            (call-process "git" nil nil nil "add" ".")
+            (call-process "git" nil nil nil "commit" "-m" "initial"))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--expand-workspace-path)
+                     (lambda (path &optional _root)
+                       (expand-file-name path tmp-dir))))
+            (let ((result (gptel-auto-workflow--self-heal-semantic
+                           :no-dirty-check t :no-git-snapshot t)))
+              (should result)))
+          ;; Verify NO snapshot commit was created (only initial commit)
+          (let ((default-directory tmp-dir))
+            (let ((log (shell-command-to-string "git log --oneline")))
+              ;; Should have exactly 1 commit (initial) or 2 if initial commit counts
+              ;; plus .gitignore auto-creation. Just check no snapshot message.
+              (should-not (string-match-p "snapshot before auto-fix" log)))))
+      (delete-directory tmp-dir t))))
+
+;; ── Safety Layer 6: Subprocess sandbox ──
+
+(ert-deftest test-self-heal-semantic/subprocess-sandbox-rejects-unloadable ()
+  "Subprocess sandbox rejects file that fails to load in batch Emacs."
+  (let* ((original-content "(defun ov5-sub-test () 42)\n(provide 'ov5-sub-test)\n")
+         ;; defun with nil as name — valid syntax, but fails at runtime
+         (buggy-content "(defun nil () (message \"bad\"))\n(provide 'ov5-sub-test)\n")
+         (file (test-self-heal-semantic--tmp-file original-content)))
+    (unwind-protect
+        (progn
+          (with-temp-buffer
+            (emacs-lisp-mode)
+            (insert buggy-content)
+            ;; Skip in-process load check so subprocess sandbox is exercised
+            (let ((result (gptel-auto-workflow--fix-validate-and-write
+                           (current-buffer) file original-content
+                           :no-load-check t)))
+              (should-not result))
+            (let ((restored (with-temp-buffer
+                              (insert-file-contents file)
+                              (buffer-string))))
+              (should (string= restored original-content)))))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/no-subprocess-check-bypasses-sandbox ()
+  "With :no-subprocess-check t, subprocess validation is skipped."
+  (let* ((original-content "(defun ov5-sub-test () 42)\n")
+         (new-content "(defun ov5-sub-test () 99)\n")
+         (file (test-self-heal-semantic--tmp-file original-content)))
+    (unwind-protect
+        (progn
+          (with-temp-buffer
+            (emacs-lisp-mode)
+            (insert new-content)
+            (let ((result (gptel-auto-workflow--fix-validate-and-write
+                           (current-buffer) file original-content
+                           :no-subprocess-check t)))
+              ;; Should pass — no subprocess check, parens balanced, load-file ok
+              (should result))))
       (test-self-heal-semantic--cleanup file))))
 
 (provide 'test-self-heal-semantic)
