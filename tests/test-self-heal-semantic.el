@@ -1049,9 +1049,11 @@ this audit check flags it so the self-heal fixer can restore top-level."
           (make-directory modules-dir t)
           (with-temp-file (expand-file-name "ov5-dirty-fixture.el" modules-dir)
             (insert "(provide 'ov5-dirty-fixture)\n"))
-          ;; Initialize git repo
+          ;; Initialize git repo with required config
           (let ((default-directory tmp-dir))
             (call-process "git" nil nil nil "init")
+            (call-process "git" nil nil nil "config" "user.name" "test")
+            (call-process "git" nil nil nil "config" "user.email" "test@test")
             (call-process "git" nil nil nil "add" ".")
             (call-process "git" nil nil nil "commit" "-m" "initial"))
           ;; Create uncommitted change
