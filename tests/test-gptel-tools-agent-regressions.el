@@ -21377,6 +21377,28 @@ meaning nothing was ever dropped and the function returned an oversized list."
     (should (= (length truncated) 3))
     (should (equal truncated '("aaa" "bbb" "ccc")))))
 
+(ert-deftest regression/auto-workflow/run-async-gate-uses-truthiness ()
+  "run-async should block when pending-decisions-p returns truthy non-t value."
+  (let ((gptel-auto-workflow--running nil)
+        (gptel-auto-workflow--stats nil)
+        (magit-called nil)
+        (result :not-called))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--active-use-p)
+               (lambda () (cons nil nil)))
+              ((symbol-function 'gptel-auto-workflow--pending-decisions-p)
+               ;; Return 'yes: truthy but (eq t 'yes) ⇒ nil — exposes the bug
+               (lambda () 'yes))
+              ((symbol-function 'gptel-auto-workflow--persist-status)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow--require-magit-dependencies)
+               (lambda () (setq magit-called t)))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (setq result (gptel-auto-workflow-run-async)))
+    (should (null result))
+    (should-not magit-called)
+    (should (equal (plist-get gptel-auto-workflow--stats :phase) "blocked"))))
+
 (provide 'test-gptel-tools-agent-regressions)
 
 ;;; test-gptel-tools-agent-regressions.el ends here

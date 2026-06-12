@@ -2332,7 +2332,7 @@ pipeline from hanging when a sub-function blocks indefinitely."
             ;; Preflight: check human-decision gate before triggering experiments.
             ;; Uses truthiness (matching gptel-tools-agent-main.el gate check).
             (if (and (fboundp 'gptel-auto-workflow--pending-decisions-p)
-                     (eq t (gptel-auto-workflow--pending-decisions-p)))
+                     (gptel-auto-workflow--pending-decisions-p))
                 (progn
                   (setq gptel-auto-workflow--stats
                         (list :phase "blocked" :total 0 :kept 0))
