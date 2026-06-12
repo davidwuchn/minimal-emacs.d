@@ -48,7 +48,7 @@
 Dynamically generated from `gptel-backend-registry'.
 First backend is primary, subsequent backends are tried in order.
 Ordered by keep-rate from experiment data.")
-(defvar gptel-auto-workflow-headless-subagent-fallbacks)
+(defvar gptel-auto-workflow-headless-subagent-fallbacks nil)
 ;; ─── Sieve-Based Backend Classification (verbum Phase 5) ───
 ;; Dynamically generated from `gptel-backend-registry' capabilities metadata.
 ;; Qwen3 family (DashScope) → single-neuron (high compression, deterministic).
