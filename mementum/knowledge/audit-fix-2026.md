@@ -1,28 +1,37 @@
 <!--
 Synthesis verification:
 - Confidence: 40%
-- Sources: 46 memories
-- Warnings: No code examples or concrete references, Very short content (20 lines)
+- Sources: 53 memories
+- Warnings: No code examples or concrete references, Very short content (29 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize many self-audit report memories into a single knowledge page about "audit-fix-2026". Let me analyze the patterns in the data:
+The user wants me to synthesize the memories into a knowledge page about audit-fix-2026. Let me analyze the patterns from the memories:
 
-1. Issue counts range from 37-41, with 38 being the most common
-2. Backend cold-start: 8/8 backends never used in last 7d - consistent across all reports
-3. Strategy cold-start: 29/29 strategies unevaluated - consistent
-4. Staging-merge bottleneck: OK with auto-resolver deployed (commit 95396bc1)
-5. Module byte-compile health: varies - 0-2 modules broken (gptel-auto-workflow-* files)
-6. Action items are consistent
-7. The time range is from 2026-06-08 to 2026-06-12
+1. Multiple self-audit reports over several days (June 8-12, 2026)
+2. Issue counts range: 37-41 issues
+3. Consistent patterns:
+   - Backend cold-start: 8/8 backends never used
+   - Strategy cold-start: 29/29 strategies unevaluated
+   - Staging-merge bottleneck: OK (auto-resolver deployed)
+   - Module byte-compile health: occasional broken modules
+4. Specific broken modules mentioned:
+   - gptel-auto-workflow-ontology-predict.el
+   - gptel-auto-workflow-ontology-router.el
+   - gptel-auto-workflow-self-heal-semantic.el
+   - gptel-auto-workflow-recovery.el
+   - gptel-auto-workflow-evolution.el
+5. Auto-resolver deployed at commit 95396bc1
+6. YC principle: 'self-evolve' must include META — auditing the system itself
 
 Let me create a comprehensive knowledge page with:
 - Frontmatter
-- Summary of audit findings
-- Issue breakdown by category
-- Trends and patterns over time
-- Module byte-compile issues detail
+- Overview of the audit pattern
+- Issue categories
+- Specific issue tables
 - Actionable patterns
-- Cross-references
+- Module byte-compile issues
+- The META principle
+- Related topics
 
 I need to make this 50+ lines with concrete examples, tables, commands, and actionable patterns.
