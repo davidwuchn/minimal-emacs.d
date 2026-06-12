@@ -1,15 +1,15 @@
 ---
-valid-from: 2026-06-09T15:22
+valid-from: 2026-06-11T19:01
 ---
 
-# Mistake: 2026-06-09 15:22
+# Mistake: 2026-06-11 19:01
 
 **Failure type:** empty-hypothesis
 **Target:** lisp/modules/gptel-tools-agent-benchmark.el
-**Category:** :programming (keep-rate: 2.2%)
-**Occurrences:** 6
+**Category:** :programming (keep-rate: 2.6%)
+**Occurrences:** 5
 **Example reasons:** none
-**Trend:** 2026-06-02T110754Z-37b1 -> 2026-06-03T231639Z-16fc
+**Trend:** 2026-06-03T192422Z-198b -> 2026-06-03T231639Z-16fc
 
 This pattern was detected by the monitoring agent as a systemic failure requiring investigation. Priority determined by category keep-rate (lower = higher priority).
 
