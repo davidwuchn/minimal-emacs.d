@@ -148,21 +148,45 @@ were created after the hiding but before restoration."
             (kill-local-variable 'mode-line-format)))))))
 
 ;; --- Auto-workflow: register external projects ---
-;; Force-load the module directly (skip transitive requires that fail during init)
-(let ((f (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el"
-                           user-emacs-directory)))
-  (when (file-exists-p f)
+(let ((projects-f (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el"
+                                    user-emacs-directory))
+      (base-f (expand-file-name "lisp/modules/gptel-tools-agent-base.el"
+                                user-emacs-directory))
+      (creatoros-dir (expand-file-name "~/workspace/creatoros/")))
+  (when (file-directory-p creatoros-dir)
+    ;; Step 1: register as project (lightweight — no deps needed)
     (condition-case nil
-        (progn
-          (load-file f)
-          (let ((creatoros (expand-file-name "~/workspace/creatoros")))
-            (when (file-directory-p creatoros)
-              (add-to-list 'gptel-auto-workflow-projects creatoros)
-              (message "[post-init] Registered CreatorOS as OV5 project"))))
-      (error (message "[post-init] CreatorOS registration deferred (deps not ready)")))))
+        (when (and (file-exists-p projects-f) (load-file projects-f))
+          (add-to-list 'gptel-auto-workflow-projects
+                       (directory-file-name creatoros-dir))
+          (message "[post-init] CreatorOS: project registered"))
+      (error (message "[post-init] CreatorOS project registration deferred")))
+    ;; Step 2: allow workspace boundary (heavier deps — may fail)
+    (condition-case nil
+        (when (and (file-exists-p base-f) (load-file base-f))
+          (add-to-list 'gptel-auto-workflow--allowed-workspace-roots creatoros-dir)
+          (message "[post-init] CreatorOS: workspace boundary allowed"))
+      (error (message "[post-init] CreatorOS boundary deferred — will retry on first workflow run")))))
 
 ;; Run after all init is complete
 (add-hook 'emacs-startup-hook #'my/fix-mode-line-for-all-buffers 100)
+
+;; Retry workspace boundary registration after full init (deps now loaded)
+(add-hook 'emacs-startup-hook
+          (lambda ()
+            (let* ((base-f (expand-file-name "lisp/modules/gptel-tools-agent-base.el"
+                                             user-emacs-directory))
+                   (creatoros-dir (expand-file-name "~/workspace/creatoros/")))
+              (when (and (file-directory-p creatoros-dir)
+                         (file-exists-p base-f)
+                         (not (member creatoros-dir gptel-auto-workflow--allowed-workspace-roots)))
+                (condition-case nil
+                    (progn
+                      (load-file base-f)
+                      (add-to-list 'gptel-auto-workflow--allowed-workspace-roots creatoros-dir)
+                      (message "[post-init] CreatorOS boundary: now allowed"))
+                  (error (message "[post-init] CreatorOS boundary still unavailable"))))))
+          90)
 
 
 
