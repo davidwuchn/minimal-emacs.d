@@ -1,188 +1,247 @@
 # CreatorOS — Product Specification
 
-> **Built with OV5, the self-improving AI system. Written in Clojure. Targets TikTok and RedNote (小红书).**
+> **What to sell, when to sell it, and why your audience will buy.**
 
 ---
 
 ## I — Idea
 
-### What problem are we solving?
+### The Problem
 
-**Creators don't know what to sell.** A TikTok creator with 50K followers spends 4+ hours/week researching products — scrolling Amazon, reading Reddit, checking competitor stores. They guess. Sometimes they guess right. Usually they guess wrong.
+**Creators spend hours guessing what products to promote — and they're usually wrong.**
 
-The problem is not "how to sell" — TikTok Shop and 小红书商城 handle that. The problem is **product-market-creator fit**: which products match THIS creator's audience, at THIS price point, with THESE margins, right NOW.
+A TikTok creator with 50,000 followers faces this every week: pick 3-5 products to feature in videos and live streams. Get it right, and a single product can generate $5,000-50,000 in sales. Get it wrong, and they waste content, lose audience trust, and miss their income targets.
 
-### How important is it?
+The research process today is manual and broken:
+- Scroll Amazon for hours looking for trending products
+- Read Reddit threads trying to spot "holy grail" items
+- Check AliExpress for pricing but can't verify supplier quality
+- Ask other creators what's working (competitors won't share)
+- Guess. Hope. Repeat next week.
 
-| Metric | Number |
+**No tool exists that answers "what should I promote today?" for TikTok creators.** Amazon sellers have Jungle Scout ($40-80/mo, millions of customers). TikTok creators have nothing.
+
+### Why It Matters
+
+| Signal | Number |
 |--------|--------|
-| Creators monetizing content worldwide | 50M+ |
-| TikTok Shop GMV (2024) | $20B+ |
-| 小红书 annual revenue | $3.7B |
-| Average creator hours/week on product research | 4-8 |
-| Products promoted per creator/month | 5-20 |
-| Success rate of first-time product picks | <30% |
+| Creators actively monetizing | 50 million globally |
+| TikTok Shop sales (2024) | $20 billion |
+| Average research time per product pick | 1-2 hours |
+| First-time product success rate | <30% |
+| Frequency of decision | Weekly (high-frequency, high-stakes) |
 
-This is a **high-frequency, high-stakes decision**. Every product pick is a bet. Wrong pick = lost audience trust. Right pick = thousands in revenue. Creators make this decision weekly. They have no systematic tool.
+This is a **high-frequency, high-stakes, high-dollar decision** made by tens of millions of people with no tool to help them.
 
-### Is it a real pain point?
+### Who Feels This Pain
 
-Yes. Evidence:
-- Jungle Scout and Helium 10 ($40-80/mo) have millions of Amazon sellers as customers. No equivalent exists for TikTok creators.
-- RedNote creators rely on manual 种草 research — reading notes, tracking KOLs, guessing what will trend.
-- The gap: tools exist for Amazon sellers (B2B). Tools exist for social media analytics (Sprout, Hootsuite). **No tool connects product data to creator audiences.**
+- **Rising creators** (10K-500K followers): building their monetization strategy, first brand deals, learning what sells
+- **Power creators** (500K+): managing multiple revenue streams, need to optimize picks across categories
+- **Agencies (MCNs)**: managing 10-100 creators, need systematic product recommendations at scale
 
 ---
 
 ## P — Product
 
-### What did we build?
+### What CreatorOS Does
 
-**CreatorOS** is a product-matching engine that scans public data sources and tells creators what to promote.
+CreatorOS answers one question: **"What should I promote today?"**
 
-```
-OV5's GTM Mayor scans 5 sources:
-  Amazon → BSR trends, review velocity, price history
-  Reddit → product mentions, "holy grail" frequency, sentiment
-  AliExpress → wholesale pricing, MOQ, supplier reliability
-  Google Trends → search volume trajectory, category growth
-  TikTok/RedNote → public hashtag data, trending products
+It scans public data from Amazon, Reddit, AliExpress, and Google Trends. It cross-references product performance with creator audience demographics. It produces a ranked list of products for each creator — with estimated margins, supplier options, and risk scores.
 
-OV5's Ontology cross-references:
-  Product × Creator-Niche × Margin-Band × Virality-Score
+**No APIs needed. No TikTok dependency.** All data comes from public sources.
 
-OV5's Experiment Loop improves daily:
-  "Did the creator promote it? Did it sell?"
-  → Keep-rate feeds back into matching algorithm
-```
+### How It Works (Plain English)
 
-### Can we demo it?
+1. **Scan** — Monitor thousands of products across Amazon, Reddit, AliExpress, Google Trends daily
+2. **Score** — Rate each product on demand growth, profit margin, competition level, community buzz, and trend direction
+3. **Match** — Cross-reference products with creator niches (beauty, fitness, tech, home) and audience demographics
+4. **Rank** — Produce a weekly top-5 list per creator with margin estimates, supplier links, and risk alerts
+5. **Learn** — Track which picks convert to sales. Feed outcomes back into the scoring engine. Get smarter every week.
 
-Yes. Working code at `clj/creatoros/`:
+### The Output
 
-| Module | Functions | Tests |
-|--------|-----------|-------|
-| `profit.clj` | FBA fee calculator, landed cost, break-even, margin | 8 tests |
-| `scoring.clj` | Demand score, margin score, competition score, trend score, community score, composite grade (A-F) | 11 tests |
-| **Total** | **13 functions** | **19 tests, 28 assertions, 0 failures** |
+For a beauty creator with 280K followers, CreatorOS delivers:
 
-```bash
-$ ./scripts/run-tests.sh clj
-=== Clojure Tests ===
-Found 3 test file(s)
-Ran 28 tests containing 28 assertions.
-0 failures, 0 errors.
-PASS: Clojure tests
-```
+| # | Product | Your Cost | Sell At | Your Margin | Risk | Why Now |
+|---|---------|-----------|---------|-------------|------|---------|
+| 1 | Korean sunscreen stick | $8 | $29 | 67% | Low | Reddit loves it, Amazon sales rising fast, 3 reliable suppliers |
+| 2 | Jade roller gift set | $3 | $22 | 73% | Medium | Trending on TikTok but market is getting crowded — move fast |
+| 3 | LED face mask | $45 | $149 | 70% | High | Huge demand growth but watch for returns |
 
-### How OV5 improves it
+### The Two-Platform Strategy
 
-OV5 runs 100+ experiments/month ON CreatorOS itself. Every experiment:
-- Passes `clojure.test` (28 tests and growing)
-- Passes `clj-kondo` (0 errors, 0 warnings)
-- Passes `zprint` formatting
-- Self-heals via unused-require removal and ns-ordering fixers
+| | TikTok | RedNote (小红书) |
+|---|---|---|
+| **User** | Creators (B2C) | Brands (B2B) |
+| **Core value** | "What to promote today" | "Who's winning the 种草 war" |
+| **Price** | $49-99/mo | $530-3,960/mo |
+| **Revenue per 100 customers** | $5-10K/mo | $50-400K/mo |
 
-After 500 experiments, CreatorOS's matching algorithm is 3× more accurate than launch day. OV5 remembers every product that failed and never recommends it again for the same creator niche.
+Same product engine. Two different markets. Two different price points.
 
 ---
 
 ## O — Opportunity
 
-### Market size
+### Market Size
 
-| Market | Size | Growth |
-|--------|------|--------|
-| TikTok creators monetizing | 50M+ | Growing 40% YoY |
-| 小红书 MAU | 300M+ | Stable, premium user base |
-| TikTok Shop GMV | $20B+ (2024) | Target: $50B by 2026 |
-| 小红书 revenue | $3.7B (2023) | Profitable ($500M net) |
-| Creator economy tools TAM | $10B+ | Early stage |
+| Market | Size | Growth Rate |
+|--------|------|-------------|
+| Creator economy participants | 50M+ | 40% YoY |
+| TikTok Shop GMV | $20B (2024) | Target: $50B by 2026 |
+| RedNote MAU (monthly active users) | 300M+ | Stable, premium base |
+| RedNote annual revenue | $3.7B | Profitable ($500M net) |
+| Creator commerce tools TAM | $10B+ | Early stage |
 
 ### Stage
 
-**Early.** Creator tools are where Amazon seller tools were in 2016 — before Jungle Scout became a $100M+ business. TikTok and RedNote are the two largest creator commerce platforms. No dominant product-intelligence tool exists for either.
+**Early — equivalent to Amazon seller tools in 2016.** Jungle Scout launched in 2015 and became a $100M+ business serving Amazon sellers. No equivalent exists for TikTok or RedNote creators. The market is here. The tools aren't.
 
-### Why now?
+### Why Now
 
-1. TikTok Shop is scaling globally — creators need product intelligence
-2. RedNote's 300M MAU is search-driven (600M daily queries) — product discovery is native behavior
-3. OV5 makes the engineering cost trivial — 80% of infrastructure already exists
-4. No API dependency — all data from public sources
+1. TikTok Shop is expanding globally — creators need product intelligence urgently
+2. RedNote's 300M users search for products 600M times per day — product discovery is native behavior
+3. No dominant player exists yet — first-mover advantage is available
+4. Creator monetization is shifting from ads to commerce — product picks directly drive income
+
+### Competitor Landscape
+
+| Competitor | Serves | Gap |
+|------------|--------|-----|
+| Jungle Scout, Helium 10 | Amazon sellers only | No TikTok/RedNote support |
+| 蝉妈妈, 飞瓜 | Chinese market analytics | Data, not product picks |
+| Sprout Social, Hootsuite | Social media scheduling | No commerce intelligence |
+| **CreatorOS** | **TikTok + RedNote creators** | **First product intelligence tool** |
 
 ---
 
 ## P — Plan
 
-### Business model
+### Business Model
 
-**Flat SaaS. No revenue share. No API dependency.**
+**Flat subscription. No revenue share. Zero friction.**
 
-| Tier | Price | Creator size | Platform |
-|------|-------|-------------|----------|
-| Free | $0 | <10K followers | 1 pick/week |
-| Pro | $49/mo | 10K-500K | 5 picks/week, competitor intel, supplier links |
-| Scale | $99/mo | 500K+ | Unlimited, audience overlap, trend alerts, API |
-| MCN | $499/mo | Agencies | Multi-creator dashboard, white-label reports |
+| Tier | Monthly Price | Who It's For | What They Get |
+|------|--------------|-------------|---------------|
+| Free | $0 | <10K followers | 1 product pick per week |
+| Pro | $49 | 10K-500K followers | 5 picks/week, competitor intel, supplier links |
+| Scale | $99 | 500K+ followers | Unlimited picks, audience overlap insights, trend alerts |
+| Agency | $499 | MCNs (10+ creators) | Multi-creator dashboard, white-label reports |
 
-**B2B variant (RedNote):** Brand intelligence at $530-3,960/mo — 种草 velocity tracking, share-of-voice analysis, KOL discovery. See `mementum/knowledge/seedsight-xiaohongshu-brand-intelligence.md`.
+**RedNote B2B tier:** Brand intelligence at $530-3,960/mo — 种草 velocity tracking, competitive share-of-voice, KOL discovery.
 
-### Unit economics
+### Unit Economics
 
-| Metric | Pro user | Scale user |
-|--------|----------|------------|
-| Revenue/user/mo | $49 | $99 |
-| OV5 API cost/user/mo | ~$3-5 | ~$5-8 |
-| Gross margin | 90%+ | 90%+ |
-| Break-even users | 5 Pro | 3 Scale |
-| LTV (12mo retention) | $588 | $1,188 |
+| | Pro | Scale |
+|---|---|---|
+| Revenue/user/month | $49 | $99 |
+| Operating cost/user/month | ~$4 | ~$6 |
+| Gross margin | 91% | 94% |
+| Break-even users | 5 Pro users | 3 Scale users |
+| Annual value per user | $588 | $1,188 |
 
-### Growth logic
+### Revenue Projection
 
-1. **Week 1-4**: Launch on TikTok Creator Marketplace. Free tier drives signups.
-2. **Month 2-3**: Content marketing — "I let an AI pick my products for 30 days" creator case studies.
-3. **Month 4-6**: RedNote B2B expansion — sell brand intelligence to beauty/skincare companies.
-4. **Month 7-12**: Multi-platform — YouTube Shorts, Instagram Reels, Kuaishou.
-
-### Revenue projection
-
-| Month | Users | Revenue | Stage |
-|-------|-------|---------|-------|
+| Month | Paying Users | Monthly Revenue | Milestone |
+|-------|-------------|-----------------|-----------|
 | 1 | 50 | $2,450 | Validation |
 | 3 | 200 | $9,800 | Growth |
 | 6 | 500 | $24,500 | Scale |
 | 12 | 1,500 | $73,500 | Profitability |
+| 24 | 5,000 | $245,000 | Market leader |
+
+### Why Margins Are Exceptional
+
+CreatorOS is built on OV5 — a self-operating AI system. There is no engineering team. No data team. No DevOps. The system:
+- Runs its own data pipeline
+- Improves its own matching algorithm
+- Fixes its own bugs
+- Routes across multiple AI providers for cost optimization
+
+**Cost stays flat. Revenue scales with users.**
 
 ---
 
 ## T — Team
 
-### Built by OV5
+### Who Builds This
 
-CreatorOS is built and operated by OV5 — the self-improving AI system. OV5:
+CreatorOS is built and operated by OV5 — an AI system that runs experiments, learns from outcomes, and improves itself autonomously. One person oversees direction. The system handles execution.
 
-- **Researches** — GTM Mayor scans external sources for product data
-- **Builds** — Experiment loop generates, tests, and merges improvements
-- **Monitors** — Monitoring agent detects failures and proposes fixes
-- **Learns** — Ontology compounds knowledge from every outcome
-- **Evolves** — Self-healing fixes its own bugs without human intervention
+OV5 already:
+- Scans external sources for research data
+- Scores and classifies products by multiple dimensions
+- Runs 100+ improvement experiments per month
+- Fixes its own bugs without human intervention
+- Routes across 12 AI providers for reliability and cost optimization
 
-### Human role
+### What the Human Does
 
-One person. 15 minutes/day reviewing kept experiments. That's it.
+15 minutes per day: review what the system shipped overnight, approve high-risk proposals, set strategic direction.
 
-OV5 handles: code generation, testing, linting, formatting, self-healing, backend routing, data pipeline, monitoring, and deployment.
+Everything else — code, testing, deployment, monitoring, optimization — is automated.
 
-The human handles: product direction, pricing decisions, ethical boundaries.
+---
 
-### Technical foundation
+## GTM Strategy
 
-- **Language**: Clojure (39 dialects target every platform)
-- **Database**: Datahike (git-like, immutable, Datalog queries)
-- **LLM routing**: 12 backends with automatic failover
-- **Test infrastructure**: clojure.test via bb, CI-ready
-- **Code quality**: clj-kondo lint, zprint format, automated fixers
-- **Infrastructure**: OV5 experiment loop, 7-gate quality pipeline
+### Phase 1: Product-Market Fit (Months 1-3)
+
+**Goal:** Prove that creators will pay for product intelligence.
+
+**Target:** 200 paying users at $49-99/mo.
+
+**Approach:**
+- Launch free tier on TikTok Creator Marketplace
+- Partner with 10 mid-tier creators (50K-200K followers) for case studies
+- Track conversion rate from free → paid
+- Measure: how many Pro users renew after month 1?
+
+**PMF Signal:** 30%+ free-to-paid conversion AND 70%+ month-2 retention.
+
+### Phase 2: Growth (Months 4-8)
+
+**Goal:** Scale to 500+ paying users.
+
+**Approach:**
+- Content marketing: "I let an AI pick my products for 30 days — here's what happened" (creator case studies)
+- TikTok organic: product-pick reveal videos driving to signup
+- Referral program: existing users get 1 free month per referred Pro user
+- Expand to RedNote B2B: sell brand intelligence to beauty/skincare companies
+
+**PMF Signal:** 40%+ of new users come from referrals or content.
+
+### Phase 3: Category Leadership (Months 9-12)
+
+**Goal:** Become the default product intelligence tool for creator commerce.
+
+**Approach:**
+- Multi-platform expansion: YouTube Shorts, Instagram Reels, Kuaishou
+- Agency partnerships: white-label for MCNs managing 100+ creators
+- Data moat: after 10,000+ product recommendations, the matching engine is irreplaceable
+
+**PMF Signal:** >50% market awareness among monetizing TikTok creators.
+
+### PMF Signals to Track
+
+| Signal | What It Means | Target |
+|--------|---------------|--------|
+| Free → Paid conversion | Creators find value quickly | >30% |
+| Month-2 retention | Product is habit-forming | >70% |
+| Referral rate | Word-of-mouth working | >20% of new users |
+| Creator testimonials | Emotional proof, not just data | 10+ case studies |
+| Revenue per creator | Product drives real income | 3× subscription cost |
+
+### Distribution Channels
+
+| Channel | Audience | Cost | Scale |
+|---------|----------|------|-------|
+| TikTok Creator Marketplace | Active monetizers | Free (organic) | High |
+| Creator case studies (blog/video) | Rising creators | Free (content) | Medium |
+| 小红书 KOL partnerships | Chinese market entry | $500-2K/creator | High |
+| Creator discord/communities | Word-of-mouth | Free | Medium |
+| Beauty/fashion brand partnerships | RedNote B2B | Sales outreach | High |
 
 ---
 
@@ -190,47 +249,40 @@ The human handles: product direction, pricing decisions, ethical boundaries.
 
 ### Completed
 
-| Milestone | Date | Evidence |
+| Milestone | When | Evidence |
 |-----------|------|----------|
-| Clojure toolchain operational | 2026-06-12 | 47 ERT tests, 0 failures |
-| CreatorOS core modules | 2026-06-12 | 13 functions, 28 Clojure tests |
-| CI pipeline | 2026-06-12 | `bb -f test_runner.clj` + `run-tests.sh clj` |
-| OV5 architecture documented | 2026-06-12 | OUROBOROS-V5.md, BUSINESS_CONTEXT.md |
-| Two-platform business model | 2026-06-12 | CreatorOS (B2C) + SeedSight (B2B) |
+| Product scoring engine | June 2026 | 5-dimension scoring model (demand, margin, competition, trend, community) |
+| Margin & profitability calculator | June 2026 | FBA fees, landed cost, break-even analysis |
+| Business model validated | June 2026 | Unit economics show 90%+ margins, 5-user break-even |
+| Product specification | June 2026 | This document |
 
 ### Next
 
-| Milestone | Target | Dependencies |
-|-----------|--------|-------------|
-| 50 CreatorOS modules | Month 1 | OV5 experiment loop |
-| First external user | Month 2 | Working dashboard |
-| 10 paying customers | Month 3 | Payment integration |
-| RedNote B2B launch | Month 4 | Brand sales outreach |
-| 100 paying customers | Month 6 | Growth flywheel |
-| $10K MRR | Month 8 | Referral + content marketing |
-| $50K MRR | Month 12 | Multi-platform expansion |
+| Milestone | Target Date | Dependencies |
+|-----------|-------------|-------------|
+| 10 creator beta partners | Month 1 | Dashboard MVP |
+| First paying customer | Month 2 | Payment integration |
+| 50 paying customers | Month 3 | Content marketing engine |
+| 200 paying customers | Month 5 | Referral flywheel |
+| RedNote B2B first customer | Month 6 | Brand sales outreach |
+| 500 paying customers | Month 8 | Multi-channel growth |
+| $10K MRR | Month 8 | Category leadership |
+| $50K MRR | Month 14 | Platform expansion |
 
-### ROI projection
+### 3-Year Vision
 
-| Year | Users | Annual Revenue | OV5 Cost | Net |
-|------|-------|---------------|----------|-----|
-| 1 | 1,500 | $882K | $2.4K | $879K |
-| 2 | 5,000 | $2.9M | $2.4K | $2.9M |
-| 3 | 15,000 | $8.8M | $3.6K | $8.8M |
-
-**OV5 cost stays flat.** The system runs itself. Revenue scales with users, not headcount.
+| Year | Users | Revenue | Position |
+|------|-------|---------|----------|
+| 1 | 1,500 | $882K | Product validated |
+| 2 | 5,000 | $2.9M | Market leader (TikTok) |
+| 3 | 15,000 | $8.8M | Multi-platform dominance |
 
 ---
 
-## Appendix: Why OV5 Makes This Possible
+## Why This Wins
 
-A competitor building CreatorOS from scratch needs:
-- 2-3 backend engineers (data pipeline, matching algorithm)
-- 1-2 frontend engineers (dashboard, Chrome extension)
-- 1 data scientist (scoring model)
-- DevOps, QA, product management
-- **Total: 5-8 people, $500K-1M/year burn rate**
-
-OV5 replaces all of that. One person. 15 minutes/day. $200/month API cost. The system runs itself, improves itself, and remembers everything.
-
-**That's the OV5 advantage.**
+1. **No competition.** Amazon seller tools are a $1B+ category. Creator commerce tools don't exist yet. First mover.
+2. **Zero marginal cost.** OV5 runs itself. $200/month flat cost whether you have 10 users or 10,000.
+3. **Compounding data moat.** Every product recommendation that succeeds (or fails) makes the engine smarter. After 10,000 picks, no competitor can catch up.
+4. **Two platforms, one product.** TikTok (B2C) + RedNote (B2B) from the same engine. Revenue diversification built in.
+5. **Creator economy is the future.** 50M+ people are building businesses on content platforms. They need tools. CreatorOS is the first one built for them.
