@@ -148,10 +148,13 @@ were created after the hiding but before restoration."
             (kill-local-variable 'mode-line-format)))))))
 
 ;; --- Auto-workflow: register external projects ---
-(when (boundp 'gptel-auto-workflow-projects)
+;; gptel-auto-workflow-projects loads lazily on first workflow run.
+;; eval-after-load ensures CreatorOS is added when the module activates.
+(with-eval-after-load 'gptel-auto-workflow-projects
   (let ((creatoros (expand-file-name "~/workspace/creatoros")))
     (when (file-directory-p creatoros)
-      (add-to-list 'gptel-auto-workflow-projects creatoros))))
+      (add-to-list 'gptel-auto-workflow-projects creatoros)
+      (message "[post-init] Registered CreatorOS as OV5 project"))))
 
 ;; Run after all init is complete
 (add-hook 'emacs-startup-hook #'my/fix-mode-line-for-all-buffers 100)
