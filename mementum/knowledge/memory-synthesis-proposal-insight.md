@@ -2,30 +2,27 @@
 Synthesis verification:
 - Confidence: 40%
 - Sources: 4 memories
-- Warnings: No code examples or concrete references, Very short content (23 lines)
+- Warnings: No code examples or concrete references, Very short content (20 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize multiple memories about Lisp modules, gptel auto-workflow, and related tooling into a comprehensive knowledge page. The topic is "memory-synthesis-proposal-insight" which is about insight proposals in a Lisp/gptel workflow system.
+The user wants me to synthesize memories about a topic called "memory-synthesis-proposal-insight" into a knowledge page. Looking at the memories provided, they all relate to "insight-proposal" topics for various components (prompt-builder, grader, general, executor) within the gptel/auto-workflow/agent modules in Emacs Lisp.
 
-Let me create a detailed knowledge page with:
-1. Frontmatter
-2. Minimum 50 lines of content
-3. Concrete examples (code, tables, commands)
-4. Actionable patterns
-5. Cross-references to related topics
+The memories indicate that there are multiple "insight proposal" memory synthesis candidates detected across different modules. These are auto-generated workflow proposals for creating knowledge pages from clusters of related memories.
 
-The memories describe various auto-workflow modules:
-- prompt-builder
-- grader
-- general
-- executor
-- ontology (router, strategy)
-- production (metrics, projects)
-- strategic
-- benchmark (principles, subagent)
-- tools-agent (benchmark, experiment-core, prompt-build, runtime)
-- treesit-agent-tools-workspace
-- mementum
+Let me create a comprehensive knowledge page that synthesizes these into actionable patterns. The page should:
+1. Have proper frontmatter
+2. Have 50+ lines of content
+3. Include concrete examples (code, tables, commands)
+4. Have actionable patterns
+5. Cross-reference related topics
 
-Let me build a comprehensive page that synthesizes these into reusable patterns.
+Let me structure this around:
+- The memory synthesis proposal insight system itself
+- The pattern of how insight proposals are generated
+- The components involved (prompt-builder, grader, executor, general)
+- How they fit into the gptel auto-workflow
+- Concrete code/command examples
+- Actionable patterns for using/creating insight proposals
+
+I'll write this as a comprehensive knowledge page about the insight proposal memory synthesis workflow.

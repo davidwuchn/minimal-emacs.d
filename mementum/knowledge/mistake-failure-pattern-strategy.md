@@ -1,42 +1,33 @@
 <!--
 Synthesis verification:
-- Confidence: 80%
+- Confidence: 12%
 - Sources: 30 memories
-- Warnings: No code examples or concrete references
-- Auto-approved: yes (passed)
+- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-strategy', Very short content (25 lines)
+- Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize the provided memories into a complete knowledge page. The topic is "mistake-failure-pattern-strategy". The memories are all "strategy" failure type, with targets being either staging-related (staging-verification, staging-scope, staging-review, staging-push, staging-merge, staging-config) or Lisp module files in an Emacs/gptel project.
+The user wants me to synthesize a set of mistake/failure pattern memories into a knowledge page. Let me analyze what I have:
 
-I need to:
-1. Create a markdown page with frontmatter
-2. Minimum 50 lines of actual content
-3. Include concrete examples (code, tables, commands)
-4. Provide actionable patterns
-5. Cross-reference related topics
-6. Return the full markdown page directly
+1. All entries share `failure type: strategy`
+2. They're categorized into:
+   - **Staging operations**: `staging-verification`, `staging-scope`, `staging-review`, `staging-push`, `staging-merge`, `staging-config`
+   - **Lisp modules** (mostly gptel-*): treesit-agent-tools-workspace, gptel-tools-agent-strategy-harness, gptel-tools-agent-runtime, gptel-tools-agent-prompt-build, gptel-tools-agent-experiment-core, gptel-tools-agent-error, gptel-tools-agent, gptel-tools-agent-benchmark, gptel-ext-tool-confirm, gptel-ext-backend-registry, gptel-benchmark-subagent, gptel-benchmark-principles, gptel-benchmark-core, gptel-auto-workflow-strategic, gptel-auto-workflow-research-cache, gptel-auto-workflow-projects, gptel-auto-workflow-production-metrics, gptel-auto-workflow-production, gptel-auto-workflow-ontology-strategy, gptel-auto-workflow-ontology-router, gptel-auto-workflow-mementum, gptel-auto-workflow-evolution, gptel-auto-workflow-bare-path-diagnostic, gptel-auto-workflow-approval-queue
 
-Let me analyze the data:
-- Failure type: strategy
-- Targets fall into two clusters:
-  - Staging workflow: staging-verification, staging-scope, staging-review, staging-push, staging-merge, staging-config
-  - Emacs Lisp modules: many gptel-* and gptel-auto-workflow-* modules
-- Category keep-rate is very low (0-4.3%), indicating high priority
-- Occurrences range 3-18
+3. Categories with keep-rates:
+   - `:programming` keep-rate 3.5% (most entries)
+   - `:agentic` keep-rate 4.3% (auto-workflow-* files)
+   - `:agentic` keep-rate 1.4% (gptel-auto-workflow-production.el)
+   - `:agentic` keep-rate 0.0% (gptel-tools-agent-benchmark.el)
 
-I should structure this as a knowledge page about strategy-level failures in the agentic/auto-workflow codebase, with concrete patterns to fix them. I'll create sections on:
-1. Overview/definition
-2. Pattern taxonomy (staging failures vs implementation failures)
-3. Actionable patterns with code examples
-4. Detection and monitoring
-5. Prevention checklist
-6. Related topics
+4. The pattern emerges clearly: a high failure rate in "strategy" type for these specific modules, particularly in the gptel-auto-workflow-* family and staging-*.
 
-Let me draft this with enough content and concrete examples. I'll include:
-- Tables summarizing the targets
-- Code snippets for verification/checklist
-- Shell commands for git staging
-- Actionable patterns as bullet points
+Let me synthesize this into a knowledge page with:
+- Frontmatter
+- Overview of the pattern
+- Failure catalog tables
+- Module category groupings
+- Keep-rate analysis
+- Actionable patterns
 - Cross-references
 
-Let me make sure it's at least 50 lines of actual content (excluding frontmatter). I'll aim for a substantial page.
+I'll aim for 50+ lines of actual content with concrete examples.
