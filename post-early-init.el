@@ -54,7 +54,21 @@
   ;; gtm-product-org) don't conflict with default "server" socket.
   (let ((dn (daemonp)))
     (when (and (stringp dn) (not (string= dn "server")))
-      (setq server-name dn))))
+      (setq server-name dn)))
+  ;; Purge stale .elc files to ensure daemon loads latest source.
+  (let ((modules-dir (expand-file-name "lisp/modules"
+                                       (or (getenv "MINIMAL_EMACS_USER_DIR")
+                                           user-emacs-directory)))
+        (cleaned 0))
+    (when (file-directory-p modules-dir)
+      (dolist (el (directory-files modules-dir t "\\.el$"))
+        (let ((elc (concat el "c")))
+          (when (and (file-exists-p elc)
+                     (file-newer-than-file-p el elc))
+            (delete-file elc)
+            (setq cleaned (1+ cleaned)))))
+      (when (> cleaned 0)
+        (message "[post-early] Purged %d stale .elc files" cleaned)))))
 
 ;; Set tree-sitter grammar directory early, before any tree-sitter modes are loaded
 ;; Note: user-emacs-directory is already set to var/ by pre-early-init.el
