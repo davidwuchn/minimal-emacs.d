@@ -3,9 +3,9 @@
 
 ;; Forward declarations for dynamic variables
 (defvar gptel-agent-dirs nil)
-(defvar gptel-auto-workflow-program-file)
+(defvar gptel-auto-workflow-program-file nil)
 (defvar gptel-auto-workflow--running nil)
-(defvar gptel-auto-workflow-skills-dir)
+(defvar gptel-auto-workflow-skills-dir nil)
 (defvar gptel-auto-workflow--current-project nil)
 (defvar gptel-auto-workflow--project-root-override nil)
 (defvar gptel-auto-workflow--run-project-root nil)
