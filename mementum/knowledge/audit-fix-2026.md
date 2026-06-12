@@ -6,41 +6,33 @@ Synthesis verification:
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize a large number of audit-fix memories (from June 8-12, 2026) into a single knowledge page. Let me analyze the patterns:
+The user wants me to synthesize a large number of self-audit reports into a single knowledge page. Let me analyze the pattern across all these memories:
 
-1. **Recurring Issues** (38 issues is the steady state):
-   - 8/8 backends cold (never used in last 7d): Cf-gateway, Token-plan, Deepseek, Z-ai, Dashscope, Minimax, Gemini, Copilot
-   - 29/29 strategies unevaluated
-   - Staging-merge bottleneck OK (0% failures, auto-resolver deployed at commit 95396bc1)
-   - Sometimes +1-2 module byte-compile issues
+1. All are self-audit reports from a system called gptel-auto-workflow
+2. They run every ~4 hours from 2026-06-08 to 2026-06-12
+3. Common issues found:
+   - Backend cold-start: 8 backends never used in last 7d (consistent across all)
+   - Strategy cold-start: 29/29 strategies unevaluated (consistent across all)
+   - Staging-merge bottleneck: OK (0% of failures) - auto-resolver deployed at commit 95396bc1
+   - Occasionally: Module byte-compile health issues with specific .el files
+4. Action items are consistent: cold backends, 40% exploration rate may be slow, source code review still needed
+5. YC note: 'self-evolve' must include META — auditing the system itself
 
-2. **Variations**:
-   - Most reports: 38 issues
-   - Some spike to 39 or 40 (with byte-compile health issues)
-   - Early reports: 37 issues
-   - Module byte-compile issues observed:
-     - gptel-auto-workflow-ontology-router.el
-     - gptel-auto-workflow-self-heal-semantic.el
-     - gptel-auto-workflow-recovery.el
-     - gptel-auto-workflow-evolution.el
+Issue counts over time:
+- 2026-06-08 11:03:34: 37
+- 2026-06-08 10:14:33: 37
+- 2026-06-08 18:00:12 onwards: mostly 38
+- 2026-06-09 15:00:09: 39 (one module broken)
+- 2026-06-10 10:00:14: 40 (two modules broken)
+- 2026-06-10 23:00:10: 40 (two modules broken)
+- 2026-06-11 23:00:07: 39 (was 38, increased)
+- 2026-06-12 03:00:12: 39
+- 2026-06-12 07:00:09: 39
 
-3. **Action items** are consistent:
-   - Attempt cold backends on next cycle
-   - 40% exploration rate may be too slow
-   - Staging-merge auto-resolver handles .md; source code still needs review
+Modules that have been broken:
+- gptel-auto-workflow-ontology-router.el
+- gptel-auto-workflow-self-heal-semantic.el
+- gptel-auto-workflow-recovery.el
+- gptel-auto-workflow-evolution.el
 
-4. **Key YC insight**: 'self-evolve' must include META — auditing the system itself
-
-Let me build a comprehensive knowledge page with:
-- Frontmatter
-- Overview
-- Issue taxonomy with tables
-- Patterns and trends over time
-- Actionable patterns
-- Specific module issues
-- Cold backend list
-- Cold strategy list
-- Auto-resolver info
-- Related topics
-
-I need to make sure I hit 50+ lines of actual content with concrete examples, tables, commands, and patterns. Let me build this carefully.
+Let me build a comprehensive knowledge page that synthesizes this into actionable patterns.

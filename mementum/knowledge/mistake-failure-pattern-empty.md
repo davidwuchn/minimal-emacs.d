@@ -1,30 +1,43 @@
 <!--
 Synthesis verification:
-- Confidence: 12%
+- Confidence: 24%
 - Sources: 10 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-empty', Very short content (22 lines)
+- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-empty'
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize a series of mistake records into a knowledge page. Let me analyze the patterns:
+The user wants me to synthesize multiple "empty-hypothesis" failure memories into a comprehensive knowledge page. Let me analyze the memories:
 
-1. All entries share `failure-type: empty-hypothesis`
-2. Categories: `:programming` and `:agentic`
-3. Keep-rates are mostly 0.0%, with some at 2.5-3.4% - all very low
-4. Targets fall into two clusters:
-   - Staging-related: staging-verification, staging-scope, staging-review
-   - Lisp module files: various `lisp/modules/gptel-*.el` files
-5. Trends all show recent dates (June 2026)
-6. No example reasons are provided for any of them
-7. Occurrences range from 3-18
+1. All memories share the failure type "empty-hypothesis"
+2. They target different areas:
+   - staging-verification (5 occurrences, :programming, 0.0% keep-rate)
+   - staging-scope (4 occurrences, :programming, 0.0% keep-rate)
+   - staging-review (18 occurrences, :programming, 3.4% keep-rate)
+   - lisp/modules/gptel-tools-agent-experiment-core.el (4 occurrences, :agentic, 0.0% keep-rate)
+   - lisp/modules/gptel-tools-agent-benchmark.el (5 occurrences, :programming, 2.6% keep-rate)
+   - lisp/modules/gptel-benchmark-subagent.el (4 occurrences, :programming, 3.2% keep-rate)
+   - lisp/modules/gptel-auto-workflow-strategic.el (3 occurrences, :agentic, 2.5% keep-rate)
+   - lisp/modules/gptel-auto-workflow-projects.el (5 occurrences, :agentic, 0.0% keep-rate)
+   - lisp/modules/gptel-auto-workflow-ontology-strategy.el (3 occurrences, :agentic, 2.5% keep-rate)
+   - lisp/modules/gptel-auto-workflow-ontology-router.el (3 occurrences, :agentic, 0.0% keep-rate)
 
-The "empty-hypothesis" failure type means these are situations where no actionable hypothesis could be formed about why something failed. This is a meta-pattern - failures that the system couldn't diagnose.
+Total occurrences: 5+4+18+4+5+4+3+5+3+3 = 54
 
-Let me create a comprehensive knowledge page that:
-- Defines the empty-hypothesis failure pattern
-- Documents the two target clusters
-- Provides actionable patterns to prevent/handle this
-- Includes tables, code examples, and cross-references
-- Has at least 50 lines of substantive content
+Categories:
+- :programming: 5 targets
+- :agentic: 5 targets
 
-Let me write this out.
+Key patterns:
+- All have "Example reasons: none" - this is the empty-hypothesis characteristic
+- Trend data shows they're consecutive runs with the same issue
+- Keep-rates are very low (0-3.4%)
+- Spans from 2026-06-02 to 2026-06-12
+
+I need to create a knowledge page that:
+1. Has minimum 50 lines of content
+2. Includes concrete examples
+3. Has actionable patterns
+4. Cross-references related topics
+5. Is in proper markdown with frontmatter
+
+Let me build a comprehensive page that synthesizes this into a pattern description, includes code examples of what empty-hypothesis looks like, how to detect it, and how to fix it.

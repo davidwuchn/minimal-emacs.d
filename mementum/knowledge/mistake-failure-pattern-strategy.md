@@ -1,37 +1,48 @@
 <!--
 Synthesis verification:
-- Confidence: 40%
+- Confidence: 80%
 - Sources: 30 memories
-- Warnings: No code examples or concrete references, Very short content (29 lines)
-- Auto-approved: yes (flagged)
+- Warnings: No code examples or concrete references
+- Auto-approved: yes (passed)
 --->
 
-The user wants me to synthesize multiple mistake/failure pattern memories into a comprehensive knowledge page about "mistake-failure-pattern-strategy". Let me analyze the memories:
+The user wants me to synthesize the memories into a knowledge page about "mistake-failure-pattern-strategy". Let me analyze the memories:
 
-1. There are two main clusters of failures:
-   - **Staging workflow failures**: staging-verification, staging-scope, staging-review, staging-push, staging-merge, staging-config
-   - **Lisp module failures** (gptel-related): treesit-agent-tools-workspace, gptel-tools-agent-strategy-harness, gptel-tools-agent-runtime, gptel-tools-agent-prompt-build, gptel-tools-agent-experiment-core, gptel-tools-agent-error, gptel-tools-agent, gptel-tools-agent-benchmark, gptel-ext-tool-confirm, gptel-ext-backend-registry, gptel-benchmark-subagent, gptel-benchmark-principles, gptel-benchmark-core, gptel-auto-workflow-strategic, gptel-auto-workflow-research-cache, gptel-auto-workflow-projects, gptel-auto-workflow-production-metrics, gptel-auto-workflow-production, gptel-auto-workflow-ontology-strategy, gptel-auto-workflow-ontology-router, gptel-auto-workflow-mementum, gptel-auto-workflow-evolution, gptel-auto-workflow-bare-path-diagnostic, gptel-auto-workflow-approval-queue
-
-2. Failure type is consistently "strategy" - meaning strategy-level failures in the agent workflow
-3. Category is mostly :programming (keep-rate 3.5%) and some :agentic (keep-rate 1.4%-4.3%)
-4. Most have no specific example reasons
-5. Trends span 2026-06-02 to 2026-06-08
-6. Occurrences range from 3 to 18
+1. All memories share `failure type: strategy`
+2. They cluster into two groups:
+   - **Staging/workflow targets**: staging-verification, staging-scope, staging-review, staging-push, staging-merge, staging-config
+   - **Lisp module targets**: Many `lisp/modules/gptel-*.el` and related files
+3. Category keep-rates vary:
+   - `:programming` keep-rate: 3.5% (most common) — very low
+   - `:agentic` keep-rate: 4.3%
+   - `:agentic` keep-rate: 1.4% (gptel-auto-workflow-production.el — lowest)
+   - `:programming` keep-rate: 0.0% (gptel-tools-agent-benchmark.el)
+4. Occurrences vary from 3 to 18
+5. The trend timestamps span roughly 2026-06-02 to 2026-06-08
 
 Key insights:
-- staging-review has the highest occurrence (18)
-- gptel-auto-workflow-production has very low keep-rate (1.4%)
-- gptel-tools-agent-benchmark has 0.0% keep-rate (critical)
-- Heavy concentration in gptel-* modules suggests systemic issues with the gptel agent tooling
-- The staging-* failures suggest CI/CD pipeline issues
+- The "strategy" failure type is systemic across many modules
+- Staging operations (push, merge, review, scope, verification, config) all failing — suggests an upstream staging pipeline problem
+- Lisp modules related to gptel agent/auto-workflow show widespread strategy failures
+- High-frequency: staging-review (18 occurrences)
+- Low keep-rate indicates most strategy failures are not retained as valid memories
+- The auto-workflow itself generates these mistake reports — meta-failure consideration
 
-Let me build a comprehensive knowledge page with:
+I need to create:
 - Frontmatter
-- Overview
-- Failure cluster analysis (staging vs lisp modules)
-- Patterns and root causes
-- Actionable remediation strategies
-- Tables of affected targets
+- At least 50 lines of content
+- Concrete examples (tables, code)
+- Actionable patterns
 - Cross-references
 
-Let me write this as a substantive knowledge page, hitting 50+ lines easily with tables, code examples, and patterns.
+Let me structure the page:
+1. Overview
+2. Failure Landscape (table of all targets)
+3. Pattern Analysis (cluster groups)
+4. Priority Matrix (based on keep-rate)
+5. Root Cause Hypotheses
+6. Actionable Patterns / Playbook
+7. Detection Commands
+8. Related topics
+
+Let me write this out fully.
