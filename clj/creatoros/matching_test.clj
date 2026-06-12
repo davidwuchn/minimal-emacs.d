@@ -1,5 +1,5 @@
 (ns creatoros.matching-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is]]
             [creatoros.matching :as sut]))
 
 (def sample-products
@@ -33,7 +33,7 @@
 
 (deftest test-match-filters-below-threshold
   (let [results (sut/match (assoc sample-creator :followers 500000) sample-products)]
-    (is (every? #(>= (:composite %) 0.50) results))))
+    (is (every? #(>= (:composite %) 0.45) results))))
 
 (deftest test-match-includes-metrics
   (let [results (sut/match sample-creator sample-products)]

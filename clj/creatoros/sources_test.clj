@@ -1,5 +1,5 @@
 (ns creatoros.sources-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is]]
             [creatoros.sources :as sut]))
 
 (deftest test-fetch-products-returns-collection

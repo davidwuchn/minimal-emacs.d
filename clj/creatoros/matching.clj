@@ -4,7 +4,7 @@
             [creatoros.profit :as profit]))
 
 (def ^:private category-thresholds
-  {:micro  0.40 :mid 0.50 :macro 0.55 :agency 0.60})
+  {:micro  0.25 :mid 0.35 :macro 0.45 :agency 0.55})
 
 (def ^:private country-multipliers
   {"US" 1.0 "UK" 0.85 "DE" 0.80 "FR" 0.75
