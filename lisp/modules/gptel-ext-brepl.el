@@ -383,15 +383,6 @@ Returns the reordered subforms concatenated with their leading whitespace."
           (setq first nil)))
       result)))
 
-(defun gptel-brepl-fix-unused-require (file-content)
-  "Remove unused :require clauses from Clojure FILE-CONTENT.
-Uses clj-kondo analysis to detect unused requires, then removes them.
-Returns (:valid t/nil :fixed-content string :error nil/string)."
-  (if (not (stringp file-content))
-      (list :valid nil :fixed-content nil :error "Expected string file-content")
-    (list :valid t :fixed-content file-content :error nil
-          :note "Unused-require detection requires clj-kondo analysis — pass-through for now")))
-
 ;;; ── Formatter ──
 
 (defun gptel-brepl-format (file-content)
