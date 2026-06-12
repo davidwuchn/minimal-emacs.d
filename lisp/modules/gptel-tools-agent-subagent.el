@@ -751,7 +751,7 @@ Logs subagent dispatch to ontology for self-evolution tracking."
 
 ;;; TodoWrite Overlay Fix for Subagent Context
 
-(defvar gptel-agent--hrule)  ; from gptel-agent-tools
+(defvar gptel-agent--hrule nil)  ; from gptel-agent-tools
 
 (defvar-local my/gptel--todo-overlay nil
   "Buffer-local cache for TodoWrite overlay.
