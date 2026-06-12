@@ -63,8 +63,9 @@ run_clj_tests() {
     clj_output=$("$brepl_bin" -f "$runner_file" 2>&1) || true
     local clj_exit=${PIPESTATUS[0]}
     if echo "$clj_output" | grep -q "No nREPL port found"; then
-        echo "SKIP: No nREPL server running (normal in CI/batch)"
-        return 0
+        echo "No nREPL — trying direct bb -f..."
+        clj_output=$(bb -f "$runner_file" 2>&1) || true
+        clj_exit=${PIPESTATUS[0]}
     fi
     if [[ $clj_exit -eq 0 ]]; then
         echo "PASS: Clojure tests"

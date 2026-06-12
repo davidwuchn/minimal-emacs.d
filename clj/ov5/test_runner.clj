@@ -1,9 +1,10 @@
 ;; ov5/test_runner.clj — Clojure test runner for OV5 experiment loop
-;; Usage: brepl -f clj/ov5/test_runner.clj
+;; Usage: bb -f clj/ov5/test_runner.clj
 ;; Scans clj/ for *_test.clj files, loads them, runs clojure.test, exits with code.
 
 (require 'clojure.test)
 (require 'clojure.java.io)
+(require 'clojure.string)
 
 (def test-dir (clojure.java.io/file "clj"))
 
@@ -19,6 +20,7 @@
   (-> f
       (clojure.string/replace #"^clj/" "")
       (clojure.string/replace #"/" ".")
+      (clojure.string/replace #"_" "-")
       (clojure.string/replace #"\.clj$" "")
       (symbol)))
 
@@ -26,17 +28,20 @@
   (println (str "Found " (count files) " test file(s): " (pr-str files)))
   (if (empty? files)
     (do (println "0 tests, 0 failures, 0 errors.") (System/exit 0))
-    (do
+    (let [loaded-ns (atom [])]
       (doseq [f files]
         (let [ns-sym (ns-from-file f)]
           (println (str "Loading " f " (" ns-sym ")"))
-          (try (load-file f)
+          (try
+            (require ns-sym)
+            (swap! loaded-ns conj ns-sym)
             (catch Exception e
               (println (str "ERROR loading " f ": " (.getMessage e)))))))
-      (let [results (apply clojure.test/run-tests
-                           (map ns-from-file files))]
-        (let [total (+ (:pass results) (:fail results) (:error results))]
+      (if (empty? @loaded-ns)
+        (do (println "0 tests, 0 failures, 0 errors.") (System/exit 0))
+        (let [results (apply clojure.test/run-tests @loaded-ns)
+              total (+ (:pass results) (:fail results) (:error results))]
           (println (str "\nRan " total " tests containing "
                         (+ (:pass results) (:fail results) (:error results)) " assertions."))
-          (println (str (:fail results) " failures, " (:error results) " errors.")))
-        (System/exit (if (zero? (+ (:fail results) (:error results))) 0 1))))))
+          (println (str (:fail results) " failures, " (:error results) " errors."))
+          (System/exit (if (zero? (+ (:fail results) (:error results))) 0 1)))))))

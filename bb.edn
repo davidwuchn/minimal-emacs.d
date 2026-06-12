@@ -1,1 +1,2 @@
-{:pods {replikativ/datahike {:version "0.8.1697"}}}
+{:paths ["clj" "clj/creatoros" "clj/ov5"]
+ :pods {replikativ/datahike {:version "0.8.1697"}}}
