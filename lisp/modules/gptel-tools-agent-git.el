@@ -771,15 +771,29 @@ than sequential regex."
 
 (defun my/gptel--sanitize-for-logging (text &optional max-len)
   "Sanitize TEXT for safe logging to Messages buffer.
-Replaces newlines and control chars with visible tokens.
-Optional MAX-LEN truncates output (default: 100 chars).
-Returns sanitized string, or \"nil\" if TEXT is nil."
+Replaces newlines and control chars with spaces.
+Escapes % and & to prevent C-level message_dolog format corruption
+and partial HTML entity artifacts under concurrent writes.
+Optional MAX-LEN truncates output (default: 100 chars)."
   (if (not (stringp text))
       "nil"
     (let ((result (replace-regexp-in-string
                    "[\n\r\t]" 
                    (lambda (m) (pcase m ("\n" " ") ("\r" " ") ("\t" " ")))
                    text t t)))
+      ;; Escape bare % for C-level message_dolog (preserve already-escaped %%)
+      (let ((i 0) (len (length result)) (out nil))
+        (while (< i len)
+          (let ((c (aref result i)))
+            (if (and (eq c ?%) (< (1+ i) len) (eq (aref result (1+ i)) ?%))
+                (progn (push ?% out) (push ?% out) (setq i (+ i 2)))
+              (if (eq c ?%)
+                  (progn (push ?% out) (push ?% out) (setq i (1+ i)))
+                (push c out)
+                (setq i (1+ i))))))
+        (setq result (concat (nreverse out))))
+      ;; Escape & to prevent partial HTML entity artifacts
+      (setq result (replace-regexp-in-string "&" "&&" result t t))
       (truncate-string-to-width result (or max-len 100) nil nil "..."))))
 
 (defun my/gptel--safe-file-p (filepath)

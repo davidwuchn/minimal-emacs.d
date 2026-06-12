@@ -79,5 +79,27 @@
   "Non-string dir should return nil."
   (should-not (my/gptel--workflow-owned-worktree-root 42)))
 
+;;; ─── Logging sanitize tests ───
+
+(ert-deftest git/sanitize-log-escapes-percent ()
+  "%% in output must be escaped for C-level message_dolog."
+  (should (string-match-p "%%"
+           (my/gptel--sanitize-for-logging "score: 85%"))))
+
+(ert-deftest git/sanitize-log-escapes-ampersand ()
+  "& in output must be escaped to prevent partial HTML entity artifacts."
+  (should (string-match-p "&&"
+           (my/gptel--sanitize-for-logging "a & b"))))
+
+(ert-deftest git/sanitize-log-no-double-escape ()
+  "Already-escaped %% should not become %%%%."
+  (should-not (string-match-p "%%%%"
+                (my/gptel--sanitize-for-logging "%%s"))))
+
+(ert-deftest git/sanitize-log-newlines-replaced ()
+  "Newlines must be replaced with spaces."
+  (should-not (string-match-p "\n"
+                (my/gptel--sanitize-for-logging "line1\nline2"))))
+
 (provide 'test-gptel-tools-agent-git)
 ;;; test-gptel-tools-agent-git.el ends here
