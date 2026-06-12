@@ -2,6 +2,9 @@
 ;; Part of gptel-tools-agent split
 
 (require 'cl-lib)
+;; Required modules
+(require 'gptel-tools-agent-base)
+(require 'gptel-tools-agent-experiment-loop)
 ;; Optional: monitoring-agent may not be available in all environments
 ;; If it fails to load, monitoring-cycle is silently skipped via fboundp guards
 (ignore-errors (require 'gptel-auto-workflow-monitoring-agent))
