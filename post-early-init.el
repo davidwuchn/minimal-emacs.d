@@ -56,10 +56,11 @@
     (when (and (stringp dn) (not (string= dn "server")))
       (setq server-name dn)))
   ;; Purge stale .elc files to ensure daemon loads latest source.
+  ;; NOTE: user-emacs-directory is already redirected to var/ by
+  ;; pre-early-init.el, so use minimal-emacs-user-directory.
   (let ((modules-dir (expand-file-name "lisp/modules"
-                                       (or (and (boundp 'minimal-emacs-user-directory)
-                                                minimal-emacs-user-directory)
-                                           (getenv "MINIMAL_EMACS_USER_DIR")
+                                       (or (bound-and-true-p minimal-emacs-user-directory)
+                                           (getenv "MINIMAL_EMACS_USER_DIRECTORY")
                                            user-emacs-directory)))
         (cleaned 0))
     (when (file-directory-p modules-dir)
@@ -67,10 +68,14 @@
         (let ((elc (concat el "c")))
           (when (and (file-exists-p elc)
                      (file-newer-than-file-p el elc))
-            (delete-file elc)
-            (setq cleaned (1+ cleaned)))))
+            (condition-case err
+                (progn
+                  (delete-file elc)
+                  (setq cleaned (1+ cleaned)))
+              (error
+               (message "[post-early] Failed to purge stale %s: %S" elc err)))))
       (when (> cleaned 0)
-        (message "[post-early] Purged %d stale .elc files" cleaned)))))
+        (message "[post-early] Purged %d stale .elc files" cleaned))))))
 
 ;; Set tree-sitter grammar directory early, before any tree-sitter modes are loaded
 ;; Note: user-emacs-directory is already set to var/ by pre-early-init.el

@@ -1766,8 +1766,137 @@ Verifies the core property of the always-defer fix."
                    (setq deferred-p t))))
         (load-file test-post-early-init-file)
         (let ((gptel-curl--sentinel-depth 0))
-          (gptel-curl--sentinel nil nil)
-          (should deferred-p))))))
+         (gptel-curl--sentinel nil nil)
+         (should deferred-p))))))
+
+;; ─── Daemon Stale .elc Purge Regression Tests ───
+
+(ert-deftest regression/daemon-purge/stale-elc-deleted-fresh-elc-preserved ()
+  "Daemon startup must delete stale .elc (source newer than compiled)
+and preserve fresh .elc (compiled newer than source).  Verifies the purge
+uses minimal-emacs-user-directory, not user-emacs-directory (which is var/)."
+  (require 'server)
+  (defvar minimal-emacs-user-directory)
+  (let* ((tmp-root (make-temp-file "purge-test-" t))
+         (modules-dir (expand-file-name "lisp/modules" tmp-root))
+         (var-dir (expand-file-name "var" tmp-root))
+         (foo-el (expand-file-name "foo.el" modules-dir))
+         (foo-elc (expand-file-name "foo.elc" modules-dir))
+         (bar-el (expand-file-name "bar.el" modules-dir))
+         (bar-elc (expand-file-name "bar.elc" modules-dir)))
+    (unwind-protect
+        (progn
+          ;; Set up directory layout
+          (make-directory modules-dir t)
+          (make-directory var-dir t)
+           ;; Create source files
+           (write-region ";; test foo" nil foo-el)
+           (write-region ";; test bar" nil bar-el)
+           ;; Stale .elc: create .elc, then touch .el to make it newer
+           (write-region ";; stale compiled" nil foo-elc)
+           (sleep-for 1)                 ; ensure timestamp difference
+           (write-region ";; test foo updated" nil foo-el)
+           ;; Fresh .elc: create .el first, then .elc after
+           (sleep-for 1)
+          (write-region ";; fresh compiled" nil bar-elc)
+          ;; Verify preconditions
+          (should (file-exists-p foo-el))
+          (should (file-exists-p foo-elc))
+          (should (file-newer-than-file-p foo-el foo-elc))
+          (should (file-exists-p bar-el))
+          (should (file-exists-p bar-elc))
+          (should (file-newer-than-file-p bar-elc bar-el))
+          ;; Simulate daemon startup with var/-redirected user-emacs-directory
+          (with-daemon-environment
+            (let ((minimal-emacs-user-directory tmp-root)
+                  (user-emacs-directory var-dir))
+              (load-file test-post-early-init-file)
+              ;; Stale .elc must be deleted
+              (should-not (file-exists-p foo-elc))
+              (should (file-exists-p foo-el))
+              ;; Fresh .elc must be preserved
+              (should (file-exists-p bar-elc))
+              (should (file-exists-p bar-el)))))
+      ;; Cleanup
+      (ignore-errors
+        (delete-file foo-elc)
+        (delete-file bar-elc)
+        (delete-file foo-el)
+        (delete-file bar-el)
+        (delete-directory modules-dir)
+        (delete-directory var-dir)
+        (delete-directory tmp-root)))))
+
+(ert-deftest regression/daemon-purge/env-root-deletes-stale-elc ()
+  "The purge should also honor MINIMAL_EMACS_USER_DIRECTORY when the variable
+is unset but the documented environment variable is present."
+  (require 'server)
+  (let* ((tmp-root (make-temp-file "purge-test-env-" t))
+         (modules-dir (expand-file-name "lisp/modules" tmp-root))
+         (var-dir (expand-file-name "var" tmp-root))
+         (foo-el (expand-file-name "foo.el" modules-dir))
+         (foo-elc (expand-file-name "foo.elc" modules-dir))
+         (old-root (getenv "MINIMAL_EMACS_USER_DIRECTORY")))
+    (unwind-protect
+        (progn
+          (make-directory modules-dir t)
+          (make-directory var-dir t)
+          (write-region ";; test foo" nil foo-el)
+          (write-region ";; stale compiled" nil foo-elc)
+          (sleep-for 1)
+          (write-region ";; test foo updated" nil foo-el)
+          (with-daemon-environment
+            (setenv "MINIMAL_EMACS_USER_DIRECTORY" tmp-root)
+            (let ((minimal-emacs-user-directory nil)
+                  (user-emacs-directory var-dir))
+              (load-file test-post-early-init-file)
+              (should-not (file-exists-p foo-elc))
+              (should (file-exists-p foo-el)))))
+      (if old-root (setenv "MINIMAL_EMACS_USER_DIRECTORY" old-root)
+        (setenv "MINIMAL_EMACS_USER_DIRECTORY" nil))
+      (ignore-errors
+        (delete-file foo-elc)
+        (delete-file foo-el)
+        (delete-directory modules-dir)
+        (delete-directory var-dir)
+        (delete-directory tmp-root)))))
+
+(ert-deftest regression/daemon-purge/delete-errors-are-nonfatal ()
+  "A purge failure should not abort daemon startup."
+  (require 'server)
+  (defvar minimal-emacs-user-directory)
+  (let* ((tmp-root (make-temp-file "purge-test-error-" t))
+         (modules-dir (expand-file-name "lisp/modules" tmp-root))
+         (var-dir (expand-file-name "var" tmp-root))
+         (foo-el (expand-file-name "foo.el" modules-dir))
+         (foo-elc (expand-file-name "foo.elc" modules-dir)))
+    (unwind-protect
+        (progn
+          (make-directory modules-dir t)
+          (make-directory var-dir t)
+          (write-region ";; test foo" nil foo-el)
+          (write-region ";; stale compiled" nil foo-elc)
+          (sleep-for 1)
+          (write-region ";; test foo updated" nil foo-el)
+          (with-daemon-environment
+            (let ((minimal-emacs-user-directory tmp-root)
+                  (user-emacs-directory var-dir))
+              (let ((real-delete-file (symbol-function 'delete-file)))
+                (cl-letf (((symbol-function 'delete-file)
+                           (lambda (file &rest args)
+                             (if (and (stringp file)
+                                      (string= file foo-elc))
+                                 (error "deny purge")
+                               (apply real-delete-file file args)))))
+                  (should (load-file test-post-early-init-file))))
+              (should (file-exists-p foo-elc))
+              (should (file-exists-p foo-el)))))
+      (ignore-errors
+        (delete-file foo-elc)
+        (delete-file foo-el)
+        (delete-directory modules-dir)
+        (delete-directory var-dir)
+        (delete-directory tmp-root)))))
 
 ;; ─── Shell Command Timeout Tests ───
 
