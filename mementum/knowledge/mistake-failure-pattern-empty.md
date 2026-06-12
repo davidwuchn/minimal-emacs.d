@@ -1,48 +1,53 @@
 <!--
 Synthesis verification:
-- Confidence: 24%
+- Confidence: 80%
 - Sources: 11 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-empty'
-- Auto-approved: yes (flagged)
+- Warnings: No code examples or concrete references
+- Auto-approved: yes (passed)
 --->
 
-The user wants me to synthesize multiple "empty-hypothesis" failure pattern memories into a comprehensive knowledge page. Let me analyze the data:
+The user wants me to synthesize the provided memories into a knowledge page. The memories all share a failure type: "empty-hypothesis" and the topic is "mistake-failure-pattern-empty". I need to create a markdown page with frontmatter and content, minimum 50 lines, with concrete examples, actionable patterns, cross-references, etc.
 
-**Common Pattern:** All entries are `empty-hypothesis` failure type
-**Categories involved:**
-- `:programming` (keep-rates: 2.6%, 3.7%, 3.8%, 2.6%)
-- `:agentic` (keep-rates: 2.1%, 0.0%, 1.3%, 0.0%, 1.4%, 0.0%)
+The memories show "empty-hypothesis" failures in various targets:
+- staging-verification (programming, 2.6%, 4 occurrences)
+- staging-scope (programming, 2.6%, 4 occurrences)
+- staging-review (programming, 3.7%, 16 occurrences)
+- lisp/modules/gptel-tools-agent-runtime.el (agentic, 2.1%, 3)
+- lisp/modules/gptel-tools-agent-experiment-core.el (agentic, 0.0%, 4)
+- lisp/modules/gptel-tools-agent-benchmark.el (programming, 2.6%, 5)
+- lisp/modules/gptel-benchmark-subagent.el (programming, 3.8%, 3)
+- lisp/modules/gptel-auto-workflow-strategic.el (agentic, 1.3%, 4)
+- lisp/modules/gptel-auto-workflow-projects.el (agentic, 0.0%, 5)
+- lisp/modules/gptel-auto-workflow-ontology-strategy.el (agentic, 1.4%, 3)
+- lisp/modules/gptel-auto-workflow-ontology-router.el (agentic, 0.0%, 3)
 
-**Targets grouped:**
-- Staging/meta targets: `staging-verification`, `staging-scope`, `staging-review`
-- Lisp modules (gptel tools): `gptel-tools-agent-runtime.el`, `gptel-tools-agent-experiment-core.el`, `gptel-tools-agent-benchmark.el`, `gptel-benchmark-subagent.el`
-- Auto-workflow modules: `gptel-auto-workflow-strategic.el`, `gptel-auto-workflow-projects.el`, `gptel-auto-workflow-ontology-strategy.el`, `gptel-auto-workflow-ontology-router.el`
+I need to interpret what "empty-hypothesis" means. From the context, it seems to be a monitoring agent detecting that a hypothesis or expected failure reason was empty - meaning the system recorded a failure but couldn't articulate why. The "Example reasons: none" reinforces this. These are systemic failures requiring investigation.
 
-**Key observations:**
-- All have "Example reasons: none" - this is THE defining feature
-- "empty-hypothesis" likely means the monitoring agent couldn't extract specific failure reasons
-- Lower keep-rate = higher priority (the memories aren't being retained/used)
-- 0.0% keep-rate is the worst
-- Total occurrences across all entries: 4+4+16+3+4+5+3+4+5+3+3 = 54 occurrences
-- Date range: 2026-06-02 to 2026-06-12
-
-Let me build a comprehensive knowledge page. I need:
-1. Min 50 lines of content
-2. Concrete examples (code, tables, commands)
-3. Actionable patterns
-4. Cross-references to related topics
-
-Let me structure this:
-
+I should write a knowledge page about the empty-hypothesis failure pattern, with:
 1. Frontmatter
-2. Overview / Definition
-3. Symptoms / Identifying markers
-4. Frequency analysis with table
-5. Affected modules (grouped)
-6. Root cause hypotheses
-7. Detection patterns / queries
-8. Actionable remediation steps
-9. Prevention checklist
-10. Related
+2. Definition/what is it
+3. Examples from the memories (tables)
+4. Root causes
+5. Detection patterns
+6. Actionable remediation patterns
+7. Code examples (maybe emacs lisp since the targets are .el files)
+8. Related topics
 
-Let me write this thoroughly.
+Let me make sure I have at least 50 lines of actual content. I'll write comprehensive content.
+
+Structure:
+- title: Empty-Hypothesis Failure Pattern
+- status: active
+- category: knowledge
+- tags: [failure-analysis, agentic, programming, monitoring, empty-hypothesis, debugging]
+
+Sections:
+1. Definition and Signatures
+2. Observed Incidents (table)
+3. Common Root Causes
+4. Detection and Alerting
+5. Remediation Patterns (actionable)
+6. Prevention Checklists
+7. Related
+
+Let me draft the content now.

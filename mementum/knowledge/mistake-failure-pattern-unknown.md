@@ -1,34 +1,29 @@
 <!--
 Synthesis verification:
-- Confidence: 40%
+- Confidence: 12%
 - Sources: 5 memories
-- Warnings: No code examples or concrete references, Very short content (26 lines)
+- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-unknown', Very short content (21 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize the provided memories into a knowledge page about "mistake-failure-pattern-unknown". Let me analyze the data:
+The user wants me to synthesize memory entries into a complete markdown knowledge page. The memories describe "unknown" failure patterns in agentic/programming contexts, targeting specific Emacs Lisp files in a gptel workflow. I need to create a knowledge page with:
 
-All 5 memories share:
-- **Failure type:** unknown
-- **Category:** mixed (mostly :agentic, one :programming)
-- **Low keep-rates** (0.0% - 4.3%)
-- Multiple occurrences
-- All target lisp modules in gptel-* system
-- All have "no example reasons" which is itself interesting metadata
+1. Frontmatter
+2. Minimum 50 lines of actual content
+3. Concrete examples (code, tables, commands)
+4. Actionable patterns (not just descriptions)
+5. Cross-references to related topics
 
-I need to create a comprehensive knowledge page with:
-1. Min 50 lines of actual content
-2. Concrete examples (code, tables, commands)
-3. Actionable patterns
-4. Cross-references to related topics
-5. Full markdown, not summary
+Since the memories say "unknown" failure type with no example reasons, I need to create a diagnostic framework for investigating these unknown failures. The targets are mostly gptel workflow/agent modules written in Emacs Lisp.
 
-Let me construct this thoughtfully. The key insight is that "unknown" failure type with no example reasons is itself a meta-pattern - it's a failure classification gap. Let me build a page that:
+I should structure this as:
+- Title and frontmatter
+- Introduction/definition
+- Pattern signatures table
+- Diagnostic workflow
+- Concrete code examples for investigation
+- Actionable patterns
+- Prevention/mitigation
+- Related topics
 
-1. Defines the pattern
-2. Aggregates the data into tables
-3. Provides actionable investigation patterns
-4. Suggests code/commands to investigate
-5. Cross-references related topics
-
-Let me write this out as a complete page.
+Let me write the full markdown page now.

@@ -1,88 +1,54 @@
 <!--
 Synthesis verification:
-- Confidence: 24%
+- Confidence: 80%
 - Sources: 38 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'research-research-persisted'
-- Auto-approved: yes (flagged)
+- Warnings: No code examples or concrete references
+- Auto-approved: yes (passed)
 --->
 
----
-title: Persisted Research Findings in Auto-Workflow
-status: active
-category: knowledge
-tags: [research, auto-workflow, persisted-findings, mementum, gptel, agent-architecture]
----
+We need synthesize memories into a knowledge page. The user provided a lot of memory chunks. We need produce a markdown knowledge page with frontmatter, sections, concrete examples, tables, commands, actionable patterns, cross-references, >=50 lines actual content. The memories contain lots of research findings, repeated, about gptel, mementum, nucleus, zeroclaw/nullclaw/context-mode/eca, external research (DSPy, Reflexion, gptel-agent, mevedel, mcp.el, error handling, etc). We need synthesize into a coherent knowledge page on topic "research-research-persisted". Title likely "Persisted Research Findings for Emacs AI Agent Development" or similar. Need minimum 50 lines of actual content. Use concrete examples, code, tables, commands. Actionable patterns. Cross-references.
 
-# Persisted Research Findings in Auto-Workflow
+We must output the complete page inline, not summary. Start with frontmatter and include full document body. Ensure it's concise but meets requirements. Need not overly long but must be complete.
 
-## Overview
+Let's identify themes across memories:
 
-[Explain the persisted-findings strategy]
+- Research strategy: persisted-findings, local fallback, structured machine-parseable outputs, research daemon orchestration, feedback loop with experiment outcomes.
+- gptel patterns: FSM/state machine pause/resume; INFO plist serializable; tool use/MCP integration; introspection; auth-source; context branching/org topic restriction; multi-model switching; gptel-agent multi-agent delegation; anti-sycophancy; diff preview; durable execution.
+- mementum patterns: three-tier storage (state.md, memories, knowledge), seven operations, human governance, DNS-based discovery, lambda protocol, word limits, synthesize.
+- nucleus patterns: attention magnets, lambda/EDN notation, prompt debugger, EBNF grammar, safe-compile/diagnose for untrusted prompts, VSM/Allium.
+- External agent architectures: DSPy signatures/modules/optimizers (GEPA/MIPROv2), Reflexion verbal self-reflection, GEPA reflective prompt evolution, EvolveR self-evolution, SE-Agent trajectory intervention, Continuum KV cache for pauses, MAST failure taxonomy, mcp.el/gptel-agent, context-mode sandboxing/Think in Code, ZeroClaw/NullClaw vtable interfaces/SOP/tool receipts/fallback chains/workspace boundaries, ECA LSP-inspired protocol, A-MEM/Mem0/MemGPT memory patterns, layered error defense/circuit breaker.
+- Local fallback: research file missing, pipeline defect, fail fast, metadata in results.tsv.
 
-## Strategy Protocol
+We need create knowledge page. Title maybe "Research: Persisted Findings for Emacs AI Agent Systems". tags: research, gptel, mementum, nucleus, agent-architecture, emacs-lisp, self-evolution, error-recovery.
 
-[Input/output schema, code]
+Sections:
+1. Overview / The persisted-findings contract
+2. Research pipeline patterns (daemon fallback, structured output, feedback loop)
+3. Core reusable findings
+   - gptel resumable request FSM
+   - mementum three-tier memory
+   - nucleus prompt validation / attention magnets
+   - MCP & multi-agent integration
+4. Agent architecture patterns (vtable/SOP, context sandboxing, memory systems, orchestration)
+5. Self-evolution & optimization (DSPy, GEPA, Reflexion, trajectory intervention)
+6. Error recovery & resilience (layered defense, circuit breaker, durable execution)
+7. Implementation checklist / actionable patterns
+8. Related topics
 
-## Keep Rate Analysis
+Need concrete examples: code blocks for gptel FSM, mementum ops, nucleus preamble, circuit breaker function, DSPy signature equivalent in elisp, etc. Tables: source, pattern, apply-to-us. Commands: M-x, functions.
 
-[Table of outcomes]
+Need ensure 50 lines actual content. Easy. Need cross-references to related topics: gptel, mementum, nucleus, eca, zeroclaw, context-mode, ai-code-interface.el, auto-workflow, AutoTTS.
 
-## Local Fallback Protocol
+Need incorporate local fallback insights: research daemon missing, use fallback, structured outputs, non-none research hash. Also meta-learning: quality measured by downstream experiment success.
 
-[The 5 bullets from the fallback content]
+Let's craft.
 
-## Recurring Research Themes
+We need avoid describing what would write; write page itself. Start frontmatter.
 
-[Synthesize across all the research runs]
+Let's write complete markdown.
 
-## Actionable Patterns
+Be concise but complete. Use headings. Include frontmatter. Use code fences. Table. Commands.
 
-[Concrete things to do]
+Need check 50 lines of actual content: content lines excluding frontmatter? likely yes. We'll have plenty.
 
-## Related
-
-[Cross-references]
-
-Let me write this out fully now. I need to make sure I have at least 50 lines of content with concrete examples, tables, commands, code. Let me make this substantive.
-
-Key data points I should include:
-- The 5 research runs with their outcomes:
-  - 2026-06-04 13:58: 0/31 kept (0%)
-  - 2026-06-04 01:07: 0/20 kept (0%)
-  - 2026-06-04 10:12: 0/3 kept (0%) - local fallback
-  - 2026-06-04 17:26: 0/10 kept (0%)
-  - 2026-06-04 14:11: 0/5 kept (0%) - local fallback
-  - 2026-05-22 04:11: 2/56 kept (4%)
-  - 2026-05-22 12:10: 3/9 kept (33%)
-  - 2026-06-04 19:07: 0/23 kept (0%)
-  - 2026-06-04 06:31: 0/3 kept (0%)
-  - 2026-06-02 20:16: 0/6 kept (0%)
-
-Recurring own repos mentioned: nucleus, mementum, gptel, zeroclaw, context-mode, eca, nullclaw, genesis-agent, efrit, gastown, psi, gbrain, Ori-Mnemos, ai-code-interface.el, hermes-agent, ml-intern
-
-External sources: GEPA, EvolveR, Reflexion, DSPy, mcp.el, emacs-mcp-server, magent, mevedel, VIGIL, MAST, arxiv papers
-
-Key research themes:
-1. FSM/State machine resumable requests (gptel)
-2. Three-tier memory hierarchies (mementum)
-3. Prompt debugging/optimization (nucleus, DSPy)
-4. Multi-agent architectures (ECA, magent, mevedel)
-5. Circuit breaker patterns (zeroclaw, Hannecke)
-6. Context reduction (context-mode)
-7. Hybrid search (gbrain)
-8. Self-rewriting meta-prompt loops
-9. Verbal self-reflection (Reflexion)
-10. Trajectory-level intervention (SE-Agent)
-11. KV cache management (Continuum)
-12. MCP integration patterns
-13. Layered error defense
-14. Failure taxonomies (MAST)
-
-Local fallback content (repeated 3+ times):
-- Preserve the feedback loop: every experiment row must include a non-none research hash so AutoTTS can link outcomes back to the research trace.
-- Treat missing research files as a pipeline defect, not a successful empty research run.
-- Prefer structured, machine-parseable research outputs with source, technique, apply-to-us, and verification fields.
-- Guard daemon orchestration boundaries: if a researcher daemon disappears after being observed, fail fast and fall back instead of waiting until the global timeout.
-- Prioritize changes that make self-evolution observable through results.tsv metadata, research traces, and controller decisions.
-
-Now let me write the full knowledge page.
+Let's generate.
