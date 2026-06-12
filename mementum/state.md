@@ -2,9 +2,9 @@
 
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
-> **Status**: ✅ **SELF-HEAL + ONTOLOGY_REPAIRED** — high-risk routing blocks direct mutation of repair-engine files; ontology-router paren corruption fixed; stale cache removed; World Store Phase 4 query layer is complete and benchmark-verified; Phase 5 branching is complete and branch tests pass; repo-wide unit-suite gate is green again after the skill-graph plist repair
-> **Latest**: Phase 4 of OV5 World Store now has a real `ov5.world-store.query` namespace, Elisp caching/fallback bridge, hot-path router/predict rewrites, and a persistent nREPL bridge inside `gptel-ext-world-store.el`. 56 relevant tests pass (30 brepl + 8 bootstrap + 8 query + 10 branch). 10k benchmark after persistent bridge: uncached ~67.87ms/query, cached ~0.0117ms/query. The targeted world-store suites are green; the full unit suite now passes after fixing the malformed `skill-graph--standard-workflows` plist in `gptel-auto-workflow-skill-graph.el`.
-> **Active Plan**: [OV5 World Store](../plans/ov5-world-store/plan.md) — complete (branch work verified)
+> **Status**: ✅ **SELF-HEAL + ONTOLOGY REPAIRED** — high-risk routing blocks direct mutation of repair-engine files; ontology-router paren corruption fixed; stale cache removed
+> **Latest**: Phase 3 of OV5 World Store COMPLETE — Context unification: schema extended with context/approval/risk attributes; plist→map conversion handles single and multiple plists; context sidecars linked by target; approval history linked by target; risk patterns linked by target; 3 context tests (sidecar, approval, risk) all green; full suite 2968 tests, 0 unexpected
+> **Active Plan**: [OV5 World Store](../plans/ov5-world-store/plan.md) — Phase 4 (Query Layer): replace parse-all-results with Datalog queries; add query helpers; benchmark latency
 > **Pi5**: Auto-evolution active; pre-push hook now blocks broken pushes to main; Pi5 auto-evolved boundary fixes (Preview Mode 2, Edit hashline, Code_Map/Inspect/Replace, plan-mode readonly enforcement)
 
 ---
@@ -137,41 +137,57 @@ Two REPL modules now exist, both wired into `gptel-config.el`:
 - **daemon-repl**: 24/26 (2 existing skips)
 - **ontology-router**: 24/24
 - **self-audit**: 9/9 (added 3: defvar-override, pipeline-gate, staging-bypass)
-- **world-store**: 26/26 (Phase 1: 8 bootstrap + Phase 2: 3 migration + Phase 3: 3 context + Phase 4: 2 query + Phase 5: 10 branch)
-- **Full unit suite**: 3015 tests, 0 unexpected, 54 skipped (2026-06-12)
+- **world-store**: 14/14 (Phase 1: 8 bootstrap + Phase 2: 3 migration + Phase 3: 3 context)
+- **Full unit suite**: 2968 total, 0 unexpected, 29 skipped. All green.
 
 ---
 
 ## Next Steps
 
-### Session Note (2026-06-12 completion)
-- Phase 4 is complete: query-layer benchmark cleared the 10k-experiment target.
-- Phase 5 branching is complete: branch store, Elisp bridge, workflow hooks, and tests are implemented and verified.
-- Branch-specific verification and the repo-wide unit suite are both green.
-- Keep the benchmark numbers handy: ~67.87ms uncached / ~0.0117ms cached on the 10k sample.
+### Session Note (2026-06-11)
+- Isolated `gptel-auto-workflow--audit-provide-inside-defun` into its own module and wired it into `gptel-auto-workflow-self-heal-semantic`.
+- Structural tests now pass: swallowed `provide` is detected and auto-fixed, good files stay clean.
+- Key insight: `syntax-ppss` can move point; wrap it in `save-excursion` inside search loops or the scan can repeat the same match forever.
+- Serialized Allium `gptel-request` fan-out behind a shared FIFO queue and aligned the diff target cap with `gptel-auto-workflow-max-targets-per-run` to prevent pipe exhaustion.
+- Verified with targeted ERT: 294 tests, 0 unexpected results.
+- Restarted auto-workflow; current status is running with run-id `2026-06-11T231229Z-92f2`.
+- Cleaned `gptel-auto-experiment--kibcm-patterns`: embedded regex newlines were real matching chars, so phrase tests now guard `same entity`, `refactor into`, `instead of`, and `similar to`.
+
+### Session Note (2026-06-12)
+- Studied [DeepSearcher](https://github.com/zilliztech/deep-searcher) and compared it with OV5.
+- Highest-leverage gap: OV5 has no dense-vector memory backend for mementum.
+- Follow-up: **Datahike + Proximum** answer this — OV5 already has Datahike wired; Proximum adds HNSW vector indexing with same immutable, git-like semantics. No new dependency needed. Extend `gptel-ext-world-store.el` to embed + chunk + index mementum memories.
+- Other gaps identified: LLM-based chunk reranking, multi-hop RAG agent over memories, knowledge-domain router, per-query agent router, web-to-memory loader, retrieval-recall evaluation harness.
+- Captured in `mementum/knowledge/deep-searcher-vs-ov5-gaps.md` and `mementum/memories/insight-deep-searcher-vs-ov5-gaps.md`.
+
+### Immediate
+1. **Enable opencode eval on Pi5** — Set `gptel-auto-workflow-opencode-eval-enabled t` after monitoring first cron cycle
+2. **Monitor pipeline metrics** — Check if fast-track staging improves keep rate from ~3.1%
+3. **Continue monitoring** — Let pipeline run, verify self-healing continues working
+
+### Near-Term
+4. **Sibyl action item** — Formalize ontology updates as auditable conversion units (plan exists, not yet started)
+5. **Write integration test for opencode executor** — Current tests mock subprocess; real test validates full pipeline
+6. **Add more eval tasks** — Expand from 3 to cover edge cases (brepl errors, daemon-repl no daemon)
+7. **Clojure brepl in OV5 pipeline** — Wire brepl bracket-fixing into auto-workflow for .clj files
 
 ---
 
 ## Relevant Files
 
-- `plans/ov5-world-store/implementation/phase-5-impl.md`: Phase 5 branching implementation plan (completed)
-- `plans/ov5-world-store/phases/phase-5.md`: Phase 5 intent / DoD (completed)
-- `clj/ov5/world_store/branch.clj`: branch store namespace and registry
-- `lisp/modules/gptel-ext-world-store-branch.el`: Elisp branch bridge
-- `lisp/modules/gptel-tools-agent-worktree.el`: worktree → branch hook
-- `lisp/modules/gptel-tools-agent-experiment-core.el`: experiment → branch switch hook
-- `lisp/modules/gptel-tools-agent-staging-merge.el`: staging → branch merge hook
 - `lisp/modules/gptel-ext-daemon-repl.el`: Elisp daemon REPL — eval, bracket validation, auto-eval, self-heal (371 lines, 20 tests)
 - `lisp/modules/gptel-ext-brepl.el`: Clojure nREPL client — eval, load-file, balance brackets (117 lines, 19 tests)
 - `lisp/gptel-config.el`: Module loader — both REPL modules wired here
 - `.opencode/skills/brepl/`: OpenCode skill for Clojure brepl CLI
 - `.opencode/skills/daemon-repl/`: OpenCode skill for Elisp daemon-repl
 - `lisp/modules/gptel-auto-workflow-self-heal-semantic.el`: 7 audit checks + auto-fixers
-- `lisp/modules/gptel-auto-workflow-evolution.el`: Evolution cycle + ontology learning
-- `.git/hooks/pre-commit`: Rejects .el files with git conflict markers
 - `mementum/knowledge/self-evolving-agent-research.md`: Research paper analysis
+- `mementum/knowledge/deep-searcher-vs-ov5-gaps.md`: DeepSearcher gap analysis (Proximum)
+- `mementum/state.md`: This file — working memory, read first every session
+- `mementum/knowledge/self-evolving-agent-research.md`: Research paper analysis
+- `mementum/knowledge/deep-searcher-vs-ov5-gaps.md`: DeepSearcher gap analysis
 - `mementum/state.md`: This file — working memory, read first every session
 
 ---
 
-*Active Mementum v1.1 — dual REPL architecture wired, world-store Phase 4 complete, repo-wide unit suite green, ontology learning active*
+*Active Mementum v1.1 — dual REPL architecture wired, 39 tests green, self-healing verified, ontology learning active*

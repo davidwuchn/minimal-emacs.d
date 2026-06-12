@@ -25,11 +25,11 @@
 ;; Without these, `let` bindings in tests would be lexical (invisible to the
 ;; functions under test that access these variables via dynamic scope).
 (eval-and-compile
-  (defvar gptel-auto-workflow-headless-subagent-fallbacks)
-  (defvar gptel-auto-workflow-executor-rate-limit-fallbacks)
-  (defvar gptel-auto-workflow--semantic-edges-cache)
-  (defvar gptel-auto-workflow--semantic-edges-cache-time)
-  (defvar gptel-auto-workflow--holographic-memory)
+  (defvar gptel-auto-workflow-headless-subagent-fallbacks nil)
+  (defvar gptel-auto-workflow-executor-rate-limit-fallbacks nil)
+  (defvar gptel-auto-workflow--semantic-edges-cache nil)
+  (defvar gptel-auto-workflow--semantic-edges-cache-time nil)
+  (defvar gptel-auto-workflow--holographic-memory nil)
   (defvar gptel-auto-workflow--lambda-strike-count)
   (defvar gptel-auto-workflow--lambda-dead-until)
   (defvar gptel-auto-workflow--lambda-last-strike-time)

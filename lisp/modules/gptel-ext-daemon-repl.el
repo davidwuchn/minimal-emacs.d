@@ -211,43 +211,50 @@ Optional SERVER overrides socket path."
 ;;; ── Bracket Validation (pre-edit) ──
 
 (defun gptel-daemon-repl-validate-brackets (file-content)
-  "Validate brackets in FILE-CONTENT string.
+  "Validate brackets in FILE-CONTENT string using Emacs built-in `check-parens'.
 Returns plist:
   :valid t/nil
   :fixed-content string (if auto-fixed)
-  :error string (if invalid and unfixable)"
-  (let ((temp-file (make-temp-file "daemon-repl-validate-" nil ".el")))
-    (unwind-protect
-        (progn
-          (with-temp-file temp-file
-            (insert file-content))
-          ;; Try to byte-compile to check syntax
-          (condition-case compile-err
-              (progn
-                (with-temp-buffer
-                  (emacs-lisp-mode)
-                  (insert file-content)
-                  (check-parens))
-                (list :valid t :fixed-content file-content :error nil))
+  :error string (if invalid and unfixable)
+  :error-pos integer (position of first error, if invalid)
+Only writes a temp file when the self-heal fixer is needed."
+  (let* ((error-pos nil)
+         (err-msg nil)
+         (valid-p
+          (condition-case err
+              (with-temp-buffer
+                (insert file-content)
+                (check-parens)
+                t)
             (error
-             ;; Try auto-fix via self-heal-semantic if available
-             (if (and gptel-daemon-repl-validate-brackets
-                      (fboundp 'gptel-auto-workflow--fix-unbalanced-parens))
-                 (progn
-                   (gptel-auto-workflow--fix-unbalanced-parens temp-file)
-                   (let ((fixed (with-temp-buffer
-                                  (insert-file-contents temp-file)
-                                  (buffer-string))))
-                     (if (string= fixed file-content)
-                         ;; Couldn't fix
-                         (list :valid nil :fixed-content nil
-                               :error (error-message-string compile-err))
-                       ;; Fixed!
-                       (list :valid t :fixed-content fixed :error nil))))
-               ;; No fixer available
-               (list :valid nil :fixed-content nil
-                     :error (error-message-string compile-err))))))
-      (delete-file temp-file))))
+             (setq err-msg (error-message-string err))
+             ;; check-parens signals user-error without position data,
+             ;; so fall back to point position as best approximate.
+             (setq error-pos (point))
+             nil))))
+    (if valid-p
+        (list :valid t :fixed-content file-content :error nil :error-pos nil)
+      (if (and gptel-daemon-repl-validate-brackets
+               (fboundp 'gptel-auto-workflow--fix-unbalanced-parens))
+          (let ((temp-file (make-temp-file "daemon-repl-validate-" nil ".el")))
+            (unwind-protect
+                (progn
+                  (with-temp-file temp-file
+                    (insert file-content))
+                  (gptel-auto-workflow--fix-unbalanced-parens temp-file)
+                  (let ((fixed (with-temp-buffer
+                                 (insert-file-contents temp-file)
+                                 (buffer-string))))
+                    (if (string= fixed file-content)
+                      (list :valid nil :fixed-content nil
+                            :error err-msg
+                            :error-pos error-pos)
+                      (list :valid t :fixed-content fixed :error nil
+                            :error-pos nil))))
+              (delete-file temp-file)))
+        (list :valid nil :fixed-content nil
+              :error err-msg
+              :error-pos error-pos)))))
 
 ;;; ── File Watch + Auto-Eval ──
 
