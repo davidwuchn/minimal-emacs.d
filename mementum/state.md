@@ -159,6 +159,10 @@ Two REPL modules now exist, both wired into `gptel-config.el`:
 - Follow-up: **Datahike + Proximum** answer this — OV5 already has Datahike wired; Proximum adds HNSW vector indexing with same immutable, git-like semantics. No new dependency needed. Extend `gptel-ext-world-store.el` to embed + chunk + index mementum memories.
 - Other gaps identified: LLM-based chunk reranking, multi-hop RAG agent over memories, knowledge-domain router, per-query agent router, web-to-memory loader, retrieval-recall evaluation harness.
 - Captured in `mementum/knowledge/deep-searcher-vs-ov5-gaps.md` and `mementum/memories/insight-deep-searcher-vs-ov5-gaps.md`.
+- Studied [Launch Fast](https://launchfastlegacyx.com/) — Chrome extension contextual-overlay pattern. Analyzed what OV5 would do applied to a SaaS codebase (experiment loop is language-agnostic, tooling is Elisp-locked).
+- Studied [clojure.cc](https://clojure.cc/) — **strategic decision: Clojure-first multi-platform.** 39 Clojure dialects cover every platform. One language (Clojure), one toolchain (clojure.test + clj-kondo + cljfmt), every platform via dialect transpilers. Eliminates per-language backend scaling problem.
+- Implemented Clojure experiment loop: `run-tests.sh clj`, `clj/ov5/test_runner.clj`, `gptel-brepl-run-tests`, `gptel-brepl-lint-file`, `gptel-brepl-fix-ns-ordering`, `:clojure` category. brepl 41/41, ontology-router 117/117.
+- Captured in `mementum/knowledge/clojure-first-multiplatform-architecture.md` and `mementum/knowledge/launch-fast-vs-ov5-gaps.md`.
 
 ### Immediate
 1. **Enable opencode eval on Pi5** — Set `gptel-auto-workflow-opencode-eval-enabled t` after monitoring first cron cycle
@@ -183,6 +187,8 @@ Two REPL modules now exist, both wired into `gptel-config.el`:
 - `lisp/modules/gptel-auto-workflow-self-heal-semantic.el`: 7 audit checks + auto-fixers
 - `mementum/knowledge/self-evolving-agent-research.md`: Research paper analysis
 - `mementum/knowledge/deep-searcher-vs-ov5-gaps.md`: DeepSearcher gap analysis (Proximum)
+- `mementum/knowledge/launch-fast-vs-ov5-gaps.md`: Launch Fast SaaS/Chrome extension patterns
+- `mementum/knowledge/clojure-first-multiplatform-architecture.md`: Clojure-first strategic decision
 - `mementum/state.md`: This file — working memory, read first every session
 - `mementum/knowledge/self-evolving-agent-research.md`: Research paper analysis
 - `mementum/knowledge/deep-searcher-vs-ov5-gaps.md`: DeepSearcher gap analysis
