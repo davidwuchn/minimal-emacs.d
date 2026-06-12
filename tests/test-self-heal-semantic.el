@@ -200,7 +200,7 @@ legitimate subagent work. Set to nil to disable.\")")
 
 (ert-deftest test-self-heal-semantic/audit-checks-variable-defined ()
   "The audit checks alist is defined with all checks."
-  (should (= (length gptel-auto-workflow--semantic-audit-checks) 11))
+  (should (= (length gptel-auto-workflow--semantic-audit-checks) 12))
   (should (assq 'let-binding-function gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'hardcoded-limit gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'score-zero-bug gptel-auto-workflow--semantic-audit-checks))
@@ -211,7 +211,8 @@ legitimate subagent work. Set to nil to disable.\")")
   (should (assq 'condition-case-unbound-err gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'risk-node gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'provide-inside-defun gptel-auto-workflow--semantic-audit-checks))
-  (should (assq 'void-defvar gptel-auto-workflow--semantic-audit-checks)))
+  (should (assq 'void-defvar gptel-auto-workflow--semantic-audit-checks))
+  (should (assq 'daemon-hang gptel-auto-workflow--semantic-audit-checks)))
 
 ;; ── Test 10: Missing provide detection ──
 
@@ -1326,6 +1327,58 @@ commit serves as the rollback point."
                            :no-subprocess-check t)))
               ;; Should pass — no subprocess check, parens balanced, load-file ok
               (should result))))
+      (test-self-heal-semantic--cleanup file))))
+
+;; ── Test 18: Daemon subprocess hang audit ──
+
+(ert-deftest test-self-heal-semantic/daemon-hang-responsive-returns-zero ()
+  "Responsive daemon (emacsclient ping succeeds) returns 0 issues."
+  (let* ((content "(defun foo () 42)")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (gptel-auto-workflow--semantic-audit-reset)
+          (setq gptel-auto-workflow--daemon-hang-done nil)
+          (cl-letf (((symbol-function 'call-process)
+                     (lambda (program &optional infile destination _display &rest args)
+                       (cond
+                        ((string= program "pgrep")
+                         (when destination
+                           (insert "12345\n"))
+                         0)
+                        ((string= program "timeout")
+                         0)  ;; responsive
+                        (t 1)))))
+            (let ((issues (gptel-auto-workflow--audit-daemon-hang file)))
+              (should (= issues 0))
+              (should (null gptel-auto-workflow--semantic-audit-log)))))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/daemon-hang-unresponsive-with-curl-orphans ()
+  "Unresponsive daemon with orphaned curl subprocesses returns 1 issue."
+  (let* ((content "(defun foo () 42)")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (gptel-auto-workflow--semantic-audit-reset)
+          (setq gptel-auto-workflow--daemon-hang-done nil)
+          (cl-letf (((symbol-function 'call-process)
+                     (lambda (program &optional infile destination _display &rest args)
+                       (cond
+                        ((string= program "pgrep")
+                         (when destination
+                           (if (member "curl" args)
+                               (insert "67890\n78901\n")
+                             (insert "12345\n")))
+                         0)
+                        ((string= program "timeout")
+                         124)  ;; timeout exit code
+                        (t 1)))))
+            (let ((issues (gptel-auto-workflow--audit-daemon-hang file)))
+              (should (= issues 1))
+              (should (= (length gptel-auto-workflow--semantic-audit-log) 1))
+              (should (eq 'daemon-subprocess-hang
+                          (plist-get (car gptel-auto-workflow--semantic-audit-log) :type))))))
       (test-self-heal-semantic--cleanup file))))
 
 (provide 'test-self-heal-semantic)
