@@ -712,11 +712,10 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
     (gptel-auto-workflow-run-async targets completion-callback)))
 
 (defun gptel-auto-workflow-run-async-nonblocking (&optional targets completion-callback)
-  "Run auto-workflow non-blockingly via idle timer.
+  "Run auto-workflow non-blockingly via timer.
 Returns immediately — the heavy setup runs in the event loop.
-Use this from emacsclient to avoid blocking the client.
-Calls `gptel-auto-workflow-run-async--guarded' in the timer."
-  (run-with-idle-timer 0 nil
+Use this from emacsclient to avoid blocking the client."
+  (run-with-timer 5 nil
     (lambda ()
       (condition-case err
           (gptel-auto-workflow-run-async--guarded targets completion-callback)
