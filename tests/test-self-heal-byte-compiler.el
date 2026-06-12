@@ -206,7 +206,7 @@
             (should (> fixes 0))
             (with-temp-buffer
               (insert-file-contents f)
-              (should (string-match-p "(defvar my-free-var" (buffer-string))))))
+               (should (string-match-p "(defvar my-free-var nil)" (buffer-string))))))
       (delete-file f))))
 
 (ert-deftest tdd/self-heal/fix-free-variables/skips-typos ()
@@ -491,6 +491,24 @@ and --fix-file is not invoked again for it."
     (should-not (> f-iter 3)))
   (let ((f-iter 0))
     (should-not (> f-iter 3))))
+
+;; ─── fix-void-defvars must not be in generic fixer list ───
+
+(ert-deftest tdd/self-heal/fix-file-no-void-defvars-for-generic-warnings ()
+  "fix-void-defvars must not be in the generic byte-compiler fixer list.
+Bare (defvar X) forms in a file processed by --fix-file should remain
+untouched (the void-defvar fixer is owned by the semantic self-heal path)."
+  (let ((f (make-temp-file "self-heal-test" nil ".el")))
+    (unwind-protect
+        (progn
+          (write-region "(defvar my-test-var)\n(defun foo () (+ 1 2))\n" nil f)
+          (gptel-auto-workflow--self-heal-byte-compiler--fix-file f)
+          (with-temp-buffer
+            (insert-file-contents f)
+            ;; The bare defvar must still be bare — fix-void-defvars was not invoked
+            (should (string-match-p "(defvar my-test-var)" (buffer-string)))
+            (should-not (string-match-p "(defvar my-test-var nil" (buffer-string)))))
+      (delete-file f))))
 
 (provide 'test-self-heal-byte-compiler)
 ;;; test-self-heal-byte-compiler.el ends here

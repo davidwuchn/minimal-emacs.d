@@ -8517,7 +8517,7 @@ Returns number of fixes."
                      (point-min)))))
             (goto-char insert-point)
             (dolist (v (sort defvars #'string<))
-              (insert (format "(defvar %s)\n" v))
+              (insert (format "(defvar %s nil)\n" v))
               (setq fixes (1+ fixes))))
           (save-buffer))))
     fixes))
@@ -8887,8 +8887,7 @@ paren balance, its changes are reverted.  Returns (FIX-COUNT . REMAINING)."
                        (lambda (_file) (gptel-auto-workflow--fix-unknown-functions file warnings))
                        (lambda (_file) (gptel-auto-workflow--fix-condition-case-no-handlers file warnings))
                        (lambda (_file) (gptel-auto-workflow--fix-arg-mismatch file warnings))
-                       #'gptel-auto-workflow--fix-let-needs-let*
-                       #'gptel-auto-workflow--fix-void-defvars))
+                       #'gptel-auto-workflow--fix-let-needs-let*))
         (cl-incf fix-count
                  (gptel-auto-workflow--run-fixer-with-rollback file fixer))))
     (cons fix-count (if (gptel-auto-workflow--check-parens file)

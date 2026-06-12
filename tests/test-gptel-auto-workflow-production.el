@@ -230,5 +230,53 @@ show as 'function not bound' much later in user code."
       (should (>= form-count 35))
       (should-not read-error))))
 
+;; ─── Evolution safety regressions ───
+
+(ert-deftest test-production/maybe-run-evolution-no-auto-approve ()
+  "maybe-run-evolution must not force gptel-mementum-headless-auto-approve to t.
+Regression: previous code wrapped mementum calls in
+\(let ((gptel-mementum-headless-auto-approve t)) ...) which bypassed
+the draft default and wrote directly to mementum/knowledge/."
+  (skip-unless (fboundp 'gptel-auto-workflow--maybe-run-evolution))
+  (unless (boundp 'gptel-auto-workflow-evolution-enabled)
+    (defvar gptel-auto-workflow-evolution-enabled))
+  (let ((gptel-auto-workflow-evolution-enabled t)
+        (gptel-auto-workflow--running nil)
+        (gptel-auto-workflow--cron-job-running nil)
+        (auto-approve-values nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow-evolution-run-cycle)
+               (lambda (&rest _) nil))
+              ((symbol-function 'gptel-mementum-build-index)
+               (lambda ()
+                 (push gptel-mementum-headless-auto-approve auto-approve-values)))
+              ((symbol-function 'gptel-mementum-synthesize-all-candidates)
+               (lambda (&rest _) nil)))
+      (condition-case nil
+          (gptel-auto-workflow--maybe-run-evolution)
+        (error nil))
+      (should-not (memq t auto-approve-values)))))
+
+(ert-deftest test-production/maybe-run-evolution-skips-mementum-when-running ()
+  "maybe-run-evolution must skip mementum maintenance when the evolution
+cycle starts a workflow (gptel-auto-workflow--running becomes non-nil)."
+  (skip-unless (fboundp 'gptel-auto-workflow--maybe-run-evolution))
+  (unless (boundp 'gptel-auto-workflow-evolution-enabled)
+    (defvar gptel-auto-workflow-evolution-enabled))
+  (let ((gptel-auto-workflow-evolution-enabled t)
+        (gptel-auto-workflow--running nil)
+        (gptel-auto-workflow--cron-job-running nil)
+        (mementum-called nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow-evolution-run-cycle)
+               (lambda (&rest _)
+                 (setq gptel-auto-workflow--running t)))
+              ((symbol-function 'gptel-mementum-build-index)
+               (lambda () (setq mementum-called t)))
+              ((symbol-function 'gptel-mementum-synthesize-all-candidates)
+               (lambda (&rest _) nil)))
+      (condition-case nil
+          (gptel-auto-workflow--maybe-run-evolution)
+        (error nil))
+      (should-not mementum-called))))
+
 (provide 'test-gptel-auto-workflow-production)
 ;;; test-gptel-auto-workflow-production.el ends here
