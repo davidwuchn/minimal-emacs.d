@@ -769,19 +769,107 @@ OV5 writes the feature, tests it, and puts it in your review queue. The ontology
 | "What's the ROI?" | 100 experiments/month × 20% keep-rate = 20 improvements/month. At $200/month API cost vs $150K/year engineer. |
 | "Does it work on new code?" | Day 0 → Day 30 shows compounding from scratch. The clone gets better every day. |
 
-### The Demo Video Structure
+### The 10-Slide Deck
 
-1. **0:00-0:30** — Show Launch Fast's real website. "We built a clone of this in Clojure."
-2. **0:30-1:30** — Show the clone code: `profit-calc.clj`, tests passing, `run-tests.sh clj`
-3. **1:30-3:00** — Run `./scripts/run-pipeline.sh`. Watch OV5 select targets, run experiments, grade results.
-4. **3:00-4:00** — Show the morning after: `git log --grep="kept"` reveals 6 improvements while you slept.
-5. **4:00-5:00** — Show the ontology: patterns learned, propagation to similar files.
-6. **5:00-6:00** — Show Month 3: OV5 proposes and builds a new feature (cross-sell widget).
-7. **6:00-7:00** — The punchline: "AI tools generate code. OV5 improves companies."
+**One-sentence pitch:** "We cloned a $41/month SaaS in Clojure, pointed OV5 at it, and watched it find bugs, optimize queries, and propose features — all while we slept."
 
-### The One-Sentence Demo Pitch
+### The 10-Slide Deck
 
-> "We cloned a $41/month SaaS product in Clojure, pointed OV5 at it, and watched it find bugs, optimize queries, and propose new features — all while we slept."
+**Slide 1 — Title**
+> ### Your Codebase Should Improve Itself
+> OV5: recursive self-improving AI that runs experiments while you sleep
+>
+> *[screenshot: `git log --oneline -10` showing 6 "kept" commits from last night]*
+
+**Slide 2 — The Problem: Stateless AI**
+> AI tools generate code. They don't remember what you rejected yesterday.
+> - Copilot: writes code, forgets ✗
+> - Claude Code: runs tasks, forgets ✗
+> - Cursor: autocompletes, forgets ✗
+>
+> **After 1 month: same capability as day 1. No learning. No memory.**
+>
+> *[graph: flat line labeled "AI coding tools — capability over time"]*
+
+**Slide 3 — OV5: Stateful, Self-Improving**
+> OV5 runs **100+ experiments/month** on your codebase. Learns from every outcome.
+> - 7 gates filter bad changes before you see them
+> - 20% keep-rate — 1 in 5 experiments ships
+> - The other 4 train the ontology (negative knowledge)
+> - Cost: ~$200/month. Alternative: $150K/year engineer.
+>
+> *[graph: compounding curve labeled "OV5 — capability over time"]*
+
+**Slide 4 — The Demo: Let's Watch It Work**
+> We cloned **Launch Fast** — a Chrome extension SaaS for Amazon sellers — in Clojure.
+> Chrome extension + React dashboard + backend API + Datahike database.
+> 10 modules, each with `clojure.test` tests.
+> Then we pointed OV5 at it.
+>
+> *[screenshot: `ls clj/amz/*.clj` — 10 files]*
+
+**Slide 5 — Day 0: The Clone**
+> ```clojure
+> ;; clj/amz/profit_calc.clj
+> (defn fba-fee [price weight size-tier]
+>   (+ (pick-pack-fee size-tier)
+>      (weight-handling-fee weight)    ;; ← OV5 will find the nil-guard bug here
+>      (* price 0.15)))
+> ```
+> ```bash
+> $ ./scripts/run-tests.sh clj
+> → 3 tests, 0 failures, 0 errors
+> ```
+> Clone runs. Tests pass. Now we sleep.
+
+**Slide 6 — Week 1: OV5 Finds What You Missed**
+> 30 experiments run overnight. 6 kept.
+> | Module | What OV5 found |
+> |--------|---------------|
+> | `profit-calc.clj` | Missing nil-guard: `weight` can be nil from Amazon API |
+> | `market-research.clj` | Datalog query optimized: 500ms → 120ms |
+> | `extension/content.clj` | DOM injection: graceful skip on missing element |
+> | `listing-builder.clj` | Input sanitization for product titles |
+> | `rank-tracker.clj` | Off-by-one in ranking position |
+>
+> *[screenshot: `git log --grep="kept" --since="7 days ago"`]*
+
+**Slide 7 — Month 1: The Ontology Knows Your Patterns**
+> After 100 experiments, OV5 has learned:
+> - "Amazon API responses need nil-guards" → auto-proposed on every new file
+> - "Datahike queries bottleneck on `:backend` attr" → index hints auto-added
+> - "DOM injection needs `try/catch`" → content scripts auto-wrapped
+>
+> **You review 15 min/day, not 4 hours/week.**
+
+**Slide 8 — Month 3: OV5 Proposes Features**
+> ```
+> [monitoring] Users searching "yoga pants" also click "yoga mats" 23% of the time.
+> [monitoring] Risk: low. Queued for experiment.
+> ```
+> OV5 writes the cross-sell widget. Tests pass. Lands in your review queue.
+> **The system doesn't just fix bugs — it spots opportunities.**
+
+**Slide 9 — The Numbers**
+> | Metric | Launch Fast clone + OV5 | Manual |
+> |--------|------------------------|--------|
+> | Improvements/month | 20+ | 2-3 |
+> | Review time | 15 min/day | 4 hrs/week |
+> | Tests per merge | 3+ (growing) | Varies |
+> | Cost | ~$200/month | $150K/year (engineer) |
+> | Bugs found while you sleep | Yes | No |
+>
+> *[graph: keep-rate stabilizing at ~20% after 50 experiments]*
+
+**Slide 10 — The Punchline**
+> ## AI tools generate code. OV5 improves companies.
+>
+> Clone it. Point it at your code. Wake up to improvements.
+>
+> `git clone --recurse-submodules https://github.com/davidwuchn/minimal-emacs.d`
+> `./scripts/run-pipeline.sh`
+>
+> *[QR code → GitHub repo]*
 
 | Package | What it enables | Who it's for |
 |---------|----------------|--------------|
