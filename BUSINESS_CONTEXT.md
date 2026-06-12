@@ -746,6 +746,48 @@ For a beauty creator with 280K followers, OV5 generates:
 
 > *"Stop guessing what to promote. Our AI scans Amazon, Reddit, and AliExpress 24/7 to tell you which products your audience will buy — with margins, suppliers, and risk scores. $49/month. First pick free. If your revenue doesn't grow in 30 days, cancel anytime."*
 
+---
+
+## The B2B Play: SeedSight for 小红书 (RedNote)
+
+TikTok is entertainment → impulse buys → creator tools. 小红书 is different.
+
+**小红书 is a consumer decision search engine.** 70% female, 90% Gen Z, 300M+ MAU. Users search "best sunscreen for sensitive skin" and read notes before buying. They don't scroll for entertainment — they research. This is 种草 (grass-planting): authentic product recommendations that seed purchase intent.
+
+**The customer is not creators — it's brands.** 小红书's own revenue ($3.7B/year) comes from brand advertising. Brands spend ¥50K-500K per KOL campaign. They need to know: what's being 种草'd? Who's winning the narrative? Which KOLs actually drive sales?
+
+OV5's GTM Mayor is a 种草 intelligence engine:
+
+| Brand question | OV5 answers with | Data source |
+|---------------|-----------------|-------------|
+| What's being 种草'd in my category? | Product mention velocity, sentiment, trend direction | 小红书 public content |
+| Who's talking about my brand vs competitors? | Share-of-voice analysis, KOL attribution | 小红书 notes + KOL profiles |
+| Is something about to blow up? | 种草 acceleration alerts (3+ sigma above baseline) | GTM Mayor trend detection |
+| Which KOLs should I work with? | Rank by 种草 effectiveness × audience trust × category fit | Ontology router + Allium |
+
+**Business model: B2B at 10× creator pricing.**
+
+| Tier | Price | Who |
+|------|-------|-----|
+| Starter | ¥3,888/mo (~$530) | Single brand, 1 category |
+| Growth | ¥8,888/mo (~$1,220) | Multi-brand, KOL discovery, alerts |
+| Enterprise | ¥28,888/mo (~$3,960) | Agency/MCN, white-label, API |
+
+**Why this works:** A single 小红书 KOL campaign costs ¥50K-500K. ¥3,888/mo for intelligence that makes that spend smarter is a rounding error. Brands already pay 小红书 for advertising. They'll pay for intelligence.
+
+**OV5 builds 80% of it.** GTM Mayor scans content. Ontology classifies brands/products/sentiment. World Store persists facts. Experiment loop improves accuracy daily. New code: ~15 .clj files for 小红书-specific extraction + dashboard.
+
+### Two Platforms, Two Strategies
+
+| | CreatorOS (TikTok) | SeedSight (小红书) |
+|---|---|---|
+| Target | Creators (B2C) | Brands (B2B) |
+| Price | $49-99/mo | $530-3,960/mo |
+| Core value | "What to promote" | "Who's winning 种草" |
+| Revenue at 100 customers | $5-10K/mo | $50-400K/mo |
+
+**Same OV5 infrastructure. Different products. Different price points. Same 80% code reuse.**
+
 | Package | What it enables | Who it's for |
 |---------|----------------|--------------|
 | **OV5 GitHub Action** | Run experiments on any repo in CI | "I don't use Emacs but I want this" |
