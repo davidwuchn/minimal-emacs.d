@@ -39,5 +39,32 @@
       (should (eq :insufficient-data (plist-get result :unify-or-diversify)))
       (should (string-match-p "have 3" (plist-get result :reason))))))
 
+(ert-deftest tdd/factor/insufficient-data-when-few-categories ()
+  "9+ results but only 1 category → :insufficient-data."
+  (let ((results nil))
+    (dotimes (i 12)
+      (setq results
+            (append results
+                    (list
+                     (tdd-factor--make-result
+                      (if (zerop (mod i 2)) "strat-a" "strat-b")
+                      "lisp/modules/foo.el" 'kept)))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda (&optional _) results))
+              ((symbol-function 'gptel-auto-workflow--categorize-experiment-target)
+               (lambda (_) :programming)))
+      (let ((result (gptel-auto-workflow--factor-performance-matrix)))
+        (should (eq :insufficient-data (plist-get result :unify-or-diversify)))
+        (should (string-match-p "1×2" (plist-get result :reason)))))))
+
+(ert-deftest tdd/factor/result-has-computed-at-key ()
+  "Result plist always includes :computed-at timestamp."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda (&optional _) nil))
+            ((symbol-function 'gptel-auto-workflow--categorize-experiment-target)
+             (lambda (_) :other)))
+    (let ((result (gptel-auto-workflow--factor-performance-matrix)))
+      (should (numberp (plist-get result :computed-at))))))
+
 (provide 'test-factor-performance-matrix)
 ;;; test-factor-performance-matrix.el ends here
