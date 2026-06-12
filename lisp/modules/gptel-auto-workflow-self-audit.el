@@ -1034,7 +1034,6 @@ Returns provider name or nil."
       (dolist (entry gptel-backend-registry)
 
 
-
         (let* ((provider (car entry))
                (plist (cdr entry))
                (models (plist-get plist :models)))
