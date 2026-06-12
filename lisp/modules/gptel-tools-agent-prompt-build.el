@@ -226,61 +226,23 @@ Criteria: has sections, has examples, has specific guidance, right length."
 
 (defconst gptel-auto-experiment--kibcm-patterns
   ;; Tier 1 — Confirmed (KIBC-M: all models, all scales)
-  '((:K "
-
-
-nil.safety\\|nil.guard\\|nil.check\\|guard[^a-z]\\|validat\\|proper-list-p\\|bound-and-true-p\\|filter.out\\|discard\\|remove
-nil\\|unless nil\\|when nil\\|error.*handling")
-    (:I "passthrough\\|pass through\\|identity\\|reference\\|binding\\|same
-entity\\|unchanged\\|copy\\|self[^a-z]")
-    (:B "compose\\|chain\\|extract helper\\|helper function\\|refactor
-into\\|DRY\\|dedup\\|unify\\|pipeline\\|sequence\\|decompose")
-    (:C "
-
-
-reorder\\|flip\\|swap\\|passive\\|invert\\|reverse\\|before.*after\\|after.*before\\|reorganize")
-    (:M "pattern\\|template\\|apply
-
-
-pattern\\|in.context\\|example.driven\\|analogy\\|match\\|few.shot\\|exemplar\\|similar
-to")
+  '((:K "nil.safety\\|nil.guard\\|nil.check\\|guard[^a-z]\\|validat\\|proper-list-p\\|bound-and-true-p\\|filter.out\\|discard\\|remove nil\\|unless nil\\|when nil\\|error.*handling")
+    (:I "passthrough\\|pass through\\|identity\\|reference\\|binding\\|same entity\\|unchanged\\|copy\\|self[^a-z]")
+    (:B "compose\\|chain\\|extract helper\\|helper function\\|refactor into\\|DRY\\|dedup\\|unify\\|pipeline\\|sequence\\|decompose")
+    (:C "reorder\\|flip\\|swap\\|passive\\|invert\\|reverse\\|before.*after\\|after.*before\\|reorganize")
+    (:M "pattern\\|template\\|apply pattern\\|in.context\\|example.driven\\|analogy\\|match\\|few.shot\\|exemplar\\|similar to")
     ;; Tier 2 — Predicted (seeking discovery: larger models)
-    (:W "
-
-
-duplicat\\|double\\|mirror\\|same.*twice\\|self.*same\\|reuse\\|share.logic\\|merge.*duplicate\\|identical.*both")
-    (:T "
-
-
-type.check\\|type.valid\\|annotation\\|type.assert\\|ensure.*type\\|cast\\|coerce\\|narrowing\\|widening")
-    (:PHI "
-
-
-both.*and\\|parallel\\|coordinat\\|multi.property\\|multiple.*same\\|fork\\|split.*combine\\|apply.*two")
-    (:D "
-
-
-deep.compos\\|multi.step\\|nested\\|complex.refactor\\|several.*changes?\\|multiple.*changes?\\|comprehensive")
+    (:W "duplicat\\|double\\|mirror\\|same.*twice\\|self.*same\\|reuse\\|share.logic\\|merge.*duplicate\\|identical.*both")
+    (:T "type.check\\|type.valid\\|annotation\\|type.assert\\|ensure.*type\\|cast\\|coerce\\|narrowing\\|widening")
+    (:PHI "both.*and\\|parallel\\|coordinat\\|multi.property\\|multiple.*same\\|fork\\|split.*combine\\|apply.*two")
+    (:D "deep.compos\\|multi.step\\|nested\\|complex.refactor\\|several.*changes?\\|multiple.*changes?\\|comprehensive")
     ;; Tier 3 — Structural (architecture-level)
-    (:SCOPE "
-
-
-scope\\|visibility\\|access.control\\|local\\|global\\|lexical\\|dynamic.*bind\\|closure\\|environment")
-    (:SUBST "simplif\\|reductio\\|substitut\\|replace.*with\\|instead
-of\\|compress\\|shorte\\|inline\\|expand")
-    (:WHNF "
-
-
-done\\|finished\\|complete\\|final\\|normal.form\\|base.case\\|terminal\\|atomic\\|primitive\\|no.further")
+    (:SCOPE "scope\\|visibility\\|access.control\\|local\\|global\\|lexical\\|dynamic.*bind\\|closure\\|environment")
+    (:SUBST "simplif\\|reductio\\|substitut\\|replace.*with\\|instead of\\|compress\\|shorte\\|inline\\|expand")
+    (:WHNF "done\\|finished\\|complete\\|final\\|normal.form\\|base.case\\|terminal\\|atomic\\|primitive\\|no.further")
     ;; Tier 4 — Meta (self-evolution itself)
-    (:Y "
-
-
-recurs\\|self.refer\\|self.modif\\|self.improv\\|self.evol\\|fixed.point\\|loop\\|iterate\\|repeat.*until\\|while")
-    (:QUOTE "
-
-
-document\\|comment\\|explain\\|describe\\|name\\|label\\|tag\\|categorize\\|classify\\|annotate\\|docstring"))
+    (:Y "recurs\\|self.refer\\|self.modif\\|self.improv\\|self.evol\\|fixed.point\\|loop\\|iterate\\|repeat.*until\\|while")
+    (:QUOTE "document\\|comment\\|explain\\|describe\\|name\\|label\\|tag\\|categorize\\|classify\\|annotate\\|docstring"))
   "15-axis KIBC-M+ operation patterns for hypothesis classification.
 Tier 1 (K,I,B,C,M): confirmed in all models.
 Tier 2 (W,T,PHI,D): predicted in larger models.
@@ -489,37 +451,84 @@ otherwise return ENGLISH-FALLBACK.  Both arguments must be strings."
              (buffer-string))))
       "λ bridge(x). prose ↔ Allium v3 | entities, rules, preconditions, outcomes")))
 
+;; ─── Allium Request Serialization Queue (FIFO) ───
+;;
+;; Prevents "Too many open files" / "Creating pipe" errors by ensuring
+;; only one Allium async request is in-flight at a time.  Fan-out
+;; callers (audit-signal, diff-opposing-hypotheses) now drain serially.
+
+(defvar gptel-auto-experiment--allium-queue nil
+  "List of thunks (zero-arg lambdas) waiting for an Allium request slot.
+FIFO: enqueued at tail, dequeued from head.")
+
+(defvar gptel-auto-experiment--allium-busy nil
+  "Non-nil when an Allium async `gptel-request' is currently in-flight.")
+
+(defun gptel-auto-experiment--allium-enqueue (thunk)
+  "Enqueue THUNK (a zero-arg lambda) for serialized Allium execution.
+If no request is active, dequeues immediately."
+  (let ((pair (list thunk)))
+    (if gptel-auto-experiment--allium-queue
+        (setcdr (last gptel-auto-experiment--allium-queue) pair)
+      (setq gptel-auto-experiment--allium-queue pair)))
+  (unless gptel-auto-experiment--allium-busy
+    (gptel-auto-experiment--allium-dequeue)))
+
+(defun gptel-auto-experiment--allium-dequeue ()
+  "Pop the head thunk from the queue and execute it."
+  (when gptel-auto-experiment--allium-queue
+    (setq gptel-auto-experiment--allium-busy t)
+    (let ((thunk (car gptel-auto-experiment--allium-queue)))
+      (setq gptel-auto-experiment--allium-queue
+            (cdr gptel-auto-experiment--allium-queue))
+      (funcall thunk))))
+
+(defun gptel-auto-experiment--allium-release ()
+  "Release the Allium slot and advance the queue."
+  (setq gptel-auto-experiment--allium-busy nil)
+  (gptel-auto-experiment--allium-dequeue))
+
 (defun gptel-auto-experiment--allium-distill (text &optional callback)
   "Distill TEXT (prose/research findings) to Allium v3 behavioral spec.
-CALLBACK receives the Allium spec string via async LLM call."
+CALLBACK receives the Allium spec string via async LLM call.
+Requests are serialized through a shared FIFO queue to avoid file-descriptor
+exhaustion."
   (if (and (fboundp 'gptel-request) (functionp callback))
       (let* ((system-prompt (gptel-auto-experiment--allium-compiler-prompt))
              (prompt (format "distill:\n\n%s" text)))
-        (gptel-request
-            prompt
-          :callback (lambda (response _info)
-                      (let ((text (if (stringp response) response (format "%s" response))))
-                        (when (functionp callback) (funcall callback text))))
-          :system system-prompt
-          :timeout 30
-          ))
+        (gptel-auto-experiment--allium-enqueue
+         (lambda ()
+           (gptel-request
+               prompt
+             :callback (lambda (response _info)
+                         (unwind-protect
+                             (let ((text (if (stringp response) response (format "%s" response))))
+                               (when (functionp callback) (funcall callback text)))
+                           (gptel-auto-experiment--allium-release)))
+             :system system-prompt
+             :timeout 30))))
     (when (functionp callback) (funcall callback nil))
     nil))
 
 (defun gptel-auto-experiment--allium-check (allium-spec &optional callback)
   "Check ALLIUM-SPEC for issues (missing preconditions, contradictions, etc.).
-CALLBACK receives the issues list as a string via async LLM call."
+CALLBACK receives the issues list as a string via async LLM call.
+Requests are serialized through a shared FIFO queue to avoid file-descriptor
+exhaustion."
   (if (and (fboundp 'gptel-request) (functionp callback))
       (let* ((system-prompt (gptel-auto-experiment--allium-compiler-prompt))
              (prompt (format "check:\n\n%s" allium-spec)))
-        (gptel-request
-            prompt
-          :callback (lambda (response _info)
-                      (let ((text (if (stringp response) response (format "%s" response))))
-                        (when (functionp callback) (funcall callback text))))
-          :system system-prompt
-          :timeout 30
-          ))
+        (gptel-auto-experiment--allium-enqueue
+         (lambda ()
+           (gptel-request
+               prompt
+             :callback (lambda (response _info)
+                         (unwind-protect
+                             (let ((text (if (stringp response) response (format "%s" response))))
+                               (when (functionp callback) (funcall callback text)))
+                           (gptel-auto-experiment--allium-release)))
+             :system system-prompt
+             :timeout 30))))
     (when (functionp callback) (funcall callback nil))
     nil))
 
@@ -527,20 +536,25 @@ CALLBACK receives the issues list as a string via async LLM call."
   "Decompile ALLIUM-SPEC to natural language prose.
 AUDIENCE when non-nil targets output for a specific role
 (e.g. \"for a product manager\").
-CALLBACK receives the prose string via async LLM call."
+CALLBACK receives the prose string via async LLM call.
+Requests are serialized through a shared FIFO queue to avoid file-descriptor
+exhaustion."
   (if (and (fboundp 'gptel-request) (functionp callback))
       (let* ((system-prompt (gptel-auto-experiment--allium-compiler-prompt))
              (audience-str (if (and audience (stringp audience))
-                               (format " %s" audience) ""))
+                                (format " %s" audience) ""))
              (prompt (format "decompile%s:\n\n%s" audience-str allium-spec)))
-        (gptel-request
-            prompt
-          :callback (lambda (response _info)
-                      (let ((text (if (stringp response) response (format "%s" response))))
-                        (when (functionp callback) (funcall callback text))))
-          :system system-prompt
-          :timeout 30
-          ))
+        (gptel-auto-experiment--allium-enqueue
+         (lambda ()
+           (gptel-request
+               prompt
+             :callback (lambda (response _info)
+                         (unwind-protect
+                             (let ((text (if (stringp response) response (format "%s" response))))
+                               (when (functionp callback) (funcall callback text)))
+                           (gptel-auto-experiment--allium-release)))
+             :system system-prompt
+             :timeout 30))))
     (when (functionp callback) (funcall callback nil))
     nil))
 
@@ -1897,7 +1911,8 @@ explore a different part of the file.\n"
                    (let ((usage (gptel-prefix-cache-context-usage dynamic-prompt)))
                      (if (plist-get usage :compaction-needed-p)
                          (progn
-                           (message "[prefix-cache] Context compaction needed: %.0f%% full — compacting older results"
+                           (message "[prefix-cache] Context compaction needed: %.0f%% full — compacting older
+results"
                                     (* 100 (plist-get usage :ratio)))
                            (gptel-prefix-cache-compact-dynamic dynamic-prompt previous-results))
                        dynamic-prompt))

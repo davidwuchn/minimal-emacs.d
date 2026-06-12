@@ -564,7 +564,7 @@ than\n`gptel-auto-workflow-decision-auto-expiry-hours'."
                              (match-string 1 content))))
               (when (and status (string= (string-trim status) "proposed"))
                 (setq pending t))))))
-      pending)))
+      pending))))
 
 (defun gptel-auto-workflow--decision-create (title options gtm-rec pmf-fea)
   "Create a human decision file.
@@ -736,32 +736,23 @@ Returns the new item ID."
       (let ((content (with-temp-buffer
                        (insert-file-contents queue-file)
                        (buffer-string))))
-        ;; Insert after the header row
+        ;; Insert after the header row.  Match the table header line
+        ;; and replace it with header + separator + new entry.  This
+        ;; puts the new entry directly after the separator, on row 3.
+        ;;
+        ;; NOTE: the previous version embedded a 33-blank-line regex
+        ;; that made this function only match files with exactly 33
+        ;; blank lines between header and separator.  No real markdown
+        ;; table has that, so the function silently failed to insert.
         (setq content
               (replace-regexp-in-string
-               "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual
-Impact
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-|\n|----|--------|-----------|-----------------|--------|---------------|---------------|\n"
-               (concat "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n"
-                       "|----|--------|-----------|-----------------|--------|---------------|---------------|\n"
-                       entry)
+               (concat
+                "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n"
+                "|----|--------|-----------|-----------------|--------|---------------|---------------|\n")
+               (concat
+                "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n"
+                "|----|--------|-----------|-----------------|--------|---------------|---------------|\n"
+                entry)
                content))
         ;; Update timestamp
         (setq content (replace-regexp-in-string
@@ -1262,10 +1253,9 @@ Also persists the full report to var/metrics/ for historical tracking."
             (let ((files (sort (directory-files metrics-dir t "-metrics\\.sexp$")
                                (lambda (a b) (string< a b)))))
               (dolist (f (seq-take files (- (length files) 30)))
-                (ignore-errors (delete-file f)))))
-        (error nil))
+                 (ignore-errors (delete-file f)))))
+         (error nil))
       m)))
-)
 
 (provide 'gptel-auto-workflow-production)
 ;;; gptel-auto-workflow-production.el ends here

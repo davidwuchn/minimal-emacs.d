@@ -84,5 +84,92 @@ is not loaded, the call to gptel-agent-read-file fails."
           (should (null result))))
     (ignore-errors (require 'gptel-agent nil t))))
 
+;; ─── Allium Request Queue Serialization Tests ───
+
+(ert-deftest regression/prompt/allium-queue-blocks-while-busy ()
+  "When busy, enqueue does not immediately dequeue new thunks.
+Manually simulating in-flight state: busy is t, two enqueued
+thunks must wait until release before executing in FIFO order."
+  (let ((gptel-auto-experiment--allium-queue nil)
+        (gptel-auto-experiment--allium-busy nil)
+        (executed nil))
+    ;; Simulate a request already in-flight
+    (setq gptel-auto-experiment--allium-busy t)
+    (gptel-auto-experiment--allium-enqueue (lambda () (push 'a executed)))
+    (gptel-auto-experiment--allium-enqueue (lambda () (push 'b executed)))
+    ;; Nothing should have run — the slot is busy
+    (should-not executed)
+    (should (= (length gptel-auto-experiment--allium-queue) 2))
+    ;; Release the slot → first thunk ('a) executes, claims the slot
+    (setq gptel-auto-experiment--allium-busy nil)
+    (gptel-auto-experiment--allium-release)
+    (should (equal executed '(a)))
+    (should gptel-auto-experiment--allium-busy)    ; dequeue re-set it
+    (should (= (length gptel-auto-experiment--allium-queue) 1))
+    ;; Release again → second thunk ('b) executes
+    (gptel-auto-experiment--allium-release)
+    (should (equal executed '(b a)))
+    ;; After thunk B runs, busy remains t — the thunk does not call
+    ;; release (in real code gptel-request's async callback does that).
+    ;; Manually reset for a clean drain check.
+    (setq gptel-auto-experiment--allium-busy nil)
+    (gptel-auto-experiment--allium-release) ; no-op (queue empty)
+    (should-not gptel-auto-experiment--allium-queue)))
+
+(ert-deftest regression/prompt/allium-queue-distill-check-chain ()
+  "distill→check callback chain: check is enqueued while distill is in-flight.
+Mock gptel-request to NOT fire the callback (simulating in-flight).
+Verify only one gptel-request fires initially; after release the second fires."
+  (let ((gptel-auto-experiment--allium-queue nil)
+        (gptel-auto-experiment--allium-busy nil)
+        (req-count 0)
+        (pending-cbs nil))
+    (cl-letf (((symbol-function 'gptel-auto-experiment--allium-compiler-prompt)
+               (lambda () "test"))
+              ((symbol-function 'gptel-request)
+               (lambda (_prompt &rest args)
+                 (cl-incf req-count)
+                 (let ((cb (plist-get args :callback)))
+                   (when cb (push cb pending-cbs))))))
+      ;; Fire distill — it should enqueue and dispatch immediately
+      (let ((distill-done nil))
+        (gptel-auto-experiment--allium-distill
+         "input"
+         (lambda (spec)
+           (should spec)
+           (gptel-auto-experiment--allium-check
+            spec
+            (lambda (_issues) (setq distill-done t)))))
+        ;; One gptel-request dispatched (distill)
+        (should (= req-count 1))
+        (should gptel-auto-experiment--allium-busy)
+        (should (= (length gptel-auto-experiment--allium-queue) 0))
+        ;; Simulate distill response arriving
+        (let ((cb (pop pending-cbs)))
+          (should cb)
+          ;; The callback body calls user-cb which calls check → enqueues.
+          ;; Then unwind-protect calls release → dequeue → runs check thunk.
+          (funcall cb "spec-ok" nil))
+        ;; Two gptel-requests total: distill + check
+        (should (= req-count 2))
+        ;; Now fire the check response
+        (let ((cb (pop pending-cbs)))
+          (should cb)
+          (funcall cb "issues-ok" nil))
+        (should-not gptel-auto-experiment--allium-busy)
+        (should-not gptel-auto-experiment--allium-queue)
+        (should distill-done)))))
+
+(ert-deftest regression/prompt/allium-queue-fallback-no-gptel-request ()
+  "When gptel-request is not fboundp, callback receives nil synchronously.
+Queue machinery is not used — the sync fallback path runs directly."
+  (let ((gptel-auto-experiment--allium-queue nil)
+        (gptel-auto-experiment--allium-busy nil)
+        (called nil))
+    (cl-letf (((symbol-function 'gptel-request) nil))
+      (gptel-auto-experiment--allium-distill "test" (lambda (v) (setq called t) (should-not v)))
+      (should called)
+      (should-not gptel-auto-experiment--allium-busy))))
+
 (provide 'test-gptel-tools-agent-prompt-build)
 ;;; test-gptel-tools-agent-prompt-build.el ends here

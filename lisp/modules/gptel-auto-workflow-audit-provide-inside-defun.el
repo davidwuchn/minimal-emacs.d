@@ -15,7 +15,6 @@ Returns 1 if swallowed, 0 if at top-level."
       (goto-char (point-min))
       (while (search-forward "(provide" nil t)
         (let* ((provide-pos (- (point) 8))
-               ;; `syntax-ppss` can move point; keep the scan stable.
                (state (save-excursion
                         (syntax-ppss provide-pos))))
           (when (and (> (car state) 0)
@@ -38,6 +37,7 @@ Returns 1 if swallowed, 0 if at top-level."
       (emacs-lisp-mode)
       (goto-char (point-min))
       (while (search-forward "(provide" nil t)
+
         (let* ((provide-pos (- (point) 8))
                (provide-line (line-number-at-pos provide-pos))
                ;; `syntax-ppss` can move point; keep the scan stable.

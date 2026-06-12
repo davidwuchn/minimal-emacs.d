@@ -357,7 +357,8 @@ Returns 1 if missing, 0 if present."
     (unbalanced-parens . gptel-auto-workflow--audit-unbalanced-parens)
     (missing-provide . gptel-auto-workflow--audit-missing-provide)
     (condition-case-unbound-err . gptel-auto-workflow--audit-condition-case-unbound-err)
-    (risk-node . gptel-auto-workflow--audit-risk-nodes))
+    (risk-node . gptel-auto-workflow--audit-risk-nodes)
+    (provide-inside-defun . gptel-auto-workflow--audit-provide-inside-defun))
   "Alist of audit check name (symbol) to audit function.")
 
 ;; ── Check 8: condition-case with unbound err ──
@@ -1105,7 +1106,8 @@ instead of fixing each failure individually."
     (unguarded-external-call . gptel-auto-workflow--fix-unguarded-external-calls)
     (missing-provide . gptel-auto-workflow--fix-missing-provide)
     (unbalanced-parens . gptel-auto-workflow--fix-unbalanced-parens)
-    (condition-case-unbound-err . gptel-auto-workflow--fix-condition-case-unbound-err))
+    (condition-case-unbound-err . gptel-auto-workflow--fix-condition-case-unbound-err)
+    (provide-inside-defun . gptel-auto-workflow--fix-provide-inside-defun))
   "Alist mapping audit issue type (symbol) to its auto-fixer function.
 Adding a new auto-fixer is now a one-line change to this alist.
 Each fixer must take FILE as argument and return fix count (0 = no-op).")
