@@ -1618,6 +1618,12 @@ so cleanup never crashes before resetting state."
          (gptel-auto-workflow--persist-status)
          (message "[auto-workflow] Initial target dispatch failed: %s"
                   (error-message-string err))
+         ;; Dump backtrace for self-diagnosis of hash-table-p nil etc.
+         (condition-case nil
+             (with-temp-buffer
+               (backtrace)
+               (message "[auto-workflow] Backtrace:\n%s" (buffer-string)))
+           (error nil))
           (when completion-callback
             (funcall completion-callback nil)))))))))
 
