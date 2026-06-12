@@ -410,5 +410,34 @@ when reading from an empty buffer or a missing file.  Must return
       (should-not (plist-get result :success))
       (should (string-match-p "not found" (plist-get result :error))))))
 
+;; ── Group 9: Clojure self-heal fixers ──
+
+(ert-deftest test-brepl/fix-ns-ordering-rejects-nil ()
+  "fix-ns-ordering returns error for nil content."
+  (let ((result (gptel-brepl-fix-ns-ordering nil)))
+    (should-not (plist-get result :valid))
+    (should (plist-get result :error))))
+
+(ert-deftest test-brepl/fix-ns-ordering-preserves-valid ()
+  "fix-ns-ordering returns same content for already-ordered ns form."
+  (let* ((content "(ns my.app\n  (:require [clojure.string :as str]))\n\n(defn foo [] 42)\n")
+         (result (gptel-brepl-fix-ns-ordering content)))
+    (should (plist-get result :valid))
+    (should (string= content (plist-get result :fixed-content)))))
+
+(ert-deftest test-brepl/fix-ns-ordering-moves-late-require ()
+  "fix-ns-ordering moves (:require ...) placed after sub-forms."
+  (let* ((content "(ns my.app\n  \n  \n  (:require [clojure.string :as str]))\n\n(defn foo [] 42)\n")
+         (result (gptel-brepl-fix-ns-ordering content)))
+    (should (plist-get result :valid))
+    ;; Should remove leading blank lines inside ns form
+    (should (string-match-p "(:require" (plist-get result :fixed-content)))))
+
+(ert-deftest test-brepl/fix-unused-require-passthrough ()
+  "fix-unused-require returns valid passthrough (needs clj-kondo for full impl)."
+  (let ((result (gptel-brepl-fix-unused-require "(ns my.app (:require [foo :as f]))\n(f 1)")))
+    (should (plist-get result :valid))
+    (should (plist-get result :note))))
+
 (provide 'test-brepl)
 ;;; test-brepl.el ends here

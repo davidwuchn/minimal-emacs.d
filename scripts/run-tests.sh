@@ -5,6 +5,7 @@
 # Usage:
 #   ./scripts/run-tests.sh              # Run all tests
 #   ./scripts/run-tests.sh unit         # Run ERT unit tests only
+#   ./scripts/run-tests.sh clj          # Run Clojure tests only
 #   ./scripts/run-tests.sh e2e          # Run E2E tests only
 #   ./scripts/run-tests.sh cron         # Run cron installation tests only
 #   ./scripts/run-tests.sh workflow     # Run auto-workflow tests only
@@ -34,6 +35,44 @@ touch_minutes_ago() {
         touch -t "$ts" "$path"
     else
         touch "$path"
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Clojure Tests (brepl + clojure.test)
+# ═══════════════════════════════════════════════════════════════════════════
+
+run_clj_tests() {
+    cd "$DIR"
+    section "Clojure Tests (brepl)"
+
+    local brepl_bin="${BREPL_BIN:-$HOME/.local/bin/brepl}"
+    if [[ ! -x "$brepl_bin" ]]; then
+        echo "SKIP: brepl not found at $brepl_bin"
+        return 0
+    fi
+
+    local runner_file="clj/ov5/test_runner.clj"
+    if [[ ! -f "$runner_file" ]]; then
+        echo "SKIP: Clojure test runner not found at $runner_file"
+        return 0
+    fi
+
+    echo "Running Clojure tests via brepl..."
+    local clj_output
+    clj_output=$("$brepl_bin" -f "$runner_file" 2>&1) || true
+    local clj_exit=${PIPESTATUS[0]}
+    if echo "$clj_output" | grep -q "No nREPL port found"; then
+        echo "SKIP: No nREPL server running (normal in CI/batch)"
+        return 0
+    fi
+    if [[ $clj_exit -eq 0 ]]; then
+        echo "PASS: Clojure tests"
+        return 0
+    else
+        echo "FAIL: Clojure tests"
+        echo "$clj_output"
+        return 1
     fi
 }
 
@@ -649,6 +688,9 @@ case "$SUBCOMMAND" in
     unit|u)
         run_unit_tests || FAILED=1
         ;;
+    clj|cj)
+        run_clj_tests || FAILED=1
+        ;;
     e2e|e)
         run_e2e_tests || FAILED=1
         ;;
@@ -661,6 +703,8 @@ case "$SUBCOMMAND" in
     all|a)
         run_unit_tests || FAILED=1
         echo ""
+        run_clj_tests || FAILED=1
+        echo ""
         run_e2e_tests || FAILED=1
         echo ""
         run_cron_tests || FAILED=1
@@ -668,9 +712,10 @@ case "$SUBCOMMAND" in
         run_workflow_tests || FAILED=1
         ;;
     *)
-        echo "Usage: $0 {unit|e2e|cron|workflow|all}"
+        echo "Usage: $0 {unit|clj|e2e|cron|workflow|all}"
         echo ""
         echo "  unit, u      - ERT unit tests only"
+        echo "  clj, cj      - Clojure tests only"
         echo "  e2e, e       - Auto-workflow E2E tests only"
         echo "  cron, c      - Cron installation tests only"
         echo "  workflow, w  - Auto-workflow tests only"

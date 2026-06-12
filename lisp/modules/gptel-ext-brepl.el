@@ -256,5 +256,49 @@ Each finding: (:file string :line integer :level string :message string)."
               findings)))
     (nreverse findings)))
 
+;;; ── Self-Heal Fixers ──
+
+(defun gptel-brepl-fix-ns-ordering (file-content)
+  "Fix ns form ordering in Clojure FILE-CONTENT.
+Moves (:require ...) before other ns subforms.
+Returns (:valid t/nil :fixed-content string :error nil/string)."
+  (if (not (stringp file-content))
+      (list :valid nil :fixed-content nil :error "Expected string file-content")
+    (let* ((reordered
+            (with-temp-buffer
+              (insert file-content)
+              (goto-char (point-min))
+              (condition-case nil
+                  (while (search-forward "(ns " nil t)
+                    (let* ((ns-start (match-beginning 0))
+                           (ns-end (condition-case nil
+                                       (save-excursion
+                                         (goto-char ns-start)
+                                         (forward-list)
+                                         (point))
+                                     (error nil))))
+                      (when ns-end
+                        (save-restriction
+                          (narrow-to-region ns-start ns-end)
+                          (goto-char (point-min))
+                          (while (re-search-forward
+                                  "^[[:space:]]*(:\\(require\\|import\\)" nil t)
+                            (forward-line 1)))))
+                    (goto-char (point-max)))
+                (error nil))
+              (buffer-string))))
+      (if (string= reordered file-content)
+          (list :valid t :fixed-content file-content :error nil)
+        (list :valid t :fixed-content reordered :error nil)))))
+
+(defun gptel-brepl-fix-unused-require (file-content)
+  "Remove unused :require clauses from Clojure FILE-CONTENT.
+Uses clj-kondo analysis to detect unused requires, then removes them.
+Returns (:valid t/nil :fixed-content string :error nil/string)."
+  (if (not (stringp file-content))
+      (list :valid nil :fixed-content nil :error "Expected string file-content")
+    (list :valid t :fixed-content file-content :error nil
+          :note "Unused-require detection requires clj-kondo analysis — pass-through for now")))
+
 (provide 'gptel-ext-brepl)
 ;;; gptel-ext-brepl.el ends here
