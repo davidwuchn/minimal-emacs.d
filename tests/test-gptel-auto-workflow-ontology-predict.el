@@ -264,22 +264,23 @@ there's no data to predict from."
 This ensures the system can collect data for new strategy+target pairs."
   (let ((mock-ontology
          '(:classes ((:name "new-strat" :keep-rate 0.1))
-           :instances ((:name "new-target" :keep-rate 0.1)))))
-    (cl-letf (((symbol-function 'gptel-auto-workflow--generate-experiment-ontology)
-                (lambda () mock-ontology))
-               ((symbol-function 'gptel-auto-workflow--parse-all-results)
-                (lambda () nil))
-               ((symbol-function 'gptel-auto-workflow--load-research-traces)
-                (lambda () nil)))
-      ;; With 10% exploration rate, probability of 0 successes in 100 trials
-      ;; is (0.9)^100 ≈ 0.000027 — negligible flakiness.
-      (let ((runs 0))
-        (dotimes (_ 100)
-          (when (gptel-auto-workflow--should-run-experiment-p "new-strat" "new-target")
-            (setq runs (1+ runs))))
-        ;; Expect roughly 10 runs (10% of 100), allow 3-20 range
-        (should (>= runs 3))
-        (should (<= runs 20))))))
+            :instances ((:name "new-target" :keep-rate 0.1)))))
+    (let ((gptel-auto-workflow--ontology-reorder-exploration-rate 0.15))
+      (cl-letf (((symbol-function 'gptel-auto-workflow--generate-experiment-ontology)
+                  (lambda () mock-ontology))
+                 ((symbol-function 'gptel-auto-workflow--parse-all-results)
+                  (lambda () nil))
+                 ((symbol-function 'gptel-auto-workflow--load-research-traces)
+                  (lambda () nil)))
+        ;; With 15% exploration rate, probability of 0 successes in 100 trials
+        ;; is (0.85)^100 ≈ 0.000013 — negligible flakiness.
+        (let ((runs 0))
+          (dotimes (_ 100)
+            (when (gptel-auto-workflow--should-run-experiment-p "new-strat" "new-target")
+              (setq runs (1+ runs))))
+          ;; Expect roughly 15 runs (15% of 100), allow 3-20 range.
+          (should (>= runs 3))
+          (should (<= runs 20)))))))
 
 (ert-deftest tdd/predict/exploration-does-not-block-high-prediction ()
   "High prediction experiments should always run, regardless of exploration."
