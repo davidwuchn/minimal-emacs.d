@@ -115,9 +115,12 @@ Returns alist of (name . socket-path)."
 
 (defun gptel-daemon-repl--default-server-socket ()
   "Return path to the default Emacs server socket."
-  (let ((socket-dir (gptel-daemon-repl--socket-dir)))
+  (let ((socket-dir (gptel-daemon-repl--socket-dir))
+        (server (if (and (boundp 'server-name) (stringp server-name))
+                    server-name
+                  gptel-daemon-repl-default-server)))
     (when socket-dir
-      (expand-file-name gptel-daemon-repl-default-server socket-dir))))
+      (expand-file-name server socket-dir))))
 
 ;;; ── REPL Evaluation ──
 
@@ -125,7 +128,8 @@ Returns alist of (name . socket-path)."
   "Return non-nil if we are running inside the target daemon.
 When true, avoid shelling out to emacsclient to prevent reentry hang."
   (and (daemonp)
-       (string= server-name gptel-daemon-repl-default-server)))
+       (or (bound-and-true-p server-name)
+           (string= server-name gptel-daemon-repl-default-server))))
 
 (defun gptel-daemon-repl--eval-direct (code)
   "Evaluate CODE string directly in-process.
