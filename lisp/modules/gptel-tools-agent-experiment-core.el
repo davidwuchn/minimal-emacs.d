@@ -40,6 +40,7 @@
 (declare-function gptel-auto-experiment--grade-with-retry "gptel-tools-agent-error")
 (declare-function gptel-auto-experiment--grader-only-error-label "gptel-tools-agent-error")
 (declare-function gptel-auto-experiment--grader-only-failure-p "gptel-tools-agent-error")
+(declare-function gptel-auto-workflow--compute-gate-score-vector "gptel-auto-workflow-pipeline-statechart")
 (declare-function gptel-auto-experiment--shell-command-to-string-timeboxed "gptel-tools-agent-validation")
 (declare-function gptel-auto-experiment--extract-hypothesis "gptel-tools-agent-experiment-loop")
 (declare-function gptel-auto-experiment--make-retry-prompt "gptel-tools-agent-experiment-loop")

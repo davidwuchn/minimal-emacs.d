@@ -59,6 +59,7 @@
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
 (declare-function gptel-auto-experiment--eight-keys-scores "gptel-tools-agent-benchmark")
 (declare-function gptel-auto-workflow--project-root "gptel-tools-agent-benchmark")
+(declare-function gptel-auto-workflow--compute-gate-score-vector "gptel-auto-workflow-pipeline-statechart")
 (declare-function gptel-auto-workflow--persist-status "gptel-tools-agent-experiment-loop")
 (declare-function my/gptel--sanitize-for-logging "gptel-tools-agent-git")
 (declare-function gptel-auto-workflow--extract-mutation-templates "gptel-tools-agent-main")
@@ -2225,8 +2226,12 @@ If :business-value-score is not set, computes from local signals."
                               (gptel-auto-workflow--plist-get experiment :complexity-after 0.0)))
            (lines-removed (gptel-auto-experiment--tsv-number
                           (gptel-auto-workflow--plist-get experiment :lines-removed 0)))
-           (understanding-score (gptel-auto-experiment--tsv-number
-                                 (gptel-auto-workflow--plist-get experiment :understanding-score 0.0))))
+            (understanding-score (gptel-auto-experiment--tsv-number
+                                 (gptel-auto-workflow--plist-get experiment :understanding-score 0.0)))
+            (gate-score-vec (or (gptel-auto-workflow--plist-get experiment :gate-score-vector)
+                                (when (fboundp 'gptel-auto-workflow--compute-gate-score-vector)
+                                  (gptel-auto-workflow--compute-gate-score-vector experiment))
+                                (make-vector 11 -1.0))))
     ;; Capture executor reasoning for self-evolution feedback
     (when (and target (bound-and-true-p gptel-auto-experiment--executor-reasoning))
       (let* ((insights (gethash target gptel-auto-experiment--grader-insights))
@@ -2372,7 +2377,7 @@ fallback hash" (or target "unknown")))
       (unless (gptel-auto-experiment--drop-replaceable-tsv-rows
                experiment-id target)
         (goto-char (point-max))
-        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%.6f\t%s\t%.4f\t%.4f\t%+.4f\t%+.2f\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%d\t%.2f\n"
+        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%.6f\t%s\t%.4f\t%.4f\t%+.4f\t%+.2f\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%d\t%.2f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\n"
                         experiment-id
                         target
                         (gptel-auto-experiment--tsv-escape
@@ -2472,7 +2477,13 @@ set it)"
                          complexity-before
                          complexity-after
                          (round lines-removed)
-                         understanding-score)))
+                         understanding-score
+                         (aref gate-score-vec 0) (aref gate-score-vec 1)
+                         (aref gate-score-vec 2) (aref gate-score-vec 3)
+                         (aref gate-score-vec 4) (aref gate-score-vec 5)
+                         (aref gate-score-vec 6) (aref gate-score-vec 7)
+                         (aref gate-score-vec 8) (aref gate-score-vec 9)
+                         (aref gate-score-vec 10))))
       (write-region (point-min) (point-max) file))
     ;; Keep strategy metrics independent from the per-run TSV.
     (when (fboundp 'gptel-auto-workflow--record-strategy-evaluation)

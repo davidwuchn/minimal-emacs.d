@@ -335,6 +335,7 @@ Caches when MAX-AGE-DAYS is nil for cycle-local reuse."
                                       (format-version (cond ((<= field-count 14) 14)
                                                             ((<= field-count 20) 20)
                                                             ((<= field-count 24) 24)
+                                                            ((>= field-count 54) 54)
                                                             (t 27)))
                                       (_experiment-id (nth 0 fields))
                                       (target (nth 1 fields))
@@ -366,7 +367,15 @@ Caches when MAX-AGE-DAYS is nil for cycle-local reuse."
                                        (skills (or (nth 28 fields) ""))
                                        (edit-mode (or (nth 29 fields) "none"))
                                        (cost-usd (string-to-number (or (nth 30 fields) "0")))
-                                       (effort-level (or (nth 31 fields) "default")))
+                                       (effort-level (or (nth 31 fields) "default"))
+                                       (gate-score-vec
+                                        (when (>= format-version 54)
+                                          (let ((vec (make-vector 11 -1.0)))
+                                            (dotimes (i 11)
+                                              (let ((val (string-to-number
+                                                          (or (nth (+ 43 i) fields) "-1"))))
+                                                (aset vec i val)))
+                                            vec))))
                                   (push (list :target target
                                               :hypothesis hypothesis
                                               :score-before score-before
@@ -387,6 +396,7 @@ Caches when MAX-AGE-DAYS is nil for cycle-local reuse."
                                              :edit-mode edit-mode
                                              :cost-usd cost-usd
                                              :effort-level effort-level
+                                             :gate-score-vector gate-score-vec
                                              :run-dir (file-name-nondirectory run-dir))
                                       records))))
                            (forward-line 1))))))))))

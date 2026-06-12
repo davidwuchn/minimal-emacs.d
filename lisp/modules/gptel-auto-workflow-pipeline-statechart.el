@@ -37,6 +37,8 @@
 
 (declare-function gptel-auto-workflow--parse-all-results "gptel-auto-workflow-evolution")
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
+(declare-function gptel-auto-experiment--tsv-decision-label "gptel-tools-agent-prompt-build")
+(declare-function gptel-auto-workflow--plist-get "gptel-tools-agent-base")
 
 ;; ─── Customization ───
 
@@ -117,6 +119,72 @@ The gate is the first one that failed — all prior gates were passed.
 Decision \"kept\" is handled separately (passed all gates).
 Decision \"staging-pending\" is treated as transient (excluded).")
 
+;; ─── Gate Score Vector ───
+
+(defun gptel-auto-workflow--compute-gate-score-vector (experiment)
+  "Return an 11-element vector of per-gate scores for EXPERIMENT.
+Each element is 0.0–1.0 or -1.0 (not applicable / unreached).
+Gate order matches `gptel-auto-workflow--pipeline-gates':
+  [roi-preflight quota-precondition executor hypothesis-uniqueness
+   validation grader decision complexity commit staging merge]
+Uses the experiment plist's :kept, :grader-quality, :comparator-reason,
+and :decision fields to reconstruct per-gate outcomes."
+  (let* ((gates (append gptel-auto-workflow--pipeline-gates nil))
+         (num-gates (length gates))
+         (vec (make-vector num-gates -1.0))
+         (kept (gptel-auto-workflow--plist-get experiment :kept nil))
+         (decision-str (or (gptel-auto-workflow--plist-get experiment :decision nil)
+                           (gptel-auto-experiment--tsv-decision-label experiment)))
+         (fail-gate (cdr (assoc decision-str
+                                gptel-auto-workflow--decision-to-fail-gate)))
+         (grader-quality (or (gptel-auto-workflow--plist-get experiment :grader-quality) 0))
+         (grader-total 5)
+         (grader-score-norm (min 1.0 (max 0.0 (/ (float grader-quality)
+                                                  (float grader-total)))))
+         (comparator-win-margin 0.5)
+         (before-fail t)
+         (gate-idx 0))
+    ;; Determine comparator win margin from decision
+    (when kept
+      (let ((reason (gptel-auto-workflow--plist-get experiment :comparator-reason "")))
+        (cond
+         ((and (stringp reason)
+               (string-match "Combined: [0-9.]+ → [0-9.]+" reason))
+          (setq comparator-win-margin 0.8))
+         (t (setq comparator-win-margin 0.6)))))
+    ;; Fill vector based on gate outcomes
+    (dolist (gate gates)
+      (cond
+       ;; If kept, all gates passed (with graded detail for measurable ones)
+       (kept
+        (pcase gate
+          ('roi-preflight        (aset vec gate-idx 1.0))
+          ('quota-precondition   (aset vec gate-idx 1.0))
+          ('executor             (aset vec gate-idx 1.0))
+          ('hypothesis-uniqueness (aset vec gate-idx 1.0))
+          ('validation           (aset vec gate-idx 1.0))
+          ('grader               (aset vec gate-idx grader-score-norm))
+          ('decision             (aset vec gate-idx comparator-win-margin))
+          ('complexity           (aset vec gate-idx 1.0))
+          ('commit               (aset vec gate-idx 1.0))
+          ('staging              (aset vec gate-idx 1.0))
+          ('merge                (aset vec gate-idx 1.0))))
+       ;; Failed: score gates before fail as 1.0, fail gate as 0.0, after as -1.0
+       ((and fail-gate before-fail (not (eq gate fail-gate)))
+        (aset vec gate-idx 1.0))
+       ((eq gate fail-gate)
+        (aset vec gate-idx
+              (pcase gate
+                ('grader grader-score-norm)
+                ('decision 0.2)
+                ('merge 0.0)
+                (_ 0.0)))
+        (setq before-fail nil))
+       (t
+        (aset vec gate-idx -1.0)))
+      (setq gate-idx (1+ gate-idx)))
+    vec))
+
 ;; ─── Persistence ───
 
 (defun gptel-auto-workflow--statechart-persistence-file ()
@@ -151,7 +219,7 @@ Decision \"staging-pending\" is treated as transient (excluded).")
   "Build pipeline statechart from historical TSV data.
 Optional MAX-AGE-DAYS limits to recent runs.
 Returns plist with :gates, :total, :kept, :discarded, :keep-rate,
-:transition-matrix, :computed-at."
+:transition-matrix, :records, :computed-at."
   (let* ((records (if (fboundp 'gptel-auto-workflow--parse-all-results)
                       (gptel-auto-workflow--parse-all-results max-age-days)
                     nil))
@@ -238,15 +306,35 @@ Returns plist with :gates, :total, :kept, :discarded, :keep-rate,
             :discarded discarded-count
              :keep-rate keep-rate
              :transition-matrix transition-matrix
+             :records records
              :computed-at (float-time)))))
 
 ;; ─── Analysis ───
+
+(defun gptel-auto-workflow--extract-gate-score-vectors (records)
+  "Extract gate score vectors from parsed TSV RECORDS.
+Gate score fields are at TSV columns 43-53 (0-indexed), after the 43
+existing columns.  Returns a list of 11-element float vectors read
+directly from the parsed TSV plists."
+  (let ((vectors nil))
+    (dolist (rec records)
+      (let ((gsv (gptel-auto-workflow--plist-get rec :gate-score-vector nil)))
+        (cond
+         ((vectorp gsv)
+          (push gsv vectors))
+         ;; Fallback: reconstruct from decision + grader-quality
+         ((and (fboundp 'gptel-auto-workflow--compute-gate-score-vector)
+               (or (gptel-auto-workflow--plist-get rec :kept)
+                   (gptel-auto-workflow--plist-get rec :decision)))
+          (push (gptel-auto-workflow--compute-gate-score-vector rec) vectors)))))
+    (nreverse vectors)))
 
 (defun gptel-auto-workflow--statechart-analyze (&optional statechart)
   "Analyze STATECHART and return bottleneck report.
 If STATECHART is nil, builds from all available TSV data.
 Returns plist with :bottleneck, :bottlenecks, :expected-keep-rate,
-:lossiest-gate, :phi-keep-rate-max, :phi-deviation, :per-gate, :computed-at."
+:lossiest-gate, :phi-keep-rate-max, :phi-deviation, :per-gate,
+:gate-score-vectors, :compensating-errors, :computed-at."
   (let* ((sc (or statechart
                  (gptel-auto-workflow--build-statechart)))
          (gates (plist-get sc :gates))
@@ -254,6 +342,7 @@ Returns plist with :bottleneck, :bottlenecks, :expected-keep-rate,
          (num-gates (length gates))
          (total (plist-get sc :total))
          (keep-rate (plist-get sc :keep-rate))
+         (records (plist-get sc :records))
          ;; Collect per-gate data
          (per-gate nil)
          (bottleneck nil)
@@ -292,16 +381,49 @@ Returns plist with :bottleneck, :bottlenecks, :expected-keep-rate,
            (phi-keep-rate-max (expt phi (- (/ (float num-gates)
                                               (1+ num-gates)))))
            (phi-deviation (- phi-keep-rate-max keep-rate)))
-      (list :bottleneck bottleneck
-            :bottlenecks bottlenecks
-            :expected-keep-rate keep-rate
-            :lossiest-gate lossiest-gate
-            :phi-keep-rate-max phi-keep-rate-max
-            :phi-deviation phi-deviation
-            :num-gates num-gates
-            :total-experiments total
-            :per-gate per-gate
-            :computed-at (float-time)))))
+       (list :bottleneck bottleneck
+             :bottlenecks bottlenecks
+             :expected-keep-rate keep-rate
+             :lossiest-gate lossiest-gate
+             :phi-keep-rate-max phi-keep-rate-max
+             :phi-deviation phi-deviation
+             :num-gates num-gates
+             :total-experiments total
+             :per-gate per-gate
+             :gate-score-vectors (gptel-auto-workflow--extract-gate-score-vectors records)
+             :compensating-errors
+             (gptel-auto-workflow--detect-compensating-errors
+              (gptel-auto-workflow--extract-gate-score-vectors records)
+              gate-order)
+             :computed-at (float-time)))))
+
+(defun gptel-auto-workflow--detect-compensating-errors (gate-score-vectors gate-order)
+  "Detect compensating errors in GATE-SCORE-VECTORS.
+A compensating error occurs when the grader score (index 5) is high
+(>0.6) but earlier gates failed or scored low.  GATE-ORDER is the
+ordered list of gate symbols.
+Returns a list of plists describing each compensating error found."
+  (let ((errors nil)
+        (gate-list (append gate-order nil)))
+    (dolist (gv gate-score-vectors)
+      (when (vectorp gv)
+        (let* ((grader-idx 5)       ; G6 = grader (0-indexed)
+               (executor-idx 2)     ; G3 = executor
+               (grader-score (if (>= (aref gv grader-idx) 0)
+                                 (aref gv grader-idx) 0.0))
+               (early-fails
+                (cl-loop for i below 5
+                         for s across gv
+                         when (and (>= s 0) (< s 0.5))
+                          collect (cons (nth i gate-list) s))))
+          (when (and (> grader-score 0.6)
+                     early-fails)
+            (push (list :executor-score (if (>= (aref gv executor-idx) 0)
+                                            (aref gv executor-idx) 0.0)
+                        :grader-score grader-score
+                        :early-failed-gates early-fails)
+                  errors)))))
+    (nreverse errors)))
 
 ;; ─── Drift Detection ───
 
@@ -388,7 +510,22 @@ Suitable for display in a buffer or log."
                     (plist-get pg :p-pass)
                     (plist-get pg :entered)
                     (plist-get pg :failed))
-            lines))
+             lines))
+    ;; Compensating-error detection
+    (let ((ce (plist-get analysis :compensating-errors)))
+      (when ce
+        (push (format "\n⚠ Compensating Errors Detected: %d\n" (length ce)) lines)
+        (push "  (High grader score masks earlier gate failures)\n" lines)
+        (dolist (err ce)
+          (let ((early-gates-str
+                 (mapconcat (lambda (pair)
+                              (format "%s=%.1f" (car pair) (cdr pair)))
+                            (plist-get err :early-failed-gates) ", ")))
+            (push (format "  exec=%.1f grader=%.1f | early-fails: %s\n"
+                          (plist-get err :executor-score)
+                          (plist-get err :grader-score)
+                          early-gates-str)
+                  lines)))))
     (apply #'concat (nreverse lines))))
 
 ;; ─── Interactive Commands ───
