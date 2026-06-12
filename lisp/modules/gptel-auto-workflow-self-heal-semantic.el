@@ -717,13 +717,53 @@ Returns a string suitable for insertion into prompts."
 
 ;; ── Auto-fixers (Layer 2+3: detect AND fix) ──
 
+(defun gptel-auto-workflow--fix-validate-and-write (buffer file &optional original-content)
+  "Validate BUFFER's paren balance via `check-parens', then write to FILE.
+BUFFER must contain the proposed new file content in `emacs-lisp-mode'.
+If `check-parens' passes, write BUFFER to FILE and return t.
+If `check-parens' fails and ORIGINAL-CONTENT is non-nil (a string),
+restore FILE to ORIGINAL-CONTENT so the broken fix is discarded.
+In all failure cases, log a warning and return nil."
+  (with-current-buffer buffer
+    (condition-case err
+        (progn
+          (check-parens)
+          (write-region (point-min) (point-max) file)
+          t)
+      (error
+       (message "[self-heal-semantic] Fix validation FAILED for %s: %s -- discarding fix"
+                (file-name-nondirectory file) (error-message-string err))
+       (when original-content
+         (with-temp-file file
+           (insert original-content)))
+        nil))))
+
+(defun gptel-auto-workflow--fix-validate-after-write (file original-content)
+  "Validate FILE after a fix write.
+If `check-parens' fails, restore ORIGINAL-CONTENT.
+Returns t if valid, nil if restored."
+  (with-temp-buffer
+    (insert-file-contents file)
+    (emacs-lisp-mode)
+    (condition-case nil
+        (progn (check-parens) t)
+      (error
+       (message "[self-heal-semantic] Fix validation FAILED for %s -- restoring original"
+                (file-name-nondirectory file))
+       (when original-content
+         (with-temp-file file
+           (insert original-content)))
+       nil))))
+
 (defun gptel-auto-workflow--fix-unguarded-external-calls (file)
   "Fix unguarded calls to external functions in FILE.
 Wraps calls like (fn ...) with (and (fboundp \='fn) (fn ...)).
 Returns number of calls fixed.  Safe: only adds guards, never changes logic."
-  (let ((fixed 0))
+  (let ((fixed 0)
+        (original-content nil))
     (with-temp-buffer
       (insert-file-contents file)
+      (setq original-content (buffer-string))
       (goto-char (point-min))
       (dolist (fn gptel-auto-workflow--semantic-external-fns)
         (let ((pattern (format "(%s\\s-" (symbol-name fn))))
@@ -785,9 +825,10 @@ Returns number of calls fixed.  Safe: only adds guards, never changes logic."
                           (cl-incf fixed)))))))))))
       ;; Write back if we fixed anything (INSIDE with-temp-buffer)
       (when (> fixed 0)
-        (write-region (point-min) (point-max) file)
-        (message "[self-heal-semantic] Added fboundp guards to %d call(s) in %s"
-                 fixed (file-name-nondirectory file))))
+        (when (gptel-auto-workflow--fix-validate-and-write
+               (current-buffer) file original-content)
+          (message "[self-heal-semantic] Added fboundp guards to %d call(s) in %s"
+                   fixed (file-name-nondirectory file)))))
     fixed))
 
 (defun gptel-auto-workflow--fix-excessive-blank-lines (file)
@@ -839,11 +880,17 @@ never touches code structure."
             (push "" content)))))
     ;; Write back if we fixed anything
     (when (> fixed 0)
-      (with-temp-file file
-        (dolist (l (nreverse content))
-          (insert l "\n")))
-      (message "[self-heal-semantic] Compressed %d blank-run(s) in %s"
-               fixed (file-name-nondirectory file)))
+      (let ((original (with-temp-buffer
+                        (insert-file-contents file)
+                        (buffer-string))))
+        (with-temp-buffer
+          (emacs-lisp-mode)
+          (dolist (l (nreverse content))
+            (insert l "\n"))
+          (when (gptel-auto-workflow--fix-validate-and-write
+                 (current-buffer) file original)
+            (message "[self-heal-semantic] Compressed %d blank-run(s) in %s"
+                     fixed (file-name-nondirectory file))))))
     fixed))
 
 (defun gptel-auto-workflow--fix-missing-provide (file)
@@ -877,10 +924,16 @@ Returns 1 if fixed, 0 if no change needed."
         (setq new-content (concat new-content
                                  (format "(provide '%s)\n" feature)))
         (setq fixed 1))
-      (with-temp-file file
-        (insert new-content))
-      (message "[self-heal-semantic] Added (provide '%s) to %s"
-               feature (file-name-nondirectory file)))
+      (let ((original (with-temp-buffer
+                        (insert-file-contents file)
+                        (buffer-string))))
+        (with-temp-buffer
+          (emacs-lisp-mode)
+          (insert new-content)
+          (when (gptel-auto-workflow--fix-validate-and-write
+                 (current-buffer) file original)
+            (message "[self-heal-semantic] Added (provide '%s) to %s"
+                     feature (file-name-nondirectory file))))))
     fixed))
 
 (defun gptel-auto-workflow--fix-unbalanced-parens (file)
@@ -931,11 +984,20 @@ Returns 1 if fixed, 0 otherwise."
                           closes-str "\n"
                           (substring new-content insert-pos))
                 (concat new-content "\n" closes-str)))
-        (with-temp-file file
-          (insert new-content))
-        (message "[self-heal-semantic] Appended %d missing close paren(s) at EOF in %s"
-                 missing (file-name-nondirectory file))
-        (setq fixed 1)))
+        (let ((original (with-temp-buffer
+                          (insert-file-contents file)
+                          (buffer-string))))
+          (with-temp-buffer
+            (emacs-lisp-mode)
+            (insert new-content)
+            (if (gptel-auto-workflow--fix-validate-and-write
+                 (current-buffer) file original)
+                (progn
+                  (message "[self-heal-semantic] Appended %d missing close paren(s) at EOF in %s"
+                           missing (file-name-nondirectory file))
+                  (setq fixed 1))
+              (message "[self-heal-semantic] Paren validation failed after unbalanced-parens fix on %s -- fix discarded"
+                       (file-name-nondirectory file)))))))
      ;; Case 2: more closes than opens — remove excess from error line
      ((< opens closes)
       (let* ((excess (- closes opens))
@@ -948,6 +1010,7 @@ Returns 1 if fixed, 0 otherwise."
             (end-of-line)
             ;; Remove excess close parens from end of line
             (let ((end-pos (point))
+                  (original-content nil)
                   (start-pos (save-excursion
                                (let ((count 0))
                                  (while (and (> (point) (line-beginning-position))
@@ -956,14 +1019,17 @@ Returns 1 if fixed, 0 otherwise."
                                    (backward-char 1)
                                    (setq count (1+ count)))
                                  (point)))))
-              (when (> (- end-pos start-pos) 0)
-                (delete-region start-pos end-pos)
+               (when (> (- end-pos start-pos) 0)
+                 (setq original-content (buffer-string))
+                 (delete-region start-pos end-pos)
                  (let ((content (buffer-string)))
                    (with-temp-file file
                      (insert content)))
                 (message "[self-heal-semantic] Removed %d excess close paren(s) from line %d in %s"
                          (- end-pos start-pos) error-line (file-name-nondirectory file))
-                (setq fixed 1))))))))
+                (setq fixed 1)
+                (unless (gptel-auto-workflow--fix-validate-after-write file original-content)
+                  (setq fixed 0)))))))))
     fixed))
 
 
@@ -973,9 +1039,11 @@ Changes (condition-case nil ... (error ... err ...))
 to (condition-case err ... (error ... err ...)).
 Returns number of fixes applied. Safe: only adds binding, never
 removes or changes logic."
-  (let ((fixed 0))
+  (let ((fixed 0)
+        (original-content nil))
     (with-temp-buffer
       (insert-file-contents file)
+      (setq original-content (buffer-string))
       (goto-char (point-min))
       (while (re-search-forward "(condition-case\\s-+\\(nil\\)\\b" nil t)
         (let* ((match-start (match-beginning 0))
@@ -1010,7 +1078,8 @@ removes or changes logic."
                        (message "[self-heal-semantic] Fixed condition-case nil → err in %s"
                                 (file-name-nondirectory file))))))))))
       (when (> fixed 0)
-        (write-region (point-min) (point-max) file)))
+        (gptel-auto-workflow--fix-validate-and-write
+         (current-buffer) file original-content)))
     fixed))
 
 (cl-defun gptel-auto-workflow--semantic-audit-file (file &key (_auto-fix nil))

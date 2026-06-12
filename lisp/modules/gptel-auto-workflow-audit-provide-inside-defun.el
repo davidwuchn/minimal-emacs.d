@@ -4,6 +4,10 @@
 ;; which happens when the unbalanced-parens fixer inserts close parens
 ;; before provide, swallowing it into the preceding defun.
 
+(declare-function gptel-auto-workflow--fix-validate-and-write
+                  "gptel-auto-workflow-self-heal-semantic"
+                  (buffer file &optional original-content))
+
 ;;;###autoload
 (defun gptel-auto-workflow--audit-provide-inside-defun (file)
   "Audit FILE for (provide '...) inside a defun body.
@@ -35,9 +39,11 @@ Guards: refuses to modify files with unresolved merge conflicts,
 and skips the fix when check-parens confirms the file is already balanced
 (syntax-ppss was wrong about the paren depth)."
   (let ((fixed 0)
-        (skip nil))
+        (skip nil)
+        (original-content nil))
     (with-temp-buffer
       (insert-file-contents file)
+      (setq original-content (buffer-string))
       (emacs-lisp-mode)
       ;; Guard: never modify files with unresolved git conflicts.
       ;; Match only at start-of-line (git convention) to avoid
@@ -77,7 +83,8 @@ and skips the fix when check-parens confirms the file is already balanced
                        depth provide-line)
               (setq fixed 1))))
         (when (> fixed 0)
-          (write-region (point-min) (point-max) file))))
+          (gptel-auto-workflow--fix-validate-and-write
+           (current-buffer) file original-content))))
     fixed))
 
 (provide 'gptel-auto-workflow-audit-provide-inside-defun)
