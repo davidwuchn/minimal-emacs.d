@@ -163,7 +163,7 @@ Two REPL modules now exist, both wired into `gptel-config.el`:
 - Studied [clojure.cc](https://clojure.cc/) — **strategic decision: Clojure-first multi-platform.** 39 Clojure dialects cover every platform. One language (Clojure), one toolchain (clojure.test + clj-kondo + cljfmt), every platform via dialect transpilers. Eliminates per-language backend scaling problem.
 - Implemented Clojure experiment loop: `run-tests.sh clj`, `clj/ov5/test_runner.clj`, `gptel-brepl-run-tests`, `gptel-brepl-lint-file`, `gptel-brepl-fix-ns-ordering`, `:clojure` category. brepl 41/41, ontology-router 117/117.
 - Captured in `mementum/knowledge/clojure-first-multiplatform-architecture.md` and `mementum/knowledge/launch-fast-vs-ov5-gaps.md`.
-- **Clojure toolchain complete**: test (clojure.test), lint (clj-kondo), format (zprint), fix (ns-ordering + unused-require). brepl 47/47 tests.
+- Built CreatorOS demo: 5 modules, 31 tests, CI pipeline. Moved to independent repo at `ssh://onepi5/davidwuchn/creatoros.git`. OV5 can now manage it via `.dir-locals.el` + project config.
 - Studied TikTok 网红 + 小红书 种草 e-commerce: two OV5 business models — CreatorOS (B2C, $49-99/mo) + SeedSight (B2B, $530-3,960/mo). Same 80% infra.
 - Updated OUROBOROS-V5.md + BUSINESS_CONTEXT.md with numbers, World Store, demo narratives.
 
