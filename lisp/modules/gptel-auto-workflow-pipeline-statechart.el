@@ -36,6 +36,7 @@
 (require 'cl-lib)
 
 (declare-function gptel-auto-workflow--parse-all-results "gptel-auto-workflow-evolution")
+(declare-function gptel-auto-workflow--factor-performance-matrix "gptel-auto-workflow-evolution")
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")
 (declare-function gptel-auto-experiment--tsv-decision-label "gptel-tools-agent-prompt-build")
 (declare-function gptel-auto-workflow--plist-get "gptel-tools-agent-base")
@@ -524,8 +525,39 @@ Suitable for display in a buffer or log."
             (push (format "  exec=%.1f grader=%.1f | early-fails: %s\n"
                           (plist-get err :executor-score)
                           (plist-get err :grader-score)
-                          early-gates-str)
-                  lines)))))
+                           early-gates-str)
+                   lines)))))
+    ;; Strategy×Category factorization (verbum Gap 4)
+    (let ((factor (and (fboundp 'gptel-auto-workflow--factor-performance-matrix)
+                       (condition-case nil
+                           (gptel-auto-workflow--factor-performance-matrix)
+                         (error nil)))))
+      (when (and factor (not (eq (plist-get factor :unify-or-diversify) :insufficient-data)))
+        (push (format "\n=== Strategy×Category Factorization ===\n") lines)
+        (push (format "Rank-1 reconstruction quality: %.3f (%.0f%%)\n"
+                      (plist-get factor :rank1-quality)
+                      (* 100 (plist-get factor :rank1-quality))) lines)
+        (push (format "Top eigenvalue (λ₀): %.4f\n"
+                      (plist-get factor :top-eigenvalue)) lines)
+        (push (format "Experiments analyzed: %d   Active: %d strategies × %d categories\n"
+                      (plist-get factor :num-experiments)
+                      (plist-get factor :active-rows)
+                      (plist-get factor :active-cols)) lines)
+        (push (format "Recommendation: %s\n"
+                      (pcase (plist-get factor :unify-or-diversify)
+                        (:unify "UNIFY — substrate dominates, all strategies perform similarly across categories")
+                        (:diversify "DIVERSIFY — strategies are category-specific, optimize per-category")
+                        (:mixed "MIXED — partial specialization, tune per high-leverage cell"))) lines)
+        ;; Per-category best strategy
+        (push "\nPer-category best strategy:\n" lines)
+        (dolist (cat (plist-get factor :categories))
+          (let ((best-strat nil) (best-rate 0.0) (inner (gethash cat (plist-get factor :matrix))))
+            (when inner
+              (maphash (lambda (strat rate)
+                         (when (> rate best-rate)
+                           (setq best-strat strat best-rate rate))) inner))
+            (push (format "  %-22s best=%-25s (%.0f%%)\n"
+                          cat (or best-strat "n/a") (* 100 best-rate)) lines)))))
     (apply #'concat (nreverse lines))))
 
 ;; ─── Interactive Commands ───

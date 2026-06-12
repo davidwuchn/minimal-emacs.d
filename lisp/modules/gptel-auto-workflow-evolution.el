@@ -2436,26 +2436,34 @@ pipeline from hanging when a sub-function blocks indefinitely."
                    (plist-get result :changes)
                    (plist-get result :saturated)))
       (error (message "[evolution] Step ontology-evolve: %s" err))))
-  ;; Step C.7d: Evolve ai-behaviors model+effort selection from experiment data
+  ;; Step C.7d: Kronecker factorization — strategy×category unify/diversify audit
+  (condition-case err
+      (let ((factor-result (gptel-auto-workflow--factor-performance-matrix)))
+        (unless (eq (plist-get factor-result :unify-or-diversify) :insufficient-data)
+          (message "[factor] Strategy×category rank-1 quality: %.3f → %s"
+                   (plist-get factor-result :rank1-quality)
+                   (plist-get factor-result :unify-or-diversify))))
+    (error (message "[evolution] Step factor-matrix: %s" err)))
+  ;; Step C.7e: Evolve ai-behaviors model+effort selection from experiment data
   (when (fboundp 'gptel-ai-behaviors--evolve-models)
     (condition-case err
         (gptel-ai-behaviors--evolve-models)
       (error (message "[evolution] Step model-evolve: %s" err))))
-  ;; Step C.7e: Evolve ai-behaviors hashtag mappings from experiment data
+  ;; Step C.7f: Evolve ai-behaviors hashtag mappings from experiment data
   (when (fboundp 'gptel-ai-behaviors--evolve-hashtags)
     (condition-case err
         (progn
           (gptel-ai-behaviors--evolve-hashtags)
           (message "[ai-behaviors] Evolved category→hashtags from experiment data"))
       (error (message "[evolution] Step ai-behaviors-evolve: %s" err))))
-  ;; Step C.7e: Evolve concrete task-type preferences per category
+  ;; Step C.7g: Evolve concrete task-type preferences per category
   (when (fboundp 'gptel-ai-behaviors--evolve-concrete-tasks)
     (condition-case err
         (progn
           (gptel-ai-behaviors--evolve-concrete-tasks)
           (message "[concrete-task] Analyzed task-type keep-rates per category"))
       (error (message "[evolution] Step concrete-task-evolve: %s" err))))
-  ;; Step C.7f: Evolve validation error patterns into HARD CONSTRAINT suggestions
+  ;; Step C.7h: Evolve validation error patterns into HARD CONSTRAINT suggestions
   (when (fboundp 'gptel-ai-behaviors--evolve-validation-rules)
     (condition-case err
         (progn
@@ -3822,6 +3830,216 @@ Writes to pending_eval.json for the meta-harness pipeline to process."
                    (equal (plist-get r :decision) t))
           (setq kept (1+ kept)))))
     (if (> total 0) (/ (float kept) total) 0.0)))
+
+;; ─── Kronecker Factorization: Strategy×Category Performance Matrix ───
+
+(defun gptel-auto-workflow--factor-performance-matrix
+    (&optional max-experiments min-per-cell)
+  "Factor strategy×category keep-rate matrix via power iteration.
+Returns plist with :unify-or-diversify recommendation.
+
+Builds matrix M[strategy, category] from experiment history where each cell
+is the mean keep-rate for experiments using that strategy on that category.
+Performs power iteration on MᵀM to find the top eigenpair, then computes
+rank-1 reconstruction quality: r = ‖U₁‖₂ / ‖M‖₂.
+
+- r > 0.85 → :unify (substrate dominates; all strategies perform alike)
+- r < 0.50 → :diversify (strategies are category-specific; diagonal matters)
+- else → :mixed (partial specialization)
+
+Optional MAX-EXPERIMENTS limits to the N most recent experiments (default 100).
+MIN-PER-CELL is minimum experiments needed for a cell (default 3)."
+  (cl-block factor-performance-matrix
+    (let* ((results (gptel-auto-workflow--parse-all-results))
+           (cell-stats (make-hash-table :test 'equal))
+           ;; key=(category . strategy) -> (kept . total)
+           (all-categories nil)
+           (all-strategies nil))
+      (when (or (null results) (< (length results) 9))
+        (cl-return-from factor-performance-matrix
+          (list :unify-or-diversify :insufficient-data
+                :reason
+                (format "Need >= 9 experiments, have %d"
+                        (length results))
+                :computed-at (float-time))))
+      ;; Limit to recent experiments
+      (when (and max-experiments (> max-experiments 0))
+        (setq results (seq-take results max-experiments)))
+      ;; Build per-cell keep-rate accumulators
+      (dolist (r results)
+        (let* ((strategy (or (plist-get r :strategy) "none"))
+               (target (plist-get r :target))
+               (category (and target (fboundp 'gptel-auto-workflow--categorize-experiment-target)
+                              (gptel-auto-workflow--categorize-experiment-target target)))
+               (kept (or (equal (plist-get r :decision) "kept")
+                         (equal (plist-get r :decision) t))))
+          (when (and category strategy (not (string-empty-p strategy))
+                     (not (string= strategy "none")))
+            (let* ((key (cons category strategy))
+                   (entry (gethash key cell-stats (cons 0 0))))
+              (setcar entry (1+ (car entry)))       ; total
+              (when kept (setcdr entry (1+ (cdr entry)))) ; kept
+              (puthash key entry cell-stats)
+              (unless (member category all-categories)
+                (push category all-categories))
+              (unless (member strategy all-strategies)
+                (push strategy all-strategies))))))
+      (setq all-categories (nreverse all-categories))
+      (setq all-strategies (nreverse all-strategies))
+      (let ((num-cats (length all-categories))
+            (num-strats (length all-strategies)))
+        (when (or (< num-cats 2) (< num-strats 2))
+          (cl-return-from factor-performance-matrix
+            (list :unify-or-diversify :insufficient-data
+                  :reason (format "Need >= 2 categories + 2 strategies, have %d×%d"
+                                  num-cats num-strats)
+                  :computed-at (float-time))))
+        ;; Build dense matrix: rows = strategies, cols = categories
+        (let* ((min-cell (or min-per-cell 3))
+               (M (make-vector num-strats nil))
+               (non-zero-cells 0))
+          (dotimes (i num-strats)
+            (let ((row (make-vector num-cats -1.0)))
+              (dotimes (j num-cats)
+                (let* ((key (cons (nth j all-categories) (nth i all-strategies)))
+                       (entry (gethash key cell-stats)))
+                  (when entry
+                    (let ((total (car entry))
+                          (kept (cdr entry)))
+                      (when (>= total min-cell)
+                        (aset row j (/ (float kept) total))
+                        (setq non-zero-cells (1+ non-zero-cells)))))))
+              (aset M i row)))
+          ;; Skip if not enough non-zero cells (need at least 4 for meaningful 2×2)
+          (when (< non-zero-cells 4)
+            (cl-return-from factor-performance-matrix
+              (list :unify-or-diversify :insufficient-data
+                    :reason (format "Only %d cells with >= %d experiments" non-zero-cells min-cell)
+                    :computed-at (float-time))))
+          ;; Count active rows and cols (each must have >= 1 non -1.0 cell)
+          (let ((active-rows 0) (active-cols 0))
+            (dotimes (i num-strats)
+              (when (cl-some (lambda (v) (>= v 0.0)) (append (aref M i) nil))
+                (setq active-rows (1+ active-rows))))
+            (dotimes (j num-cats)
+              (let ((has-data nil))
+                (dotimes (i num-strats)
+                  (when (>= (aref (aref M i) j) 0.0)
+                    (setq has-data t)))
+                (when has-data (setq active-cols (1+ active-cols)))))
+            (when (or (< active-rows 2) (< active-cols 2))
+              (cl-return-from factor-performance-matrix
+                (list :unify-or-diversify :insufficient-data
+                      :reason (format "Only %d active strategies × %d active categories"
+                                      active-rows active-cols)
+                      :computed-at (float-time))))
+            ;; Power iteration on MᵀM (category×category)
+            ;; Matrix-vector product: y = Mᵀ M x = Mᵀ (M x)
+            (cl-labels
+                ((mtm-multiply (x)        ; x: category vector -> category vector
+                   (let* ((mx (make-vector num-strats 0.0)) ; M x (strategy vector)
+                          (result (make-vector num-cats 0.0)))
+                     ;; Step 1: mx = M x
+                     (dotimes (i num-strats)
+                       (let ((sum 0.0))
+                         (dotimes (j num-cats)
+                           (let ((mval (aref (aref M i) j)))
+                             (when (>= mval 0.0)
+                               (setq sum (+ sum (* mval (aref x j)))))))
+                         (aset mx i sum)))
+                     ;; Step 2: result = Mᵀ (M x)
+                     (dotimes (j num-cats)
+                       (let ((sum 0.0))
+                         (dotimes (i num-strats)
+                           (let ((mval (aref (aref M i) j)))
+                             (when (>= mval 0.0)
+                               (setq sum (+ sum (* mval (aref mx i)))))))
+                         (aset result j sum)))
+                     result))
+                 (norm (v)               ; L2 norm
+                   (let ((s 0.0))
+                     (dotimes (k (length v))
+                       (setq s (+ s (* (aref v k) (aref v k)))))
+                     (if (> s 0.0) (sqrt s) 0.0)))
+                 (normalize (v)
+                   (let* ((n (norm v))
+                          (res (make-vector (length v) 0.0)))
+                     (when (> n 1e-15)
+                       (dotimes (k (length v))
+                         (aset res k (/ (aref v k) n))))
+                     res)))
+              ;; Initialize random unit vector
+              (let ((v (make-vector num-cats 0.0))
+                    (eigenvalue 0.0)
+                    (converged nil)
+                    (max-iter 50)
+                    (tol 1e-6))
+                ;; Seed with random values
+                (dotimes (j num-cats)
+                  (aset v j (- (random 2000) 1000.0)))
+                (setq v (normalize v))
+                ;; Power iteration
+                (catch 'power-converged
+                  (dotimes (_iter max-iter)
+                    (let ((v-new (normalize (mtm-multiply v))))
+                      ;; Check convergence: dot product should be close to +/-1
+                      (let ((dot 0.0))
+                        (dotimes (j num-cats)
+                          (setq dot (+ dot (* (aref v j) (aref v-new j)))))
+                        (setq v v-new)
+                        (when (> (abs dot) (- 1.0 tol))
+                          (setq converged t)
+                          (throw 'power-converged t))))))
+                ;; Compute eigenvalue via Rayleigh quotient: λ = vᵀ (MᵀM) v
+                (let* ((mv (mtm-multiply v))
+                       (rayleigh 0.0))
+                  (dotimes (j num-cats)
+                    (setq rayleigh (+ rayleigh (* (aref v j) (aref mv j)))))
+                  (setq eigenvalue (max 0.0 rayleigh)))
+                ;; Compute rank-1 approximation in strategy×category space
+                ;; U₁ = M v vᵀ  (but we only need norms)
+                ;; ‖U₁‖₂ = ‖M v‖₂ * ‖v‖₂ = ‖M v‖₂  (since v is unit)
+                (let* ((mx (make-vector num-strats 0.0))
+                       (m-norm-sq 0.0)
+                       (u1-norm-sq 0.0))
+                  (dotimes (i num-strats)
+                    (let ((sum 0.0))
+                      (dotimes (j num-cats)
+                        (let ((mval (aref (aref M i) j)))
+                          (when (>= mval 0.0)
+                            (setq sum (+ sum (* mval (aref v j))))
+                            (setq m-norm-sq (+ m-norm-sq (* mval mval))))))
+                      (aset mx i sum)
+                      (setq u1-norm-sq (+ u1-norm-sq (* sum sum)))))
+                  (let* ((m-norm (if (> m-norm-sq 0.0) (sqrt m-norm-sq) 0.0))
+                         (u1-norm (if (> u1-norm-sq 0.0) (sqrt u1-norm-sq) 0.0))
+                         (rank1-quality (if (> m-norm 0.0) (/ u1-norm m-norm) 0.0))
+                         (decision
+                          (cond
+                           ((> rank1-quality 0.85) :unify)
+                           ((< rank1-quality 0.50) :diversify)
+                           (t :mixed)))
+                         ;; Build matrix alist for reporting
+                         (matrix-ht (make-hash-table :test 'eq)))
+                    (dotimes (j num-cats)
+                      (let ((inner (make-hash-table :test 'equal)))
+                        (dotimes (i num-strats)
+                          (let ((mval (aref (aref M i) j)))
+                            (when (>= mval 0.0)
+                              (puthash (nth i all-strategies) mval inner))))
+                        (puthash (nth j all-categories) inner matrix-ht)))
+                    (list :unify-or-diversify decision
+                          :rank1-quality rank1-quality
+                          :top-eigenvalue eigenvalue
+                          :top-eigenvector (when converged v)
+                          :matrix matrix-ht
+                          :categories all-categories
+                          :strategies all-strategies
+                          :num-experiments (length results)
+                          :active-rows active-rows
+                          :active-cols active-cols
+                          :converged converged
+                          :computed-at (float-time))))))))))))
 
 (defvar gptel-auto-workflow--champion-composite-score 0.0
   "Composite benchmark score of the champion strategy.
