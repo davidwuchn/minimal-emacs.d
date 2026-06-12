@@ -1,12 +1,12 @@
 ---
-valid-from: 2026-06-12T03:05
+valid-from: 2026-06-12T07:02
 ---
 
-# Mistake: 2026-06-12 03:05
+# Mistake: 2026-06-12 07:02
 
 **Failure type:** grader-bypass
 **Target:** lisp/modules/gptel-tools-agent-runtime.el
-**Category:** :agentic (keep-rate: 1.6%)
+**Category:** :agentic (keep-rate: 2.1%)
 **Occurrences:** 3
 **Example reasons:** none
 **Trend:** 2026-06-04T085158Z-9537 -> 2026-06-04T184456Z-8b97

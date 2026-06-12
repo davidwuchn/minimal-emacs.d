@@ -1,43 +1,40 @@
 <!--
 Synthesis verification:
 - Confidence: 24%
-- Sources: 10 memories
+- Sources: 11 memories
 - Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-empty'
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize multiple "empty-hypothesis" failure memories into a comprehensive knowledge page. Let me analyze the memories:
+The user wants me to synthesize memories into a knowledge page. Let me analyze the prompt to determine which mode to use.
 
-1. All memories share the failure type "empty-hypothesis"
-2. They target different areas:
-   - staging-verification (5 occurrences, :programming, 0.0% keep-rate)
-   - staging-scope (4 occurrences, :programming, 0.0% keep-rate)
-   - staging-review (18 occurrences, :programming, 3.4% keep-rate)
-   - lisp/modules/gptel-tools-agent-experiment-core.el (4 occurrences, :agentic, 0.0% keep-rate)
-   - lisp/modules/gptel-tools-agent-benchmark.el (5 occurrences, :programming, 2.6% keep-rate)
-   - lisp/modules/gptel-benchmark-subagent.el (4 occurrences, :programming, 3.2% keep-rate)
-   - lisp/modules/gptel-auto-workflow-strategic.el (3 occurrences, :agentic, 2.5% keep-rate)
-   - lisp/modules/gptel-auto-workflow-projects.el (5 occurrences, :agentic, 0.0% keep-rate)
-   - lisp/modules/gptel-auto-workflow-ontology-strategy.el (3 occurrences, :agentic, 2.5% keep-rate)
-   - lisp/modules/gptel-auto-workflow-ontology-router.el (3 occurrences, :agentic, 0.0% keep-rate)
+The prompt does NOT contain "EXPECTED BEHAVIORS", so I need to check if this is a skill mode task. However, looking more carefully, this is actually a direct generation task - the user wants me to generate a knowledge page from the memories provided. This isn't an evaluation task at all.
 
-Total occurrences: 5+4+18+4+5+4+3+5+3+3 = 54
+Wait, let me re-read the role and behavior. The instructions say I'm an evaluator that grades outputs. But the user is asking me to generate content, not evaluate it. This is a generation task, not an evaluation task.
 
-Categories:
-- :programming: 5 targets
-- :agentic: 5 targets
+The prompt says:
+- "Synthesize the following memories into a knowledge page"
+- Requirements about minimum 50 lines, concrete examples, etc.
+- "Return the full markdown page directly in your final response"
 
-Key patterns:
-- All have "Example reasons: none" - this is the empty-hypothesis characteristic
-- Trend data shows they're consecutive runs with the same issue
-- Keep-rates are very low (0-3.4%)
-- Spans from 2026-06-02 to 2026-06-12
+This is a generation task, not an evaluation. I should just generate the knowledge page as requested. The evaluation framework in my role doesn't apply here because there's no output to evaluate - the user IS asking me to produce the output.
 
-I need to create a knowledge page that:
-1. Has minimum 50 lines of content
-2. Includes concrete examples
-3. Has actionable patterns
-4. Cross-references related topics
-5. Is in proper markdown with frontmatter
+Let me synthesize the memories into a knowledge page about the "empty-hypothesis" failure pattern.
 
-Let me build a comprehensive page that synthesizes this into a pattern description, includes code examples of what empty-hypothesis looks like, how to detect it, and how to fix it.
+Looking at the memories:
+- All failures are type "empty-hypothesis"
+- Targets span: staging-verification, staging-scope, staging-review, various gptel/*.el files
+- Categories: uncategorized, :programming, :agentic
+- Keep-rates: 0.0% to 3.2% (very low, indicating systemic issues)
+- Occurrences: 3-11 per pattern
+- All have "Example reasons: none"
+- Time period: 2026-06-02 to 2026-06-12
+
+Key observations:
+1. "empty-hypothesis" is a failure type where no hypothesis is generated
+2. It affects both staging processes and code modules
+3. Keep-rates are extremely low (0-3.2%)
+4. No example reasons are recorded - a metadata gap
+5. Concentrated in :agentic and :programming categories
+
+Let me create a comprehensive knowledge page.

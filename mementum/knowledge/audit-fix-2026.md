@@ -1,38 +1,28 @@
 <!--
 Synthesis verification:
-- Confidence: 24%
+- Confidence: 40%
 - Sources: 46 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'audit-fix-2026'
+- Warnings: No code examples or concrete references, Very short content (20 lines)
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize a large number of self-audit reports into a single knowledge page. Let me analyze the pattern across all these memories:
+The user wants me to synthesize many self-audit report memories into a single knowledge page about "audit-fix-2026". Let me analyze the patterns in the data:
 
-1. All are self-audit reports from a system called gptel-auto-workflow
-2. They run every ~4 hours from 2026-06-08 to 2026-06-12
-3. Common issues found:
-   - Backend cold-start: 8 backends never used in last 7d (consistent across all)
-   - Strategy cold-start: 29/29 strategies unevaluated (consistent across all)
-   - Staging-merge bottleneck: OK (0% of failures) - auto-resolver deployed at commit 95396bc1
-   - Occasionally: Module byte-compile health issues with specific .el files
-4. Action items are consistent: cold backends, 40% exploration rate may be slow, source code review still needed
-5. YC note: 'self-evolve' must include META — auditing the system itself
+1. Issue counts range from 37-41, with 38 being the most common
+2. Backend cold-start: 8/8 backends never used in last 7d - consistent across all reports
+3. Strategy cold-start: 29/29 strategies unevaluated - consistent
+4. Staging-merge bottleneck: OK with auto-resolver deployed (commit 95396bc1)
+5. Module byte-compile health: varies - 0-2 modules broken (gptel-auto-workflow-* files)
+6. Action items are consistent
+7. The time range is from 2026-06-08 to 2026-06-12
 
-Issue counts over time:
-- 2026-06-08 11:03:34: 37
-- 2026-06-08 10:14:33: 37
-- 2026-06-08 18:00:12 onwards: mostly 38
-- 2026-06-09 15:00:09: 39 (one module broken)
-- 2026-06-10 10:00:14: 40 (two modules broken)
-- 2026-06-10 23:00:10: 40 (two modules broken)
-- 2026-06-11 23:00:07: 39 (was 38, increased)
-- 2026-06-12 03:00:12: 39
-- 2026-06-12 07:00:09: 39
+Let me create a comprehensive knowledge page with:
+- Frontmatter
+- Summary of audit findings
+- Issue breakdown by category
+- Trends and patterns over time
+- Module byte-compile issues detail
+- Actionable patterns
+- Cross-references
 
-Modules that have been broken:
-- gptel-auto-workflow-ontology-router.el
-- gptel-auto-workflow-self-heal-semantic.el
-- gptel-auto-workflow-recovery.el
-- gptel-auto-workflow-evolution.el
-
-Let me build a comprehensive knowledge page that synthesizes this into actionable patterns.
+I need to make this 50+ lines with concrete examples, tables, commands, and actionable patterns.

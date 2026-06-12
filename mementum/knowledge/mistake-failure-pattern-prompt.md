@@ -1,52 +1,30 @@
 <!--
 Synthesis verification:
-- Confidence: 80%
+- Confidence: 12%
 - Sources: 7 memories
-- Warnings: No code examples or concrete references
-- Auto-approved: yes (passed)
+- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-prompt', Very short content (22 lines)
+- Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize memories about a specific topic: "mistake-failure-pattern-prompt" into a knowledge page. Let me analyze the memories:
+The user wants me to synthesize multiple memory entries about "prompt" failure patterns into a knowledge page. Let me analyze the patterns:
 
-1. All entries share the same failure type: "prompt"
-2. All targets are files in `lisp/modules/` related to gptel (likely a Claude/LLM integration in Emacs)
-3. Various files affected:
-   - gptel-tools-agent-prompt-build.el (4 occurrences)
-   - gptel-tools-agent-benchmark.el (5 occurrences, keep-rate 3.5%)
-   - gptel-benchmark-principles.el (3 occurrences)
-   - gptel-auto-workflow-strategic.el (3 occurrences, keep-rate 4.3%)
-   - gptel-auto-workflow-projects.el (3 occurrences, keep-rate 4.3%)
-   - gptel-auto-workflow-ontology-router.el (3 occurrences)
-   - gptel-auto-workflow-evolution.el (3 occurrences)
+1. All failures are of type "prompt"
+2. They target different modules in lisp/modules/
+3. Common targets: gptel-tools-agent-*, gptel-benchmark-*, gptel-auto-workflow-*
+4. Some have category keep-rates (programming: 3.5%, agentic: 4.3%)
+5. Occurrences range from 3-5
+6. Trends show dates from May 30 to June 8, 2026
 
-4. Time range: 2026-05-30 to 2026-06-08
-5. Common pattern: prompt-related failures in gptel modules
-6. Categories mentioned: :programming, :agentic
-7. Keep-rates are very low (3.5%, 4.3%) - meaning very few generated outputs are kept
-8. Multiple occurrences (3-5) per file
-
-Key insights:
-- This is a systemic pattern, not isolated incidents
-- Affects gptel modules (Emacs LLM integration)
-- Cross-cutting: affects prompt building, benchmarking, auto-workflow
-- Two categories: programming and agentic
-- The keep-rates are concerning (3.5-4.3% is very low)
-- Files are split across multiple subsystems
-
-I need to create a knowledge page with:
+Let me create a comprehensive knowledge page with:
 - Frontmatter
-- Minimum 50 lines of content
-- Concrete examples
+- Pattern analysis
+- Tables of affected modules
+- Concrete examples/commands for investigation
 - Actionable patterns
 - Cross-references
-- Tables/commands
 
-Let me structure this:
-1. Overview/Pattern Summary
-2. Affected Modules (table)
-3. Common Failure Modes
-4. Root Cause Analysis
-5. Detection Patterns
-6. Actionable Remediation
-7. Prevention
-8. Related topics
+I need to be careful: the prompt asks me to synthesize memories and produce a knowledge page. This isn't a code evaluation task (no "EXPECTED BEHAVIORS" section), and there's no eval_metadata.json. This is a direct content generation request.
+
+Wait, looking at the root system policy again - it says I should be evaluating outputs. But the user request is to generate a knowledge page, not evaluate something. The system prompt says "Evaluate outputs against defined criteria" but the user is asking me to produce output.
+
+Actually, re-reading: the system prompt is about my role as an evaluator. The user is giving me a task to generate a knowledge page. This is a straightforward content generation task. I'll generate the knowledge page as requested.

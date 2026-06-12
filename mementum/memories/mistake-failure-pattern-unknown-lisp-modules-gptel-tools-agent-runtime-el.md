@@ -1,12 +1,12 @@
 ---
-valid-from: 2026-06-12T03:05
+valid-from: 2026-06-12T07:02
 ---
 
-# Mistake: 2026-06-12 03:05
+# Mistake: 2026-06-12 07:02
 
 **Failure type:** unknown
 **Target:** lisp/modules/gptel-tools-agent-runtime.el
-**Category:** :agentic (keep-rate: 1.6%)
+**Category:** :agentic (keep-rate: 2.1%)
 **Occurrences:** 3
 **Example reasons:** none
 **Trend:** 2026-06-04T100156Z-1c10 -> 2026-06-05T005714Z-0cd4

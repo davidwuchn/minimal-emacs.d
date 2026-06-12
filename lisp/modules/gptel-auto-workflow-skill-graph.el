@@ -398,38 +398,39 @@ Preserves dependency edge type (explicit frontmatter) on updates."
 
 (defvar skill-graph--standard-workflows
   '((:name "elisp-workflow"
-     :atoms (elisp-discover elisp-expert elisp-validator)
-     :category :programming
-     :patterns ("\\.el\\'")
-     :description "Read→Understand→Write→Validate workflow for Elisp editing")
+      :atoms (elisp-discover elisp-expert elisp-validator)
+      :category :programming
+      :patterns ("\\.el\\'")
+      :description "Read→Understand→Write→Validate workflow for Elisp editing")
     (:name "clojure-workflow"
      :atoms (clojure-expert)
      :category :programming
      :patterns ("\\.clj\\'" "\\.cljs\\'" "\\.cljc\\'")
      :description "REPL-first workflow for Clojure editing")
-     (:name "debug-workflow"
-      :atoms (elisp-debug elisp-validator)
-      :category :agentic
-      :patterns ()
-      :description "Debug→Validate workflow for fixing errors")
+    (:name "debug-workflow"
+     :atoms (elisp-debug elisp-validator)
+     :category :agentic
+     :patterns ()
+     :description "Debug→Validate workflow for fixing errors")
     (:name "tool-workflow"
-      :atoms (hashline-edit elisp-expert elisp-replace)
-      :category :tool-calls
-      :patterns ()
-      :description "Hashline→Edit→Replace workflow for tool modifications")
+     :atoms (hashline-edit elisp-expert elisp-replace)
+     :category :tool-calls
+     :patterns ()
+     :description "Hashline→Edit→Replace workflow for tool modifications")
     (:name "analyze-workflow"
-      :atoms (provider-error-analyzer elisp-validator)
-      :category :agentic
-      :patterns ()
-      :description "Analyze→Validate workflow for diagnostics")
+     :atoms (provider-error-analyzer elisp-validator)
+     :category :agentic
+     :patterns ()
+     :description "Analyze→Validate workflow for diagnostics")
     (:name "prompt-workflow"
-      :atoms (agent-prompts tool-prompts)
-      :category :natural-language
-      :patterns ()
-      :description "Prompt→Template workflow for prompt engineering"))
+     :atoms (agent-prompts tool-prompts)
+     :category :natural-language
+     :patterns ()
+     :description "Prompt→Template workflow for prompt engineering"))
   "Pre-compiled workflow molecules.
-Each is a plist with :name, :atoms, :category (matching ontology), :description.
-Used as fallback when graph edges are cold (no experiment data).")
+Each is a plist with :name, :atoms, :category (matching ontology),
+:description.
+ Used as fallback when graph edges are cold (no experiment data).")
 
 (defun skill-graph--recommend-molecule (target &optional category)
   "Recommend a molecule for TARGET based on skill graph and ontology CATEGORY.

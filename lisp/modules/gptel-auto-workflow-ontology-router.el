@@ -3759,6 +3759,15 @@ possible misclassification"
 
 
 
+
+
+
+
+
+
+
+
+
 sandbox\\|^gptel-tools-\\(?:bash\\|grep\\|glob\\|edit\\|apply\\|preview\\|programmatic\\)")
     (:natural-language . "context\\|prompt\\|chat\\|conversation\\|language\\|text\\|summarize\\|stream"))
   "Regex patterns used by `categorize-target' for each category.

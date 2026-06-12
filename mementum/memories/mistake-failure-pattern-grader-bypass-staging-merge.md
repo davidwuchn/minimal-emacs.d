@@ -1,15 +1,15 @@
 ---
-valid-from: 2026-06-09T08:52
+valid-from: 2026-06-12T07:02
 ---
 
-# Mistake: 2026-06-09 08:52
+# Mistake: 2026-06-12 07:02
 
 **Failure type:** grader-bypass
 **Target:** staging-merge
-**Category:** :programming (keep-rate: 0.0%)
+**Category:** :programming (keep-rate: 2.6%)
 **Occurrences:** 3
 **Example reasons:** none
-**Trend:** 2026-06-05T034931Z-5628 -> 2026-06-05T230335Z-9097
+**Trend:** 2026-06-06T154818Z-2c02 -> 2026-06-07T192103Z-515a
 
 This pattern was detected by the monitoring agent as a systemic failure requiring investigation. Priority determined by category keep-rate (lower = higher priority).
 

@@ -2,9 +2,9 @@
 
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
-> **Status**: ✅ **SELF-HEAL + ONTOLOGY_REPAIRED** — high-risk routing blocks direct mutation of repair-engine files; ontology-router paren corruption fixed; stale cache removed; World Store Phase 4 query layer is complete and benchmark-verified; repo-wide unit-suite verification now passes; Phase 5 branching is complete
-> **Latest**: Phase 4 of OV5 World Store now has a real `ov5.world-store.query` namespace, Elisp caching/fallback bridge, hot-path router/predict rewrites, and a persistent nREPL bridge inside `gptel-ext-world-store.el`. 56 relevant tests pass (30 brepl + 8 bootstrap + 8 query + 10 branch). 10k benchmark after persistent bridge: uncached ~67.87ms/query, cached ~0.0117ms/query. Full unit suite now passes (2993 total, 0 unexpected, 29 skipped). Phase 5 implementation is complete and verified.
-> **Active Plan**: [OV5 World Store](../plans/ov5-world-store/plan.md) — complete
+> **Status**: ✅ **SELF-HEAL + ONTOLOGY_REPAIRED** — high-risk routing blocks direct mutation of repair-engine files; ontology-router paren corruption fixed; stale cache removed; World Store Phase 4 query layer is complete and benchmark-verified; Phase 5 branching is complete and branch tests pass; repo-wide unit-suite gate is green again after the skill-graph plist repair
+> **Latest**: Phase 4 of OV5 World Store now has a real `ov5.world-store.query` namespace, Elisp caching/fallback bridge, hot-path router/predict rewrites, and a persistent nREPL bridge inside `gptel-ext-world-store.el`. 56 relevant tests pass (30 brepl + 8 bootstrap + 8 query + 10 branch). 10k benchmark after persistent bridge: uncached ~67.87ms/query, cached ~0.0117ms/query. The targeted world-store suites are green; the full unit suite now passes after fixing the malformed `skill-graph--standard-workflows` plist in `gptel-auto-workflow-skill-graph.el`.
+> **Active Plan**: [OV5 World Store](../plans/ov5-world-store/plan.md) — complete (branch work verified)
 > **Pi5**: Auto-evolution active; pre-push hook now blocks broken pushes to main; Pi5 auto-evolved boundary fixes (Preview Mode 2, Edit hashline, Code_Map/Inspect/Replace, plan-mode readonly enforcement)
 
 ---
@@ -138,15 +138,16 @@ Two REPL modules now exist, both wired into `gptel-config.el`:
 - **ontology-router**: 24/24
 - **self-audit**: 9/9 (added 3: defvar-override, pipeline-gate, staging-bypass)
 - **world-store**: 26/26 (Phase 1: 8 bootstrap + Phase 2: 3 migration + Phase 3: 3 context + Phase 4: 2 query + Phase 5: 10 branch)
-- **Full unit suite**: 2993 total, 0 unexpected, 29 skipped (2026-06-12)
+- **Full unit suite**: 3015 tests, 0 unexpected, 54 skipped (2026-06-12)
 
 ---
 
 ## Next Steps
 
 ### Session Note (2026-06-12 completion)
-- Phase 4 is complete: query-layer benchmark cleared the 10k-experiment target and the repo-wide unit suite passes.
+- Phase 4 is complete: query-layer benchmark cleared the 10k-experiment target.
 - Phase 5 branching is complete: branch store, Elisp bridge, workflow hooks, and tests are implemented and verified.
+- Branch-specific verification and the repo-wide unit suite are both green.
 - Keep the benchmark numbers handy: ~67.87ms uncached / ~0.0117ms cached on the 10k sample.
 
 ---

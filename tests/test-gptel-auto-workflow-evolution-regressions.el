@@ -3483,6 +3483,9 @@ should be diffed."
 With 5 targets each having both kept+discarded entries, and no budget variable
 bound, all 5 targets should be diffed (5 ≤ 20 fallback)."
   (let ((target-count 0)
+        (was-bound (boundp 'gptel-auto-workflow-max-targets-per-run))
+        (saved-val (when (boundp 'gptel-auto-workflow-max-targets-per-run)
+                     gptel-auto-workflow-max-targets-per-run))
         (results
          (cl-loop for i from 1 to 5
                   nconc (list (list :target (format "lisp/target-%02d.el" i)
@@ -3501,10 +3504,14 @@ bound, all 5 targets should be diffed (5 ≤ 20 fallback)."
                (lambda (_kept _discarded callback)
                  (setq target-count (1+ target-count))
                  (funcall callback (cons 0 0)))))
-      ;; Ensure the variable is not accidentally bound
-      (when (boundp 'gptel-auto-workflow-max-targets-per-run)
-        (makunbound 'gptel-auto-workflow-max-targets-per-run))
-      (gptel-auto-workflow--allium-diff-opposing-hypotheses)
-      (should (= target-count 5)))))  ; 5 ≤ 20 fallback
+      (unwind-protect
+          (progn
+            ;; Ensure the variable is not accidentally bound
+            (when was-bound
+              (makunbound 'gptel-auto-workflow-max-targets-per-run))
+            (gptel-auto-workflow--allium-diff-opposing-hypotheses)
+            (should (= target-count 5)))  ; 5 ≤ 20 fallback
+        (when was-bound
+          (setq gptel-auto-workflow-max-targets-per-run saved-val))))))
 
 ;;; test-gptel-auto-workflow-evolution-regressions.el ends here

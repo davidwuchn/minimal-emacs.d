@@ -980,7 +980,7 @@ Returns number of signals applied."
     (when (file-exists-p grader-timeout-file) (delete-file grader-timeout-file))
     (when (file-exists-p grader-backends-file) (delete-file grader-backends-file))
     applied))
- 
+
 ;;; Pricing freshness check (token-economics foundation)
 
 (defun gptel-auto-workflow-self-audit--parse-pricing-knowledge ()
@@ -1032,6 +1032,8 @@ Returns provider name or nil."
   (when (boundp 'gptel-backend-registry)
     (catch 'found
       (dolist (entry gptel-backend-registry)
+
+
 
         (let* ((provider (car entry))
                (plist (cdr entry))

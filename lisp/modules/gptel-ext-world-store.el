@@ -152,6 +152,9 @@ fall back to the CLI brepl path."
        (message "[world-store] Persistent nREPL client unavailable: %s"
                 (error-message-string err))))))
 
+(define-error 'ov5-world-store--nrepl-eval-error
+  "nREPL eval failed" 'error)
+
 (defun ov5-world-store--persistent-nrepl-eval (code)
   "Evaluate Clojure CODE via the persistent nREPL client.
 Returns the eval result as a trimmed string, consistent with the brepl CLI
@@ -186,7 +189,18 @@ output format.  Signals an error on any failure — the caller
         (let ((v (string-trim val)))
           (while (string-prefix-p "nil" v)
             (setq v (substring v 3)))
-          (string-trim v)))
+          (let ((result (string-trim v)))
+            ;; When the value is empty (only nil returns from ns/aborted
+            ;; forms) AND an exception or error is present, the eval
+            ;; actually failed — signal instead of returning "".
+            (if (and (string-empty-p result)
+                     (or ex err))
+                (signal 'ov5-world-store--nrepl-eval-error
+                        (list (format "nREPL eval error: %s"
+                                      (or (and ex (string-trim ex))
+                                          (and err (string-trim err))
+                                          "unknown"))))
+              result))))
        (out (let* ((s (string-trim out))
                    (lines (split-string s "\n" t)))
               (car (last lines))))

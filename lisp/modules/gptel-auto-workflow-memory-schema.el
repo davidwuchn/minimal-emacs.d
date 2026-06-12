@@ -1412,6 +1412,8 @@ On malformed forms: a bad form may swallow the rest of the file
 this by checking that the read form contains one of our known
 top-level symbols, and abort the parse if it doesn't."
 
+
+
   (let ((defuns nil) (defvars nil) (requires nil) (provides nil))
     (condition-case nil
         (with-temp-buffer

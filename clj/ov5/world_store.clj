@@ -114,6 +114,11 @@
   []
   (some? @store-conn))
 
+(defn set-store-conn!
+  "Internal: replace the store connection. Used by branch switching."
+  [conn]
+  (reset! store-conn conn))
+
 ;; -----------------------------------------------------------------------------
 ;; CRUD
 
