@@ -11,7 +11,7 @@
 (require 'seq)
 (require 'gptel)
 
-(defvar nucleus-hidden-directives) ; defined in nucleus-presets.el
+(defvar nucleus-hidden-directives nil) ; defined in nucleus-presets.el
 
 ;; Fix: gptel-system-prompt transient doesn't preserve the originating buffer.
 ;; When the [Prompt:] header button is clicked, gptel-system-prompt opens a
@@ -19,7 +19,7 @@
 ;; window's buffer.  We capture the gptel buffer at click time and pass it
 ;; explicitly to gptel--edit-directive via :buffer.
 
-(defvar gptel--set-buffer-locally)          ; defined in gptel-transient
+(defvar gptel--set-buffer-locally nil)          ; defined in gptel-transient
 (declare-function gptel--set-with-scope "gptel-transient")
 (declare-function gptel--edit-directive "gptel-transient")
 (declare-function gptel--crowdsourced-prompts "gptel-transient")

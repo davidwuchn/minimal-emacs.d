@@ -64,7 +64,7 @@
 (defvar gptel-auto-workflow--run-id nil)
 (defvar gptel-auto-workflow--worktree-base-root nil)
 (defvar gptel-auto-workflow--headless nil)
-(defvar gptel-auto-workflow-persistent-headless)
+(defvar gptel-auto-workflow-persistent-headless nil)
 (defvar gptel-auto-workflow--current-target nil)
 (defvar gptel-auto-workflow--stats nil)
 (defvar gptel-auto-workflow--results nil)

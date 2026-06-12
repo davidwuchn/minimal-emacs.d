@@ -33,7 +33,7 @@
 
 (declare-function gptel-tool-name "gptel" (tool))
 (declare-function gptel-tool-description "gptel" (tool))
-(defvar gptel-tools)
+(defvar gptel-tools nil)
 
 (declare-function gptel-auto-workflow--project-root "gptel-tools-agent-benchmark")
 (declare-function gptel-auto-workflow--worktree-base-root "gptel-tools-agent-base")

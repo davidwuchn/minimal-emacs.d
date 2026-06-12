@@ -1453,7 +1453,7 @@ Aggregates across subagents and models for each (category strategy backend)."
 
 (defvar gptel-ai-behaviors--strategy-affinities nil
   "List of (category . ((strategy . cost-adjusted-rate) ...)).")
-(defvar gptel-auto-workflow-headless-subagent-fallbacks)
+(defvar gptel-auto-workflow-headless-subagent-fallbacks nil)
 (defvar gptel-ai-behaviors--category-chains (make-hash-table :test 'equal)
   "Hash table mapping ontology category keyword to ordered backend list.
 Each entry: ((backend . keeps-per-dollar-score) ...).

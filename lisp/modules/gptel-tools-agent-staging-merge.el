@@ -53,9 +53,9 @@
 (declare-function gptel-auto-workflow--sync-staging-from-main "gptel-tools-agent-worktree")
 
 ;; Forward declarations for dynamic variables
-(defvar gptel-auto-experiment-max-changed-files)
+(defvar gptel-auto-experiment-max-changed-files nil)
 (defvar gptel-auto-experiment-retry-delay nil)
-(defvar gptel-auto-workflow-git-timeout)
+(defvar gptel-auto-workflow-git-timeout nil)
 (defvar gptel-auto-workflow--auto-promote-staging t
   "Non-nil to automatically promote verified staging to main.")
 (defvar gptel-auto-workflow--last-staging-push-output nil)

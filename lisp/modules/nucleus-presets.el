@@ -10,8 +10,8 @@
 (require 'subr-x)
 (require 'nucleus-tools)
 
-(defvar nucleus-agent-tool-contracts)  ; defined in nucleus-tools.el
-(defvar nucleus-agents-dir)            ; defined in nucleus-prompts.el
+(defvar nucleus-agent-tool-contracts nil)  ; defined in nucleus-tools.el
+(defvar nucleus-agents-dir nil)            ; defined in nucleus-prompts.el
 
 ;;; Customization
 

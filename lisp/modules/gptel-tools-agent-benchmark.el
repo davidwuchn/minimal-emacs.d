@@ -34,12 +34,12 @@
 (declare-function gptel-auto-workflow--worktree-needs-submodule-hydration-p "gptel-tools-agent-worktree")
 (defvar gptel-auto-experiment-max-aux-subagent-retries nil)
 (defvar gptel-auto-experiment-max-per-provider-attempts nil)
-(defvar gptel-auto-experiment-min-quality-gain-on-score-tie)
-(defvar gptel-auto-experiment-use-subagents)
+(defvar gptel-auto-experiment-min-quality-gain-on-score-tie nil)
+(defvar gptel-auto-experiment-use-subagents nil)
 (defvar gptel-auto-workflow--current-target nil)
 (defvar gptel-auto-workflow--project-root-override nil
   "Override for project root when running from non-git directory.")
-(defvar gptel-auto-workflow-use-staging) ; declared via defcustom in subagent.el
+(defvar gptel-auto-workflow-use-staging nil) ; declared via defcustom in subagent.el
 (defun gptel-auto-workflow--project-root ()
   "Return the MAIN project root directory.
 When in a worktree, returns the main repo root (parent of .git/worktrees).

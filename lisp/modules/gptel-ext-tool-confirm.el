@@ -11,10 +11,10 @@
 (require 'gptel)
 (require 'gptel-ext-fsm-utils)
 
-(defvar gptel-tool-call-actions-map) ; defined in gptel
-(defvar gptel--tool-preview-alist)   ; defined in gptel
-(defvar gptel--request-alist)        ; defined in gptel-request
-(defvar gptel--fsm-last)             ; defined in gptel
+(defvar gptel-tool-call-actions-map nil) ; defined in gptel
+(defvar gptel--tool-preview-alist nil)   ; defined in gptel
+(defvar gptel--request-alist nil)        ; defined in gptel-request
+(defvar gptel--fsm-last nil)             ; defined in gptel
 (defvar gptel-sandbox-confirm-function nil)
 (defvar gptel-sandbox-aggregate-confirm-function nil)
 ;; Forward declarations for gptel-ext-tool-permits.el functions

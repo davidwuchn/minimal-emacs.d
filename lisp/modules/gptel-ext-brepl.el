@@ -187,7 +187,8 @@ Only activates in `clojure-mode' buffers when
 
 (defun gptel-brepl-run-tests (namespace)
   "Run clojure.test tests for NAMESPACE via brepl.
-Returns plist (:success t/nil :tests N :failures N :errors N :error string :raw string)."
+Returns plist (:success t/nil :tests N :failures N :errors N :error string
+:raw string)."
   (let ((binary (executable-find gptel-brepl-binary)))
     (if (not binary)
         (list :success nil :tests 0 :failures 0 :errors 0

@@ -76,7 +76,7 @@ CALLBACK receives synthesized content."
 
 ;;; LLM Request Functions
 
-(defvar gptel-backend)
+(defvar gptel-backend nil)
 (declare-function gptel-request "gptel" (prompt &rest args))
 
 (defun gptel-benchmark--auto-select-model ()

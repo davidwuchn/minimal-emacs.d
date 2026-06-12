@@ -35,7 +35,7 @@ Args: strategy target predicted threshold tokens."
   :type 'string
   :group 'gptel-auto-workflow)
 
-(defvar gptel-auto-workflow--ontology-reorder-exploration-rate)
+(defvar gptel-auto-workflow--ontology-reorder-exploration-rate nil)
 
 ;; ─── Prediction Core ───
 

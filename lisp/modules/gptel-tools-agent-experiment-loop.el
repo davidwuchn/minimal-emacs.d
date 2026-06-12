@@ -31,15 +31,15 @@
 (declare-function gptel-auto-experiment--compute-frontier "gptel-tools-agent-prompt-build" (target))
 (declare-function gptel-auto-workflow--target-saturated-p "gptel-auto-workflow-ontology-predict" (target &optional max-experiments))
 
-(defvar gptel-auto-experiment-max-per-target)
-(defvar gptel-auto-experiment-no-improvement-threshold)
+(defvar gptel-auto-experiment-max-per-target nil)
+(defvar gptel-auto-experiment-no-improvement-threshold nil)
 (defvar gptel-auto-workflow--run-id nil)
 (defvar gptel-auto-experiment--quota-exhausted nil)
 (defvar gptel-auto-experiment--consecutive-timeout-threshold 3
   "Stop experiments on a target after this many consecutive timeouts.")
 (defvar gptel-auto-experiment--api-error-count nil)
 (defvar gptel-auto-experiment--api-error-threshold 5)
-(defvar gptel-auto-experiment-delay-between)
+(defvar gptel-auto-experiment-delay-between nil)
 (defvar gptel-auto-workflow--status-run-id nil)
 (defvar gptel-auto-workflow--defer-subagent-env-persistence nil)
 (defvar gptel-auto-workflow--staging-worktree-dir nil)
