@@ -354,7 +354,7 @@ Returns (:valid t/nil :fixed-content string :error nil/string)."
                 ;; Run clj-kondo to find unused requires
                 (call-process kondo nil outbuf nil
                               "--lint" temp-file
-                              "--config" "{:output {:format :edn}}")
+                              "--config" "{:output {:format :text}}")
                 (let ((output (with-current-buffer outbuf (buffer-string))))
                   (setq unused-reqs
                         (gptel-brepl--parse-kondo-unused-requires output)))
@@ -367,23 +367,15 @@ Returns (:valid t/nil :fixed-content string :error nil/string)."
             (kill-buffer outbuf)))))))
 
 (defun gptel-brepl--parse-kondo-unused-requires (output)
-  "Parse clj-kondo EDN output for unused requires.
+  "Parse clj-kondo text output for unused namespace requires.
 Returns list of (namespace . alias-or-nil) pairs to remove."
   (let ((unused nil))
-    (condition-case nil
-        (let ((edn (car (read-from-string output))))
-          (when (and edn (vectorp edn))
-            (dolist (finding edn)
-              (when (and (listp finding)
-                         (eq (nth 1 finding) 'unused-referred-var))
-                (let* ((message (nth 3 finding))
-                       (ns-match (when (stringp message)
-                                   (string-match
-                                    "namespace \\([^ ]+\\)"
-                                    message))))
-                  (when ns-match
-                    (push (cons (match-string 1 message) nil) unused)))))))
-      (error nil))
+    (dolist (line (split-string output "\n" t))
+      (when (string-match
+             "namespace \\([^ ]+\\) is required but never used"
+             line)
+        (let ((ns-name (match-string 1 line)))
+          (push (cons ns-name nil) unused))))
     (let ((result nil))
       (dolist (entry unused)
         (unless (assoc (car entry) result)
@@ -392,7 +384,8 @@ Returns list of (namespace . alias-or-nil) pairs to remove."
 
 (defun gptel-brepl--remove-requires (file-content unused-reqs)
   "Remove unused :require clauses from FILE-CONTENT.
-UNUSED-REQS is a list of namespace strings to remove."
+UNUSED-REQS is a list of namespace strings to remove.
+Also removes empty (:require) forms."
   (with-temp-buffer
     (insert file-content)
     (goto-char (point-min))
@@ -404,7 +397,6 @@ UNUSED-REQS is a list of namespace strings to remove."
                       "\\b[^]]*\\]")
               nil t)
         (let ((start (match-beginning 0)))
-          ;; Go back to find the leading whitespace
           (goto-char start)
           (skip-chars-backward " \t\n\r")
           (delete-region (point)
@@ -412,6 +404,10 @@ UNUSED-REQS is a list of namespace strings to remove."
                            (goto-char (match-end 0))
                            (skip-chars-forward " \t\n\r")
                            (point))))))
+    ;; Clean up empty (:require) forms
+    (goto-char (point-min))
+    (while (re-search-forward "(\\(\\s-*\\):require\\s-*)" nil t)
+      (replace-match ""))
     (buffer-string)))
 
 (provide 'gptel-ext-brepl)
