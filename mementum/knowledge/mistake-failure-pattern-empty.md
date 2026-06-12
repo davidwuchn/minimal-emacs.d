@@ -1,57 +1,41 @@
 <!--
 Synthesis verification:
-- Confidence: 80%
+- Confidence: 24%
 - Sources: 11 memories
-- Warnings: No code examples or concrete references
-- Auto-approved: yes (passed)
+- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-empty'
+- Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize a series of "mistake" memory records into a knowledge page about the topic "mistake-failure-pattern-empty". 
+The user wants me to synthesize a series of "mistake" memory records into a knowledge page. Let me analyze what I have:
 
-Let me analyze the memories:
+All records share a common failure type: `empty-hypothesis`. They span different targets:
+- staging-verification
+- staging-scope
+- staging-review
+- lisp/modules/gptel-tools-agent-runtime.el
+- lisp/modules/gptel-tools-agent-experiment-core.el
+- lisp/modules/gptel-tools-agent-benchmark.el
+- lisp/modules/gptel-benchmark-subagent.el
+- lisp/modules/gptel-auto-workflow-strategic.el
+- lisp/modules/gptel-auto-workflow-projects.el
+- lisp/modules/gptel-auto-workflow-ontology-strategy.el
+- lisp/modules/gptel-auto-workflow-ontology-router.el
 
-1. All share the same failure type: `empty-hypothesis`
-2. Categories span `:programming` and `:agentic`
-3. Targets include:
-   - `staging-verification`
-   - `staging-scope`
-   - `staging-review`
-   - `lisp/modules/gptel-tools-agent-runtime.el`
-   - `lisp/modules/gptel-tools-agent-experiment-core.el`
-   - `lisp/modules/gptel-tools-agent-benchmark.el`
-   - `lisp/modules/gptel-benchmark-subagent.el`
-   - `lisp/modules/gptel-auto-workflow-strategic.el`
-   - `lisp/modules/gptel-auto-workflow-projects.el`
-   - `lisp/modules/gptel-auto-workflow-ontology-strategy.el`
-   - `lisp/modules/gptel-auto-workflow-ontology-router.el`
-4. Keep rates are all very low (0.0% - 3.8%)
-5. Example reasons are all "none" - this is a key signal of the failure pattern itself
-6. Dates range from 2026-06-04 to 2026-06-12
+Categories: :programming and :agentic
+Keep-rates range from 0.0% to 3.8% (all very low)
+Occurrences: 3-16
+All have "Example reasons: none" - which is the hallmark of an empty-hypothesis failure (no root cause identified)
 
-Key insights:
-- This is a meta-pattern: "empty-hypothesis" failures where the analysis itself produces no reasons
-- All instances have "Example reasons: none" - which is itself the defining feature
-- The pattern spans multiple modules and staging categories
-- Keep rates are catastrophically low (mostly under 4%, some at 0.0%)
-- Occurrences vary from 3 to 16
+The key insight: empty-hypothesis means the failure was detected but no hypothesis (root cause reason) was generated. This is a meta-pattern about the failure analysis pipeline itself failing to produce useful diagnostic reasons.
 
-I need to:
-1. Write a complete knowledge page (50+ lines)
-2. Include concrete examples (tables, commands, etc.)
-3. Provide actionable patterns
-4. Cross-reference related topics
-5. Start with frontmatter
+Let me build a comprehensive knowledge page with:
+1. Frontmatter
+2. Definition/description of empty-hypothesis
+3. Pattern data table
+4. Why "Example reasons: none" is significant
+5. Code/config examples
+6. Actionable patterns for mitigation
+7. Detection/remediation code
+8. Cross-references
 
-Let me structure this:
-
-1. Frontmatter with title, status, category, tags
-2. Overview/Summary section
-3. Pattern definition - what is "empty-hypothesis"
-4. Manifestations table - all the targets with data
-5. Root cause analysis
-6. Detection signals
-7. Actionable remediation patterns
-8. Prevention patterns
-9. Cross-references
-
-Let me write this comprehensively. I should aim for well over 50 lines of substantive content.
+I need to make this 50+ lines with concrete examples, tables, and actionable patterns.

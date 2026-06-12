@@ -6,34 +6,46 @@ Synthesis verification:
 - Auto-approved: yes (passed)
 --->
 
-The user wants me to synthesize memories about the topic "memory-synthesis-proposal-insight" into a knowledge page. Looking at the input memories, they are all auto-generated synthesis proposals about different insight topics:
+The user wants me to synthesize memories about "memory-synthesis-proposal-insight" into a knowledge page. Let me analyze what I have:
 
-1. insight-proposal-prompt-builder (14 memories)
-2. insight-proposal-grader-lisp (8 memories)
-3. insight-proposal-general-lisp (4 memories)
-4. insight-proposal-executor-lisp (3 memories)
+The memories are about an "insight-proposal" workflow in an Emacs-based system using `gptel` (Emacs LLM client) and Lisp modules. The memories cover several sub-topics:
 
-The actual content of these memories is just metadata - they are proposals that recommend creating knowledge pages for those topics. They don't contain the actual content to be synthesized.
+1. **insight-proposal-prompt-builder** (14 memories) - HIGH PRIORITY
+2. **insight-proposal-grader-lisp** (8 memories) - HIGH PRIORITY
+3. **insight-proposal-general-lisp** (4 memories) - Standard priority
+4. **insight-proposal-executor-lisp** (3 memories) - Standard priority
 
-The task is to create a knowledge page about "memory-synthesis-proposal-insight" which would document the pattern of auto-synthesis proposals. This is meta-content about the auto-workflow system that detects when memories on a topic exceed a threshold and recommends synthesis.
+The source modules include:
+- `mementum.el` - memory synthesis engine
+- `ontology-router.el` - ontology routing
+- `ontology-strategy.el` - ontology strategies
+- `production.el` - production orchestration
+- `production-metrics.el` - metrics tracking
+- `projects.el` - project management
+- `strategic.el` - strategic operations
+- `benchmark-principles.el` - benchmark principles
+- `benchmark-subagent.el` - benchmark subagents
+- `tools-agent-benchmark.el` - agent benchmarking tools
+- `tools-agent-experiment-core.el` - experiment core
+- `tools-agent-prompt-build.el` - prompt building tools
+- `tools-agent-runtime.el` - runtime tools
+- `treesit-agent-tools-workspace.el` - tree-sitter workspace tools
+- `staging-review.md` - staging reviews
 
-Let me create a comprehensive knowledge page that:
-1. Documents the auto-synthesis proposal pattern
-2. Provides actionable patterns
-3. Cross-references related topics
-4. Has at least 50 lines of content
-5. Includes concrete examples (the actual proposals, the workflow)
-6. Includes tables, commands, etc.
+The architecture appears to be a 4-stage pipeline:
+1. **Prompt Builder** - constructs prompts for LLMs
+2. **Grader** - evaluates/grades LLM outputs
+3. **Executor** - executes actions based on insights
+4. **General** - shared infrastructure
 
-Since the memories themselves are just synthesis proposals (metadata about other memories), I need to synthesize what I can extract from them - which is the pattern of how synthesis proposals work in this auto-workflow system.
+Each stage has Lisp modules organized in a `gptel` (Emacs LLM client) workflow, with auto-workflow orchestration for memory synthesis.
 
-Let me structure this well with the frontmatter, then build out the content with sections covering:
-- The synthesis proposal pattern
-- Threshold rules
-- Priority levels
-- Source memory types
-- The auto-workflow system
-- How to act on proposals
-- Related topics
+Let me create a comprehensive knowledge page with:
+- Frontmatter
+- Architecture overview
+- Stage-by-stage breakdown
+- Code/command examples
+- Cross-references
+- Actionable patterns
 
-I'll make this comprehensive and actionable.
+I need to write 50+ lines of actual content. Let me build this out.

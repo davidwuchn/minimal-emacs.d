@@ -4,39 +4,29 @@
 
 # Semantic File Relationships
 
-Generated: 2026-06-08T23:06
+Generated: 2026-06-12T21:20
 
-| lisp/modules/gptel-auto-workflow-ontology-router.el | lisp/modules/gptel-auto-workflow-production-metrics.el | 0.571 |
-| lisp/modules/gptel-auto-workflow-context-database.el | lisp/modules/gptel-tools-agent-benchmark.el | 0.333 |
-| lisp/modules/gptel-auto-workflow-monitoring-agent.el | lisp/modules/gptel-auto-workflow-production-metrics.el | 0.300 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/gptel-tools-agent-experiment-core.el | 0.286 |
-| lisp/modules/gptel-auto-workflow-evolution.el | lisp/modules/gptel-auto-workflow-production-metrics.el | 0.286 |
-| lisp/modules/gptel-auto-workflow-bare-path-diagnostic.el | lisp/modules/gptel-auto-workflow-production-metrics.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/gptel-auto-workflow-strategic.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/gptel-ext-abort.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/gptel-ext-checkpoint.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/gptel-ext-circuit-breaker.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/gptel-ext-context.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/gptel-ext-core.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/gptel-ext-fsm-utils.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/gptel-ext-reasoning.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/gptel-ext-tool-confirm.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/gptel-ext-tool-sanitize.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/gptel-ext-transient.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/gptel-sandbox.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/gptel-tools-code.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/gptel-tools-edit.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/gptel-tools-glob.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/gptel-tools-memory.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/gptel-tools-preview.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/nucleus-presets.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/nucleus-prompts.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/nucleus-tools.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/treesit-agent-tools-workspace.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/treesit-agent-tools.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/treesit-local-xref.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-production-metrics.el | lisp/modules/gptel-ext-tool-permits.el | 0.250 |
-| lisp/modules/gptel-auto-workflow-architectural-evolution.el | lisp/modules/gptel-auto-workflow-production-metrics.el | 0.222 |
+| lisp/modules/gptel-auto-experiment-ai-behaviors.el | lisp/modules/gptel-auto-workflow-research-benchmark.el | 2.000 |
+| lisp/modules/gptel-auto-workflow-recovery.el | lisp/modules/gptel-auto-workflow-research-benchmark.el | 2.000 |
+| lisp/modules/gptel-auto-workflow-research-benchmark.el | lisp/modules/gptel-benchmark-subagent.el | 2.000 |
+| lisp/modules/gptel-auto-workflow-research-benchmark.el | lisp/modules/gptel-ext-retry.el | 2.000 |
+| lisp/modules/gptel-auto-workflow-research-benchmark.el | lisp/modules/gptel-tools-agent-error.el | 2.000 |
+| lisp/modules/gptel-auto-workflow-research-benchmark.el | lisp/modules/gptel-tools-agent-research.el | 2.000 |
+| lisp/modules/gptel-auto-workflow-research-benchmark.el | lisp/modules/gptel-tools-agent-staging-baseline.el | 2.000 |
+| lisp/modules/gptel-auto-workflow-projects.el | lisp/modules/gptel-auto-workflow-research-benchmark.el | 1.000 |
+| lisp/modules/gptel-auto-workflow-research-benchmark.el | lisp/modules/gptel-tools-agent-base.el | 1.000 |
+| lisp/modules/gptel-auto-workflow-research-benchmark.el | lisp/modules/gptel-tools-agent-subagent.el | 1.000 |
+| lisp/modules/gptel-auto-workflow-research-benchmark.el | lisp/modules/gptel-tools-agent-worktree.el | 1.000 |
+| lisp/modules/gptel-auto-workflow-ontology-predict.el | lisp/modules/gptel-auto-workflow-research-benchmark.el | 0.500 |
+| lisp/modules/gptel-auto-workflow-research-benchmark.el | lisp/modules/gptel-tools-agent-experiment-loop.el | 0.500 |
+| lisp/modules/gptel-auto-workflow-research-benchmark.el | lisp/modules/gptel-auto-workflow-self-audit.el | 0.400 |
+| lisp/modules/gptel-auto-workflow-research-benchmark.el | lisp/modules/gptel-tools-agent-benchmark.el | 0.333 |
+| lisp/modules/gptel-auto-workflow-monitoring-agent.el | lisp/modules/gptel-auto-workflow-research-benchmark.el | 0.250 |
+| lisp/modules/gptel-auto-workflow-ontology-router.el | lisp/modules/gptel-auto-workflow-research-benchmark.el | 0.250 |
+| lisp/modules/gptel-auto-workflow-research-benchmark.el | lisp/modules/gptel-tools-agent-experiment-core.el | 0.250 |
+| lisp/modules/gptel-auto-workflow-production.el | lisp/modules/gptel-auto-workflow-research-benchmark.el | 0.222 |
+| lisp/modules/gptel-auto-workflow-research-benchmark.el | lisp/modules/gptel-tools-agent-prompt-build.el | 0.222 |
+| lisp/modules/gptel-auto-workflow-research-benchmark.el | lisp/modules/gptel-tools-agent-staging-merge.el | 0.222 |
 
 ## Ontology Implications
 

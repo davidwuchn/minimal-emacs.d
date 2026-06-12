@@ -1,41 +1,38 @@
 <!--
 Synthesis verification:
-- Confidence: 24%
+- Confidence: 80%
 - Sources: 30 memories
-- Warnings: No code examples or concrete references, Content does not mention topic 'mistake-failure-pattern-strategy'
-- Auto-approved: yes (flagged)
+- Warnings: No code examples or concrete references
+- Auto-approved: yes (passed)
 --->
 
-The user wants me to synthesize a set of memories about a mistake/failure pattern related to strategy failures into a comprehensive knowledge page. Let me analyze the memories:
+The user wants me to synthesize a set of memory entries about mistake-failure-pattern-strategy into a comprehensive knowledge page. Let me analyze the data:
 
-1. All memories share `Failure type: strategy`
-2. The targets fall into clear categories:
-   - **Staging operations** (staging-verification, staging-scope, staging-review, staging-push, staging-merge, staging-config)
-   - **Lisp module files** in `lisp/modules/` (treesit-agent-tools-workspace, gptel-tools-agent-*, gptel-ext-*, gptel-benchmark-*, gptel-auto-workflow-*)
-3. Many have `:programming` category with keep-rate 3.5%, some have `:agentic` category with varying keep-rates (4.3%, 1.4%)
-4. One has `:programming` with keep-rate 0.0% (gptel-auto-workflow-benchmark.el) - highest priority
-5. Occurrences range from 3 to 18
-6. Trends span from 2026-06-02 to 2026-06-08
+All entries share:
+- **Failure type:** strategy
+- Categories: `:programming` (keep-rate: 3.5%) or `:agentic` (keep-rate: 1.4% or 4.3%)
+- One outlier: `gptel-tools-agent-benchmark.el` has keep-rate: 0.0%
+- Targets cluster into two groups:
+  1. **Staging workflow targets**: staging-verification, staging-scope, staging-review, staging-push, staging-merge, staging-config
+  2. **Lisp module targets**: Many gptel-tools-agent-* and gptel-auto-workflow-* modules, plus gptel-ext-* and gptel-benchmark-* and treesit-agent-tools-workspace.el
 
-Let me build a comprehensive knowledge page that:
-- Has clear frontmatter
-- Documents the pattern
-- Lists all targets organized by category
-- Provides actionable insights
-- Cross-references related topics
-- Has at least 50 lines of actual content
-- Includes concrete examples/tables/commands
+Occurrence counts range from 3 to 18, with staging-review being the worst (18 occurrences).
 
-I'll structure it with:
-1. Frontmatter
-2. Overview
-3. Pattern metadata
-4. Affected targets by category (tables)
-5. High-priority targets
-6. Root cause hypotheses
-7. Actionable patterns / remediation strategies
-8. Code examples
-9. Monitoring commands
-10. Related topics
+I need to write a comprehensive knowledge page with:
+- Frontmatter
+- Minimum 50 lines of content
+- Concrete examples (tables, commands, code)
+- Actionable patterns
+- Cross-references
 
-Let me write this out comprehensively.
+Let me structure this:
+
+1. Overview
+2. Failure Categorization (table)
+3. Staging Pipeline Failures (table + patterns)
+4. Lisp Module Failures (table + patterns)
+5. Priority Analysis
+6. Actionable Patterns
+7. Related topics
+
+Let me write this out carefully with concrete data.
