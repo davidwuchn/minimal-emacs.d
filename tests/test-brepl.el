@@ -437,10 +437,64 @@ when reading from an empty buffer or a missing file.  Must return
     (should (string-match-p "(:require" (plist-get result :fixed-content)))))
 
 (ert-deftest test-brepl/fix-unused-require-passthrough ()
-  "fix-unused-require returns valid passthrough (needs clj-kondo for full impl)."
+  "fix-unused-require returns valid result (now uses clj-kondo when available)."
   (let ((result (gptel-brepl-fix-unused-require "(ns my.app (:require [foo :as f]))\n(f 1)")))
     (should (plist-get result :valid))
-    (should (plist-get result :note))))
+    (should (stringp (plist-get result :fixed-content)))))
+
+;; ── Group A: formatter ──
+
+(ert-deftest test-brepl/format-handles-nil ()
+  "format returns error for nil content."
+  (let ((result (gptel-brepl-format nil)))
+    (should-not (plist-get result :valid))
+    (should (plist-get result :error))))
+
+(ert-deftest test-brepl/format-skips-when-zprint-missing ()
+  "format returns valid passthrough when zprint not found."
+  (cl-letf (((symbol-function 'executable-find) (lambda (_) nil)))
+    (let ((result (gptel-brepl-format "(defn foo [] 42)")))
+      (should (plist-get result :valid))
+      (should (plist-get result :note)))))
+
+(ert-deftest test-brepl/format-calls-zprint ()
+  "format calls zprint and returns formatted content."
+  (let ((called nil))
+    (cl-letf (((symbol-function 'executable-find)
+               (lambda (name) (when (string= name "zprint") "/usr/bin/zprint")))
+              ((symbol-function 'call-process)
+               (lambda (program &optional infile destination display &rest args)
+                 (setq called t)
+                 0)))
+      (let ((result (gptel-brepl-format "(defn foo [] 42)")))
+        (should (plist-get result :valid))
+        (should called)))))
+
+;; ── Group B: unused-require fixer ──
+
+(ert-deftest test-brepl/fix-unused-missing-kondo ()
+  "fix-unused-require skips when clj-kondo not found."
+  (cl-letf (((symbol-function 'executable-find) (lambda (_) nil)))
+    (let ((result (gptel-brepl-fix-unused-require "(ns x (:require [foo :as f]))\n(f 1)")))
+      (should (plist-get result :valid))
+      (should (plist-get result :note)))))
+
+(ert-deftest test-brepl/remove-requires-strips-ns ()
+  "remove-requires removes specified namespace from :require."
+  (let ((result (gptel-brepl--remove-requires
+                 "(ns my.app\n  (:require [clojure.string :as str]\n            [unused.ns :as u]))\n\n(str \"hello\")"
+                 '(("unused.ns")))))
+    (should (string-match-p "clojure.string" result))
+    (should-not (string-match-p "unused.ns" result))))
+
+(ert-deftest test-brepl/remove-requires-preserves-other ()
+  "remove-requires keeps non-specified requires intact."
+  (let ((result (gptel-brepl--remove-requires
+                 "(ns x (:require [a :as a] [b :as b] [c :as c]))\n(a/foo)\n(c/bar)"
+                 '(("b")))))
+    (should (string-match-p "\\[a :as a\\]" result))
+    (should (string-match-p "\\[c :as c\\]" result))
+    (should-not (string-match-p "\\[b :as b\\]" result))))
 
 (provide 'test-brepl)
 ;;; test-brepl.el ends here

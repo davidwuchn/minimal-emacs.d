@@ -300,5 +300,118 @@ Returns (:valid t/nil :fixed-content string :error nil/string)."
     (list :valid t :fixed-content file-content :error nil
           :note "Unused-require detection requires clj-kondo analysis — pass-through for now")))
 
+;;; ── Formatter ──
+
+(defun gptel-brepl-format (file-content)
+  "Format Clojure FILE-CONTENT using zprint.
+Returns plist (:valid t/nil :fixed-content string :error nil/string)."
+  (if (not (stringp file-content))
+      (list :valid nil :fixed-content nil :error "Expected string file-content")
+    (let ((zprint (executable-find "zprint")))
+      (if (not zprint)
+          (list :valid t :fixed-content file-content :error nil
+                :note "zprint not found — skipping format")
+        (let* ((temp-file (make-temp-file "brepl-format-" nil ".clj"))
+               (outbuf (generate-new-buffer " *zprint-out*")))
+          (unwind-protect
+              (progn
+                (with-temp-file temp-file
+                  (insert file-content))
+                (let ((exit-code (call-process zprint nil outbuf nil temp-file)))
+                  (if (zerop exit-code)
+                      (let ((formatted (with-temp-buffer
+                                         (insert-file-contents temp-file)
+                                         (buffer-string))))
+                        (list :valid t :fixed-content formatted :error nil))
+                    (let ((err (with-current-buffer outbuf (string-trim (buffer-string)))))
+                      (list :valid nil :fixed-content file-content
+                            :error (if (string-empty-p err)
+                                       (format "zprint exited %d" exit-code)
+                                     err))))))
+            (delete-file temp-file)
+            (kill-buffer outbuf)))))))
+
+;;; ── Self-Heal: unused require removal ──
+
+(defun gptel-brepl-fix-unused-require (file-content)
+  "Remove unused :require clauses from Clojure FILE-CONTENT.
+Uses clj-kondo analysis to detect unused requires.
+Returns (:valid t/nil :fixed-content string :error nil/string)."
+  (if (not (stringp file-content))
+      (list :valid nil :fixed-content nil :error "Expected string file-content")
+    (let ((kondo (executable-find "clj-kondo")))
+      (if (not kondo)
+          (list :valid t :fixed-content file-content :error nil
+                :note "clj-kondo not found — skipping unused-require check")
+        (let* ((temp-file (make-temp-file "brepl-unused-" nil ".clj"))
+               (outbuf (generate-new-buffer " *kondo-out*"))
+               (unused-reqs nil))
+          (unwind-protect
+              (progn
+                (with-temp-file temp-file
+                  (insert file-content))
+                ;; Run clj-kondo to find unused requires
+                (call-process kondo nil outbuf nil
+                              "--lint" temp-file
+                              "--config" "{:output {:format :edn}}")
+                (let ((output (with-current-buffer outbuf (buffer-string))))
+                  (setq unused-reqs
+                        (gptel-brepl--parse-kondo-unused-requires output)))
+                (if unused-reqs
+                    (let ((fixed (gptel-brepl--remove-requires
+                                  file-content unused-reqs)))
+                      (list :valid t :fixed-content fixed :error nil))
+                  (list :valid t :fixed-content file-content :error nil)))
+            (delete-file temp-file)
+            (kill-buffer outbuf)))))))
+
+(defun gptel-brepl--parse-kondo-unused-requires (output)
+  "Parse clj-kondo EDN output for unused requires.
+Returns list of (namespace . alias-or-nil) pairs to remove."
+  (let ((unused nil))
+    (condition-case nil
+        (let ((edn (car (read-from-string output))))
+          (when (and edn (vectorp edn))
+            (dolist (finding edn)
+              (when (and (listp finding)
+                         (eq (nth 1 finding) 'unused-referred-var))
+                (let* ((message (nth 3 finding))
+                       (ns-match (when (stringp message)
+                                   (string-match
+                                    "namespace \\([^ ]+\\)"
+                                    message))))
+                  (when ns-match
+                    (push (cons (match-string 1 message) nil) unused)))))))
+      (error nil))
+    (let ((result nil))
+      (dolist (entry unused)
+        (unless (assoc (car entry) result)
+          (push entry result)))
+      result)))
+
+(defun gptel-brepl--remove-requires (file-content unused-reqs)
+  "Remove unused :require clauses from FILE-CONTENT.
+UNUSED-REQS is a list of namespace strings to remove."
+  (with-temp-buffer
+    (insert file-content)
+    (goto-char (point-min))
+    (dolist (ns-name (mapcar 'car unused-reqs))
+      (goto-char (point-min))
+      (while (re-search-forward
+              (concat "\\["
+                      (regexp-quote ns-name)
+                      "\\b[^]]*\\]")
+              nil t)
+        (let ((start (match-beginning 0)))
+          ;; Go back to find the leading whitespace
+          (goto-char start)
+          (skip-chars-backward " \t\n\r")
+          (delete-region (point)
+                         (progn
+                           (goto-char (match-end 0))
+                           (skip-chars-forward " \t\n\r")
+                           (point))))))
+    (buffer-string)))
+
 (provide 'gptel-ext-brepl)
 ;;; gptel-ext-brepl.el ends here
