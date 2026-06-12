@@ -188,7 +188,9 @@ there's no data to predict from."
           ;; Round to avoid floating-point precision issues near threshold
           (predicted-rounded (/ (round (* predicted 100)) 100.0))
           (threshold-rounded (/ (round (* gptel-auto-workflow--prediction-threshold 100)) 100.0))
-          (exploration-rate (if (boundp 'gptel-auto-workflow--ontology-reorder-exploration-rate)
+          (exploration-rate (if (and (boundp 'gptel-auto-workflow--ontology-reorder-exploration-rate)
+                                     (numberp gptel-auto-workflow--ontology-reorder-exploration-rate)
+                                     (> gptel-auto-workflow--ontology-reorder-exploration-rate 0))
                                 gptel-auto-workflow--ontology-reorder-exploration-rate
                               0.15)))
     (if (>= predicted-rounded threshold-rounded)
