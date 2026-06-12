@@ -281,7 +281,42 @@ Same OV5 codebase. Same scoring engine. Same data pipeline.
 | Core value | "What to promote today" | "Who's winning the 种草 war" |
 | Revenue at scale | $50K/mo (1,500 creators) | $500K/mo (100 enterprise brands) |
 
-Full strategy: `mementum/knowledge/seedsight-xiaohongshu-brand-intelligence.md`
+### Architecture: One Engine, Two Products
+
+```
+                        ┌──────────────────────────────────────┐
+                        │         DATA SOURCES (Public)         │
+                        │  Amazon │ Reddit │ AliExpress │       │
+                        │  Google Trends │ TikTok │ RedNote     │
+                        └──────────────┬───────────────────────┘
+                                       │
+                        ┌──────────────▼───────────────────────┐
+                        │         OV5 SHARED ENGINE            │
+                        │                                      │
+                        │  GTM Mayor ──► scans all sources     │
+                        │  Ontology   ──► classifies products  │
+                        │  World Store──► persists facts       │
+                        │  Experiment ──► improves daily       │
+                        │  Mementum   ──► remembers forever    │
+                        │  12 Backends──► auto-failover AI     │
+                        └──────┬──────────────────┬───────────┘
+                               │                  │
+              ┌────────────────▼──┐    ┌──────────▼──────────────┐
+              │   CREATOROS       │    │      SEEDSIGHT          │
+              │   (TikTok B2C)    │    │    (RedNote B2B)        │
+              │                   │    │                         │
+              │  "What should I   │    │  "Who's winning the     │
+              │   promote today?" │    │   种草 war?"             │
+              │                   │    │                         │
+              │  $19-99/mo        │    │  $530-3,960/mo          │
+              │  1,500 users      │    │  100 enterprise brands  │
+              │  → $50K/mo        │    │  → $500K/mo             │
+              └───────────────────┘    └─────────────────────────┘
+```
+
+**One codebase. One scoring engine. One data pipeline. Two products. Two price points. Zero additional infrastructure cost to add the second product.**
+
+The engine is language-agnostic — adding a new data source (e.g., Shopee for SEA, Mercado Libre for LATAM) is a configuration change, not a rewrite. Adding a new product surface (e.g., YouTube Shorts, Instagram Reels) reuses the same infrastructure.
 
 ---
 
