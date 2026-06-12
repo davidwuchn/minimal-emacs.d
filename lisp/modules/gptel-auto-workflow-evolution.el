@@ -3847,7 +3847,8 @@ rank-1 reconstruction quality: r = ‖U₁‖₂ / ‖M‖₂.
 - r < 0.50 → :diversify (strategies are category-specific; diagonal matters)
 - else → :mixed (partial specialization)
 
-Optional MAX-EXPERIMENTS limits to the N most recent experiments (default 100).
+Optional MAX-EXPERIMENTS limits to the N most recent experiments (default
+100).
 MIN-PER-CELL is minimum experiments needed for a cell (default 3)."
   (cl-block factor-performance-matrix
     (let* ((results (gptel-auto-workflow--parse-all-results))
