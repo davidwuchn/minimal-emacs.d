@@ -94,10 +94,20 @@ Also establish or reconnect the persistent nREPL client connection."
                (process-live-p ov5-world-store--nrepl-process))
     (let ((port (ov5-world-store--nrepl-port)))
       (message "[world-store] Starting bb nREPL server on port %d..." port)
+      ;; --init clj/ov5/world_store.clj ensures the query namespace is loaded
+      ;; on the server side.  Without this, (ns ov5.world-store.query) in
+      ;; eval forms fails because the server's classpath doesn't auto-load
+      ;; source files when switching namespaces.
+      ;;
+      ;; IMPORTANT: --init must come BEFORE the nrepl-server subcommand
+      ;; (it's a global bb flag, not a subcommand arg).
       (setq ov5-world-store--nrepl-process
             (start-process "bb-nrepl" "*bb-nrepl*"
-                          "bb" "nrepl-server" (format "%d" port)))
-      (sleep-for 2)  ;; Give server time to start
+                          "bb" "--init" "clj/ov5/world_store.clj"
+                          "nrepl-server" (format "%d" port)))
+      ;; --init loads world_store.clj (~1.5k lines, ~5s on cold start).
+      ;; Old value (2s) was enough for nrepl-server but not for --init.
+      (sleep-for 8)  ;; Give server time to start AND load --init file
       (message "[world-store] nREPL server started")))
   ;; Reconnect persistent nREPL client if server is live but client is not
   (when (and ov5-world-store--nrepl-process
