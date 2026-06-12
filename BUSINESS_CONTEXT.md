@@ -157,7 +157,7 @@ All happens while employees sleep
 **Remaining ~4%:**
 - Add Proximum vector search to mementum memory retrieval (Datahike already wired — blocked on BB pod)
 - Build CreatorOS demo on external codebase (prove OV5 works on non-Emacs code)
-- MCP server: expose OV5 tools to external AI agents (Claude/Cursor/OpenCode)
+- MCP server: expose OV5 tools to external AI agents — ✅ done via OpenCode skill (`~/.config/opencode/skills/creatoros/SKILL.md`), no protocol needed
 - Wire real user feedback/support ticket APIs (need Slack/Zendesk API keys)
 
 **Clojure toolchain:** ✅ Complete — test (clojure.test), lint (clj-kondo), format (zprint), fix (ns-ordering, unused-require), categorize (:clojure), test runner (run-tests.sh clj). brepl 47/47 tests.
