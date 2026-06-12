@@ -164,6 +164,10 @@ Two REPL modules now exist, both wired into `gptel-config.el`:
 - Implemented Clojure experiment loop: `run-tests.sh clj`, `clj/ov5/test_runner.clj`, `gptel-brepl-run-tests`, `gptel-brepl-lint-file`, `gptel-brepl-fix-ns-ordering`, `:clojure` category. brepl 41/41, ontology-router 117/117.
 - Captured in `mementum/knowledge/clojure-first-multiplatform-architecture.md` and `mementum/knowledge/launch-fast-vs-ov5-gaps.md`.
 
+### Session Note (2026-06-12 late)
+- Fixed the blocked-experiment control flow: `evolution-run-cycle` now preflights the human-decision gate, returns `blocked-pending-decisions` instead of falsely reporting success, and `run-async` now uses truthiness for the gate check.
+- Added regression coverage for blocked trigger handling and restarted `pmf-value-stream`; live status now responds on `/tmp/emacs$(id -u)/pmf-value-stream`.
+
 ### Immediate
 1. **Enable opencode eval on Pi5** — Set `gptel-auto-workflow-opencode-eval-enabled t` after monitoring first cron cycle
 2. **Monitor pipeline metrics** — Check if fast-track staging improves keep rate from ~3.1%
