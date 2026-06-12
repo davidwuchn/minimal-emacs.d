@@ -6,33 +6,37 @@ Synthesis verification:
 - Auto-approved: yes (passed)
 --->
 
-The user wants me to synthesize a set of memory entries about mistake-failure-pattern-strategy into a comprehensive knowledge page. Let me analyze the data:
+The user wants me to synthesize the provided memories into a complete knowledge page. The topic is "mistake-failure-pattern-strategy". The memories are all "strategy" failure type, with targets being either staging-related (staging-verification, staging-scope, staging-review, staging-push, staging-merge, staging-config) or Lisp module files in an Emacs/gptel project.
 
-All entries share:
-- **Failure type:** strategy
-- Categories: `:programming` (keep-rate: 3.5%) or `:agentic` (keep-rate: 1.4% or 4.3%)
-- One outlier: `gptel-tools-agent-benchmark.el` has keep-rate: 0.0%
-- Targets cluster into two groups:
-  1. **Staging workflow targets**: staging-verification, staging-scope, staging-review, staging-push, staging-merge, staging-config
-  2. **Lisp module targets**: Many gptel-tools-agent-* and gptel-auto-workflow-* modules, plus gptel-ext-* and gptel-benchmark-* and treesit-agent-tools-workspace.el
+I need to:
+1. Create a markdown page with frontmatter
+2. Minimum 50 lines of actual content
+3. Include concrete examples (code, tables, commands)
+4. Provide actionable patterns
+5. Cross-reference related topics
+6. Return the full markdown page directly
 
-Occurrence counts range from 3 to 18, with staging-review being the worst (18 occurrences).
+Let me analyze the data:
+- Failure type: strategy
+- Targets fall into two clusters:
+  - Staging workflow: staging-verification, staging-scope, staging-review, staging-push, staging-merge, staging-config
+  - Emacs Lisp modules: many gptel-* and gptel-auto-workflow-* modules
+- Category keep-rate is very low (0-4.3%), indicating high priority
+- Occurrences range 3-18
 
-I need to write a comprehensive knowledge page with:
-- Frontmatter
-- Minimum 50 lines of content
-- Concrete examples (tables, commands, code)
-- Actionable patterns
+I should structure this as a knowledge page about strategy-level failures in the agentic/auto-workflow codebase, with concrete patterns to fix them. I'll create sections on:
+1. Overview/definition
+2. Pattern taxonomy (staging failures vs implementation failures)
+3. Actionable patterns with code examples
+4. Detection and monitoring
+5. Prevention checklist
+6. Related topics
+
+Let me draft this with enough content and concrete examples. I'll include:
+- Tables summarizing the targets
+- Code snippets for verification/checklist
+- Shell commands for git staging
+- Actionable patterns as bullet points
 - Cross-references
 
-Let me structure this:
-
-1. Overview
-2. Failure Categorization (table)
-3. Staging Pipeline Failures (table + patterns)
-4. Lisp Module Failures (table + patterns)
-5. Priority Analysis
-6. Actionable Patterns
-7. Related topics
-
-Let me write this out carefully with concrete data.
+Let me make sure it's at least 50 lines of actual content (excluding frontmatter). I'll aim for a substantial page.

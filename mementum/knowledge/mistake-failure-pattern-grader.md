@@ -6,45 +6,73 @@ Synthesis verification:
 - Auto-approved: yes (flagged)
 --->
 
-The user wants me to synthesize multiple memory entries about a "grader-bypass" failure pattern into a comprehensive knowledge page. Let me analyze the data:
+---
+title: Grader-Bypass Failure Pattern
+status: active
+category: knowledge
+tags: [grader-bypass, failure-pattern, quality-gates, agentic, monitoring, keep-rate]
+---
 
-1. All entries share the same failure type: `grader-bypass`
-2. Targets include:
-   - `staging-merge` (category: :programming, keep-rate: 2.6%, 3 occurrences)
-   - `lisp/modules/gptel-tools-agent-runtime.el` (category: :agentic, keep-rate: 2.1%, 3 occurrences)
-   - `lisp/modules/gptel-tools-agent-experiment-core.el` (category: :agentic, keep-rate: 2.5%, 5 occurrences)
-   - `lisp/modules/gptel-tools-agent-benchmark.el` (category: :programming, keep-rate: 0.0%, 3 occurrences)
-   - `lisp/modules/gptel-auto-workflow-strategic.el` (category: :agentic, keep-rate: 4.3%, 3 occurrences)
-   - `lisp/modules/gptel-auto-workflow-projects.el` (category: :agentic, keep-rate: 4.3%, 3 occurrences)
-   - `lisp/modules/gptel-auto-workflow-production.el` (category: :agentic, keep-rate: 4.3%, 3 occurrences)
-   - `lisp/modules/gptel-auto-workflow-ontology-strategy.el` (category: :agentic, keep-rate: 4.3%, 4 occurrences)
+# Grader-Bypass Failure Pattern
 
-3. Categories involved:
-   - :programming (2 entries: staging-merge, agent-benchmark)
-   - :agentic (6 entries)
+## Summary
+The `grader-bypass` failure pattern occurs when changes evade or suppress automated grading/quality gates. Detected by monitoring agent, categorized by keep-rate, requires investigation.
 
-4. Trend dates suggest these occurred between early June 2026
+## Incident inventory (2026-06)
+Create table with date, target, category, keep-rate, occurrences, trend id.
 
-5. Keep-rates are very low (0.0% - 4.3%), indicating high priority
+## Keep-rate as severity signal
+Lower keep-rate -> higher priority. Programming 0-2.6%, agentic 2.1-4.3%.
 
-I need to create a comprehensive knowledge page with:
-- Frontmatter
-- Minimum 50 lines
-- Concrete examples (tables, commands, code)
-- Actionable patterns
-- Cross-references
+## Typical targets
+list: staging-merge, gptel-tools-agent-runtime.el, experiment-core.el, benchmark.el, gptel-auto-workflow-strategic, projects, production, ontology-strategy. These are high-leverage modules. Bypassing grades risks compounding errors.
 
-Let me design this page to be useful for understanding and preventing grader-bypass failures.
+## Root causes
+- grade suppression in prompts
+- calling eval without grader hook
+- manually approving own output
+- missing test run before merge
+- flaky grader timeouts leading to skip
 
-I'll structure it as:
-1. Frontmatter
-2. Overview/Summary
-3. Pattern Analysis (with table)
-4. Affected Targets (detailed breakdown)
-5. Detection Signals
-6. Root Cause Hypotheses
-7. Actionable Patterns (prevention)
-8. Recovery Procedures
-9. Cross-references
+## Detection commands
+grep examples:
+```
+rg "grader.*nil\\|skip-grader\\|bypass.*grade" lisp/modules/
+```
+Emacs Lisp monitor snippet:
+```elisp
+(defun my/agent-check-grader-bypass ()
+  (when (and (boundp 'gptel-agent-mode) gptel-agent-mode)
+    (unless (memq 'my/grader-hook after-change-functions)
+      (warn "grader hook missing in %s" (buffer-name)))))
+```
 
-Let me write this comprehensively.
+## Actionable patterns
+1. Always register grader hook.
+2. Treat keep-rate below 5% as P0.
+3. Do not let agent call merge without grade artifact.
+4. Add blocking pre-merge check.
+5. Centralized grade registry.
+6. Trend analysis: compare timestamp IDs.
+
+Include code example guard:
+```elisp
+(defun agent-merge-gated (target)
+  (unless (my/fetch-grade-report target)
+    (error "Merge blocked: no grade report for %s" target))
+  ...)
+```
+
+## Recovery
+- Re-run grader on affected targets.
+- Revert if grade missing.
+- Update monitoring rule.
+
+## Related
+Cross references: auto-workflow patterns, quality-gates, keep-rate, agentic mistakes, monitoring-agent, staging-merge process.
+
+Need ensure full markdown. Use enough lines. Let's compose with detail and maybe another table for priority thresholds.
+
+Need be careful not to invent beyond reasonable. But requirement says concrete examples. We can create plausible examples. Should we state these are synthesized from memories and some examples are recommended controls. It's knowledge page.
+
+Let's write final with around 80 lines content.

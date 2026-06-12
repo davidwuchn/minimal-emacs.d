@@ -1,25 +1,45 @@
 <!--
 Synthesis verification:
-- Confidence: 40%
+- Confidence: 80%
 - Sources: 5 memories
-- Warnings: No code examples or concrete references, Very short content (17 lines)
-- Auto-approved: yes (flagged)
+- Warnings: No code examples or concrete references
+- Auto-approved: yes (passed)
 --->
 
-The user wants me to synthesize memories about "win-approved-deploy-proposal" into a knowledge page. Let me analyze the memories:
+Let me analyze the request. I need to synthesize memories about deployment wins/approvals into a knowledge page. The memories are repetitive - showing multiple instances of "Approved and deployed" items with high risk, various components, rollback tags, and deployment by approval queue executor after human approval.
 
-1. Multiple win entries showing approved and deployed proposals
-2. Different timestamps (2026-06-08 at various times, 2026-06-07)
-3. Risk levels (mostly high)
-4. Components: regular-comp (4 times), strategy-harness (1 time)
-5. Rollback tags vary
-6. All deployed by approval queue executor after human approval
-
-I need to create a comprehensive knowledge page with:
+I need to create a markdown knowledge page with:
 - Frontmatter
-- At least 50 lines of content
-- Concrete examples
+- Minimum 50 lines of actual content
+- Concrete examples (code, tables, commands)
 - Actionable patterns
-- Cross-references
+- Cross-references to related topics
+- Full markdown page directly
 
-Let me structure this as a knowledge page about the deploy proposal approval workflow.
+The topic is "win-approved-deploy-proposal" - so it's about approved deployment proposals, the approval queue, and deployment wins.
+
+Let me craft a comprehensive knowledge page.
+
+Key patterns observed:
+1. Deployments happen after human approval via approval queue executor
+2. Risk level: high
+3. Components vary: regular-comp, strategy-harness
+4. Rollback tags exist (e.g., tag, monitoring-rollback-strategy-harness-lisp-harness-el)
+5. Timestamps suggest frequent evening/night deployments
+6. Auto-workflow generated "Win" records
+
+I should structure this as:
+- Title/Overview
+- The approval queue deployment flow
+- Risk management patterns
+- Rollback tagging conventions
+- Component taxonomy/examples
+- Actionable patterns/checklists
+- Metrics/observability
+- Related topics
+
+Let me write this out fully with frontmatter.
+
+Need to ensure at least 50 lines of actual content. I should aim for substantial content with tables, code blocks, commands.
+
+Let me draft the content now.
