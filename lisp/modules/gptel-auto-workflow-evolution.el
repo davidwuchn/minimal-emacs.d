@@ -7294,10 +7294,11 @@ cap is `2*default`)."
         (setq gptel-auto-experiment-grade-timeout new-timeout))
       new-timeout)))
 
-(defvar gptel-auto-workflow--diagnosis-accuracy nil
+(defvar gptel-auto-workflow--diagnosis-accuracy
+  (make-hash-table :test 'equal)
   "Hash table tracking diagnosis fix accuracy.
 Keys are diagnosis strings, values are (SUCCESS-COUNT . FAILURE-COUNT)
-cons cells.  Forward reference; initialized later.")
+cons cells.")
 
 (defun gptel-auto-workflow--cross-diagnosis-share (diagnosis fixed-p)
   "Share learnings across similar diagnoses.
@@ -8131,9 +8132,7 @@ Returns list of (backend . health-plist) for degraded backends."
   "Failed remediation count before escalating to alternative backend.
 Auto-adapts based on per-diagnosis false-positive rate via --adapt-threshold.")
 
-;; Initialize diagnosis accuracy table (forward-declared above)
-(unless (hash-table-p gptel-auto-workflow--diagnosis-accuracy)
-  (setq gptel-auto-workflow--diagnosis-accuracy (make-hash-table :test 'equal)))
+;; diagnosis-accuracy initialized at defvar above (line ~7297)
 
 (defun gptel-auto-workflow--adapt-threshold (diagnosis was-effective)
   "Adapt detection threshold for DIAGNOSIS based on whether fix was effective.
