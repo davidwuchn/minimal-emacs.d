@@ -937,100 +937,69 @@ Returns 1 if fixed, 0 if no change needed."
     fixed))
 
 (defun gptel-auto-workflow--fix-unbalanced-parens (file)
-  "Fix unbalanced parens in FILE.
-Handles two cases:
-1. Missing close parens (more opens than closes) — appends at EOF
-2. Extra close parens (more closes than opens) — removes from error line
-Returns 1 if fixed, 0 otherwise."
-  (let ((fixed 0)
-        (opens 0)
-        (closes 0)
-        (new-content nil)
-        (in-string nil)
-        (in-comment nil)
-        (escaped nil))
+  "Fix unbalanced parens in FILE using Emacs built-in sexp scanning.
+Uses `scan-sexps' to find the exact imbalance position, then deletes
+excess close parens at the error position or inserts missing close
+parens iteratively until the buffer is balanced.
+Inserts before provide/end markers to keep them top-level.
+Returns 1 if fixed, 0 if already balanced or unfixable."
+  (let ((made-change nil)
+        (max-attempts 50)
+        (original-content
+         (with-temp-buffer
+           (insert-file-contents file)
+           (buffer-string))))
     (with-temp-buffer
       (insert-file-contents file)
-      (setq new-content (buffer-string))
-      ;; Walk through content, tracking paren balance while ignoring
-      ;; string literals and comments (where parens don't count).
-      (dolist (ch (append new-content nil))
-        (cond
-         (escaped (setq escaped nil))
-         ((eq ch 92) (setq escaped t))
-         ((and (not in-string) (eq ch 59))
-          (setq in-comment t))
-         ((and in-comment (eq ch 10))
-          (setq in-comment nil))
-         ((and (not in-comment) (eq ch 34))
-          (setq in-string (not in-string)))
-         ((and (not in-string) (not in-comment))
-          (cond
-           ((eq ch 40) (setq opens (1+ opens)))
-           ((eq ch 41) (setq closes (1+ closes))))))))
-    (cond
-      ;; Case 1: more opens than closes — append missing closes at EOF
-      ((> opens closes)
-       (let* ((missing (- opens closes))
-              (closes-str (make-string missing 41))
-              (insert-pos (or (string-match "^\\s-*(provide\\s-+'" new-content)
-                              (string-match "^;;; .*ends here$" new-content))))
-        ;; Prefer inserting before the provide/end marker so provide remains
-        ;; top-level. Appending at EOF can make (provide ...) part of an
-        ;; unclosed defun body: load succeeds, but require fails.
-        (setq new-content
-              (if insert-pos
-                  (concat (substring new-content 0 insert-pos)
-                          closes-str "\n"
-                          (substring new-content insert-pos))
-                (concat new-content "\n" closes-str)))
-        (let ((original (with-temp-buffer
-                          (insert-file-contents file)
-                          (buffer-string))))
-          (with-temp-buffer
-            (emacs-lisp-mode)
-            (insert new-content)
-            (if (gptel-auto-workflow--fix-validate-and-write
-                 (current-buffer) file original)
-                (progn
-                  (message "[self-heal-semantic] Appended %d missing close paren(s) at EOF in %s"
-                           missing (file-name-nondirectory file))
-                  (setq fixed 1))
-              (message "[self-heal-semantic] Paren validation failed after unbalanced-parens fix on %s -- fix discarded"
-                       (file-name-nondirectory file)))))))
-     ;; Case 2: more closes than opens — remove excess from error line
-     ((< opens closes)
-      (let* ((excess (- closes opens))
-             (error-line (gptel-auto-workflow--find-paren-balance-line file)))
-        (when error-line
-          (with-temp-buffer
-            (insert new-content)
-            (goto-char (point-min))
-            (forward-line (1- error-line))
-            (end-of-line)
-            ;; Remove excess close parens from end of line
-            (let ((end-pos (point))
-                  (original-content nil)
-                  (start-pos (save-excursion
-                               (let ((count 0))
-                                 (while (and (> (point) (line-beginning-position))
-                                            (< count excess)
-                                            (eq (char-before) 41))
-                                   (backward-char 1)
-                                   (setq count (1+ count)))
-                                 (point)))))
-               (when (> (- end-pos start-pos) 0)
-                 (setq original-content (buffer-string))
-                 (delete-region start-pos end-pos)
-                 (let ((content (buffer-string)))
-                   (with-temp-file file
-                     (insert content)))
-                (message "[self-heal-semantic] Removed %d excess close paren(s) from line %d in %s"
-                         (- end-pos start-pos) error-line (file-name-nondirectory file))
-                (setq fixed 1)
-                (unless (gptel-auto-workflow--fix-validate-after-write file original-content)
-                  (setq fixed 0)))))))))
-    fixed))
+      (emacs-lisp-mode)
+      ;; Quick check: already balanced?
+      (unless (condition-case nil
+                  (progn (scan-sexps (point-min) (point-max)) t)
+                (scan-error nil))
+        ;; Iterate: fix one imbalance per loop, re-check, repeat
+        (let ((attempt 0))
+          (while (and (< attempt max-attempts)
+                      (condition-case err
+                          (progn (scan-sexps (point-min) (point-max)) nil)
+                        (scan-error
+                         (let ((err-pos (nth 2 err)))
+                           (when err-pos
+                             (goto-char err-pos)
+                             ;; Skip if inside a string (can't fix string parens)
+                             (unless (nth 3 (syntax-ppss))
+                               (if (and (not (eobp))
+                                        (eq (char-after) 41))
+                                   ;; Excess close paren at point: delete it
+                                   (progn
+                                     (delete-char 1)
+                                     (setq made-change t))
+                                 ;; Missing close: insert before provide or
+                                 ;; end marker to keep them top-level;
+                                 ;; iterative re-scan handles nested misses.
+                                 (goto-char (point-max))
+                                 (if (or (re-search-backward
+                                          "^\\s-*(provide\\s-+'" nil t)
+                                         (re-search-backward
+                                          ";;; .*ends here" nil t))
+                                     (progn
+                                       (beginning-of-line)
+                                       (insert ")\n")
+                                       (setq made-change t))
+                                   ;; No marker found: insert at EOF
+                                   (goto-char (point-max))
+                                   (insert ")\n")
+                                   (setq made-change t))))))
+                         t)))
+            (setq attempt (1+ attempt))))
+        ;; Validate and write only if we made fixes
+        (when made-change
+          (if (gptel-auto-workflow--fix-validate-and-write
+               (current-buffer) file original-content)
+              (message
+               "[self-heal-semantic] Fixed unbalanced parens in %s"
+               (file-name-nondirectory file))
+            (setq made-change nil)))))
+    (if made-change 1 0)))
 
 
 (defun gptel-auto-workflow--fix-condition-case-unbound-err (file)
