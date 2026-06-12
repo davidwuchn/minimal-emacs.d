@@ -436,6 +436,22 @@ when reading from an empty buffer or a missing file.  Must return
     ;; Should remove leading blank lines inside ns form
     (should (string-match-p "(:require" (plist-get result :fixed-content)))))
 
+(ert-deftest test-brepl/fix-ns-ordering-actually-moves-gen-class-after-require ()
+  "fix-ns-ordering should reorder (:gen-class) to come AFTER (:require).
+This is the canonical Clojure convention: :gen-class must be the LAST
+sub-form in the ns form, after :require/:import.  This test guards
+against regression of the silent no-op bug discovered in 038318b3e."
+  (let* ((content "(ns my.app\n  (:gen-class)\n  (:require [clojure.string :as str]))\n\n(defn foo [] 42)\n")
+         (result (gptel-brepl-fix-ns-ordering content))
+         (fixed (plist-get result :fixed-content)))
+    (should (plist-get result :valid))
+    ;; (:require must come BEFORE (:gen-class) in the fixed output
+    (let ((require-pos (string-match "(:require" fixed))
+          (gen-class-pos (string-match "(:gen-class" fixed)))
+      (should require-pos)
+      (should gen-class-pos)
+      (should (< require-pos gen-class-pos)))))
+
 (ert-deftest test-brepl/fix-unused-require-passthrough ()
   "fix-unused-require returns valid result (now uses clj-kondo when available)."
   (let ((result (gptel-brepl-fix-unused-require "(ns my.app (:require [foo :as f]))\n(f 1)")))

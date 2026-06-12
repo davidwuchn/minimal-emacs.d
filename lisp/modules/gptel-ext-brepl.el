@@ -261,36 +261,127 @@ Each finding: (:file string :line integer :level string :message string)."
 
 (defun gptel-brepl-fix-ns-ordering (file-content)
   "Fix ns form ordering in Clojure FILE-CONTENT.
-Moves (:require ...) before other ns subforms.
+Reorders sub-forms of each (ns ...) form to canonical Clojure order:
+  1. (:require ...)
+  2. (:import ...)
+  3. (:gen-class) and other sub-forms
 Returns (:valid t/nil :fixed-content string :error nil/string)."
   (if (not (stringp file-content))
       (list :valid nil :fixed-content nil :error "Expected string file-content")
-    (let* ((reordered
-            (with-temp-buffer
-              (insert file-content)
-              (goto-char (point-min))
-              (condition-case nil
-                  (while (search-forward "(ns " nil t)
-                    (let* ((ns-start (match-beginning 0))
-                           (ns-end (condition-case nil
-                                       (save-excursion
-                                         (goto-char ns-start)
-                                         (forward-list)
-                                         (point))
-                                     (error nil))))
-                      (when ns-end
-                        (save-restriction
-                          (narrow-to-region ns-start ns-end)
-                          (goto-char (point-min))
-                          (while (re-search-forward
-                                  "^[[:space:]]*(:\\(require\\|import\\)" nil t)
-                            (forward-line 1)))))
-                    (goto-char (point-max)))
-                (error nil))
-              (buffer-string))))
+    (let ((reordered file-content))
+      (with-temp-buffer
+        (insert file-content)
+        (goto-char (point-min))
+        (condition-case nil
+            (progn
+              (while (re-search-forward "(ns[[:space:]\n\r]+" nil t)
+                (let* ((ns-start (match-beginning 0))
+                       (ns-end (condition-case nil
+                                   (save-excursion
+                                     (goto-char ns-start)
+                                     (forward-list)
+                                     (point))
+                                 (error nil))))
+                  (when ns-end
+                    (let* ((ns-text (buffer-substring ns-start ns-end))
+                           (reordered-ns (gptel-brepl--reorder-ns-form ns-text)))
+                      (unless (string= ns-text reordered-ns)
+                        (delete-region ns-start ns-end)
+                        (insert reordered-ns))))
+                    (goto-char ns-end))))
+          (error nil))
+        (setq reordered (buffer-string)))
       (if (string= reordered file-content)
           (list :valid t :fixed-content file-content :error nil)
         (list :valid t :fixed-content reordered :error nil)))))
+
+(defun gptel-brepl--reorder-ns-form (ns-text)
+  "Reorder sub-forms of NS-TEXT (a string starting with (ns ...)).
+Returns reordered ns text."
+  (condition-case nil
+      (let* ((prefix-match (string-match "^(ns[[:space:]\n\r]+\\([^[:space:]\n\r]+\\)" ns-text))
+             (nspace (and prefix-match (match-string 1 ns-text)))
+             (prefix-end (or (and prefix-match (match-end 0)) 0))
+             (body-start prefix-end)
+             (body-end (1- (length ns-text)))
+             (body (substring ns-text body-start body-end))
+             (subforms (gptel-brepl--extract-ns-subforms body))
+             (reordered (gptel-brepl--reorder-ns-subforms subforms))
+             (result (concat "(ns " nspace reordered ")")))
+        result)
+    (error ns-text)))
+
+(defun gptel-brepl--extract-ns-subforms (body)
+  "Extract balanced sub-forms from BODY (a string). Returns list of (WS . FORM) cons cells."
+  (let ((subforms nil))
+    (with-temp-buffer
+      (insert body)
+      (goto-char (point-min))
+      (let ((current-pos (point)))
+        (while (not (eobp))
+          (let* ((ws-start current-pos)
+                 (form-start (progn
+                               (skip-syntax-forward " \t\n\r")
+                               (point)))
+                 (ws (and (< ws-start form-start)
+                          (buffer-substring ws-start form-start)))
+                 (form-end (gptel-brepl--find-form-end form-start)))
+            (if (and form-end (> form-end form-start))
+                (progn
+                  (let ((form-text (buffer-substring form-start form-end)))
+                    (push (cons ws form-text) subforms))
+                  (setq current-pos form-end)
+                  (goto-char form-end))
+              (goto-char (point-max))))))
+      (nreverse subforms))))
+
+(defun gptel-brepl--find-form-end (start)
+  "Find the end position of the form starting at START in current buffer.
+Returns point after the form, or nil if not found."
+  (if (eq (char-after start) ?\()
+      (condition-case nil
+          (progn
+            (goto-char start)
+            (forward-list)
+            (point))
+        (error nil))
+    (progn
+      (goto-char start)
+      (re-search-forward "[\s\t\n\r()\";,]" nil t)
+      (or (match-beginning 0) (point-max)))))
+
+(defun gptel-brepl--reorder-ns-subforms (subforms)
+  "Reorder SUBFORMS to put :require/:import first, others after.
+Returns the reordered subforms concatenated with their leading whitespace."
+  (let ((require-imports nil)
+        (others nil))
+    (dolist (sf subforms)
+      (let* ((form (cdr sf))
+             (raw-key (and (string-prefix-p "(" form)
+                           (string-match "(\\([^ )]+\\)" form)
+                           (match-string 1 form)))
+             (key (and raw-key
+                       (if (string-prefix-p ":" raw-key)
+                           (substring raw-key 1)
+                         raw-key))))
+        (if (member key '("require" "import"))
+            (push sf require-imports)
+          (push sf others))))
+    (setq require-imports (nreverse require-imports))
+    (setq others (nreverse others))
+    (let ((reordered (append require-imports others))
+          (result "")
+          (first t))
+      (dolist (sf reordered)
+        (let* ((ws (car sf))
+               (form (cdr sf)))
+          (when first
+            (when ws (setq result (concat result ws)))
+            (setq first nil))
+          (setq result (concat result form)))
+        (when first
+          (setq first nil)))
+      result)))
 
 (defun gptel-brepl-fix-unused-require (file-content)
   "Remove unused :require clauses from Clojure FILE-CONTENT.
