@@ -49,7 +49,12 @@
              (my/duplicate-daemon-running-p))
     (message "[daemon] Daemon %s already running, exiting this one"
              (my/current-daemon-name))
-    (kill-emacs 0)))
+     (kill-emacs 0))
+  ;; Use daemon name as server-name so worker daemons (pmf-value-stream,
+  ;; gtm-product-org) don't conflict with default "server" socket.
+  (let ((dn (daemonp)))
+    (when (and (stringp dn) (not (string= dn "server")))
+      (setq server-name dn))))
 
 ;; Set tree-sitter grammar directory early, before any tree-sitter modes are loaded
 ;; Note: user-emacs-directory is already set to var/ by pre-early-init.el
