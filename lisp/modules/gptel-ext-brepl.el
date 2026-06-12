@@ -312,7 +312,8 @@ Returns reordered ns text."
     (error ns-text)))
 
 (defun gptel-brepl--extract-ns-subforms (body)
-  "Extract balanced sub-forms from BODY (a string). Returns list of (WS . FORM) cons cells."
+  "Extract balanced sub-forms from BODY (a string). Returns list of (WS . FORM)
+cons cells."
   (let ((subforms nil))
     (with-temp-buffer
       (insert body)
