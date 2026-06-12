@@ -1117,7 +1117,9 @@ Each fixer must take FILE as argument and return fix count (0 = no-op).")
                 "gptel-auto-workflow-monitoring-agent.el"
                 "gptel-auto-workflow-ontology-router.el"
                 "gptel-auto-workflow-evolution.el"
-                "gptel-tools-agent-worktree.el"))
+                "gptel-tools-agent-worktree.el"
+                "gptel-auto-workflow-production.el"
+                "gptel-ext-context-cache.el"))
   "Files that should be healed through OV5 worktree/subagent validation.")
 
 (defun gptel-auto-workflow--self-heal-route-for-file (file)
@@ -1252,13 +1254,25 @@ because a HEAD worktree cannot faithfully represent uncommitted live edits."
                                      :file abs-file
                                      :worktree worktree))))))))))))
 
+(defun gptel-auto-workflow--self-heal-file-has-conflict-p (file)
+  "Return non-nil if FILE contains an unresolved merge conflict marker.
+Matches `<<<<<<<' only at the start of a line (optionally preceded by
+whitespace), which is how git produces conflict markers.  This avoids
+false positives from string literals containing the same characters.
+Self-heal must never modify files with unresolved conflicts."
+  (with-temp-buffer
+    (insert-file-contents file)
+    (goto-char (point-min))
+    (re-search-forward "^[ \t]*<<<<<<<" nil t)))
+
 (defun gptel-auto-workflow--self-heal-semantic ()
   "Layer 2+3 self-heal: detect AND fix semantic/operational bugs.
 Runs audit checks on all lisp/modules/*.el files, then applies safe
 auto-fixers for detected issues (e.g., excessive blank lines)."
   (interactive)
   (let ((result (gptel-auto-workflow--semantic-audit-all))
-        (total-fixed 0))
+        (total-fixed 0)
+        (skipped-conflict 0))
     (when (> (plist-get result :total-issues) 0)
       (message "[self-heal-semantic] Found %d issues"
                (plist-get result :total-issues)))
@@ -1271,15 +1285,21 @@ auto-fixers for detected issues (e.g., excessive blank lines)."
               (present-types
                (delete-dups
                 (delq nil (mapcar (lambda (r) (plist-get r :type)) log)))))
-        (if (eq 'ov5-worktree (gptel-auto-workflow--self-heal-route-mode file))
-            (let ((dispatch-result (gptel-auto-workflow--self-heal-file-dispatch file)))
-              (cl-incf total-fixed (or (plist-get dispatch-result :auto-fixed) 0)))
-          (dolist (issue-type present-types)
-            (let ((fixer (alist-get issue-type gptel-auto-workflow--semantic-fixer-alist)))
-              (when fixer
-                (let ((fixed (funcall fixer file)))
-                  (when (> fixed 0)
-                    (cl-incf total-fixed fixed)))))))))
+        ;; Guard: never touch files with unresolved git conflicts.
+        (if (gptel-auto-workflow--self-heal-file-has-conflict-p file)
+            (progn
+              (message "[self-heal-semantic] Skipping %s: unresolved merge conflict"
+                       (file-name-nondirectory file))
+              (cl-incf skipped-conflict))
+          (if (eq 'ov5-worktree (gptel-auto-workflow--self-heal-route-mode file))
+              (let ((dispatch-result (gptel-auto-workflow--self-heal-file-dispatch file)))
+                (cl-incf total-fixed (or (plist-get dispatch-result :auto-fixed) 0)))
+            (dolist (issue-type present-types)
+              (let ((fixer (alist-get issue-type gptel-auto-workflow--semantic-fixer-alist)))
+                (when fixer
+                  (let ((fixed (funcall fixer file)))
+                    (when (> fixed 0)
+                      (cl-incf total-fixed fixed))))))))))
     (when (> total-fixed 0)
       (message "[self-heal-semantic] Auto-fixed %d issue(s)" total-fixed))
     (plist-put result :auto-fixed total-fixed)
