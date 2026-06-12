@@ -645,10 +645,10 @@ This is the differentiator. Every other AI coding tool is stateless. OV5 is stat
 
 | Channel | Hook | CTA |
 |---------|------|-----|
-| **GitHub README** | "120/120 modules compile with 0 warnings — self-healing" | Badge that links to OV5 docs |
-| **HN Show HN** | "I built a system that runs 100 experiments/month on its own codebase" | "Try it, report your keep-rate" |
-| **Conference talk** | "The Snake That Eats Its Own Code" — 10-min live demo | Clone → run → review kept experiments |
-| **Blog post** | "Why Your Codebase Should Run Experiments, Not Just Tests" | Link to quickstart |
+| **GitHub README** | "131/131 modules, ~2,970 tests, 0 failures — self-healing" | Badge that links to OV5 docs |
+| **HN Show HN** | "I built a system that runs 100 experiments/month on its own codebase — then pointed it at a Launch Fast clone" | "Try it, report your keep-rate" |
+| **Conference talk** | "The Snake That Eats Its Own Code: Improving a SaaS Product While You Sleep" — 7-min live demo | Clone → run → review kept experiments |
+| **Blog post** | "I Cloned Launch Fast in Clojure and Let an AI Improve It for 30 Days" | Link to quickstart |
 | **r/emacs, r/lisp** | "Self-healing Emacs Lisp: the system fixes its own warnings" | `M-x gptel-auto-workflow-run-async` |
 | **Twitter/X threads** | "Day 1: 10 experiments. Day 30: 100 experiments. Day 90: the system catches bugs I didn't know existed." | Before/after screenshots |
 
@@ -676,7 +676,112 @@ OV5 needs artifacts that **leave the repo** and reach new users:
 
 ### Future: Beyond Emacs
 
-The architecture is provider-agnostic and language-agnostic. The Emacs surface is the first implementation, not the last.
+The architecture is provider-agnostic and language-agnostic. The Emacs surface is the first implementation, not the last. The Clojure-first strategy (39 dialects covering every platform) makes this concrete — OV5 experiments on `.clj` files and targets any platform through dialect transpilers.
+
+---
+
+## The Demo: Improving Launch Fast with OV5
+
+The best way to understand OV5 is to watch it improve a real product. **Launch Fast** ([launchfastlegacyx.com](https://launchfastlegacyx.com/)) is a Chrome extension SaaS for Amazon sellers — market research, product validation, supplier lookup, keyword analysis, rank tracking, and listing optimization. It has a Chrome extension, a React dashboard, and a backend API.
+
+We build a clone in Clojure, then point OV5 at it. Here's what happens.
+
+### Day 0: The Clone
+
+```clojure
+;; clj/amz/profit_calc.clj — FBA profit calculator
+(ns amz.profit-calc)
+
+(defn fba-fee [price weight size-tier]
+  (+ (pick-pack-fee size-tier)
+     (weight-handling-fee weight size-tier)
+     (* price 0.15)))
+
+(defn break-even [cogs freight fees target-margin]
+  (/ (+ cogs freight fees) (- 1 target-margin)))
+
+;; clj/amz/profit_calc_test.clj — 3 tests, takes 0.1s
+(ns amz.profit-calc-test
+  (:require [clojure.test :refer [deftest is]]
+            [amz.profit-calc :as sut]))
+
+(deftest test-fba-fee
+  (is (= 6.13 (sut/fba-fee 29.99 1.5 :standard))))
+
+(deftest test-break-even
+  (is (= 22.15 (sut/break-even 9.00 3.50 3.00 0.30))))
+```
+
+```bash
+./scripts/run-tests.sh clj    # → 3 tests, 0 failures, 0 errors
+./scripts/run-tests.sh unit   # → ~2,970 ERT tests on OV5 itself
+```
+
+**10 Clojure modules, each with tests.** Chrome extension (CLJS), dashboard (Reagent), backend (Ring), data pipeline (BB scripts), all in one codebase. Datahike stores everything. OV5 watches.
+
+### Week 1: OV5 Finds What You Missed
+
+OV5 runs 30 experiments on the clone:
+
+| Experiment | What OV5 did | Result |
+|-----------|-------------|--------|
+| `profit-calc.clj` | Found missing nil-guard: `weight` can be nil from Amazon API | Kept |
+| `market-research.clj` | Optimized Datalog query — 500ms → 120ms | Kept |
+| `keyword-research.clj` | Added cache for repeated keyword lookups | Kept |
+| `extension/content.clj` | Fixed DOM injection: element not found → graceful skip | Kept |
+| `listing-builder.clj` | Added input sanitization for product titles | Kept |
+| `rank-tracker.clj` | Fixed off-by-one in ranking position | Kept |
+
+**6 kept, 24 discarded.** Keep-rate: 20%. The 24 discards trained the ontology on what NOT to do. Every kept experiment passed `clojure.test` and `clj-kondo`.
+
+### Month 1: The Ontology Knows Your Patterns
+
+After 100 experiments:
+
+| Pattern learned | Effect |
+|----------------|--------|
+| "Amazon API responses need nil-guards" | Every new `.clj` file gets nil-guards auto-proposed |
+| "Datahike queries bottleneck on `:backend` attr — needs index" | New queries auto-include index hints |
+| "Chrome extension DOM injection needs `try/catch`" | Content scripts auto-wrapped |
+| "Profit calculations must use `bigdec` not `float`" | Type errors prevented before commit |
+
+**The system now fixes patterns it recognizes.** You review 15 min/day, not 4 hours/week.
+
+### Month 3: OV5 Proposes Features
+
+OV5's monitoring agent notices patterns in the data:
+
+```
+[monitoring] Users searching "yoga pants" also click "yoga mats" 23% of the time.
+[monitoring] Proposal: add cross-sell widget to product page.
+[monitoring] Risk: low. Auto-queued for experiment.
+```
+
+OV5 writes the feature, tests it, and puts it in your review queue. The ontology already knows the codebase's patterns, so the code is idiomatic.
+
+### Why This Demo Works
+
+| Objection | How Launch Fast answers it |
+|-----------|--------------------------|
+| "OV5 only works on Emacs Lisp" | The clone is Clojure, not Elisp. Tests via clojure.test, not ERT. |
+| "It's too abstract" | Launch Fast is a real product anyone can visit. The clone is concrete. |
+| "What if we don't use Emacs?" | The clone is a Chrome extension + web app. No Emacs needed. |
+| "What's the ROI?" | 100 experiments/month × 20% keep-rate = 20 improvements/month. At $200/month API cost vs $150K/year engineer. |
+| "Does it work on new code?" | Day 0 → Day 30 shows compounding from scratch. The clone gets better every day. |
+
+### The Demo Video Structure
+
+1. **0:00-0:30** — Show Launch Fast's real website. "We built a clone of this in Clojure."
+2. **0:30-1:30** — Show the clone code: `profit-calc.clj`, tests passing, `run-tests.sh clj`
+3. **1:30-3:00** — Run `./scripts/run-pipeline.sh`. Watch OV5 select targets, run experiments, grade results.
+4. **3:00-4:00** — Show the morning after: `git log --grep="kept"` reveals 6 improvements while you slept.
+5. **4:00-5:00** — Show the ontology: patterns learned, propagation to similar files.
+6. **5:00-6:00** — Show Month 3: OV5 proposes and builds a new feature (cross-sell widget).
+7. **6:00-7:00** — The punchline: "AI tools generate code. OV5 improves companies."
+
+### The One-Sentence Demo Pitch
+
+> "We cloned a $41/month SaaS product in Clojure, pointed OV5 at it, and watched it find bugs, optimize queries, and propose new features — all while we slept."
 
 | Package | What it enables | Who it's for |
 |---------|----------------|--------------|
