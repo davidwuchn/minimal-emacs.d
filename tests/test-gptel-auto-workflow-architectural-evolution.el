@@ -410,7 +410,10 @@ Returns write-calls list after body completes."
                  (gptel-auto-workflow-monitoring-cycle-interval 0)
                  (gptel-auto-workflow-monitoring-min-occurrences 3)
                  (gptel-auto-workflow-monitoring-deploy-threshold 0.6))
-             (gptel-auto-workflow--monitoring-cycle))))
+             (setq gptel-auto-workflow--running t)
+             (unwind-protect
+                 (gptel-auto-workflow--monitoring-cycle)
+                (makunbound 'gptel-auto-workflow--running)))))
     ;; Monitoring cycle should have write calls
     (should (>= (length calls) 1))))
 

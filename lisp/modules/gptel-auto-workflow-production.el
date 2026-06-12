@@ -805,24 +805,18 @@ Returns the new item ID."
       (let ((content (with-temp-buffer
                        (insert-file-contents queue-file)
                        (buffer-string))))
-        ;; Insert after the header row.  Match the table header line
-        ;; and replace it with header + separator + new entry.  This
-        ;; puts the new entry directly after the separator, on row 3.
-        ;;
-        ;; NOTE: the previous version embedded a 33-blank-line regex
-        ;; that made this function only match files with exactly 33
-        ;; blank lines between header and separator.  No real markdown
-        ;; table has that, so the function silently failed to insert.
-        (setq content
-              (replace-regexp-in-string
-               (concat
-                "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n"
-                "|----|--------|-----------|-----------------|--------|---------------|---------------|\n")
-               (concat
-                "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n"
-                "|----|--------|-----------|-----------------|--------|---------------|---------------|\n"
-                entry)
-               content))
+        ;; Insert after the header row.  Use line-oriented matching
+        ;; (split by newline, find the separator, insert after it)
+        ;; to avoid regex patterns that trigger self-heal corruption.
+        (let ((lines (split-string content "\n")))
+          (let ((sep-idx (cl-position
+                          "|----|--------|-----------|-----------------|--------|---------------|---------------|"
+                          lines :test #'string=)))
+            (when sep-idx
+              (setq lines (append (cl-subseq lines 0 (1+ sep-idx))
+                                  (list (string-trim-right entry "\n"))
+                                  (cl-subseq lines (1+ sep-idx))))
+              (setq content (mapconcat #'identity lines "\n")))))
         ;; Update timestamp
         (setq content (replace-regexp-in-string
                        "<!-- UPDATED -->"

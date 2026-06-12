@@ -1522,14 +1522,14 @@ Returns list of written mementum file paths, or nil if throttled/disabled."
                      (truncate elapsed)
                      gptel-auto-workflow-monitoring-cycle-interval)
             nil)
+        ;; Skip synthesis when pipeline is idle to avoid mementum churn
+        (unless (bound-and-true-p gptel-auto-workflow--running)
+          (message "[monitoring] Pipeline idle — skipping synthesis phases")
+          (cl-return-from gptel-auto-workflow--monitoring-cycle nil))
         ;; Update throttle timestamp and cycle counter
         (setq gptel-auto-workflow-monitoring-last-cycle-time now)
         (setq gptel-auto-workflow-monitoring-cycle-counter
               (1+ gptel-auto-workflow-monitoring-cycle-counter))
-        ;; Skip synthesis when pipeline is idle to avoid mementum churn
-        (unless gptel-auto-workflow--running
-          (message "[monitoring] Pipeline idle — skipping synthesis phases")
-          (cl-return-from gptel-auto-workflow--monitoring-cycle nil))
         ;; Phase 0: Run health probes every 3rd cycle
         (when (= (mod gptel-auto-workflow-monitoring-cycle-counter 3) 0)
           (ignore-errors

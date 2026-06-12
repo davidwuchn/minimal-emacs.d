@@ -12,6 +12,8 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'gptel-auto-workflow-production-metrics)
+
+(defvar gptel-auto-workflow--results-dir)
 (require 'gptel-tools-agent-base)
 (require 'gptel-tools-agent-prompt-analyze)
 (require 'gptel-tools-agent-prompt-build)
@@ -21,8 +23,8 @@
   "TSV header must include columns 33-39 for production metrics."
   (let* ((header (string-trim-right gptel-auto-workflow--results-tsv-header))
          (columns (split-string header "\t")))
-    ;; Should have 43 columns (32 original + 7 production metrics + 4 complexity metrics)
-    (should (= 43 (length columns)))
+    ;; Should have 54 columns (32 original + 7 production metrics + 4 complexity metrics + 11 gate-score columns)
+    (should (= 54 (length columns)))
     ;; Column 33: prod_error_rate_before
     (should (string= "prod_error_rate_before" (nth 32 columns)))
     ;; Column 34: prod_error_rate_after
@@ -44,7 +46,29 @@
     ;; Column 42: lines_removed
     (should (string= "lines_removed" (nth 41 columns)))
     ;; Column 43: understanding_score
-    (should (string= "understanding_score" (nth 42 columns)))))
+    (should (string= "understanding_score" (nth 42 columns)))
+    ;; Column 44: gate_score:0
+    (should (string= "gate_score:0" (nth 43 columns)))
+    ;; Column 45: gate_score:1
+    (should (string= "gate_score:1" (nth 44 columns)))
+    ;; Column 46: gate_score:2
+    (should (string= "gate_score:2" (nth 45 columns)))
+    ;; Column 47: gate_score:3
+    (should (string= "gate_score:3" (nth 46 columns)))
+    ;; Column 48: gate_score:4
+    (should (string= "gate_score:4" (nth 47 columns)))
+    ;; Column 49: gate_score:5
+    (should (string= "gate_score:5" (nth 48 columns)))
+    ;; Column 50: gate_score:6
+    (should (string= "gate_score:6" (nth 49 columns)))
+    ;; Column 51: gate_score:7
+    (should (string= "gate_score:7" (nth 50 columns)))
+    ;; Column 52: gate_score:8
+    (should (string= "gate_score:8" (nth 51 columns)))
+    ;; Column 53: gate_score:9
+    (should (string= "gate_score:9" (nth 52 columns)))
+    ;; Column 54: gate_score:10
+    (should (string= "gate_score:10" (nth 53 columns)))))
 
 ;; Test 2: Service inference from target path
 (ert-deftest test-production-metrics/infer-service-from-target ()
@@ -116,8 +140,8 @@
 (ert-deftest test-production-metrics/track-impact-with-mock ()
   "Should track production impact using mocked Sentry API."
   ;; Mock the Sentry query to return test data
-  (cl-letf (((symbol-function 'gptel-auto-workflow--query-sentry-errors)
-             (lambda (target &optional days-before days-after)
+(cl-letf (((symbol-function 'gptel-auto-workflow--query-sentry-errors)
+             (lambda (_target &optional _days-before _days-after)
                (list :before-rate 0.05
                      :after-rate 0.03
                      :service "test-service"))))

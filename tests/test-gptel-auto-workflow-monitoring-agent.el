@@ -19,6 +19,8 @@
 (require 'cl-lib)
 (require 'gptel-auto-workflow-monitoring-agent)
 
+(defvar gptel-auto-workflow--running)
+
 ;; ── Helper Macros ──
 
 (defmacro with-clean-monitoring-state (&rest body)
@@ -28,10 +30,14 @@
          (gptel-auto-workflow-monitoring-min-occurrences 3)
          (gptel-auto-workflow-monitoring-cycle-interval 900)
          (gptel-auto-workflow-monitoring-last-cycle-time 0.0))
-     ,@body))
+     (setq gptel-auto-workflow--running t)
+     (unwind-protect
+         (progn ,@body)
+       (makunbound 'gptel-auto-workflow--running))))
 
 (defmacro with-mocked-parse-and-mementum (records &rest body)
-  "Execute BODY with mocked parse, mementum, git-cmd, and staging-worktree.  Returns write-calls."
+  "Execute BODY with mocked parse, mementum, git-cmd, and staging-worktree.
+Returns write-calls."
   (declare (indent 1))
   `(let* ((write-calls nil)
           (parsed-records ,records))
@@ -51,9 +57,9 @@
                (substring slug 0 (min 80 (length slug))))))
           ((symbol-function 'gptel-auto-workflow--worktree-base-root)
 (lambda () "/tmp/mock-base"))
-          ((symbol-function 'gptel-auto-workflow--git-cmd)
-           (lambda (cmd &optional _timeout)
-             "mock-git-output"))
+           ((symbol-function 'gptel-auto-workflow--git-cmd)
+            (lambda (_cmd &optional _timeout)
+              "mock-git-output"))
           ((symbol-function 'gptel-auto-workflow--with-staging-worktree)
            (lambda (fn) (funcall fn))))
        (with-clean-monitoring-state ,@body)
@@ -186,6 +192,16 @@ Returns the result of the last form in BODY."
          (- (float-time) 60))
    (let ((result (gptel-auto-workflow--monitoring-cycle)))
      (should (null result)))))
+
+(ert-deftest test-monitoring/idle-unbound-cycle-no-op ()
+  "Idle/unbound monitoring cycle: no void-variable, returns nil, leaves throttle unchanged."
+  (makunbound 'gptel-auto-workflow--running)
+  (let ((gptel-auto-workflow-monitoring-enabled t)
+        (gptel-auto-workflow-monitoring-cycle-interval 900)
+        (gptel-auto-workflow-monitoring-last-cycle-time 42.0))
+    (let ((before gptel-auto-workflow-monitoring-last-cycle-time))
+      (should (null (gptel-auto-workflow--monitoring-cycle)))
+      (should (= gptel-auto-workflow-monitoring-last-cycle-time before)))))
 
 (ert-deftest test-monitoring/throttle-allows-after-interval ()
   "Should allow cycle when elapsed time >= cycle-interval."
@@ -551,15 +567,15 @@ Returns the result of the last form in BODY."
 (ert-deftest test-monitoring/rollback-success ()
   "Should execute rollback via git reset --hard (not checkout) and return success status."
   (let* ((rollback-tag "monitoring-rollback-general-misc")
-         (git-calls nil)
-         (result nil))
+          (git-calls nil)
+          (result nil))
     ;; Mock git-cmd to capture what commands are run
     (cl-letf (((symbol-function 'gptel-auto-workflow--git-cmd)
-               (lambda (cmd timeout)
-                 (push cmd git-calls)
-                 "mocked output"))
-              ((symbol-function 'gptel-auto-workflow--mementum-write-memory)
-               (lambda (&rest args) nil)))
+               (lambda (cmd _timeout)
+                  (push cmd git-calls)
+                  "mocked output"))
+               ((symbol-function 'gptel-auto-workflow--mementum-write-memory)
+                (lambda (&rest _args) nil)))
       (setq result (gptel-auto-workflow--rollback-proposal rollback-tag)))
     ;; Should use git reset --hard, NOT git checkout TAG (which detaches HEAD)
     (should (cl-find-if (lambda (c) (string-match-p "git reset --hard" c)) git-calls))
