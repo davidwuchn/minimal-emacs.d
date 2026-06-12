@@ -1112,28 +1112,27 @@ instead of fixing each failure individually."
 Adding a new auto-fixer is now a one-line change to this alist.
 Each fixer must take FILE as argument and return fix count (0 = no-op).")
 
-(defconst gptel-auto-workflow--self-heal-high-risk-file-pattern
-  (regexp-opt '("gptel-auto-workflow-self-heal-semantic.el"
-                "gptel-auto-workflow-monitoring-agent.el"
-                "gptel-auto-workflow-ontology-router.el"
-                "gptel-auto-workflow-evolution.el"
-                "gptel-tools-agent-worktree.el"
-                "gptel-auto-workflow-production.el"
-                "gptel-ext-context-cache.el"))
-  "Files that should be healed through OV5 worktree/subagent validation.")
+(defconst gptel-auto-workflow--self-heal-direct-safe-file-pattern
+  "\\`ov5-test-"
+  "Files matching this pattern are safe for direct mutation.
+Matches temp test fixture files (created by `test-self-heal-semantic--tmp-file',
+which uses `make-temp-file \"ov5-test-\"').  Files outside lisp/modules/
+are also direct-safe regardless of name, handled in the route function.")
 
 (defun gptel-auto-workflow--self-heal-route-for-file (file)
   "Return healing route plist for FILE.
-:mode is `direct' for normal files and `ov5-worktree' for high-risk
-workflow/self-heal files.  The monitor and daemon-repl can use this to
-decide which file to heal and how much validation is required."
+:mode is `direct' for temp/test fixture files or files outside lisp/modules/.
+Everything else defaults to `ov5-worktree' deferred validation.
+The monitor and daemon-repl can use this to decide which file to heal
+and how much validation is required."
   (let ((name (file-name-nondirectory file)))
-    (if (string-match-p gptel-auto-workflow--self-heal-high-risk-file-pattern name)
-        (list :mode 'ov5-worktree
-              :reason 'high-risk-repair-engine
+    (if (or (string-match-p gptel-auto-workflow--self-heal-direct-safe-file-pattern name)
+            (not (string-match-p "lisp/modules/" file)))
+        (list :mode 'direct
+              :reason 'direct-safe
               :file file)
-      (list :mode 'direct
-            :reason 'targeted-file
+      (list :mode 'ov5-worktree
+            :reason 'default-deferred
             :file file))))
 
 (defun gptel-auto-workflow--self-heal-route-mode (file)

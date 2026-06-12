@@ -537,10 +537,20 @@ causing void-function errors when gptel-agent was not loaded."
 
 (ert-deftest test-self-heal-semantic/entry-point-runs ()
   "gptel-auto-workflow--self-heal-semantic can be called as entry point."
-  (let ((result (gptel-auto-workflow--self-heal-semantic)))
-    (should result)
-    (should (plist-get result :total-issues))
-    (should (numberp (plist-get result :files-checked)))))
+  (let* ((tmp-dir (make-temp-file "ov5-test-modules-" t))
+         (modules-dir (expand-file-name "lisp/modules" tmp-dir)))
+    (make-directory modules-dir t)
+    (with-temp-file (expand-file-name "ov5-test-fixture.el" modules-dir)
+      (insert "(provide 'ov5-test-fixture)\n"))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--expand-workspace-path)
+                   (lambda (path &optional _root)
+                     (expand-file-name path tmp-dir))))
+          (let ((result (gptel-auto-workflow--self-heal-semantic)))
+            (should result)
+            (should (plist-get result :total-issues))
+            (should (numberp (plist-get result :files-checked)))))
+      (delete-directory tmp-dir t))))
 
 ;; ── Test 12: Fixer registry data-driven dispatch ──
 
@@ -552,9 +562,9 @@ causing void-function errors when gptel-agent was not loaded."
   (should (assq 'unbalanced-parens gptel-auto-workflow--semantic-fixer-alist))
   (should (assq 'provide-inside-defun gptel-auto-workflow--semantic-fixer-alist)))
 
-(ert-deftest test-self-heal-semantic/routes-normal-file-direct ()
-  "Normal target files use direct targeted self-heal."
-  (should (eq 'direct
+(ert-deftest test-self-heal-semantic/routes-defaults-to-ov5-worktree ()
+  "Files in lisp/modules/ default to ov5-worktree deferred validation."
+  (should (eq 'ov5-worktree
               (gptel-auto-workflow--self-heal-route-mode
                "lisp/modules/gptel-ext-context.el"))))
 
@@ -565,7 +575,19 @@ causing void-function errors when gptel-agent was not loaded."
                   "lisp/modules/gptel-auto-workflow-ontology-router.el"))
     (let ((route (gptel-auto-workflow--self-heal-route-for-file file)))
       (should (eq 'ov5-worktree (plist-get route :mode)))
-      (should (eq 'high-risk-repair-engine (plist-get route :reason))))))
+      (should (eq 'default-deferred (plist-get route :reason))))))
+
+(ert-deftest test-self-heal-semantic/routes-temp-fixture-direct ()
+  "Temp test fixture files (ov5-test-*) are safe for direct mutation."
+  (should (eq 'direct
+              (gptel-auto-workflow--self-heal-route-mode
+               "/tmp/ov5-test-XYZ123.el"))))
+
+(ert-deftest test-self-heal-semantic/routes-outside-modules-direct ()
+  "Files outside lisp/modules/ are safe for direct mutation."
+  (should (eq 'direct
+              (gptel-auto-workflow--self-heal-route-mode
+               "/some/other/path/foo.el"))))
 
 (ert-deftest test-self-heal-semantic/ov5-adapter-defers-without-worktree-helper ()
   "High-risk adapter does not mutate directly when worktree helper is missing."
