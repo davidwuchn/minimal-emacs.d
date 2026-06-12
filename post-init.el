@@ -182,13 +182,25 @@ Only reloads for top-level frames (not Corfu child frames) and only once per fra
 ;; (network timeout, pipe break) while the Emacs process survives.  Instead
 ;; of requiring an external watchdog to SIGKILL and restart (losing all
 ;; in-progress experiment work), recreate the socket in-process every 30s.
-(when (and (daemonp) server-process (process-live-p server-process))
+;; Also ensure server-start is called initially if not already done.
+(when (daemonp)
+  ;; Ensure server is started (daemon should do this automatically, but be explicit)
+  (unless (and (boundp 'server-process) server-process (process-live-p server-process))
+    (condition-case err
+        (progn
+          (server-start)
+          (message "[server] Explicitly started server: %s" server-name))
+      (error
+       (message "[server] Failed to start server: %s" (error-message-string err)))))
+  
+  ;; Self-heal: check every 30s and recreate socket if lost
   (run-at-time 30 30
                (lambda ()
                  (when (and (boundp 'server-name) (stringp server-name)
                             (boundp 'server-socket-dir) (stringp server-socket-dir))
                    (let ((sock (expand-file-name server-name server-socket-dir)))
                      (unless (file-exists-p sock)
+                       (message "[server] Socket missing: %s, attempting self-heal" sock)
                        (when server-process
                          (condition-case nil (delete-process server-process) (error nil))
                          (setq server-process nil))
