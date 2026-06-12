@@ -545,7 +545,8 @@ Suitable for display in a buffer or log."
                       (plist-get factor :active-cols)) lines)
         (push (format "Recommendation: %s\n"
                       (pcase (plist-get factor :unify-or-diversify)
-                        (:unify "UNIFY — substrate dominates, all strategies perform similarly across categories")
+                        (:unify "UNIFY — substrate dominates, all strategies perform similarly across
+categories")
                         (:diversify "DIVERSIFY — strategies are category-specific, optimize per-category")
                         (:mixed "MIXED — partial specialization, tune per high-leverage cell"))) lines)
         ;; Per-category best strategy
