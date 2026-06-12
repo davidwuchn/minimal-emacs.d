@@ -104,7 +104,7 @@ fresh cycle.")
 (defvar gptel-auto-workflow-run-async nil)
 (defvar gptel-auto-workflow--lambda-strike-count nil)
 (defvar gptel-auto-workflow--lambda-dead-until nil)
-(defvar gptel-auto-experiment-max-per-target nil)
+(defvar gptel-auto-experiment-max-per-target)
 
 (defcustom gptel-auto-workflow--critical-functions
   '(gptel-auto-workflow-run-async--guarded

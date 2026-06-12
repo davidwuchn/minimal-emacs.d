@@ -66,7 +66,7 @@
                   "gptel-auto-workflow-approval-queue")
 (declare-function gptel-auto-workflow-approval-queue--read-sexp-file
                   "gptel-auto-workflow-approval-queue")
-(defvar gptel-auto-workflow-approval-queue-dir nil)
+(defvar gptel-auto-workflow-approval-queue-dir)
 
 (declare-function gptel-auto-workflow--run-architectural-analysis
   "gptel-auto-workflow-architectural-evolution")
@@ -100,7 +100,7 @@ Prevents excessive analysis overhead on the experiment pipeline."
 (defvar gptel-auto-workflow-monitoring-cycle-counter 0
   "Counter for monitoring cycles, used to run health probes every 3rd cycle.")
 
-(defvar gptel-auto-experiment--shared-retryable-error-patterns nil)
+(defvar gptel-auto-experiment--shared-retryable-error-patterns)
 
 
 ;; ── Phase 0: Runtime Health Probes ──

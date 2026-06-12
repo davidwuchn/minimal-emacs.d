@@ -73,9 +73,9 @@ ORIG is the original function, PATH is the file path."
 
 ;; --- Forward declarations ---
 (defvar gptel--openrouter nil) ; defined later; forward-declared for byte-compiler
-(defvar gptel--minimax nil)   ; defined later; forward-declared for byte-compiler
+(defvar gptel--minimax)       ; defined later; forward-declared for byte-compiler
 (defvar gptel--moonshot nil)  ; defined later; forward-declared for byte-compiler
-(defvar gptel--cf-gateway nil) ; defined later; forward-declared for byte-compiler
+(defvar gptel--cf-gateway)     ; defined later; forward-declared for byte-compiler
 (defvar my/gptel--in-subagent-task) ; defined in gptel-tools-agent.el
 
 ;; ==============================================================================

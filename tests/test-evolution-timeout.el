@@ -126,8 +126,15 @@
             ((symbol-function 'gptel-auto-workflow--emit-result)
              (lambda (&rest _) nil))
             ((symbol-function 'gptel-auto-workflow--autoresearch-check)
-             (lambda (_) nil)))
+             (lambda (_) nil))
+            ;; Hermetic gate: prior tests may load production.el, making
+            ;; pending-decisions-p fboundp with nil gate — which passes
+            ;; and lets evolution-run-cycle reach the experiment-trigger
+            ;; branch (run-async, real HTTP).  Force the blocked path.
+            ((symbol-function 'gptel-auto-workflow--pending-decisions-p)
+             (lambda () t)))
     (let ((start (float-time))
+          (gptel-auto-workflow--evolution-last-run nil)
           (result (gptel-auto-workflow-evolution-run-cycle 5)))
       (let ((elapsed (- (float-time) start)))
         ;; Must return within 5 seconds (all stubs are fast)

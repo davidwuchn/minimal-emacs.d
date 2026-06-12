@@ -31,8 +31,8 @@
 (declare-function gptel-auto-experiment--compute-frontier "gptel-tools-agent-prompt-build" (target))
 (declare-function gptel-auto-workflow--target-saturated-p "gptel-auto-workflow-ontology-predict" (target &optional max-experiments))
 
-(defvar gptel-auto-experiment-max-per-target nil)
-(defvar gptel-auto-experiment-no-improvement-threshold nil)
+(defvar gptel-auto-experiment-max-per-target)
+(defvar gptel-auto-experiment-no-improvement-threshold)
 (defvar gptel-auto-workflow--run-id nil)
 (defvar gptel-auto-experiment--quota-exhausted nil)
 (defvar gptel-auto-experiment--consecutive-timeout-threshold 3
