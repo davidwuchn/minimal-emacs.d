@@ -3,7 +3,7 @@
 (defvar gptel-auto-workflow--routing-audit-log nil)
 (defvar gptel-auto-workflow--run-failed-backends nil)
 (defvar gptel-auto-workflow--rate-limited-backends nil)
-(defvar gptel-ai-behaviors--best-concrete-tasks nil)
+(defvar gptel-ai-behaviors--best-concrete-tasks (make-hash-table :test 'equal))
 (defvar gptel-auto-experiment--target-state-cache
   (make-hash-table :test 'equal)
   "Cache for target state (byte-compiles, syntax-ok) per experiment.")
@@ -1308,7 +1308,7 @@ VSM S2 Metal: coordination prevents duplicated effort across similar files."
 All known backends now support lambda notation, so this prompt is no
 longer sent via API — retained only for backward compatibility.")
 
-(defvar gptel-auto-workflow--backend-lambda-health-cache nil
+(defvar gptel-auto-workflow--backend-lambda-health-cache (make-hash-table :test 'equal)
   "Cache of backend lambda verification results.
 Format: \(\(backend . timestamp\) . status\) where
 status is :healthy/:degraded/:unknown.")
