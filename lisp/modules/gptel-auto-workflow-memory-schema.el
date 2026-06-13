@@ -43,13 +43,11 @@ Analogous to MemGraphRAG's tau threshold."
   :type 'file
   :group 'gptel-tools-agent)
 
-(defvar gptel-auto-workflow--memory-schema-schemas nil
-  "Hash table: SCHEMA-KEY -> frequency count.
-Initialized lazily on first access.")
+(defvar gptel-auto-workflow--memory-schema-schemas (make-hash-table :test 'equal :size 32)
+  "Hash table: SCHEMA-KEY -> frequency count.")
 
-(defvar gptel-auto-workflow--memory-schema-entities nil
-  "Hash table: ENTITY-NAME -> (count . (source-file ...)).
-Initialized lazily on first access.")
+(defvar gptel-auto-workflow--memory-schema-entities (make-hash-table :test 'equal :size 64)
+  "Hash table: ENTITY-NAME -> (count . (source-file ...)).")
 
 (defvar gptel-auto-workflow--memory-schema-triples nil
   "Hash table: TRIPLE-KEY -> (schema-key . source-file).
@@ -597,7 +595,7 @@ SCORE = sum of shared-schema counts at each depth level."
 
 ;; ─── Bidirectional Memory-Code Links ───
 
-(defvar gptel-auto-workflow--memory-schema-code-links nil
+(defvar gptel-auto-workflow--memory-schema-code-links (make-hash-table :test 'equal :size 32)
   "Hash table: CODE-FILE-REL -> list of referenced memory slugs.
 Populated lazily by `gptel-auto-workflow--memory-schema-scan-code-links'.")
 
