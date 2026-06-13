@@ -78,7 +78,10 @@
 (defvar gptel-auto-workflow-targets nil)
 (defvar gptel-model nil)
 (defvar gptel-auto-workflow--cached-baseline-results nil)
-(defvar gptel-auto-workflow-use-staging nil)
+;; NOTE: `gptel-auto-workflow-use-staging' is defined via defcustom in
+;; gptel-tools-agent-subagent.el with default t.  Do NOT override it here
+;; with a nil defvar, as that silently disables staging and lets optimize
+;; branches bypass review.
 (defvar gptel-backend nil)
 (defvar gptel-auto-experiment-time-budget nil)
 (defvar gptel-auto-workflow--last-progress-time nil)

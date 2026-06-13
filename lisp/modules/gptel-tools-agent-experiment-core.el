@@ -1265,29 +1265,42 @@ fallback hash" (or target "unknown")))))
                                                          (setq gptel-auto-experiment--best-score score-after
                                                                gptel-auto-experiment--no-improvement-count 0)
                                                          (message "[auto-exp] Commit successful, proceeding with push/staging")
-			                                                        (if gptel-auto-experiment-auto-push
-			                                                            (progn
-			                                                              (message "[auto-experiment] Pushing to %s" experiment-branch)
-			                                                              (if (gptel-auto-workflow--push-branch-with-lease
-				                                                               experiment-branch
-				                                                               (format "Push optimize branch %s" experiment-branch)
-				                                                               180)
-				                                                              (if gptel-auto-workflow-use-staging
-				                                                                  (gptel-auto-workflow--staging-flow
-					                                                               experiment-branch
-					                                                               finalize)
-				                                                                (funcall finalize))
-				                                                            (let ((failed-result
-					                                                               (plist-put (copy-sequence exp-result)
-						                                                                      :comparator-reason
-						                                                                      "optimize-push-failed")))
-				                                                              (setq failed-result (plist-put failed-result :kept nil))
-				                                                              (funcall log-fn run-id failed-result)
-				                                                              ;; Track token economics for this experiment
-				                                                              (when (fboundp 'gptel-token-economics--track-experiment)
-				                                                                (gptel-token-economics--track-experiment failed-result))
-				                                                              (funcall callback failed-result))))
-			                                                          (funcall finalize)))
+                                                        ;; QUARANTINE: do not push optimize branches to origin until
+                                                        ;; staging verification has passed.  If staging is disabled, push
+                                                        ;; is blocked entirely to prevent unreviewed optimize branches
+                                                        ;; from leaking to the shared remote.
+                                                        (if gptel-auto-workflow-use-staging
+                                                            (if gptel-auto-experiment-auto-push
+                                                                (progn
+                                                                  (message "[auto-experiment] Pushing to %s" experiment-branch)
+                                                                  (if (gptel-auto-workflow--push-branch-with-lease
+                                                                       experiment-branch
+                                                                       (format "Push optimize branch %s" experiment-branch)
+                                                                       180)
+                                                                      (gptel-auto-workflow--staging-flow
+                                                                       experiment-branch
+                                                                       finalize)
+                                                                    (let ((failed-result
+                                                                           (plist-put (copy-sequence exp-result)
+                                                                                      :comparator-reason
+                                                                                      "optimize-push-failed")))
+                                                                      (setq failed-result (plist-put failed-result :kept nil))
+                                                                      (funcall log-fn run-id failed-result)
+                                                                      ;; Track token economics for this experiment
+                                                                      (when (fboundp 'gptel-token-economics--track-experiment)
+                                                                        (gptel-token-economics--track-experiment failed-result))
+                                                                      (funcall callback failed-result))))
+                                                              (funcall finalize))
+                                                          (let ((failed-result
+                                                                 (plist-put (copy-sequence exp-result)
+                                                                            :comparator-reason
+                                                                            "staging-disabled-push-blocked")))
+                                                            (setq failed-result (plist-put failed-result :kept nil))
+                                                            (message "[auto-experiment] ✗ Push blocked for %s: staging is disabled" experiment-branch)
+                                                            (funcall log-fn run-id failed-result)
+                                                            (when (fboundp 'gptel-token-economics--track-experiment)
+                                                              (gptel-token-economics--track-experiment failed-result))
+                                                            (funcall callback failed-result))))
 		                                                        (let ((failed-result
 			                                                           (plist-put (copy-sequence exp-result)
 				                                                                  :comparator-reason
@@ -1589,20 +1602,25 @@ fallback hash" (or target "unknown")))))
 								   nil "false" nil
 								   gptel-auto-experiment-validation-retry-active-grace)))
                                                (let ((default-directory experiment-worktree))
-                                                   (let* ((grader-bypass
-                                                           (and grade-passed
-                                                                grade-score grade-total (> grade-total 0)
-                                                                (>= (/ (float grade-score) grade-total) 0.6)
-                                                                (not validation-error)))
+                                                   ;; NOTE: _grade-genuine dummy bindings preserve
+                                                   ;; the paren balance of the original let* after
+                                                   ;; the grade-genuine-p check was extracted into
+                                                   ;; `gptel-auto-experiment--grader-bypass-p'.
+                                                   (let* ((_grade-genuine nil)
+                                                          (_grade-genuine2 nil)
+                                                          (grader-bypass
+                                                           (gptel-auto-experiment--grader-bypass-p
+                                                            grade-passed grade-score grade-total grade bench
+                                                            validation-error tests-passed))
                                                           (reason
                                                            (if grader-bypass
                                                                (format "grader-bypass:%s"
-                                                                       "benchmark failed but grader passed strongly")
-                                                            (cond (validation-error validation-error)
-                                                                  ((not (plist-get bench :nucleus-passed))
-                                                                   "nucleus-validation-failed")
-                                                                  ((not tests-passed) "tests-failed")
-                                                                  (t "verification-failed"))))
+                                                                       "benchmark failed but genuine grader passed strongly")
+                                                             (cond (validation-error validation-error)
+                                                                   ((not tests-passed) "tests-failed")
+                                                                   ((not (plist-get bench :nucleus-passed))
+                                                                    "nucleus-validation-failed")
+                                                                   (t "verification-failed"))))
                                                          (exp-result
                                                           (list :target target
                                                                 :id experiment-id
@@ -1659,12 +1677,11 @@ fallback hash" (or target "unknown")))))
                                                                      (setq gptel-auto-experiment--best-score
                                                                            (/ (float grade-score) grade-total)
                                                                            gptel-auto-experiment--no-improvement-count 0)
+                                                                     (if gptel-auto-workflow-use-staging
                                                                      (if gptel-auto-experiment-auto-push
                                                                          (if (gptel-auto-workflow--push-branch-with-lease
                                                                               experiment-branch "Push grader-bypass" 180)
-                                                                             (if gptel-auto-workflow-use-staging
-                                                                                 (gptel-auto-workflow--staging-flow experiment-branch finalize)
-                                                                               (funcall finalize))
+                                                                             (gptel-auto-workflow--staging-flow experiment-branch finalize)
                                                                            (let ((failed (plist-put (copy-sequence exp-result) :comparator-reason "grader-bypass-push-failed")))
                                                                              (setq failed (plist-put failed :kept nil))
                                                                              (funcall log-fn run-id failed)
@@ -1672,7 +1689,15 @@ fallback hash" (or target "unknown")))))
                                                                              (when (fboundp 'gptel-token-economics--track-experiment)
                                                                                (gptel-token-economics--track-experiment failed))
                                                                              (funcall callback failed)))
-                                                                       (funcall finalize)))
+                                                                       (funcall finalize))
+                                                                   (let ((failed (plist-put (copy-sequence exp-result)
+                                                                                           :comparator-reason "staging-disabled-grader-bypass-push-blocked")))
+                                                                     (setq failed (plist-put failed :kept nil))
+                                                                     (message "[auto-experiment] ✗ Grader-bypass push blocked for %s: staging is disabled" experiment-branch)
+                                                                     (funcall log-fn run-id failed)
+                                                                     (when (fboundp 'gptel-token-economics--track-experiment)
+                                                                       (gptel-token-economics--track-experiment failed))
+                                                                     (funcall callback failed))))
                                                                  (let ((failed (plist-put (copy-sequence exp-result)
                                                                                           :comparator-reason
                                                                                           (if stage-ok
@@ -1972,6 +1997,32 @@ Safe to call multiple times: already-merged branches are skipped."
         (message "[staging-recovery] %d experiments are > %dh old — skipping (branches likely deleted)"
                  skipped gptel-auto-experiment--staging-recovery-max-age-hours)))))
 
+(defun gptel-auto-experiment--grader-bypass-p
+    (grade-passed grade-score grade-total grade bench
+                  validation-error tests-passed)
+  "Return t if the grade qualifies for grader-bypass.
+GRADE-PASSED is the boolean result from the grader.
+GRADE-SCORE and GRADE-TOTAL are the numeric score and total.
+GRADE is a plist with keys :grader-only-failure, :quota-exhausted,
+:blind-mode, :details.
+BENCH is a plist with key :nucleus-passed.
+VALIDATION-ERROR is non-nil if validation failed.
+TESTS-PASSED is the boolean test result from the benchmark.
+Requires: genuine grade result (no grader-only-failure, quota-exhausted,
+blind-mode, or auto-pass details), score >= 0.75, no validation error,
+tests passed, and nucleus passed."
+  (and grade-passed
+       (not (plist-get grade :grader-only-failure))
+       (not (plist-get grade :quota-exhausted))
+       (not (plist-get grade :blind-mode))
+       (not (string-match-p "auto-pass"
+                            (or (plist-get grade :details) "")))
+       grade-score grade-total (> grade-total 0)
+       (>= (/ (float grade-score) grade-total) 0.75)
+       (not validation-error)
+       tests-passed
+       (plist-get bench :nucleus-passed)))
+
 (defun gptel-auto-experiment--grader-bypass-commit-and-push
     (target hypothesis grade-score grade-total _baseline
      experiment-id experiment-worktree experiment-branch
@@ -2010,17 +2061,23 @@ fresh stage+commit cycle before giving up."
             (gptel-auto-workflow--track-commit experiment-id target experiment-worktree)
             (gptel-auto-experiment--maybe-log-staging-pending run-id exp-result log-fn)
             (setq gptel-auto-experiment--no-improvement-count 0)
-            (if gptel-auto-experiment-auto-push
-                (if (gptel-auto-workflow--push-branch-with-lease
-                     experiment-branch (format "Push bypass branch %s" experiment-branch) 180)
-                    (if gptel-auto-workflow-use-staging
+            (if gptel-auto-workflow-use-staging
+                (if gptel-auto-experiment-auto-push
+                    (if (gptel-auto-workflow--push-branch-with-lease
+                         experiment-branch (format "Push bypass branch %s" experiment-branch) 180)
                         (gptel-auto-workflow--staging-flow experiment-branch finalize)
-                      (funcall finalize))
-                  (let ((failed-result (plist-put (plist-put (copy-sequence exp-result) :comparator-reason "bypass-push-failed") :kept nil)))
-                    (funcall log-fn run-id failed-result)
-                    (when (fboundp 'gptel-token-economics--track-experiment)
-                      (gptel-token-economics--track-experiment failed-result))))
-              (funcall finalize)))
+                      (let ((failed-result (plist-put (plist-put (copy-sequence exp-result) :comparator-reason "bypass-push-failed") :kept nil)))
+                        (funcall log-fn run-id failed-result)
+                        (when (fboundp 'gptel-token-economics--track-experiment)
+                          (gptel-token-economics--track-experiment failed-result))))
+                  (funcall finalize))
+              (let ((failed-result (plist-put (plist-put (copy-sequence exp-result)
+                                                         :comparator-reason "staging-disabled-bypass-push-blocked")
+                                              :kept nil)))
+                (message "[auto-experiment] ✗ Bypass push blocked for %s: staging is disabled" experiment-branch)
+                (funcall log-fn run-id failed-result)
+                (when (fboundp 'gptel-token-economics--track-experiment)
+                  (gptel-token-economics--track-experiment failed-result)))))
         (progn
           (gptel-auto-workflow--drop-provisional-commit
            provisional-commit-hash (format "Drop bypass commit for %s" target))

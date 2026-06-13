@@ -17,13 +17,27 @@
     "lisp/modules/gptel-auto-workflow-production.el"
     "lisp/modules/gptel-auto-workflow-strategic.el"
     "lisp/modules/gptel-auto-workflow-evolution.el"
-    "lisp/modules/gptel-tools-agent-staging-baseline.el"
+    "lisp/modules/gptel-auto-workflow-self-heal-semantic.el"
+    "lisp/modules/gptel-auto-workflow-self-audit.el"
+    "lisp/modules/gptel-auto-workflow-monitoring-agent.el"
+    "lisp/modules/gptel-tools-agent-benchmark.el"
+    "lisp/modules/gptel-tools-agent-validation.el"
+    "lisp/modules/gptel-tools-agent-experiment-core.el"
+    "lisp/modules/gptel-tools-agent-main.el"
     "lisp/modules/gptel-tools-agent-prompt-build.el"
+    "lisp/modules/gptel-tools-agent-staging-baseline.el"
+    "lisp/modules/gptel-tools-agent-staging-merge.el"
+    "lisp/modules/gptel-tools-agent-subagent.el"
+    "lisp/modules/gptel-benchmark-subagent.el"
     "mementum/gtm/strategy-roadmap.md"
     "mementum/decisions/")
   "Files and directories that require explicit human approval to modify.
 Any experiment touching these is blocked regardless of grader score.
-This prevents architectural destruction attacks that fool the grader.")
+This prevents architectural destruction attacks that fool the grader.
+Gate-engine files (benchmark, grader, validation, staging, experiment-core,
+main, subagent, self-heal, self-audit, monitoring) are hard-blocked because
+mutating the gate engine from inside an experiment is a self-referential
+attack surface.")
 
 (declare-function gptel-auto-workflow--read-file-contents "gptel-tools-agent-base" (filepath))
 
@@ -103,7 +117,9 @@ validation callers only need the exit code."
   "Return shell COMMAND output with validation timeout protection."
   (if-let* ((timeout (gptel-auto-experiment--process-timeout-seconds)))
       (gptel-auto-experiment--shell-command-native-timeout command timeout)
-    (condition-case err (shell-command-to-string command))))
+    (condition-case err
+        (shell-command-to-string command)
+      (error (message "[validation] shell command failed: %s" err) ""))))
 
 (defun gptel-auto-experiment--invalid-cl-return-target-in-forms (forms &optional blocks)
   "Return the first invalid `cl-return-from' target in FORMS.
@@ -492,91 +508,95 @@ Returns nil if valid, or error message string if invalid."
 
 ;; ─── Cheap Diff Content Sanity Check ───
 
+(defun gptel-auto-experiment--validate-diff-text (diff-text)
+  "Analyze DIFF-TEXT (a git diff string) for dangerous patterns.
+Returns nil if content seems reasonable, or an error string.
+Catches: trivial changes (whitespace/comments only), LLM artifacts in diff,
+vandalism (removal of error handling), excessively large diffs,
+critical-file mutations, mass deletions, and scope creep.
+Extracted from `gptel-auto-experiment--validate-diff-content' for testability."
+  (cond
+   ;; No diff at all — executor somehow produced no changes
+   ((string-empty-p (string-trim (or diff-text "")))
+    "Cheap check: experiment produced no file changes")
+   ;; Check for LLM/markdown artifacts in the diff
+   ((string-match-p
+     "\\+```\\(emacs-lisp\\|lisp\\|elisp\\)?" diff-text)
+    (format "Cheap check: LLM markdown artifacts in diff (``` blocks)"))
+   ;; Check for debug artifacts: print/insert at top level
+    ((let ((debug-form nil))
+       (when (string-match
+              "^\\+\\(message\\|insert\\|print\\|princ\\|debug\\)" diff-text)
+         (setq debug-form (match-string 1 diff-text))
+         (format "Cheap check: debug artifact in diff (top-level %s)"
+                 debug-form))))
+   ;; Check for vandalism: removal of error handling patterns
+    ((string-match-p
+      "^-.*condition-case\\|^-.*ignore-errors\\|^-.*noninteractive"
+      diff-text)
+     (format "Cheap check: error handling removal detected in diff"))
+    ;; Check for excessive diff size (>80 lines touched is off-task)
+    ((let ((line-count (with-temp-buffer
+                         (insert diff-text)
+                         (count-matches "\n" (point-min) (point-max)))))
+       (when (> line-count 80)
+         (format "Cheap check: diff too large (%d lines)"
+                 (1+ line-count)))))
+     ;; Check for trivial changes: only whitespace or comment additions
+    ((let ((non-trivial-lines 0))
+       (dolist (line (split-string diff-text "\n"))
+         (when (string-match-p "^\\+[^+ \t;]" line)
+           (cl-incf non-trivial-lines)))
+       (when (and (> non-trivial-lines 0) (< non-trivial-lines 2))
+         (format "Cheap check: diff has only %d non-comment code lines"
+                 non-trivial-lines))))
+      ;; CRITICAL FILE CHECK: hard-block any mutation of gate-engine
+      ;; or otherwise protected files.  Small bug fixes to non-gate
+      ;; files are allowed, but the gate engine must never be mutated
+      ;; by an experiment because that is a self-referential attack.
+      ((let ((critical-hit nil))
+         (dolist (pattern gptel-auto-experiment--critical-files)
+           (when (and (not critical-hit)
+                      (string-match-p (regexp-quote pattern) diff-text))
+             (setq critical-hit pattern)))
+         (when critical-hit
+           (format "CRITICAL: experiment modifies protected file: %s"
+                   critical-hit))))
+     ;; DESTRUCTIVE CHANGE CHECK: mass deletion detection
+    ((let* ((added (with-temp-buffer
+                    (insert diff-text)
+                    (count-matches "^\\+" (point-min) (point-max))))
+            (deleted (with-temp-buffer
+                       (insert diff-text)
+                       (count-matches "^-" (point-min) (point-max))))
+            (net-change (- added deleted)))
+       (when (< net-change -50)
+         (format "ARCHITECTURAL DESTRUCTION: net deletion of %d lines (added %d, deleted %d)"
+                 (- net-change) added deleted))))
+    ;; SCOPE CREEP CHECK: too many files touched
+    ((let* ((files-touched
+             (delete-dups
+              (delq nil
+                    (mapcar (lambda (line)
+                              (when (string-match "^diff --git a/\\(.+?\\) b/" line)
+                                (match-string 1 line)))
+                            (split-string diff-text "\n"))))))
+       (when (> (length files-touched) 5)
+         (format "SCOPE CREEP: touches %d files (expected <=3)"
+                 (length files-touched)))))
+     ;; Looks reasonable
+     (t nil)))
+
 (defun gptel-auto-experiment--validate-diff-content (worktree)
   "Cheap pre-grade check of aggregate diff in WORKTREE.
 Returns nil if content seems reasonable, or an error string.
-Catches: trivial changes (whitespace/comments only), LLM artifacts in diff,
-vandalism (removal of error handling), and excessively large diffs.
+Delegates diff-text analysis to `gptel-auto-experiment--validate-diff-text'.
 This runs between syntax validation and the grader API call."
   (when (and worktree (file-directory-p worktree))
-    (let ((default-directory worktree)
-          (diff-text (gptel-auto-experiment--shell-command-to-string-timeboxed
-                      "git --no-pager diff --no-ext-diff --unified=10 HEAD -- . 2>/dev/null")))
-      (cond
-       ;; No diff at all — executor somehow produced no changes
-       ((string-empty-p (string-trim (or diff-text "")))
-        "Cheap check: experiment produced no file changes")
-       ;; Check for LLM/markdown artifacts in the diff
-       ((string-match-p
-         "\\+```\\(emacs-lisp\\|lisp\\|elisp\\)?" diff-text)
-        (format "Cheap check: LLM markdown artifacts in diff (``` blocks)"))
-       ;; Check for debug artifacts: print/insert at top level
-        ((let ((debug-form nil))
-           (when (string-match
-                  "^\\+\\(message\\|insert\\|print\\|princ\\|debug\\)" diff-text)
-             (setq debug-form (match-string 1 diff-text))
-             (format "Cheap check: debug artifact in diff (top-level %s)"
-                     debug-form))))
-       ;; Check for vandalism: removal of error handling patterns
-        ((string-match-p
-          "^-.*condition-case\\|^-.*ignore-errors\\|^-.*noninteractive"
-          diff-text)
-         (format "Cheap check: error handling removal detected in diff"))
-        ;; Check for excessive diff size (>80 lines touched is off-task)
-        ((let ((line-count (with-temp-buffer
-                             (insert diff-text)
-                             (count-matches "\n" (point-min) (point-max)))))
-           (when (> line-count 80)
-             (format "Cheap check: diff too large (%d lines)"
-                     (1+ line-count)))))
-         ;; Check for trivial changes: only whitespace or comment additions
-        ((let ((non-trivial-lines 0))
-           (dolist (line (split-string diff-text "\n"))
-             (when (string-match-p "^\\+[^+ \t;]" line)
-               (cl-incf non-trivial-lines)))
-           (when (and (> non-trivial-lines 0) (< non-trivial-lines 2))
-             (format "Cheap check: diff has only %d non-comment code lines"
-                     non-trivial-lines))))
-         ;; CRITICAL FILE CHECK: only block if actually destructive
-         ;; Small bug fixes to critical files are allowed; mass deletions are not
-         ((let ((critical-hit nil))
-            (dolist (pattern gptel-auto-experiment--critical-files)
-              (when (and (not critical-hit)
-                         (string-match-p (regexp-quote pattern) diff-text))
-                (setq critical-hit pattern)))
-            (when critical-hit
-              ;; Count total deletions in diff
-              (let ((total-deletions
-                     (with-temp-buffer
-                       (insert diff-text)
-                       (count-matches "^-" (point-min) (point-max)))))
-                (when (> total-deletions 20)
-                  (format "CRITICAL: experiment deletes %d lines including protected file: %s"
-                          total-deletions critical-hit))))))
-        ;; DESTRUCTIVE CHANGE CHECK: mass deletion detection
-        ((let* ((added (with-temp-buffer
-                        (insert diff-text)
-                        (count-matches "^\\+" (point-min) (point-max))))
-                (deleted (with-temp-buffer
-                           (insert diff-text)
-                           (count-matches "^-" (point-min) (point-max))))
-                (net-change (- added deleted)))
-           (when (< net-change -50)
-             (format "ARCHITECTURAL DESTRUCTION: net deletion of %d lines (added %d, deleted %d)"
-                     (- net-change) added deleted))))
-        ;; SCOPE CREEP CHECK: too many files touched
-        ((let* ((files-touched
-                 (delete-dups
-                  (delq nil
-                        (mapcar (lambda (line)
-                                  (when (string-match "^diff --git a/\\(.+?\\) b/" line)
-                                    (match-string 1 line)))
-                                (split-string diff-text "\n"))))))
-           (when (> (length files-touched) 5)
-             (format "SCOPE CREEP: touches %d files (expected <=3)"
-                     (length files-touched)))))
-         ;; Looks reasonable
-         (t nil)))))
+    (let ((default-directory worktree))
+      (gptel-auto-experiment--validate-diff-text
+       (gptel-auto-experiment--shell-command-to-string-timeboxed
+        "git --no-pager diff --no-ext-diff --unified=10 HEAD -- . 2>/dev/null")))))
 
 ;; ─── Grader Fast-Track: Auto-pass small defensive changes ───
 
