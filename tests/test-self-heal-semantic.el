@@ -1552,5 +1552,61 @@ The regex should not match code inside comments."
           (should (= issues 0)))
       (test-self-heal-semantic--cleanup file))))
 
+;; ── Regression: nil-hash-table value-position false positive ──
+
+(ert-deftest test-self-heal-semantic/nil-hash-table-clean-value-position-fp ()
+  "Variable in puthash VALUE position is NOT flagged as a hash table.
+Regression: the old [^)]* regex matched var names anywhere in hash function
+forms, including :run-id payload values inside puthash."
+  (let* ((content
+          "(defvar gptel-prefix-cache--run-id nil \"Run ID sentinel.\")\n\n(defvar my-cache (make-hash-table :test 'equal)\n  \"Hash table for role caches.\")\n\n(defun store-role (role content)\n  (puthash role\n           (list :content content\n                 :run-id gptel-prefix-cache--run-id)\n           my-cache))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-nil-hash-tables file)))
+          (should (= issues 0)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/nil-hash-table-prefix-cache-clean ()
+  "gptel-ext-prefix-cache.el produces zero nil-hash-table audit issues.
+Regression: gptel-prefix-cache--run-id (a run-id sentinel, not a hash table)
+was falsely flagged because it appeared in puthash VALUE position."
+  (let ((file (expand-file-name "lisp/modules/gptel-ext-prefix-cache.el"
+                                default-directory)))
+    (skip-unless (file-exists-p file))
+    (gptel-auto-workflow--semantic-audit-reset)
+    (gptel-auto-workflow--audit-nil-hash-tables file)
+    (let ((nil-ht-issues
+           (cl-remove-if-not (lambda (entry)
+                               (eq (plist-get entry :type) 'nil-hash-table))
+                             gptel-auto-workflow--semantic-audit-log)))
+      (should (= (length nil-ht-issues) 0)))))
+
+(ert-deftest test-self-heal-semantic/nil-hash-table-memory-schema-clean ()
+  "gptel-auto-workflow-memory-schema.el produces zero nil-hash-table audit issues.
+Multi-binding lazy-init and make-hash-table ctors are recognized.
+skill-graph--edges is a bare forward-declaration, not nil-initialized."
+  (let ((file (expand-file-name "lisp/modules/gptel-auto-workflow-memory-schema.el"
+                                default-directory)))
+    (skip-unless (file-exists-p file))
+    (gptel-auto-workflow--semantic-audit-reset)
+    (gptel-auto-workflow--audit-nil-hash-tables file)
+    (let ((nil-ht-issues
+           (cl-remove-if-not (lambda (entry)
+                               (eq (plist-get entry :type) 'nil-hash-table))
+                             gptel-auto-workflow--semantic-audit-log)))
+      (should (= (length nil-ht-issues) 0)))))
+
+(ert-deftest test-self-heal-semantic/nil-hash-table-clean-multi-binding-lazy-init ()
+  "Multi-binding setq lazy-init (memory-schema pattern) is recognized.
+Three variables initialized in one (setq a (make-...) b (make-...) c (make-...))
+form are correctly skipped by the lazy-init guard."
+  (let* ((content
+          "(defvar schemas nil)\n(defvar entities nil)\n(defvar triples nil)\n\n(defun ensure-loaded ()\n  (setq schemas (make-schemas)\n        entities (make-entities)\n        triples (make-triples)))\n\n(defun lookup (key)\n  (gethash key schemas)\n  (gethash key entities)\n  (gethash key triples))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-nil-hash-tables file)))
+          (should (= issues 0)))
+      (test-self-heal-semantic--cleanup file))))
+
 (provide 'test-self-heal-semantic)
 ;;; test-self-heal-semantic.el ends here
