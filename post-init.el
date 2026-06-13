@@ -278,4 +278,4 @@ Only reloads for top-level frames (not Corfu child frames) and only once per fra
                                    (error 'ERR))))
                     (if (or (eq result2 t) (eq result2 nil))
                         (message "[CRITICAL] Fixed pending-decisions-p after reload")
-                      (message "[CRITICAL] FAILED to fix pending-decisions-p (still returns %s)" result2))))))))
+                      (message "[CRITICAL] FAILED to fix pending-decisions-p (still returns %s)" result2)))))))))
