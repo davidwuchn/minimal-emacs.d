@@ -1744,12 +1744,13 @@ the bare defvar here just suppresses compiler warnings."
 
 (ert-deftest test-self-heal-semantic/void-defvar-still-flags-bare-not-hash-table ()
   "Bare defvar NOT used as a hash table is still flagged.
-Ensures the hash-table skip gate does not suppress real void-defvar issues."
+Ensures the hash-table skip gate does not suppress real void-defvar issues.
+The variable is NOT referenced elsewhere in the file — it is truly unused."
   (let* ((content
           "(defvar my-flag)
 
 \(defun get-flag ()
-  my-flag)")
+  t)")
          (file (test-self-heal-semantic--tmp-file content)))
     (unwind-protect
         (let ((issues (gptel-auto-workflow--audit-void-defvars file)))
@@ -1770,6 +1771,36 @@ defined in gptel-auto-workflow-skill-graph.el — it should NOT be flagged."
                                (eq (plist-get entry :type) 'void-defvar))
                              gptel-auto-workflow--semantic-audit-log)))
       (should (= (length void-issues) 0)))))
+
+;; ── Test 23: void-defvar forward-declaration (used-elsewhere) gate ──
+
+(ert-deftest test-self-heal-semantic/void-defvar-skips-forward-decl-with-usage ()
+  "Bare defvar whose symbol is used elsewhere in the file is a forward
+declaration and should NOT be flagged (0 void-defvar issues)."
+  (let* ((content
+          "(defvar my-flag)
+
+\(defun get-flag ()
+  my-flag)")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-void-defvars file)))
+          (should (= issues 0)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/void-defvar-flags-truly-unused-bare ()
+  "Bare defvar with NO other usage anywhere in the file should still be
+flagged (1 void-defvar issue)."
+  (let* ((content
+          "(defvar my-flag)
+
+\(defun get-flag ()
+  t)")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-void-defvars file)))
+          (should (>= issues 1)))
+      (test-self-heal-semantic--cleanup file))))
 
 (provide 'test-self-heal-semantic)
 ;;; test-self-heal-semantic.el ends here

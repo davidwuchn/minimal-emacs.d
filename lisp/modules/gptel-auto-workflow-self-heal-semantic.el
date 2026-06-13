@@ -403,6 +403,25 @@ Returns 1 if missing, 0 if present."
 
 ;; ── Check 10: Bare (defvar FOO) without initial value ──
 
+(defun gptel-auto-workflow--var-used-elsewhere-p (var-name search-start buffer)
+  "Return t if VAR-NAME appears as a standalone symbol after SEARCH-START.
+Searches BUFFER (which must be in `emacs-lisp-mode') from SEARCH-START to
+end-of-buffer.  Excludes occurrences inside strings and comments.
+SEARCH-START should be the buffer position immediately after the close
+paren of the defvar form whose variable name is being checked."
+  (with-current-buffer buffer
+    (save-excursion
+      (goto-char search-start)
+      (let ((case-fold-search nil)
+            (pattern (concat "\\_<" (regexp-quote var-name) "\\_>")))
+        (catch 'found
+          (while (re-search-forward pattern nil t)
+            (let ((state (syntax-ppss (match-beginning 0))))
+              (unless (or (nth 3 state)   ; inside string
+                          (nth 4 state))  ; inside comment
+                (throw 'found t))))
+          nil)))))
+
 (defun gptel-auto-workflow--audit-void-defvars (file)
   "Audit FILE for bare (defvar SYMBOL) without an initial value.
 Bare defvars do not make the variable special under lexical-binding,
@@ -429,18 +448,26 @@ causing void-variable errors at runtime.  Returns count of bare defvars."
              (when (eq (char-after) ?\))
                (setq is-bare t))))
           (when is-bare
-            ;; Skip bare defvars that are forward declarations for hash
-            ;; tables defined in another file.  These are expected: the
-            ;; real definition initializes the hash table; the bare
-            ;; defvar here suppresses compiler warnings.
-            (unless (gptel-auto-workflow--var-used-as-hash-table-p
-                     var-name nil (current-buffer))
-              (setq issues (1+ issues))
-              (gptel-auto-workflow--semantic-audit-record
-               file line-no
-               'void-defvar
-               (format "Bare (defvar %s) — add nil to prevent void-variable errors"
-                       var-name))))
+            (let ((defvar-end (point)))  ; position of close paren
+              ;; Skip bare defvars that are forward declarations for hash
+              ;; tables defined in another file.  These are expected: the
+              ;; real definition initializes the hash table; the bare
+              ;; defvar here suppresses compiler warnings.
+              (unless (gptel-auto-workflow--var-used-as-hash-table-p
+                       var-name nil (current-buffer))
+                ;; Also skip bare defvars that are forward declarations:
+                ;; if the variable appears elsewhere in the same file
+                ;; (e.g., in function calls, setq, let bindings), it is
+                ;; a legitimate forward declaration for a variable
+                ;; defined in another file.
+                (unless (gptel-auto-workflow--var-used-elsewhere-p
+                         var-name (1+ defvar-end) (current-buffer))
+                  (setq issues (1+ issues))
+                  (gptel-auto-workflow--semantic-audit-record
+                   file line-no
+                   'void-defvar
+                   (format "Bare (defvar %s) — add nil to prevent void-variable errors"
+                           var-name))))))
           ;; Move past this form to avoid re-matching the same defvar.
           ;; If bare, we advanced to the close paren during detection;
           ;; otherwise, move to the next line.
