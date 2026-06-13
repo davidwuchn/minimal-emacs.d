@@ -2146,5 +2146,44 @@ an infinite loop caused by syntax-propertize interacting with
       (ignore-errors (delete-directory exp-subdir t))
       (test-self-heal-semantic--cleanup file))))
 
+;; ── Phase 1 hardening: timeout and smoke tests ──
+
+(ert-deftest test-self-heal-semantic/audit-check-timeout-kills-infinite-loop ()
+  "A check that hangs is killed by the per-check timeout and counted as an issue."
+  (let ((file (test-self-heal-semantic--tmp-file ";; dummy file\n"))
+        (fake-check (cons 'fake-timeout-check
+                          (lambda (_file) (sleep-for 999) 0))))
+    (unwind-protect
+        (cl-letf (((symbol-value 'gptel-auto-workflow--semantic-audit-checks)
+                    (cons fake-check gptel-auto-workflow--semantic-audit-checks)))
+          (let ((result (gptel-auto-workflow--semantic-audit-file file)))
+            (should (>= (plist-get result :issues) 1))
+            (should (with-temp-buffer
+                      (dolist (entry (plist-get result :log))
+                        (when (plist-get entry :message)
+                          (insert (plist-get entry :message) " ")))
+                      (goto-char (point-min))
+                      (re-search-forward "timed out" nil t)))))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/semantic-audit-all-real-repo-completes ()
+  "Semantic audit on the real repo completes without timing out."
+  (skip-unless (file-directory-p (expand-file-name "lisp/modules"
+                                                    (or (getenv "GIT_WORK_TREE")
+                                                        default-directory))))
+  (let* ((start (float-time))
+         (result (condition-case err
+                     (gptel-auto-workflow--semantic-audit-all)
+                   (error (message "Audit error: %s" err) nil))))
+    (should result)
+    (should (numberp (plist-get result :total-issues)))
+    (should (> (plist-get result :files-checked) 0))
+    (should-not (plist-get result :timed-out))
+    (let ((elapsed (- (float-time) start)))
+      (message "Semantic audit completed in %.1f seconds (%d files, %d issues)"
+               elapsed (plist-get result :files-checked)
+               (plist-get result :total-issues))
+      (should (< elapsed 30)))))
+
 (provide 'test-self-heal-semantic)
 ;;; test-self-heal-semantic.el ends here

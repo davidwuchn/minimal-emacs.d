@@ -69,7 +69,51 @@ if [[ "$pushing_to_main" -eq 1 ]]; then
     fi
 fi
 
-# ── Gate 2: Submodule sync check ──
+# ── Gate 2: Audit smoke gate ──
+# Block pushes to main when semantic audit smoke test fails or hangs.
+# Override: set SKIP_TEST_GATE=1 to bypass both test and audit gates.
+if [[ "$pushing_to_main" -eq 1 ]]; then
+    if [[ "${SKIP_TEST_GATE:-0}" == "1" ]]; then
+        echo "pre-push: ⚠ SKIP_TEST_GATE=1 — audit smoke gate bypassed"
+    else
+        echo ""
+        echo "╔══════════════════════════════════════════════════════════════╗"
+        echo "║  PRE-PUSH AUDIT GATE: Running semantic audit smoke test      ║"
+        echo "╚══════════════════════════════════════════════════════════════╝"
+        echo ""
+        set +e
+        audit_output="$(timeout 60 emacs --batch -Q \
+            -L "$repo_root" \
+            -L "$repo_root/lisp" \
+            -L "$repo_root/lisp/modules" \
+            -L "$repo_root/packages/gptel" \
+            -L "$repo_root/packages/gptel-agent" \
+            -l gptel-auto-workflow-self-heal-semantic \
+            --eval "(require 'gptel-auto-workflow-audit-provide-inside-defun)" \
+            --eval "(let ((r (gptel-auto-workflow--semantic-audit-smoke-test))) (if (plist-get r :pass) (kill-emacs 0) (progn (message \"AUDIT SMOKE FAIL: %S\" r) (kill-emacs 1))))" \
+            2>&1)" || true
+        audit_exit=$?
+        set -e
+        if [[ $audit_exit -eq 0 ]]; then
+            echo "✓ AUDIT GATE PASSED: semantic audit smoke test passed"
+            echo ""
+        else
+            echo ""
+            echo "╔══════════════════════════════════════════════════════════════╗"
+            echo "║  ✗ PUSH BLOCKED: Semantic audit smoke test failed            ║"
+            echo "╠══════════════════════════════════════════════════════════════╣"
+            echo "║  Fix the semantic issues or hung checks and retry.           ║"
+            echo "║  Emergency bypass: set SKIP_TEST_GATE=1 env var.             ║"
+            echo "╚══════════════════════════════════════════════════════════════╝"
+            echo ""
+            echo "$audit_output" | tail -20
+            echo ""
+            exit 1
+        fi
+    fi
+fi
+
+# ── Gate 3: Submodule sync check ──
 # Skip when VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1 (staging worktrees lack submodules).
 if [[ "${VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC:-0}" == "1" ]]; then
     echo "pre-push: skipping submodule sync (VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1)"

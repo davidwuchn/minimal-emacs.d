@@ -47,6 +47,21 @@ Set to 0 to disable rate limiting."
   :type 'integer
   :group 'gptel-tools-agent)
 
+;; ── Semantic audit timeouts ──
+
+(defcustom gptel-auto-workflow-semantic-audit-check-timeout-seconds 10
+  "Seconds before an individual audit check times out.
+A check that times out is counted as an issue (failure)."
+  :type 'number
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-auto-workflow-semantic-audit-total-timeout-seconds 120
+  "Seconds before the entire semantic audit run times out.
+When the total timeout fires, `semantic-audit-all' returns partial
+results with `:timed-out t'."
+  :type 'number
+  :group 'gptel-tools-agent)
+
 (defvar gptel-auto-workflow--fix-attempt-history
   (make-hash-table :test 'equal)
   "Hash table mapping (FILE . FIXER-NAME) → float-time of last attempt.
@@ -1761,15 +1776,26 @@ end-of-file error on broken files)."
   (gptel-auto-workflow--semantic-audit-reset)
   (let ((total-issues 0))
     (dolist (check gptel-auto-workflow--semantic-audit-checks)
-      ;; Wrap each check in condition-case to isolate failures.
-      ;; A broken file (e.g., unbalanced parens) shouldn't crash the
-      ;; whole audit run.
+      ;; Wrap each check in condition-case to isolate failures, and
+      ;; with-timeout to kill hung checks (e.g., infinite loops).
       (condition-case check-err
-          (let ((issues (funcall (cdr check) file)))
-            (setq total-issues (+ total-issues issues)))
+          (let ((check-result
+                 (with-timeout (gptel-auto-workflow-semantic-audit-check-timeout-seconds
+                                 'audit-timeout)
+                   (funcall (cdr check) file))))
+            (if (eq check-result 'audit-timeout)
+                (progn
+                  (gptel-auto-workflow--semantic-audit-record
+                   file 0 (car check)
+                   (format "Check %s timed out (>= %s s)"
+                           (car check)
+                           gptel-auto-workflow-semantic-audit-check-timeout-seconds))
+                  (setq total-issues (1+ total-issues)))
+              (setq total-issues (+ total-issues check-result))))
         (error
          (message "[self-heal-semantic] Check %s failed on %s: %s"
-                  (car check) (file-name-nondirectory file) check-err))))
+                  (car check) (file-name-nondirectory file) check-err)
+         (setq total-issues (1+ total-issues)))))
     (list :issues total-issues
           :log (nreverse (copy-sequence gptel-auto-workflow--semantic-audit-log)))))
 
@@ -1786,21 +1812,59 @@ from the audit patterns embedded in the code."
          (files (and (file-directory-p modules-dir)
                      (directory-files modules-dir t "\\.el\\'")))
          (total-issues 0)
-         (report nil))
-    (when files
-      (dolist (file files)
-        ;; Skip our own module (contains audit patterns)
-        (unless (string-match-p "self-heal-semantic" (file-name-nondirectory file))
-          (let* ((result (gptel-auto-workflow--semantic-audit-file file))
-                 (issues (plist-get result :issues)))
-            (setq total-issues (+ total-issues issues))
-            (when (> issues 0)
-              (push (list :file file :issues issues
-                          :log (plist-get result :log))
-                    report))))))
-     (list :total-issues total-issues
-           :files-checked (length files)
-           :report (nreverse report))))
+         (report nil)
+         (files-done 0)
+         (start-time (float-time))
+         (total-files (length files))
+         (result-body
+          (if (not files)
+              (list :total-issues 0 :files-checked 0 :report nil
+                    :timed-out nil :elapsed 0.0)
+            (with-timeout (gptel-auto-workflow-semantic-audit-total-timeout-seconds
+                            (list 'timed-out
+                                  :total-issues total-issues
+                                  :files-checked files-done
+                                  :report (nreverse report)
+                                  :timed-out t
+                                  :elapsed (- (float-time) start-time)))
+              (dolist (file files)
+                (unless (string-match-p
+                         "self-heal-semantic"
+                         (file-name-nondirectory file))
+                  (let* ((result (gptel-auto-workflow--semantic-audit-file file))
+                         (issues (plist-get result :issues)))
+                    (setq total-issues (+ total-issues issues))
+                    (setq files-done (1+ files-done))
+                    (when (> issues 0)
+                      (push (list :file file :issues issues
+                                  :log (plist-get result :log))
+                            report)))))
+              (list :total-issues total-issues
+                    :files-checked total-files
+                    :report (nreverse report)
+                    :timed-out nil
+                    :elapsed (- (float-time) start-time))))))
+    result-body))
+
+;; ── Smoke test ──
+
+(defun gptel-auto-workflow--semantic-audit-smoke-test ()
+  "Run the semantic audit on the real repo and return a pass/fail plist.
+Returns plist: (:pass t/nil :elapsed <seconds> :total-issues <count>
+:files-checked <count> :timed-out t/nil).
+Pass means: audit did not time out AND elapsed < 60 seconds.
+Issue count does not affect pass/fail (pre-existing findings are
+expected in the real repo)."
+  (let* ((result (gptel-auto-workflow--semantic-audit-all))
+         (timed-out (plist-get result :timed-out))
+         (elapsed (or (plist-get result :elapsed) 0.0))
+         (total-issues (plist-get result :total-issues))
+         (files-checked (plist-get result :files-checked)))
+    `(:pass ,(and (not timed-out) (< elapsed 60))
+      :elapsed ,elapsed
+      :total-issues ,total-issues
+      :files-checked ,files-checked
+      :timed-out ,timed-out)))
 
 ;; ── Batch Anchoring (MOSS insight) ──
 
