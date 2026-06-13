@@ -399,31 +399,67 @@ LegalOS is built and operated by OV5 — the self-improving AI system that runs 
 
 ---
 
-## Architecture: One Engine, Five Products
+## Architecture: One Engine, Three Jurisdictions
+
+Same as TikTok vs RedNote for CreatorOS — LegalOS has jurisdiction variants. Each jurisdiction uses different data sources and legal systems, but the same OV5 engine powers all of them.
 
 ```
                         ┌──────────────────────────────────────┐
+                        │         DATA SOURCES (Public)         │
+                        │  CourtListener │ 中国裁判文书网 │ BAILII  │
+                        │  Legifrance │ CanLII │ 北大法宝       │
+                        └──────────────┬───────────────────────┘
+                                       │
+                        ┌──────────────▼───────────────────────┐
                         │         OV5 SHARED ENGINE            │
                         │  GTM Mayor │ Ontology │ World Store  │
                         │  Experiment Loop │ 12 Backends       │
-                        └──┬────────┬────────┬────────┬───────┘
-                           │        │        │        │
-            ┌──────────────▼┐ ┌─────▼────┐ ┌▼─────────▼┐ ┌────▼──────────┐
-            │  CREATOROS    │ │ SEEDSIGHT│ │  AMAZON   │ │   LEGALOS     │
-            │  TikTok B2C   │ │ RedNote  │ │  Seller   │ │   Legal B2C   │
-            │  $19-99/mo    │ │ $530-4K  │ │ $49-99/mo │ │  $49-299/mo   │
-            └───────────────┘ └──────────┘ └───────────┘ └───────────────┘
+                        └──┬──────────────┬───────────┬───────┘
+                           │              │           │
+          ┌────────────────▼──┐ ┌─────────▼──────┐ ┌──▼──────────────────┐
+          │   US LEGALOS      │ │   法治OS        │ │   EU LEGALOS        │
+          │   (Common Law)    │ │   (Civil Law)  │ │   (Civil Law)       │
+          │                   │ │                │ │                     │
+          │  "Is this NDA     │ │  "这份竞业限制  │ │  "Cette clause de   │
+          │   enforceable?"   │ │   有效吗?"      │ │   non-concurrence?" │
+          │                   │ │                │ │                     │
+          │  CourtListener    │ │  中国裁判文书网  │ │  Legifrance         │
+          │  $49-299/mo       │ │  ¥99-599/mo    │ │  €39-239/mo         │
+          │  1.3M lawyers     │ │  750K lawyers  │ │  280K lawyers       │
+          └───────────────────┘ └────────────────┘ └─────────────────────┘
 ```
 
-**One engine. One language. Five products. Zero additional infrastructure cost.**
+**One engine. One language. Three jurisdictions. Same scoring engine. Different data sources. Different legal systems. Zero additional infrastructure cost per jurisdiction.**
+
+Adding a new jurisdiction (Japan, Brazil, India) is a configuration change: new data source parser + jurisdiction-specific contract templates. The core engine (document review, research, drafting) doesn't change.
+
+| | What Changes | What Stays |
+|---|---|---|
+| Per jurisdiction | Data source, contract templates, language, pricing | Document parser, clause extractor, AI routing, test suite |
+| Per legal system | Case law API, statute database | Research engine, citation verification |
+| Per language | UI, templates | Core logic, scoring, ontology |
+
+### Five Products, One Engine (OV5 Portfolio)
+
+LegalOS is one of five products OV5 powers from the same infrastructure:
+
+| Product | Domain | Market |
+|---------|--------|--------|
+| CreatorOS | TikTok product matching | 30M creators |
+| SeedSight | RedNote brand intel | 300K brands |
+| Amazon Seller | FBA product picks | 5M sellers |
+| **LegalOS** | Legal AI (3 jurisdictions) | **6M+ lawyers** |
+| _(next)_ | Domain TBD | — |
+
+**Same engine. Different domains. Zero additional infrastructure cost per product.**
 
 ---
 
 ## Why This Wins
 
-1. **No competition in the niche.** Harvey owns enterprise. Mike is self-host OSS. No one serves solo/small firms with affordable AI.
-2. **CourtListener is free.** 7M+ US opinions, bulk data available. Zero API cost.
-3. **Lawyers bill by the hour.** 10 hours saved/week at $300/hr = $3K/week value. $49/mo is trivial.
-4. **Self-improving moat.** Every document review, every research query, every drafted contract feeds the ontology. After 500 experiments, LegalOS knows more about your practice area than any paralegal.
-5. **OV5 makes it possible.** $200/mo total ops cost. 90%+ margins from day one.
-6. **Five products from one engine.** Same infrastructure powers CreatorOS, SeedSight, Amazon Seller, and LegalOS. Each new product costs near-zero to add.
+1. **No competition in China.** 750K lawyers, zero AI legal platforms. First-mover advantage.
+2. **No competition in US solo/small firm market.** Harvey owns enterprise ($1K-5K/seat). No one serves the other 95%.
+3. **Public case law databases are free.** CourtListener (US), 裁判文书网 (China), BAILII (UK), CanLII (Canada), Legifrance (France). Zero API cost.
+4. **Lawyers bill by the hour.** 10 hours saved/week at $300/hr = $3K/week. $49/mo is trivial.
+5. **Self-improving moat.** Every document review, every research query feeds the ontology. Compounds across jurisdictions — a pattern learned in China improves US results.
+6. **OV5 makes it possible.** $200/mo total ops cost. 90%+ margins. One human, 15 min/day.
