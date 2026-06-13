@@ -10,7 +10,7 @@
 ;; 1. Detect backend cold-start: any backend with 0 experiments in 7d
 ;; 2. Detect strategy cold-start: any strategy with 0 evaluations
 ;; 3. Detect staging-merge bottleneck: >50% of failures are staging-merge
-;; 4. Generate 'audit-fix' memory when issues found
+;; 4. Generate 'audit-fix' scratch reports when issues found
 ;; 5. Emit a Self-Audit Report to the digest
 ;;
 ;; Pattern: 'What would a human reviewer notice? Let the system notice too.'
@@ -55,6 +55,12 @@ then --expand-workspace-path (daemon mode), then default-directory."
       (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
            (gptel-auto-workflow--expand-workspace-path ""))
       default-directory))
+
+(defun gptel-auto-workflow-self-audit--audit-fix-dir ()
+  "Return the scratch directory for audit-fix artifacts.
+Uses var/tmp/self-audit/audit-fix/ under the workspace root."
+  (expand-file-name "var/tmp/self-audit/audit-fix/"
+                    (gptel-auto-workflow-self-audit--root)))
 
 (defun gptel-auto-workflow-self-audit--filter-recent-files (files cutoff)
   "Return FILES whose mtime is after CUTOFF (float-time)."
@@ -492,16 +498,16 @@ Returns plist :gap-count, :isolated, :low-confidence, :self-refs, :mismatches."
        (gptel-auto-workflow-self-audit--format-merge-section sma)
        (gptel-auto-workflow-self-audit--format-knowledge-gap-section kg)
        (gptel-auto-workflow-self-audit--format-defvar-override-section dvoc)
-       (gptel-auto-workflow-self-audit--format-pipeline-gate-section ptgc)
-       (gptel-auto-workflow-self-audit--format-staging-bypass-section sbc)
-       (format "**Audit score: %d issues found** (timestamp %s)\n"
-               issues ts)
-       "Memory written: mementum/memories/audit-fix-*.md\n"))))
+        (gptel-auto-workflow-self-audit--format-pipeline-gate-section ptgc)
+        (gptel-auto-workflow-self-audit--format-staging-bypass-section sbc)
+        (format "**Audit score: %d issues found** (timestamp %s)\n"
+                issues ts)
+        "Scratch written: var/tmp/self-audit/audit-fix/audit-fix-*.md\n"))))
 
 ;;; Memory writing
 
 (defun gptel-auto-workflow-self-audit--build-memory-content (audit-result)
-  "Build the content string for the audit-fix memory file."
+  "Build the content string for the audit-fix scratch file."
   (let* ((bca (plist-get audit-result :backend-cold-start))
          (sca (plist-get audit-result :strategy-cold-start))
          (sma (plist-get audit-result :staging-merge-bottleneck))
@@ -544,18 +550,18 @@ Returns plist :gap-count, :isolated, :low-confidence, :self-refs, :mismatches."
      "- Staging-merge auto-resolver handles .md; source code still needs review\n\n"
      "**Status**: Audit is in place. The next pipeline run will detect\n"
      "the same issues, and the next evolution cycle can act on them.\n\n"
-     "YC: 'self-evolve' must include META — auditing the system itself,\n"
-     "not just the code it produces. This memory is itself an evolution.\n")))
+      "YC: 'self-evolve' must include META — auditing the system itself,\n"
+      "not just the code it produces. This report is itself an evolution.\n")))
 
 (defun gptel-auto-workflow-self-audit--write-memory (audit-result)
-  "Write an audit-fix memory file when issues are found."
+  "Write an audit-fix scratch file when issues are found."
   (when (and audit-result (> (or (plist-get audit-result :issues) 0) 0))
     (let* ((root (gptel-auto-workflow-self-audit--root))
-           (memory-dir (expand-file-name "mementum/memories/" root))
+           (memory-dir (gptel-auto-workflow-self-audit--audit-fix-dir))
            (ts (plist-get audit-result :timestamp))
            (filename (expand-file-name
-                      (concat "audit-fix-" ts ".md")
-                      memory-dir))
+                       (concat "audit-fix-" ts ".md")
+                       memory-dir))
            (content (gptel-auto-workflow-self-audit--build-memory-content
                      audit-result)))
       (condition-case err
@@ -571,8 +577,8 @@ Returns plist :gap-count, :isolated, :low-confidence, :self-refs, :mismatches."
               (insert "auto-fixable: yes (auto-resolver deployed)\n")
               (insert "---\n\n")
               (insert content))
-            (message "[self-audit] Wrote audit-fix memory for %d issues"
-                     (plist-get audit-result :issues)))
+            (message "[self-audit] Wrote audit-fix scratch file: %s"
+                     filename))
         (error
          (message "[self-audit] Failed to write audit memory: %s"
                   (error-message-string err)))))))
@@ -749,10 +755,10 @@ Returns plist :before-issues, :after-issues, :improved-p, :delta."
 ;;; System-health synthesis (Learning<-Quality loop)
 
 (defun gptel-auto-workflow-self-audit--read-audit-memories ()
-  "Read all audit-fix-*.md memory files and return list of plists.
+  "Read all audit-fix-*.md scratch files and return list of plists.
 Each plist has :file, :timestamp, :issues, :cold, :unev, :bottleneck."
   (let* ((root (gptel-auto-workflow-self-audit--root))
-         (mem-dir (expand-file-name "mementum/memories/" root))
+         (mem-dir (gptel-auto-workflow-self-audit--audit-fix-dir))
          (memories '()))
     (when (file-directory-p mem-dir)
       (dolist (f (directory-files mem-dir t "audit-fix-.*\\.md$"))

@@ -197,6 +197,7 @@ Two REPL modules now exist, both wired into `gptel-config.el`:
 - Double-checked why experiment gates still let a bad semantic-audit path reach `main`: the pre-push audit gate used `|| true` after command substitution, so `$?` always read as 0 and Gate 2 could not fail on audit errors.
 - Closed a second blind spot: `gptel-auto-workflow-audit-provide-inside-defun.el` was required by the audit path but not treated as gate-engine / never-fast-track, so it now routes through full staging verification.
 - Added regression coverage for the push-blocking path and the new gate-engine helper; full unit suite passed after the fix.
+- Follow-up: audit-fix reports now live in `var/tmp/self-audit/audit-fix/`; `mementum/memories/` is reserved for durable learning, not scratch audit output.
 
 ### Immediate
 1. **Review/quarantine remaining toxic optimize branches** — 143 remote optimize branches; many flagged by `audit-toxic-optimize-branches`. Decide batch deletion vs. case-by-case review.

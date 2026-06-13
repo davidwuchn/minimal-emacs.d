@@ -22,6 +22,11 @@
 (defvar test-self-audit--tmp-dir nil
   "Temporary directory for test data.")
 
+(defun test-self-audit--audit-fix-dir ()
+  "Return the scratch dir for audit-fix artifacts in the temp root."
+  (expand-file-name "var/tmp/self-audit/audit-fix"
+                    test-self-audit--tmp-dir))
+
 (defun test-self-audit--setup ()
   "Create temp dir and mock experiment data."
   (setq test-self-audit--tmp-dir
@@ -40,11 +45,12 @@
       (insert "0\t0\t0\t0\t0\t0\t0\tkept\t0\t0\t0\t0\t0\t0\t0\tDeepSeek\t0\t0\t0\t0\t0\tstrategy-v1\t0\t0\n")
       ;; Row 2: backend=DeepSeek, decision=staging-merge-failed, strategy=strategy-v1
       (insert "0\t0\t0\t0\t0\t0\t0\tstaging-merge-failed\t0\t0\t0\t0\t0\t0\t0\tDeepSeek\t0\t0\t0\t0\t0\tstrategy-v1\t0\t0\n")
-      ;; Row 3: backend=MiniMax, decision=kept, strategy=strategy-v2
-      (insert "0\t0\t0\t0\t0\t0\t0\tkept\t0\t0\t0\t0\t0\t0\t0\tMiniMax\t0\t0\t0\t0\t0\tstrategy-v2\t0\t0\n")))
-  ;; Create mementum/memories/
+       ;; Row 3: backend=MiniMax, decision=kept, strategy=strategy-v2
+       (insert "0\t0\t0\t0\t0\t0\t0\tkept\t0\t0\t0\t0\t0\t0\t0\tMiniMax\t0\t0\t0\t0\t0\tstrategy-v2\t0\t0\n")))
+  ;; Create legacy mementum/memories/ and scratch var/tmp/self-audit/audit-fix/
   (make-directory (expand-file-name "mementum/memories"
-                                    test-self-audit--tmp-dir) t))
+                                    test-self-audit--tmp-dir) t)
+  (make-directory (test-self-audit--audit-fix-dir) t))
 
 (defun test-self-audit--teardown ()
   "Delete temp dir and restore defaults."
@@ -186,11 +192,13 @@
           (should result)
           (should (plist-member result :issues))
           (should (> (plist-get result :issues) 0))
-          ;; Report should be a non-empty string
-          (should report)
-          (should (string-match "Self-Audit" report))
-          ;; Cold backends should appear somewhere in the result
-           (should (member "ColdBackend1" (plist-get (plist-get result :backend-cold-start) :cold)))))
+           ;; Report should be a non-empty string
+           (should report)
+           (should (string-match "Self-Audit" report))
+           (should (string-match-p "var/tmp/self-audit/audit-fix/audit-fix-\\*\\.md" report))
+           (should-not (string-match-p "mementum/memories/audit-fix-\\*\\.md" report))
+           ;; Cold backends should appear somewhere in the result
+            (should (member "ColdBackend1" (plist-get (plist-get result :backend-cold-start) :cold)))))
      (test-self-audit--teardown)))
 
 ;; ── Synthesis Tests ──
@@ -198,75 +206,112 @@
 (ert-deftest test-self-audit/read-audit-memories-empty ()
   "Returns nil when no audit-fix memory files exist."
   (test-self-audit--setup)
-  (unwind-protect
-      (let ((memories (gptel-auto-workflow-self-audit--read-audit-memories)))
-        (should (null memories)))
-    (test-self-audit--teardown)))
+  (let ((legacy-dir (expand-file-name "mementum/memories"
+                                      test-self-audit--tmp-dir)))
+    (unwind-protect
+        (progn
+          (should (null (gptel-auto-workflow-self-audit--read-audit-memories)))
+          (should-not (directory-files legacy-dir t "audit-fix-.*\\.md$")))
+      (test-self-audit--teardown))))
 
 (ert-deftest test-self-audit/read-audit-memories-parses-files ()
   "Parses audit-fix memory files and returns list of plists."
   (test-self-audit--setup)
-  (unwind-protect
-      (progn
-        ;; Create 3 audit-fix memory files
-        (with-temp-file (expand-file-name "mementum/memories/audit-fix-run-1.md" test-self-audit--tmp-dir)
-          (insert "---\ntimestamp: 2026-06-01T10:00:00\nissues: 5\n---\n\nBackend cold-start: 3/8 backends\nStrategy cold-start: 12/15 strategies\nBOTTLENECK: staging-merge\n"))
-        (with-temp-file (expand-file-name "mementum/memories/audit-fix-run-2.md" test-self-audit--tmp-dir)
-          (insert "---\ntimestamp: 2026-06-02T10:00:00\nissues: 4\n---\n\nBackend cold-start: 2/8 backends\nStrategy cold-start: 10/15 strategies\n"))
-        (with-temp-file (expand-file-name "mementum/memories/audit-fix-run-3.md" test-self-audit--tmp-dir)
-          (insert "---\ntimestamp: 2026-06-03T10:00:00\nissues: 3\n---\n\nBackend cold-start: 4/8 backends\nBOTTLENECK: staging-merge\n"))
-        (let ((memories (gptel-auto-workflow-self-audit--read-audit-memories)))
-          (should (= (length memories) 3))
-          ;; Check that at least one has cold backends
-          (should (> (seq-count (lambda (m) (> (plist-get m :cold-backends) 0)) memories) 0))))
-    (test-self-audit--teardown)))
+  (let* ((scratch-dir (test-self-audit--audit-fix-dir))
+         (legacy-dir (expand-file-name "mementum/memories"
+                                       test-self-audit--tmp-dir)))
+    (unwind-protect
+        (progn
+          ;; Create 3 audit-fix memory files
+          (with-temp-file (expand-file-name "audit-fix-run-1.md" scratch-dir)
+            (insert "---\ntimestamp: 2026-06-01T10:00:00\nissues: 5\n---\n\nBackend cold-start: 3/8 backends\nStrategy cold-start: 12/15 strategies\nBOTTLENECK: staging-merge\n"))
+          (with-temp-file (expand-file-name "audit-fix-run-2.md" scratch-dir)
+            (insert "---\ntimestamp: 2026-06-02T10:00:00\nissues: 4\n---\n\nBackend cold-start: 2/8 backends\nStrategy cold-start: 10/15 strategies\n"))
+          (with-temp-file (expand-file-name "audit-fix-run-3.md" scratch-dir)
+            (insert "---\ntimestamp: 2026-06-03T10:00:00\nissues: 3\n---\n\nBackend cold-start: 4/8 backends\nBOTTLENECK: staging-merge\n"))
+          (let ((memories (gptel-auto-workflow-self-audit--read-audit-memories)))
+            (should (= (length memories) 3))
+            (should (> (seq-count (lambda (m) (> (plist-get m :cold-backends) 0)) memories) 0)))
+          (should-not (directory-files legacy-dir t "audit-fix-.*\\.md$")))
+      (test-self-audit--teardown))))
 
 (ert-deftest test-self-audit/synthesize-system-health-below-threshold ()
   "Returns nil when fewer than 3 audit-fix memories exist."
   (test-self-audit--setup)
-  (unwind-protect
-      (progn
-        ;; Create only 2 audit-fix memory files
-        (with-temp-file (expand-file-name "mementum/memories/audit-fix-run-1.md" test-self-audit--tmp-dir)
-          (insert "---\ntimestamp: 2026-06-01T10:00:00\nissues: 5\n---\n\nBackend cold-start: 3/8 backends\n"))
-        (with-temp-file (expand-file-name "mementum/memories/audit-fix-run-2.md" test-self-audit--tmp-dir)
-          (insert "---\ntimestamp: 2026-06-02T10:00:00\nissues: 4\n---\n\nBackend cold-start: 2/8 backends\n"))
-        (let ((result (gptel-auto-workflow-self-audit--synthesize-system-health)))
-          (should (null result))
-          ;; Knowledge page should NOT be created
+  (let* ((scratch-dir (test-self-audit--audit-fix-dir))
+         (legacy-dir (expand-file-name "mementum/memories"
+                                       test-self-audit--tmp-dir)))
+    (unwind-protect
+        (progn
+          ;; Create only 2 audit-fix memory files
+          (with-temp-file (expand-file-name "audit-fix-run-1.md" scratch-dir)
+            (insert "---\ntimestamp: 2026-06-01T10:00:00\nissues: 5\n---\n\nBackend cold-start: 3/8 backends\n"))
+          (with-temp-file (expand-file-name "audit-fix-run-2.md" scratch-dir)
+            (insert "---\ntimestamp: 2026-06-02T10:00:00\nissues: 4\n---\n\nBackend cold-start: 2/8 backends\n"))
+          (should (null (gptel-auto-workflow-self-audit--synthesize-system-health)))
           (should-not (file-exists-p
                        (expand-file-name "mementum/knowledge/system-health-patterns.md"
-                                         test-self-audit--tmp-dir)))))
-    (test-self-audit--teardown)))
+                                         test-self-audit--tmp-dir)))
+          (should-not (directory-files legacy-dir t "audit-fix-.*\\.md$")))
+      (test-self-audit--teardown))))
 
 (ert-deftest test-self-audit/synthesize-system-health-creates-knowledge-page ()
   "Creates system-health-patterns.md when >=3 audit-fix memories exist."
   (test-self-audit--setup)
-  (unwind-protect
-      (progn
-        ;; Create 3 audit-fix memory files
-        (with-temp-file (expand-file-name "mementum/memories/audit-fix-run-1.md" test-self-audit--tmp-dir)
-          (insert "---\ntimestamp: 2026-06-01T10:00:00\nissues: 5\n---\n\nBackend cold-start: 3/8 backends\nStrategy cold-start: 12/15 strategies\nBOTTLENECK: staging-merge\n"))
-        (with-temp-file (expand-file-name "mementum/memories/audit-fix-run-2.md" test-self-audit--tmp-dir)
-          (insert "---\ntimestamp: 2026-06-02T10:00:00\nissues: 4\n---\n\nBackend cold-start: 2/8 backends\nStrategy cold-start: 10/15 strategies\nBOTTLENECK: staging-merge\n"))
-        (with-temp-file (expand-file-name "mementum/memories/audit-fix-run-3.md" test-self-audit--tmp-dir)
-          (insert "---\ntimestamp: 2026-06-03T10:00:00\nissues: 3\n---\n\nBackend cold-start: 4/8 backends\nBOTTLENECK: staging-merge\n"))
-        (let ((result (gptel-auto-workflow-self-audit--synthesize-system-health)))
-          (should (= result 3))
-          ;; Knowledge page should be created (moved to var/tmp/ in 8c89f22f1)
-          (should (file-exists-p
-                   (expand-file-name "var/tmp/system-health-patterns.md"
-                                     test-self-audit--tmp-dir)))
-          ;; Content should contain key sections
-          (with-temp-buffer
-            (insert-file-contents
-             (expand-file-name "var/tmp/system-health-patterns.md"
-                               test-self-audit--tmp-dir))
-            (goto-char (point-min))
-            (should (search-forward "System Health Patterns" nil t))
-            (should (search-forward "Backend Cold-Start" nil t))
-            (should (search-forward "Staging-Merge Bottleneck" nil t)))))
-    (test-self-audit--teardown)))
+  (let* ((scratch-dir (test-self-audit--audit-fix-dir))
+         (legacy-dir (expand-file-name "mementum/memories"
+                                       test-self-audit--tmp-dir)))
+    (unwind-protect
+        (progn
+          ;; Create 3 audit-fix memory files
+          (with-temp-file (expand-file-name "audit-fix-run-1.md" scratch-dir)
+            (insert "---\ntimestamp: 2026-06-01T10:00:00\nissues: 5\n---\n\nBackend cold-start: 3/8 backends\nStrategy cold-start: 12/15 strategies\nBOTTLENECK: staging-merge\n"))
+          (with-temp-file (expand-file-name "audit-fix-run-2.md" scratch-dir)
+            (insert "---\ntimestamp: 2026-06-02T10:00:00\nissues: 4\n---\n\nBackend cold-start: 2/8 backends\nStrategy cold-start: 10/15 strategies\nBOTTLENECK: staging-merge\n"))
+          (with-temp-file (expand-file-name "audit-fix-run-3.md" scratch-dir)
+            (insert "---\ntimestamp: 2026-06-03T10:00:00\nissues: 3\n---\n\nBackend cold-start: 4/8 backends\nBOTTLENECK: staging-merge\n"))
+          (let ((result (gptel-auto-workflow-self-audit--synthesize-system-health)))
+            (should (= result 3))
+            (should (file-exists-p
+                     (expand-file-name "var/tmp/system-health-patterns.md"
+                                       test-self-audit--tmp-dir)))
+            (with-temp-buffer
+              (insert-file-contents
+               (expand-file-name "var/tmp/system-health-patterns.md"
+                                 test-self-audit--tmp-dir))
+              (goto-char (point-min))
+              (should (search-forward "System Health Patterns" nil t))
+              (should (search-forward "Backend Cold-Start" nil t))
+              (should (search-forward "Staging-Merge Bottleneck" nil t))))
+          (should-not (directory-files legacy-dir t "audit-fix-.*\\.md$")))
+      (test-self-audit--teardown))))
+
+(ert-deftest test-self-audit/write-memory-uses-scratch-dir ()
+  "Writes audit-fix artifacts to var/tmp/self-audit/audit-fix/ only."
+  (test-self-audit--setup)
+  (let* ((ts "2026-06-13T10:11:12")
+         (audit-fix-dir (test-self-audit--audit-fix-dir))
+         (legacy-dir (expand-file-name "mementum/memories"
+                                       test-self-audit--tmp-dir))
+         (result (list :timestamp ts
+                       :issues 1
+                       :backend-cold-start '(:cold nil :all nil)
+                       :strategy-cold-start '(:unevaluated 0
+                                               :total 0
+                                               :unevaluated-names nil)
+                       :staging-merge-bottleneck '(:bottleneck-p nil
+                                                   :fraction 0.0)
+                       :module-health '(:broken nil :total 0)))
+         (expected (expand-file-name (concat "audit-fix-" ts ".md")
+                                     audit-fix-dir)))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow-self-audit--root)
+                   #'test-self-audit--mock-root))
+          (gptel-auto-workflow-self-audit--write-memory result)
+          (should (file-exists-p expected))
+          (should (directory-files audit-fix-dir t "audit-fix-.*\\.md$"))
+          (should-not (directory-files legacy-dir t "audit-fix-.*\\.md$")))
+      (test-self-audit--teardown))))
 
 (ert-deftest test-self-audit/write-memory-handles-nil-issues ()
   "`gptel-auto-workflow-self-audit--write-memory' must not error when
@@ -275,26 +320,27 @@ Regression: the comparison `(> (plist-get audit-result :issues) 0)` signaled
 `wrong-type-argument number-or-marker-p' when :issues was nil.
 Fix: `(> (or (plist-get audit-result :issues) 0) 0)`."
   (let* ((test-self-audit--tmp-dir (make-temp-file "aw-audit-nil" t))
-         (gptel-auto-workflow--workspace-path test-self-audit--tmp-dir)
-         (mem-dir (expand-file-name "mementum/memories/"
+         (mem-dir (expand-file-name "mementum/memories"
                                     test-self-audit--tmp-dir))
+         (audit-fix-dir (expand-file-name "var/tmp/self-audit/audit-fix"
+                                          test-self-audit--tmp-dir))
          (result (list :timestamp (format-time-string "%Y%m%dT%H%M%SZ")
-                        :backend-cold-start '(:cold nil)
-                        ;; NOTE: no :issues key
-                        :strategy-cold-start '(:unevaluated nil)
-                        :merge-bottleneck '(:unmerged nil)
-                        :byte-compile-warnings '(:warnings nil)))
-                   (mem-files-before (progn (make-directory mem-dir t)
-                                   (length (directory-files mem-dir t)))))
+                       :backend-cold-start '(:cold nil)
+                       ;; NOTE: no :issues key
+                       :strategy-cold-start '(:unevaluated nil)
+                       :merge-bottleneck '(:unmerged nil)
+                       :byte-compile-warnings '(:warnings nil))))
+    (make-directory mem-dir t)
+    (make-directory audit-fix-dir t)
     (unwind-protect
-        (progn
+        (cl-letf (((symbol-function 'gptel-auto-workflow-self-audit--root)
+                   #'test-self-audit--mock-root))
           (condition-case err
               (gptel-auto-workflow-self-audit--write-memory result)
             (error
              (ert-fail (format "write-memory should not error on nil :issues: %S" err))))
-          ;; After call (no :issues): no new memory file
-           (let ((after (length (directory-files mem-dir t))))
-            (should (eq mem-files-before after))))
+          (should-not (directory-files mem-dir t "audit-fix-.*\\.md$"))
+          (should-not (directory-files audit-fix-dir t "audit-fix-.*\\.md$")))
       (delete-directory test-self-audit--tmp-dir t))))
 
 (ert-deftest test-self-audit/filter-recent-files-skips-deleted ()
