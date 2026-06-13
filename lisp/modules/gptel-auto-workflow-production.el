@@ -130,15 +130,17 @@ Skips when a workflow or cron job is active to avoid preempting experiments."
     ;; Mementum maintenance: rebuild index + synthesize candidates.
     ;; Runs every cycle (hourly) but is cheap when no new memories exist.
     ;; Enable auto-approve in headless so synthesis actually writes files.
-    (condition-case nil
-        (when (fboundp 'gptel-mementum-build-index)
-          (with-no-warnings
-            (let ((gptel-mementum-headless-auto-approve t))
-              (gptel-mementum-build-index)
-              (when (fboundp 'gptel-mementum-synthesize-all-candidates)
-                (gptel-mementum-synthesize-all-candidates nil t)))))
-      (error
-       (message "[mementum] Maintenance error in evolution cycle")))))
+    ;; Skip if workflow started during evolution cycle.
+    (when (not (bound-and-true-p gptel-auto-workflow--running))
+      (condition-case nil
+          (when (fboundp 'gptel-mementum-build-index)
+            (with-no-warnings
+              (let ((gptel-mementum-headless-auto-approve t))
+                (gptel-mementum-build-index)
+                (when (fboundp 'gptel-mementum-synthesize-all-candidates)
+                  (gptel-mementum-synthesize-all-candidates nil t)))))
+        (error
+         (message "[mementum] Maintenance error in evolution cycle"))))))
 
 (defun gptel-auto-workflow-start-evolution-timer ()
   "Start periodic evolution timer."
@@ -817,17 +819,7 @@ Returns the new item ID."
               (replace-regexp-in-string
                (concat
                 "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n"
-                "
-
-
-
-
-
-
-
-
-
-|----|--------|-----------|-----------------|--------|---------------|---------------|\n")
+                "|----|--------|-----------|-----------------|--------|---------------|---------------|\n")
                (concat
                 "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n"
                 "|----|--------|-----------|-----------------|--------|---------------|---------------|\n"
