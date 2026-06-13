@@ -706,8 +706,11 @@ Logs subagent dispatch to ontology for self-evolution tracking."
                      (integerp timeout) (> timeout 0)
                      (integerp grace) (> grace 0)
                      (+ timeout grace)))
-          (my/gptel--run-agent-tool callback agent-name description prompt
-                                    files include-history include-diff))
+          (with-timeout ((or timeout 300) ;; fallback: 5min hard limit
+                         (funcall callback
+                                  (format "subagent timeout after %ds" (or timeout 300))))
+            (my/gptel--run-agent-tool callback agent-name description prompt
+                                      files include-history include-diff)))
       (setq my/gptel-agent-task-timeout previous-timeout
             my/gptel-agent-task-hard-timeout previous-hard-timeout))))
 
