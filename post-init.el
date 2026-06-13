@@ -14,20 +14,14 @@
 (when (string= (getenv "MINIMAL_EMACS_WORKFLOW_DAEMON") "1")
   (setq gptel-auto-workflow-persistent-headless t)
   ;; Clean stale daemon socket before server-start creates a new one.
-  ;; On macOS, Emacs tries $TMPDIR/emacs$UID/$NAME first. If a stale
-  ;; socket from a crashed daemon exists, the new daemon falls back to
-  ;; /tmp/emacs$UID/$NAME, and emacsclient -s can't reach it because
-  ;; it also checks TMPDIR first. Delete the stale socket here so the
-  ;; new daemon always creates at the expected location.
-  (condition-case nil
-      (let ((socket-dir (expand-file-name (format "emacs%d" (user-uid))
-                                          (or (getenv "TMPDIR") "/tmp")))
-            (sock (concat server-name)))
-        (let ((stale (expand-file-name server-name socket-dir)))
+  (when (boundp 'server-socket-dir)
+    (condition-case nil
+        (let* ((socket-dir server-socket-dir)
+               (stale (expand-file-name server-name socket-dir)))
           (when (file-exists-p stale)
             (delete-file stale)
-            (message "[post-init] Cleaned stale daemon socket: %s" stale))))
-    (error nil)))
+            (message "[post-init] Cleaned stale daemon socket: %s" stale)))
+      (error nil)))
 
 ;; Add the local lisp directory to Emacs' load path using the true root directory
 ;; (not user-emacs-directory, since we changed that to var/)
