@@ -1484,6 +1484,35 @@ commit serves as the rollback point."
               (should (= issues 1)))))
       (test-self-heal-semantic--cleanup file))))
 
+(ert-deftest test-self-heal-semantic/daemon-hang-runs-once-per-audit-all ()
+  "Daemon-hang check returns exactly 1 issue per audit-all run across N files.
+Regression: semantic-audit-reset cleared daemon-hang-done for every file,
+causing ~130 duplicate daemon-hang findings in a full dry-run."
+  (let* ((tmp-dir (make-temp-file "ov5-test-daemon-hang-once-" t))
+         (modules-dir (expand-file-name "lisp/modules" tmp-dir)))
+    (unwind-protect
+        (progn
+          (make-directory modules-dir t)
+          ;; Create 3 fixture files. Each file only contains clean, minimal code
+          ;; so no other audit check flags anything.
+          (dotimes (i 3)
+            (with-temp-file (expand-file-name (format "ov5-fixture-%d.el" i) modules-dir)
+              (insert (format "(defun ov5-fixture-fn-%d () 42)\n(provide 'ov5-fixture-%d)\n"
+                              i i))))
+          ;; Mock: force daemon-hang impl to return 1 (hung), override modules-dir
+          (cl-letf (((symbol-function 'gptel-auto-workflow--expand-workspace-path)
+                     (lambda (path &optional _root)
+                       (expand-file-name path tmp-dir)))
+                    ((symbol-function 'gptel-auto-workflow--audit-daemon-hang--impl)
+                     (lambda () 1)))
+            (let ((result (gptel-auto-workflow--semantic-audit-all)))
+              ;; With guard working: 1 daemon-hang issue total (not 3 = 1 per file)
+              ;; Daemon-hang returns count directly; does not use audit-record,
+              ;; so :log fields are empty but :issues counts it.
+              (should (= (plist-get result :total-issues) 1))
+              (should (= (plist-get result :files-checked) 3)))))
+      (delete-directory tmp-dir t))))
+
 ;; ── Test 19: nil-hash-table audit detection ──
 
 (ert-deftest test-self-heal-semantic/detects-nil-hash-table-gethash ()
@@ -1797,10 +1826,25 @@ flagged (1 void-defvar issue)."
 \(defun get-flag ()
   t)")
          (file (test-self-heal-semantic--tmp-file content)))
-    (unwind-protect
-        (let ((issues (gptel-auto-workflow--audit-void-defvars file)))
-          (should (>= issues 1)))
-      (test-self-heal-semantic--cleanup file))))
+     (unwind-protect
+         (let ((issues (gptel-auto-workflow--audit-void-defvars file)))
+           (should (>= issues 1)))
+       (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/void-defvar-gptel-ext-core-clean ()
+  "gptel-ext-core.el produces zero void-defvar issues.
+Unused bare forward declaration gptel--cf-gateway was removed; remaining
+forward declarations are either used in the file or are hash-table vars."
+  (let ((file (expand-file-name "lisp/modules/gptel-ext-core.el"
+                                default-directory)))
+    (skip-unless (file-exists-p file))
+    (gptel-auto-workflow--semantic-audit-reset)
+    (gptel-auto-workflow--audit-void-defvars file)
+    (let ((void-issues
+           (cl-remove-if-not (lambda (entry)
+                               (eq (plist-get entry :type) 'void-defvar))
+                             gptel-auto-workflow--semantic-audit-log)))
+      (should (= (length void-issues) 0)))))
 
 (provide 'test-self-heal-semantic)
 ;;; test-self-heal-semantic.el ends here

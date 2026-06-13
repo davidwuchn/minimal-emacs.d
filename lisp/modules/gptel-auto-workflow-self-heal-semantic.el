@@ -77,8 +77,7 @@ Returns nil (allow) if rate limiting is disabled or no history exists."
 
 (defun gptel-auto-workflow--semantic-audit-reset ()
   "Clear the semantic audit log."
-  (setq gptel-auto-workflow--semantic-audit-log nil
-        gptel-auto-workflow--daemon-hang-done nil))
+  (setq gptel-auto-workflow--semantic-audit-log nil))
 
 (defvar gptel-auto-workflow--semantic--top-level-cache
   (make-hash-table :test 'equal)
@@ -504,7 +503,7 @@ causing void-variable errors at runtime.  Returns count of bare defvars."
         1)
     (error 0)))
 
-(defun gptel-auto-workflow--audit-daemon-hang (file)
+(cl-defun gptel-auto-workflow--audit-daemon-hang (file)
   "Audit for daemon subprocess hang. FILE accepted for dispatch, ignored."
   (when gptel-auto-workflow--daemon-hang-done (cl-return-from gptel-auto-workflow--audit-daemon-hang 0))
   (setq gptel-auto-workflow--daemon-hang-done t)
@@ -1456,8 +1455,9 @@ end-of-file error on broken files)."
   "Run semantic audit on all Elisp files in lisp/modules/.
 Skips the self-heal-semantic module itself to avoid false positives
 from the audit patterns embedded in the code."
+  (setq gptel-auto-workflow--daemon-hang-done nil)
   (let* ((modules-dir (or (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
-                               (gptel-auto-workflow--expand-workspace-path "lisp/modules"))
+                                (gptel-auto-workflow--expand-workspace-path "lisp/modules"))
                           "lisp/modules"))
          (files (and (file-directory-p modules-dir)
                      (directory-files modules-dir t "\\.el\\'")))
@@ -1716,6 +1716,8 @@ Keyword arguments:
   ;; Reset rate-limit history for each self-heal cycle
   (setq gptel-auto-workflow--fix-attempt-history
         (make-hash-table :test 'equal))
+  ;; Reset daemon-hang check guard so each full audit run gets one check
+  (setq gptel-auto-workflow--daemon-hang-done nil)
   ;; ── Dirty-tree gate (Step 1 safety layer) ──
   (let ((dirty-result
          (unless no-dirty-check
