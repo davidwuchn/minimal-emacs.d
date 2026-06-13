@@ -410,6 +410,7 @@ causing void-variable errors at runtime.  Returns count of bare defvars."
   (let ((issues 0))
     (with-temp-buffer
       (insert-file-contents file)
+      (emacs-lisp-mode)
       (goto-char (point-min))
       (while (re-search-forward "^(defvar[ \t]+\\([a-z][a-z0-9-]*\\)" nil t)
         (let ((var-name (match-string 1))
@@ -428,12 +429,18 @@ causing void-variable errors at runtime.  Returns count of bare defvars."
              (when (eq (char-after) ?\))
                (setq is-bare t))))
           (when is-bare
-            (setq issues (1+ issues))
-            (gptel-auto-workflow--semantic-audit-record
-             file line-no
-             'void-defvar
-             (format "Bare (defvar %s) — add nil to prevent void-variable errors"
-                     var-name)))
+            ;; Skip bare defvars that are forward declarations for hash
+            ;; tables defined in another file.  These are expected: the
+            ;; real definition initializes the hash table; the bare
+            ;; defvar here suppresses compiler warnings.
+            (unless (gptel-auto-workflow--var-used-as-hash-table-p
+                     var-name nil (current-buffer))
+              (setq issues (1+ issues))
+              (gptel-auto-workflow--semantic-audit-record
+               file line-no
+               'void-defvar
+               (format "Bare (defvar %s) — add nil to prevent void-variable errors"
+                       var-name))))
           ;; Move past this form to avoid re-matching the same defvar.
           ;; If bare, we advanced to the close paren during detection;
           ;; otherwise, move to the next line.

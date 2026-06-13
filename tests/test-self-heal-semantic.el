@@ -1683,5 +1683,51 @@ finding at every gethash call site."
                              gptel-auto-workflow--semantic-audit-log)))
       (should (= (length nil-ht-issues) 0)))))
 
+;; ── Test 22: void-defvar skips hash-table forward declarations ──
+
+(ert-deftest test-self-heal-semantic/void-defvar-skips-hash-table-forward-decl ()
+  "Bare defvar used as a hash table (forward declaration) is NOT flagged.
+The real definition in another file initializes the hash table;
+the bare defvar here just suppresses compiler warnings."
+  (let* ((content
+          "(defvar skill-graph--edges)
+
+\(defun lookup (key)
+  (gethash key skill-graph--edges))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-void-defvars file)))
+          (should (= issues 0)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/void-defvar-still-flags-bare-not-hash-table ()
+  "Bare defvar NOT used as a hash table is still flagged.
+Ensures the hash-table skip gate does not suppress real void-defvar issues."
+  (let* ((content
+          "(defvar my-flag)
+
+\(defun get-flag ()
+  my-flag)")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-void-defvars file)))
+          (should (>= issues 1)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/void-defvar-memory-schema-clean ()
+  "gptel-auto-workflow-memory-schema.el produces zero void-defvar issues.
+skill-graph--edges is a bare forward-declaration for a hash table
+defined in gptel-auto-workflow-skill-graph.el — it should NOT be flagged."
+  (let ((file (expand-file-name "lisp/modules/gptel-auto-workflow-memory-schema.el"
+                                default-directory)))
+    (skip-unless (file-exists-p file))
+    (gptel-auto-workflow--semantic-audit-reset)
+    (gptel-auto-workflow--audit-void-defvars file)
+    (let ((void-issues
+           (cl-remove-if-not (lambda (entry)
+                               (eq (plist-get entry :type) 'void-defvar))
+                             gptel-auto-workflow--semantic-audit-log)))
+      (should (= (length void-issues) 0)))))
+
 (provide 'test-self-heal-semantic)
 ;;; test-self-heal-semantic.el ends here
