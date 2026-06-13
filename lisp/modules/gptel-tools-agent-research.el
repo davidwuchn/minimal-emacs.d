@@ -319,11 +319,30 @@ Returns list of synthesis candidates."
                (topic (gptel-mementum--extract-topic slug)))
           (when topic
             (puthash topic (cons file (gethash topic by-topic)) by-topic))))
-      (maphash
-       (lambda (topic files)
-         (when (>= (length files) 3)
-           (push (list :topic topic :count (length files) :files (nreverse files)) candidates)))
-       by-topic)
+       (maphash
+        (lambda (topic files)
+          (when (>= (length files) 3)
+            ;; Dedup guard: skip topics that already have a knowledge page
+            ;; newer than the newest memory for this topic. Without this,
+            ;; synthesis re-triggers every cycle, consuming all daemon
+            ;; uptime on macOS before any experiment can be dispatched.
+            (let ((knowledge-page
+                   (expand-file-name (format "mementum/knowledge/%s.md" topic)
+                                     (gptel-auto-workflow--project-root)))
+                  (newest-memory-time
+                   (cl-reduce #'max
+                              (mapcar (lambda (f)
+                                        (file-attribute-modification-time
+                                         (file-attributes f)))
+                                      files))))
+              (unless (and (file-exists-p knowledge-page)
+                           (time-less-p newest-memory-time
+                                        (file-attribute-modification-time
+                                         (file-attributes knowledge-page))))
+                (push (list :topic topic :count (length files) :files (nreverse files))
+                      candidates))))
+          nil)
+        by-topic)
       ;; Sort by count descending, then topic name
       (setq candidates
             (sort candidates
