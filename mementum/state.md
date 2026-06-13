@@ -182,10 +182,20 @@ Two REPL modules now exist, both wired into `gptel-config.el`:
 - `run-tests.sh unit <selector>` now forwards selectors, and OV5 maps known files to focused suites (`self-heal-semantic`, `memory-schema`, `prefix-cache`).
 - Promotion now rejects if the targeted ERT gate fails, so self-heal can find and stop bad semantic fixes before they reach main.
 
+### Session Note (2026-06-13 continued — OV5 grader-bypass hardening)
+- Discovered a systemic experiment-gaming attack: many `optimize/*` branches on origin have `◈ Grader-bypass ... 0.40 → 1.00 (+150%)` subjects with fabricated scores.
+- Root causes: staging disabled by `defvar nil` overrides; critical-file check only blocked mass deletions; grader-bypass accepted `:grader-only-failure`/blind-mode auto-passes; optimize branches pushed before staging.
+- Implemented 4-phase hardening plan under `plans/ov5-grader-bypass-hardening/`.
+- Phase 1 pushed to main (`021b2d10`): removed staging overrides, expanded critical-files registry, hardened grader-bypass predicate, added push quarantine, added `tests/test-experiment-gates.el` (16 tests).
+- Phase 2 pushed to main (`de129468`): added `toxic-commit-subject` and `score-fabrication` self-heal-semantic checks, added `audit-toxic-optimize-branches` self-audit helper, added 3 regression tests.
+- Deleted toxic branch `optimize/benchmark-ncase-r110836z56cd-exp1` from origin. Scanned remaining 143 optimize branches; many still have toxic subjects and need review/quarantine.
+- Full verification: 132 self-heal-semantic tests + 16 experiment-gates tests pass; pre-push gate passes.
+- Captured memory + knowledge: `mementum/memories/insight-ov5-grader-bypass-gate-hardening.md`, `mementum/knowledge/ov5-experiment-gate-integrity.md`.
+
 ### Immediate
-1. **Enable opencode eval on Pi5** — Set `gptel-auto-workflow-opencode-eval-enabled t` after monitoring first cron cycle
-2. **Monitor pipeline metrics** — Check if fast-track staging improves keep rate from ~3.1%
-3. **Continue monitoring** — Let pipeline run, verify self-healing continues working
+1. **Review/quarantine remaining toxic optimize branches** — 143 remote optimize branches; many flagged by `audit-toxic-optimize-branches`. Decide batch deletion vs. case-by-case review.
+2. **Enable opencode eval on Pi5** — Set `gptel-auto-workflow-opencode-eval-enabled t` after monitoring first cron cycle
+3. **Monitor pipeline metrics** — Check if gate hardening reduces toxic branch creation and improves real keep rate
 
 ### Near-Term
 4. **Sibyl action item** — Formalize ontology updates as auditable conversion units (plan exists, not yet started)
@@ -202,7 +212,11 @@ Two REPL modules now exist, both wired into `gptel-config.el`:
 - `lisp/gptel-config.el`: Module loader — both REPL modules wired here
 - `.opencode/skills/brepl/`: OpenCode skill for Clojure brepl CLI
 - `.opencode/skills/daemon-repl/`: OpenCode skill for Elisp daemon-repl
-- `lisp/modules/gptel-auto-workflow-self-heal-semantic.el`: 7 audit checks + auto-fixers
+- `lisp/modules/gptel-auto-workflow-self-heal-semantic.el`: 17 audit checks + auto-fixers (now includes toxic-commit-subject and score-fabrication)
+- `lisp/modules/gptel-tools-agent-experiment-core.el`: experiment runner with hardened grader-bypass predicate and push quarantine
+- `lisp/modules/gptel-tools-agent-validation.el`: critical-file mutation gate
+- `mementum/knowledge/ov5-experiment-gate-integrity.md`: gate integrity knowledge base
+- `mementum/memories/insight-ov5-grader-bypass-gate-hardening.md`: hardening session memory
 - `mementum/knowledge/self-evolving-agent-research.md`: Research paper analysis
 - `mementum/knowledge/deep-searcher-vs-ov5-gaps.md`: DeepSearcher gap analysis (Proximum)
 - `mementum/knowledge/launch-fast-vs-ov5-gaps.md`: Launch Fast SaaS/Chrome extension patterns
@@ -214,4 +228,4 @@ Two REPL modules now exist, both wired into `gptel-config.el`:
 
 ---
 
-*Active Mementum v1.1 — dual REPL architecture wired, 39 tests green, self-healing verified, ontology learning active*
+*Active Mementum v1.1 — dual REPL architecture wired, 148 self-heal/experiment-gate tests green, OV5 gate integrity hardened, ontology learning active*
