@@ -74,7 +74,8 @@ When non-nil, called with the target string and should return an integer 0-N.
 Overrides the local error-log fallback in
 `gptel-auto-workflow--query-support-tickets'.")
 
-(defvar gptel-auto-workflow--production-metrics-cache nil
+(defvar gptel-auto-workflow--production-metrics-cache
+  (make-hash-table :test 'equal)
   "Cache for production metrics queries.
 Format: (hash-table target -> (before-rate . after-rate)).")
 
@@ -414,10 +415,13 @@ Business value heuristics:
            (bytecompile-output (when file-exists
                                  (ignore-errors
                                    (with-temp-buffer
-                                     (condition-case err (call-process (expand-file-name invocation-name
+                                     (condition-case err
+                                         (call-process (expand-file-name invocation-name
                                                                        invocation-directory)
                                                    nil t nil
-                                                   "-Q" "--batch" "-f" "batch-byte-compile" abs-target))
+                                                   "-Q" "--batch" "-f" "batch-byte-compile" abs-target)
+                                       (error (message "[metrics] byte-compile error: %s"
+                                                       (error-message-string err)) nil)))
                                      (buffer-string)))))
            (has-warnings (and bytecompile-output
                               (string-match-p "Warning\\|warning" bytecompile-output)))
