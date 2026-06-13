@@ -1120,6 +1120,48 @@ this audit check flags it so the self-heal fixer can restore top-level."
             (should (= issues-after 0))))
       (test-self-heal-semantic--cleanup file))))
 
+;; ── Test 17b: provide-inside-defun false-positive guard ──
+
+(ert-deftest test-self-heal-semantic/provide-inside-defun-skips-false-positive-symbol ()
+  "Synthetic file with (provide-pos ...) inside a defun and top-level
+(provide 'feature) should report 0 provide-inside-defun issues.
+Regression: (search-forward \"(provide\" …) was matching substrings
+inside symbol names like provide-pos, provide-line, provides."
+  (let* ((content
+          "(defun foo ()
+  (let ((provide-pos 1)
+        (provides nil))
+    (list provide-pos provides))
+  42)
+(provide 'test-provision)
+;;; test-provision.el ends here
+")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (gptel-auto-workflow--semantic-audit-reset)
+          (let ((issues (gptel-auto-workflow--audit-provide-inside-defun file)))
+            (should (= issues 0))))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/provide-inside-defun-still-detects-real-provide ()
+  "Real (provide 'x) inside a defun must still be flagged.
+This is the original bug: a missing close paren causes provide to be
+swallowed into the preceding defun body."
+  (let* ((content
+          "(defun foo ()
+  1
+(provide 'bar)
+;;; bar.el ends here
+")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (gptel-auto-workflow--semantic-audit-reset)
+          (let ((issues (gptel-auto-workflow--audit-provide-inside-defun file)))
+            (should (>= issues 1))))
+      (test-self-heal-semantic--cleanup file))))
+
 ;; ── Safety Layer 1: Dirty-tree gate ──
 
 (ert-deftest test-self-heal-semantic/dirty-tree-gate-blocks-with-uncommitted ()

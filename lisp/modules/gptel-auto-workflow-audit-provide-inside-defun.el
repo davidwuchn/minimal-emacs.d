@@ -18,20 +18,22 @@ Returns 1 if swallowed, 0 if at top-level."
       (emacs-lisp-mode)
       (goto-char (point-min))
       (while (search-forward "(provide" nil t)
-
-
-        (let* ((provide-pos (- (point) 8))
-               (state (save-excursion
-                        (syntax-ppss provide-pos))))
-          (when (and (> (car state) 0)
-                     (not (nth 3 state))
-                     (not (nth 4 state)))
-            (setq issues (1+ issues))
-            (when (fboundp 'gptel-auto-workflow--semantic-audit-record)
-              (gptel-auto-workflow--semantic-audit-record
-               file (line-number-at-pos provide-pos)
-               'provide-inside-defun
-               "(provide ...) is inside a defun"))))))
+        ;; Guard: skip false positives where "(provide" is part of a
+        ;; longer symbol name, e.g. provide-pos, provide-line, provides.
+        (unless (and (char-after)
+                     (memq (char-syntax (char-after)) '(?w ?_)))
+          (let* ((provide-pos (- (point) 8))
+                 (state (save-excursion
+                          (syntax-ppss provide-pos))))
+            (when (and (> (car state) 0)
+                       (not (nth 3 state))
+                       (not (nth 4 state)))
+              (setq issues (1+ issues))
+              (when (fboundp 'gptel-auto-workflow--semantic-audit-record)
+                (gptel-auto-workflow--semantic-audit-record
+                 file (line-number-at-pos provide-pos)
+                 'provide-inside-defun
+                 "(provide ...) is inside a defun")))))))
     issues))
 
 ;;;###autoload
@@ -66,24 +68,27 @@ and skips the fix when check-parens confirms the file is already balanced
       (unless skip
         (goto-char (point-min))
         (while (search-forward "(provide" nil t)
-
-          (let* ((provide-pos (- (point) 8))
-                 (provide-line (line-number-at-pos provide-pos))
-                 ;; `syntax-ppss` can move point; keep the scan stable.
-                 (state (save-excursion
-                          (syntax-ppss provide-pos)))
-                 (depth (car state)))
-            (when (and (> depth 0)
-                       (not (nth 3 state))
-                       (not (nth 4 state)))
-              (save-excursion
-                (goto-char provide-pos)
-                (beginning-of-line)
-                (insert (make-string depth ?\)))
-                (insert "\n"))
-              (message "[self-heal] Inserted %d close paren(s) before provide at line %d"
-                       depth provide-line)
-              (setq fixed 1))))
+          ;; Guard: skip false positives where "(provide" is part of a
+          ;; longer symbol name, e.g. provide-pos, provide-line, provides.
+          (unless (and (char-after)
+                       (memq (char-syntax (char-after)) '(?w ?_)))
+            (let* ((provide-pos (- (point) 8))
+                   (provide-line (line-number-at-pos provide-pos))
+                   ;; `syntax-ppss` can move point; keep the scan stable.
+                   (state (save-excursion
+                            (syntax-ppss provide-pos)))
+                   (depth (car state)))
+              (when (and (> depth 0)
+                         (not (nth 3 state))
+                         (not (nth 4 state)))
+                (save-excursion
+                  (goto-char provide-pos)
+                  (beginning-of-line)
+                  (insert (make-string depth ?\)))
+                  (insert "\n"))
+                (message "[self-heal] Inserted %d close paren(s) before provide at line %d"
+                         depth provide-line)
+                (setq fixed 1)))))
         (when (> fixed 0)
           (gptel-auto-workflow--fix-validate-and-write
            (current-buffer) file original-content))))
