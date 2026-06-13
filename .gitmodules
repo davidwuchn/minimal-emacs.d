@@ -14,3 +14,7 @@
 	path = packages/nucleus
 	url = https://github.com/davidwuchn/nucleus
 	branch = main
+[submodule "packages/nelisp"]
+	path = packages/nelisp
+	url = https://github.com/davidwuchn/nelisp.git
+	branch = main
