@@ -2113,7 +2113,7 @@ Returns filtered list."
 
 ;; ─── Conflicted Target Review Queue ───
 
-(defvar gptel-auto-workflow--review-decisions nil
+(defvar gptel-auto-workflow--review-decisions (make-hash-table :test 'equal)
   "Hash table of human decisions on conflicted targets.
 Key: target (string), value: plist with :decision (:approved/:dropped/:defer)
 and optionally :backend (string) for approved targets.

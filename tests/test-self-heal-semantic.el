@@ -1667,5 +1667,21 @@ form are correctly skipped by the lazy-init guard."
           (should (= issues 0)))
       (test-self-heal-semantic--cleanup file))))
 
+(ert-deftest test-self-heal-semantic/nil-hash-table-strategic-clean ()
+  "gptel-auto-workflow-strategic.el produces zero nil-hash-table audit issues.
+Regression: gptel-auto-workflow--review-decisions was initialized to nil
+instead of (make-hash-table :test 'equal), triggering a nil-hash-table audit
+finding at every gethash call site."
+  (let ((file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el"
+                                default-directory)))
+    (skip-unless (file-exists-p file))
+    (gptel-auto-workflow--semantic-audit-reset)
+    (gptel-auto-workflow--audit-nil-hash-tables file)
+    (let ((nil-ht-issues
+           (cl-remove-if-not (lambda (entry)
+                               (eq (plist-get entry :type) 'nil-hash-table))
+                             gptel-auto-workflow--semantic-audit-log)))
+      (should (= (length nil-ht-issues) 0)))))
+
 (provide 'test-self-heal-semantic)
 ;;; test-self-heal-semantic.el ends here
