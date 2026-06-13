@@ -435,7 +435,9 @@ it when the current transient implementation is too old."
                 (let ((current-lib (locate-library "transient")))
                   (and current-lib
                        (not (string-prefix-p dir current-lib)))))
-        (load (file-name-sans-extension lib) nil 'nomessage))
+        (condition-case nil
+            (load (file-name-sans-extension lib) nil 'nomessage)
+          (error nil)))
       dir)))
 
 (defun gptel-auto-workflow--seed-live-root-load-path (&optional proj-root)
