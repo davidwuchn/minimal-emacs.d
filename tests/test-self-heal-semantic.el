@@ -200,7 +200,7 @@ legitimate subagent work. Set to nil to disable.\")")
 
 (ert-deftest test-self-heal-semantic/audit-checks-variable-defined ()
   "The audit checks alist is defined with all checks."
-  (should (= (length gptel-auto-workflow--semantic-audit-checks) 15))
+  (should (= (length gptel-auto-workflow--semantic-audit-checks) 17))
   (should (assq 'let-binding-function gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'hardcoded-limit gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'score-zero-bug gptel-auto-workflow--semantic-audit-checks))
@@ -1535,12 +1535,19 @@ causing ~130 duplicate daemon-hang findings in a full dry-run."
             (with-temp-file (expand-file-name (format "ov5-fixture-%d.el" i) modules-dir)
               (insert (format "(defun ov5-fixture-fn-%d () 42)\n(provide 'ov5-fixture-%d)\n"
                               i i))))
-          ;; Mock: force daemon-hang impl to return 1 (hung), override modules-dir
+          ;; Mock: force daemon-hang impl to return 1 (hung), override modules-dir,
+          ;; and suppress git-based checks (toxic-commit-subject, score-fabrication)
+          ;; that would scan real git history and pollute the issue count.
           (cl-letf (((symbol-function 'gptel-auto-workflow--expand-workspace-path)
                      (lambda (path &optional _root)
                        (expand-file-name path tmp-dir)))
                     ((symbol-function 'gptel-auto-workflow--audit-daemon-hang--impl)
-                     (lambda () 1)))
+                     (lambda () 1))
+                    ((symbol-function 'shell-command-to-string)
+                     (lambda (cmd)
+                       (if (string-match-p "\\`git log" cmd)
+                           ""
+                         (shell-command-to-string cmd)))))
             (let ((result (gptel-auto-workflow--semantic-audit-all)))
               ;; With guard working: 1 daemon-hang issue total (not 3 = 1 per file)
               ;; Daemon-hang returns count directly; does not use audit-record,
@@ -2022,11 +2029,102 @@ forward declarations are either used in the file or are hash-table vars."
 (ert-deftest test-self-heal-semantic/audit-checks-includes-new-checks ()
   "New checks 14 and 15 are registered in the audit-checks alist."
   (should (assq 'orphaned-curl-process gptel-auto-workflow--semantic-audit-checks))
-  (should (assq 'curl-no-max-time gptel-auto-workflow--semantic-audit-checks)))
+  (should (assq 'curl-no-max-time gptel-auto-workflow--semantic-audit-checks))
+  (should (assq 'toxic-commit-subject gptel-auto-workflow--semantic-audit-checks))
+  (should (assq 'score-fabrication gptel-auto-workflow--semantic-audit-checks)))
 
 (ert-deftest test-self-heal-semantic/fixer-includes-orphaned-curl ()
   "Orphaned-curl fixer is registered in the fixer alist."
   (should (assq 'orphaned-curl-process gptel-auto-workflow--semantic-fixer-alist)))
+
+;; ── Check 16: Toxic commit subject detection ──
+
+(ert-deftest test-self-heal-semantic/toxic-commit-subject-detects-grader-bypass ()
+  "Detects commit subjects containing grader-bypass or score-fabrication patterns."
+  (let* ((content "(defun foo () 42)")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (gptel-auto-workflow--semantic-audit-reset)
+          (setq gptel-auto-workflow--toxic-commit-subject-done nil)
+          (cl-letf (((symbol-function 'shell-command-to-string)
+                     (lambda (cmd)
+                       (if (string-match-p "git log --all --format=%s" cmd)
+                           (concat "Normal commit\n"
+                                   "◈ Grader-bypass: rebase experiment 0.40 → 1.00 (+150%)\n"
+                                   "Another clean commit\n")
+                         ""))))
+            (let ((issues (gptel-auto-workflow--audit-toxic-commit-subject file)))
+              (should (>= issues 1))
+              (should (cl-find 'toxic-commit-subject gptel-auto-workflow--semantic-audit-log
+                               :key (lambda (e) (plist-get e :type)))))))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/toxic-commit-subject-clean ()
+  "No issues when commit history contains only normal subjects."
+  (let* ((content "(defun foo () 42)")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (gptel-auto-workflow--semantic-audit-reset)
+          (setq gptel-auto-workflow--toxic-commit-subject-done nil)
+          (cl-letf (((symbol-function 'shell-command-to-string)
+                     (lambda (cmd)
+                       (if (string-match-p "git log --all --format=%s" cmd)
+                           "Fix bug in parser\nAdd feature X\nRefactor module Y\n"
+                         ""))))
+            (let ((issues (gptel-auto-workflow--audit-toxic-commit-subject file)))
+              (should (= issues 0))
+              (should (null gptel-auto-workflow--semantic-audit-log)))))
+      (test-self-heal-semantic--cleanup file))))
+
+;; ── Check 17: Score fabrication detection ──
+
+(ert-deftest test-self-heal-semantic/score-fabrication-detects-mismatch ()
+  "Detects when a commit's claimed score differs from the TSV score_after."
+  (let* ((content "(defun foo () 42)")
+         (file (test-self-heal-semantic--tmp-file content))
+         (exp-subdir (make-temp-file "ov5-test-exp-" t))
+         (orig-shell-cmd (symbol-function 'shell-command-to-string))
+         (orig-directory-files (symbol-function 'directory-files))
+         (orig-file-directory-p (symbol-function 'file-directory-p)))
+    (unwind-protect
+        (progn
+          ;; Create commits.txt with a SHA that has a toxic subject
+          (with-temp-file (expand-file-name "commits.txt" exp-subdir)
+            (insert "abc123def456789012345678901234567890abcd 1 lisp/modules/foo.el 12:00:00\n"))
+          ;; Create results.tsv with score_after = 1.00 (different from 0.60 in subject)
+          (with-temp-file (expand-file-name "results.tsv" exp-subdir)
+            (insert "experiment_id\ttarget\thypothesis\tscore_before\tscore_after\tcode_quality\tdelta\tdecision\n")
+            (insert (format "1\ttarget\tclaim\t0.40\t1.00\t0.50\t0.60\tkept\n")))
+          (gptel-auto-workflow--semantic-audit-reset)
+          (setq gptel-auto-workflow--score-fabrication-done nil)
+          (cl-letf (((symbol-function 'gptel-auto-workflow--expand-workspace-path)
+                     (lambda (path &optional _root)
+                       (if (string-empty-p path)
+                           "/tmp/ov5-fake-root"
+                         (expand-file-name path "/tmp/ov5-fake-root"))))
+                    ((symbol-function 'shell-command-to-string)
+                     (lambda (cmd)
+                       (if (string-match-p "git log --all --format='%H %s'" cmd)
+                           "abc123def456789012345678901234567890abcd ◈ Grader-bypass: 0.40 → 0.60 (+50%)\n"
+                         (funcall orig-shell-cmd cmd))))
+                    ((symbol-function 'directory-files)
+                     (lambda (dir &optional full match nosort)
+                       (if (string-match-p "var/tmp/experiments" dir)
+                           (list exp-subdir)
+                         (apply orig-directory-files dir full match nosort nil))))
+                    ((symbol-function 'file-directory-p)
+                     (lambda (dir)
+                       (or (string= dir "/tmp/ov5-fake-root/var/tmp/experiments")
+                           (string= dir exp-subdir)
+                           (funcall orig-file-directory-p dir)))))
+            (let ((issues (gptel-auto-workflow--audit-score-fabrication file)))
+              (should (>= issues 1))
+              (should (cl-find 'score-fabrication gptel-auto-workflow--semantic-audit-log
+                               :key (lambda (e) (plist-get e :type)))))))
+      (ignore-errors (delete-directory exp-subdir t))
+      (test-self-heal-semantic--cleanup file))))
 
 (provide 'test-self-heal-semantic)
 ;;; test-self-heal-semantic.el ends here

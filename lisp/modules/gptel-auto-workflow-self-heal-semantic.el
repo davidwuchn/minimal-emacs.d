@@ -606,6 +606,163 @@ Only checks files in lisp/modules/ and post-init.el, not upstream gptel."
                    (format "gptel-curl-args block missing --max-time in %s" base)))))))))
     issues))
 
+;; ── Check 16: Toxic commit subjects (grader-bypass / score-fabrication) ──
+
+(defun gptel-auto-workflow--toxic-commit-subject-p (subject)
+  "Return t if SUBJECT string matches a toxic grader-bypass or score-fabrication pattern.
+Detects:
+- Case-insensitive `grader-bypass' references
+- Suspicious score transformations like 0.40 → 1.00 or 0.40 -> 1.00"
+  (let ((case-fold-search t))
+    (or (string-match-p "grader-bypass" subject)
+        (string-match-p "0\\.\\d+\\s-*→\\s-*1\\.\\d+" subject)
+        (string-match-p "0\\.\\d+\\s-*->\\s-*1\\.\\d+" subject))))
+
+(defvar gptel-auto-workflow--toxic-commit-subject-done nil
+  "Set to t after toxic-commit-subject check runs to skip per-file re-check.")
+
+(cl-defun gptel-auto-workflow--audit-toxic-commit-subject (file)
+  "Scan git history for commit subjects matching toxic grader-bypass patterns.
+Uses `git log --all --format=%s' once per audit cycle.
+FILE accepted for dispatch, ignored.
+Returns count of flagged commits."
+  (when gptel-auto-workflow--toxic-commit-subject-done
+    (cl-return-from gptel-auto-workflow--audit-toxic-commit-subject 0))
+  (setq gptel-auto-workflow--toxic-commit-subject-done t)
+  (let ((issues 0))
+    (condition-case nil
+        (let ((output (shell-command-to-string "git log --all --format=%s")))
+          (dolist (subject (split-string output "\n" t))
+            (when (gptel-auto-workflow--toxic-commit-subject-p subject)
+              (setq issues (1+ issues))
+              (gptel-auto-workflow--semantic-audit-record
+               file 0 'toxic-commit-subject
+               (format "Toxic commit subject: %s" subject)))))
+      (error (message "[self-heal-semantic] git log --all failed — skipping toxic-commit-subject check")))
+    issues))
+
+;; ── Check 17: Score fabrication in experiment results ──
+
+(defvar gptel-auto-workflow--score-fabrication-done nil
+  "Set to t after score-fabrication check runs to skip per-file re-check.")
+
+(cl-defun gptel-auto-workflow--audit-score-fabrication (file)
+  "Detect experiment result claims inconsistent with actual benchmark TSV files.
+Scans var/tmp/experiments/*/commits.txt and var/tmp/experiments/*/results.tsv.
+Flags commits whose claimed score-after in subject differs from TSV
+score_after by more than 0.1, or whose TSV row is missing.
+FILE accepted for dispatch, ignored.
+Returns count of issues found."
+  (when gptel-auto-workflow--score-fabrication-done
+    (cl-return-from gptel-auto-workflow--audit-score-fabrication 0))
+  (setq gptel-auto-workflow--score-fabrication-done t)
+  (let* ((issues 0)
+         (root (or (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
+                        (gptel-auto-workflow--expand-workspace-path ""))
+                   default-directory))
+         (exp-dir (expand-file-name "var/tmp/experiments" root))
+         (sha-subject-map (make-hash-table :test 'equal)))
+    (cond
+     ((not (file-directory-p exp-dir)) 0)
+     (t
+      (gptel-auto-workflow--build-sha-subject-map sha-subject-map)
+      (dolist (exp-subdir (directory-files exp-dir t "\\`[0-9TZ]" t))
+        (setq issues (+ issues
+                        (gptel-auto-workflow--check-experiment-dir
+                         exp-subdir sha-subject-map file))))
+      issues))))
+
+(defun gptel-auto-workflow--build-sha-subject-map (sha-subject-map)
+  "Populate SHA-SUBJECT-MAP from git log output.
+Maps commit SHA (string) to commit subject (string)."
+  (condition-case nil
+      (let ((output (shell-command-to-string "git log --all --format='%H %s'")))
+        (dolist (line (split-string output "\n" t))
+          (when (string-match "\\`\\([0-9a-f]\\{40\\}\\) \\(.+\\)" line)
+            (puthash (match-string 1 line) (match-string 2 line)
+                     sha-subject-map))))
+    (error nil)))
+
+(defun gptel-auto-workflow--check-experiment-dir (exp-subdir sha-subject-map module-file)
+  "Check one experiment directory for score fabrication.
+Returns count of issues found in EXP-SUBDIR."
+  (let ((issues 0)
+        (commits-file (expand-file-name "commits.txt" exp-subdir))
+        (results-file (expand-file-name "results.tsv" exp-subdir)))
+    (when (and (file-exists-p commits-file)
+               (file-exists-p results-file))
+      (condition-case nil
+          (let* ((tsv-data (gptel-auto-workflow--parse-results-tsv results-file))
+                 (tsv-score-map (gptel-auto-workflow--build-tsv-score-map tsv-data))
+                 (commit-lines (gptel-auto-workflow--read-commits-txt commits-file))
+                 (exp-id (file-name-nondirectory
+                          (directory-file-name exp-subdir))))
+            (dolist (sha commit-lines)
+              (let ((subject (gethash sha sha-subject-map)))
+                (when (and subject
+                           (string-match
+                             "0\\.\\([0-9]+\\)\\s-*\\(?:→\\|->\\)\\s-*\\([0-9.]+\\)"
+                            subject))
+                  (let* ((claimed-score
+                          (string-to-number (match-string 2 subject)))
+                         (tsv-score (gethash exp-id tsv-score-map))
+                         (diff (if tsv-score
+                                   (abs (- claimed-score tsv-score))
+                                 1.0)))
+                    (when (or (null tsv-score) (> diff 0.1))
+                      (setq issues (1+ issues))
+                      (gptel-auto-workflow--semantic-audit-record
+                       module-file 0 'score-fabrication
+                       (format
+                        "Score mismatch: %s claims %.2f, TSV has %s (SHA %s, exp %s)"
+                        subject claimed-score
+                        (if tsv-score (format "%.2f" tsv-score) "MISSING")
+                        (substring sha 0 8) exp-id))))))))
+        (error nil)))
+    issues))
+
+(defun gptel-auto-workflow--parse-results-tsv (results-file)
+  "Parse RESULTS-FILE TSV into a list of field-lists.
+Returns list of row-lists (each row is a list of strings)."
+  (with-temp-buffer
+    (insert-file-contents results-file)
+    (goto-char (point-min))
+    (let ((rows nil))
+      (while (not (eobp))
+        (let ((line (buffer-substring (point) (line-end-position))))
+          (unless (string-empty-p line)
+            (push (split-string line "\t" t) rows)))
+        (forward-line 1))
+      (nreverse rows))))
+
+(defun gptel-auto-workflow--build-tsv-score-map (tsv-rows)
+  "Build hash map from experiment_id to score_after (float) from TSV-ROWS."
+  (let ((score-map (make-hash-table :test 'equal)))
+    (dolist (row tsv-rows)
+      (when (length> row 4)
+        (let ((exp-id (nth 0 row))
+              (score-after-str (nth 4 row)))
+          (when (and exp-id (not (string-empty-p exp-id))
+                     score-after-str
+                     (string-match-p "\\`[0-9.]+\\'" score-after-str))
+            (puthash exp-id (string-to-number score-after-str) score-map)))))
+    score-map))
+
+(defun gptel-auto-workflow--read-commits-txt (commits-file)
+  "Read COMMITS-FILE and return list of commit SHAs (first field of each line)."
+  (let ((shas nil))
+    (with-temp-buffer
+      (insert-file-contents commits-file)
+      (goto-char (point-min))
+      (while (not (eobp))
+        (let ((line (buffer-substring (point) (line-end-position))))
+          (unless (string-empty-p line)
+            (let ((parts (split-string line " " t)))
+              (when (length> parts 0)
+                (push (nth 0 parts) shas)))))
+        (forward-line 1)))
+    (nreverse shas)))
+
 ;; ── Check 13: nil-initialized hash tables ──
 
 (defun gptel-auto-workflow--var-used-as-hash-table-p (var-name _file-content buffer)
@@ -752,7 +909,9 @@ Returns count of issues found."
     (daemon-hang . gptel-auto-workflow--audit-daemon-hang)
     (nil-hash-table . gptel-auto-workflow--audit-nil-hash-tables)
     (orphaned-curl-process . gptel-auto-workflow--audit-orphaned-curl-processes)
-    (curl-no-max-time . gptel-auto-workflow--audit-curl-no-max-time))
+    (curl-no-max-time . gptel-auto-workflow--audit-curl-no-max-time)
+    (toxic-commit-subject . gptel-auto-workflow--audit-toxic-commit-subject)
+    (score-fabrication . gptel-auto-workflow--audit-score-fabrication))
   "Alist of audit check name (symbol) to audit function.")
 
 ;; ── Check 8: condition-case with unbound err ──
@@ -1597,6 +1756,8 @@ end-of-file error on broken files)."
 Skips the self-heal-semantic module itself to avoid false positives
 from the audit patterns embedded in the code."
   (setq gptel-auto-workflow--daemon-hang-done nil)
+  (setq gptel-auto-workflow--toxic-commit-subject-done nil)
+  (setq gptel-auto-workflow--score-fabrication-done nil)
   (let* ((modules-dir (or (and (fboundp 'gptel-auto-workflow--expand-workspace-path)
                                 (gptel-auto-workflow--expand-workspace-path "lisp/modules"))
                           "lisp/modules"))
@@ -1860,6 +2021,8 @@ Keyword arguments:
         (make-hash-table :test 'equal))
   ;; Reset daemon-hang check guard so each full audit run gets one check
   (setq gptel-auto-workflow--daemon-hang-done nil)
+  (setq gptel-auto-workflow--toxic-commit-subject-done nil)
+  (setq gptel-auto-workflow--score-fabrication-done nil)
   ;; ── Dirty-tree gate (Step 1 safety layer) ──
   (let ((dirty-result
          (unless no-dirty-check

@@ -1440,8 +1440,40 @@ Returns plist (:total :total-cost :kept :kept-cost :models-seen
                                  (plist-get b :total-cost)))))
       (list :total total :total-cost total-cost
             :kept kept :kept-cost kept-cost
-            :models-seen (hash-table-count model-stats)
+             :models-seen (hash-table-count model-stats)
             :model-breakdown breakdown))))
+
+;; ── OV5 grader-bypass hardening: toxic optimize/* branch detector ──
+
+(defun gptel-auto-workflow--audit-toxic-optimize-branches ()
+  "List all remote `optimize/*' branches whose tip commit subject matches
+toxic grader-bypass or score-fabrication patterns.
+Returns list of (branch . subject) pairs.  Logs a warning for each.
+Uses the same detection logic as `gptel-auto-workflow--toxic-commit-subject-p'
+but inlined to avoid cross-module dependency."
+  (let ((pairs nil)
+        (case-fold-search t))
+    (condition-case nil
+        (let ((branches-output
+               (shell-command-to-string "git branch -r --list 'origin/optimize/*'")))
+          (dolist (branch (split-string branches-output "\n" t))
+            (setq branch (string-trim branch))
+            (unless (string-empty-p branch)
+              (condition-case nil
+                  (let ((subject
+                         (string-trim
+                          (shell-command-to-string
+                           (format "git log -1 --format=%%s %s" branch)))))
+                    (when (and subject (not (string-empty-p subject))
+                               (or (string-match-p "grader-bypass" subject)
+                                   (string-match-p "0\\.\\d+\\s-*→\\s-*1\\.\\d+" subject)
+                                   (string-match-p "0\\.\\d+\\s-*->\\s-*1\\.\\d+" subject)))
+                      (push (cons branch subject) pairs)
+                      (message "[self-audit] Toxic optimize branch detected: %s — %s"
+                               branch subject)))
+                (error nil)))))
+      (error nil))
+    pairs))
 
 (provide 'gptel-auto-workflow-self-audit)
 ;;; gptel-auto-workflow-self-audit.el ends here
