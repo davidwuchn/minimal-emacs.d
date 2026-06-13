@@ -92,5 +92,35 @@
         (gptel-auto-workflow-monitoring-cycle-interval 900))
     (should (null (gptel-auto-workflow--monitoring-cycle)))))
 
+(ert-deftest test-main/self-heal-byte-compiler-skipped-in-cron-mode ()
+  "Byte-compiler self-heal should be skipped when cron job is running."
+  (let ((gptel-auto-workflow--cron-job-running t)
+        (gptel-auto-workflow--self-heal-enabled t)
+        (called nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--self-heal-byte-compiler)
+               (lambda () (setq called t) (list :fixes-applied 0 :remaining-warnings 0 :files-fixed nil))))
+      (gptel-auto-workflow--maybe-self-heal-byte-compiler)
+      (should-not called))))
+
+(ert-deftest test-main/self-heal-byte-compiler-runs-when-enabled ()
+  "Byte-compiler self-heal should run when enabled and not in cron mode."
+  (let ((gptel-auto-workflow--cron-job-running nil)
+        (gptel-auto-workflow--self-heal-enabled t)
+        (called nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--self-heal-byte-compiler)
+               (lambda () (setq called t) (list :fixes-applied 0 :remaining-warnings 0 :files-fixed nil))))
+      (gptel-auto-workflow--maybe-self-heal-byte-compiler)
+      (should called))))
+
+(ert-deftest test-main/self-heal-byte-compiler-skipped-when-disabled ()
+  "Byte-compiler self-heal should be skipped when globally disabled."
+  (let ((gptel-auto-workflow--cron-job-running nil)
+        (gptel-auto-workflow--self-heal-enabled nil)
+        (called nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--self-heal-byte-compiler)
+               (lambda () (setq called t) (list :fixes-applied 0 :remaining-warnings 0 :files-fixed nil))))
+      (gptel-auto-workflow--maybe-self-heal-byte-compiler)
+      (should-not called))))
+
 (provide 'test-gptel-tools-agent-main)
 ;;; test-gptel-tools-agent-main.el ends here

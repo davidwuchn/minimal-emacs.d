@@ -412,6 +412,22 @@ Works on Linux (/proc) and macOS (ps)."
                (string-to-number (match-string 1))))
          (error nil))))))
 
+(defun gptel-auto-workflow--maybe-self-heal-byte-compiler ()
+  "Run byte-compiler self-heal unless disabled or running in cron mode.
+In cron/pipeline mode this is skipped because it mutates source files
+and can take 10+ minutes, causing the pipeline idle detector to assume
+the daemon is done."
+  (when (and gptel-auto-workflow--self-heal-enabled
+             (not (bound-and-true-p gptel-auto-workflow--cron-job-running))
+             (fboundp 'gptel-auto-workflow--self-heal-byte-compiler))
+    (condition-case err
+        (let ((result (gptel-auto-workflow--self-heal-byte-compiler)))
+          (when (> (plist-get result :remaining-warnings) 0)
+            (message "[self-heal] Byte-compiler: %d warnings remain after auto-fix"
+                     (plist-get result :remaining-warnings))))
+      (error (message "[self-heal] Byte-compiler self-heal error: %s"
+                      (error-message-string err))))))
+
 (defun gptel-auto-workflow-run-async (&optional targets completion-callback)
   "Run auto-workflow asynchronously with TARGETS.
 Non-blocking - returns immediately.
@@ -583,9 +599,14 @@ Usage:
                (or (null gptel-auto-workflow--cached-baseline-results)
                    (not (eq (plist-get gptel-auto-workflow--cached-baseline-results :exit-code) 0))))
       (message "[auto-workflow] Warming baseline cache (first run may take ~2min)...")
-      (condition-case nil
-          (gptel-auto-workflow--main-baseline-test-results)
-        (error (message "[auto-workflow] Baseline warm failed (will retry on first experiment)"))))
+      ;; In cron mode cap at 10 min so the pipeline idle detector doesn't
+      ;; assume the daemon is done; first experiment can retry if needed.
+      (condition-case err
+          (progn
+            (setq gptel-auto-workflow--last-progress-time (current-time))
+            (with-timeout (600 (message "[auto-workflow] Baseline warm timed out after 600s (will retry on first experiment)"))
+              (gptel-auto-workflow--main-baseline-test-results)))
+        (error (message "[auto-workflow] Baseline warm failed: %s" (error-message-string err)))))
     (setq gptel-auto-workflow--current-project (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-project-root (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-id (or gptel-auto-workflow--run-id
@@ -613,15 +634,9 @@ Usage:
         (error (message "[self-heal] State restore skipped: %s"
                         (error-message-string err)))))
     ;; Phase 3: Byte-compiler self-heal — fix warnings before experiments
-    (when (and gptel-auto-workflow--self-heal-enabled
-               (fboundp 'gptel-auto-workflow--self-heal-byte-compiler))
-      (condition-case err
-          (let ((result (gptel-auto-workflow--self-heal-byte-compiler)))
-            (when (> (plist-get result :remaining-warnings) 0)
-              (message "[self-heal] Byte-compiler: %d warnings remain after auto-fix"
-                       (plist-get result :remaining-warnings))))
-        (error (message "[self-heal] Byte-compiler self-heal error: %s"
-                        (error-message-string err)))))
+    ;; Skip in cron/pipeline mode: it mutates source and can take 10+ minutes,
+    ;; causing the pipeline idle detector to assume the daemon is done.
+    (gptel-auto-workflow--maybe-self-heal-byte-compiler)
     ;; Phase 4: Self-diagnostic probe — verify grader health before wasting experiments
     (when (and (fboundp 'gptel-auto-workflow--probe-before-experiments)
                (not (with-timeout (60 "timeout")
