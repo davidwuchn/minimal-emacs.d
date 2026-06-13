@@ -188,7 +188,8 @@ Two REPL modules now exist, both wired into `gptel-config.el`:
 - Implemented 4-phase hardening plan under `plans/ov5-grader-bypass-hardening/`.
 - Phase 1 pushed to main (`021b2d10`): removed staging overrides, expanded critical-files registry, hardened grader-bypass predicate, added push quarantine, added `tests/test-experiment-gates.el` (16 tests).
 - Phase 2 pushed to main (`de129468`): added `toxic-commit-subject` and `score-fabrication` self-heal-semantic checks, added `audit-toxic-optimize-branches` self-audit helper, added 3 regression tests.
-- Deleted toxic branch `optimize/benchmark-ncase-r110836z56cd-exp1` from origin. Scanned remaining 143 optimize branches; many still have toxic subjects and need review/quarantine.
+- Deleted toxic branch `optimize/benchmark-ncase-r110836z56cd-exp1` from origin. Scanned remaining 143 optimize branches; many still had toxic subjects.
+- **Cleanup complete**: batch-deleted 141 toxic `optimize/*` branches from origin (verified none were merged to main). Only 2 non-toxic optimize branches remain.
 - Full verification: 132 self-heal-semantic tests + 16 experiment-gates tests pass; pre-push gate passes.
 - Captured memory + knowledge: `mementum/memories/insight-ov5-grader-bypass-gate-hardening.md`, `mementum/knowledge/ov5-experiment-gate-integrity.md`.
 
