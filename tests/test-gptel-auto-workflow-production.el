@@ -167,6 +167,36 @@ multi-line string literal containing 33 consecutive newlines."
     (should (<= max-blank-outside 2))
     (should (<= max-blank-inside 3))))
 
+(ert-deftest test-production/innovation-queue-add-heals-blank-lines ()
+  "add() must insert the entry even when the queue file has blank
+lines between the header and separator (a corruption mode we have
+seen in the wild), and it must normalize those blank lines away."
+  (skip-unless (fboundp 'gptel-auto-workflow--innovation-queue-add))
+  (let* ((root (make-temp-file "ov5-prod-" t))
+         (queue-dir (expand-file-name "mementum" root))
+         (queue-file (expand-file-name "innovation-queue.md" queue-dir)))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                   (lambda () root)))
+          (make-directory queue-dir t)
+          ;; Corrupted table: 5 blank lines between header and separator.
+          (with-temp-file queue-file
+            (insert "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n")
+            (insert "\n\n\n\n\n")
+            (insert "|----|--------|-----------|-----------------|--------|---------------|---------------|\n")
+            (insert "| existing | research | foo | +1% | running | exp-1 | +0.5% |\n"))
+          (let ((id (gptel-auto-workflow--innovation-queue-add
+                     "test-source" "test-technique" "test-impact")))
+            (with-temp-buffer
+              (insert-file-contents queue-file)
+              (let ((lines (split-string (buffer-string) "\n" t)))
+                ;; Should be 4 lines: header, separator, new entry, existing row
+                (should (= 4 (length lines)))
+                (should (string-match-p "test-source" (nth 2 lines)))
+                (should (string-match-p id (nth 2 lines)))
+                (should (string-match-p "existing" (nth 3 lines)))))))
+      (delete-directory root t))))
+
 (ert-deftest test-production/all-key-functions-fboundp ()
   "All key public functions must be bound after loading the module.
 Regression guard: a previous version of this file had a missing

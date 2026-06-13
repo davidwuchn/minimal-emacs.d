@@ -792,9 +792,9 @@ Called after research cycle completes."
 (defun gptel-auto-workflow--innovation-queue-add (source technique expected-impact)
   "Add an innovation idea to the queue.
 SOURCE: where the idea came from \(e.g., `GitHub trends',
-`arXiv paper'\)
-TECHNIQUE: what to try \(e.g., `Hashline editing'\)
-EXPECTED-IMPACT: predicted outcome \(e.g., `+15% keep-rate'\)
+`arXiv paper')
+TECHNIQUE: what to try \(e.g., `Hashline editing')
+EXPECTED-IMPACT: predicted outcome \(e.g., `+15% keep-rate')
 Returns the new item ID."
   (let* ((queue-file (gptel-auto-workflow--innovation-queue-file))
          (id (format "innov-%s-%d"
@@ -808,26 +808,21 @@ Returns the new item ID."
                        (insert-file-contents queue-file)
                        (buffer-string))))
         ;; Insert after the header row.  Match the table header line
-        ;; and replace it with header + separator + new entry.  This
-        ;; puts the new entry directly after the separator, on row 3.
-        ;;
-        ;; NOTE: the previous version embedded a 33-blank-line regex
-        ;; that made this function only match files with exactly 33
-        ;; blank lines between header and separator.  No real markdown
-        ;; table has that, so the function silently failed to insert.
-          (setq content
-                (replace-regexp-in-string
-                 (concat
-                  "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n"
-                  "
-
-
-|----|--------|-----------|-----------------|--------|---------------|---------------|\n")
-                 (concat
-                  "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n"
-                  "|----|--------|-----------|-----------------|--------|---------------|---------------|\n"
-                  entry)
-                 content))
+        ;; and separator, allowing arbitrary blank lines between them.
+        ;; This is resilient to corrupted queue files that accumulate
+        ;; blank lines, and self-heals them back to a valid markdown
+        ;; table on every add.
+        (setq content
+              (replace-regexp-in-string
+               (concat
+                "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n"
+                "\\(?:\\s-*\n\\)*"
+                "|----|--------|-----------|-----------------|--------|---------------|---------------|\n")
+               (concat
+                "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n"
+                "|----|--------|-----------|-----------------|--------|---------------|---------------|\n"
+                entry)
+               content))
         ;; Update timestamp
         (setq content (replace-regexp-in-string
                        "<!-- UPDATED -->"
@@ -835,7 +830,7 @@ Returns the new item ID."
                        content))
         (with-temp-file queue-file
           (insert content))))
-    (message "[innovation] Queued: %s (%s → %s)" id technique expected-impact)
+    (message "[innovation] Queued: %s (%s -> %s)" id technique expected-impact)
     id))
 
 (defun gptel-auto-workflow--innovation-queue-update (id status &optional experiment-id actual-impact)
