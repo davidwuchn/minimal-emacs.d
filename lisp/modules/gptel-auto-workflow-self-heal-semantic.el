@@ -2032,6 +2032,15 @@ Keyword arguments:
              (when (and gptel-auto-workflow--self-heal-dirty-tree-gate
                         (not (string-empty-p porcelain)))
                (message "[self-heal-semantic] WARNING: dirty working tree — refusing self-heal")
+               ;; Also scan changed files for excessive blank lines
+               ;; (merge conflicts and stash pops can silently introduce them).
+               (dolist (line (split-string porcelain "\n" t))
+                 (let ((file (cadr (split-string line))))
+                   (when (and file (string-suffix-p ".el" file))
+                     (let ((issues (gptel-auto-workflow--audit-blank-lines file)))
+                       (when (> issues 0)
+                         (message "[self-heal-semantic] DIRTY-TREE: %s has %d excessive-blank-lines issue(s) — fix before self-heal"
+                                  (file-name-nondirectory file) issues))))))
                (list :status 'dirty-tree
                      :reason "uncommitted changes in working tree"
                      :total-issues 0
