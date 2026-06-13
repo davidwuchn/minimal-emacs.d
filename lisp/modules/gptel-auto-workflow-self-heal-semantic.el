@@ -609,7 +609,8 @@ Only checks files in lisp/modules/ and post-init.el, not upstream gptel."
 ;; ── Check 16: Toxic commit subjects (grader-bypass / score-fabrication) ──
 
 (defun gptel-auto-workflow--toxic-commit-subject-p (subject)
-  "Return t if SUBJECT string matches a toxic grader-bypass or score-fabrication pattern.
+  "Return t if SUBJECT string matches a toxic grader-bypass or score-fabrication
+pattern.
 Detects:
 - Case-insensitive `grader-bypass' references
 - Suspicious score transformations like 0.40 → 1.00 or 0.40 -> 1.00"
@@ -638,7 +639,8 @@ Returns count of flagged commits."
               (gptel-auto-workflow--semantic-audit-record
                file 0 'toxic-commit-subject
                (format "Toxic commit subject: %s" subject)))))
-      (error (message "[self-heal-semantic] git log --all failed — skipping toxic-commit-subject check")))
+      (error (message "[self-heal-semantic] git log --all failed — skipping toxic-commit-subject
+check")))
     issues))
 
 ;; ── Check 17: Score fabrication in experiment results ──

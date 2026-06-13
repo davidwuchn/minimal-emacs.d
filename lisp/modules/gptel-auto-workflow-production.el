@@ -819,16 +819,7 @@ Returns the new item ID."
               (replace-regexp-in-string
                (concat
                 "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n"
-                "
-
-
-
-
-
-
-
-
-|----|--------|-----------|-----------------|--------|---------------|---------------|\n")
+                "|----|--------|-----------|-----------------|--------|---------------|---------------|\n")
                (concat
                 "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n"
                 "|----|--------|-----------|-----------------|--------|---------------|---------------|\n"
