@@ -200,7 +200,7 @@ legitimate subagent work. Set to nil to disable.\")")
 
 (ert-deftest test-self-heal-semantic/audit-checks-variable-defined ()
   "The audit checks alist is defined with all checks."
-  (should (= (length gptel-auto-workflow--semantic-audit-checks) 12))
+  (should (= (length gptel-auto-workflow--semantic-audit-checks) 13))
   (should (assq 'let-binding-function gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'hardcoded-limit gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'score-zero-bug gptel-auto-workflow--semantic-audit-checks))
@@ -212,7 +212,8 @@ legitimate subagent work. Set to nil to disable.\")")
   (should (assq 'risk-node gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'provide-inside-defun gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'void-defvar gptel-auto-workflow--semantic-audit-checks))
-  (should (assq 'daemon-hang gptel-auto-workflow--semantic-audit-checks)))
+  (should (assq 'daemon-hang gptel-auto-workflow--semantic-audit-checks))
+  (should (assq 'nil-hash-table gptel-auto-workflow--semantic-audit-checks)))
 
 ;; ── Test 10: Missing provide detection ──
 
@@ -1367,6 +1368,116 @@ commit serves as the rollback point."
                      (lambda () 1)))
             (let ((issues (gptel-auto-workflow--audit-daemon-hang file)))
               (should (= issues 1)))))
+      (test-self-heal-semantic--cleanup file))))
+
+;; ── Test 19: nil-hash-table audit detection ──
+
+(ert-deftest test-self-heal-semantic/detects-nil-hash-table-gethash ()
+  "Detects (defvar ht nil) where ht is used with gethash in same file."
+  (let* ((content
+          "(defvar my-cache nil \"Cache for lookups.\")\n\n(defun lookup (key)\n  (gethash key my-cache))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-nil-hash-tables file)))
+          (should (= issues 1)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/detects-nil-hash-table-puthash ()
+  "Detects nil hash table used with puthash."
+  (let* ((content
+          "(defvar my-table nil)\n\n(defun store (k v)\n  (puthash k v my-table))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-nil-hash-tables file)))
+          (should (= issues 1)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/nil-hash-table-clean-when-no-hash-usage ()
+  "defvar nil without hash-table usage is clean (not a false positive)."
+  (let* ((content
+          "(defvar my-counter nil \"Simple counter.\")\n\n(defun inc ()\n  (setq my-counter (1+ (or my-counter 0))))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-nil-hash-tables file)))
+          (should (= issues 0)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/nil-hash-table-clean-when-properly-initialized ()
+  "Properly initialized hash table is clean."
+  (let* ((content
+          "(defvar my-ht (make-hash-table :test 'equal) \"Hash table.\")\n\n(defun lookup (key)\n  (gethash key my-ht))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-nil-hash-tables file)))
+          (should (= issues 0)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/nil-hash-table-multiple-detected ()
+  "Multiple nil hash tables in same file are all detected."
+  (let* ((content
+          "(defvar ht1 nil)\n(defvar ht2 nil \"Another one.\")\n\n(defun f ()\n  (gethash 'x ht1)\n  (puthash 'y 1 ht2))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-nil-hash-tables file)))
+          (should (= issues 2)))
+      (test-self-heal-semantic--cleanup file))))
+
+;; ── Test 20: nil-hash-table fixer ──
+
+(ert-deftest test-self-heal-semantic/fixes-nil-hash-table-to-make-hash-table ()
+  "Fixer replaces nil with (make-hash-table :test 'equal) in defvar."
+  (let* ((content
+          "(defvar my-cache nil \"Cache.\")\n\n(defun lookup (key)\n  (gethash key my-cache))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (let ((fixed (gptel-auto-workflow--fix-nil-hash-tables file)))
+            (should (= fixed 1))
+            (with-temp-buffer
+              (insert-file-contents file)
+              (should (string-match-p
+                       "(defvar my-cache (make-hash-table :test 'equal)"
+                       (buffer-string))))))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/fixer-no-op-when-no-hash-usage ()
+  "Fixer returns 0 for defvar nil without hash table usage."
+  (let* ((content
+          "(defvar my-var nil \"Not a hash table.\")\n\n(defun f ()\n  (setq my-var 42))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (let ((fixed (gptel-auto-workflow--fix-nil-hash-tables file)))
+            (should (= fixed 0))))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/fixer-no-op-already-initialized ()
+  "Fixer returns 0 when hash table is already properly initialized."
+  (let* ((content
+          "(defvar my-ht (make-hash-table :test 'equal))\n\n(defun f ()\n  (gethash 'x my-ht))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (let ((fixed (gptel-auto-workflow--fix-nil-hash-tables file)))
+            (should (= fixed 0))))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/fixer-fixes-multiple-nil-hash-tables ()
+  "Fixer fixes multiple nil hash tables in same file."
+  (let* ((content
+          "(defvar ht1 nil)\n(defvar ht2 nil)\n\n(defun f ()\n  (gethash 'x ht1)\n  (puthash 'y 1 ht2))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (let ((fixed (gptel-auto-workflow--fix-nil-hash-tables file)))
+            (should (= fixed 2))
+            (with-temp-buffer
+              (insert-file-contents file)
+              (should (string-match-p "make-hash-table" (buffer-string)))
+              ;; nil should be gone from defvars
+              (should-not (string-match-p
+                           "(defvar ht[12] nil)"
+                           (buffer-string))))))
       (test-self-heal-semantic--cleanup file))))
 
 (provide 'test-self-heal-semantic)

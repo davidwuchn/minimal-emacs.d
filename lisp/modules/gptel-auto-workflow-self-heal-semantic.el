@@ -476,6 +476,47 @@ causing void-variable errors at runtime.  Returns count of bare defvars."
   (setq gptel-auto-workflow--daemon-hang-done t)
   (gptel-auto-workflow--audit-daemon-hang--impl))
 
+;; ── Check 13: nil-initialized hash tables ──
+
+(defun gptel-auto-workflow--var-used-as-hash-table-p (var-name file-content)
+  "Check if VAR-NAME appears in hash-table function calls in FILE-CONTENT.
+Matches VAR-NAME referenced with gethash, puthash, maphash, hash-table-p,
+or clrhash — indicating it is used as a hash table."
+  (let ((case-fold-search nil))
+    (catch 'found
+      (dolist (fn '("gethash" "puthash" "maphash" "hash-table-p" "clrhash"))
+        (when (string-match-p
+               (format "(%s\\b[^)]*\\b%s\\b" fn (regexp-quote var-name))
+               file-content)
+          (throw 'found t)))
+      nil)))
+
+(defun gptel-auto-workflow--audit-nil-hash-tables (file)
+  "Audit FILE for hash tables initialized to nil.
+Detects (defvar NAME nil) where NAME is used with hash-table
+functions (gethash, puthash, maphash, hash-table-p, clrhash)
+in the same file.  Returns count of issues found."
+  (let ((issues 0)
+        (file-content nil))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (setq file-content (buffer-string))
+      (goto-char (point-min))
+      (while (re-search-forward
+              "^(defvar[ \t]+\\([a-z][a-z0-9-]*\\)[ \t]+nil\\b" nil t)
+        (let ((var-name (match-string 1))
+              (line-no (line-number-at-pos)))
+          (when (gptel-auto-workflow--var-used-as-hash-table-p
+                 var-name file-content)
+            (setq issues (1+ issues))
+            (gptel-auto-workflow--semantic-audit-record
+             file line-no
+             'nil-hash-table
+             (format
+              "Hash table %s initialized to nil — use (make-hash-table :test 'equal)"
+              var-name)))))
+      issues)))
+
 (defvar gptel-auto-workflow--semantic-audit-checks
   '((let-binding-function . gptel-auto-workflow--audit-let-binding-functions)
     (hardcoded-limit . gptel-auto-workflow--audit-hardcoded-limits)
@@ -488,7 +529,8 @@ causing void-variable errors at runtime.  Returns count of bare defvars."
     (risk-node . gptel-auto-workflow--audit-risk-nodes)
     (provide-inside-defun . gptel-auto-workflow--audit-provide-inside-defun)
     (void-defvar . gptel-auto-workflow--audit-void-defvars)
-    (daemon-hang . gptel-auto-workflow--audit-daemon-hang))
+    (daemon-hang . gptel-auto-workflow--audit-daemon-hang)
+    (nil-hash-table . gptel-auto-workflow--audit-nil-hash-tables))
   "Alist of audit check name (symbol) to audit function.")
 
 ;; ── Check 8: condition-case with unbound err ──
@@ -1220,6 +1262,46 @@ removes or changes logic."
          (current-buffer) file original-content)))
     fixed))
 
+;; ── Fix: nil-initialized hash tables ──
+
+(defun gptel-auto-workflow--fix-nil-hash-tables (file)
+  "Fix nil-initialized hash table defvars in FILE.
+Changes (defvar NAME nil ...) to (defvar NAME (make-hash-table :test 'equal) ...)
+where NAME is used with hash-table functions in the same file.
+Returns number of fixes applied."
+  (let ((fixed 0)
+        (original-content nil)
+        (fixes-list nil))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (setq original-content (buffer-string))
+      (goto-char (point-min))
+      (let ((file-content (buffer-string)))
+        (while (re-search-forward
+                "^(defvar[ \t]+\\([a-z][a-z0-9-]*\\)[ \t]+nil\\b" nil t)
+          (let ((var-name (match-string 1)))
+            (when (gptel-auto-workflow--var-used-as-hash-table-p
+                   var-name file-content)
+              ;; Record the position of "nil" for replacement
+              (save-excursion
+                (re-search-backward "nil" (line-beginning-position) t)
+                (push (cons (point) var-name) fixes-list))))))
+      ;; Apply fixes from bottom to top to preserve positions
+      (dolist (fix (sort fixes-list (lambda (a b) (> (car a) (car b)))))
+        (let ((pos (car fix)))
+          (goto-char pos)
+          (delete-region pos (+ pos 3))
+          (insert "(make-hash-table :test 'equal)")
+          (cl-incf fixed)))
+      (when (> fixed 0)
+        (gptel-auto-workflow--fix-validate-and-write
+         (current-buffer) file original-content
+         :no-load-check t :no-subprocess-check t)))
+    (when (> fixed 0)
+      (message "[self-heal] nil-hash-table: %d fix(es) in %s"
+               fixed (file-name-nondirectory file)))
+    fixed))
+
 (cl-defun gptel-auto-workflow--semantic-audit-file (file &key (_auto-fix nil))
   "Run all semantic audit checks on FILE.
 Wraps each check in condition-case so a buggy check doesn't
@@ -1315,7 +1397,8 @@ instead of fixing each failure individually."
     (unbalanced-parens . gptel-auto-workflow--fix-unbalanced-parens)
     (condition-case-unbound-err . gptel-auto-workflow--fix-condition-case-unbound-err)
     (provide-inside-defun . gptel-auto-workflow--fix-provide-inside-defun)
-    (void-defvar . gptel-auto-workflow--fix-void-defvars))
+    (void-defvar . gptel-auto-workflow--fix-void-defvars)
+    (nil-hash-table . gptel-auto-workflow--fix-nil-hash-tables))
   "Alist mapping audit issue type (symbol) to its auto-fixer function.
 Adding a new auto-fixer is now a one-line change to this alist.
 Each fixer must take FILE as argument and return fix count (0 = no-op).")
@@ -1323,7 +1406,8 @@ Each fixer must take FILE as argument and return fix count (0 = no-op).")
 (defconst gptel-auto-workflow--self-heal-direct-safe-file-pattern
   "\\`ov5-test-"
   "Files matching this pattern are safe for direct mutation.
-Matches temp test fixture files (created by `test-self-heal-semantic--tmp-file',
+Matches temp test fixture files (created by
+`test-self-heal-semantic--tmp-file',
 which uses `make-temp-file \"ov5-test-\"').  Files outside lisp/modules/
 are also direct-safe regardless of name, handled in the route function.")
 
