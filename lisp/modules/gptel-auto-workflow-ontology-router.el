@@ -4,7 +4,9 @@
 (defvar gptel-auto-workflow--run-failed-backends nil)
 (defvar gptel-auto-workflow--rate-limited-backends nil)
 (defvar gptel-ai-behaviors--best-concrete-tasks nil)
-(defvar gptel-auto-experiment--target-state-cache nil)
+(defvar gptel-auto-experiment--target-state-cache
+  (make-hash-table :test 'equal)
+  "Cache for target state (byte-compiles, syntax-ok) per experiment.")
 (declare-function gptel-auto-experiment--replay-grader-insights-from-tsv
   "gptel-auto-experiment-core")
 (declare-function gptel-auto-workflow--worktree-base-root

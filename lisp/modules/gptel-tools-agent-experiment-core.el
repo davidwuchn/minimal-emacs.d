@@ -301,8 +301,9 @@ threshold %.2f — aborting experiment %d/%d for %s"
                                     (condition-case nil
                                         (progn (check-parens) t)
                                       (error nil))))))
-               (puthash target (list :byte-compiles byte-compiles :syntax-ok syntax-ok)
-                        gptel-auto-experiment--target-state-cache))))
+                (when (hash-table-p gptel-auto-experiment--target-state-cache)
+                  (puthash target (list :byte-compiles byte-compiles :syntax-ok syntax-ok)
+                           gptel-auto-experiment--target-state-cache)))))
           ;; CRITICAL: Set default-directory to worktree so all subagents
          ;; operate in the correct context. Each worktree = one session.
          (default-directory experiment-worktree)
