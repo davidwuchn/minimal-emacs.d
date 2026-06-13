@@ -7605,7 +7605,9 @@ reflection logic may be broken"
 ;; Forward declarations for self-healing state variables
 ;; (defined in Phase 5 but referenced by recovery and persistence)
 (defvar gptel-auto-workflow--consecutive-failed-remediations 0)
-(defvar gptel-auto-workflow--grader-health-metrics nil)
+(defvar gptel-auto-workflow--grader-health-metrics
+  (make-hash-table :test 'equal)
+  "Hash table tracking grader health per backend.")
 (defvar gptel-auto-workflow--blind-mode nil)
 
 ;; Dynamic variables from gptel package
