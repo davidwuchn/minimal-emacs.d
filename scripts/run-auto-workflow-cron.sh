@@ -51,7 +51,7 @@ case "$ACTION" in
         esac
         ;;
 esac
-STATUS_FILE="${AUTO_WORKFLOW_STATUS_FILE:-$DIR/var/tmp/cron/${SNAPSHOT_NAME}-status.sexp}"
+STATUS_FILE="${AUTO_WORKFLOW_STATUS_FILE:-$DIR/var/tmp/cron/${SNAPSHOT_NAME}-status.edn}"
 DAEMON_LOG="$DIR/var/tmp/cron/${SERVER_NAME}.log"
 MESSAGES_FILE="${AUTO_WORKFLOW_MESSAGES_FILE:-$DIR/var/tmp/cron/${SNAPSHOT_NAME}-messages-tail.txt}"
 MESSAGES_CHARS="${AUTO_WORKFLOW_MESSAGES_CHARS:-16000}"
@@ -269,7 +269,7 @@ print_messages_snapshot() {
 }
 
 status_indicates_running() {
-    [ -r "$STATUS_FILE" ] && grep -q ':running t' "$STATUS_FILE"
+    [ -r "$STATUS_FILE" ] && grep -q ':running true' "$STATUS_FILE"
 }
 
 status_indicates_active_phase() {
@@ -578,7 +578,7 @@ rewrite_status_idle() {
         return 0
     fi
 
-    perl -i -pe 's/:running\s+t/:running nil/' "$STATUS_FILE"
+    perl -i -pe 's/:running\s+true/:running nil/' "$STATUS_FILE"
     perl -i -pe 's/:phase "[^"]*"/:phase "idle"/' "$STATUS_FILE"
     # Ensure trailing newline (use if/else to survive set -e)
     if [ -n "$(tail -c1 "$STATUS_FILE")" ]; then
@@ -651,7 +651,7 @@ daemon_reports_active_workflow() {
         if ! printf '%s' "$output" | grep -q ':phase '; then
             return 1
         fi
-        if printf '%s' "$output" | grep -q ':running t'; then
+        if printf '%s' "$output" | grep -q ':running true'; then
             return 0
         fi
         if printf '%s' "$output" | grep -Eq ':phase "(idle|complete|skipped|quota-exhausted)"'; then
@@ -896,7 +896,7 @@ refresh_snapshot_paths_from_daemon() {
 prime_snapshot_paths_for_action() {
     local default_status="$STATUS_FILE"
     local default_messages="$MESSAGES_FILE"
-    local shared_status="$DIR/var/tmp/cron/auto-workflow-status.sexp"
+    local shared_status="$DIR/var/tmp/cron/auto-workflow-status.edn"
     local shared_messages="$DIR/var/tmp/cron/auto-workflow-messages-tail.txt"
 
     if [ -n "${AUTO_WORKFLOW_STATUS_FILE:-}" ] || [ -n "${AUTO_WORKFLOW_MESSAGES_FILE:-}" ]; then

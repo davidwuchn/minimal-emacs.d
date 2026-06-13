@@ -182,9 +182,9 @@ daemon_responds() {
 # and times out, making a healthy daemon look unresponsive.  The status
 # file is written to disk before any long-running operation.
 workflow_active() {
-    local status_file="$DIR/var/tmp/cron/auto-workflow-status.sexp"
+    local status_file="$DIR/var/tmp/cron/auto-workflow-status.edn"
     if [ -f "$status_file" ]; then
-        grep -q ':running t' "$status_file" 2>/dev/null && return 0
+        grep -q ':running true' "$status_file" 2>/dev/null && return 0
     fi
     return 1
 }

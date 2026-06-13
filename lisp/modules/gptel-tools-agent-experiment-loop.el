@@ -1,6 +1,7 @@
 ; -*- lexical-binding: t; -*-
 (require 'cl-lib)
 (require 'subr-x)
+(require 'parseedn)
 (declare-function magit-git-success "magit-git")
 (declare-function cl-subseq "cl-lib")
 (declare-function gptel-auto-workflow--call-in-run-context "gptel-tools-agent-base")
@@ -834,7 +835,7 @@ Never signals — errors are silently swallowed so the timer stays alive."
                         gptel-auto-workflow--heartbeat-interval
                         #'gptel-auto-workflow--write-heartbeat)))
 
-(defcustom gptel-auto-workflow-status-file "var/tmp/cron/auto-workflow-status.sexp"
+(defcustom gptel-auto-workflow-status-file "var/tmp/cron/auto-workflow-status.edn"
   "Path to the persisted auto-workflow status snapshot.
 Relative paths are resolved from the project root."
   :type 'file
@@ -859,7 +860,7 @@ Relative paths are resolved from the project root."
 (defun gptel-auto-workflow--status-file ()
   "Return absolute path to the persisted workflow status snapshot."
   (let* ((configured-file gptel-auto-workflow-status-file)
-         (default-file "var/tmp/cron/auto-workflow-status.sexp")
+         (default-file "var/tmp/cron/auto-workflow-status.edn")
          (env-file (getenv "AUTO_WORKFLOW_STATUS_FILE")))
     (cond
      ((not (equal configured-file default-file))
@@ -984,8 +985,41 @@ Relative paths are resolved from the project root."
        (equal (plist-get status :run-id)
               gptel-auto-workflow--run-id)))
 
+(defun gptel-auto-workflow--write-edn (file data)
+  "Write DATA as EDN to FILE."
+  (with-temp-file file
+    (insert (parseedn-print-str data))
+    (insert "\n")))
+
+(defun gptel-auto-workflow--read-edn (file)
+  "Read EDN from FILE and return the parsed value as a plist, or nil on error."
+  (when (file-readable-p file)
+    (condition-case err
+        (let ((content (with-temp-buffer
+                         (insert-file-contents file)
+                         (buffer-string))))
+          (gptel-auto-workflow--edn-to-plist (parseedn-read-str content)))
+      (error
+       (message "[auto-workflow] Failed to read EDN from %s: %s" file (error-message-string err))
+       nil))))
+
+(defun gptel-auto-workflow--edn-to-plist (data)
+  "Recursively convert parsed EDN DATA (hash-tables, vectors) into plists/lists."
+  (cond
+   ((hash-table-p data)
+    (let (plist)
+      (maphash (lambda (k v)
+                 (setq plist (plist-put plist k (gptel-auto-workflow--edn-to-plist v))))
+               data)
+      plist))
+   ((vectorp data)
+    (mapcar #'gptel-auto-workflow--edn-to-plist data))
+   ((listp data)
+    (mapcar #'gptel-auto-workflow--edn-to-plist data))
+   (t data)))
+
 (defun gptel-auto-workflow--persist-status ()
-  "Persist current workflow status for non-blocking cron health checks."
+  "Persist current workflow status as EDN for non-blocking cron health checks."
   (let* ((file (gptel-auto-workflow--status-file))
          (dir (when file (file-name-directory file)))
          (status (gptel-auto-workflow--status-plist))
@@ -1010,22 +1044,15 @@ Relative paths are resolved from the project root."
        (message "[auto-workflow] Status guard error (native-comp stale?): %s" err)))
     (when dir
       (make-directory dir t))
-    (with-temp-file file
-      (let ((print-length nil)
-            (print-level nil))
-        (prin1 status (current-buffer))
-        (insert "\n")))
+    (gptel-auto-workflow--write-edn file status)
     (gptel-auto-workflow--persist-messages-tail)))
 
 (defun gptel-auto-workflow-read-persisted-status ()
-  "Read the persisted workflow status snapshot, or nil if unavailable."
+  "Read the persisted workflow status EDN snapshot, or nil if unavailable."
   (let ((file (gptel-auto-workflow--status-file)))
     (when (file-readable-p file)
       (condition-case err
-          (with-temp-buffer
-            (insert-file-contents file)
-            (goto-char (point-min))
-            (read (current-buffer)))
+          (gptel-auto-workflow--read-edn file)
         (error
          (message "[auto-workflow] Failed to read status snapshot: %s" err)
          (cl-return))))))

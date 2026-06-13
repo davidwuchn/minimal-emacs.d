@@ -271,7 +271,7 @@ run_e2e_tests() {
     chmod 700 "$complete_runtime_dir"
     complete_server="aw-complete-$$"
 
-    printf '%s\n' '(:running t :kept 0 :total 5 :phase "running" :run-id "stale-complete" :results "var/tmp/experiments/stale-complete/results.tsv")' >"$complete_status_file"
+    printf '%s\n' '(:running true :kept 0 :total 5 :phase "running" :run-id "stale-complete" :results "var/tmp/experiments/stale-complete/results.tsv")' >"$complete_status_file"
     printf '%s\n' '[auto-workflow] stale running snapshot' >"$complete_messages_file"
     touch_minutes_ago 2 "$complete_status_file"
 
@@ -335,7 +335,7 @@ run_e2e_tests() {
 
     if grep -q ':phase "complete"' <<< "$status_output" &&
        grep -q ':phase "complete"' "$complete_status_file" &&
-       ! grep -q ':running t' "$complete_status_file"; then
+       ! grep -q ':running true' "$complete_status_file"; then
         pass "wrapper rewrites stale running snapshot from daemon completion"
     else
         rm -f "$complete_status_file" "$complete_messages_file" "$complete_daemon_log"
@@ -366,7 +366,7 @@ run_e2e_tests() {
     chmod 700 "$live_messages_runtime_dir"
     live_messages_server="aw-live-msg-$$"
 
-    printf '%s\n' '(:running t :kept 0 :total 3 :phase "running" :run-id "live-messages" :results "var/tmp/experiments/live-messages/results.tsv")' >"$live_messages_status_file"
+    printf '%s\n' '(:running true :kept 0 :total 3 :phase "running" :run-id "live-messages" :results "var/tmp/experiments/live-messages/results.tsv")' >"$live_messages_status_file"
     printf '%s\n' '[auto-workflow] stale persisted tail' >"$live_messages_file"
     touch_minutes_ago 2 "$live_messages_file"
 

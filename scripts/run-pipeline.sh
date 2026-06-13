@@ -556,8 +556,8 @@ pipeline_git_sync_latest "pre-workflow" "auto-workflow-pre-pull"
 log "Stopping any existing daemons to load latest code..."
 # Check if auto-workflow is already running experiments — preserve its worktrees
 workflow_running=0
-if [ -f "$DIR/var/tmp/cron/auto-workflow-status.sexp" ]; then
-    if grep -q ':running t' "$DIR/var/tmp/cron/auto-workflow-status.sexp" 2>/dev/null; then
+if [ -f "$DIR/var/tmp/cron/auto-workflow-status.edn" ]; then
+    if grep -q ':running true' "$DIR/var/tmp/cron/auto-workflow-status.edn" 2>/dev/null; then
         workflow_running=1
         log "Auto-workflow already running experiments — preserving worktrees"
     fi
@@ -567,7 +567,7 @@ kill_ov5_daemons "pre-cleanup"
 "$SCRIPT" stop >/dev/null 2>&1 || true
 AUTO_WORKFLOW_EMACS_SERVER=gtm-product-org "$SCRIPT" stop >/dev/null 2>&1 || true
 # Clear stale status so auto-workflow starts fresh daemon
-rm -f "$DIR/var/tmp/cron/auto-workflow-status.sexp" 2>/dev/null || true
+rm -f "$DIR/var/tmp/cron/auto-workflow-status.edn" 2>/dev/null || true
 # Force-remove stale staging worktree so auto-workflow recreates from latest main
 rm -rf "$DIR/var/tmp/experiments/staging-verify" 2>/dev/null || true
 # Only clean optimize worktrees if no workflow was running (avoid race)
@@ -942,7 +942,7 @@ if [ "${PIPELINE_SKIP_PRE_EVOLUTION:-no}" != "yes" ]; then
     clean_ov5_sockets
     unset -f clean_ov5_sockets
     # Clear workflow status so auto-workflow can start a fresh daemon
-    rm -f "$DIR/var/tmp/cron/auto-workflow-status.sexp" 2>/dev/null || true
+    rm -f "$DIR/var/tmp/cron/auto-workflow-status.edn" 2>/dev/null || true
     # Discard all local changes + untracked files in auto-generated dirs
     pipeline_git_sync_latest "post-evolution" "auto-workflow-post-pull"
     sleep 2
