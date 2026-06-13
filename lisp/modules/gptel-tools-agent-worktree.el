@@ -9,7 +9,9 @@
 (defvar gptel-auto-workflow--skip-submodule-sync-env nil)
 (defvar gptel-auto-workflow-staging-branch nil)
 (defvar gptel-auto-workflow--staging-worktree-dir nil)
-(defvar gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
+(defvar gptel-auto-workflow--worktree-state (make-hash-table :test 'equal)
+  "Hash table mapping target → worktree state plist.
+Keys: target (string).  Values: (:worktree-dir DIR :current-branch BRANCH).")
 (declare-function gptel-auto-workflow--default-dir "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--non-empty-string-p "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--hash-get-bound "gptel-tools-agent-base")
@@ -291,7 +293,8 @@ branches into the staging branch.")
 (defun gptel-auto-workflow--assert-main-untouched ()
   "Assert that current branch is NOT main.
 Call this before any git operation that might modify branches.
-Suppressed during staging-pending recovery (cherry-picks to staging, not main)."
+Suppressed during staging-pending recovery (cherry-picks to staging, not
+main)."
   (unless gptel-auto-workflow--recovering-stale-staging
     (let ((current (magit-get-current-branch)))
       (when (string= current "main")
@@ -364,8 +367,10 @@ Suppressed during staging-pending recovery (cherry-picks to staging, not main)."
 
 (defun gptel-auto-workflow--staging-main-ref ()
   "Return the safe main ref staging and experiments should mirror.
-Prefer local `main' when it either matches the shared remote's `main' branch or
-is a clean ahead-only tip. Otherwise use the shared remote's `main' so dirty or
+Prefer local `main' when it either matches the shared remote's `main' branch
+or
+is a clean ahead-only tip. Otherwise use the shared remote's `main' so dirty
+or
 diverged local state does not leak into workflow branches."
   (let ((default-directory (gptel-auto-workflow--default-dir)))
     (let* ((remote-main (gptel-auto-workflow--shared-remote-branch "main"))
@@ -883,7 +888,8 @@ This ensures .git/modules/PATH contains the commit needed for hydration."
 
 (defun gptel-auto-workflow--shared-submodule-git-dir (path &optional commit)
   "Return a local git dir for submodule PATH that can materialize COMMIT.
-Prefer the current checkout when it is a standalone repo, then fall back to the
+Prefer the current checkout when it is a standalone repo, then fall back to
+the
 superproject-managed `.git/modules/...` store."
   (when (gptel-auto-workflow--non-empty-string-p path)
     (let* ((checkout-git-dirs (gptel-auto-workflow--submodule-checkout-git-dirs path))

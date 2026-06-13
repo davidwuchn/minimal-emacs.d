@@ -3,9 +3,9 @@
 (defvar gptel-auto-workflow--routing-audit-log nil)
 (defvar gptel-auto-workflow--run-failed-backends nil)
 (defvar gptel-auto-workflow--rate-limited-backends nil)
-(defvar gptel-ai-behaviors--best-concrete-tasks (make-hash-table :test 'equal))
-(defvar gptel-auto-experiment--target-state-cache
-  (make-hash-table :test 'equal)
+(defvar gptel-ai-behaviors--best-concrete-tasks (make-hash-table :test 'equal)
+  "Hash table: category keyword -> best concrete task keyword.")
+(defvar gptel-auto-experiment--target-state-cache (make-hash-table :test 'equal)
   "Cache for target state (byte-compiles, syntax-ok) per experiment.")
 (declare-function gptel-auto-experiment--replay-grader-insights-from-tsv
   "gptel-auto-experiment-core")
