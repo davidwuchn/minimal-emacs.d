@@ -88,6 +88,8 @@ run_unit_tests() {
     local snapshot_paths_file
     local runtime_dir
     local workflow_server
+    local parseclj_dir
+    local parseedn_dir
     local yaml_dir
     local ert_status=0
 
@@ -120,6 +122,8 @@ run_unit_tests() {
     }
     chmod 700 "$runtime_dir"
     workflow_server="ov5-auto-workflow-test-$(basename "$runtime_dir")"
+    parseclj_dir="$(printf '%s\n' "$DIR"/var/elpa/parseclj-*/ | sort -V | tail -1)"
+    parseedn_dir="$(printf '%s\n' "$DIR"/var/elpa/parseedn-*/ | sort -V | tail -1)"
     yaml_dir="$(printf '%s\n' "$DIR"/var/elpa/yaml-*/ | sort -V | tail -1)"
     
     local output
@@ -137,6 +141,8 @@ run_unit_tests() {
         -L "$DIR/lisp/modules" \
         -L "$DIR/packages/gptel" \
         -L "$DIR/packages/gptel-agent" \
+        -L "$parseclj_dir" \
+        -L "$parseedn_dir" \
         -L "$yaml_dir" \
         -L "$DIR/tests" \
         -l ert \

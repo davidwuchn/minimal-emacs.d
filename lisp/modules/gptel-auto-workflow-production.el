@@ -130,16 +130,16 @@ Skips when a workflow or cron job is active to avoid preempting experiments."
           (message "[auto-workflow] Backtrace logging also failed: %s" (error-message-string log-err))))))
     ;; Mementum maintenance: rebuild index + synthesize candidates.
     ;; Runs every cycle (hourly) but is cheap when no new memories exist.
-    ;; Enable auto-approve in headless so synthesis actually writes files.
+    ;; Respects `gptel-mementum-headless-auto-approve' (default `draft') so
+    ;; unattended synthesis writes to drafts/ for later human review.
     ;; Skip if workflow started during evolution cycle.
     (when (not (bound-and-true-p gptel-auto-workflow--running))
       (condition-case nil
           (when (fboundp 'gptel-mementum-build-index)
             (with-no-warnings
-              (let ((gptel-mementum-headless-auto-approve t))
-                (gptel-mementum-build-index)
-                (when (fboundp 'gptel-mementum-synthesize-all-candidates)
-                  (gptel-mementum-synthesize-all-candidates nil t)))))
+              (gptel-mementum-build-index)
+              (when (fboundp 'gptel-mementum-synthesize-all-candidates)
+                (gptel-mementum-synthesize-all-candidates nil t))))
         (error
          (message "[mementum] Maintenance error in evolution cycle"))))))
 
@@ -825,7 +825,8 @@ Returns a list of plists, or nil if the file does not exist or is empty."
   (make-directory (file-name-directory queue-file) t)
   (with-temp-file queue-file
     (insert ";; Innovation queue (EDN). Each entry is a map with keys:\n")
-    (insert ";; :id :source :technique :expected-impact :status :experiment-id :actual-impact\n")
+    (insert ";; :id :source :technique :expected-impact :status :experiment-id\n")
+    (insert ";; :actual-impact\n")
     (insert (parseedn-print-str (apply #'vector queue)))
     (insert "\n")))
 

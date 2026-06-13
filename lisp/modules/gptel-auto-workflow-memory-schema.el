@@ -160,6 +160,10 @@ Nil means not yet built.")
 (defvar gptel-auto-workflow--unified-graph-time nil
   "Timestamp when unified graph was last built.")
 
+(defvar gptel-auto-workflow--memory-schema-code-links nil
+  "Hash table: CODE-FILE-REL -> list of referenced memory slugs.
+Nil means the code-link index has not been scanned yet.")
+
 (defun gptel-auto-workflow--memory-schema-reset ()
   "Reset in-memory schema index to empty."
   (setq gptel-auto-workflow--memory-schema-schemas
@@ -168,6 +172,7 @@ Nil means not yet built.")
         (gptel-auto-workflow--memory-schema-make-entities))
   (setq gptel-auto-workflow--memory-schema-triples
         (gptel-auto-workflow--memory-schema-make-triples))
+  (setq gptel-auto-workflow--memory-schema-code-links nil)
   (setq gptel-auto-workflow--memory-schema-synonymy-cache nil
         gptel-auto-workflow--memory-schema-synonymy-cache-time nil
         gptel-auto-workflow--unified-graph nil
@@ -594,10 +599,6 @@ SCORE = sum of shared-schema counts at each depth level."
              (length (gptel-auto-workflow--memory-schema-stable-schemas)))))
 
 ;; ─── Bidirectional Memory-Code Links ───
-
-(defvar gptel-auto-workflow--memory-schema-code-links (make-hash-table :test 'equal :size 32)
-  "Hash table: CODE-FILE-REL -> list of referenced memory slugs.
-Populated lazily by `gptel-auto-workflow--memory-schema-scan-code-links'.")
 
 (defun gptel-auto-workflow--memory-schema-scan-code-links ()
   "Scan project source files for @memory: references.

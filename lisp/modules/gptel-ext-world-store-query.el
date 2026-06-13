@@ -187,7 +187,7 @@ Cached by filter serialization."
 (defun world-store-query-backend-strategy-target-stats (backend &optional strategy target)
   "Return (:kept N :total M :keep-rate F) plist for experiments
 matching BACKEND, optionally filtered by STRATEGY/TARGET."
-  (let* ((code (format "(ns ov5.world-store.query) (backend-strategy-target-stats %S %S %S)"
+  (let* ((code (format "(ns ov5.world-store.query) (backend-strategy-target-stats-readable %S %S %S)"
                        backend strategy target))
          (result (world-store-query--call code
                                           (format "stats-%s-%s-%s" backend strategy target))))

@@ -1284,7 +1284,8 @@ exists, and git push origin main appears AFTER the test gate."
 (defun gptel-auto-workflow-self-audit--check-staging-bypass (&optional hours)
   "Analyze recent git log for direct-to-main commits that bypassed staging.
 Scans last HOURS (default 24) for commits to main modifying lisp/modules/*.el.
-Classifies commits: subject containing \='staging\='/\='merge\='/\='PR\='/\='🔄\=' →
+Classifies commits: subject containing
+\='staging\='/\='merge\='/\='PR\='/\='🔄\=' →
 via-staging.
 Returns plist (:bypass-commits :bypass-count :review-commits :hours).
 Each commit plist: (:hash :subject :author)."
