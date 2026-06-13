@@ -210,6 +210,56 @@ LegalOS is an AI legal assistant that handles the four highest-time-cost tasks f
 
 ---
 
+## T — Chinese Market: 法治OS
+
+### Why China Is Different
+
+China has a **civil law system** — statutes matter more than precedent. Core features (document review, contract drafting, legal research) work across both systems. Data sources and templates are different.
+
+### Market Size
+
+| Metric | US | China |
+|--------|-----|-------|
+| Lawyers | 1.3M | 750K+ |
+| Annual growth | 2% | 8-10% |
+| Law firms | 50K+ | 35K+ |
+| Legal tech spending | $5B+ | $1B (growing 25% YoY) |
+| Harvey equivalent | ✅ Market leader | ❌ None exists |
+
+### Adapted Features
+
+| US Source | China Equivalent |
+|-----------|-----------------|
+| CourtListener | 中国裁判文书网 (130M+ court opinions) |
+| Westlaw/LexisNexis | 北大法宝 (PKULaw), 法信 |
+| Common law precedent | Statute + regulation search |
+| US contract templates | China Civil Code templates (劳动合同, 保密协议) |
+
+### Localized Pricing
+
+| Tier | US | China (¥) |
+|------|-----|-----------|
+| Free | $0 | ¥0 |
+| Solo | $49/mo | ¥99/mo (~$14) |
+| Firm | $149/mo | ¥299/mo (~$41) |
+| Pro | $299/mo | ¥599/mo (~$82) |
+
+### GTM: China
+
+1. **WeChat Mini Program** — lowest friction, lawyers already live there
+2. **律师协会 (Bar Association)** — CLE-eligible training partnerships
+3. **北大法宝 Integration** — dominant legal database, API access
+
+### Why China Could Be First
+
+1. No Harvey competitor — first-mover advantage
+2. 750K+ lawyers, growing 8-10%/year
+3. WeChat distribution: 1.3B users, zero app-install friction
+4. Government mandates digital legal transformation
+5. Lower cost per user, higher volume potential
+
+---
+
 ## T — Team
 
 ### Who Builds This
