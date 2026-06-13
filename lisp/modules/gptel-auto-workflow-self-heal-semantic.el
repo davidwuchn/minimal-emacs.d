@@ -410,19 +410,35 @@ Returns 1 if missing, 0 if present."
 Searches BUFFER (which must be in `emacs-lisp-mode') from SEARCH-START to
 end-of-buffer.  Excludes occurrences inside strings and comments.
 SEARCH-START should be the buffer position immediately after the close
-paren of the defvar form whose variable name is being checked."
-  (with-current-buffer buffer
-    (save-excursion
-      (goto-char search-start)
-      (let ((case-fold-search nil)
-            (pattern (concat "\\_<" (regexp-quote var-name) "\\_>")))
-        (catch 'found
-          (while (re-search-forward pattern nil t)
-            (let ((state (syntax-ppss (match-beginning 0))))
-              (unless (or (nth 3 state)   ; inside string
-                          (nth 4 state))  ; inside comment
-                (throw 'found t))))
-          nil)))))
+paren of the defvar form whose variable name is being checked.
+
+We run `syntax-ppss' on a separate syntax copy of BUFFER.  Calling
+`syntax-ppss' in the search buffer can trigger `syntax-propertize',
+which alters text properties in a way that makes `re-search-forward'
+with \\_<...\\_> stick to the same match (observed with backtick-quoted
+symbols in docstrings)."
+  (let ((case-fold-search nil)
+        (pattern (concat "\\_<" (regexp-quote var-name) "\\_>"))
+        (syntax-copy (generate-new-buffer " *semantic-syntax-copy*" t)))
+    (unwind-protect
+        (with-current-buffer syntax-copy
+          (insert-buffer-substring buffer)
+          (emacs-lisp-mode)
+          ;; Force full propertization of the copy up front.
+          (syntax-ppss (point-max))
+          (with-current-buffer buffer
+            (save-excursion
+              (goto-char search-start)
+              (catch 'found
+                (while (re-search-forward pattern nil t)
+                  (let ((state (with-current-buffer syntax-copy
+                                 (syntax-ppss (match-beginning 0)))))
+                    (unless (or (nth 3 state)   ; inside string
+                                (nth 4 state))  ; inside comment
+                      (throw 'found t))))
+                nil))))
+      (when (buffer-name syntax-copy)
+        (kill-buffer syntax-copy)))))
 
 (defun gptel-auto-workflow--audit-void-defvars (file)
   "Audit FILE for bare (defvar SYMBOL) without an initial value.
@@ -623,8 +639,9 @@ Detects:
   "Set to t after toxic-commit-subject check runs to skip per-file re-check.")
 
 (cl-defun gptel-auto-workflow--audit-toxic-commit-subject (file)
-  "Scan git history for commit subjects matching toxic grader-bypass patterns.
-Uses `git log --all --format=%s' once per audit cycle.
+  "Scan recent git history for toxic grader-bypass commit subjects.
+Uses git log --all --since=90 days ago --format=%s once per audit cycle
+so the scan stays bounded as history grows.
 FILE accepted for dispatch, ignored.
 Returns count of flagged commits."
   (when gptel-auto-workflow--toxic-commit-subject-done
@@ -632,7 +649,8 @@ Returns count of flagged commits."
   (setq gptel-auto-workflow--toxic-commit-subject-done t)
   (let ((issues 0))
     (condition-case nil
-        (let ((output (shell-command-to-string "git log --all --format=%s")))
+        (let ((output (shell-command-to-string
+                        "git log --all --since='90 days ago' --format=%s")))
           (dolist (subject (split-string output "\n" t))
             (when (gptel-auto-workflow--toxic-commit-subject-p subject)
               (setq issues (1+ issues))
@@ -675,10 +693,12 @@ Returns count of issues found."
       issues))))
 
 (defun gptel-auto-workflow--build-sha-subject-map (sha-subject-map)
-  "Populate SHA-SUBJECT-MAP from git log output.
-Maps commit SHA (string) to commit subject (string)."
+  "Populate SHA-SUBJECT-MAP from recent git log output.
+Maps commit SHA (string) to commit subject (string).
+Limits scan to the last 90 days to keep runtime bounded."
   (condition-case nil
-      (let ((output (shell-command-to-string "git log --all --format='%H %s'")))
+      (let ((output (shell-command-to-string
+                     "git log --all --since='90 days ago' --format='%H %s'")))
         (dolist (line (split-string output "\n" t))
           (when (string-match "\\`\\([0-9a-f]\\{40\\}\\) \\(.+\\)" line)
             (puthash (match-string 1 line) (match-string 2 line)

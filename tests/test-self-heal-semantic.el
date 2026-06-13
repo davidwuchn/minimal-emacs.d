@@ -1889,6 +1889,26 @@ forward declarations are either used in the file or are hash-table vars."
                              gptel-auto-workflow--semantic-audit-log)))
        (should (= (length void-issues) 0)))))
 
+(ert-deftest test-self-heal-semantic/void-defvar-no-hang-on-backtick-docstring ()
+  "Bare defvar whose only other occurrence is inside a backtick-quoted
+docstring must be flagged without hanging.  This is a regression test for
+an infinite loop caused by syntax-propertize interacting with
+\\_<...\\_> regex search."
+  (let* ((content
+          "(defvar my-flag)
+
+\(defun get-flag ()
+  \"Return `my-flag'.\"
+  t)")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let* ((start (float-time))
+               (issues (gptel-auto-workflow--audit-void-defvars file))
+               (elapsed (- (float-time) start)))
+          (should (>= issues 1))
+          (should (< elapsed 2.0)))
+      (test-self-heal-semantic--cleanup file))))
+
 ;; ── Check 14: orphaned-curl-process ──
 
 (ert-deftest test-self-heal-semantic/orphaned-curl-no-processes-returns-zero ()
@@ -2049,7 +2069,7 @@ forward declarations are either used in the file or are hash-table vars."
           (setq gptel-auto-workflow--toxic-commit-subject-done nil)
           (cl-letf (((symbol-function 'shell-command-to-string)
                      (lambda (cmd)
-                       (if (string-match-p "git log --all --format=%s" cmd)
+                        (if (string-match-p "git log --all --since='90 days ago' --format=%s" cmd)
                            (concat "Normal commit\n"
                                    "◈ Grader-bypass: rebase experiment 0.40 → 1.00 (+150%)\n"
                                    "Another clean commit\n")
@@ -2070,7 +2090,7 @@ forward declarations are either used in the file or are hash-table vars."
           (setq gptel-auto-workflow--toxic-commit-subject-done nil)
           (cl-letf (((symbol-function 'shell-command-to-string)
                      (lambda (cmd)
-                       (if (string-match-p "git log --all --format=%s" cmd)
+                        (if (string-match-p "git log --all --since='90 days ago' --format=%s" cmd)
                            "Fix bug in parser\nAdd feature X\nRefactor module Y\n"
                          ""))))
             (let ((issues (gptel-auto-workflow--audit-toxic-commit-subject file)))
@@ -2106,7 +2126,7 @@ forward declarations are either used in the file or are hash-table vars."
                          (expand-file-name path "/tmp/ov5-fake-root"))))
                     ((symbol-function 'shell-command-to-string)
                      (lambda (cmd)
-                       (if (string-match-p "git log --all --format='%H %s'" cmd)
+                        (if (string-match-p "git log --all --since='90 days ago' --format='%H %s'" cmd)
                            "abc123def456789012345678901234567890abcd ◈ Grader-bypass: 0.40 → 0.60 (+50%)\n"
                          (funcall orig-shell-cmd cmd))))
                     ((symbol-function 'directory-files)
