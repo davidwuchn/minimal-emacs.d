@@ -815,50 +815,22 @@ Returns the new item ID."
         ;; that made this function only match files with exactly 33
         ;; blank lines between header and separator.  No real markdown
         ;; table has that, so the function silently failed to insert.
-        (setq content
-              (replace-regexp-in-string
-               (concat
-                "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n"
-                "
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+         (setq content
+               (replace-regexp-in-string
+                (concat
+                 "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n"
+                 "
 
 
 
 
 
 |----|--------|-----------|-----------------|--------|---------------|---------------|\n")
-               (concat
-                "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n"
-                "|----|--------|-----------|-----------------|--------|---------------|---------------|\n"
-                entry)
-               content))
+                (concat
+                 "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n"
+                 "|----|--------|-----------|-----------------|--------|---------------|---------------|\n"
+                 entry)
+                content))
         ;; Update timestamp
         (setq content (replace-regexp-in-string
                        "<!-- UPDATED -->"

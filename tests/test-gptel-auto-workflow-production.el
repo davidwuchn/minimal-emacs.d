@@ -119,9 +119,12 @@ the function only match tables with exactly 33 blank lines between
 the header and the separator — a pattern no real markdown table
 ever has.  This guard fails if the pattern ever regresses.
 
-We only count blank lines OUTSIDE string literals and comments."
+This test counts blank lines both outside AND inside string
+literals in the function, because the original bug was a
+multi-line string literal containing 33 consecutive newlines."
   (skip-unless (fboundp 'gptel-auto-workflow--innovation-queue-add))
-  (let ((max-blank 0))
+  (let ((max-blank-outside 0)
+        (max-blank-inside 0))
     (condition-case nil
         (with-temp-buffer
           (insert-file-contents
@@ -131,32 +134,38 @@ We only count blank lines OUTSIDE string literals and comments."
           (goto-char (point-min))
           (when (re-search-forward
                  "(defun gptel-auto-workflow--innovation-queue-add" nil t)
-            ;; Walk to end of defun, tracking blank lines that are
-            ;; OUTSIDE string literals and comments.
             (let ((start (point))
                   (end (progn (end-of-defun) (point)))
-                  (cur-blank 0)
+                  (outside-blank 0)
+                  (inside-blank 0)
                   (ppss nil))
               (goto-char start)
               (while (and (not (eobp)) (< (point) end))
                 (setq ppss (syntax-ppss))
                 (cond
-                 ;; Inside string or comment: ignore blank lines
-                 ((nth 3 ppss) nil)
+                 ;; Inside string literal: track blank lines
+                 ((nth 3 ppss)
+                  (if (eolp)
+                      (setq inside-blank (1+ inside-blank))
+                    (setq inside-blank 0))
+                  (when (> inside-blank max-blank-inside)
+                    (setq max-blank-inside inside-blank)))
+                 ;; Inside comment: ignore
                  ((nth 4 ppss) nil)
-                 ;; At end of line: check if it's blank
+                 ;; Outside string/comment: track blank lines
                  ((eolp)
-                  (setq cur-blank (1+ cur-blank))
-                  (when (> cur-blank max-blank)
-                    (setq max-blank cur-blank)))
-                  ;; On a non-blank line: reset counter
+                  (setq outside-blank (1+ outside-blank))
+                  (when (> outside-blank max-blank-outside)
+                    (setq max-blank-outside outside-blank)))
                  (t
-                  (setq cur-blank 0)))
+                  (setq outside-blank 0)))
                 (forward-line 1)))))
       (error nil))
-    ;; The bug was 33+ blank lines.  Allow up to 2 (one blank line
-    ;; inside a defun is normal).
-    (should (<= max-blank 2))))
+    ;; The bug was 33+ blank lines.  Allow up to 2 outside (one blank
+    ;; line inside a defun is normal) and 3 inside a string literal
+    ;; (some multi-line strings legitimately contain a blank line).
+    (should (<= max-blank-outside 2))
+    (should (<= max-blank-inside 3))))
 
 (ert-deftest test-production/all-key-functions-fboundp ()
   "All key public functions must be bound after loading the module.
