@@ -1031,6 +1031,65 @@ exit code."
             (should (stringp (cdr result)))))
       (delete-directory tmpdir t))))
 
+;; ── Test 16b: ERT selector forwarding ──
+
+(ert-deftest test-self-heal-semantic/run-ert-forwards-selector ()
+  "run-ert-in-worktree passes the ERT selector as second argument to run-tests.sh."
+  (let* ((tmpdir (make-temp-file "ov5-ert-test-" t))
+         (test-dir (expand-file-name "tests/" tmpdir))
+         (lisp-dir (expand-file-name "lisp/modules/" tmpdir))
+         (script-dir (expand-file-name "scripts/" tmpdir)))
+    (unwind-protect
+        (progn
+          (make-directory lisp-dir t)
+          (make-directory test-dir t)
+          (make-directory script-dir t)
+          (with-temp-file (expand-file-name "test-mod.el" lisp-dir)
+            (insert "(defun test-mod-hello () 42)\n(provide 'test-mod)\n"))
+          (with-temp-file (expand-file-name "run-tests.sh" script-dir)
+            (insert "#!/bin/bash\necho \"MOCK-RUN-TESTS $*\"\nexit 0\n"))
+          (chmod (expand-file-name "run-tests.sh" script-dir) #o755)
+          (let ((result (gptel-auto-workflow--run-ert-in-worktree tmpdir "self-heal-semantic")))
+            (should (car result))
+            (should (string-match-p "MOCK-RUN-TESTS unit self-heal-semantic" (cdr result)))))
+      (delete-directory tmpdir t))))
+
+(ert-deftest test-self-heal-semantic/ov5-promotion-rejected-on-ert-gate-failure ()
+  "self-heal-file-via-ov5 rejects promotion when the ERT gate fails."
+  (let ((orig-call-process (symbol-function 'call-process)))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--with-temporary-worktree)
+               (lambda (_slug _ref fn)
+                 (let ((tmpdir (make-temp-file "ov5-test-worktree-" t)))
+                   (unwind-protect
+                       (progn
+                         (make-directory (expand-file-name "lisp/modules/" tmpdir) t)
+                         (make-directory (expand-file-name "tests/" tmpdir) t)
+                         (make-directory (expand-file-name "scripts/" tmpdir) t)
+                         (with-temp-file (expand-file-name "lisp/modules/gptel-auto-workflow-self-heal-semantic.el" tmpdir)
+                           (insert "(defun ov5-ert-gate-test-fn () 42)\n(provide 'gptel-auto-workflow-self-heal-semantic)\n"))
+                         (with-temp-file (expand-file-name "scripts/run-tests.sh" tmpdir)
+                           (insert "#!/bin/bash\necho 'ERT gate simulated failure'\nexit 1\n"))
+                         (chmod (expand-file-name "scripts/run-tests.sh" tmpdir) #o755)
+                         (funcall fn tmpdir))
+                     (delete-directory tmpdir t)))))
+              ((symbol-function 'gptel-auto-workflow--self-heal-file)
+               (lambda (_file)
+                 (list :auto-fixed 1 :issues 1)))
+              ((symbol-function 'gptel-auto-workflow--worktree-base-root)
+               (lambda () default-directory))
+              ((symbol-function 'call-process)
+               (lambda (program &optional _infile _destination _display &rest args)
+                 ;; Return 0 for git diff (pretend file is clean) so
+                 ;; the dirty-target gate does not block the ERT gate.
+                 (if (and (string= program "git")
+                          (member "diff" args))
+                     0
+                   (apply orig-call-process program nil nil nil args)))))
+      (let ((result (gptel-auto-workflow--self-heal-file-via-ov5
+                     "lisp/modules/gptel-auto-workflow-self-heal-semantic.el")))
+        (should (eq 'rejected (plist-get result :status)))
+        (should (eq 'ert-gate-failed (plist-get result :reason)))))))
+
 ;; ── Test 17: provide-inside-defun detection and fix ──
 
 (ert-deftest test-self-heal-semantic/detects-provide-inside-defun ()

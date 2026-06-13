@@ -171,6 +171,17 @@ Two REPL modules now exist, both wired into `gptel-config.el`:
 - Fixed the blocked-experiment control flow: `evolution-run-cycle` now preflights the human-decision gate, returns `blocked-pending-decisions` instead of falsely reporting success, and `run-async` now uses truthiness for the gate check.
 - Added regression coverage for blocked trigger handling and restarted `pmf-value-stream`; live status now responds on `/tmp/emacs$(id -u)/pmf-value-stream`.
 
+### Session Note (2026-06-13)
+- OV5 nil-hash self-heal was over-eager: parse/load gates passed while semantic defaults were still wrong.
+- Hardened the detector with exact table-argument matching, buffer-aware multi-binding lazy-init parsing, and a bare forward declaration for `skill-graph--edges`.
+- Added regressions for the real affected files; `gptel-ext-prefix-cache.el` and `gptel-auto-workflow-memory-schema.el` now audit clean.
+- Lesson: rewriting `defvar` defaults needs semantic/behavior gates, not just structural load checks.
+
+### Session Note (2026-06-13 late)
+- Added a targeted ERT gate before OV5 promotes semantic fixes back to the live tree.
+- `run-tests.sh unit <selector>` now forwards selectors, and OV5 maps known files to focused suites (`self-heal-semantic`, `memory-schema`, `prefix-cache`).
+- Promotion now rejects if the targeted ERT gate fails, so self-heal can find and stop bad semantic fixes before they reach main.
+
 ### Immediate
 1. **Enable opencode eval on Pi5** — Set `gptel-auto-workflow-opencode-eval-enabled t` after monitoring first cron cycle
 2. **Monitor pipeline metrics** — Check if fast-track staging improves keep rate from ~3.1%

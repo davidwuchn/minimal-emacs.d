@@ -687,7 +687,7 @@ FAILED=0
 
 case "$SUBCOMMAND" in
     unit|u)
-        run_unit_tests || FAILED=1
+        run_unit_tests "${2:-t}" || FAILED=1
         ;;
     clj|cj)
         run_clj_tests || FAILED=1

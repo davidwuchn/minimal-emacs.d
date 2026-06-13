@@ -1499,6 +1499,15 @@ instead of fixing each failure individually."
 Adding a new auto-fixer is now a one-line change to this alist.
 Each fixer must take FILE as argument and return fix count (0 = no-op).")
 
+(defvar gptel-auto-workflow--self-heal-ert-selectors
+  '(("gptel-auto-workflow-self-heal-semantic.el" . "self-heal-semantic")
+    ("gptel-auto-workflow-memory-schema.el" . "memory-schema")
+    ("gptel-ext-prefix-cache.el" . "prefix-cache"))
+  "Alist mapping file basename (string) to ERT selector (string).
+Used by `gptel-auto-workflow--self-heal-file-via-ov5' to target relevant
+ERT tests before promoting semantic fixes into the live tree.
+Files not listed here fall back to the full `unit' suite.")
+
 (defconst gptel-auto-workflow--self-heal-direct-safe-file-pattern
   "\\`ov5-test-"
   "Files matching this pattern are safe for direct mutation.
@@ -1547,8 +1556,9 @@ live-tree mutation is performed."
        (append route (list :status 'unknown-route
                            :auto-fixed 0))))))
 
-(defun gptel-auto-workflow--run-ert-in-worktree (worktree-dir)
+(defun gptel-auto-workflow--run-ert-in-worktree (worktree-dir &optional ert-selector)
   "Run ert test suite from WORKTREE-DIR via scripts/run-tests.sh unit.
+Optional ERT-SELECTOR is passed as the second argument for targeted testing.
 Returns (PASS-P . OUTPUT-STRING).
 When no tests/ directory exists, returns (t . \"no tests directory\").
 Uses `call-process' to capture both stdout+stderr AND the exit code,
@@ -1565,14 +1575,15 @@ fragile output parsing."
       (let* ((default-directory worktree-dir)
              (stdout-buf (generate-new-buffer " *ov5-ert-stdout*"))
              (stderr-file (make-temp-file "ov5-ert-stderr-"))
-             (exit-code
-              (unwind-protect
-                  (call-process "bash" nil (list stdout-buf stderr-file) nil
-                                (shell-quote-argument script) "unit")
-                (with-current-buffer stdout-buf
-                  (goto-char (point-max))
-                  (insert-file-contents stderr-file))
-                (delete-file stderr-file)))
+              (exit-code
+               (unwind-protect
+                   (apply #'call-process "bash" nil (list stdout-buf stderr-file) nil
+                          (shell-quote-argument script) "unit"
+                          (if ert-selector (list ert-selector) nil))
+                 (with-current-buffer stdout-buf
+                   (goto-char (point-max))
+                   (insert-file-contents stderr-file))
+                 (delete-file stderr-file)))
              (output (string-trim
                       (with-current-buffer stdout-buf (buffer-string)))))
         (kill-buffer stdout-buf)
@@ -1621,19 +1632,25 @@ because a HEAD worktree cannot faithfully represent uncommitted live edits."
                        (insert-file-contents target)
                        (emacs-lisp-mode)
                        (check-parens))
-                     (load-file target)
-                     ;; NOTE: We intentionally do NOT run the full test
-                     ;; suite here.  Self-heal makes structural fixes
-                     ;; (blank lines, parens, fboundp guards) validated
-                     ;; by check-parens + load-file above.  The full test
-                     ;; suite requires submodule hydration (gptel, yaml)
-                     ;; which only verify-staging provides.  The staging
-                     ;; path already has a working test gate with
-                     ;; hydration — see gptel-auto-workflow--verify-staging.
-                     (copy-file target abs-file t)
-                     (append result (list :status 'accepted
-                                          :file abs-file
-                                          :worktree worktree)))
+                      (load-file target)
+                      ;; ERT gate: run targeted or full unit tests before promotion.
+                      (let* ((fname (file-name-nondirectory file))
+                             (selector (cdr (assoc fname gptel-auto-workflow--self-heal-ert-selectors)))
+                             (ert-result (gptel-auto-workflow--run-ert-in-worktree worktree selector)))
+                        (if (car ert-result)
+                            (progn
+                              (copy-file target abs-file t)
+                              (append result (list :status 'accepted
+                                                   :file abs-file
+                                                   :worktree worktree)))
+                          (message "[self-heal-semantic] ERT gate FAILED for %s: %s"
+                                   fname (cdr ert-result))
+                          (append result (list :status 'rejected
+                                               :reason 'ert-gate-failed
+                                               :ert-selector selector
+                                               :ert-output (cdr ert-result)
+                                               :file abs-file
+                                               :worktree worktree)))))
                (error
                 (append result (list :status 'rejected
                                      :reason 'validation-failed
