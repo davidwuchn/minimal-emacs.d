@@ -539,14 +539,34 @@ Returns (success-p . output)."
               (_ (when submodule-note
                    (with-current-buffer output-buffer
                      (insert submodule-note "\n"))))
-              (_ (when submodule-pass
-                   (message "[auto-workflow] Running unit tests in staging (may block ~60s)...")))
-               (test-result (when (and submodule-pass test-script (file-exists-p test-script))
-                              (gptel-auto-workflow--call-process-with-watchdog
-                               "bash" nil output-buffer nil test-script "unit")))
-               (_ (when test-result
-                    (message "[auto-workflow] Unit tests completed (exit=%d)" test-result)))
-               (verify-result (when (and submodule-pass verify-script (file-exists-p verify-script))
+               (_ (when submodule-pass
+                    (message "[auto-workflow] Running unit tests in staging (may block ~60s)...")))
+                (test-result (when (and submodule-pass test-script (file-exists-p test-script))
+                               (gptel-auto-workflow--call-process-with-watchdog
+                                "bash" nil output-buffer nil test-script "unit")))
+                (_ (when test-result
+                     (message "[auto-workflow] Unit tests completed (exit=%d)" test-result)))
+                ;; Explicit semantic audit smoke gate — independent of unit tests.
+                ;; Catches hung detectors that the test suite might miss or skip.
+                (audit-smoke-result
+                 (when (and submodule-pass test-script (file-exists-p test-script))
+                   (message "[auto-workflow] Running semantic audit smoke gate in staging...")
+                   (let ((default-directory worktree))
+                     (gptel-auto-workflow--call-process-with-watchdog
+                      "timeout" nil output-buffer nil
+                      "60"
+                      "emacs" "--batch" "-Q"
+                      "-L" worktree
+                      "-L" (expand-file-name "lisp" worktree)
+                      "-L" (expand-file-name "lisp/modules" worktree)
+                      "-L" (expand-file-name "packages/gptel" worktree)
+                      "-L" (expand-file-name "packages/gptel-agent" worktree)
+                      "-l" "gptel-auto-workflow-self-heal-semantic"
+                      "--eval" "(require 'gptel-auto-workflow-audit-provide-inside-defun)"
+                      "--eval" "(let ((r (gptel-auto-workflow--semantic-audit-smoke-test))) (if (plist-get r :pass) (kill-emacs 0) (progn (message \"AUDIT SMOKE FAIL: %S\" r) (kill-emacs 1))))"))))
+                (_ (when audit-smoke-result
+                     (message "[auto-workflow] Semantic audit smoke gate completed (exit=%d)" audit-smoke-result)))
+                (verify-result (when (and submodule-pass verify-script (file-exists-p verify-script))
                                (let ((process-environment
                                       (cons "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1"
                                             process-environment)))
@@ -565,13 +585,16 @@ Returns (success-p . output)."
                      (goto-char (point-max))
                      (unless (bolp) (insert "\n"))
                      (insert (cdr behavioral-result) "\n"))))
-              (test-pass (and submodule-pass
-                              (or (not (and test-script (file-exists-p test-script)))
-                                  (eq test-result 0))))
-              (verify-pass (and submodule-pass
-                                (or (not (and verify-script (file-exists-p verify-script)))
-                                    (eq verify-result 0))))
-              (checks-pass (and test-pass verify-pass behavioral-pass))
+               (test-pass (and submodule-pass
+                               (or (not (and test-script (file-exists-p test-script)))
+                                   (eq test-result 0))))
+               (audit-smoke-pass (and submodule-pass
+                                      (or (not (and test-script (file-exists-p test-script)))
+                                          (eq audit-smoke-result 0))))
+               (verify-pass (and submodule-pass
+                                 (or (not (and verify-script (file-exists-p verify-script)))
+                                     (eq verify-result 0))))
+               (checks-pass (and test-pass verify-pass behavioral-pass audit-smoke-pass))
              (output (with-current-buffer output-buffer (buffer-string))))
         (when (and submodule-pass
                    (not checks-pass))
@@ -593,21 +616,25 @@ Returns (success-p . output)."
          (setq result (and syntax-pass submodule-pass checks-pass))
          ;; Loud gate logging — unmissable in cron/daemon output
          (let ((gate-status (if result "PASS" "FAIL"))
-               (gate-detail
-                (format "syntax=%s submodule=%s tests=%s verify=%s behavioral=%s"
-                        (if syntax-pass "OK" "FAIL")
-                        (if submodule-pass "OK" "FAIL")
-                        (cond ((not submodule-pass) "SKIP")
-                              ((not (and test-script (file-exists-p test-script))) "SKIP")
-                              ((eq test-result 0) "OK")
-                              (t (format "FAIL(exit=%s)" test-result)))
-                        (cond ((not submodule-pass) "SKIP")
-                              ((not (and verify-script (file-exists-p verify-script))) "SKIP")
-                              ((eq verify-result 0) "OK")
-                              (t (format "FAIL(exit=%s)" verify-result)))
-                        (cond ((null behavioral-result) "SKIP")
-                              ((car behavioral-result) "OK")
-                              (t "FAIL")))))
+                (gate-detail
+                 (format "syntax=%s submodule=%s tests=%s audit-smoke=%s verify=%s behavioral=%s"
+                         (if syntax-pass "OK" "FAIL")
+                         (if submodule-pass "OK" "FAIL")
+                         (cond ((not submodule-pass) "SKIP")
+                               ((not (and test-script (file-exists-p test-script))) "SKIP")
+                               ((eq test-result 0) "OK")
+                               (t (format "FAIL(exit=%s)" test-result)))
+                         (cond ((not submodule-pass) "SKIP")
+                               ((not (and test-script (file-exists-p test-script))) "SKIP")
+                               ((eq audit-smoke-result 0) "OK")
+                               (t (format "FAIL(exit=%s)" audit-smoke-result)))
+                         (cond ((not submodule-pass) "SKIP")
+                               ((not (and verify-script (file-exists-p verify-script))) "SKIP")
+                               ((eq verify-result 0) "OK")
+                               (t (format "FAIL(exit=%s)" verify-result)))
+                         (cond ((null behavioral-result) "SKIP")
+                               ((car behavioral-result) "OK")
+                               (t "FAIL")))))
            (message "╔══════════════════════════════════════════════════════╗")
            (message "║ STAGING GATE: %s                               %s║"
                     gate-status (make-string (- 39 (length gate-status)) ?\s))
