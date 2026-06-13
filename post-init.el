@@ -234,9 +234,12 @@ Only reloads for top-level frames (not Corfu child frames) and only once per fra
   ;; Hard curl timeout prevents orphaned subprocesses from hanging the daemon.
   ;; Without --max-time, curl blocks indefinitely when server closes connection
   ;; without FIN, filling the 64KB pipe buffer on macOS and never exiting.
-  (when (boundp 'gptel-curl-extra-args)
+  ;; Must use with-eval-after-load because gptel is loaded lazily; boundp
+  ;; returns nil during post-init startup.
+  (with-eval-after-load 'gptel-request
     (add-to-list 'gptel-curl-extra-args "--max-time" t)
-    (add-to-list 'gptel-curl-extra-args "900" t))
+    (add-to-list 'gptel-curl-extra-args "900" t)
+    (message "[post-init] Set gptel curl --max-time 900s for daemon"))
   
   ;; Self-heal: check every 30s and recreate socket if lost
   (run-at-time 30 30
