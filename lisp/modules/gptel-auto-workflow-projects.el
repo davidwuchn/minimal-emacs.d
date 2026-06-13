@@ -22,7 +22,7 @@
 (require 'gptel-tools-agent nil t)
 
 ;; External variables from gptel-tools-agent.el
-(defvar gptel-auto-workflow--worktree-state nil)
+(defvar gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
 (defvar gptel-auto-workflow-worktree-base nil)
 (defvar gptel-auto-workflow--current-target nil)
 
@@ -91,7 +91,7 @@ Each worktree gets its own isolated buffer for subagent overlays.")
 
 (defvar gptel-auto-workflow--normalized-projects-cache nil
   "Cached normalized projects list with timestamp for invalidation.")
-(defvar gptel-auto-workflow--normalized-projects-hash nil
+(defvar gptel-auto-workflow--normalized-projects-hash (make-hash-table :test 'equal)
   "Hash table mapping current-dir prefixes to project roots for O(1) lookup.")
 
 (defun gptel-auto-workflow--ensure-buffer-tables ()

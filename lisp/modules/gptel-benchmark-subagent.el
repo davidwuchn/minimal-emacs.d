@@ -40,7 +40,7 @@
 (defvar my/gptel-agent-task-timeout)
 (defvar gptel-agent-preset nil)
 (defvar gptel--request-params nil)
-(defvar gptel-ai-behaviors--subagent-failures nil)
+(defvar gptel-ai-behaviors--subagent-failures (make-hash-table :test 'equal))
 (defvar gptel-ai-behaviors--current-hashtags nil)
 (defvar gptel-tools-read-hashline-default nil)
 (defvar log-model nil

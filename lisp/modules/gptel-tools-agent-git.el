@@ -49,7 +49,7 @@
 (defvar gptel--fsm-last nil)
 (defvar my/gptel--subagent-origin-buffer)
 (defvar gptel-auto-workflow--staging-worktree-dir nil)
-(defvar gptel-auto-workflow--worktree-state nil)
+(defvar gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
 (defvar gptel-auto-workflow--running nil)
 (defvar gptel-auto-workflow--last-progress-time nil)
 (defun gptel-auto-workflow--log-conflict (commit-hash conflict-output)

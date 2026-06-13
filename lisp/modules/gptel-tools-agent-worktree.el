@@ -9,7 +9,7 @@
 (defvar gptel-auto-workflow--skip-submodule-sync-env nil)
 (defvar gptel-auto-workflow-staging-branch nil)
 (defvar gptel-auto-workflow--staging-worktree-dir nil)
-(defvar gptel-auto-workflow--worktree-state nil)
+(defvar gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
 (declare-function gptel-auto-workflow--default-dir "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--non-empty-string-p "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--hash-get-bound "gptel-tools-agent-base")

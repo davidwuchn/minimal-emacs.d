@@ -25,7 +25,7 @@
 (defvar gptel-auto-experiment--review-feedback nil)
 (defvar gptel-auto-workflow--current-strategy-name nil)
 (defvar gptel-auto-experiment--mementum-recall nil)
-(defvar gptel-auto-experiment--grader-insights nil)
+(defvar gptel-auto-experiment--grader-insights (make-hash-table :test 'equal))
 (defvar gptel-auto-experiment--executor-reasoning nil)
 (defvar gptel-auto-workflow-context-db-auto-capture nil)
 (defvar gptel-task-type-model-defaults nil)
