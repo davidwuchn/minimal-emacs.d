@@ -94,6 +94,15 @@ Prevents excessive analysis overhead on the experiment pipeline."
   :type 'integer
   :group 'gptel-tools-agent)
 
+(defcustom gptel-auto-workflow-monitoring-semantic-audit-timeout-seconds 90
+  "Seconds before the monitoring agent's Phase 10 semantic audit times out.
+When the timeout fires, the monitoring cycle logs a message and continues.
+This prevents a hung audit detector from blocking the monitoring cycle.
+Default 90 s: headroom for the 60 s smoke-test pass threshold while keeping
+well within the 900 s (15 min) monitoring cycle interval."
+  :type 'number
+  :group 'gptel-tools-agent)
+
 (defvar gptel-auto-workflow-monitoring-last-cycle-time 0.0
   "Float-time of last monitoring cycle.  Used for throttle enforcement.")
 
@@ -1764,14 +1773,19 @@ approval queue)"
              ;; - Unguarded external calls (void-function prevention)
              ;; - Excessive blank lines (code hygiene)
              ;; - Hardcoded limits, score=0 bugs, let-binding functions
-              (ignore-errors
-                (when (fboundp 'gptel-auto-workflow--self-heal-semantic)
-                  (let ((result (gptel-auto-workflow--self-heal-semantic :dry-run t)))
-                    (let ((issues (plist-get result :total-issues))
-                          (fixed (plist-get result :auto-fixed)))
-                      (when (> issues 0)
-                        (message "[monitoring] Phase 10: Semantic audit found %d issues (dry-run, %d would be fixed)"
-                                 issues (or fixed 0)))))))
+             ;; Wrapped with with-timeout so a hung detector does not
+             ;; block the 15-minute monitoring cycle.
+              (with-timeout (gptel-auto-workflow-monitoring-semantic-audit-timeout-seconds
+                              (message "[monitoring] Phase 10: Semantic audit timed out after %s seconds"
+                                       gptel-auto-workflow-monitoring-semantic-audit-timeout-seconds))
+                (ignore-errors
+                  (when (fboundp 'gptel-auto-workflow--self-heal-semantic)
+                    (let ((result (gptel-auto-workflow--self-heal-semantic :dry-run t)))
+                      (let ((issues (plist-get result :total-issues))
+                            (fixed (plist-get result :auto-fixed)))
+                        (when (> issues 0)
+                          (message "[monitoring] Phase 10: Semantic audit found %d issues (dry-run, %d would be fixed)"
+                                   issues (or fixed 0))))))))
              ;; Phase 10b: Batch-anchored evolution proposal
              ;; Groups audit failures by type for curated evolution (MOSS insight)
              (ignore-errors

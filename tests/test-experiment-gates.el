@@ -13,6 +13,7 @@
 
 (require 'ert)
 (require 'cl-lib)
+(require 'gptel-tools-agent-staging-merge)
 
 ;; ── Test A: Staging default ──
 
@@ -187,6 +188,102 @@ Covers 'blind-mode-auto-pass' and similar bypass attempts."
 ;;   3. Mocked grader result callbacks
 ;; This is better suited for the E2E test suite (test-wrapped-fsm.el or
 ;; a new test-auto-workflow-gates.el) rather than a pure unit test.
+
+;; ── Test E: Gate-engine files never fast-track ──
+
+(ert-deftest test-experiment-gates/gate-engine-never-fast-track ()
+  "Diffs touching self-heal-semantic or staging-merge are not fast-track eligible.
+Gate-engine files (self-heal, staging, experiment-core, monitoring, pre-push,
+run-tests.sh) must go through full staging verification; fast-track is blocked."
+  ;; Bind fast-track variables to ensure eligibility would otherwise pass
+  (let ((gptel-auto-workflow-fast-track-enabled t)
+        (gptel-auto-workflow-fast-track-max-files 5)
+        (gptel-auto-workflow-fast-track-max-lines 50))
+    ;; ── Self-heal semantic touched → blocked ──
+    (cl-letf (((symbol-function 'gptel-auto-workflow--git-cmd)
+               (lambda (_cmd _timeout)
+                 " lisp/modules/gptel-auto-workflow-self-heal-semantic.el | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)")))
+      (should-not (gptel-auto-workflow--fast-track-eligible-p "test-branch")))
+    ;; ── Staging-merge touched → blocked ──
+    (cl-letf (((symbol-function 'gptel-auto-workflow--git-cmd)
+               (lambda (_cmd _timeout)
+                 " lisp/modules/gptel-tools-agent-staging-merge.el | 3 +--\n 1 file changed, 2 insertions(+), 1 deletion(-)")))
+      (should-not (gptel-auto-workflow--fast-track-eligible-p "test-branch")))
+    ;; ── Experiment-core touched → blocked ──
+    (cl-letf (((symbol-function 'gptel-auto-workflow--git-cmd)
+               (lambda (_cmd _timeout)
+                 " lisp/modules/gptel-tools-agent-experiment-core.el | 1 +\n 1 file changed, 1 insertion(+)")))
+      (should-not (gptel-auto-workflow--fast-track-eligible-p "test-branch")))
+    ;; ── Experiment-loop touched → blocked ──
+    (cl-letf (((symbol-function 'gptel-auto-workflow--git-cmd)
+               (lambda (_cmd _timeout)
+                 " lisp/modules/gptel-tools-agent-experiment-loop.el | 1 +\n 1 file changed, 1 insertion(+)")))
+      (should-not (gptel-auto-workflow--fast-track-eligible-p "test-branch")))
+    ;; ── Monitoring agent touched → blocked ──
+    (cl-letf (((symbol-function 'gptel-auto-workflow--git-cmd)
+               (lambda (_cmd _timeout)
+                 " lisp/modules/gptel-auto-workflow-monitoring-agent.el | 1 +\n 1 file changed, 1 insertion(+)")))
+      (should-not (gptel-auto-workflow--fast-track-eligible-p "test-branch")))
+    ;; ── Pre-push hook touched → blocked ──
+    (cl-letf (((symbol-function 'gptel-auto-workflow--git-cmd)
+               (lambda (_cmd _timeout)
+                 " scripts/git-hooks/pre-push | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)")))
+      (should-not (gptel-auto-workflow--fast-track-eligible-p "test-branch")))
+    ;; ── run-tests.sh touched → blocked ──
+    (cl-letf (((symbol-function 'gptel-auto-workflow--git-cmd)
+               (lambda (_cmd _timeout)
+                 " scripts/run-tests.sh | 1 +\n 1 file changed, 1 insertion(+)")))
+      (should-not (gptel-auto-workflow--fast-track-eligible-p "test-branch")))
+    ;; ── Non-gate-engine file → still eligible (non-regression) ──
+    (cl-letf (((symbol-function 'gptel-auto-workflow--git-cmd)
+               (lambda (_cmd _timeout)
+                 " lisp/modules/gptel-ext-context.el | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)")))
+      (should (gptel-auto-workflow--fast-track-eligible-p "test-branch")))))
+
+(ert-deftest test-experiment-gates/gate-engine-fast-track-multi-file ()
+  "A multi-file diff where one file is gate-engine blocks fast-track.
+Even if other files are non-gate-engine and the change is small,
+touching any gate-engine file must block fast-track."
+  (let ((gptel-auto-workflow-fast-track-enabled t)
+        (gptel-auto-workflow-fast-track-max-files 5)
+        (gptel-auto-workflow-fast-track-max-lines 50))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--git-cmd)
+               (lambda (_cmd _timeout)
+                 " lisp/modules/gptel-ext-context.el      | 2 +-\n lisp/modules/gptel-auto-workflow-self-heal-semantic.el | 1 +\n 2 files changed, 2 insertions(+), 1 deletion(-)")))
+      (should-not (gptel-auto-workflow--fast-track-eligible-p "test-branch")))))
+
+;; ── Test F: Monitoring semantic audit timeout ──
+
+(ert-deftest test-experiment-gates/monitoring-semantic-audit-timeout-defcustom ()
+  "The monitoring semantic audit timeout defcustom exists and is positive."
+  (require 'gptel-auto-workflow-monitoring-agent)
+  (should (boundp 'gptel-auto-workflow-monitoring-semantic-audit-timeout-seconds))
+  (let ((val gptel-auto-workflow-monitoring-semantic-audit-timeout-seconds))
+    (should (numberp val))
+    (should (> val 0))))
+
+(ert-deftest test-experiment-gates/monitoring-semantic-audit-timeout-kills-hang ()
+  "A with-timeout wrapper kills a hung semantic audit and reports failure.
+Simulates the monitoring agent's Phase 10 timeout pattern: a hung audit
+is killed and the monitoring cycle continues."
+  (require 'gptel-auto-workflow-self-heal-semantic nil t)
+  (skip-unless (fboundp 'gptel-auto-workflow--semantic-audit-smoke-test))
+  ;; Override semantic-audit-all to hang, then verify outer with-timeout kills it.
+  ;; The smoke test internally calls audit-all.  We set the internal timeout
+  ;; to a huge value so it does not preempt our outer timeout.
+  (let ((gptel-auto-workflow-semantic-audit-total-timeout-seconds 999))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--semantic-audit-all)
+               (lambda (&rest _) (sleep-for 999) nil)))
+      (let* ((start (float-time))
+             (result (with-timeout (5
+                                     (list :pass nil
+                                           :timed-out t
+                                           :elapsed (- (float-time) start)))
+                       (gptel-auto-workflow--semantic-audit-smoke-test))))
+        (should-not (plist-get result :pass))
+        (should (plist-get result :timed-out))
+        ;; Must complete well under 10 seconds (5s timeout + overhead)
+        (should (< (- (float-time) start) 10))))))
 
 ;; ── Provide ──
 

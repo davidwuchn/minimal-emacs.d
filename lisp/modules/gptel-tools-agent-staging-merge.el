@@ -472,7 +472,25 @@ Eligibility: few changed files AND few changed lines AND fast-track enabled."
       (and file-count
            (> file-count 0)
            (<= file-count gptel-auto-workflow-fast-track-max-files)
-           (<= total-lines gptel-auto-workflow-fast-track-max-lines)))))
+           (<= total-lines gptel-auto-workflow-fast-track-max-lines)
+           ;; Gate-engine files must never be fast-track eligible.
+           ;; These files implement the safety mechanisms; a bug in them must
+           ;; go through full staging verification (unit tests + audit smoke gate).
+           (not (and (stringp diff-stat)
+                     (let ((gate-engine-patterns
+                            '("gptel-auto-workflow-self-heal-semantic\\.el"
+                              "gptel-tools-agent-staging-merge\\.el"
+                              "gptel-tools-agent-experiment-core\\.el"
+                              "gptel-tools-agent-experiment-loop\\.el"
+                              "gptel-auto-workflow-monitoring-agent\\.el"
+                              "scripts/git-hooks/pre-push"
+                              "scripts/run-tests\\.sh")))
+                       (cl-some (lambda (line)
+                                  (when (string-match-p "|" line)
+                                    (cl-some (lambda (pattern)
+                                               (string-match-p pattern line))
+                                             gate-engine-patterns)))
+                                (split-string diff-stat "\n" t)))))))))
 
 (defun gptel-auto-workflow--verify-staging ()
   "Run verification in the staging worktree.
