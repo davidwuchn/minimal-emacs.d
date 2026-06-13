@@ -81,9 +81,10 @@ Computed once by `gptel-prefix-cache-compute' and reused across experiments.")
 (defvar gptel-prefix-cache--valid-p nil
   "Non-nil when `gptel-prefix-cache--content' is valid for current run.")
 
-(defvar gptel-prefix-cache--run-id (make-hash-table :test 'equal)
+(defvar gptel-prefix-cache--run-id nil
   "Run ID for which the cache was computed.
-Used to detect run changes and invalidate stale cache.")
+Used to detect run changes and invalidate stale cache.
+Set to a string (or nil) by `gptel-prefix-cache-compute'.")
 
 (defvar gptel-prefix-cache--timestamp nil
   "Timestamp when cache was last computed.")

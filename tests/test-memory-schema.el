@@ -37,6 +37,50 @@
 (require 'gptel-auto-workflow-memory-schema)
 (require 'gptel-auto-workflow-mementum)
 
+;; ─── Regression: Initial Values Are Nil ───
+;; These must run before any test that initializes the schema index,
+;; to verify lazy-load defaults on fresh startup.
+
+(ert-deftest tdd/memory-schema/schemas-starts-nil ()
+  "Regression: schemas default must be nil, not a hash table.
+Prior tests may have mutated this global; we save/restore."
+  (let ((saved gptel-auto-workflow--memory-schema-schemas))
+    (setq gptel-auto-workflow--memory-schema-schemas nil)
+    (unwind-protect
+        (progn
+          (should (null gptel-auto-workflow--memory-schema-schemas))
+          (should-not (hash-table-p gptel-auto-workflow--memory-schema-schemas)))
+      (setq gptel-auto-workflow--memory-schema-schemas saved))))
+
+(ert-deftest tdd/memory-schema/entities-starts-nil ()
+  "Regression: entities default must be nil, not a hash table.
+Prior tests may have mutated this global; we save/restore."
+  (let ((saved gptel-auto-workflow--memory-schema-entities))
+    (setq gptel-auto-workflow--memory-schema-entities nil)
+    (unwind-protect
+        (progn
+          (should (null gptel-auto-workflow--memory-schema-entities))
+          (should-not (hash-table-p gptel-auto-workflow--memory-schema-entities)))
+      (setq gptel-auto-workflow--memory-schema-entities saved))))
+
+(ert-deftest tdd/memory-schema/code-links-starts-nil ()
+  "Regression: code-links must start nil for lazy scanning."
+  (should (null gptel-auto-workflow--memory-schema-code-links))
+  (should-not (hash-table-p gptel-auto-workflow--memory-schema-code-links)))
+
+(ert-deftest tdd/memory-schema/ensure-loaded-initializes-triples ()
+  "Regression: ensure-loaded must initialize triples even when
+worktree-base-root is unavailable, preventing puthash errors."
+  (let ((gptel-auto-workflow--memory-schema-schemas nil)
+        (gptel-auto-workflow--memory-schema-entities nil)
+        (gptel-auto-workflow--memory-schema-triples nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+               (lambda () (error "unbound"))))
+      (gptel-auto-workflow--memory-schema-ensure-loaded))
+    (should (hash-table-p gptel-auto-workflow--memory-schema-schemas))
+    (should (hash-table-p gptel-auto-workflow--memory-schema-entities))
+    (should (hash-table-p gptel-auto-workflow--memory-schema-triples))))
+
 ;; ─── Test Fixtures ───
 
 (defmacro with-schema-test-env (&rest body)

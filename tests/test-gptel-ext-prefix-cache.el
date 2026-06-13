@@ -11,6 +11,13 @@
 ;; Load module under test
 (require 'gptel-ext-prefix-cache)
 
+;; ─── Regression: Initial Value Is Nil ───
+
+(ert-deftest test-prefix-cache-run-id-starts-nil ()
+  "Regression: run-id must start as nil, not a hash table."
+  (should (null gptel-prefix-cache--run-id))
+  (should-not (hash-table-p gptel-prefix-cache--run-id)))
+
 ;; ─── Test Helpers ───
 
 (defvar test-prefix-cache--original-content nil)

@@ -43,11 +43,13 @@ Analogous to MemGraphRAG's tau threshold."
   :type 'file
   :group 'gptel-tools-agent)
 
-(defvar gptel-auto-workflow--memory-schema-schemas (make-hash-table :test 'equal)
-  "Hash table: SCHEMA-KEY -> frequency count.")
+(defvar gptel-auto-workflow--memory-schema-schemas nil
+  "Hash table: SCHEMA-KEY -> frequency count.
+Initialized lazily on first access.")
 
-(defvar gptel-auto-workflow--memory-schema-entities (make-hash-table :test 'equal)
-  "Hash table: ENTITY-NAME -> (count . (source-file ...)).")
+(defvar gptel-auto-workflow--memory-schema-entities nil
+  "Hash table: ENTITY-NAME -> (count . (source-file ...)).
+Initialized lazily on first access.")
 
 (defvar gptel-auto-workflow--memory-schema-triples nil
   "Hash table: TRIPLE-KEY -> (schema-key . source-file).
@@ -138,7 +140,9 @@ Falls back to empty tables when runtime deps are unavailable."
     (setq gptel-auto-workflow--memory-schema-schemas
           (gptel-auto-workflow--memory-schema-make-schemas)
           gptel-auto-workflow--memory-schema-entities
-          (gptel-auto-workflow--memory-schema-make-entities))
+          (gptel-auto-workflow--memory-schema-make-entities)
+          gptel-auto-workflow--memory-schema-triples
+          (gptel-auto-workflow--memory-schema-make-triples))
     (when (fboundp 'gptel-auto-workflow--worktree-base-root)
       (condition-case _err
           (gptel-auto-workflow--memory-schema-load-index)
@@ -593,9 +597,9 @@ SCORE = sum of shared-schema counts at each depth level."
 
 ;; ─── Bidirectional Memory-Code Links ───
 
-(defvar gptel-auto-workflow--memory-schema-code-links (make-hash-table :test 'equal)
+(defvar gptel-auto-workflow--memory-schema-code-links nil
   "Hash table: CODE-FILE-REL -> list of referenced memory slugs.
-Populated by `gptel-auto-workflow--memory-schema-scan-code-links'.")
+Populated lazily by `gptel-auto-workflow--memory-schema-scan-code-links'.")
 
 (defun gptel-auto-workflow--memory-schema-scan-code-links ()
   "Scan project source files for @memory: references.
