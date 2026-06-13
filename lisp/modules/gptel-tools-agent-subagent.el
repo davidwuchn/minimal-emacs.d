@@ -537,6 +537,7 @@ Uses hash table keyed by task-id to support parallel execution."
                                :launching t
                                :process-environment nil
                                :last-buffer-tick nil
+                               :curl-process nil
                                :last-activity-time (current-time)
                                :agent-type agent-type
                                :activity-dir activity-dir)
@@ -570,6 +571,25 @@ Uses hash table keyed by task-id to support parallel execution."
                                            gptel-tools)
                                   (my/gptel--seed-fsm-tools child-fsm gptel-tools))
                                 (my/gptel--disable-auto-retry-for-fsm child-fsm)))
+                            ;; Capture the live gptel-curl process for cleanup fallback.
+                            ;; When the grader times out and auto-passes, the underlying
+                            ;; curl survives as an orphan; storing it here lets the
+                            ;; cleanup function kill it directly via :curl-process.
+                            (ignore-errors
+                              (when (boundp 'gptel--request-alist)
+                                (let ((found-proc
+                                       (cl-loop for entry in gptel--request-alist
+                                                for proc = (car entry)
+                                                for fsm = (nth 1 entry)
+                                                when (and (process-live-p proc)
+                                                          (fboundp 'gptel-fsm-info)
+                                                          (eq (plist-get (gptel-fsm-info fsm) :buffer)
+                                                              request-buf))
+                                                return proc)))
+                                  (when found-proc
+                                    (puthash task-id
+                                             (plist-put state :curl-process found-proc)
+                                             my/gptel--agent-task-state)))))
                             (let* ((state (gethash task-id my/gptel--agent-task-state))
                                    (tick (my/gptel--agent-task-buffer-tick request-buf)))
                               (when (and state tick)

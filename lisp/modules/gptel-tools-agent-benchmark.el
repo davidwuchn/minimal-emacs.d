@@ -1096,7 +1096,12 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
               (lambda ()
                 (let ((state (gethash grade-id
                                       gptel-auto-experiment--grade-state)))
-                  (when (gptel-auto-workflow--state-active-p state)
+                   (when (gptel-auto-workflow--state-active-p state)
+                    ;; Abort the live curl request so it doesn't survive the
+                    ;; auto-pass and become an orphaned process.
+                    (when (and (fboundp 'gptel-abort)
+                               (buffer-live-p grade-buffer))
+                      (ignore-errors (gptel-abort grade-buffer)))
                     (message "[auto-exp] Grading timeout after %ds — AUTO-PASS to prevent destruction"
                              (gptel-auto-experiment--effective-grade-timeout))
                     ;; CRITICAL FIX: timeout means grader couldn't evaluate,

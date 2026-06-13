@@ -232,8 +232,8 @@ Only reloads for top-level frames (not Corfu child frames) and only once per fra
   ;; returns nil during post-init startup.
   (with-eval-after-load 'gptel-request
     (add-to-list 'gptel-curl-extra-args "--max-time" t)
-    (add-to-list 'gptel-curl-extra-args "900" t)
-    (message "[post-init] Set gptel curl --max-time 900s for daemon"))
+    (add-to-list 'gptel-curl-extra-args "840" t)
+    (message "[post-init] Set gptel curl --max-time 840s for daemon"))
   
   ;; Self-heal: check every 30s and recreate socket if lost
   (run-at-time 30 30

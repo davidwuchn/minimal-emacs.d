@@ -1006,23 +1006,41 @@ prevent orphaned subprocess accumulation on macOS."
                    my/gptel--abort-depth)
         (let ((my/gptel--abort-depth (1+ my/gptel--abort-depth)))
           (ignore-errors (gptel-abort request-buf)))))
-    ;; Fallback: kill any gptel-curl process whose buffer matches request-buf.
+    ;; Second-tier fallback: kill stored curl process from task state.
+    (when-let* ((stored-proc (plist-get state :curl-process))
+                ((process-live-p stored-proc)))
+      (message "[nucleus] Killing stored curl process %s for buffer %s"
+               (process-id stored-proc)
+               (buffer-name request-buf))
+      (ignore-errors
+        (set-process-filter stored-proc #'ignore)
+        (set-process-sentinel stored-proc #'ignore)
+        (delete-process stored-proc)))
+    ;; Third-tier fallback: iterate gptel--request-alist and match by FSM :buffer.
     ;; `gptel-abort` searches `gptel--request-alist` for a matching entry and
     ;; silently does nothing if the entry was already cleaned up (e.g., sentinel
     ;; ran first). In that case the curl process is orphaned and must be killed
     ;; directly. On macOS, orphaned curl processes with a full 64KB pipe buffer
     ;; block indefinitely, eventually crashing the daemon.
+    ;; Comparing (process-buffer proc) to request-buf doesn't work: curl's
+    ;; process-buffer is a temp buffer, not the parent request buffer.
     (when (buffer-live-p request-buf)
-      (dolist (proc (process-list))
-        (when (and (process-live-p proc)
-                   (string= (process-name proc) "gptel-curl")
-                   (eq (process-buffer proc) request-buf))
-          (message "[nucleus] Killing orphaned gptel-curl %s (buffer %s)"
-                   (process-id proc) (buffer-name request-buf))
-          (ignore-errors
-            (set-process-filter proc #'ignore)
-            (set-process-sentinel proc #'ignore)
-            (delete-process proc)))))))
+      (ignore-errors
+        (when (boundp 'gptel--request-alist)
+          (dolist (entry gptel--request-alist)
+            (let* ((proc (car entry))
+                   (fsm (nth 1 entry)))
+              (when (and (process-live-p proc)
+                         (string= (process-name proc) "gptel-curl")
+                         (fboundp 'gptel-fsm-info)
+                         (eq (plist-get (gptel-fsm-info fsm) :buffer)
+                             request-buf))
+                (message "[nucleus] Killing orphaned gptel-curl %s (buffer %s)"
+                         (process-id proc) (buffer-name request-buf))
+                (ignore-errors
+                  (set-process-filter proc #'ignore)
+                  (set-process-sentinel proc #'ignore)
+                  (delete-process proc))))))))))
 
 (defun my/gptel--agent-task-buffer-tick (buffer)
   "Return BUFFER's current modification tick when BUFFER is live."
