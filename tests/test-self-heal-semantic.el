@@ -1480,5 +1480,64 @@ commit serves as the rollback point."
                            (buffer-string))))))
       (test-self-heal-semantic--cleanup file))))
 
+;; ── Test 21: nil-hash-table guard / nested / docstring regression ──
+
+(ert-deftest test-self-heal-semantic/nil-hash-table-clean-hash-table-p-guard ()
+  "Variable with hash-table-p guard (alist-backed cache) is clean.
+hash-table-p is a predicate used in guards, not evidence of hash-table usage.
+The variable may be an alist that is conditionally checked with hash-table-p."
+  (let* ((content
+          "(defvar my-cache nil \"Alist-backed cache.\")\n\n(defun lookup (key)\n  (assoc key my-cache))\n\n(defun reset ()\n  (when (hash-table-p my-cache)\n    (maphash (lambda (k v) (message \"%s\" k)) my-cache)\n    (clrhash my-cache)))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-nil-hash-tables file)))
+          (should (= issues 0)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/nil-hash-table-clean-lazy-init-setq ()
+  "Variable with lazy-init setq to make-hash-table is clean.
+Pattern: (defvar schemas nil) with (setq schemas (make-hash-table ...))
+elsewhere — intentionally nil until load-time."
+  (let* ((content
+          "(defvar my-schemas nil \"Lazy-initialized hash table.\")\n\n(defun make-schemas ()\n  (make-hash-table :test 'equal))\n\n(defun load-schemas ()\n  (setq my-schemas (make-schemas)))\n\n(defun lookup (key)\n  (gethash key my-schemas))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-nil-hash-tables file)))
+          (should (= issues 0)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/detects-nil-hash-table-maphash-nested ()
+  "Detects nil hash table used with maphash containing nested lambda form.
+Regression: the old [^)]* regex missed (maphash (lambda (k v) ...) var)."
+  (let* ((content
+          "(defvar my-ht nil)\n\n(defun iterate ()\n  (maphash (lambda (k v) (message \"%s -> %s\" k v)) my-ht))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-nil-hash-tables file)))
+          (should (= issues 1)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/nil-hash-table-clean-docstring-mention ()
+  "defvar with maphash mention in docstring does not trigger.
+The variable is not actually used with hash-table functions in code."
+  (let* ((content
+          "(defvar my-ht nil\n  \"Hash table for lookups.  Use (maphash (lambda (k v) ...) my-ht) to iterate.\")\n\n(defun f ()\n  42)")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-nil-hash-tables file)))
+          (should (= issues 0)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/nil-hash-table-clean-comment-mention ()
+  "defvar with gethash mention in trailing comment does not trigger.
+The regex should not match code inside comments."
+  (let* ((content
+          "(defvar my-ht nil)  ;; (gethash 'key my-ht) would fail if nil\n\n(defun f ()\n  42)")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-nil-hash-tables file)))
+          (should (= issues 0)))
+      (test-self-heal-semantic--cleanup file))))
+
 (provide 'test-self-heal-semantic)
 ;;; test-self-heal-semantic.el ends here

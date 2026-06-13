@@ -478,43 +478,120 @@ causing void-variable errors at runtime.  Returns count of bare defvars."
 
 ;; ── Check 13: nil-initialized hash tables ──
 
-(defun gptel-auto-workflow--var-used-as-hash-table-p (var-name file-content)
+(defun gptel-auto-workflow--var-used-as-hash-table-p (var-name file-content &optional buffer)
   "Check if VAR-NAME appears in hash-table function calls in FILE-CONTENT.
-Matches VAR-NAME referenced with gethash, puthash, maphash, hash-table-p,
-or clrhash — indicating it is used as a hash table."
-  (let ((case-fold-search nil))
-    (catch 'found
-      (dolist (fn '("gethash" "puthash" "maphash" "hash-table-p" "clrhash"))
+Matches VAR-NAME referenced with gethash, puthash, maphash, or clrhash
+— indicating it is used as a hash table.  `hash-table-p' is excluded
+because it is a common guard predicate on alist-backed caches.
+If BUFFER is non-nil, use syntax-ppss to skip matches inside strings
+and comments."
+  (let ((case-fold-search nil)
+        (simple-fns '("gethash" "puthash" "clrhash"))
+        (nested-fn "maphash"))
+    (if buffer
+        ;; Buffer-based: re-search-forward with syntax-ppss filtering.
+        ;; NB: syntax-ppss moves point, so every call must be wrapped
+        ;; in save-excursion to avoid an infinite re-search-forward loop.
+        ;; The entire buffer search is wrapped in save-excursion so the
+        ;; caller's point is preserved.
+        (catch 'found
+          (with-current-buffer buffer
+            (save-excursion
+              (emacs-lisp-mode)
+              (dolist (fn (append simple-fns (list nested-fn)))
+                (goto-char (point-min))
+                (while (re-search-forward (format "(%s\\b" fn) nil t)
+                  (let ((call-start (match-beginning 0))
+                        (state (save-excursion
+                                 (syntax-ppss (match-beginning 0)))))
+                    (unless (or (nth 3 state) (nth 4 state))
+                      (let ((form-end
+                             (condition-case nil
+                                 (save-excursion
+                                   (goto-char call-start)
+                                   (forward-sexp 1)
+                                   (point))
+                               (error nil))))
+                        (when form-end
+                          (save-excursion
+                            (goto-char call-start)
+                            (when (re-search-forward
+                                   (format "\\b%s\\b" (regexp-quote var-name))
+                                   form-end t)
+                              (throw 'found t))))))))))
+            nil))
+      ;; String-based: string-match-p (no syntax awareness, used by fixer)
+      (catch 'found
+        (dolist (fn simple-fns)
+          (when (string-match-p
+                 (format "(%s\\b[^)]*\\b%s\\b" fn (regexp-quote var-name))
+                 file-content)
+            (throw 'found t)))
+        ;; maphash: use non-greedy any-char to skip nested lambda forms
         (when (string-match-p
-               (format "(%s\\b[^)]*\\b%s\\b" fn (regexp-quote var-name))
+               (format "(%s\\b\\(.\\|\n\\)*?\\b%s\\b"
+                       nested-fn (regexp-quote var-name))
                file-content)
-          (throw 'found t)))
-      nil)))
+          (throw 'found t))
+        nil))))
+
+(defun gptel-auto-workflow--var-has-hash-table-p-guard-p (var-name file-content)
+  "Return t if (hash-table-p VAR-NAME) appears in FILE-CONTENT.
+Indicates the variable is conditionally a hash table (may be alist-backed
+by default) and should not be auto-fixed."
+  (string-match-p
+   (format "(hash-table-p\\b[^)]*\\b%s\\b" (regexp-quote var-name))
+   file-content))
+
+(defun gptel-auto-workflow--var-has-lazy-init-setq-p (var-name file-content)
+  "Return t if a setq of VAR-NAME to a hash-table constructor appears.
+Matches (setq VAR-NAME (make-hash-table ...)) or
+(setq VAR-NAME (make-...)) — the conventional lazy-init pattern
+where the variable is intentionally nil until a loader function
+calls a constructor.  Uses non-greedy matching so nested calls
+like (make-schemas) are detected."
+  (string-match-p
+   (format "(setq\\b[^)]*?\\b%s\\b[^)]*?\\(make-hash-table\\|(make-\\)"
+           (regexp-quote var-name))
+   file-content))
 
 (defun gptel-auto-workflow--audit-nil-hash-tables (file)
   "Audit FILE for hash tables initialized to nil.
 Detects (defvar NAME nil) where NAME is used with hash-table
-functions (gethash, puthash, maphash, hash-table-p, clrhash)
-in the same file.  Returns count of issues found."
+functions (gethash, puthash, maphash, clrhash) in the same file.
+Skips variables guarded by (hash-table-p VAR), lazy-init setq
+patterns, and matches inside strings/comments.
+Returns count of issues found."
   (let ((issues 0)
         (file-content nil))
     (with-temp-buffer
       (insert-file-contents file)
+      (emacs-lisp-mode)
       (setq file-content (buffer-string))
       (goto-char (point-min))
       (while (re-search-forward
               "^(defvar[ \t]+\\([a-z][a-z0-9-]*\\)[ \t]+nil\\b" nil t)
         (let ((var-name (match-string 1))
-              (line-no (line-number-at-pos)))
-          (when (gptel-auto-workflow--var-used-as-hash-table-p
-                 var-name file-content)
-            (setq issues (1+ issues))
-            (gptel-auto-workflow--semantic-audit-record
-             file line-no
-             'nil-hash-table
-             (format
-              "Hash table %s initialized to nil — use (make-hash-table :test 'equal)"
-              var-name)))))
+              (line-no (line-number-at-pos))
+              (match-pos (match-beginning 0)))
+          ;; Skip if the defvar itself is inside a string or comment
+          (unless (let ((state (save-excursion (syntax-ppss match-pos))))
+                    (or (nth 3 state) (nth 4 state)))
+            ;; Skip lazy-init / ensure-loaded sentinels
+            (unless (gptel-auto-workflow--var-has-lazy-init-setq-p
+                     var-name file-content)
+              ;; Skip hash-table-p guarded variables (alist-backed caches)
+              (unless (gptel-auto-workflow--var-has-hash-table-p-guard-p
+                       var-name file-content)
+                (when (gptel-auto-workflow--var-used-as-hash-table-p
+                       var-name file-content (current-buffer))
+                  (setq issues (1+ issues))
+                  (gptel-auto-workflow--semantic-audit-record
+                   file line-no
+                   'nil-hash-table
+                   (format
+                    "Hash table %s initialized to nil — use (make-hash-table :test 'equal)"
+                    var-name))))))))
       issues)))
 
 (defvar gptel-auto-workflow--semantic-audit-checks
@@ -1268,6 +1345,7 @@ removes or changes logic."
   "Fix nil-initialized hash table defvars in FILE.
 Changes (defvar NAME nil ...) to (defvar NAME (make-hash-table :test 'equal) ...)
 where NAME is used with hash-table functions in the same file.
+Skips variables guarded by (hash-table-p VAR) or lazy-init setq patterns.
 Returns number of fixes applied."
   (let ((fixed 0)
         (original-content nil)
@@ -1280,12 +1358,16 @@ Returns number of fixes applied."
         (while (re-search-forward
                 "^(defvar[ \t]+\\([a-z][a-z0-9-]*\\)[ \t]+nil\\b" nil t)
           (let ((var-name (match-string 1)))
-            (when (gptel-auto-workflow--var-used-as-hash-table-p
-                   var-name file-content)
-              ;; Record the position of "nil" for replacement
-              (save-excursion
-                (re-search-backward "nil" (line-beginning-position) t)
-                (push (cons (point) var-name) fixes-list))))))
+            (unless (gptel-auto-workflow--var-has-lazy-init-setq-p
+                     var-name file-content)
+              (unless (gptel-auto-workflow--var-has-hash-table-p-guard-p
+                       var-name file-content)
+                (when (gptel-auto-workflow--var-used-as-hash-table-p
+                       var-name file-content)
+                  ;; Record the position of "nil" for replacement
+                  (save-excursion
+                    (re-search-backward "nil" (line-beginning-position) t)
+                    (push (cons (point) var-name) fixes-list))))))))
       ;; Apply fixes from bottom to top to preserve positions
       (dolist (fix (sort fixes-list (lambda (a b) (> (car a) (car b)))))
         (let ((pos (car fix)))
