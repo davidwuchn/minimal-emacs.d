@@ -210,6 +210,33 @@ LegalOS is an AI legal assistant that handles the four highest-time-cost tasks f
 
 ---
 
+## Cross-Sell from CreatorOS / SeedSight
+
+CreatorOS and SeedSight already serve entrepreneurs who need legal protection. Every TikTok creator signing a brand deal. Every RedNote brand managing suppliers. LegalOS is their natural next step.
+
+### JTBD per Platform
+
+| Platform | User | Job-to-be-Done | LegalOS Solution |
+|----------|------|---------------|-----------------|
+| **TikTok** | Creator with 50K+ followers | "I got my first $5K brand deal. The contract is 12 pages. I don't know if it's fair." | Contract review: flags unfair terms, explains in plain language |
+| **TikTok** | Creator hiring first employee | "I need an employment contract. I have no idea what's legally required." | Employment agreement: 5 questions → compliant contract |
+| **TikTok** | Creator launching a product | "I want to trademark my brand name. Where do I start?" | IP filing guide + NDA generator for suppliers |
+| **RedNote** | Brand sourcing from 1688 | "My supplier sent a contract in Chinese. Does it protect me?" | Bilingual contract review + enforceability check |
+| **RedNote** | Brand managing 5+ KOLs | "Each KOL has a different agreement. How do I standardize?" | KOL agreement template library, customizable per tier |
+| **Both** | Entrepreneur growing fast | "I need legal foundations but can't afford a $400/hr lawyer." | All-in-one: $49/mo instead of $400/hr |
+
+### Cross-Sell Funnel
+
+```
+CreatorOS/SeedSight user (1,500 total)
+  → "Review this contract" button → 300 click (20%)
+  → Free trial (1 review) → 150 try (50%)
+  → Convert to LegalOS Solo ($49/mo) → 75 convert (50%)
+  → Revenue: $3,675/mo incremental. Zero acquisition cost.
+```
+
+---
+
 ## International Expansion Plan
 
 Start from China — the largest untapped legal AI market. Then expand to civil law neighbors, common law markets, and emerging markets. Each wave builds on the last.
