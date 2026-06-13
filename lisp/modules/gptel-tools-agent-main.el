@@ -621,7 +621,8 @@ Usage:
                         (error-message-string err)))))
     ;; Phase 4: Self-diagnostic probe — verify grader health before wasting experiments
     (when (and (fboundp 'gptel-auto-workflow--probe-before-experiments)
-               (not (gptel-auto-workflow--probe-before-experiments)))
+               (not (with-timeout (60 "timeout")
+                      (gptel-auto-workflow--probe-before-experiments))))
       (message "[auto-workflow] Diagnostic probe failed: grader broken, experiments halted")
       (setq gptel-auto-workflow--running nil)
       (cl-return-from gptel-auto-workflow-run-async nil))
