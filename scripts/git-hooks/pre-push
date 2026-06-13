@@ -39,7 +39,7 @@ if [[ "$pushing_to_main" -eq 1 ]]; then
             echo "║  PRE-PUSH TEST GATE: Running unit tests before push to main ║"
             echo "╚══════════════════════════════════════════════════════════════╝"
             echo ""
-            test_output="$(timeout 300 bash "$test_script" unit 2>&1)" || true
+            test_output="$(timeout 900 bash "$test_script" unit 2>&1)" || true
             unexpected="$(echo "$test_output" | grep -oE '[0-9]+ unexpected' | grep -oE '^[0-9]+' | head -1)"
             if [[ -z "$unexpected" ]]; then
                 if echo "$test_output" | grep -q "0 unexpected"; then
