@@ -72,6 +72,76 @@ Must have >= 2 non-trivial added lines to pass the trivial-change check."
     (should (stringp result))
     (should (string-match-p "no file changes" result))))
 
+(ert-deftest test-experiment-gates/diff-with-llm-markdown-blocked ()
+  "A diff containing ```emacs-lisp blocks is flagged as LLM artifact."
+  (let ((diff-text
+         "diff --git a/x.el b/x.el
+--- a/x.el
++++ b/x.el
+@@ -1,1 +1,3 @@
++(progn (message \"x\") nil)
++```emacs-lisp
++(defun foo () 42)
++```"))
+    (let ((result (gptel-auto-experiment--validate-diff-text diff-text)))
+      (should (stringp result))
+      (should (string-match-p "LLM markdown" result)))))
+
+(ert-deftest test-experiment-gates/diff-with-debug-artifact-blocked ()
+  "A diff with top-level (message ...) insertion is flagged as debug code.
+Catches the LLM tendency to leave (message \"debugging X\") in commits."
+  (let ((diff-text
+         "diff --git a/lisp/modules/gptel-ext-context.el b/lisp/modules/gptel-ext-context.el
+--- a/lisp/modules/gptel-ext-context.el
++++ b/lisp/modules/gptel-ext-context.el
+@@ -1,1 +1,2 @@
++(message \"debug trace\")
++(defun foo () 42)"))
+    (let ((result (gptel-auto-experiment--validate-diff-text diff-text)))
+      (should (stringp result))
+      (should (string-match-p "debug artifact" result)))))
+
+(ert-deftest test-experiment-gates/diff-with-error-handling-removal-blocked ()
+  "A diff that removes condition-case is flagged as vandalism."
+  (let ((diff-text
+         "diff --git a/x.el b/x.el
+--- a/x.el
++++ b/x.el
+@@ -1,5 +1,2 @@
+-(condition-case err
+-    (do-stuff)
+-  (error (message \"oops\")))
++(do-stuff)"))
+    (let ((result (gptel-auto-experiment--validate-diff-text diff-text)))
+      (should (stringp result))
+      (should (string-match-p "error handling" result)))))
+
+(ert-deftest test-experiment-gates/diff-too-large-blocked ()
+  "A diff with >80 added lines is flagged as off-task."
+  (let* ((lines '("diff --git a/x.el b/x.el"
+                  "--- a/x.el"
+                  "+++ b/x.el"
+                  "@@ -1,1 +1,82 @@"))
+         (body-lines (mapcar (lambda (n) (format "+(line %d)" n))
+                             (number-sequence 1 85)))
+         (diff-text (mapconcat #'identity (append lines body-lines) "\n")))
+    (let ((result (gptel-auto-experiment--validate-diff-text diff-text)))
+      (should (stringp result))
+      (should (string-match-p "too large" result)))))
+
+(ert-deftest test-experiment-gates/diff-trivially-small-blocked ()
+  "A diff with only 1 non-comment code line is flagged as trivial."
+  (let ((diff-text
+         "diff --git a/x.el b/x.el
+--- a/x.el
++++ b/x.el
+@@ -1,1 +1,2 @@
++;; a comment
++(provide 'x)"))
+    (let ((result (gptel-auto-experiment--validate-diff-text diff-text)))
+      (should (stringp result))
+      (should (string-match-p "non-comment code lines" result)))))
+
 ;; ── Test C: Grader-bypass genuine-result predicate ──
 
 (require 'gptel-tools-agent-experiment-core)

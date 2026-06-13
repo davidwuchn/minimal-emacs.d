@@ -524,10 +524,15 @@ Extracted from `gptel-auto-experiment--validate-diff-content' for testability."
      "\\+```\\(emacs-lisp\\|lisp\\|elisp\\)?" diff-text)
     (format "Cheap check: LLM markdown artifacts in diff (``` blocks)"))
    ;; Check for debug artifacts: print/insert at top level
-    ((let ((debug-form nil))
-       (when (string-match
-              "^\\+\\(message\\|insert\\|print\\|princ\\|debug\\)" diff-text)
-         (setq debug-form (match-string 1 diff-text))
+    ((let ((debug-form nil)
+           (debug-prefixes '("+(message" "+( insert" "+(message"
+                             "+(print" "+(princ" "+(debug")))
+       (dolist (line (split-string diff-text "\n"))
+         (dolist (prefix debug-prefixes)
+           (when (and (null debug-form)
+                      (string-prefix-p prefix line))
+             (setq debug-form (substring line (length prefix))))))
+       (when debug-form
          (format "Cheap check: debug artifact in diff (top-level %s)"
                  debug-form))))
    ;; Check for vandalism: removal of error handling patterns
