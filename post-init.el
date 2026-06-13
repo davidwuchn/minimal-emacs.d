@@ -182,8 +182,6 @@ were created after the hiding but before restoration."
                   (error (message "[post-init] CreatorOS boundary still unavailable"))))))
           90)
 
-
-
 ;;; post-init.el ends here
 
 ;; ==============================================================================
