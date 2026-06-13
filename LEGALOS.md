@@ -210,53 +210,113 @@ LegalOS is an AI legal assistant that handles the four highest-time-cost tasks f
 
 ---
 
-## T — Chinese Market: 法治OS
+## International Expansion Plan
 
-### Why China Is Different
+LegalOS rolls out in waves, each building on the last. Common law markets first (same engine), civil law markets next (adapted engine), then emerging markets (localized engine).
 
-China has a **civil law system** — statutes matter more than precedent. Core features (document review, contract drafting, legal research) work across both systems. Data sources and templates are different.
+### Wave 1: US (Month 1-4) — Prove the Model
 
-### Market Size
+| | US |
+|---|---|
+| Legal system | Common law |
+| Lawyers | 1.3M |
+| Case law source | CourtListener (7M+ opinions, free) |
+| Language | English |
+| GTM | Bar associations, solo practitioner groups, legal aid |
+| Price | $49-299/mo |
+| Revenue target (Month 4) | 200 users, $10K/mo |
 
-| Metric | US | China |
-|--------|-----|-------|
-| Lawyers | 1.3M | 750K+ |
-| Annual growth | 2% | 8-10% |
-| Law firms | 50K+ | 35K+ |
-| Legal tech spending | $5B+ | $1B (growing 25% YoY) |
-| Harvey equivalent | ✅ Market leader | ❌ None exists |
+**Why first:** Largest English-speaking market. CourtListener is free. Contract types are standardized. PMF proven here before expanding.
 
-### Adapted Features
+### Wave 2: UK + Commonwealth (Month 5-7) — Same Language, Same Law
 
-| US Source | China Equivalent |
-|-----------|-----------------|
-| CourtListener | 中国裁判文书网 (130M+ court opinions) |
-| Westlaw/LexisNexis | 北大法宝 (PKULaw), 法信 |
-| Common law precedent | Statute + regulation search |
-| US contract templates | China Civil Code templates (劳动合同, 保密协议) |
+| | UK | Canada | Australia | New Zealand |
+|---|---|---|---|---|
+| Legal system | Common law | Common law (QC civil) | Common law | Common law |
+| Lawyers | 200K | 130K | 90K | 15K |
+| Case law | BAILII (free) | CanLII (free) | AustLII (free) | NZLII (free) |
+| Language | English | English/French | English | English |
+| Price | £39-239/mo | C$59-359/mo | A$69-399/mo | NZ$69-399/mo |
 
-### Localized Pricing
+**Why second:** Same legal system. Same language. Free case law databases (BAILII/CanLII/AustLII — all part of the Free Access to Law Movement). Near-zero engine adaptation. Combined: 435K lawyers.
 
-| Tier | US | China (¥) |
-|------|-----|-----------|
-| Free | $0 | ¥0 |
-| Solo | $49/mo | ¥99/mo (~$14) |
-| Firm | $149/mo | ¥299/mo (~$41) |
-| Pro | $299/mo | ¥599/mo (~$82) |
+### Wave 3: EU (Month 8-11) — Civil Law, GDPR Ready
 
-### GTM: China
+| | Germany | France | Netherlands | Nordics |
+|---|---|---|---|---|
+| Legal system | Civil law | Civil law | Civil law | Civil law |
+| Lawyers | 165K | 70K | 18K | 25K |
+| Case law | Bundesgerichtshof | Legifrance | Rechtspraak.nl | National courts |
+| Language | German | French | Dutch | SV/DK/NO/FI |
+| GDPR | ✅ Required | ✅ Required | ✅ Required | ✅ Required |
+| Price | €39-239/mo | €39-239/mo | €39-239/mo | €39-239/mo |
 
-1. **WeChat Mini Program** — lowest friction, lawyers already live there
-2. **律师协会 (Bar Association)** — CLE-eligible training partnerships
-3. **北大法宝 Integration** — dominant legal database, API access
+**Why third:** Largest civil law market. GDPR compliance is mandatory but OV5 can self-host per country. Statute databases are public. Combined: 280K+ lawyers. Localization needed per language.
 
-### Why China Could Be First
+### Wave 4: China (Month 12-15) — Largest Untapped Market
 
-1. No Harvey competitor — first-mover advantage
-2. 750K+ lawyers, growing 8-10%/year
-3. WeChat distribution: 1.3B users, zero app-install friction
-4. Government mandates digital legal transformation
-5. Lower cost per user, higher volume potential
+| | China |
+|---|---|
+| Legal system | Civil law (socialist) |
+| Lawyers | 750K+ |
+| Case law | 中国裁判文书网 (130M+ opinions, public) |
+| Statutes | 全国人大法规数据库 |
+| Database partner | 北大法宝 (PKULaw) |
+| Language | Chinese |
+| Distribution | WeChat Mini Program |
+| Price | ¥99-599/mo ($14-82) |
+| Revenue target (Month 15) | 5,000 users, ¥495K/mo ($68K) |
+
+**Why fourth:** Builds on civil law adaptations from Wave 3. Massive market with zero AI legal competition. WeChat distribution eliminates app-install friction. Government mandates digital legal transformation.
+
+### Wave 5: Emerging Markets (Month 16-24)
+
+| | India | Brazil | Southeast Asia | Africa |
+|---|---|---|---|---|
+| Legal system | Common law | Civil law | Mixed | Mixed |
+| Lawyers | 1.5M+ | 1.2M+ | 200K+ | 300K+ |
+| Case law | Indian Kanoon | JusBrasil | National courts | AfricanLII |
+| Language | English | Portuguese | EN/TH/VN/ID | EN/FR/PT |
+| Price | ₹499-2,499/mo | R$49-249/mo | $9-49/mo | $9-29/mo |
+
+**Why last:** Largest total lawyer population (3.2M+). Very price-sensitive — needs ultra-low pricing. Indian Kanoon and AfricanLII provide free case law. Combined: 3.2M+ lawyers. Revenue from volume, not per-user.
+
+### International Rollout Timeline
+
+```
+Month 1-4  │ US           ████████░░ 200 users, $10K/mo
+Month 5-7  │ Commonwealth ░░░░████░░ 435K lawyers addressable
+Month 8-11 │ EU           ░░░░░░██░░ 280K lawyers, GDPR
+Month 12-15│ China        ░░░░░░░░██ 750K lawyers, WeChat
+Month 16-24│ Emerging     ░░░░░░░░░█ 3.2M lawyers, volume play
+```
+
+### Revenue by Wave (Month 24 Projection)
+
+| Wave | Users | Avg Price | Monthly Revenue | Share |
+|------|-------|-----------|-----------------|-------|
+| US | 1,500 | $49 | $73,500 | 28% |
+| Commonwealth | 800 | £39 ($49) | $39,200 | 15% |
+| EU | 600 | €39 ($42) | $25,200 | 10% |
+| China | 5,000 | ¥99 ($14) | $70,000 | 27% |
+| Emerging | 12,000 | $9 | $108,000 | 42% |
+| **Total** | **19,900** | | **$315,900** | |
+
+**Emerging markets drive volume. US/UK drive revenue per user. China bridges both.**
+
+### What Changes Per Market
+
+| Layer | What Adapts | Effort |
+|-------|------------|--------|
+| Case law source | New API/parser per country | ~1 .clj file |
+| Statute database | New API/parser | ~1 .clj file |
+| Contract templates | Jurisdiction-specific clauses | ~1 .clj file |
+| Language | Translation layer (AI-assisted) | ~2 .clj files |
+| Pricing | Country config | 1-line change |
+| GTM | Local partnerships | Non-code |
+| Regulatory | GDPR, data residency | Infrastructure |
+
+**OV5 learns cross-market patterns.** A contract clause flagged in Germany can inform reviews in France. A citation pattern from UK common law can improve US research. The ontology compounds globally.
 
 ---
 
