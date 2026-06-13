@@ -192,49 +192,45 @@ Covers 'blind-mode-auto-pass' and similar bypass attempts."
 ;; ── Test E: Gate-engine files never fast-track ──
 
 (ert-deftest test-experiment-gates/gate-engine-never-fast-track ()
-  "Diffs touching self-heal-semantic or staging-merge are not fast-track eligible.
-Gate-engine files (self-heal, staging, experiment-core, monitoring, pre-push,
-run-tests.sh) must go through full staging verification; fast-track is blocked."
-  ;; Bind fast-track variables to ensure eligibility would otherwise pass
+  "Diffs touching gate-engine files are not fast-track eligible.
+Gate-engine files (self-heal, audit helper, staging, experiment-core,
+monitoring, pre-push, run-tests.sh) must go through full staging
+verification; fast-track is blocked."
   (let ((gptel-auto-workflow-fast-track-enabled t)
         (gptel-auto-workflow-fast-track-max-files 5)
         (gptel-auto-workflow-fast-track-max-lines 50))
-    ;; ── Self-heal semantic touched → blocked ──
     (cl-letf (((symbol-function 'gptel-auto-workflow--git-cmd)
                (lambda (_cmd _timeout)
                  " lisp/modules/gptel-auto-workflow-self-heal-semantic.el | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)")))
       (should-not (gptel-auto-workflow--fast-track-eligible-p "test-branch")))
-    ;; ── Staging-merge touched → blocked ──
+    (cl-letf (((symbol-function 'gptel-auto-workflow--git-cmd)
+               (lambda (_cmd _timeout)
+                 " lisp/modules/gptel-auto-workflow-audit-provide-inside-defun.el | 1 +\n 1 file changed, 1 insertion(+)")))
+      (should-not (gptel-auto-workflow--fast-track-eligible-p "test-branch")))
     (cl-letf (((symbol-function 'gptel-auto-workflow--git-cmd)
                (lambda (_cmd _timeout)
                  " lisp/modules/gptel-tools-agent-staging-merge.el | 3 +--\n 1 file changed, 2 insertions(+), 1 deletion(-)")))
       (should-not (gptel-auto-workflow--fast-track-eligible-p "test-branch")))
-    ;; ── Experiment-core touched → blocked ──
     (cl-letf (((symbol-function 'gptel-auto-workflow--git-cmd)
                (lambda (_cmd _timeout)
                  " lisp/modules/gptel-tools-agent-experiment-core.el | 1 +\n 1 file changed, 1 insertion(+)")))
       (should-not (gptel-auto-workflow--fast-track-eligible-p "test-branch")))
-    ;; ── Experiment-loop touched → blocked ──
     (cl-letf (((symbol-function 'gptel-auto-workflow--git-cmd)
                (lambda (_cmd _timeout)
                  " lisp/modules/gptel-tools-agent-experiment-loop.el | 1 +\n 1 file changed, 1 insertion(+)")))
       (should-not (gptel-auto-workflow--fast-track-eligible-p "test-branch")))
-    ;; ── Monitoring agent touched → blocked ──
     (cl-letf (((symbol-function 'gptel-auto-workflow--git-cmd)
                (lambda (_cmd _timeout)
                  " lisp/modules/gptel-auto-workflow-monitoring-agent.el | 1 +\n 1 file changed, 1 insertion(+)")))
       (should-not (gptel-auto-workflow--fast-track-eligible-p "test-branch")))
-    ;; ── Pre-push hook touched → blocked ──
     (cl-letf (((symbol-function 'gptel-auto-workflow--git-cmd)
                (lambda (_cmd _timeout)
                  " scripts/git-hooks/pre-push | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)")))
       (should-not (gptel-auto-workflow--fast-track-eligible-p "test-branch")))
-    ;; ── run-tests.sh touched → blocked ──
     (cl-letf (((symbol-function 'gptel-auto-workflow--git-cmd)
                (lambda (_cmd _timeout)
                  " scripts/run-tests.sh | 1 +\n 1 file changed, 1 insertion(+)")))
       (should-not (gptel-auto-workflow--fast-track-eligible-p "test-branch")))
-    ;; ── Non-gate-engine file → still eligible (non-regression) ──
     (cl-letf (((symbol-function 'gptel-auto-workflow--git-cmd)
                (lambda (_cmd _timeout)
                  " lisp/modules/gptel-ext-context.el | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)")))

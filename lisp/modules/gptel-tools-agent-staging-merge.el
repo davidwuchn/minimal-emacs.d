@@ -478,11 +478,12 @@ Eligibility: few changed files AND few changed lines AND fast-track enabled."
            ;; go through full staging verification (unit tests + audit smoke gate).
            (not (and (stringp diff-stat)
                      (let ((gate-engine-patterns
-                            '("gptel-auto-workflow-self-heal-semantic\\.el"
-                              "gptel-tools-agent-staging-merge\\.el"
-                              "gptel-tools-agent-experiment-core\\.el"
-                              "gptel-tools-agent-experiment-loop\\.el"
-                              "gptel-auto-workflow-monitoring-agent\\.el"
+                              '("gptel-auto-workflow-self-heal-semantic\\.el"
+                                "gptel-auto-workflow-audit-provide-inside-defun\\.el"
+                                "gptel-tools-agent-staging-merge\\.el"
+                                "gptel-tools-agent-experiment-core\\.el"
+                                "gptel-tools-agent-experiment-loop\\.el"
+                                "gptel-auto-workflow-monitoring-agent\\.el"
                               "scripts/git-hooks/pre-push"
                               "scripts/run-tests\\.sh")))
                        (cl-some (lambda (line)

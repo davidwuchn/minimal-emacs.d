@@ -497,6 +497,57 @@ experiment phases do not trip the real pre-grade target validator."
       (when (file-exists-p fake-emacs)
         (delete-file fake-emacs)))))
 
+(ert-deftest regression/auto-workflow/pre-push-audit-gate-blocks-on-nonzero-emacs ()
+  "The pre-push audit gate must block pushes when the audit command fails."
+  (let* ((repo-root (file-name-as-directory (make-temp-file "aw-pre-push" t)))
+         (scripts-dir (expand-file-name "scripts" repo-root))
+         (run-tests (expand-file-name "run-tests.sh" scripts-dir))
+         (check-sync (expand-file-name "check-submodule-sync.sh" scripts-dir))
+         (fake-bin (make-temp-file "aw-pre-push-bin" t))
+         (fake-emacs-src (test-auto-workflow--write-shell-script
+                          "fake-emacs" "exit 17"))
+         (output-buffer (generate-new-buffer " *aw-pre-push-output*"))
+         (default-directory repo-root)
+         (base-environment
+          (cl-remove-if
+           (lambda (entry)
+             (or (string-prefix-p "SKIP_TEST_GATE=" entry)
+                 (string-prefix-p "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=" entry)))
+           process-environment))
+         (hook (expand-file-name "scripts/git-hooks/pre-push" test-auto-workflow--repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=0")
+                  base-environment)))
+    (unwind-protect
+        (progn
+          (call-process "git" nil nil nil "init" "-q")
+          (make-directory scripts-dir t)
+          (with-temp-file run-tests
+            (insert "#!/bin/sh\n"
+                    "printf 'Ran 1 tests, 1 results as expected, 0 unexpected, 0 skipped\\n'\n"))
+          (set-file-modes run-tests #o755)
+          (with-temp-file check-sync
+            (insert "#!/bin/sh\nexit 0\n"))
+          (set-file-modes check-sync #o755)
+          (rename-file fake-emacs-src (expand-file-name "emacs" fake-bin) t)
+          (set-file-modes (expand-file-name "emacs" fake-bin) #o755)
+          (with-temp-buffer
+            (insert "refs/heads/feature deadbeefdeadbeefdeadbeefdeadbeefdeadbeef refs/heads/main cafebabecafebabecafebabecafebabecafebabe\n")
+            (let ((exit-code (call-process-region (point-min) (point-max)
+                                                  hook
+                                                  nil output-buffer nil)))
+              (should (= exit-code 1))
+              (with-current-buffer output-buffer
+                (should (string-match-p "PUSH BLOCKED: Semantic audit smoke test failed"
+                                        (buffer-string)))))))
+      (delete-directory repo-root t)
+      (delete-directory fake-bin t)
+      (when (buffer-live-p output-buffer)
+        (kill-buffer output-buffer))
+      (when (file-exists-p fake-emacs-src)
+        (delete-file fake-emacs-src)))))
+
 (defun test-auto-workflow--argv-eval-payload (argv)
   "Return the `--eval' payload from fake emacsclient ARGV, or nil."
   (when (vectorp argv)

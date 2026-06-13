@@ -91,7 +91,7 @@ if [[ "$pushing_to_main" -eq 1 ]]; then
             -l gptel-auto-workflow-self-heal-semantic \
             --eval "(require 'gptel-auto-workflow-audit-provide-inside-defun)" \
             --eval "(let ((r (gptel-auto-workflow--semantic-audit-smoke-test))) (if (plist-get r :pass) (kill-emacs 0) (progn (message \"AUDIT SMOKE FAIL: %S\" r) (kill-emacs 1))))" \
-            2>&1)" || true
+            2>&1)"
         audit_exit=$?
         set -e
         if [[ $audit_exit -eq 0 ]]; then

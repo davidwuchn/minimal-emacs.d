@@ -193,6 +193,11 @@ Two REPL modules now exist, both wired into `gptel-config.el`:
 - Full verification: 132 self-heal-semantic tests + 16 experiment-gates tests pass; pre-push gate passes.
 - Captured memory + knowledge: `mementum/memories/insight-ov5-grader-bypass-gate-hardening.md`, `mementum/knowledge/ov5-experiment-gate-integrity.md`.
 
+### Session Note (2026-06-13 late — semantic audit gate follow-up)
+- Double-checked why experiment gates still let a bad semantic-audit path reach `main`: the pre-push audit gate used `|| true` after command substitution, so `$?` always read as 0 and Gate 2 could not fail on audit errors.
+- Closed a second blind spot: `gptel-auto-workflow-audit-provide-inside-defun.el` was required by the audit path but not treated as gate-engine / never-fast-track, so it now routes through full staging verification.
+- Added regression coverage for the push-blocking path and the new gate-engine helper; full unit suite passed after the fix.
+
 ### Immediate
 1. **Review/quarantine remaining toxic optimize branches** — 143 remote optimize branches; many flagged by `audit-toxic-optimize-branches`. Decide batch deletion vs. case-by-case review.
 2. **Enable opencode eval on Pi5** — Set `gptel-auto-workflow-opencode-eval-enabled t` after monitoring first cron cycle
