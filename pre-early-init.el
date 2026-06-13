@@ -34,12 +34,21 @@
   (dolist (dir elpa-dirs)
     (when (file-directory-p dir)
       (add-to-list 'load-path dir)))
-  (let ((elpa-transient-dir
-         (car (directory-files package-user-dir t "^transient-[0-9]"))))
-    (when elpa-transient-dir
+  (let* ((elpa-transient-dir
+          (car (directory-files package-user-dir t "^transient-[0-9]")))
+         (elpa-transient-lib
+          (when elpa-transient-dir
+            (expand-file-name "transient" elpa-transient-dir))))
+    (when elpa-transient-lib
       (when (featurep 'transient)
         (unload-feature 'transient t))
-      (load "transient" nil 'nomessage))))
+      (condition-case err
+          (progn
+            (load elpa-transient-lib nil 'nomessage)
+            (unless (fboundp 'transient-define-group)
+              (error "ELPA transient loaded but transient-define-group is missing")))
+        (error (message "Failed to load ELPA transient: %S" err)
+               (signal (car err) (cdr err)))))))
 
 ;; Prevent package-refresh-contents network hang on startup.
 ;; Load archive-contents from cache instead of fetching from network.
