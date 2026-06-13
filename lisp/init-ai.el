@@ -50,10 +50,10 @@
   ;; path (/tmp) and emacsclient -s can't reach it.
   (condition-case nil
       (let ((stale (expand-file-name server-name
-                                     (if (fboundp 'server-socket-dir)
-                                         (server-socket-dir)
-                                       (expand-file-name (format "emacs%d" (user-uid))
-                                                         (or (getenv "TMPDIR") "/tmp"))))))
+                                     (or (and (boundp 'server-socket-dir)
+                                              (stringp server-socket-dir)
+                                              server-socket-dir)
+                                         (format "/tmp/emacs%d" (user-uid))))))
         (when (file-exists-p stale)
           (delete-file stale)
           (message "[init-ai] Cleaned stale daemon socket: %s" stale)))

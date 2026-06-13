@@ -39,11 +39,14 @@
   ;; Skip reading full shell rc files — reduces startup by ~2s on macOS.
   (exec-path-from-shell-check-startup-files nil)
   :config
-  (dolist (var '("TMPDIR"
-                 "SSH_AUTH_SOCK" "SSH_AGENT_PID"
+  (dolist (var '("SSH_AUTH_SOCK" "SSH_AGENT_PID"
                  "GPG_AGENT_INFO"
                  "LANG" "LC_CTYPE"))
     (add-to-list 'exec-path-from-shell-variables var))
+  ;; Do NOT sync TMPDIR for workflow daemons: socket dir is pinned to /tmp/emacs$UID/.
+  (unless (and (fboundp 'my/workflow-daemon-p)
+               (my/workflow-daemon-p))
+    (add-to-list 'exec-path-from-shell-variables "TMPDIR"))
   (exec-path-from-shell-initialize))
 
 ;; ============================================================

@@ -233,23 +233,32 @@ Only reloads for top-level frames (not Corfu child frames) and only once per fra
     (add-to-list 'gptel-curl-extra-args "840" t)
     (message "[post-init] Set gptel curl --max-time 840s for daemon"))
   
-  ;; Self-heal: check every 30s and recreate socket if lost
+  (defun my/server-socket-healthy-p (sock)
+    "Return t if SOCK exists and emacsclient can connect."
+    (and (file-exists-p sock)
+         (executable-find "emacsclient")
+         (let ((exit (call-process "emacsclient" nil nil nil
+                                   "-s" sock "-a" "false" "-e" "t")))
+           (eq exit 0))))
+
+  ;; Self-heal: check every 30s and recreate socket if unreachable
   (run-at-time 30 30
                (lambda ()
                  (when (and (boundp 'server-name) (stringp server-name)
                             (boundp 'server-socket-dir) (stringp server-socket-dir))
                    (let ((sock (expand-file-name server-name server-socket-dir)))
-                     (unless (file-exists-p sock)
-                       (message "[server] Socket missing: %s, attempting self-heal" sock)
+                     (unless (my/server-socket-healthy-p sock)
+                       (message "[server] Socket unhealthy: %s, attempting self-heal" sock)
                        (when server-process
                          (condition-case nil (delete-process server-process) (error nil))
                          (setq server-process nil))
+                       (condition-case nil (delete-file sock) (error nil))
                        (condition-case err
                            (progn (server-start)
                                   (message "[server] Self-healed socket %s" sock))
                          (error
                           (message "[server] Self-heal failed: %s"
-                                    (error-message-string err))))))))))
+                                   (error-message-string err))))))))))
 
 ;; ─── Critical function corruption guard ───
 ;; Self-heal: if pending-decisions-p returns a symbol instead of t/nil,

@@ -321,8 +321,9 @@ Use symbols in commit messages for searchable git history.
 
 λ socket_path(x).   /tmp/emacs$(id -u)/ ≡ daemon_socket_dir
                     | ¬XDG_RUNTIME_DIR/ (unreliable on macOS)
+                    | ¬TMPDIR/ for workflow daemons
+                    | pin(server-socket-dir) → /tmp/emacs$(id -u)/
                     | $(id -u) preferred over XDG_RUNTIME_DIR
-                    | resolution_order: XDG_RUNTIME_DIR > TMPDIR > /tmp/emacs$UID
 ```
 
 **Earth provides the solid foundation.** S3 is the grounding center that manages daily reality and distributes resources.
