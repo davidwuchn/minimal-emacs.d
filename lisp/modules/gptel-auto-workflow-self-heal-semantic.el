@@ -788,7 +788,8 @@ Returns count of risk nodes found."
                 (error-fn (cdr pattern)))
             (goto-char (point-min))
             (while (re-search-forward (format "(%s\\b" api-fn) nil t)
-              (let* ((match-line (line-number-at-pos (match-beginning 0)))
+              (let* ((call-pos (match-beginning 0))
+                     (match-line (line-number-at-pos call-pos))
                      (defun-start (save-excursion
                                     (when (re-search-backward "^(\\(defun\\|cl-defun\\)\\b" nil t)
                                       (point))))
@@ -799,10 +800,30 @@ Returns count of risk nodes found."
                                     (point))))
                      (has-error-handling nil))
                 (when (and defun-start defun-end)
+                  ;; Guard 1: condition-case in the defun
                   (save-excursion
                     (goto-char defun-start)
                     (when (re-search-forward (format "(%s\\b" error-fn) defun-end t)
-                      (setq has-error-handling t))))
+                      (setq has-error-handling t)))
+                  ;; Guard 2: ignore-errors anywhere in the defun
+                  (unless has-error-handling
+                    (save-excursion
+                      (goto-char defun-start)
+                      (when (re-search-forward "(ignore-errors\\b" defun-end t)
+                        (setq has-error-handling t))))
+                  ;; Guard 3: API call is inside an unwind-protect form
+                  (unless has-error-handling
+                    (save-excursion
+                      (goto-char call-pos)
+                      (condition-case nil
+                          (when (re-search-backward
+                                 "(unwind-protect\\b" defun-start t)
+                            (let ((uwp-start (point)))
+                              (goto-char uwp-start)
+                              (forward-sexp 1)
+                              (when (> (point) call-pos)
+                                (setq has-error-handling t))))
+                        (error nil)))))
                 (unless has-error-handling
                   (setq issues (1+ issues))
                   (gptel-auto-workflow--semantic-audit-record
@@ -867,7 +888,8 @@ Returns nil if file doesn't exist or no risk nodes found."
                 (error-fn (cdr pattern)))
             (goto-char (point-min))
             (while (re-search-forward (format "(%s\\b" api-fn) nil t)
-              (let* ((defun-start (save-excursion
+              (let* ((call-pos (match-beginning 0))
+                     (defun-start (save-excursion
                                     (when (re-search-backward "^(\\(defun\\|cl-defun\\)\\b" nil t)
                                       (point))))
                      (defun-end (when defun-start
@@ -877,10 +899,30 @@ Returns nil if file doesn't exist or no risk nodes found."
                                     (point))))
                      (has-error-handling nil))
                 (when (and defun-start defun-end)
+                  ;; Guard 1: condition-case in the defun
                   (save-excursion
                     (goto-char defun-start)
                     (when (re-search-forward (format "(%s\\b" error-fn) defun-end t)
-                      (setq has-error-handling t))))
+                      (setq has-error-handling t)))
+                  ;; Guard 2: ignore-errors anywhere in the defun
+                  (unless has-error-handling
+                    (save-excursion
+                      (goto-char defun-start)
+                      (when (re-search-forward "(ignore-errors\\b" defun-end t)
+                        (setq has-error-handling t))))
+                  ;; Guard 3: API call is inside an unwind-protect form
+                  (unless has-error-handling
+                    (save-excursion
+                      (goto-char call-pos)
+                      (condition-case nil
+                          (when (re-search-backward
+                                 "(unwind-protect\\b" defun-start t)
+                            (let ((uwp-start (point)))
+                              (goto-char uwp-start)
+                              (forward-sexp 1)
+                              (when (> (point) call-pos)
+                                (setq has-error-handling t))))
+                        (error nil)))))
                 (unless has-error-handling
                   (cl-pushnew 'risk-node-api types)))))))
       types)))

@@ -252,17 +252,18 @@ This is the existing fallback path extracted from the original
                  (lines (split-string stdout "\n" t)))
             (car (last lines)))
         (error "%s" (or (plist-get result :error) "brepl eval failed")))))
-   (t
-    (let* ((port (ov5-world-store--nrepl-port))
-           (tmpfile (make-temp-file "ov5-brepl-"))
-           (output nil))
-      (with-temp-file tmpfile
-        (insert code))
-      (setq output (shell-command-to-string
-                    (format "BREPL_PORT=%d brepl < %s" port tmpfile)))
-      (delete-file tmpfile)
-      (let ((lines (split-string output "\n" t)))
-        (car (last lines)))))))
+    (t
+     (let* ((port (ov5-world-store--nrepl-port))
+            (tmpfile (make-temp-file "ov5-brepl-"))
+            (output nil))
+       (with-temp-file tmpfile
+         (insert code))
+       (unwind-protect
+           (setq output (shell-command-to-string
+                         (format "BREPL_PORT=%d brepl < %s" port tmpfile)))
+         (delete-file tmpfile))
+       (let ((lines (split-string output "\n" t)))
+         (car (last lines)))))))
 
 ;; -----------------------------------------------------------------------------
 ;; Connection

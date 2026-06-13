@@ -773,6 +773,42 @@ Inspired by TSP paper: fine-grained risk nodes where failures emerge."
           (should (= issues 0)))
       (test-self-heal-semantic--cleanup file))))
 
+(ert-deftest test-self-heal-semantic/risk-node-api-unwind-protect-guard ()
+  "call-process inside unwind-protect is guarded — no risk-node-api issue."
+  (let* ((content
+          "(defun foo ()\n  (unwind-protect\n      (call-process \"ls\" nil nil nil \"/tmp\")\n    (delete-file \"/tmp/x\")))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (gptel-auto-workflow--semantic-audit-reset)
+          (let ((issues (gptel-auto-workflow--audit-risk-nodes file)))
+            (should (= issues 0))))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/risk-node-api-ignore-errors-guard ()
+  "shell-command-to-string inside ignore-errors is guarded — no risk-node-api issue."
+  (let* ((content
+          "(defun foo ()\n  (ignore-errors\n    (shell-command-to-string \"ls -la\")))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (gptel-auto-workflow--semantic-audit-reset)
+          (let ((issues (gptel-auto-workflow--audit-risk-nodes file)))
+            (should (= issues 0))))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/risk-node-api-bare-call-process-flagged ()
+  "Bare call-process with no guard is still flagged as risk-node-api."
+  (let* ((content
+          "(defun foo ()\n  (call-process \"ls\" nil nil nil \"/tmp\"))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (gptel-auto-workflow--semantic-audit-reset)
+          (let ((issues (gptel-auto-workflow--audit-risk-nodes file)))
+            (should (>= issues 1))))
+      (test-self-heal-semantic--cleanup file))))
+
 (ert-deftest test-self-heal-semantic/skip-top-level-defvar-risk-node ()
   "Top-level defvar with hash-table should NOT be flagged as risk node.
 Top-level forms are persistent caches, not temporary resources.
