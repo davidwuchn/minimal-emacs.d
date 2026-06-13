@@ -285,6 +285,23 @@ is killed and the monitoring cycle continues."
         ;; Must complete well under 10 seconds (5s timeout + overhead)
         (should (< (- (float-time) start) 10))))))
 
+(ert-deftest test-experiment-gates/monitoring-semantic-audit-timeout-writes-memory ()
+  "When the monitoring semantic audit times out, a failure-pattern memory is written.
+This gives OV5 a concrete signal to detect and self-heal hung detectors."
+  (require 'gptel-auto-workflow-monitoring-agent nil t)
+  (skip-unless (fboundp 'gptel-auto-workflow--monitoring-semantic-audit-timeout-handler))
+  (let ((calls nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--mementum-write-memory)
+               (lambda (symbol slug content)
+                 (push (list symbol slug content) calls)
+                 "/tmp/fake-memory.md")))
+      (gptel-auto-workflow--monitoring-semantic-audit-timeout-handler)
+      (should (= (length calls) 1))
+      (should (eq (caar calls) '❌))
+      (should (string-match-p "monitoring-semantic-audit-timeout" (nth 1 (car calls))))
+      (should (string-match-p "Semantic audit timed out" (nth 2 (car calls))))
+      (should (string-match-p "hung detector" (nth 2 (car calls)))))))
+
 ;; ── Provide ──
 
 (provide 'test-experiment-gates)

@@ -103,6 +103,21 @@ well within the 900 s (15 min) monitoring cycle interval."
   :type 'number
   :group 'gptel-tools-agent)
 
+(defun gptel-auto-workflow--monitoring-semantic-audit-timeout-handler ()
+  "Handle a timeout in the monitoring agent's Phase 10 semantic audit.
+Logs the timeout and writes a failure-pattern memory so OV5 can detect
+and self-heal from hung detectors."
+  (message "[monitoring] Phase 10: Semantic audit timed out after %s seconds"
+           gptel-auto-workflow-monitoring-semantic-audit-timeout-seconds)
+  (when (fboundp 'gptel-auto-workflow--mementum-write-memory)
+    (gptel-auto-workflow--mementum-write-memory
+     '❌
+     (format "monitoring-semantic-audit-timeout-%s"
+             (format-time-string "%Y%m%dT%H%M%S"))
+     (format "**Monitoring Phase 10 semantic audit timed out after %s seconds.**\n\nThis indicates a hung detector in the self-heal-semantic audit path. The monitoring cycle continued, but the audit did not complete. Investigate `gptel-auto-workflow--semantic-audit-all` and individual audit checks for infinite loops or excessive runtime.\n\n---\n*Timeout defcustom:* `gptel-auto-workflow-monitoring-semantic-audit-timeout-seconds`\n*Detected at:* %s"
+             gptel-auto-workflow-monitoring-semantic-audit-timeout-seconds
+             (format-time-string "%Y-%m-%dT%H:%M:%S")))))
+
 (defvar gptel-auto-workflow-monitoring-last-cycle-time 0.0
   "Float-time of last monitoring cycle.  Used for throttle enforcement.")
 
@@ -1776,8 +1791,7 @@ approval queue)"
              ;; Wrapped with with-timeout so a hung detector does not
              ;; block the 15-minute monitoring cycle.
               (with-timeout (gptel-auto-workflow-monitoring-semantic-audit-timeout-seconds
-                              (message "[monitoring] Phase 10: Semantic audit timed out after %s seconds"
-                                       gptel-auto-workflow-monitoring-semantic-audit-timeout-seconds))
+                              (gptel-auto-workflow--monitoring-semantic-audit-timeout-handler))
                 (ignore-errors
                   (when (fboundp 'gptel-auto-workflow--self-heal-semantic)
                     (let ((result (gptel-auto-workflow--self-heal-semantic :dry-run t)))
