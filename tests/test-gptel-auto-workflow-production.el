@@ -43,158 +43,118 @@
 
 ;;; Innovation queue tests
 ;;
-;; The innovation-queue.md file is a markdown table.  add() reads the
-;; file, locates the table header, and inserts a new entry right after
-;; the header (before any existing data rows).  The previous version
-;; of this function embedded a 33-blank-line regex in the source — a
-;; clear copy-paste artifact that made the function fragile (only matched
-;; tables with EXACTLY 33 blank lines, which no real table has).
-;;
-;; TDD guard: this test ensures the pattern is sane (0 or 1 blank
-;; line, not 33) AND that the add function actually inserts an entry
-;; into a freshly created table.
+;; The innovation queue is backed by EDN (mementum/innovation-queue.edn).
+;; These tests guard add/update/list round-tripping, corruption resilience,
+;; and ensure the regex/blank-line bug from the markdown-table era never
+;; returns.
 
-(ert-deftest test-production/innovation-queue-add-creates-table-when-missing ()
-  "add() must create a fresh table when queue file does not exist.
-The function checks (file-exists-p queue-file) and skips insertion
-when false.  This test guards the contract: if you call add() and
-no file exists, the file should be created with header + entry."
+(ert-deftest test-production/innovation-queue-file-uses-edn ()
+  "Queue file must use .edn extension."
+  (let ((root (make-temp-file "ov5-prod-" t)))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                   (lambda () root)))
+          (should (string-suffix-p "innovation-queue.edn"
+                                   (gptel-auto-workflow--innovation-queue-file))))
+      (delete-directory root t))))
+
+(ert-deftest test-production/innovation-queue-add-creates-edn ()
+  "add() must create an EDN queue file with a valid entry."
   (skip-unless (fboundp 'gptel-auto-workflow--innovation-queue-add))
   (let* ((root (make-temp-file "ov5-prod-" t))
-         (queue-file (expand-file-name "mementum/innovation-queue.md" root)))
+         (queue-dir (expand-file-name "mementum" root))
+         (queue-file (expand-file-name "innovation-queue.edn" queue-dir)))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
                    (lambda () root)))
           (should-not (file-exists-p queue-file))
-          (condition-case err
-              (gptel-auto-workflow--innovation-queue-add
-               "test-source" "test-technique" "test-impact")
-            (error (message "[test] add() errored on missing file: %s"
-                            (error-message-string err)))))
-      (delete-directory root t))))
-
-(ert-deftest test-production/innovation-queue-add-inserts-after-header ()
-  "add() must insert the entry directly after the table header.
-The queue file format is a markdown table:
-  | ID | ... |
-  |----| ... |   ← separator
-  | row 1     |
-  | row 2     |
-The new entry should appear on line 3 (after the separator), not
-appended at the end of the file or wedged in the middle of an
-existing row."
-  (skip-unless (fboundp 'gptel-auto-workflow--innovation-queue-add))
-  (let* ((root (make-temp-file "ov5-prod-" t))
-         (queue-dir (expand-file-name "mementum" root))
-         (queue-file (expand-file-name "innovation-queue.md" queue-dir)))
-    (unwind-protect
-        (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
-                   (lambda () root)))
-          ;; Create a fresh queue file with header + one existing row
-          (make-directory queue-dir t)
-          (with-temp-file queue-file
-            (insert "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n")
-            (insert "|----|--------|-----------|-----------------|--------|---------------|---------------|\n")
-            (insert "| existing | research | foo | +1% | running | exp-1 | +0.5% |\n"))
           (let ((id (gptel-auto-workflow--innovation-queue-add
                      "test-source" "test-technique" "test-impact")))
-            (with-temp-buffer
-              (insert-file-contents queue-file)
-              (let ((lines (split-string (buffer-string) "\n" t)))
-                ;; Should be 4 lines: header, separator, new entry, existing row
-                (should (= 4 (length lines)))
-                ;; Line 3 (index 2) should be the new entry — contains our test id
-                (should (string-match-p "test-source" (nth 2 lines)))
-                (should (string-match-p "test-technique" (nth 2 lines)))
-                (should (string-match-p id (nth 2 lines)))
-                ;; Line 4 (index 3) should be the original existing row
-                (should (string-match-p "existing" (nth 3 lines)))))))
+            (should (file-exists-p queue-file))
+            (let ((queue (gptel-auto-workflow--innovation-queue-read queue-file)))
+              (should (= 1 (length queue)))
+              (let ((item (car queue)))
+                (should (string= id (plist-get item :id)))
+                (should (string= "test-source" (plist-get item :source)))
+                (should (string= "test-technique" (plist-get item :technique)))
+                (should (string= "test-impact" (plist-get item :expected-impact)))
+                (should (string= "pending" (plist-get item :status)))))))
       (delete-directory root t))))
 
-(ert-deftest test-production/innovation-queue-regex-no-33-blank-lines ()
-  "The regex pattern in --innovation-queue-add must not contain
-33+ blank lines.  The previous version embedded a string with
-33 consecutive newlines as part of the search pattern, which made
-the function only match tables with exactly 33 blank lines between
-the header and the separator — a pattern no real markdown table
-ever has.  This guard fails if the pattern ever regresses.
-
-This test counts blank lines both outside AND inside string
-literals in the function, because the original bug was a
-multi-line string literal containing 33 consecutive newlines."
-  (skip-unless (fboundp 'gptel-auto-workflow--innovation-queue-add))
-  (let ((max-blank-outside 0)
-        (max-blank-inside 0))
-    (condition-case nil
-        (with-temp-buffer
-          (insert-file-contents
-           (expand-file-name
-            "lisp/modules/gptel-auto-workflow-production.el"))
-          (emacs-lisp-mode)
-          (goto-char (point-min))
-          (when (re-search-forward
-                 "(defun gptel-auto-workflow--innovation-queue-add" nil t)
-            (let ((start (point))
-                  (end (progn (end-of-defun) (point)))
-                  (outside-blank 0)
-                  (inside-blank 0)
-                  (ppss nil))
-              (goto-char start)
-              (while (and (not (eobp)) (< (point) end))
-                (setq ppss (syntax-ppss))
-                (cond
-                 ;; Inside string literal: track blank lines
-                 ((nth 3 ppss)
-                  (if (eolp)
-                      (setq inside-blank (1+ inside-blank))
-                    (setq inside-blank 0))
-                  (when (> inside-blank max-blank-inside)
-                    (setq max-blank-inside inside-blank)))
-                 ;; Inside comment: ignore
-                 ((nth 4 ppss) nil)
-                 ;; Outside string/comment: track blank lines
-                 ((eolp)
-                  (setq outside-blank (1+ outside-blank))
-                  (when (> outside-blank max-blank-outside)
-                    (setq max-blank-outside outside-blank)))
-                 (t
-                  (setq outside-blank 0)))
-                (forward-line 1)))))
-      (error nil))
-    ;; The bug was 33+ blank lines.  Allow up to 2 outside (one blank
-    ;; line inside a defun is normal) and 3 inside a string literal
-    ;; (some multi-line strings legitimately contain a blank line).
-    (should (<= max-blank-outside 2))
-    (should (<= max-blank-inside 3))))
-
-(ert-deftest test-production/innovation-queue-add-heals-blank-lines ()
-  "add() must insert the entry even when the queue file has blank
-lines between the header and separator (a corruption mode we have
-seen in the wild), and it must normalize those blank lines away."
+(ert-deftest test-production/innovation-queue-add-appends ()
+  "add() must append entries while preserving existing ones."
   (skip-unless (fboundp 'gptel-auto-workflow--innovation-queue-add))
   (let* ((root (make-temp-file "ov5-prod-" t))
          (queue-dir (expand-file-name "mementum" root))
-         (queue-file (expand-file-name "innovation-queue.md" queue-dir)))
+         (queue-file (expand-file-name "innovation-queue.edn" queue-dir)))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
                    (lambda () root)))
           (make-directory queue-dir t)
-          ;; Corrupted table: 5 blank lines between header and separator.
-          (with-temp-file queue-file
-            (insert "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n")
-            (insert "\n\n\n\n\n")
-            (insert "|----|--------|-----------|-----------------|--------|---------------|---------------|\n")
-            (insert "| existing | research | foo | +1% | running | exp-1 | +0.5% |\n"))
+          (gptel-auto-workflow--innovation-queue-write
+           queue-file
+           (list (list :id "existing" :source "research" :technique "foo"
+                       :expected-impact "+1%" :status "running"
+                       :experiment-id "exp-1" :actual-impact "+0.5%")))
           (let ((id (gptel-auto-workflow--innovation-queue-add
                      "test-source" "test-technique" "test-impact")))
-            (with-temp-buffer
-              (insert-file-contents queue-file)
-              (let ((lines (split-string (buffer-string) "\n" t)))
-                ;; Should be 4 lines: header, separator, new entry, existing row
-                (should (= 4 (length lines)))
-                (should (string-match-p "test-source" (nth 2 lines)))
-                (should (string-match-p id (nth 2 lines)))
-                (should (string-match-p "existing" (nth 3 lines)))))))
+            (let ((queue (gptel-auto-workflow--innovation-queue-read queue-file)))
+              (should (= 2 (length queue)))
+              (should (string= "existing" (plist-get (car queue) :id)))
+              (should (string= id (plist-get (cadr queue) :id))))))
+      (delete-directory root t))))
+
+(ert-deftest test-production/innovation-queue-update-changes-status ()
+  "update() must change status and leave other entries intact."
+  (skip-unless (fboundp 'gptel-auto-workflow--innovation-queue-update))
+  (let* ((root (make-temp-file "ov5-prod-" t))
+         (queue-dir (expand-file-name "mementum" root))
+         (queue-file (expand-file-name "innovation-queue.edn" queue-dir)))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                   (lambda () root)))
+          (make-directory queue-dir t)
+          (gptel-auto-workflow--innovation-queue-write
+           queue-file
+           (list (list :id "a" :status "pending")
+                 (list :id "b" :status "pending")))
+          (should (gptel-auto-workflow--innovation-queue-update "a" "running" "exp-2" "+5%"))
+          (let ((queue (gptel-auto-workflow--innovation-queue-read queue-file)))
+            (should (= 2 (length queue)))
+            (should (string= "running" (plist-get (car queue) :status)))
+            (should (string= "exp-2" (plist-get (car queue) :experiment-id)))
+            (should (string= "+5%" (plist-get (car queue) :actual-impact)))
+            (should (string= "pending" (plist-get (cadr queue) :status)))))
+      (delete-directory root t))))
+
+(ert-deftest test-production/innovation-queue-list-filters-status ()
+  "list() must filter by status when requested."
+  (skip-unless (fboundp 'gptel-auto-workflow--innovation-queue-list))
+  (let* ((root (make-temp-file "ov5-prod-" t))
+         (queue-dir (expand-file-name "mementum" root))
+         (queue-file (expand-file-name "innovation-queue.edn" queue-dir)))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                   (lambda () root)))
+          (make-directory queue-dir t)
+          (gptel-auto-workflow--innovation-queue-write
+           queue-file
+           (list (list :id "a" :status "pending")
+                 (list :id "b" :status "running")
+                 (list :id "c" :status "pending")))
+          (let ((pending (gptel-auto-workflow--innovation-queue-list "pending")))
+            (should (= 2 (length pending)))
+            (should (cl-every (lambda (item) (string= "pending" (plist-get item :status)))
+                              pending))))
+      (delete-directory root t))))
+
+(ert-deftest test-production/innovation-queue-read-returns-nil-for-missing-file ()
+  "Reading a missing queue file must return nil, not error."
+  (let ((root (make-temp-file "ov5-prod-" t)))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                   (lambda () root)))
+          (should-not (gptel-auto-workflow--innovation-queue-read)))
       (delete-directory root t))))
 
 (ert-deftest test-production/all-key-functions-fboundp ()
