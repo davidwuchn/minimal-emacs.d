@@ -24,6 +24,8 @@
 (declare-function gptel-auto-experiment--run-with-retry "gptel-tools-agent-error")
 (declare-function gptel-auto-experiment--result-hard-timeout-p "gptel-tools-agent-error")
 (declare-function gptel-auto-workflow--run-callback-live-p "gptel-tools-agent-base")
+(declare-function gptel-fsm-info "gptel-request")  ; for orphaned-curl cleanup
+(defvar gptel--request-alist)  ; for orphaned-curl cleanup
 ;;; gptel-tools-agent-experiment-loop.el --- Experiment loop, status management -*- lexical-binding: t; -*-
 ;; Part of gptel-tools-agent split
 
@@ -1605,7 +1607,9 @@ Force-stops when:
      nil)))
 
 (defun gptel-auto-workflow--force-stop ()
-  "Force-stop the current workflow run and clean up state."
+  "Force-stop the current workflow run and clean up state.
+Also kills any orphaned gptel-curl subprocesses to prevent
+resource accumulation that can crash the daemon on macOS."
   (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
   (setq gptel-auto-workflow--running nil
         gptel-auto-workflow--cron-job-running nil
@@ -1621,7 +1625,30 @@ Force-stops when:
     (cancel-timer gptel-auto-workflow--watchdog-timer)
     (setq gptel-auto-workflow--watchdog-timer nil))
   (gptel-auto-workflow--stop-status-refresh-timer)
+  ;; Kill orphaned gptel-curl subprocesses to prevent daemon crash
+  (gptel-auto-workflow--kill-orphaned-curl-processes)
   nil)
+
+(defun gptel-auto-workflow--kill-orphaned-curl-processes ()
+  "Kill any orphaned gptel-curl subprocesses.
+An orphan is a gptel-curl process with no active FSM entry in
+`gptel--request-alist' or one that has been running for >15 minutes."
+  (dolist (proc (process-list))
+    (when (and (process-name proc)
+               (string= (process-name proc) "gptel-curl")
+               (eq (process-status proc) 'run))
+      (let* ((fsm (car (alist-get proc gptel--request-alist)))
+             (info (and fsm (gptel-fsm-info fsm)))
+             (running-secs (condition-case nil
+                               (float-time (time-since (process-attribute proc 'start)))
+                             (error 0))))
+        (when (or (not info)  ; no FSM entry → orphaned
+                  (and (numberp running-secs)
+                       (> running-secs 900)))  ; >15min
+          (message "[auto-workflow] Killing orphaned gptel-curl process %s (%.0fs running)"
+                   (process-id proc) running-secs)
+          (ignore-errors
+            (delete-process proc)))))))
 
 (defun gptel-auto-workflow--update-progress ()
   "Update progress timestamp for watchdog tracking."

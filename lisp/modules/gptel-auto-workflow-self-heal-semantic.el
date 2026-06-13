@@ -15,8 +15,11 @@
 (require 'json)
 (require 'gptel-auto-workflow-audit-provide-inside-defun)
 
+(declare-function process-attribute "process")
 (declare-function gptel-auto-workflow--with-temporary-worktree
                   "gptel-tools-agent-staging-baseline" (slug ref fn))
+(defvar gptel--request-alist nil
+  "Forward declaration for orphaned-curl-process check.")
 
 ;; ── Dirty-tree gate helper ──
 
@@ -509,6 +512,100 @@ causing void-variable errors at runtime.  Returns count of bare defvars."
   (setq gptel-auto-workflow--daemon-hang-done t)
   (gptel-auto-workflow--audit-daemon-hang--impl))
 
+;; ── Check 14: orphaned curl processes ──
+
+(defvar gptel-auto-workflow--orphaned-curl-count nil
+  "Enable count throttling? (Currently unused, but defined.)")
+
+(cl-defun gptel-auto-workflow--audit-orphaned-curl-processes (file)
+  "Audit for orphaned gptel-curl subprocesses on the system.
+Returns count of orphaned processes.  FILE accepted for dispatch, ignored.
+An orphan is a gptel-curl process running >15 minutes with no FSM entry
+in `gptel--request-alist', or any gptel-curl process exceeding a count
+threshold (default 8)."
+  (let ((orphans 0)
+        (alive 0))
+    (condition-case nil
+        (dolist (proc (process-list))
+          (when (and (process-name proc)
+                     (string= (process-name proc) "gptel-curl")
+                     (eq (process-status proc) 'run))
+            (setq alive (1+ alive))
+            (let* ((entry (assoc proc gptel--request-alist))
+                   (running-secs (condition-case nil
+                                     (float-time (time-since (process-attribute proc 'start)))
+                                   (error nil))))
+              (when (or (not entry)
+                        (and (numberp running-secs) (> running-secs 900)))
+                (setq orphans (1+ orphans))))))
+      (error (setq orphans 0)))
+    (when (> alive 8)
+      (setq orphans (+ orphans (- alive 8))))
+    (when (> orphans 0)
+      (message "[self-heal] Orphaned gptel-curl processes: %d (alive total: %d)"
+               orphans alive))
+    orphans))
+
+(defun gptel-auto-workflow--fix-orphaned-curl-processes (file)
+  "Kill orphaned gptel-curl processes.  FILE accepted for dispatch, ignored.
+Returns number of processes killed."
+  (let ((killed 0))
+    (condition-case nil
+        (dolist (proc (process-list))
+          (when (and (process-name proc)
+                     (string= (process-name proc) "gptel-curl")
+                     (eq (process-status proc) 'run))
+            (let* ((entry (assoc proc gptel--request-alist))
+                   (running-secs (condition-case nil
+                                     (float-time (time-since (process-attribute proc 'start)))
+                                   (error nil))))
+              (when (or (not entry)
+                        (and (numberp running-secs) (> running-secs 900)))
+                (message "[self-heal] Killing orphaned gptel-curl %s (%.0fs)"
+                         (process-id proc) (or running-secs 0))
+                (ignore-errors
+                  (set-process-filter proc #'ignore)
+                  (set-process-sentinel proc #'ignore)
+                  (delete-process proc))
+                (setq killed (1+ killed))))))
+      (error nil))
+    killed))
+
+;; ── Check 15: missing --max-time in curl args ──
+
+(defun gptel-auto-workflow--audit-curl-no-max-time (file)
+  "Audit FILE for curl arg blocks missing --max-time.
+Returns count of blocks without --max-time.
+Only checks files in lisp/modules/ and post-init.el, not upstream gptel."
+  (let ((base (file-name-nondirectory file))
+        (issues 0))
+    (when (and (stringp base)
+               (or (string-suffix-p ".el" base)
+                   (string-suffix-p "-init.el" base)))
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        ;; Look for gptel-curl-extra-args or curl-args lists that lack --max-time
+        (while (re-search-forward
+                "gptel-curl-extra-args\\|gptel-curl--common-args\\|executor-curl-extra"
+                nil t)
+          ;; Scan forward for the closing paren of the list
+          (let ((start (match-beginning 0))
+                (end (condition-case nil
+                         (save-excursion
+                           (backward-char)
+                           (forward-list)
+                           (point))
+                       (error nil))))
+            (when end
+              (let ((block (buffer-substring start end)))
+                (unless (string-match "--max-time\\|--connect-timeout" block)
+                  (setq issues (1+ issues))
+                  (gptel-auto-workflow--semantic-audit-record
+                   file (line-number-at-pos start) 'curl-no-max-time
+                   (format "gptel-curl-args block missing --max-time in %s" base)))))))))
+    issues))
+
 ;; ── Check 13: nil-initialized hash tables ──
 
 (defun gptel-auto-workflow--var-used-as-hash-table-p (var-name _file-content buffer)
@@ -653,7 +750,9 @@ Returns count of issues found."
     (provide-inside-defun . gptel-auto-workflow--audit-provide-inside-defun)
     (void-defvar . gptel-auto-workflow--audit-void-defvars)
     (daemon-hang . gptel-auto-workflow--audit-daemon-hang)
-    (nil-hash-table . gptel-auto-workflow--audit-nil-hash-tables))
+    (nil-hash-table . gptel-auto-workflow--audit-nil-hash-tables)
+    (orphaned-curl-process . gptel-auto-workflow--audit-orphaned-curl-processes)
+    (curl-no-max-time . gptel-auto-workflow--audit-curl-no-max-time))
   "Alist of audit check name (symbol) to audit function.")
 
 ;; ── Check 8: condition-case with unbound err ──
@@ -1570,7 +1669,8 @@ instead of fixing each failure individually."
     (condition-case-unbound-err . gptel-auto-workflow--fix-condition-case-unbound-err)
     (provide-inside-defun . gptel-auto-workflow--fix-provide-inside-defun)
     (void-defvar . gptel-auto-workflow--fix-void-defvars)
-    (nil-hash-table . gptel-auto-workflow--fix-nil-hash-tables))
+    (nil-hash-table . gptel-auto-workflow--fix-nil-hash-tables)
+    (orphaned-curl-process . gptel-auto-workflow--fix-orphaned-curl-processes))
   "Alist mapping audit issue type (symbol) to its auto-fixer function.
 Adding a new auto-fixer is now a one-line change to this alist.
 Each fixer must take FILE as argument and return fix count (0 = no-op).")

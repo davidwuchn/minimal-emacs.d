@@ -992,18 +992,37 @@ request buffer for an active workflow task."
   "Guard against recursive gptel-abort in sentinel chains.")
 
 (defun my/gptel--cleanup-agent-request-buffer (state)
-  "Abort STATE's live request buffer.
+  "Abort STATE's live request buffer and kill any orphaned curl process.
 Do not kill routed worktree buffers here: gptel process sentinels may still
 need the buffer to exist briefly after `gptel-abort'. Worktree lifecycle
-helpers handle explicit stale-buffer discards during recreate/delete flows."
-  (when-let* ((request-buf (my/gptel--agent-task-request-buffer state))
-              ((buffer-live-p request-buf))
-              ((fboundp 'gptel-abort)))
-    (if (> my/gptel--abort-depth 3)
-        (message "[nucleus] Skipping gptel-abort at depth %d (recursion guard)"
-                 my/gptel--abort-depth)
-      (let ((my/gptel--abort-depth (1+ my/gptel--abort-depth)))
-        (ignore-errors (gptel-abort request-buf))))))
+helpers handle explicit stale-buffer discards during recreate/delete flows.
+When `gptel-abort' can't find the FSM entry (silently returns nil), this
+function falls back to directly killing matching gptel-curl processes to
+prevent orphaned subprocess accumulation on macOS."
+  (let ((request-buf (my/gptel--agent-task-request-buffer state)))
+    (when (and (buffer-live-p request-buf) (fboundp 'gptel-abort))
+      (if (> my/gptel--abort-depth 3)
+          (message "[nucleus] Skipping gptel-abort at depth %d (recursion guard)"
+                   my/gptel--abort-depth)
+        (let ((my/gptel--abort-depth (1+ my/gptel--abort-depth)))
+          (ignore-errors (gptel-abort request-buf)))))
+    ;; Fallback: kill any gptel-curl process whose buffer matches request-buf.
+    ;; `gptel-abort` searches `gptel--request-alist` for a matching entry and
+    ;; silently does nothing if the entry was already cleaned up (e.g., sentinel
+    ;; ran first). In that case the curl process is orphaned and must be killed
+    ;; directly. On macOS, orphaned curl processes with a full 64KB pipe buffer
+    ;; block indefinitely, eventually crashing the daemon.
+    (when (buffer-live-p request-buf)
+      (dolist (proc (process-list))
+        (when (and (process-live-p proc)
+                   (string= (process-name proc) "gptel-curl")
+                   (eq (process-buffer proc) request-buf))
+          (message "[nucleus] Killing orphaned gptel-curl %s (buffer %s)"
+                   (process-id proc) (buffer-name request-buf))
+          (ignore-errors
+            (set-process-filter proc #'ignore)
+            (set-process-sentinel proc #'ignore)
+            (delete-process proc)))))))
 
 (defun my/gptel--agent-task-buffer-tick (buffer)
   "Return BUFFER's current modification tick when BUFFER is live."

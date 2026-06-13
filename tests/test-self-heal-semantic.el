@@ -200,7 +200,7 @@ legitimate subagent work. Set to nil to disable.\")")
 
 (ert-deftest test-self-heal-semantic/audit-checks-variable-defined ()
   "The audit checks alist is defined with all checks."
-  (should (= (length gptel-auto-workflow--semantic-audit-checks) 13))
+  (should (= (length gptel-auto-workflow--semantic-audit-checks) 15))
   (should (assq 'let-binding-function gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'hardcoded-limit gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'score-zero-bug gptel-auto-workflow--semantic-audit-checks))
@@ -1880,7 +1880,153 @@ forward declarations are either used in the file or are hash-table vars."
            (cl-remove-if-not (lambda (entry)
                                (eq (plist-get entry :type) 'void-defvar))
                              gptel-auto-workflow--semantic-audit-log)))
-      (should (= (length void-issues) 0)))))
+       (should (= (length void-issues) 0)))))
+
+;; ── Check 14: orphaned-curl-process ──
+
+(ert-deftest test-self-heal-semantic/orphaned-curl-no-processes-returns-zero ()
+  "No gptel-curl processes at all returns 0 issues."
+  (let* ((content "(defun foo () 42)")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (gptel-auto-workflow--semantic-audit-reset)
+          (cl-letf (((symbol-function 'process-list)
+                     (lambda () nil)))
+            (let ((issues (gptel-auto-workflow--audit-orphaned-curl-processes file)))
+              (should (= issues 0)))))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/orphaned-curl-detects-old-process-without-fsm ()
+  "Returns 1 when a gptel-curl process runs >15min with no FSM entry."
+  (let* ((content "(defun foo () 42)")
+         (file (test-self-heal-semantic--tmp-file content))
+         ;; Mock process plist: name=gptel-curl, status=run, no FSM entry
+         (mock-proc (list :name "gptel-curl" :status 'run)))
+    (unwind-protect
+        (progn
+          (gptel-auto-workflow--semantic-audit-reset)
+          (cl-letf (((symbol-function 'process-list)
+                     (lambda () (list mock-proc)))
+                    ((symbol-function 'process-name)
+                     (lambda (p) (plist-get p :name)))
+                    ((symbol-function 'process-status)
+                     (lambda (p) (plist-get p :status)))
+                    ((symbol-function 'process-attribute)
+                     (lambda (p attr)
+                       ;; Simulate process started 1000 seconds ago (>> 900)
+                       (time-subtract (current-time) 1000)))
+                    ;; No FSM entry: mock-proc not in gptel--request-alist
+                    ((symbol-value 'gptel--request-alist) nil))
+            (let ((issues (gptel-auto-workflow--audit-orphaned-curl-processes file)))
+              (should (= issues 1)))))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/orphaned-curl-fixer-kills-orphaned ()
+  "Fixer kills orphaned gptel-curl processes and returns kill count."
+  (let* ((content "(defun foo () 42)")
+         (file (test-self-heal-semantic--tmp-file content))
+         ;; Use a real process so we can verify it gets killed
+         (buf (generate-new-buffer " *test-curl-fix*"))
+         (mock-process
+          (make-process
+           :name "gptel-curl"
+           :buffer buf
+           :command '("sleep" "5")
+           :connection-type 'pipe
+           :noquery t)))
+    (unwind-protect
+        (progn
+          (cl-letf (((symbol-function 'process-list)
+                     (lambda () (list mock-process)))
+                    ((symbol-function 'process-attribute)
+                     (lambda (p attr)
+                       (time-subtract (current-time) 1000)))
+                    ;; No FSM entry → orphaned
+                    ((symbol-value 'gptel--request-alist) nil))
+            (let ((killed (gptel-auto-workflow--fix-orphaned-curl-processes file)))
+              (should (= killed 1)))))
+      (ignore-errors (delete-process mock-process))
+      (ignore-errors (kill-buffer buf))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/orphaned-curl-threshold-count ()
+  "Returns issues when total gptel-curl processes exceed 8 even if all have FSMs."
+  (let* ((content "(defun foo () 42)")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (gptel-auto-workflow--semantic-audit-reset)
+          ;; Create 10 mock process plists that pass all the gptel-curl checks
+          (let ((mock-procs
+                 (cl-loop for i from 1 to 10
+                          collect (list :i i :name "gptel-curl" :status 'run))))
+            (cl-letf (((symbol-function 'process-list)
+                       (lambda () mock-procs))
+                      ((symbol-function 'process-name)
+                       (lambda (p) (plist-get p :name)))
+                      ((symbol-function 'process-status)
+                       (lambda (p) (plist-get p :status)))
+                      ((symbol-function 'process-attribute)
+                       (lambda (p attr) nil)) ;; no start attr, so running-secs is nil
+                      ;; All have FSM entries
+                      ((symbol-value 'gptel--request-alist)
+                       (mapcar (lambda (p) (list p 'fsm-placeholder)) mock-procs)))
+              (let ((issues (gptel-auto-workflow--audit-orphaned-curl-processes file)))
+                ;; 10 total - 8 threshold = 2 excess
+                (should (= issues 2))))))
+      (test-self-heal-semantic--cleanup file))))
+
+;; ── Check 15: curl-no-max-time ──
+
+(ert-deftest test-self-heal-semantic/curl-no-max-time-detects-missing ()
+  "Detects gptel-curl-extra-args block without --max-time."
+  (let* ((content
+          "(require 'gptel-request)
+\(setq gptel-curl-extra-args '(\"--compressed\" \"--location\"))
+\(defun foo () 42)")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (gptel-auto-workflow--semantic-audit-reset)
+          (let ((issues (gptel-auto-workflow--audit-curl-no-max-time file)))
+            (should (>= issues 1))))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/curl-no-max-time-clean-with-flag ()
+  "No issues when gptel-curl-extra-args includes --max-time."
+  (let* ((content
+          "(require 'gptel-request)
+\(setq gptel-curl-extra-args '(\"--max-time\" \"900\" \"--compressed\"))
+\(defun foo () 42)")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (gptel-auto-workflow--semantic-audit-reset)
+          (let ((issues (gptel-auto-workflow--audit-curl-no-max-time file)))
+            (should (= issues 0))))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/curl-no-max-time-skip-non-el-files ()
+  "Non-.el files return 0 issues (only checks .el and -init.el files)."
+  (let* ((file (make-temp-file "ov5-test-curl-" nil ".json"))
+         (content "gptel-curl-extra-args '(\"--compressed\")"))
+    (unwind-protect
+        (progn
+          (with-temp-file file (insert content))
+          (gptel-auto-workflow--semantic-audit-reset)
+          (let ((issues (gptel-auto-workflow--audit-curl-no-max-time file)))
+            (should (= issues 0))))
+      (ignore-errors (delete-file file)))))
+
+(ert-deftest test-self-heal-semantic/audit-checks-includes-new-checks ()
+  "New checks 14 and 15 are registered in the audit-checks alist."
+  (should (assq 'orphaned-curl-process gptel-auto-workflow--semantic-audit-checks))
+  (should (assq 'curl-no-max-time gptel-auto-workflow--semantic-audit-checks)))
+
+(ert-deftest test-self-heal-semantic/fixer-includes-orphaned-curl ()
+  "Orphaned-curl fixer is registered in the fixer alist."
+  (should (assq 'orphaned-curl-process gptel-auto-workflow--semantic-fixer-alist)))
 
 (provide 'test-self-heal-semantic)
 ;;; test-self-heal-semantic.el ends here

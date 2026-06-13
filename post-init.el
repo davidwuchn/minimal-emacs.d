@@ -231,6 +231,13 @@ Only reloads for top-level frames (not Corfu child frames) and only once per fra
       (error
        (message "[server] Failed to start server: %s" (error-message-string err)))))
   
+  ;; Hard curl timeout prevents orphaned subprocesses from hanging the daemon.
+  ;; Without --max-time, curl blocks indefinitely when server closes connection
+  ;; without FIN, filling the 64KB pipe buffer on macOS and never exiting.
+  (when (boundp 'gptel-curl-extra-args)
+    (add-to-list 'gptel-curl-extra-args "--max-time" t)
+    (add-to-list 'gptel-curl-extra-args "900" t))
+  
   ;; Self-heal: check every 30s and recreate socket if lost
   (run-at-time 30 30
                (lambda ()
