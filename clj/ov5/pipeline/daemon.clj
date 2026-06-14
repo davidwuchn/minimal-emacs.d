@@ -304,12 +304,12 @@
                             "bash" "-c" inner-cmd]]
             (try
               ;; Start as background process (not waited)
-              (p/process {:out :inherit :err :inherit :env env-opts} setsid-cmd)
+              (apply p/process {:out :inherit :err :inherit :env env-opts} setsid-cmd)
               (catch Exception e
                 (log/logf "ERROR launching daemon via setsid: %s" (.getMessage e))
                 ;; Fallback: launch directly
-                (p/process {:out :inherit :err :inherit :env env-opts} launch-cmd))))
-          (p/process {:out :inherit :err :inherit :env env-opts} launch-cmd)))
+                (apply p/process {:out :inherit :err :inherit :env env-opts} launch-cmd))))
+          (apply p/process {:out :inherit :err :inherit :env env-opts} launch-cmd)))
       ;; 8. Poll up to 150*0.2s for daemon to respond
       (loop [i 0]
         (let [state (check-worker-daemon server-name emacsclient-path)]
