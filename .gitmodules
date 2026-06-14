@@ -1,20 +1,20 @@
 [submodule "packages/ai-code"]
 	path = packages/ai-code
-	url = https://github.com/davidwuchn/ai-code-interface.el
+	url = ssh://git@onepi5/davidwuchn/ai-code-interface.el.git
 	branch = main
 [submodule "packages/ai-behaviors"]
 	path = packages/ai-behaviors
-	url = https://github.com/davidwuchn/ai-behaviors
+	url = ssh://git@onepi5/davidwuchn/ai-behaviors.git
 	branch = main
 [submodule "packages/mementum"]
 	path = packages/mementum
-	url = https://github.com/davidwuchn/mementum
+	url = ssh://git@onepi5/davidwuchn/mementum.git
 	branch = main
 [submodule "packages/nucleus"]
 	path = packages/nucleus
-	url = https://github.com/davidwuchn/nucleus
+	url = ssh://git@onepi5/davidwuchn/nucleus.git
 	branch = main
 [submodule "packages/nelisp"]
 	path = packages/nelisp
-	url = https://github.com/davidwuchn/nelisp.git
+	url = ssh://git@onepi5/davidwuchn/nelisp.git
 	branch = main
