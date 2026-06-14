@@ -255,19 +255,19 @@ Only reads strings; does not execute code."
                :nelisp-reader-error-pos pos))))))
 
 (defun gptel-daemon-repl--find-unmatched-paren-pos (file-content)
-  "Return 0-indexed position of the first unmatched parenthesis in
-FILE-CONTENT, or nil if all parens balance.  Walks the string tracking
-depth, skipping strings (between unescaped double quotes) and line
-comments (from `;' to end-of-line).  Returns the position of the first
-extra `)' if depth goes negative, or the position of the first unmatched
-`(' if depth is positive at end."
-  (let ((depth 0)
+  "Return 0-indexed position of the first unmatched open paren in
+FILE-CONTENT, or nil if all parens balance.  Walks the string with a
+stack of unmatched open-paren positions, skipping strings (between
+unescaped double quotes) and line comments (from `;' to end-of-line).
+Returns the position of the first extra `)' if depth goes negative, or
+the position of the first unmatched `(' (oldest on the stack) if any
+remain at end."
+  (let ((stack nil)
         (pos 0)
         (len (length file-content))
         (in-string nil)
         (escape nil)
-        (in-line-comment nil)
-        (last-unmatched-open-pos nil))
+        (in-line-comment nil))
     (catch 'found
       (while (< pos len)
         (let ((c (aref file-content pos)))
@@ -275,24 +275,23 @@ extra `)' if depth goes negative, or the position of the first unmatched
            (in-line-comment
             (when (= c ?\n) (setq in-line-comment nil)))
            (in-string
-            (cond (escape (setq escape nil))
-                  ((= c ?\\) (setq escape t))
-                  ((= c ?\") (setq in-string nil))))
+            (cond
+             (escape (setq escape nil))
+             ((= c ?\\) (setq escape t))
+             ((= c ?\") (setq in-string nil))))
            (t
             (cond
              ((= c ?\;) (setq in-line-comment t))
              ((= c ?\") (setq in-string t))
-             ((= c ?\()
-              (setq depth (1+ depth))
-              (when (and (> depth 0) (null last-unmatched-open-pos))
-                (setq last-unmatched-open-pos pos)))
+             ((= c ?\() (push pos stack))
              ((= c ?\))
-              (setq depth (1- depth))
-              (when (< depth 0)
-                (throw 'found pos))))))
+              (if stack
+                  (pop stack)
+                (throw 'found pos)))))))
         (setq pos (1+ pos)))
-      (when (> depth 0)
-        last-unmatched-open-pos)))))
+      ;; Stack holds unmatched `(' positions newest-first; oldest is the
+      ;; first to remain unmatched, so it's the right diagnostic anchor.
+      (car (nreverse stack)))))
 
 (defun gptel-daemon-repl-validate-brackets (file-content)
   "Validate brackets/syntax in FILE-CONTENT string.

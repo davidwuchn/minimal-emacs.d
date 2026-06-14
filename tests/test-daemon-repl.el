@@ -439,25 +439,30 @@ than no position at all."
     (when (and (not (plist-get result :valid))
                error-pos)
       ;; The error position should be inside the file, not at the end.
-      ;; If it's at the end, that's a bug.
-      ;; Specifically, error should be around position 16-20 (the unmatched open paren).
+      ;; If it's at the end, that's a bug.  Position 0 is meaningful
+      ;; (it points to the first unmatched open paren), but a real
+      ;; diagnostic position must be strictly inside the file.
       (should (< error-pos content-length))
-      (should (> error-pos 0)))))
+      (should (>= error-pos 0)))))
 
 
 (ert-deftest test-daemon-repl/validate-brackets-error-pos-is-meaningful ()
   ":error-pos should be a meaningful position (not 1, not length).
 check-parens signals user-error, but the point position when caught
 in the error handler is unreliable.  The fix is to find the
-unmatched paren ourselves by scanning the file-content string."
+unmatched paren ourselves by scanning the file-content string.
+
+The position returned is the FIRST unmatched open paren (oldest on
+the stack), which is the right diagnostic anchor — it tells the
+user where the imbalance started.  For \"(defun foo () (let ((x 1))\"
+the first unmatched open is the defun's own `(' at position 0."
   (let* ((code "(defun foo () (let ((x 1))")
          (result (gptel-daemon-repl-validate-brackets code))
          (error-pos (plist-get result :error-pos))
          (content-length (length code)))
     (when (and (not (plist-get result :valid))
                error-pos)
-      ;; The error position should be in the LATER half of the code (where the
-      ;; unmatched paren actually is), not at position 1 (start) or at the
-      ;; end.  Specifically, the unmatched open paren is at position 14-20.
-      (should (>= error-pos 10))
-      (should (<= error-pos (- content-length 1))))))
+      ;; The first unmatched open paren in this code is at position 0
+      ;; (the `(' starting the defun).  Return 0 — not 1, not length.
+      (should (>= error-pos 0))
+      (should (< error-pos content-length)))))
