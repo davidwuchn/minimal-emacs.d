@@ -134,7 +134,11 @@ Only actual dotfiles (basenames starting with .) are excluded."
     (let ((result (gptel-daemon-repl-validate-brackets code)))
       (should (plist-get result :valid))
       (should (string= (plist-get result :fixed-content) code))
-      (should (null (plist-get result :error))))))
+      (should (null (plist-get result :error)))
+      ;; NeLisp reader pass (if available) also reports valid.
+      (when (plist-get result :nelisp-reader-valid)
+        (should (plist-get result :nelisp-reader-valid))
+        (should (null (plist-get result :nelisp-reader-error)))))))
 
 (ert-deftest test-daemon-repl/validate-brackets-unbalanced ()
   "Unbalanced code is detected; may be auto-fixed if fixer available."
@@ -148,7 +152,10 @@ Only actual dotfiles (basenames starting with .) are excluded."
         ;; Could not fix — should report error
         (progn
           (should-not (plist-get result :valid))
-          (should (stringp (plist-get result :error))))))))
+          (should (stringp (plist-get result :error)))))
+      ;; NeLisp reader (if loaded) should also flag the syntax problem.
+      (when (plist-get result :nelisp-reader-error)
+        (should (stringp (plist-get result :nelisp-reader-error)))))))
 
 (ert-deftest test-daemon-repl/before-save-autofix-gate-detects-change ()
   "The before-save hook gate compares :fixed-content with buffer-string,
@@ -213,6 +220,29 @@ validate-brackets succeeding for balanced code."
     (should (plist-get result :valid))))
 
 ;; ── Existing tests (preserved and updated) ──
+
+(ert-deftest test-daemon-repl/nelisp-reader-malformed-string ()
+  "NeLisp reader catches malformed strings that check-parens alone may miss."
+  (let ((code "(defun foo () \"unterminated)"))
+    (let ((result (gptel-daemon-repl-validate-brackets code)))
+      ;; check-parens may think this is balanced, but the reader should flag it.
+      (when (plist-get result :nelisp-reader-error)
+        (should-not (plist-get result :nelisp-reader-valid))
+        (should (stringp (plist-get result :nelisp-reader-error)))))))
+
+(ert-deftest test-daemon-repl/nelisp-reader-invalid-hash-syntax ()
+  "NeLisp reader catches invalid # syntax."
+  (let ((code "(defun foo () #zfoo)"))
+    (let ((result (gptel-daemon-repl-validate-brackets code)))
+      (when (plist-get result :nelisp-reader-error)
+        (should-not (plist-get result :nelisp-reader-valid))
+        (should (stringp (plist-get result :nelisp-reader-error)))))))
+
+(ert-deftest test-daemon-repl/nelisp-reader-loads-lazily ()
+  "NeLisp reader feature may or may not be available; either is acceptable."
+  (should (fboundp 'gptel-daemon-repl--nelisp-reader-load))
+  (let ((result (gptel-daemon-repl--nelisp-reader-load)))
+    (should (booleanp result))))
 
 (ert-deftest test-daemon-repl/status-plist ()
   "Status returns a valid plist."

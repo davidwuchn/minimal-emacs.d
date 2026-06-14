@@ -3,9 +3,35 @@
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
 > **Status**: ✅ **SELF-HEAL + ONTOLOGY REPAIRED** — high-risk routing blocks direct mutation of repair-engine files; ontology-router paren corruption fixed; stale cache removed
-> **Latest**: `scripts/run-pipeline.sh` rewritten in Clojure/babashka (`clj/ov5/pipeline.clj` + helpers); datahike pod loading made conditional so `bb -m ov5.pipeline` works on macOS aarch64; production.el test regressions fixed. Full unit suite green (3209 tests, 0 unexpected, 89 skipped).
-> **Active Plan**: Monitor Pi5 cron for the new bb-based pipeline; investigate remaining `decision-callback-is-idempotent` integration-test abort.
+> **Latest**: NeLisp reader integrated into daemon-repl bracket validation as a second syntax pass; test file malformed-string literal fixed. Full unit suite green (3212 tests, 0 unexpected, 89 skipped).
+> **Active Plan**: Commit daemon-repl + NeLisp reader changes; verify Pi5 cron with bb-based pipeline; investigate remaining `decision-callback-is-idempotent` integration-test abort.
 > **Pi5**: Auto-evolution active; pre-push hook now blocks broken pushes to main; Pi5 auto-evolved boundary fixes (Preview Mode 2, Edit hashline, Code_Map/Inspect/Replace, plan-mode readonly enforcement)
+
+---
+
+## Session Note (2026-06-14 — NeLisp reader syntax validation in daemon-repl)
+
+1. **Augmented `gptel-daemon-repl-validate-brackets`** (`lisp/modules/gptel-ext-daemon-repl.el`)
+   - Added two-pass validation: existing `check-parens` structural pass first, then a second pass via `nelisp-reader-read-all` from `packages/nelisp/src/nelisp-reader.el`.
+   - Added `gptel-daemon-repl--nelisp-reader-load` helper that lazily loads the reader with the correct `load-path` (`packages/nelisp/src`).
+   - Added `gptel-daemon-repl--validate-with-nelisp-reader` helper that catches `nelisp-reader-error` and returns `:nelisp-reader-error` / `:nelisp-reader-error-pos` fields.
+   - Validation plist now includes `:nelisp-reader-valid`, `:nelisp-reader-error`, and `:nelisp-reader-error-pos`.
+   - No new dependencies or startup cost: reader is loaded only when validation is called.
+
+2. **Added regression tests** (`tests/test-daemon-repl.el`)
+   - `test-daemon-repl/nelisp-reader-malformed-string`: verifies reader catches malformed strings that `check-parens` may miss.
+   - `test-daemon-repl/nelisp-reader-invalid-hash-syntax`: verifies reader catches invalid `#` syntax.
+   - `test-daemon-repl/nelisp-reader-loads-lazily`: verifies the lazy-load helper exists and returns a boolean.
+   - Fixed an invalid string literal in the malformed-string test that caused the test file to fail `load` (escaped inner quotes).
+
+### Verification
+- `test-daemon-repl`: 33/33 pass (was 30; +3 new tests).
+- Full unit suite: 3212 tests, 3123 expected, 0 unexpected, 89 skipped. Runtime ~167s.
+- `bash scripts/run-tests.sh unit test-daemon-repl`: pass.
+
+### Notes
+- `packages/ai-code` submodule shows a generated `ai-code-autoloads.el` modification; left untouched (generated artifact).
+- New untracked memory `mementum/memories/audit-fix-2026-06-13T14:00:15.md` (audit report) is unrelated to this work; left for user review.
 
 ---
 

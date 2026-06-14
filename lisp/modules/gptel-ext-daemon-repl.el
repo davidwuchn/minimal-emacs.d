@@ -214,14 +214,61 @@ Optional SERVER overrides socket path."
 
 ;;; ── Bracket Validation (pre-edit) ──
 
+(defun gptel-daemon-repl--nelisp-reader-load ()
+  "Attempt to load `nelisp-reader' from the NeLisp submodule.
+Returns t if loaded successfully, nil otherwise."
+  (condition-case nil
+      (progn
+        (require 'nelisp-reader
+                 (expand-file-name
+                  "packages/nelisp/src/nelisp-reader.el"
+                  (or (and (boundp 'user-emacs-directory)
+                           user-emacs-directory)
+                      default-directory))
+                 t)
+        (featurep 'nelisp-reader))
+    (error nil)))
+
+(defun gptel-daemon-repl--validate-with-nelisp-reader (file-content)
+  "Run NeLisp reader over FILE-CONTENT as a second syntax pass.
+Returns plist:
+  :nelisp-reader-valid t/nil
+  :nelisp-reader-error string or nil
+  :nelisp-reader-error-pos integer or nil
+Only reads strings; does not execute code."
+  (if (not (featurep 'nelisp-reader))
+      (list :nelisp-reader-valid t
+            :nelisp-reader-error nil
+            :nelisp-reader-error-pos nil)
+    (condition-case err
+        (progn
+          (nelisp-reader-read-all file-content)
+          (list :nelisp-reader-valid t
+                :nelisp-reader-error nil
+                :nelisp-reader-error-pos nil))
+      (nelisp-reader-error
+       (let* ((data (cdr err))
+              (msg (car data))
+              (pos (and (cdr data) (integerp (cadr data)) (cadr data))))
+         (list :nelisp-reader-valid nil
+               :nelisp-reader-error (format "NeLisp reader: %s" msg)
+               :nelisp-reader-error-pos pos))))))
+
 (defun gptel-daemon-repl-validate-brackets (file-content)
-  "Validate brackets in FILE-CONTENT string using Emacs built-in `check-parens'.
+  "Validate brackets/syntax in FILE-CONTENT string.
+Primary pass uses `check-parens'; secondary pass uses NeLisp reader if available.
 Returns plist:
   :valid t/nil
   :fixed-content string (if auto-fixed)
   :error string (if invalid and unfixable)
   :error-pos integer (position of first error, if invalid)
+  :nelisp-reader-valid t/nil
+  :nelisp-reader-error string or nil
+  :nelisp-reader-error-pos integer or nil
 Only writes a temp file when the self-heal fixer is needed."
+  ;; Ensure NeLisp reader is loaded lazily once.
+  (unless (featurep 'nelisp-reader)
+    (gptel-daemon-repl--nelisp-reader-load))
   (let* ((error-pos nil)
          (err-msg nil)
          (valid-p
@@ -235,9 +282,11 @@ Only writes a temp file when the self-heal fixer is needed."
              ;; check-parens signals user-error without position data,
              ;; so fall back to point position as best approximate.
              (setq error-pos (point))
-             nil))))
+             nil)))
+         (reader-result (gptel-daemon-repl--validate-with-nelisp-reader file-content)))
     (if valid-p
-        (list :valid t :fixed-content file-content :error nil :error-pos nil)
+        (append (list :valid t :fixed-content file-content :error nil :error-pos nil)
+                reader-result)
       (if (and gptel-daemon-repl-validate-brackets
                (fboundp 'gptel-auto-workflow--fix-unbalanced-parens))
           (let ((temp-file (make-temp-file "daemon-repl-validate-" nil ".el")))
@@ -250,15 +299,18 @@ Only writes a temp file when the self-heal fixer is needed."
                                  (insert-file-contents temp-file)
                                  (buffer-string))))
                     (if (string= fixed file-content)
-                      (list :valid nil :fixed-content nil
-                            :error err-msg
-                            :error-pos error-pos)
-                      (list :valid t :fixed-content fixed :error nil
-                            :error-pos nil))))
+                      (append (list :valid nil :fixed-content nil
+                                    :error err-msg
+                                    :error-pos error-pos)
+                              reader-result)
+                      (append (list :valid t :fixed-content fixed :error nil
+                                    :error-pos nil)
+                              reader-result))))
               (delete-file temp-file)))
-        (list :valid nil :fixed-content nil
-              :error err-msg
-              :error-pos error-pos)))))
+        (append (list :valid nil :fixed-content nil
+                      :error err-msg
+                      :error-pos error-pos)
+                reader-result)))))
 
 ;;; ── File Watch + Auto-Eval ──
 
