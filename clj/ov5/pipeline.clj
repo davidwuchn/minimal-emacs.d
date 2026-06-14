@@ -368,6 +368,8 @@
                                   "-L" (str root "/lisp/modules")
                                   "-L" (str root "/packages/gptel")
                                   "-L" (str root "/packages/compat")
+                                  "-L" (str root "/var/elpa/parseclj-1.1.1")
+                                  "-L" (str root "/var/elpa/parseedn-1.2.1")
                                   "-l" "gptel"
                                   "--eval"
                                   (str "(progn"
@@ -423,11 +425,11 @@
   (log/log "=== Step 0.5: Auto-fix (ACT on self-audit findings) ===")
   (let [root (log/project-root)
         cold-backends (:cold-backends @env)
-        unevaluated-strategies (:unevaluated-strategies @env)
+        unevaluated-strategies (or (:unevaluated-strategies @env) 0)
         bottleneck (:bottleneck @env)
-        broken-modules (:broken-modules @env)
-        pricing-stale (:pricing-stale @env)
-        days-stale (:days-stale @env)
+        broken-modules (or (:broken-modules @env) 0)
+        pricing-stale (or (:pricing-stale @env) 0)
+        days-stale (or (:days-stale @env) 0)
         remedial (atom 0)]
     ;; Auto-fix 1: Force cold backends
     (when (and cold-backends (not= cold-backends []) (not= cold-backends "nil"))
