@@ -122,9 +122,10 @@
     (when (and lock-str (not (str/blank? lock-str)))
       (try
         (let [pid (Long/parseLong lock-str)]
-          (when (.isAlive (java.lang.ProcessHandle/of pid))
-            (log "Pipeline already running (PID" pid "), skipping")
-            (System/exit 0)))
+          (when-let [ph (-> (java.lang.ProcessHandle/of pid) .orElse nil)]
+            (when (.isAlive ph)
+              (log "Pipeline already running (PID" pid "), skipping")
+              (System/exit 0))))
         (catch NumberFormatException _ nil)))
     (.mkdirs (.getParentFile f))
     (spit f (str (current-pid)))
