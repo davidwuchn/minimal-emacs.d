@@ -525,8 +525,8 @@ Extracted from `gptel-auto-experiment--validate-diff-content' for testability."
     (format "Cheap check: LLM markdown artifacts in diff (``` blocks)"))
    ;; Check for debug artifacts: print/insert at top level
     ((let ((debug-form nil)
-           (debug-prefixes '("+(message" "+( insert" "+(message"
-                             "+(print" "+(princ" "+(debug")))
+           (debug-prefixes '("+(message" "+( insert" "+(insert"
+                             "+(print" "+(princ" "+(debug"))))
        (dolist (line (split-string diff-text "\n"))
          (dolist (prefix debug-prefixes)
            (when (and (null debug-form)
@@ -534,7 +534,7 @@ Extracted from `gptel-auto-experiment--validate-diff-content' for testability."
              (setq debug-form (substring line (length prefix))))))
        (when debug-form
          (format "Cheap check: debug artifact in diff (top-level %s)"
-                 debug-form))))
+                 debug-form)))))
    ;; Check for vandalism: removal of error handling patterns
     ((string-match-p
       "^-.*condition-case\\|^-.*ignore-errors\\|^-.*noninteractive"
