@@ -59,6 +59,22 @@ else
     fail "researcher-controller.edn missing or empty — controller starts from defaults"
 fi
 
+section "3. Socket Directory Pinning"
+
+# The workflow daemon pins server-socket-dir to /tmp/emacs$UID/.
+# Scripts that invoke emacsclient must use /tmp as TMPDIR so socket discovery
+# does not drift to /var/folders/.../T/ on macOS.
+if grep -q 'export TMPDIR=/tmp' "$DIR/scripts/run-pipeline.sh"; then
+    pass "run-pipeline.sh pins TMPDIR=/tmp for emacsclient"
+else
+    fail "run-pipeline.sh missing TMPDIR=/tmp pin — emacsclient socket drift likely"
+fi
+if grep -q 'export TMPDIR=${TMPDIR:-/tmp}' "$DIR/scripts/run-auto-workflow-cron.sh"; then
+    pass "run-auto-workflow-cron.sh pins TMPDIR for emacsclient"
+else
+    fail "run-auto-workflow-cron.sh missing TMPDIR pin"
+fi
+
 section "4. Launchd Service"
 
 if launchctl print gui/$(id -u)/org.gnu.emacs.daemon 2>&1 | grep -q "state = running"; then

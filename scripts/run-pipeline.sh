@@ -9,6 +9,13 @@ set -euo pipefail
 ulimit -s 65532 2>/dev/null || true
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Pin TMPDIR to /tmp so emacsclient finds the daemon socket.
+# The workflow daemon pins server-socket-dir to /tmp/emacs$UID/ and sets
+# TMPDIR=/tmp inside Emacs. Shell invocations must match, otherwise
+# emacsclient --socket-name looks in /var/folders/.../T/ on macOS and fails.
+export TMPDIR=/tmp
+
 SCRIPT="$DIR/scripts/run-auto-workflow-cron.sh"
 
 # Bootstrap: ensure we're running the latest version of the script.
