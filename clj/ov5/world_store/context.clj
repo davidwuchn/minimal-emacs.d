@@ -1,6 +1,6 @@
 (ns ov5.world-store.context
   "Context unification for OV5 World Store.
-   Merges .sexp sidecars, approval history, and risk patterns into
+   Merges .edn sidecars, approval history, and risk patterns into
    unified experiment entities."
   (:require [clojure.java.io :as io]
             [clojure.edn :as edn]
@@ -117,7 +117,7 @@
   [dir]
   (ensure-context-schema)
   (let [files (->> (file-seq (io/file dir))
-                   (filter #(.endsWith (.getName %) ".sexp"))
+                    (filter #(.endsWith (.getName %) ".edn"))
                    (map #(.getAbsolutePath %))
                    (sort))
         results (atom {:files 0 :matched 0 :unmatched 0 :errors []})]
@@ -218,8 +218,8 @@
   "Unify all context data from default locations."
   []
   (let [context-results (unify-all-context-sidecars "var/context")
-        approval-results (unify-approval-history "var/approval-history.sexp")
-        risk-results (unify-risk-patterns "var/risk-patterns.sexp")]
+        approval-results (unify-approval-history "var/approval-history.edn")
+        risk-results (unify-risk-patterns "var/risk-patterns.edn")]
     {:context context-results
      :approval approval-results
      :risk risk-results}))

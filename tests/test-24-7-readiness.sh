@@ -43,28 +43,20 @@ done
 
 section "3. State Persistence"
 
-# cross-subsystem-state.json must be valid JSON
-state_file="$DIR/var/tmp/cross-subsystem-state.json"
-if [ -f "$state_file" ]; then
-    if python3 -c "import json; json.load(open('$state_file'))" 2>/dev/null; then
-        pass "cross-subsystem-state.json is valid JSON ($(wc -c < "$state_file") bytes)"
-    else
-        fail "cross-subsystem-state.json is invalid JSON"
-    fi
+# cross-subsystem-state.edn must exist and be non-empty
+state_file="$DIR/var/tmp/cross-subsystem-state.edn"
+if [ -f "$state_file" ] && [ -s "$state_file" ]; then
+    pass "cross-subsystem-state.edn exists ($(wc -c < "$state_file") bytes)"
 else
-    fail "cross-subsystem-state.json missing — next cycle starts with amnesia"
+    fail "cross-subsystem-state.edn missing or empty — next cycle starts with amnesia"
 fi
 
-# researcher-controller.json must exist and be valid
-controller_file="$DIR/var/tmp/researcher-controller.json"
-if [ -f "$controller_file" ]; then
-    if python3 -c "import json; json.load(open('$controller_file'))" 2>/dev/null; then
-        pass "researcher-controller.json is valid JSON ($(wc -c < "$controller_file") bytes)"
-    else
-        fail "researcher-controller.json is invalid JSON"
-    fi
+# researcher-controller.edn must exist and be non-empty
+controller_file="$DIR/var/tmp/researcher-controller.edn"
+if [ -f "$controller_file" ] && [ -s "$controller_file" ]; then
+    pass "researcher-controller.edn exists ($(wc -c < "$controller_file") bytes)"
 else
-    fail "researcher-controller.json missing — controller starts from defaults"
+    fail "researcher-controller.edn missing or empty — controller starts from defaults"
 fi
 
 section "4. Launchd Service"

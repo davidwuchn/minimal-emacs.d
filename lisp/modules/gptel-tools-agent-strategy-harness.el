@@ -84,7 +84,8 @@ attempting dependent strategies. Prevents exploration from collapsing
 into complex strategies before their building blocks are validated.")
 
 (defun gptel-auto-workflow--strategy-prerequisites-met-p (strategy-name)
-  "Return non-nil if all prerequisites for STRATEGY-NAME have at least one success.
+  "Return non-nil if all prerequisites for STRATEGY-NAME have at least one
+success.
 Prerequisites are looked up in `gptel-auto-workflow--strategy-dag'.
 If no prerequisites defined, returns t (no gate)."
   (let ((prereqs (gethash strategy-name gptel-auto-workflow--strategy-dag)))

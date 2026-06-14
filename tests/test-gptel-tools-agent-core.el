@@ -28,7 +28,7 @@
 
 ;;; Functions under test
 
-(defun test-build-subagent-context (prompt files include-history include-diff &optional origin-buf)
+(defun test-build-subagent-context (prompt files include-history include-diff &optional _origin-buf)
   "Build context for subagent."
   (let ((context ""))
     (when (and files (sequencep files))
@@ -702,52 +702,36 @@ ORIG-FN is the original function to wrap."
     (should (equal (plist-get final-callback-result :decision) "kept"))))
 
 (ert-deftest agent/staging/tsv-replaces-staging-pending ()
-  "TSV logger must replace staging-pending rows, not duplicate them."
+  "Logger must transact to World Store (no TSV file operations).
+Replaces the old TSV-based staging-pending row replacement test."
   (require 'gptel-tools-agent-base)
   (require 'gptel-tools-agent-prompt-analyze)
   (require 'gptel-tools-agent-prompt-build)
-  (require 'gptel-tools-agent-base)  ; for gptel-auto-workflow--results-tsv-header
-  (let* ((tsv-file (make-temp-file "test-staging" nil ".tsv"))
-         ;; Write header + one staging-pending row
-         (_ (with-temp-file tsv-file
-              (insert gptel-auto-workflow--results-tsv-header)
-              (insert "1\ttest.el\thypothesis\t0.40\t0.80\t0.50\t+0.40\tstaging-pending\t100\t9\tgraded\tstaging-pending\tpatterns\toutput\t100\tMiniMax\t1000\tall\t?\t?\ttemplate-default\tnone\thash\tnone\tnone\t?\tmodel\tscores\tskills\tnone\n")))
-         (run-id "run-test")
-         ;; Pre-populate business metrics so log-tsv skips the slow
-         ;; gptel-auto-workflow--compute-local-business-value path
-         ;; (which scans 20+ log files and can throw via cl-block).
+  (let* ((run-id "run-test")
          (experiment (list :target "test.el" :id 1 :score-before 0.4
                            :score-after 0.8 :kept t :decision "kept"
                            :comparator-reason "improvement"
                            :business-value-score 0.5
                            :risk-score 0.3
                            :user-satisfaction-delta 0.0
-                           :support-tickets-reduced 0)))
-    ;; Mock results file path to use our temp file
-    ;; Also mock compute-local-business-value: it uses cl-return-from inside
-    ;; ignore-errors which causes non-local exits that abort ert batch mode.
-    (cl-letf (((symbol-function 'gptel-auto-workflow--results-file-path)
-               (lambda (&optional _run-id) tsv-file))
+                           :support-tickets-reduced 0))
+         (transact-called nil)
+         (transact-edn nil))
+    ;; Mock World Store brepl-eval to capture the transact call
+    (cl-letf (((symbol-function 'ov5-world-store--brepl-eval)
+               (lambda (code)
+                 (setq transact-called t
+                       transact-edn code)
+                 "nil"))
               ((symbol-function 'gptel-auto-workflow--compute-local-business-value)
                (lambda (&rest _args) nil)))
-      ;; Log the kept result
       (gptel-auto-experiment-log-tsv run-id experiment))
-    ;; Verify only one row exists (staging-pending was replaced)
-    (with-temp-buffer
-      (insert-file-contents tsv-file)
-      (goto-char (point-min))
-      (let ((row-count 0))
-        (while (not (eobp))
-          (forward-line 1)
-          (when (not (eobp))
-            (setq row-count (1+ row-count))))
-        ;; Should be header + 1 data row = 2 lines total
-        (should (= row-count 1))
-        ;; Verify the kept row exists
-        (goto-char (point-min))
-        (forward-line 1)
-        (should (search-forward "kept" nil t))))
-    (delete-file tsv-file)))
+    ;; Verify transact was called with expected content
+    (should transact-called)
+    (should transact-edn)
+    (should (string-match "transact-experiment" (or transact-edn "")))
+    (should (string-match ":experiment/id" (or transact-edn "")))
+    (should (string-match ":experiment/decision" (or transact-edn "")))))
 
 (provide 'test-gptel-tools-agent-core)
 ;;; test-gptel-tools-agent-core.el ends here

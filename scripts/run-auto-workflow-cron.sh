@@ -237,7 +237,7 @@ seed_worker_daemon_shared_var() {
 }
 
 default_status() {
-    printf '(:running nil :kept 0 :total 0 :phase "idle" :results "var/tmp/experiments/%s/results.tsv")\n' "$(date +%F)"
+    printf '(:running nil :kept 0 :total 0 :phase "idle" :results nil :store "var/world-store")\n'
 }
 
 print_status() {

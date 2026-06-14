@@ -792,16 +792,16 @@ Regression test: deeply nested lambda after refactor should not confuse the eval
     (should-not (gptel-auto-workflow--allium-read-quality "test"))))
 
 (ert-deftest regression/auto-workflow-evolution/tsv-parse-column-alignment ()
-  "parse-all-results correctly reads all 32 TSV columns with correct indices."
+  "parse-all-results correctly reads experiment attributes from the World Store."
   (let ((tmpdir (make-temp-file "tsvcol-" t)))
     (unwind-protect
         (let ((run-dir (expand-file-name "var/tmp/experiments/2026-05-01" tmpdir)))
           (make-directory run-dir t)
-          (with-temp-file (expand-file-name "results.tsv" run-dir)
-            (insert "id\ttarget\thypothesis\tscore_before\tscore_after\tcode_quality\tdelta\tdecision\tduration\tgrader_quality\tgrader_reason\tcomparator_reason\tanalyzer_patterns\tagent_output\toutput_chars\tbackend\tprompt_chars\tsections_included\texploration_axis\tcandidate_scores\tstrategy\tresearch_strategy\tresearch_hash\tresearch_quality\tcontroller_decision\tkibcm_axis\tmodel\teight_key_scores\tskills\tedit_mode\tcost_usd\teffort_level\n")
-            (insert "1\tlisp/foo.el\tadd nil check\t0.00\t0.50\t0.8\t+0.50\tkept\t12.3\t0.9\tgood\tbetter\tnone\tagent out\t1500\tdeepseek\t2000\tall\tlearn\tnone\topt1\tresearch1\thash1\t0.8\tyes\t:K\tdeepseek-v4-pro\t{}\tnil-guard\thashline\t0.002500\thigh\n"))
+          ;; Seed a mock experiment into the World Store for this test.
           (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
-                     (lambda () tmpdir)))
+                     (lambda () tmpdir))
+                    ((symbol-function 'ov5-world-store--brepl-eval)
+                     (lambda (_) "[[:kibcm-axis \":K\" :target \"lisp/foo.el\" :hypothesis \"add nil check\" :score-before 0.0 :score-after 0.5 :code-quality 0.8 :decision \"kept\" :grader-quality 0.9 :prompt-chars 2000 :research-strategy \"research1\" :research-hash \"hash1\" :research-quality \"0.8\" :model \"deepseek-v4-pro\" :skills \"nil-guard\" :edit-mode \"hashline\" :cost-usd 0.0025 :effort-level \"high\" :duration 12.3 :id \"2026-05-01T000000Z-0000#1\"]]")))
             (let ((results (gptel-auto-workflow--parse-all-results)))
               (should results)
               (let ((r (car results)))
@@ -821,7 +821,7 @@ Regression test: deeply nested lambda after refactor should not confuse the eval
                 (should (string= (plist-get r :skills) "nil-guard"))
                 (should (string= (plist-get r :edit-mode) "hashline"))
                 (should (> (plist-get r :cost-usd) 0.0))
-                (should (string= (plist-get r :effort-level) "high")))))) 
+                (should (string= (plist-get r :effort-level) "high"))))))
       (delete-directory tmpdir t))))
 
 (ert-deftest regression/auto-workflow-evolution/allium-read-quality-missing-file ()
@@ -3013,8 +3013,8 @@ must not override it to MiniMax via setq-local in subagent buffers."
         ;; S5 weak → nucleus-tools.el should be front (matches nucleus pattern)
         (should (string-match-p "nucleus" first))))))
 
-(ert-deftest regression/auto-workflow-evolution/restore-json-keyword-lambda-state ()
-  "JSON object maps restore as keyword plists; immune memory needs alist entries."
+(ert-deftest regression/auto-workflow-evolution/restore-edn-keyword-lambda-state ()
+  "EDN object maps restore as keyword plists; immune memory needs alist entries."
   (let ((root (make-temp-file "aw-cross-state" t))
         (strike-count (make-hash-table :test 'equal))
         (dead-until (make-hash-table :test 'equal))
@@ -3035,8 +3035,8 @@ must not override it to MiniMax via setq-local in subagent buffers."
                 gptel-auto-workflow--lambda-dead-until dead-until
                 gptel-auto-workflow--lambda-verification-results verification-results)
           (make-directory (expand-file-name "var/tmp" root) t)
-          (with-temp-file (expand-file-name "var/tmp/cross-subsystem-state.json" root)
-            (insert "{\"lambda-strikes\":{\"DashScope\":1},\"lambda-dead\":{\"MiniMax\":123.0},\"lambda-results\":{\"DeepSeek\":\"alive\"}}"))
+          (with-temp-file (expand-file-name "var/tmp/cross-subsystem-state.edn" root)
+            (insert "{:lambda-strikes {\"DashScope\" 1}, :lambda-dead {\"MiniMax\" 123.0}, :lambda-results {\"DeepSeek\" alive}}"))
           (gptel-auto-workflow--restore-next-cycle-hints)
           (should (= 1 (gethash "DashScope" strike-count)))
           (should (= 123.0 (gethash "MiniMax" dead-until)))

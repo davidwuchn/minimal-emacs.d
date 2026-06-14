@@ -2,7 +2,7 @@
 
 ;;; Commentary:
 
-;; Tests for context unification (.sexp sidecars, approval, risk).
+;; Tests for context unification (.edn sidecars, approval, risk).
 
 ;;; Code:
 
@@ -55,7 +55,7 @@
          :experiment/decision "kept")))
      ;; Create a context sidecar
      (let* ((ctx-dir (make-temp-file "ov5-ctx-" t))
-            (ctx-file (expand-file-name "1.sexp" ctx-dir)))
+            (ctx-file (expand-file-name "1.edn" ctx-dir)))
        (with-temp-file ctx-file
          (insert "(:id 1 :target \"foo.el\" :business-rationale \"fix bug\" :causal-chain ((\"cause\" . \"effect\")) :decision-rationale \"good fix\" :learned \"test lesson\" :expected-impact \"better code\" :observed-impact \"confirmed\" :risk-score 0.2)\n"))
        ;; Unify context

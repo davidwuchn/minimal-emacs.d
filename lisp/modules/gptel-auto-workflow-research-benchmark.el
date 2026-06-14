@@ -16,6 +16,7 @@
 
 (require 'cl-lib)
 (require 'json)
+(require 'parseedn)
 (require 'subr-x)
 
 (declare-function gptel-benchmark-call-subagent "gptel-benchmark-subagent")
@@ -434,7 +435,7 @@ TRACES is list of trace plists."
 CONTROLLER-CONFIG is a plist with controller parameters.
 Reads existing file first and merges, so champion keys from
 update-controller-from-champion-changes survive the save."
-   (let* ((controller-file (expand-file-name "var/tmp/researcher-controller.json"
+   (let* ((controller-file (expand-file-name "var/tmp/researcher-controller.edn"
                                            (gptel-auto-workflow--worktree-base-root)))
          (existing (condition-case nil
                       (when (file-readable-p controller-file)
@@ -486,15 +487,11 @@ AutoTTS: Ignore tiny fluctuations that don't represent real progress."
 (defun gptel-auto-workflow--load-evolution-history ()
   "Load evolution history from disk.
 Returns list of evolution records."
-  (let ((history-file (expand-file-name "var/tmp/controller-evolution-history.json"
+  (let ((history-file (expand-file-name "var/tmp/controller-evolution-history.edn"
                                         (gptel-auto-workflow--worktree-base-root))))
     (if (file-exists-p history-file)
         (condition-case err
-            (with-temp-buffer
-              (insert-file-contents history-file)
-              (let ((json-object-type 'plist)
-                    (json-key-type 'keyword))
-                (json-read)))
+            (gptel-auto-workflow--read-edn history-file)
           (error
            (message "[autotts] Failed to load evolution history: %s" err)
            nil))
@@ -502,7 +499,7 @@ Returns list of evolution records."
 
 (defun gptel-auto-workflow--save-evolution-history (history)
   "Save evolution HISTORY to disk."
-  (let ((history-file (expand-file-name "var/tmp/controller-evolution-history.json"
+  (let ((history-file (expand-file-name "var/tmp/controller-evolution-history.edn"
                                         (gptel-auto-workflow--worktree-base-root))))
     (make-directory (file-name-directory history-file) t)
     (with-temp-file history-file

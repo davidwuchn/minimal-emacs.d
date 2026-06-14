@@ -334,7 +334,7 @@
 
 (ert-deftest test-daemon/load-evolved-controller-config ()
   (let ((result (gptel-auto-workflow--load-evolved-controller-config)))
-    (if (file-exists-p (gptel-auto-workflow--autotts-file "var/tmp/researcher-controller.json"))
+    (if (file-exists-p (gptel-auto-workflow--autotts-file "var/tmp/researcher-controller.edn"))
         (should (listp result))
       (should-not result))))
 
@@ -343,7 +343,7 @@
 
 (ert-deftest test-daemon/load-researcher-feedback-no-file ()
   ;; Mock file-exists-p to return nil so the test doesn't depend on
-  ;; whether the researcher-feedback.sexp file was created by a prior
+  ;; whether the researcher-feedback.edn file was created by a prior
   ;; evolution cycle run.
   (cl-letf (((symbol-function 'file-exists-p) (lambda (_) nil)))
     (should-not (gptel-auto-workflow--load-researcher-feedback))))

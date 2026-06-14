@@ -121,8 +121,8 @@ if [ -d "var/tmp/experiments" ]; then
     exp_count=$(find var/tmp/experiments -type d -name "main-baseline-*" | wc -l | tr -d ' ')
     echo "✓ $exp_count baseline experiment directories found"
     
-    # Check for kept experiments
-    kept_count=$(find var/tmp/experiments -name "results.tsv" -exec grep -l "kept" {} \; 2>/dev/null | wc -l | tr -d ' ')
+    # Check for kept experiments via World Store
+    kept_count=$(bb -e "(require 'ov5.world-store) (ov5.world-store/connect \"var/world-store\") (ov5.world-store/kept-experiment-count)" 2>/dev/null || echo "0")
     echo "✓ $kept_count experiments marked as 'kept'"
     
     # Check for evolution patterns

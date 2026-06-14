@@ -604,7 +604,8 @@ Usage:
       (condition-case err
           (progn
             (setq gptel-auto-workflow--last-progress-time (current-time))
-            (with-timeout (600 (message "[auto-workflow] Baseline warm timed out after 600s (will retry on first experiment)"))
+            (with-timeout (600 (message "[auto-workflow] Baseline warm timed out after 600s (will retry on first
+experiment)"))
               (gptel-auto-workflow--main-baseline-test-results)))
         (error (message "[auto-workflow] Baseline warm failed: %s" (error-message-string err)))))
     (setq gptel-auto-workflow--current-project (gptel-auto-workflow--default-dir)

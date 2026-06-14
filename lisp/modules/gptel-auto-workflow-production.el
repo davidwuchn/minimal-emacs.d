@@ -5,6 +5,7 @@
 
 (require 'cl-lib)
 (require 'parseedn)
+(require 'gptel-tools-agent-experiment-loop)
 (require 'gptel-auto-workflow-external-sensors nil t)
 (require 'gptel-auto-workflow-production-metrics nil t)
 (require 'gptel-auto-workflow-monitoring-agent nil t)
@@ -1175,15 +1176,10 @@ Returns a plist suitable for logging or dashboard display."
       (dolist (subdir '("pending" "decisions"))
         (let ((dir (expand-file-name (concat "var/approval-queue/" subdir "/") root)))
           (when (file-directory-p dir)
-            (dolist (f (directory-files dir t "\\.sexp$"))
-              (let ((entry (condition-case nil
-                               (with-temp-buffer
-                                 (insert-file-contents f)
-                                 (goto-char (point-min))
-                                 (read (current-buffer)))
-                             (error nil))))
-                (when entry
-                  (pcase (plist-get entry :status)
+            (dolist (f (directory-files dir t "\\.edn$"))
+               (let ((entry (gptel-auto-workflow--read-edn f)))
+                 (when entry
+                   (pcase (plist-get entry :status)
                     ("pending" (setq aq-pending (1+ aq-pending)))
                     ("approved" (setq aq-approved (1+ aq-approved)))
                     ("rejected" (setq aq-rejected (1+ aq-rejected)))
@@ -1200,11 +1196,11 @@ Returns a plist suitable for logging or dashboard display."
         ;; ── Context DB ──
         (let ((ctx-count
                (length (when (file-directory-p (expand-file-name "var/context" root))
-                         (directory-files (expand-file-name "var/context" root) t "\\.sexp$")))))
-          ;; ── Disposable ──
-          (let ((disp-count
-                 (length (when (file-directory-p (expand-file-name "var/disposable" root))
-                           (directory-files (expand-file-name "var/disposable" root) t "\\.sexp$")))))
+                         (directory-files (expand-file-name "var/context" root) t "\\.edn$")))))
+            ;; ── Disposable ──
+            (let ((disp-count
+                   (length (when (file-directory-p (expand-file-name "var/disposable" root))
+                           (directory-files (expand-file-name "var/disposable" root) t "\\.edn$")))))
             ;; ── Mementum ──
             (let ((mem-count
                    (length (when (file-directory-p (expand-file-name "mementum/memories" root))
@@ -1303,12 +1299,13 @@ Also persists the full report to var/metrics/ for historical tracking."
                            default-directory))
                  (metrics-dir (expand-file-name "var/metrics/" root))
                  (ts (format-time-string "%Y%m%dT%H%M%S")))
-            (make-directory metrics-dir t)
-            (with-temp-file (expand-file-name (concat ts "-metrics.sexp") metrics-dir)
-              (prin1 m (current-buffer)))
-            ;; Keep only last 30 metric snapshots
-            (let ((files (sort (directory-files metrics-dir t "-metrics\\.sexp$")
-                               (lambda (a b) (string< a b)))))
+             (make-directory metrics-dir t)
+             (gptel-auto-workflow--write-edn
+              (expand-file-name (concat ts "-metrics.edn") metrics-dir)
+              m)
+             ;; Keep only last 30 metric snapshots
+             (let ((files (sort (directory-files metrics-dir t "-metrics\\.edn$")
+                                (lambda (a b) (string< a b)))))
               (dolist (f (seq-take files (- (length files) 30)))
                  (ignore-errors (delete-file f)))))
          (error nil))

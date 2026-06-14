@@ -7,9 +7,11 @@
 
 (require 'cl-lib)
 (require 'json)
+(require 'parseedn)
 (require 'subr-x)
 
 (declare-function gptel-sandbox--eval-expr "gptel-sandbox" (expr env))
+(declare-function gptel-auto-workflow--read-edn "gptel-tools-agent-experiment-loop" (file))
 
 (defvar gptel-auto-workflow--research-accumulated-findings nil)
 (defvar gptel-auto-workflow--research-total-tokens nil)
@@ -46,17 +48,12 @@
   (expand-file-name relative-path (gptel-auto-workflow--autotts-root)))
 
 (defun gptel-auto-workflow--load-evolved-controller-config ()
-  "Load raw evolved controller JSON from disk, or nil."
+  "Load raw evolved controller EDN from disk, or nil."
   (let ((controller-file (gptel-auto-workflow--autotts-file
-                          "var/tmp/researcher-controller.json")))
+                          "var/tmp/researcher-controller.edn")))
     (when (file-exists-p controller-file)
       (condition-case err
-          (let ((json-object-type 'plist)
-                (json-array-type 'list)
-                (json-key-type 'keyword))
-            (with-temp-buffer
-              (insert-file-contents controller-file)
-              (json-read)))
+          (gptel-auto-workflow--read-edn controller-file)
         (error
          (message "[autotts] Failed to load controller config: %s" err)
          nil)))))
@@ -295,14 +292,12 @@ Returns plist with :model-intercept, :model-weights, etc., or nil."
 
 (defun gptel-auto-workflow--load-researcher-feedback ()
   "Load researcher feedback from disk and return adjustment plist.
-Reads var/tmp/researcher-feedback.sexp and suggests beta/threshold tweaks."
+Reads var/tmp/researcher-feedback.edn and suggests beta/threshold tweaks."
   (let ((feedback-file (gptel-auto-workflow--autotts-file
-                        "var/tmp/researcher-feedback.sexp")))
+                        "var/tmp/researcher-feedback.edn")))
     (when (file-exists-p feedback-file)
       (condition-case err
-          (let ((feedback (with-temp-buffer
-                           (insert-file-contents feedback-file)
-                           (read (current-buffer)))))
+          (let ((feedback (gptel-auto-workflow--read-edn feedback-file)))
             (let ((best-rate (or (plist-get feedback :best-rate) 0.5)))
               ;; Adjust beta based on success rate: higher rate = higher beta (more exploration)
               (list :feedback-beta-offset (- best-rate 0.5)

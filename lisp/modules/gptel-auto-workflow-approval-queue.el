@@ -8,7 +8,7 @@
 ;;; Commentary:
 
 ;; Approval queue for high-risk monitoring agent proposals.
-;; Persists proposals as pending .sexp files, supports approve/reject/expiry,
+;; Persists proposals as pending .edn files, supports approve/reject/expiry,
 ;; and integrates with the monitoring agent's deploy-proposal function.
 ;; When deploy-action is "approval-required", proposals are enqueued here
 ;; instead of auto-deployed, closing the last gap in the OV5 self-improving loop.
@@ -17,6 +17,8 @@
 
 (require 'cl-lib)
 (require 'subr-x)
+(require 'parseedn)
+(require 'gptel-tools-agent-experiment-loop)
 
 ;; ── Configuration ──
 
@@ -37,15 +39,15 @@ decisions/ for archived approved/rejected/expired proposals."
 ;; ── File Path Helpers ──
 
 (defun gptel-auto-workflow-approval-queue-file (proposal-id)
-  "Return absolute path to the pending .sexp file for PROPOSAL-ID."
+  "Return absolute path to the pending .edn file for PROPOSAL-ID."
   (expand-file-name
-   (concat "pending/" proposal-id ".sexp")
+   (concat "pending/" proposal-id ".edn")
    (expand-file-name gptel-auto-workflow-approval-queue-dir)))
 
 (defun gptel-auto-workflow-approval-queue-decisions-file (proposal-id)
-  "Return absolute path to the archived decisions .sexp file for PROPOSAL-ID."
+  "Return absolute path to the archived decisions .edn file for PROPOSAL-ID."
   (expand-file-name
-   (concat "decisions/" proposal-id ".sexp")
+   (concat "decisions/" proposal-id ".edn")
    (expand-file-name gptel-auto-workflow-approval-queue-dir)))
 
 ;; ── Find Existing Pending ──
@@ -58,7 +60,7 @@ Returns nil if no matching pending entries exist."
            "pending"
            (expand-file-name gptel-auto-workflow-approval-queue-dir)))
          (files (when (file-directory-p pending-dir)
-                  (directory-files pending-dir t "\\.sexp$")))
+                  (directory-files pending-dir t "\\.edn$")))
          (matches nil))
     (dolist (f files)
       (let ((entry (gptel-auto-workflow-approval-queue--read-sexp-file f)))
@@ -77,7 +79,7 @@ Returns nil if no matching pending entries exist."
 (defun gptel-auto-workflow-approval-queue-enqueue (tested-proposal rollback-tag)
   "Persist TESTED-PROPOSAL as a pending approval queue entry.
 ROLLBACK-TAG is the git rollback tag for emergency recovery.
-Generates a stable proposal-id slug, writes a .sexp file to the
+Generates a stable proposal-id slug, writes an .edn file to the
 pending directory, and returns the full queue-entry plist.
 Skips enqueue if an identical proposal (same component+target) already
 exists in the pending queue (deduplication).
@@ -124,24 +126,15 @@ Queue-entry plist keys: :id, :created-at, :expires-at, :status,
                 (expand-file-name gptel-auto-workflow-approval-queue-dir)))
               (filepath (gptel-auto-workflow-approval-queue-file proposal-id)))
          (make-directory pending-dir t)
-         (with-temp-file filepath
-           (prin1 queue-entry (current-buffer)))
+         (gptel-auto-workflow--write-edn filepath queue-entry)
          queue-entry))))
 
 ;; ── Read Helpers ──
 
 (defun gptel-auto-workflow-approval-queue--read-sexp-file (filepath)
-  "Read and return the plist stored in FILEPATH (.sexp format).
+  "Read and return the plist stored in FILEPATH (.edn format).
 Returns nil if file does not exist or cannot be read."
-  (when (file-exists-p filepath)
-    (with-temp-buffer
-      (insert-file-contents filepath)
-      (goto-char (point-min))
-      (condition-case nil
-          (read (current-buffer))
-        (error
-         (message "[approval-queue] Warning: corrupt sexp file %s" filepath)
-         nil)))))
+  (gptel-auto-workflow--read-edn filepath))
 
 ;; ── List ──
 
@@ -157,7 +150,7 @@ Otherwise, expired entries are pruned first."
            (expand-file-name gptel-auto-workflow-approval-queue-dir)))
          (files
           (when (file-directory-p pending-dir)
-            (directory-files pending-dir t "\\.sexp$")))
+            (directory-files pending-dir t "\\.edn$")))
          (entries nil))
     (dolist (f files)
       (let ((entry (gptel-auto-workflow-approval-queue--read-sexp-file f)))
@@ -184,7 +177,7 @@ Returns the number of entries pruned."
            (expand-file-name gptel-auto-workflow-approval-queue-dir)))
          (files
           (when (file-directory-p pending-dir)
-            (directory-files pending-dir t "\\.sexp$")))
+            (directory-files pending-dir t "\\.edn$")))
          (now (float-time))
          (pruned 0))
     (make-directory decisions-dir t)
@@ -195,8 +188,7 @@ Returns the number of entries pruned."
           (let* ((id (plist-get entry :id))
                  (expired-entry (plist-put entry :status "expired"))
                  (dest (gptel-auto-workflow-approval-queue-decisions-file id)))
-            (with-temp-file dest
-              (prin1 expired-entry (current-buffer)))
+            (gptel-auto-workflow--write-edn dest expired-entry)
             (delete-file f)
             (setq pruned (1+ pruned))))))
     pruned))
@@ -254,8 +246,7 @@ Returns the updated plist, or nil if the proposal was not found."
              (updated (plist-put updated :decision-note (or note "")))
              (dest (gptel-auto-workflow-approval-queue-decisions-file proposal-id)))
         (make-directory (file-name-directory dest) t)
-        (with-temp-file dest
-          (prin1 updated (current-buffer)))
+        (gptel-auto-workflow--write-edn dest updated)
         (delete-file filepath)
         updated))))
 
@@ -275,8 +266,7 @@ Returns the updated plist, or nil if the proposal was not found."
              (updated (plist-put updated :decision-note (or note "")))
              (dest (gptel-auto-workflow-approval-queue-decisions-file proposal-id)))
         (make-directory (file-name-directory dest) t)
-        (with-temp-file dest
-          (prin1 updated (current-buffer)))
+        (gptel-auto-workflow--write-edn dest updated)
         (delete-file filepath)
         updated))))
 
@@ -305,7 +295,7 @@ Returns list of auto-approved proposal IDs."
            "decisions"
            (expand-file-name gptel-auto-workflow-approval-queue-dir)))
          (files (when (file-directory-p pending-dir)
-                  (directory-files pending-dir t "\\.sexp$")))
+                  (directory-files pending-dir t "\\.edn$")))
          ;; Group by component+target
          (groups (make-hash-table :test 'equal))
          (auto-approved nil))
@@ -340,8 +330,7 @@ Returns list of auto-approved proposal IDs."
                               (format "Auto-approved: %d duplicate proposals for %s"
                                       (length entries) key))))
                 (dest (gptel-auto-workflow-approval-queue-decisions-file oldest-id)))
-           (with-temp-file dest
-             (prin1 approved-entry (current-buffer)))
+           (gptel-auto-workflow--write-edn dest approved-entry)
            (delete-file oldest-file)
            (message "[approval-queue] Auto-approved recurring proposal: %s (%d duplicates)"
                     oldest-id (1- (length entries)))
@@ -359,8 +348,7 @@ Returns list of auto-approved proposal IDs."
                       (plist-put e :decision-note
                                  (format "Duplicate of auto-approved proposal for %s" key))))
                    (dest (gptel-auto-workflow-approval-queue-decisions-file id)))
-             (with-temp-file dest
-               (prin1 rejected-entry (current-buffer)))
+             (gptel-auto-workflow--write-edn dest rejected-entry)
              (delete-file f)))))
      groups)
     (nreverse auto-approved)))
@@ -382,7 +370,7 @@ Returns count of proposals removed."
            "decisions"
            (expand-file-name gptel-auto-workflow-approval-queue-dir)))
          (files (when (file-directory-p pending-dir)
-                  (directory-files pending-dir t "\\.sexp$")))
+                  (directory-files pending-dir t "\\.edn$")))
          (groups (make-hash-table :test 'equal))
          (removed 0))
     ;; Group by component+target
@@ -415,8 +403,7 @@ Returns count of proposals removed."
                       (plist-put e :decision-note
                                  (format "Duplicate removed by dedup cleanup for %s" key))))
                    (dest (gptel-auto-workflow-approval-queue-decisions-file id)))
-             (with-temp-file dest
-               (prin1 rejected-entry (current-buffer)))
+             (gptel-auto-workflow--write-edn dest rejected-entry)
              (delete-file f)
              (setq removed (1+ removed))))))
      groups)
@@ -447,7 +434,7 @@ or 0.0 if none)."
          (oldest-created 0.0))
     ;; Count expired in decisions dir
     (when (file-directory-p decisions-dir)
-      (let ((decision-files (directory-files decisions-dir t "\\.sexp$")))
+      (let ((decision-files (directory-files decisions-dir t "\\.edn$")))
         (dolist (f decision-files)
           (let ((entry (gptel-auto-workflow-approval-queue--read-sexp-file f)))
             (when (and entry
@@ -477,7 +464,7 @@ Returns list of executed proposal IDs."
           (expand-file-name gptel-auto-workflow-approval-queue-dir)))
         (executed nil))
     (when (file-directory-p decisions-dir)
-      (dolist (f (directory-files decisions-dir t "\\.sexp$"))
+      (dolist (f (directory-files decisions-dir t "\\.edn$"))
           (let ((entry (gptel-auto-workflow-approval-queue--read-sexp-file f)))
             (when (and entry
                        (equal (plist-get entry :status) "approved")
@@ -508,8 +495,7 @@ Returns list of executed proposal IDs."
               ;; Mark as deployed
               (let* ((updated (plist-put entry :status "deployed"))
                     (updated (plist-put updated :deployed-at (float-time))))
-                (with-temp-file f
-                  (prin1 updated (current-buffer)))
+                (gptel-auto-workflow--write-edn f updated)
                 (message "[approval-queue] Deployed approved proposal: %s (component: %s)"
                          proposal-id component)
                 (push proposal-id executed)))))))
@@ -535,7 +521,7 @@ If TARGETS is nil, returns just the approved targets as a fresh list."
            (expand-file-name gptel-auto-workflow-approval-queue-dir)))
          (approved-targets nil))
     (when (file-directory-p decisions-dir)
-      (dolist (f (directory-files decisions-dir t "\\.sexp$"))
+      (dolist (f (directory-files decisions-dir t "\\.edn$"))
         (let ((entry (gptel-auto-workflow-approval-queue--read-sexp-file f)))
           (when (and entry
                      (equal (plist-get entry :status) "approved")

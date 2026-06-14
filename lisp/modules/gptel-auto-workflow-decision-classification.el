@@ -17,6 +17,7 @@
 
 (require 'cl-lib)
 (require 'pp)
+(require 'gptel-tools-agent-experiment-loop)
 
 ;; ============================================================================
 ;; Configuration
@@ -231,7 +232,7 @@ Returns plist with :auto-approval-rate, :recommend-rate,
 (defun gptel-auto-workflow--learn-risk-patterns ()
   "Learn risk patterns from approval history.
 Analyzes history to identify common patterns and their risk levels.
-After building patterns, persists them to var/risk-patterns.sexp."
+After building patterns, persists them to var/risk-patterns.edn."
   (let* ((history gptel-auto-workflow--approval-history)
           (patterns (make-hash-table :test 'equal)))
     ;; Group experiments by target pattern
@@ -260,14 +261,13 @@ After building patterns, persists them to var/risk-patterns.sexp."
 ;; ============================================================================
 
 (defun gptel-auto-workflow--persist-risk-patterns ()
-  "Write gptel-auto-workflow--risk-patterns to var/risk-patterns.sexp.
-Creates var/ directory if needed.  Uses pp-to-string for readable output."
+  "Write gptel-auto-workflow--risk-patterns to var/risk-patterns.edn.
+Creates var/ directory if needed."
   (condition-case err
       (let* ((var-dir (expand-file-name "var/" default-directory))
-             (filepath (expand-file-name "risk-patterns.sexp" var-dir)))
+             (filepath (expand-file-name "risk-patterns.edn" var-dir)))
         (make-directory var-dir t)
-        (with-temp-file filepath
-          (insert (pp-to-string gptel-auto-workflow--risk-patterns)))
+        (gptel-auto-workflow--write-edn filepath (vconcat gptel-auto-workflow--risk-patterns))
         filepath)
     (error
      (message "[decision] Failed to persist risk patterns: %s"
@@ -275,33 +275,28 @@ Creates var/ directory if needed.  Uses pp-to-string for readable output."
      nil)))
 
 (defun gptel-auto-workflow--load-risk-patterns ()
-  "Read risk patterns from var/risk-patterns.sexp if it exists.
+  "Read risk patterns from var/risk-patterns.edn if it exists.
 Sets gptel-auto-workflow--risk-patterns from the file data.
 Returns the loaded patterns, or nil if file does not exist."
   (condition-case err
-      (let* ((filepath (expand-file-name "var/risk-patterns.sexp" default-directory)))
-        (when (file-exists-p filepath)
-          (let ((data (with-temp-buffer
-                        (insert-file-contents filepath)
-                        (goto-char (point-min))
-                        (read (current-buffer)))))
-            (when (listp data)
-              (setq gptel-auto-workflow--risk-patterns data)
-              data))))
+      (let* ((filepath (expand-file-name "var/risk-patterns.edn" default-directory))
+             (data (gptel-auto-workflow--read-edn filepath)))
+        (when (listp data)
+          (setq gptel-auto-workflow--risk-patterns data)
+          data))
     (error
      (message "[decision] Failed to load risk patterns: %s"
               (error-message-string err))
      nil)))
 
 (defun gptel-auto-workflow--persist-approval-history ()
-  "Write gptel-auto-workflow--approval-history to var/approval-history.sexp.
-Creates var/ directory if needed.  Uses pp-to-string for readable output."
+  "Write gptel-auto-workflow--approval-history to var/approval-history.edn.
+Creates var/ directory if needed."
   (condition-case err
       (let* ((var-dir (expand-file-name "var/" default-directory))
-             (filepath (expand-file-name "approval-history.sexp" var-dir)))
+             (filepath (expand-file-name "approval-history.edn" var-dir)))
         (make-directory var-dir t)
-        (with-temp-file filepath
-          (insert (pp-to-string gptel-auto-workflow--approval-history)))
+        (gptel-auto-workflow--write-edn filepath (vconcat gptel-auto-workflow--approval-history))
         filepath)
     (error
      (message "[decision] Failed to persist approval history: %s"
@@ -309,19 +304,15 @@ Creates var/ directory if needed.  Uses pp-to-string for readable output."
      nil)))
 
 (defun gptel-auto-workflow--load-approval-history ()
-  "Read approval history from var/approval-history.sexp if it exists.
+  "Read approval history from var/approval-history.edn if it exists.
 Sets gptel-auto-workflow--approval-history from the file data.
 Returns the loaded history, or nil if file does not exist."
   (condition-case err
-      (let* ((filepath (expand-file-name "var/approval-history.sexp" default-directory)))
-        (when (file-exists-p filepath)
-          (let ((data (with-temp-buffer
-                        (insert-file-contents filepath)
-                        (goto-char (point-min))
-                        (read (current-buffer)))))
-            (when (listp data)
-              (setq gptel-auto-workflow--approval-history data)
-              data))))
+      (let* ((filepath (expand-file-name "var/approval-history.edn" default-directory))
+             (data (gptel-auto-workflow--read-edn filepath)))
+        (when (listp data)
+          (setq gptel-auto-workflow--approval-history data)
+          data))
     (error
      (message "[decision] Failed to load approval history: %s"
               (error-message-string err))

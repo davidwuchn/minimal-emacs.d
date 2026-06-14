@@ -271,7 +271,7 @@ run_e2e_tests() {
     chmod 700 "$complete_runtime_dir"
     complete_server="aw-complete-$$"
 
-    printf '%s\n' '(:running true :kept 0 :total 5 :phase "running" :run-id "stale-complete" :results "var/tmp/experiments/stale-complete/results.tsv")' >"$complete_status_file"
+    printf '%s\n' '(:running true :kept 0 :total 5 :phase "running" :run-id "stale-complete" :results nil :store "var/world-store")' >"$complete_status_file"
     printf '%s\n' '[auto-workflow] stale running snapshot' >"$complete_messages_file"
     touch_minutes_ago 2 "$complete_status_file"
 
@@ -366,7 +366,7 @@ run_e2e_tests() {
     chmod 700 "$live_messages_runtime_dir"
     live_messages_server="aw-live-msg-$$"
 
-    printf '%s\n' '(:running true :kept 0 :total 3 :phase "running" :run-id "live-messages" :results "var/tmp/experiments/live-messages/results.tsv")' >"$live_messages_status_file"
+    printf '%s\n' '(:running true :kept 0 :total 3 :phase "running" :run-id "live-messages" :results nil :store "var/world-store")' >"$live_messages_status_file"
     printf '%s\n' '[auto-workflow] stale persisted tail' >"$live_messages_file"
     touch_minutes_ago 2 "$live_messages_file"
 

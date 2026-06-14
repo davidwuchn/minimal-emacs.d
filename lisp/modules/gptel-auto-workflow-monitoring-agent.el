@@ -38,6 +38,8 @@
 (declare-function gptel-auto-workflow--mementum-slug
   "gptel-auto-workflow-mementum")
 (require 'subr-x)
+(require 'parseedn)
+(require 'gptel-tools-agent-experiment-loop)
 
 (declare-function gptel-auto-workflow--parse-all-results
                   "gptel-auto-workflow-evolution")
@@ -168,7 +170,7 @@ Returns plist with :fresh, :latest-snapshot, :age-hours."
          (age-hours 0.0))
     (condition-case nil
         (when (file-directory-p metrics-dir)
-          (let* ((files (directory-files metrics-dir t "-metrics\\.sexp$"))
+          (let* ((files (directory-files metrics-dir t "-metrics\\.edn$"))
                  (sorted (sort files
                                (lambda (a b)
                                  (let ((ta (float-time (nth 5 (file-attributes a))))
@@ -289,7 +291,7 @@ Each element is a plist:
 Populated when a proposal is deployed; consumed by Phase 7.")
 
 (defvar gptel-auto-workflow-monitoring--impact-assessment-file
-  (expand-file-name "var/impact-assessments.sexp" user-emacs-directory)
+  (expand-file-name "var/impact-assessments.edn" user-emacs-directory)
   "File to persist pending impact assessments across daemon restarts.")
 
 (defun gptel-auto-workflow--persist-impact-assessments ()
@@ -297,19 +299,15 @@ Populated when a proposal is deployed; consumed by Phase 7.")
   (ignore-errors
     (make-directory (file-name-directory
                      gptel-auto-workflow-monitoring--impact-assessment-file) t)
-    (with-temp-file gptel-auto-workflow-monitoring--impact-assessment-file
-      (prin1 gptel-auto-workflow-monitoring--pending-impact-assessments
-             (current-buffer)))
+    (gptel-auto-workflow--write-edn
+     gptel-auto-workflow-monitoring--impact-assessment-file
+     (vconcat gptel-auto-workflow-monitoring--pending-impact-assessments))
     t))
 
 (defun gptel-auto-workflow--load-impact-assessments ()
   "Load pending impact assessments from disk.  Returns list or nil."
   (ignore-errors
-    (when (file-exists-p gptel-auto-workflow-monitoring--impact-assessment-file)
-      (with-temp-buffer
-        (insert-file-contents gptel-auto-workflow-monitoring--impact-assessment-file)
-        (goto-char (point-min))
-        (read (current-buffer))))))
+    (gptel-auto-workflow--read-edn gptel-auto-workflow-monitoring--impact-assessment-file)))
 
 (defun gptel-auto-workflow--record-deployment-for-impact (module proposal baseline-metrics)
   "Record a deployment for later impact assessment.
@@ -1493,7 +1491,7 @@ Returns list of applied parameter symbols."
                            gptel-auto-workflow-approval-queue-dir
                            default-directory))))
       (when (file-directory-p decisions-dir)
-        (dolist (f (directory-files decisions-dir t "\\.sexp$"))
+        (dolist (f (directory-files decisions-dir t "\\.edn$"))
           (let ((entry (gptel-auto-workflow-approval-queue--read-sexp-file f)))
             (when (and entry
                        (equal (plist-get entry :type) "self-tune")
@@ -1519,8 +1517,7 @@ value:** %s\n\nApplied after human approval via approval queue."
                 ;; Mark as applied in the queue
                 (let* ((updated (plist-put entry :applied-at (float-time)))
                        (updated (plist-put updated :tuning-result result)))
-                  (with-temp-file f
-                    (prin1 updated (current-buffer))))
+                   (gptel-auto-workflow--write-edn f updated))
                 (message "[monitoring] Applied self-tuning: %s = %s"
                          param (prin1-to-string (plist-get result :new-value)))
                 (push param applied))))))

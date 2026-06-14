@@ -12,6 +12,7 @@
 
 (require 'cl-lib)
 (require 'json)
+(require 'parseedn)
 (require 'seq)
 (require 'subr-x)
 
@@ -26,6 +27,8 @@
 ;; and grader remediation escalation (lines 7105, 7160).  Without this,
 ;; (void-function gptel-auto-workflow-self-audit--root) blocks experiments.
 (require 'gptel-auto-workflow-self-audit nil t)
+;; Soft require: world-store provides ov5-world-store--brepl-eval for Datahike queries
+(require 'gptel-ext-world-store nil t)
 
 ;; Forward declarations — defined in gptel-tools-agent-base (loaded before
 ;; this module via post-init's init-ai chain).  These silence the byte-compiler
@@ -56,6 +59,7 @@
 (declare-function gptel-auto-workflow--load-autotts-controller "strategic-daemon-functions" ())
 (declare-function gptel-auto-workflow--load-research-traces "gptel-auto-workflow-research-benchmark" ())
 (declare-function gptel-backend-name "gptel-request" (backend))
+(declare-function gptel-auto-workflow--edn-to-plist "gptel-tools-agent-experiment-loop" (data))
 
 (defvar gptel-auto-workflow--champion-keep-rate nil)
 (defvar gptel-backend nil)
@@ -280,131 +284,106 @@ Checks: file exists, not empty, header present, field counts consistent."
           :warnings (nreverse warnings))))
 
 (defun gptel-auto-workflow--parse-all-results (&optional max-age-days)
-  "Parse historical results.tsv files into a list of experiment records.
-Optional MAX-AGE-DAYS limits to runs within that many days (default: all).
+  "Query the Datahike World Store for all experiment records.
+Optional MAX-AGE-DAYS limits to experiments within that many days (default:
+all).
 Caches when MAX-AGE-DAYS is nil for cycle-local reuse."
   (or (and (not max-age-days) gptel-auto-workflow--results-cache)
-      (let* ((results-dir (expand-file-name "var/tmp/experiments"
-                                            (gptel-auto-workflow--worktree-base-root)))
+      (let* ((records nil)
              (cutoff-time (when max-age-days
                             (- (float-time) (* max-age-days 24 60 60))))
-             (records nil)
-             (runs-parsed 0)
-             (max-runs 50)
-             (max-candidates 200))
-        (when (file-directory-p results-dir)
-          (let ((all-dirs (directory-files results-dir t "^202[0-9]-")))
-            ;; Sort by modification time (newest first).
-            (setq all-dirs
-                  (sort all-dirs
-                        (lambda (a b)
-                          (> (float-time (file-attribute-modification-time (file-attributes a)))
-                             (float-time (file-attribute-modification-time (file-attributes b)))))))
-            ;; Recent runs are often header-only when experiments are still in flight
-            ;; or aborted early. Keep scanning until we have enough non-empty runs.
-            (dolist (run-dir (seq-take all-dirs max-candidates))
-              (when (and (< runs-parsed max-runs)
-                         (or (not cutoff-time)
-                             (> (float-time (file-attribute-modification-time (file-attributes run-dir)))
-                                cutoff-time)))
-                (let ((tsv-file (expand-file-name "results.tsv" run-dir)))
-                  (when (and (file-exists-p tsv-file)
-                             (let ((integrity (gptel-auto-workflow--verify-tsv-integrity tsv-file)))
-                               (when (plist-get integrity :warnings)
-                                 (message "[tsv-integrity] %s: %s"
-                                          (file-name-nondirectory run-dir)
-                                          (string-join (plist-get integrity :warnings) "; ")))
-                               (plist-get integrity :valid)))
-                    (with-temp-buffer
-                      (insert-file-contents tsv-file)
-                      (goto-char (point-min))
-                      (forward-line 1)
-                      (unless (eobp)
-                        (setq runs-parsed (1+ runs-parsed))
-                        (while (not (eobp))
-                          (let ((line (buffer-substring-no-properties
-                                       (line-beginning-position) (line-end-position))))
-                            (unless (string-empty-p line)
-                              (let* ((fields (split-string line "\t"))
-                                     (field-count (length fields))
-                                     ;; Handle multiple TSV format versions:
-                                     ;; 14 cols: earliest (no backend/strategy/research fields)
-                                     ;; 20 cols: backend at index 14, no research fields
-                                     ;; 24 cols: backend at index 14, research fields at 20-23
-                                     ;; 27 cols: backend at index 15, full research fields
-                                      (format-version (cond ((<= field-count 14) 14)
-                                                            ((<= field-count 20) 20)
-                                                            ((<= field-count 24) 24)
-                                                            ((>= field-count 54) 54)
-                                                            (t 27)))
-                                      (_experiment-id (nth 0 fields))
-                                      (target (nth 1 fields))
-                                     (hypothesis (nth 2 fields))
-                                     (score-before (string-to-number (or (nth 3 fields) "0")))
-                                     (score-after (string-to-number (or (nth 4 fields) "0")))
-                                     (quality (string-to-number (or (nth 5 fields) "0")))
-                                     (delta (string-to-number (or (nth 6 fields) "+0.00")))
-                                     (decision (nth 7 fields))
-                                     (grader-q (string-to-number (or (nth 9 fields) "0")))
-                                     (backend (cond ((<= format-version 14) "unknown")
-                                                    ((<= format-version 24)
-                                                     (or (nth 14 fields) "unknown"))
-                                                    (t (or (nth 15 fields) "unknown"))))
-                                     (prompt-chars (string-to-number
-                                                    (or (nth (if (<= format-version 24) 15 16) fields) "0")))
-                                      (strategy (if (<= format-version 20) "none"
-                                                   (or (nth 20 fields) "none")))
-                                      (research-strategy (if (<= format-version 20) "none"
-                                                            (or (nth 21 fields) "none")))
-                                      (research-hash (if (<= format-version 20) "none"
-                                                        (or (nth 22 fields) "none")))
-                                       (research-quality (if (<= format-version 20) "none"
-                                                            (or (nth 23 fields) "none")))
-                                       (kibcm-axis (if (<= format-version 24) "?"
-                                                      (or (nth 25 fields) "?")))
-                                       (model (if (<= format-version 24) "unknown"
-                                                 (or (nth 26 fields) "unknown")))
-                                       (skills (or (nth 28 fields) ""))
-                                       (edit-mode (or (nth 29 fields) "none"))
-                                       (cost-usd (string-to-number (or (nth 30 fields) "0")))
-                                       (effort-level (or (nth 31 fields) "default"))
-                                       (gate-score-vec
-                                        (when (>= format-version 54)
-                                          (let ((vec (make-vector 11 -1.0)))
-                                            (dotimes (i 11)
-                                              (let ((val (string-to-number
-                                                          (or (nth (+ 43 i) fields) "-1"))))
-                                                (aset vec i val)))
-                                            vec))))
-                                  (push (list :target target
-                                              :hypothesis hypothesis
-                                              :score-before score-before
-                                              :score-after score-after
-                                              :code-quality quality
-                                              :delta delta
-                                              :decision decision
-                                              :grader-quality grader-q
-                                              :prompt-chars prompt-chars
-                                              :backend backend
-                                              :strategy strategy
-                                              :research-strategy research-strategy
-                                             :research-hash research-hash
-                                             :research-quality research-quality
-                                             :kibcm-axis kibcm-axis
-                                             :model model
-                                             :skills skills
-                                             :edit-mode edit-mode
-                                             :cost-usd cost-usd
-                                             :effort-level effort-level
-                                             :gate-score-vector gate-score-vec
-                                             :run-dir (file-name-nondirectory run-dir))
-                                      records))))
-                           (forward-line 1))))))))))
-        (message "[parse-all-results] Parsed %d runs, %d records" runs-parsed (length records))
-        (let ((result (nreverse records)))
-          (unless max-age-days
-            (setq gptel-auto-workflow--results-cache result))
-          result))))
+             ;; Query World Store via brepl — returns EDN: [[:id "..." :target "..." ...] ...]
+             (edn-str
+              (condition-case nil
+                  (ov5-world-store--brepl-eval
+                   "(do (load-file \"clj/ov5/world_store.clj\") (ns ov5.world-store) (connect
+\"var/world-store\") (all-experiments-readable))")
+                (error nil)))
+             (store-results (when (and edn-str (not (string-empty-p edn-str)))
+                              (ignore-errors
+                                (parseedn-read-str edn-str)))))
+          (when store-results
+            (unless (listp store-results)
+              (setq store-results (append store-results nil)))
+            (dolist (raw-entity store-results)   ;; each entity is a plist vector
+              (let* ((entity (append raw-entity nil))
+                    (id (plist-get entity :id))
+                   (target (plist-get entity :target))
+                   ;; Extract run-id from experiment/id prefix
+                   (run-dir (when (stringp id)
+                              (if (string-match "\\`\\([^#]+\\)#" id)
+                                  (match-string 1 id)
+                                id)))
+                   (exp-ts (when (stringp run-dir)
+                             (condition-case nil
+                                 (float-time
+                                  (date-to-time
+                                   (concat (substring run-dir 0 10) "T"
+                                           (substring run-dir 11 13) ":"
+                                           (substring run-dir 13 15) ":"
+                                           (substring run-dir 15 17))))
+                               (error nil)))))
+              ;; Age filter
+              (when (or (not cutoff-time)
+                        (not exp-ts)
+                        (> exp-ts cutoff-time))
+                ;; Build gate-score-vector from individual attributes
+                (let ((gate-score-vec (make-vector 11 -1.0)))
+                  (dotimes (i 11)
+                    (let ((attr (intern (format ":gate-score-%d" i) obarray)))
+                      (when (plist-member entity attr)
+                        (aset gate-score-vec i (or (plist-get entity attr) -1.0)))))
+                  (push (list :id (or id "")
+                              :target (or target "")
+                              :hypothesis (or (plist-get entity :hypothesis) "")
+                              :score-before (or (plist-get entity :score-before) 0.0)
+                              :score-after (or (plist-get entity :score-after) 0.0)
+                              :code-quality (or (plist-get entity :code-quality) 0.0)
+                              :delta (or (plist-get entity :delta) 0.0)
+                              :decision (or (plist-get entity :decision) "unknown")
+                              :duration (or (plist-get entity :duration) 0)
+                              :grader-quality (or (plist-get entity :grader-quality) 0.0)
+                              :grader-reason (or (plist-get entity :grader-reason) "")
+                              :comparator-reason (or (plist-get entity :comparator-reason) "")
+                              :analyzer-patterns (or (plist-get entity :analyzer-patterns) "")
+                              :agent-output (or (plist-get entity :agent-output) "")
+                              :output-chars (or (plist-get entity :output-chars) 0)
+                              :prompt-chars (or (plist-get entity :prompt-chars) 0)
+                              :backend (or (plist-get entity :backend) "unknown")
+                              :strategy (or (plist-get entity :strategy) "none")
+                              :research-strategy (or (plist-get entity :research-strategy) "none")
+                              :research-hash (or (plist-get entity :research-hash) "none")
+                              :research-quality (or (plist-get entity :research-quality) "none")
+                              :controller-decision (or (plist-get entity :controller-decision) "none")
+                              :kibcm-axis (or (plist-get entity :kibcm-axis) "?")
+                              :model (or (plist-get entity :model) "unknown")
+                              :skills (or (plist-get entity :skills) "")
+                              :edit-mode (or (plist-get entity :edit-mode) "none")
+                              :cost-usd (or (plist-get entity :cost-usd) 0.0)
+                              :effort-level (or (plist-get entity :effort-level) "default")
+                              :business-value-score (or (plist-get entity :business-value-score) 0.0)
+                              :risk-score (or (plist-get entity :risk-score) 0.0)
+                              :complexity-before (or (plist-get entity :complexity-before) 0.0)
+                              :complexity-after (or (plist-get entity :complexity-after) 0.0)
+                              :lines-removed (or (plist-get entity :lines-removed) 0)
+                              :understanding-score (or (plist-get entity :understanding-score) 0.0)
+                              :gate-score-vector gate-score-vec
+                              :exploration-axis (or (plist-get entity :exploration-axis) "?")
+                              :diversity (or (plist-get entity :diversity) 0.0)
+                              :persona-category (or (plist-get entity :persona-category) nil)
+                              :persona-archetype (or (plist-get entity :persona-archetype) nil)
+                              :sections-included (or (plist-get entity :sections-included) "all")
+                              :eight-keys-scores (or (plist-get entity :eight-key-scores) "")
+                              :candidate-validation (or (plist-get entity :candidate-scores) "")
+                              :research-context (or (plist-get entity :research-context) nil)
+                              :run-dir (or run-dir ""))
+                        records)))))
+          (message "[parse-all-results] Loaded %d records from World Store"
+                   (length records))
+          (let ((result (nreverse records)))
+            (unless max-age-days
+              (setq gptel-auto-workflow--results-cache result))
+            result)))))
 
 (defvar gptel-auto-workflow--evolution-patterns-cache nil
   "Cached evolution patterns from skill. Reset on skill reload.")
@@ -2119,15 +2098,15 @@ with kept experiments, and updates the researcher prompt accordingly."
               (when (and best-quality (> best-rate 0))
                 (message "[evolution] Best research quality: %s (%.1f%%) - updating skill guidance"
                          best-quality (* 100 best-rate))
-                ;; Store feedback for next researcher run
-                (let ((feedback-file (expand-file-name "var/tmp/researcher-feedback.sexp"
-                                                       (gptel-auto-workflow--worktree-base-root))))
-                  (with-temp-file feedback-file
-                     (prin1 (list :best-quality best-quality
-                                  :best-rate best-rate
-                                  :stats stats
-                                  :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ"))
-                            (current-buffer))))
+                 ;; Store feedback for next researcher run
+                 (let ((feedback-file (expand-file-name "var/tmp/researcher-feedback.edn"
+                                                        (gptel-auto-workflow--worktree-base-root))))
+                   (gptel-auto-workflow--write-edn
+                    feedback-file
+                    (list :best-quality best-quality
+                          :best-rate best-rate
+                          :stats (vconcat stats)
+                          :timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ"))))
                ;; Self-evolve: correlate research sources to experiment outcomes
                (when (fboundp 'gptel-auto-workflow--correlate-research-to-outcomes)
                  (let ((source-stats (gptel-auto-workflow--correlate-research-to-outcomes)))
@@ -3773,28 +3752,42 @@ Returns the keep-rate as a float, or 0.10 as a safe lower-bound fallback."
 
 (defun gptel-auto-workflow--champions-file ()
   "Return the path to the category champions persistence file."
-  (expand-file-name "var/tmp/category-champions.sexp"
+  (expand-file-name "var/tmp/category-champions.edn"
                     (or (gptel-auto-workflow--worktree-base-root)
                         user-emacs-directory)))
 
 (defun gptel-auto-workflow--save-category-champions ()
-  "Persist category champions to disk."
+  "Persist category champions to disk as EDN.
+Converts internal alist to a vector of plists for EDN compatibility."
   (let ((file (gptel-auto-workflow--champions-file)))
     (make-directory (file-name-directory file) t)
-    (with-temp-file file
-      (prin1 gptel-auto-workflow--category-champions (current-buffer)))
+    (gptel-auto-workflow--write-edn
+     file
+     (vconcat
+      (mapcar (lambda (entry)
+                (let ((category (car entry))
+                      (pair (cdr entry)))
+                  (list :category category
+                        :strategy (car pair)
+                        :rate (cdr pair))))
+              gptel-auto-workflow--category-champions)))
     (message "[champion] Persisted %d category champions to %s"
              (length gptel-auto-workflow--category-champions)
              (file-relative-name file))))
 
 (defun gptel-auto-workflow--load-category-champions ()
-  "Load category champions from disk."
+  "Load category champions from disk.  Converts EDN vector of plists
+back to internal alist of (category . (strategy . rate))."
   (let ((file (gptel-auto-workflow--champions-file)))
     (when (file-exists-p file)
       (condition-case nil
-          (with-temp-buffer
-            (insert-file-contents file)
-            (setq gptel-auto-workflow--category-champions (read (current-buffer)))
+          (let ((data (gptel-auto-workflow--read-edn file)))
+            (setq gptel-auto-workflow--category-champions
+                  (mapcar (lambda (entry)
+                            (cons (plist-get entry :category)
+                                  (cons (plist-get entry :strategy)
+                                        (plist-get entry :rate))))
+                          data))
             (message "[champion] Loaded %d category champions from %s"
                      (length gptel-auto-workflow--category-champions)
                      (file-relative-name file)))
@@ -5755,7 +5748,7 @@ When a champion is promoted or improves, adjust controller parameters:
 - New champion → reset topic priors to favor the champion's domain.
 Persists updated config to var/tmp/researcher-controller.json."
   (let* ((root (gptel-auto-workflow--worktree-base-root))
-         (config-file (and root (expand-file-name "var/tmp/researcher-controller.json" root)))
+         (config-file (and root (expand-file-name "var/tmp/researcher-controller.edn" root)))
          (existing (when (and config-file (file-readable-p config-file))
                      (condition-case nil
                          (let ((json-object-type 'plist)
@@ -5792,8 +5785,7 @@ Persists updated config to var/tmp/researcher-controller.json."
                                            :rate (cddr e)))
                          gptel-auto-workflow--category-champions)))
       (make-directory (file-name-directory config-file) t)
-      (with-temp-file config-file
-         (insert (gptel-auto-workflow--json-encode-plist existing))))))
+      (gptel-auto-workflow--write-edn config-file existing))))
 
 (defun gptel-auto-workflow--category-experiment-budget (total-experiments)
   "Allocate TOTAL-EXPERIMENTS slots across 4 categories by champion status.
@@ -5995,7 +5987,7 @@ Uncategorized targets pass through (counted against :other quota)."
 Solves S5-2/S4-5/S2-1: cross-cycle state amnesia.
 Also persists EMA confidence history for cross-session trend analysis."
   (let* ((root (gptel-auto-workflow--worktree-base-root))
-         (file (and root (expand-file-name "var/tmp/cross-subsystem-state.json" root)))
+         (file (and root (expand-file-name "var/tmp/cross-subsystem-state.edn" root)))
          (hints gptel-auto-workflow--evolution-next-cycle-hints))
     ;; Attach EMA history for cross-session continuity
     (when (bound-and-true-p gptel-auto-workflow--research-ema-history)
@@ -6024,11 +6016,11 @@ Also persists EMA confidence history for cross-session trend analysis."
         (setq hints (plist-put hints :lambda-results results))))
     (when file
       (make-directory (file-name-directory file) t)
-      (with-temp-file file
-         (insert (gptel-auto-workflow--json-encode-plist hints))))))
+      (gptel-auto-workflow--write-edn file hints))))
 
-(defun gptel-auto-workflow--json-map-entries (value)
-  "Return VALUE as alist entries after JSON plist/alist restoration."
+(defun gptel-auto-workflow--edn-map-entries (value)
+  "Return VALUE as alist entries after EDN map/plist restoration.
+Handles both keyword plists and flat lists of alternating key/value pairs."
   (cond
    ((null value) nil)
    ((and (listp value) (keywordp (car value)))
@@ -6039,23 +6031,27 @@ Also persists EMA confidence history for cross-session trend analysis."
           (when (keywordp key)
             (push (cons (substring (symbol-name key) 1) val) entries))))
       (nreverse entries)))
-   ((listp value) value)))
+   ((and (listp value) (listp (car value)))
+    value)
+   ((listp value)
+    (let (entries)
+      (while value
+        (let ((k (pop value))
+              (v (and value (pop value))))
+          (push (cons k v) entries)))
+      (nreverse entries)))
+   (t value)))
 
 (defun gptel-auto-workflow--restore-next-cycle-hints ()
   "Restore evolution-next-cycle-hints from disk after daemon restart.
 Also restores EMA confidence history for cross-session trend analysis."
   (let* ((root (gptel-auto-workflow--worktree-base-root))
-         (file (and root (expand-file-name "var/tmp/cross-subsystem-state.json" root))))
+         (file (and root (expand-file-name "var/tmp/cross-subsystem-state.edn" root))))
     (when (and file (file-readable-p file))
-      (with-temp-buffer
-        (insert-file-contents file)
-        (goto-char (point-min))
-        (condition-case nil
-            (let ((json-object-type 'plist)
-                  (json-array-type 'list)
-                  (json-key-type 'keyword))
-              (setq gptel-auto-workflow--evolution-next-cycle-hints (json-read)))
-          (error nil))))
+      (condition-case nil
+          (setq gptel-auto-workflow--evolution-next-cycle-hints
+                (gptel-auto-workflow--read-edn file))
+        (error nil)))
     ;; Restore EMA confidence data from plist
     (when (and gptel-auto-workflow--evolution-next-cycle-hints
                (boundp 'gptel-auto-workflow--research-ema-history))
@@ -6073,21 +6069,21 @@ Also restores EMA confidence history for cross-session trend analysis."
         (let ((strikes (plist-get gptel-auto-workflow--evolution-next-cycle-hints :lambda-strikes)))
           (when strikes
             (clrhash gptel-auto-workflow--lambda-strike-count)
-            (dolist (s (gptel-auto-workflow--json-map-entries strikes))
+            (dolist (s (gptel-auto-workflow--edn-map-entries strikes))
               (when (consp s)
                 (puthash (car s) (cdr s) gptel-auto-workflow--lambda-strike-count))))))
       (when (boundp 'gptel-auto-workflow--lambda-dead-until)
         (let ((dead (plist-get gptel-auto-workflow--evolution-next-cycle-hints :lambda-dead)))
           (when dead
             (clrhash gptel-auto-workflow--lambda-dead-until)
-            (dolist (d (gptel-auto-workflow--json-map-entries dead))
+            (dolist (d (gptel-auto-workflow--edn-map-entries dead))
               (when (consp d)
                 (puthash (car d) (cdr d) gptel-auto-workflow--lambda-dead-until))))))
       (when (boundp 'gptel-auto-workflow--lambda-verification-results)
         (let ((results (plist-get gptel-auto-workflow--evolution-next-cycle-hints :lambda-results)))
           (when results
             (clrhash gptel-auto-workflow--lambda-verification-results)
-            (dolist (r (gptel-auto-workflow--json-map-entries results))
+            (dolist (r (gptel-auto-workflow--edn-map-entries results))
               (when (consp r)
                 (puthash (car r) (intern (format "%s" (cdr r)))
                          gptel-auto-workflow--lambda-verification-results)))))))))

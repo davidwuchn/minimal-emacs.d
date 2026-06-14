@@ -11,7 +11,7 @@
 ;; Preserves business context (why decisions were made, what was learned)
 ;; as per-experiment sidecar files, enabling code regeneration with better models.
 ;;
-;; Architecture: each experiment gets a sidecar file var/context/<id>.sexp
+;; Architecture: each experiment gets a sidecar file var/context/<id>.edn
 ;; containing narrative fields (business-rationale, hypothesis, causal-chain,
 ;; learned, decision-rationale) alongside score/model/duration metrics.
 ;; This captures "why" not just "what" for each experiment.
@@ -20,11 +20,14 @@
 
 (require 'cl-lib)
 (require 'subr-x)
+(require 'parseedn)
 ;; gptel-auto-workflow--project-root is called unconditionally in multiple
 ;; functions (--file-path, --ensure-dir, capture, --derive-dependencies).
 ;; Require it so the function is actually defined at runtime, not just
 ;; declared for the byte-compiler.
 (require 'gptel-tools-agent-benchmark nil t)
+;; Reuse shared EDN helpers.
+(require 'gptel-tools-agent-experiment-loop)
 
 (declare-function gptel-auto-workflow--plist-get "gptel-tools-agent-base")
 (declare-function gptel-auto-workflow--project-root "gptel-tools-agent-benchmark")
@@ -35,7 +38,7 @@
 
 (defcustom gptel-auto-workflow-context-db-dir "var/context"
   "Directory for per-experiment context sidecar files.
-Relative to project root.  Each experiment gets <id>.sexp."
+Relative to project root.  Each experiment gets <id>.edn."
   :type 'string
   :group 'gptel-tools-agent)
 
@@ -51,7 +54,7 @@ Relative to project root.  Each experiment gets <id>.sexp."
 (defun gptel-auto-workflow-context-db--file-path (experiment-id)
   "Return absolute path to sidecar file for EXPERIMENT-ID."
   (let ((root (gptel-auto-workflow--project-root)))
-    (expand-file-name (format "%s.sexp" experiment-id)
+    (expand-file-name (format "%s.edn" experiment-id)
                       (expand-file-name gptel-auto-workflow-context-db-dir root))))
 
 (defun gptel-auto-workflow-context-db--ensure-dir ()
@@ -63,27 +66,24 @@ Relative to project root.  Each experiment gets <id>.sexp."
     dir))
 
 (defun gptel-auto-workflow-context-db--write (context)
-  "Write CONTEXT plist to its sidecar file as a sexp.
+  "Write CONTEXT plist to its sidecar file as EDN.
 Returns CONTEXT on success, nil on failure."
   (condition-case err
       (let ((file (gptel-auto-workflow-context-db--file-path
                    (plist-get context :id))))
         (gptel-auto-workflow-context-db--ensure-dir)
-        (with-temp-file file
-          (let ((print-length nil)
-                (print-level nil))
-            (prin1 context (current-buffer))))
+        (gptel-auto-workflow--write-edn file context)
         context)
     (error
      (message "[context-db] Write error: %s" err)
      nil)))
 
 (defun gptel-auto-workflow-context-db--all-files ()
-  "Return list of all .sexp sidecar files in the context directory."
+  "Return list of all .edn sidecar files in the context directory."
   (let ((dir (expand-file-name gptel-auto-workflow-context-db-dir
                                (gptel-auto-workflow--project-root))))
     (when (file-directory-p dir)
-      (directory-files dir t "\\.sexp$"))))
+      (directory-files dir t "\\.edn$"))))
 
 ;; ============================================================================
 ;; Internal Helpers — Derivation Layer
@@ -144,7 +144,8 @@ Priority: hypothesis patterns > strategy mapping > category mapping."
     (list (cons cause effect))))
 
 (defun gptel-auto-workflow-context-db--derive-dependencies (target)
-  "Derive list of dependency paths from TARGET file by parsing require statements."
+  "Derive list of dependency paths from TARGET file by parsing require
+statements."
   (let* ((root (gptel-auto-workflow--project-root))
          (target-full (expand-file-name target root))
          (deps nil))
@@ -214,7 +215,7 @@ Uses score delta and grader/comparator reason."
 
 (defun gptel-auto-workflow-context-db-capture (experiment-result &optional metadata)
   "Capture causal/business context from EXPERIMENT-RESULT.
-Write a sidecar .sexp file with derived narrative fields.
+Write a sidecar .edn file with derived narrative fields.
 Optional METADATA plist is merged into the context.
 Returns the captured context plist."
   (let* ((id (or (plist-get experiment-result :id) 0))
@@ -255,10 +256,7 @@ Returns the plist, or nil if no sidecar exists."
   (let ((file (gptel-auto-workflow-context-db--file-path experiment-id)))
     (when (and file (file-exists-p file))
       (condition-case err
-          (with-temp-buffer
-            (insert-file-contents file)
-            (goto-char (point-min))
-            (read (current-buffer)))
+          (gptel-auto-workflow--read-edn file)
         (error
          (message "[context-db] Read error for id %s: %s" experiment-id err)
          nil)))))
@@ -276,10 +274,7 @@ Returns list of matching context plists.
         (results nil))
     (dolist (file files)
       (condition-case _err
-          (let ((ctx (with-temp-buffer
-                       (insert-file-contents file)
-                       (goto-char (point-min))
-                       (read (current-buffer)))))
+          (let ((ctx (gptel-auto-workflow--read-edn file)))
             (when ctx
               (let ((match t))
                 (when target
@@ -321,10 +316,7 @@ Scans all sidecars, finds those listing target in their dependency list."
         (ids nil))
 (dolist (file files)
       (condition-case _err
-          (let* ((ctx (with-temp-buffer
-                        (insert-file-contents file)
-                        (goto-char (point-min))
-                        (read (current-buffer))))
+          (let* ((ctx (gptel-auto-workflow--read-edn file))
                  (deps (plist-get ctx :dependencies)))
             (when (and ctx deps (member target deps))
               (push (plist-get ctx :id) ids)))
@@ -381,10 +373,7 @@ Returns list of matching context plists."
                             :decision-rationale :expected-impact :observed-impact)))
     (dolist (file files)
       (condition-case _err
-          (let ((ctx (with-temp-buffer
-                       (insert-file-contents file)
-                       (goto-char (point-min))
-                       (read (current-buffer))))
+          (let ((ctx (gptel-auto-workflow--read-edn file))
                 (found nil))
             (when ctx
               (dolist (field narrative-fields)
@@ -403,7 +392,7 @@ Returns list of matching context plists."
         (ids nil))
     (dolist (file files)
       (let ((basename (file-name-nondirectory file)))
-        (when (string-match "\\([0-9]+\\)\\.sexp" basename)
+        (when (string-match "\\([0-9]+\\)\\.edn" basename)
           (push (string-to-number (match-string 1 basename)) ids))))
     (sort ids #'<)))
 

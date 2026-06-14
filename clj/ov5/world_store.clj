@@ -17,7 +17,9 @@
 ;; Schema
 
 (def base-schema
-  "Minimal schema for Phase 1: experiment, backend, strategy, target."
+  "Full schema for experiment entities, backends, strategies, targets.
+   All experiments attributes are :db.cardinality/one.
+   Only :experiment/id has :db/unique :db.unique/identity."
   [{:db/ident :experiment/id
     :db/valueType :db.type/string
     :db/cardinality :db.cardinality/one
@@ -34,14 +36,165 @@
    {:db/ident :experiment/score-after
     :db/valueType :db.type/double
     :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/code-quality
+    :db/valueType :db.type/double
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/delta
+    :db/valueType :db.type/double
+    :db/cardinality :db.cardinality/one}
    {:db/ident :experiment/decision
     :db/valueType :db.type/keyword
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/duration
+    :db/valueType :db.type/long
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/grader-quality
+    :db/valueType :db.type/double
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/grader-reason
+    :db/valueType :db.type/string
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/comparator-reason
+    :db/valueType :db.type/string
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/analyzer-patterns
+    :db/valueType :db.type/string
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/agent-output
+    :db/valueType :db.type/string
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/output-chars
+    :db/valueType :db.type/long
     :db/cardinality :db.cardinality/one}
    {:db/ident :experiment/backend
     :db/valueType :db.type/string
     :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/prompt-chars
+    :db/valueType :db.type/long
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/sections-included
+    :db/valueType :db.type/string
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/exploration-axis
+    :db/valueType :db.type/string
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/candidate-scores
+    :db/valueType :db.type/string
+    :db/cardinality :db.cardinality/one}
    {:db/ident :experiment/strategy
     :db/valueType :db.type/string
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/research-strategy
+    :db/valueType :db.type/string
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/research-hash
+    :db/valueType :db.type/string
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/research-quality
+    :db/valueType :db.type/string
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/controller-decision
+    :db/valueType :db.type/keyword
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/kibcm-axis
+    :db/valueType :db.type/string
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/model
+    :db/valueType :db.type/string
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/eight-key-scores
+    :db/valueType :db.type/string
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/skills
+    :db/valueType :db.type/string
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/edit-mode
+    :db/valueType :db.type/string
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/cost-usd
+    :db/valueType :db.type/double
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/effort-level
+    :db/valueType :db.type/keyword
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/prod-error-rate-before
+    :db/valueType :db.type/double
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/prod-error-rate-after
+    :db/valueType :db.type/double
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/prod-error-rate-delta
+    :db/valueType :db.type/double
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/user-satisfaction-delta
+    :db/valueType :db.type/double
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/support-tickets-reduced
+    :db/valueType :db.type/long
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/business-value-score
+    :db/valueType :db.type/double
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/risk-score
+    :db/valueType :db.type/double
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/complexity-before
+    :db/valueType :db.type/double
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/complexity-after
+    :db/valueType :db.type/double
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/lines-removed
+    :db/valueType :db.type/long
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/understanding-score
+    :db/valueType :db.type/double
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/diversity
+    :db/valueType :db.type/double
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/persona-category
+    :db/valueType :db.type/string
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/persona-archetype
+    :db/valueType :db.type/string
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/research-context
+    :db/valueType :db.type/string
+    :db/cardinality :db.cardinality/one}
+   ;; Gate scores (11 elements, stored individually as doubles)
+   {:db/ident :experiment/gate-score-0
+    :db/valueType :db.type/double
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/gate-score-1
+    :db/valueType :db.type/double
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/gate-score-2
+    :db/valueType :db.type/double
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/gate-score-3
+    :db/valueType :db.type/double
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/gate-score-4
+    :db/valueType :db.type/double
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/gate-score-5
+    :db/valueType :db.type/double
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/gate-score-6
+    :db/valueType :db.type/double
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/gate-score-7
+    :db/valueType :db.type/double
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/gate-score-8
+    :db/valueType :db.type/double
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/gate-score-9
+    :db/valueType :db.type/double
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :experiment/gate-score-10
+    :db/valueType :db.type/double
     :db/cardinality :db.cardinality/one}
    {:db/ident :experiment/timestamp
     :db/valueType :db.type/instant
@@ -155,6 +308,19 @@
   []
   (query '[:find [(pull ?e [*]) ...] :where [?e :experiment/id _]]))
 
+(defn transact-experiment
+  "Transact a single experiment map into the store.
+   If RUN-ID is non-nil, prefixes :experiment/id with \"run-id#\" to ensure
+   global uniqueness (e.g. \"2026-06-13T12:00:00Z-abc1#exp-001\").
+   Returns the transaction report."
+  ([experiment-map] (transact-experiment nil experiment-map))
+  ([run-id experiment-map]
+   (let [entity (if run-id
+                  (update experiment-map :experiment/id
+                          #(str run-id "#" %))
+                  experiment-map)]
+     (transact [entity]))))
+
 (defn experiments-by-target
   "Return all experiments for a given target path."
   [target-path]
@@ -175,6 +341,40 @@
   (query '[:find [(pull ?e [*]) ...] :in $ ?decision
            :where [?e :experiment/decision ?decision]]
          decision))
+
+(defn experiments-by-decision-and-age
+  "Return experiments with DECISION (:db.type/keyword) where the
+   :experiment/id timestamp prefix is > MIN-AGE-HOURS ago and
+   < MAX-AGE-HOURS ago.  Both age params are floats in hours.
+   Returns coll of entity maps (empty if none match)."
+  [decision min-age-hours max-age-hours]
+  (let [all (experiments-by-decision decision)
+        now-ms (System/currentTimeMillis)
+        min-cutoff (- now-ms (* min-age-hours 3600000))
+        max-cutoff (- now-ms (* max-age-hours 3600000))]
+    (filter (fn [e]
+              (when-let [id (:experiment/id e)]
+                (when-let [m (re-find #"^(\d{4}-\d{2}-\d{2}T\d{2}\d{2}\d{2})Z" id)]
+                  (let [ts (try (-> (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HHmmss")
+                                    (.parse (m 1))
+                                    .getTime)
+                                (catch Exception _ nil))]
+                    (and ts
+                         (< ts min-cutoff)
+                         (> ts max-cutoff))))))
+            all)))
+
+(defn kept-experiment-count
+  "Return count of experiments with decision :kept."
+  []
+  (count (experiments-by-decision :kept)))
+
+(defn kept-target-count
+  "Return count of distinct targets with at least one kept experiment."
+  []
+  (let [kept (experiments-by-decision :kept)
+        targets (set (map :experiment/target kept))]
+    (count targets)))
 
 (defn experiments-by-strategy
   "Return all experiments for a given strategy name."
@@ -232,3 +432,18 @@
 ;; Ensure branch namespace is available in the brepl session
 (try (load-file "clj/ov5/world_store/branch.clj")
      (catch Exception _ nil))
+
+;; -----------------------------------------------------------------------------
+;; Elisp Bridge Convenience
+
+(defn all-experiments-readable
+  "Return all experiments as Elisp-readable plist vectors.
+   Calls entities-to-readable on all-experiments."
+  []
+  (entities-to-readable (all-experiments)))
+
+(defn staging-pending-by-age
+  "Return staging-pending experiments within [MIN-H max-H] range."
+  [min-hours max-hours]
+  (entities-to-readable
+   (experiments-by-decision-and-age :staging-pending min-hours max-hours)))

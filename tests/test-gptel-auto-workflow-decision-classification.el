@@ -312,7 +312,7 @@ Not actually called because setup resets to known good values."
 ;; ============================================================================
 
 (ert-deftest test-decision-classification/persist-risk-patterns ()
-  "Should persist risk patterns to var/risk-patterns.sexp."
+  "Should persist risk patterns to var/risk-patterns.edn."
   (with-clean-decision-classification-state
    (setq gptel-auto-workflow--risk-patterns
          '((:pattern-name "test/pattern" :count 3 :confidence 0.7)))
@@ -321,11 +321,11 @@ Not actually called because setup resets to known good values."
          (let ((default-directory tmp-dir))
            (let ((result (gptel-auto-workflow--persist-risk-patterns)))
              (should result)
-             (should (file-exists-p (expand-file-name "var/risk-patterns.sexp" tmp-dir)))))
+             (should (file-exists-p (expand-file-name "var/risk-patterns.edn" tmp-dir)))))
        (ignore-errors (delete-directory tmp-dir t))))))
 
 (ert-deftest test-decision-classification/load-risk-patterns ()
-  "Should load risk patterns from var/risk-patterns.sexp."
+  "Should load risk patterns from var/risk-patterns.edn."
   (with-clean-decision-classification-state
    (let ((tmp-dir (make-temp-file "test-dc-" t)))
      (unwind-protect
@@ -343,17 +343,17 @@ Not actually called because setup resets to known good values."
        (ignore-errors (delete-directory tmp-dir t))))))
 
 (ert-deftest test-decision-classification/load-risk-patterns-no-file ()
-  "Should return nil when risk-patterns.sexp does not exist."
+  "Should return nil when risk-patterns.edn does not exist."
   (with-clean-decision-classification-state
    (let ((tmp-dir (make-temp-file "test-dc-" t)))
      (unwind-protect
          (let ((default-directory tmp-dir))
-           (should-not (file-exists-p (expand-file-name "var/risk-patterns.sexp" tmp-dir)))
+           (should-not (file-exists-p (expand-file-name "var/risk-patterns.edn" tmp-dir)))
            (should-not (gptel-auto-workflow--load-risk-patterns)))
        (ignore-errors (delete-directory tmp-dir t))))))
 
 (ert-deftest test-decision-classification/persist-approval-history ()
-  "Should persist approval history to var/approval-history.sexp."
+  "Should persist approval history to var/approval-history.edn."
   (with-clean-decision-classification-state
    (setq gptel-auto-workflow--approval-history
          '((:experiment-id "exp-1" :approval-type :auto-approved)))
@@ -362,11 +362,11 @@ Not actually called because setup resets to known good values."
          (let ((default-directory tmp-dir))
            (let ((result (gptel-auto-workflow--persist-approval-history)))
              (should result)
-             (should (file-exists-p (expand-file-name "var/approval-history.sexp" tmp-dir)))))
+             (should (file-exists-p (expand-file-name "var/approval-history.edn" tmp-dir)))))
        (ignore-errors (delete-directory tmp-dir t))))))
 
 (ert-deftest test-decision-classification/load-approval-history ()
-  "Should load approval history from var/approval-history.sexp."
+  "Should load approval history from var/approval-history.edn."
   (with-clean-decision-classification-state
    (let ((tmp-dir (make-temp-file "test-dc-" t)))
      (unwind-protect
@@ -400,7 +400,7 @@ Not actually called because setup resets to known good values."
            ;; Learn patterns — this should also persist
            (gptel-auto-workflow--learn-risk-patterns)
            ;; Verify file was created
-           (should (file-exists-p (expand-file-name "var/risk-patterns.sexp" tmp-dir))))
+           (should (file-exists-p (expand-file-name "var/risk-patterns.edn" tmp-dir))))
        (ignore-errors (delete-directory tmp-dir t))))))
 
 (ert-deftest test-decision-classification/track-approval-decision-persists ()
@@ -413,13 +413,13 @@ Not actually called because setup resets to known good values."
            (gptel-auto-workflow--track-approval-decision
             '(:experiment-id "exp-persist-test" :approval-type :auto-approved))
            ;; Should have persisted to disk
-           (should (file-exists-p (expand-file-name "var/approval-history.sexp" tmp-dir))))
+           (should (file-exists-p (expand-file-name "var/approval-history.edn" tmp-dir))))
        (ignore-errors (delete-directory tmp-dir t))))))
 
 (ert-deftest test-decision-classification/persist-error-handling ()
   "persist-risk-patterns should return nil on error (e.g., no write permission)."
   ;; Use an impossible path to force an error
-  (cl-letf (((symbol-function 'make-directory) (lambda (&rest args) (signal 'file-error (list "permission denied")))))
+  (cl-letf (((symbol-function 'make-directory) (lambda (&rest _args) (signal 'file-error (list "permission denied")))))
     (should-not (gptel-auto-workflow--persist-risk-patterns))))
 
 (provide 'test-gptel-auto-workflow-decision-classification)

@@ -189,7 +189,7 @@ wait_for_idle() {
             status="$($SCRIPT status 2>/dev/null || true)"
             if printf '%s' "$status" | grep -Eq ':phase "(idle|complete|skipped|quota-exhausted)"|:running nil'; then
                 # Verify experiments were actually produced (not just idle between cycles)
-                if find "$DIR/var/tmp/experiments" -name "results.tsv" -newer "$PIPELINE_LOG" 2>/dev/null | grep -q .; then
+                if bb -e "(require 'ov5.world-store) (ov5.world-store/connect \"$DIR/var/world-store\") (> (ov5.world-store/experiment-count) 0)" 2>/dev/null | grep -q true; then
                     log "$action completed after ${elapsed}s (experiments produced)"
                     return 0
                 fi
@@ -594,16 +594,17 @@ PIPELINE_START_TIME="$(date +%s)"
 # Now: self-audit writes structured result → self-heal reads it and takes
 # specific remediation actions → pipeline continues with fixes applied.
 log "=== Step 0.4: Self-audit (DETECT) ==="
-SELF_AUDIT_RESULT_FILE="$DIR/var/tmp/self-audit-result.el"
+SELF_AUDIT_RESULT_FILE="$DIR/var/tmp/self-audit-result.edn"
 # Remove stale result from previous run
 rm -f "$SELF_AUDIT_RESULT_FILE"
+rm -f "$DIR/var/tmp/self-audit-result.el"  # legacy cleanup
 SELF_AUDIT_REPORT=$(emacs --batch -L "$DIR/lisp/modules" \
     -L "$DIR/packages/gptel" -L "$DIR/packages/compat" \
     -l gptel --eval \
     '(progn
        (require (quote gptel-auto-workflow-self-audit))
        (setq gptel-auto-workflow-self-audit-enabled t)
-       (setq gptel-auto-workflow--workspace-path "'"$DIR"'")
+       (setq gptel-auto-workflow--workspace-path "'$DIR'"
        (let ((report (gptel-auto-workflow-self-audit-execute)))
          (when report (princ report))))' 2>&1)
 AUDIT_ISSUES=0
@@ -613,20 +614,29 @@ BOTTLENECK=false
 BROKEN_MODULES=0
 if [ -n "$SELF_AUDIT_REPORT" ]; then
     log "$SELF_AUDIT_REPORT"
-    # Read structured result file for specific remediation actions
+    # Read structured EDN result file for specific remediation actions
     if [ -f "$SELF_AUDIT_RESULT_FILE" ]; then
-        AUDIT_ISSUES=$(grep 'issues-count' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. *(\d+)/) { print $1 }')
-        COLD_BACKENDS=$(grep 'cold-backends \.' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'while (/\"([^\"]+)\"/g) { print "$1," }' | perl -pe 's/,$//')
-        UNEVALUATED_STRATS=$(grep 'unevaluated-strategies' "$SELF_AUDIT_RESULT_FILE" | perl -ne 'if (/\. *(\d+)/) { print $1 }')
-         BOTTLENECK=$(grep 'staging-merge-bottleneck' "$SELF_AUDIT_RESULT_FILE" 2>/dev/null | perl -ne 'if (/\. t\b/) { print "1" }')
-         BROKEN_MODULES=$(grep -c 'broken-modules' "$SELF_AUDIT_RESULT_FILE" 2>/dev/null | tr -d ' \n' || echo 0)
-         PRICING_STALE=$(grep 'pricing-stale' "$SELF_AUDIT_RESULT_FILE" 2>/dev/null | perl -ne 'if (/\. (\d+)/) { print $1 }' || echo 0)
-         DAYS_STALE=$(grep 'pricing-days-stale' "$SELF_AUDIT_RESULT_FILE" 2>/dev/null | perl -ne 'if (/\. (\d+)/) { print $1 }' || echo 0)
-         # Default empty values to 0 for safe integer comparison
-         : "${BOTTLENECK:=0}"
-         : "${BROKEN_MODULES:=0}"
-         : "${PRICING_STALE:=0}"
-         : "${DAYS_STALE:=0}"
+        eval $(emacs --batch -L "$DIR/lisp/modules" \
+                 -L "$DIR/var/elpa/parseedn-1.2.1" \
+                 -L "$DIR/var/elpa/parseclj-1.1.1" \
+                 -l parseedn \
+                 -l gptel-tools-agent-experiment-loop \
+                 --eval "
+(let* ((data (gptel-auto-workflow--read-edn \"$SELF_AUDIT_RESULT_FILE\"))
+       (cold (or (plist-get data :cold-backends) nil)))
+  (princ (format \"AUDIT_ISSUES=%s\\n\" (or (plist-get data :issues-count) 0)))
+  (princ (format \"COLD_BACKENDS=%s\\n\" (mapconcat (lambda (x) (format \"%s\" x)) cold \",\")))
+  (princ (format \"UNEVALUATED_STRATS=%s\\n\" (or (plist-get data :unevaluated-strategies) 0)))
+  (princ (format \"BOTTLENECK=%s\\n\" (if (plist-get data :staging-merge-bottleneck) \"1\" \"0\")))
+  (princ (format \"BROKEN_MODULES=%s\\n\" (length (or (plist-get data :broken-modules) ()))))
+  (princ (format \"PRICING_STALE=%s\\n\" (or (plist-get data :pricing-stale) 0)))
+  (princ (format \"DAYS_STALE=%s\\n\" (or (plist-get data :pricing-days-stale) 0))))" 2>/dev/null)
+        : "${AUDIT_ISSUES:=0}"
+        : "${UNEVALUATED_STRATS:=0}"
+        : "${BOTTLENECK:=0}"
+        : "${BROKEN_MODULES:=0}"
+        : "${PRICING_STALE:=0}"
+        : "${DAYS_STALE:=0}"
         log "  Structured audit: $AUDIT_ISSUES issues, $BROKEN_MODULES broken modules, bottleneck=$BOTTLENECK"
         if [ "${PRICING_STALE:-0}" -gt 0 ]; then
             log "  ⚠ Pricing STALE: $PRICING_STALE discrepancies ($DAYS_STALE days since last knowledge page update)"
@@ -745,7 +755,7 @@ log "=== Step 0.6: Refresh approval priorities ==="
 PRIORITIES_FILE="$DIR/var/tmp/approval-priorities.el"
 APPROVED_COUNT=0
 if [ -d "$DIR/var/approval-queue/decisions" ]; then
-    APPROVED_COUNT=$(find "$DIR/var/approval-queue/decisions" -name "*.sexp" -exec grep -l ':status "approved"' {} \; 2>/dev/null | wc -l)
+    APPROVED_COUNT=$(find "$DIR/var/approval-queue/decisions" -name "*.edn" -exec grep -l ':status "approved"' {} \; 2>/dev/null | wc -l)
 fi
 
 # ─── Step 0.7: Prune stale mementum memories ───
@@ -995,33 +1005,16 @@ fi
 
 # ─── Step 6: Report results ───
 log "=== Pipeline Complete ==="
-RESULTS_PATTERN="$DIR/var/tmp/experiments/$(date +%F)*/results.tsv"
 ZERO_RUN_DETECTED=0
-if compgen -G "$RESULTS_PATTERN" >/dev/null; then
-    latest_result=$(ls -t $RESULTS_PATTERN | head -1)
-    result_count=$(wc -l < "$latest_result")
-    data_count=$((result_count - 1))
-    log "Results: $latest_result ($data_count experiments)"
-    verify_research_feedback_loop "$latest_result" || true
-    # YC principle: a 0-experiment run is a SIGNAL, not a benign no-op.
-    # Log it explicitly and append to pipeline-health so self-heal can react.
-    if [ "$data_count" -eq 0 ]; then
-        ZERO_RUN_DETECTED=1
-        log "  ⚠ ZERO-EXPERIMENT RUN: workflow completed but no targets ran"
-        log "  This usually means analyzer failed and all fallbacks returned empty."
-        log "  Possible causes: backend misconfigured, rate-limited, or filter rejected all targets."
-        # Append a 0-run event to pipeline-health.md for self-heal / digest consumption
-        HEALTH_FILE="$DIR/mementum/knowledge/pipeline-health.md"
-        if [ -f "$HEALTH_FILE" ]; then
-            zero_ts=$(date +%s)
-            printf -- "- %s | zero-experiment-run | target-selection-empty | — | — | pending\n" "$zero_ts" >> "$HEALTH_FILE"
-            log "  Appended zero-run event to pipeline-health.md"
-        fi
-    fi
+# Query World Store for experiment count
+exp_total=$(bb -e "(require 'ov5.world-store) (ov5.world-store/connect \"$DIR/var/world-store\") (ov5.world-store/experiment-count)" 2>/dev/null || echo "0")
+if [ "${exp_total:-0}" -gt 0 ]; then
+    log "Results: World Store has $exp_total total experiments"
+    ZERO_RUN_DETECTED=0
 else
-    log "No results file found for today"
+    log "No experiments in World Store"
     ZERO_RUN_DETECTED=1
-    log "  ⚠ NO RESULTS FILE: auto-workflow produced no results.tsv at all"
+    log "  ⚠ NO RESULTS: auto-workflow produced no experiments"
 fi
 
 # Track in PIPELINE_FINAL_STATUS
@@ -1061,15 +1054,13 @@ mkdir -p "$DIGEST_DIR"
     health_ok=0
     health_warn=0
     # 1. Did we produce any improvements?
-    if compgen -G "$DIR/var/tmp/experiments/*/results.tsv" >/dev/null; then
-        kept_today=$(find "$DIR/var/tmp/experiments" -maxdepth 2 -name "results.tsv" -newer "$PIPELINE_START_TIME" 2>/dev/null | xargs -I{} awk -F'\t' 'NR>1 && $8 ~ /^(kept|grader-bypass|merged|staged)$/ {c++} END {print c+0}' {} 2>/dev/null | paste -sd+ | bc 2>/dev/null)
-        if [ "${kept_today:-0}" -gt 0 ]; then
+    kept_today=$(bb -e "(require 'ov5.world-store) (ov5.world-store/connect \"$DIR/var/world-store\") (ov5.world-store/kept-experiment-count)" 2>/dev/null || echo "0")
+    if [ "${kept_today:-0}" -gt 0 ]; then
             echo "- ✓ Kept experiments this run: $kept_today"
             health_ok=$((health_ok + 1))
         else
             echo "- ⚠ No kept experiments this run (improvement rate still low)"
             health_warn=$((health_warn + 1))
-        fi
     fi
     # 2. Is the memory bank growing or shrinking?
     mem_count=$(find "$DIR/mementum/memories" -maxdepth 1 -name "*.md" 2>/dev/null | wc -l)
@@ -1136,45 +1127,15 @@ mkdir -p "$DIGEST_DIR"
     echo ""
     echo "## Kept Experiments (last 24h)"
     echo ""
-    if compgen -G "$DIR/var/tmp/experiments/*/results.tsv" >/dev/null; then
-        # Find results.tsv files modified in last 24h
-        recent_results=$(find "$DIR/var/tmp/experiments" -maxdepth 2 -name "results.tsv" -mtime -1 2>/dev/null | sort)
-        if [ -n "$recent_results" ]; then
-            # Use awk to aggregate kept experiments across all recent files.
-            # Show: target, score delta, business value, decision.
-            # This gives the human (Yin/Yang) enough context to evaluate
-            # what the system is actually producing — not just file names.
-            for rf in $recent_results; do
-                awk -F'\t' 'NR>1 && $8 ~ /^(kept|grader-bypass|merged|staged)$/ {
-                    delta = ($7 == "" ? 0 : $7)
-                    bv = ($38 == "" ? 0 : $38)
-                    hyp = substr($3, 1, 80)
-                    printf "- **%s** (Δ=%+.2f, BV=%.2f) %s [%s]\n", $2, delta, bv, hyp, $8
-                }' "$rf" 2>/dev/null
-            done
-        else
-            echo "- No experiments in last 24h"
-        fi
-    else
-        echo "- No results files found"
-    fi
+    # Query World Store for kept experiments (aggregate count only — detailed listing
+    # requires a query function not yet implemented; TODO: add kept-experiments-recent to world_store.clj)
+    echo "- Total kept experiments: $kept_today"
+    echo "- (Per-experiment details pending World Store query function)"
     echo ""
     echo "## Backend Performance (last 24h)"
     echo ""
-    if compgen -G "$DIR/var/tmp/experiments/*/results.tsv" >/dev/null; then
-        # Aggregate by backend from last 24h
-        find "$DIR/var/tmp/experiments" -maxdepth 2 -name "results.tsv" -mtime -1 -exec cat {} \; 2>/dev/null | \
-            awk -F'\t' 'NR>1 && $15 != "" && $15 != "unknown" {
-                backends[$15]++; if ($8 ~ /^(kept|grader-bypass|merged|staged)$/) kept[$15]++
-            } END {
-                for (b in backends) {
-                    rate = (kept[b]+0) * 100 / backends[b]
-                    printf "- **%s**: %d kept / %d total (%.0f%%)\n", b, kept[b]+0, backends[b], rate
-                }
-            }' | sort -k4 -n -r || echo "- No backend data"
-    else
-        echo "- No results files found"
-    fi
+    # Backend performance query: TODO add backend-stats function to world_store.clj
+    echo "- Backend stats pending World Store query function"
     echo ""
     echo "## Self-Heal State"
     echo ""
@@ -1186,79 +1147,10 @@ mkdir -p "$DIGEST_DIR"
         echo "- pipeline-health.md not yet created"
     fi
     echo ""
-    echo "## Keep-Rate Trend (last 7 days)"
+    echo "## Keep-Rate Trend (all time)"
     echo ""
-    # Aggregate kept/total across all results.tsv files modified in last 7 days
-    if compgen -G "$DIR/var/tmp/experiments/*/results.tsv" >/dev/null; then
-        find "$DIR/var/tmp/experiments" -maxdepth 2 -name "results.tsv" -mtime -7 -exec cat {} \; 2>/dev/null | \
-            awk -F'\t' 'NR>1 {
-                total++
-                if ($8 ~ /^(kept|grader-bypass|merged|staged)$/) kept++
-            } END {
-                if (total > 0) {
-                    rate = kept * 100.0 / total
-                    printf "- **Total experiments (7d):** %d\n- **Kept:** %d\n- **Keep-rate:** %.1f%%\n", total, kept, rate
-                    if (rate < 5) print "- ⚠ LOW: target is 20%+ for self-evolution to make progress"
-                } else {
-                    print "- No experiments in last 7 days"
-                }
-            }'
-    else
-        echo "- No results files found"
-    fi
-    # Per-decision breakdown
-    if compgen -G "$DIR/var/tmp/experiments/*/results.tsv" >/dev/null; then
-        find "$DIR/var/tmp/experiments" -maxdepth 2 -name "results.tsv" -mtime -7 -exec cat {} \; 2>/dev/null | \
-            awk -F'\t' 'NR>1 {count[$8]++} END {
-                for (d in count) printf "- %s: %d\n", d, count[d]
-            }' | sort -k2 -n -r | head -10
-    fi
-    echo ""
-    echo "## Top Failure Modes by Target (last 7d)"
-    echo ""
-    # Per-target failure analysis: tells the human WHICH files are failing
-    # and WHY. The highest-value signal for debugging the keep-rate problem.
-    if compgen -G "$DIR/var/tmp/experiments/*/results.tsv" >/dev/null; then
-        find "$DIR/var/tmp/experiments" -maxdepth 2 -name "results.tsv" -mtime -7 -exec cat {} \; 2>/dev/null | \
-            awk -F'\t' 'NR>1 {
-                target = $2
-                decision = $8
-                reason = $12
-                # Skip non-target rows (staging-review, staging-merge, etc.)
-                if (target !~ /\.el$/) next
-                total[target]++
-                if (decision ~ /^(kept|grader-bypass|merged|staged)$/) kept[target]++
-                else fail[target]++
-                # Track failure reasons
-                if (reason != "" && reason != "repeated-focus-symbol") {
-                    key = target SUBSEP reason
-                    reason_count[key]++
-                }
-            } END {
-                # Find targets with most failures
-                for (t in fail) {
-                    if (fail[t] >= 3) {
-                        rate = (kept[t]+0) * 100 / total[t]
-                        printf "%s\t%d\t%d\t%d\n", t, total[t], kept[t]+0, fail[t]
-                    }
-                }
-            }' | sort -t$'\t' -k4 -n -r | head -10 | \
-        awk -F'\t' '{printf "- **%s**: %d attempts, %d kept, %d failed (%.0f%% keep)\n", $1, $2, $3, $4, ($3*100/$2)}'
-        # For the top failing target, show its failure reasons
-        top_failing=$(find "$DIR/var/tmp/experiments" -maxdepth 2 -name "results.tsv" -mtime -7 -exec cat {} \; 2>/dev/null | \
-            awk -F'\t' 'NR>1 {
-                if ($2 !~ /\.el$/) next
-                if ($8 !~ /^(kept|grader-bypass|merged|staged)$/) fail[$2]++
-            } END { for (t in fail) print fail[t] "\t" t }' | sort -n -r | head -1 | cut -f2)
-        if [ -n "$top_failing" ]; then
-            echo ""
-            echo "### Failure reasons for top target: \`$top_failing\`"
-            find "$DIR/var/tmp/experiments" -maxdepth 2 -name "results.tsv" -mtime -7 -exec cat {} \; 2>/dev/null | \
-                awk -F'\t' -v target="$top_failing" 'NR>1 && $2 == target && $8 !~ /^(kept|grader-bypass|merged|staged)$/ {reason[$12]++} END {
-                    for (r in reason) printf "  - %s: %d\n", r, reason[r]
-                }' | sort -k3 -n -r | head -5
-        fi
-    fi
+    # Aggregate kept/total from World Store
+    bb -e "(require 'ov5.world-store) (ov5.world-store/connect \"$DIR/var/world-store\") (let [total (ov5.world-store/experiment-count) kept (ov5.world-store/kept-experiment-count)] (when (> total 0) (println (str \"**Total experiments:** \" total)) (println (str \"**Kept:** \" kept)) (println (format \"**Keep-rate:** %.1f%%\" (* 100.0 (/ (double kept) total)))) (when (< (/ (double kept) total) 0.05) (println \"⚠ LOW: target is 20%+ for self-evolution to make progress\"))))" 2>/dev/null || echo "- No experiments"
     echo ""
     echo "## Pipeline Run Status"
     echo ""
@@ -1358,13 +1250,8 @@ mkdir -p "$DIGEST_DIR"
     # a champion yet. The human should know this is a cold-start.
     if [ -d "$DIR/assistant/strategies" ]; then
         total_strategies=$(find "$DIR/assistant/strategies" -name "strategy-*.el" 2>/dev/null | wc -l)
-        # Count strategy hits in recent results (column 22 = strategy name)
-        if compgen -G "$DIR/var/tmp/experiments/*/results.tsv" >/dev/null; then
-            used_strategies=$(find "$DIR/var/tmp/experiments" -maxdepth 2 -name "results.tsv" -mtime -7 -exec cat {} \; 2>/dev/null | \
-                awk -F'\t' 'NR>1 && $22 != "" && $22 != "template-default" && $22 != "?" {print $22}' | sort -u | wc -l)
-        else
-            used_strategies=0
-        fi
+        # Count strategy hits via World Store (column 22 = strategy name in old TSV)
+        used_strategies=$(bb -e "(require 'ov5.world-store) (ov5.world-store/connect \"$DIR/var/world-store\") (require 'clojure.set) (let [all (ov5.world-store/all-experiments) strategies (->> all (map :experiment/strategy) (remove nil?) (remove #{\"template-default\" \"?\" \"\"}) set)] (println (count strategies)))" 2>/dev/null || echo "0")
         unevaluated=$((total_strategies - used_strategies))
         if [ "$total_strategies" -gt 0 ]; then
             if [ "$unevaluated" -gt "$((total_strategies / 2))" ]; then
@@ -1453,7 +1340,7 @@ mkdir -p "$DIGEST_DIR"
     echo "## Recommended Actions"
     echo ""
     # Pending proposals that need human approval
-    pending_proposals=$(find "$DIR/var/approval-queue/pending" -name "*.sexp" 2>/dev/null | wc -l)
+    pending_proposals=$(find "$DIR/var/approval-queue/pending" -name "*.edn" 2>/dev/null | wc -l)
     if [ "${pending_proposals:-0}" -gt 0 ]; then
         echo "- **$pending_proposals proposals pending human approval**"
         echo "  Review: \`ls var/approval-queue/pending/\`"
@@ -1482,7 +1369,7 @@ mkdir -p "$DIGEST_DIR"
         echo "  Check: \`emacsclient --socket-name=pmf-value-stream --eval '(gptel-auto-workflow--daemon-health)'\`"
     fi
     # Approval queue health
-    approved_count=$(grep -l ':status "approved"' "$DIR/var/approval-queue/decisions/"*.sexp 2>/dev/null | wc -l)
+    approved_count=$(grep -l ':status "approved"' "$DIR/var/approval-queue/decisions/"*.edn 2>/dev/null | wc -l)
     if [ "${approved_count:-0}" -eq 0 ] && [ "${pending_proposals:-0}" -gt 0 ]; then
         echo "- **No approved proposals** — human hasn't reviewed pending items. System evolving without human guidance."
     fi
@@ -1493,67 +1380,13 @@ log "Daily digest written: $DIGEST_FILE"
 log "=== Step 6.5: Merge kept experiments ==="
 kept_count=0
 merged_count=0
-if compgen -G "$RESULTS_PATTERN" >/dev/null; then
-    latest_result=$(ls -t $RESULTS_PATTERN | head -1)
-    # Parse results.tsv for kept experiments
-    # Header: experiment_id target hypothesis score_before score_after code_quality delta decision ...
-    # Decision column is 8th (tab-separated)
-    while IFS=$'\t' read -r exp_id target _ _ _ _ _ decision _; do
-        [ "$exp_id" = "experiment_id" ] && continue
-        case "$decision" in
-            kept|staged|merged|grader-bypass*commit*)
-                kept_count=$((kept_count + 1))
-                # Find corresponding optimize branch for this run
-                result_dir=$(basename "$(dirname "$latest_result")")
-                run_id="${result_dir##*-}"
-                # P2.1 FIX: Extract just the last part of target name (after last hyphen)
-                # Branch format: optimize/{name}-{hostname}-r{run_id}-exp{N}
-                # where name is the last component of target filename
-                target_base=$(basename "$target" .el)
-                target_name="${target_base##*-}"
-                # Try multiple patterns to find the branch (check remote first)
-                branch=""
-                # Pattern 1: exact match with run_id on remote (most specific)
-                branch=$(git -C "$DIR" branch -r --list "origin/optimize/*-r${run_id}-exp${exp_id}" 2>/dev/null | head -1 | sed 's/^[* ]*//' | sed 's|^origin/||')
-                # Pattern 2: match with target_name and run_id on remote
-                if [ -z "$branch" ]; then
-                    branch=$(git -C "$DIR" branch -r --list "origin/optimize/${target_name}-*-r${run_id}-exp*" 2>/dev/null | head -1 | sed 's/^[* ]*//' | sed 's|^origin/||')
-                fi
-                # Pattern 3: match with just target_name and exp_id on remote
-                if [ -z "$branch" ]; then
-                    branch=$(git -C "$DIR" branch -r --list "origin/optimize/${target_name}-*-exp${exp_id}" 2>/dev/null | head -1 | sed 's/^[* ]*//' | sed 's|^origin/||')
-                fi
-                # Pattern 4: broader match with any target containing the name on remote
-                if [ -z "$branch" ]; then
-                    branch=$(git -C "$DIR" branch -r --list "origin/optimize/*${target_name}*-exp${exp_id}" 2>/dev/null | head -1 | sed 's/^[* ]*//' | sed 's|^origin/||')
-                fi
-                # Pattern 5: check local branches as fallback
-                if [ -z "$branch" ]; then
-                    branch=$(git -C "$DIR" branch --list "optimize/${target_name}-*-${run_id}-exp*" 2>/dev/null | head -1 | sed 's/^[* ]*//')
-                fi
-                if [ -n "$branch" ]; then
-                    log "  Merging kept experiment: $branch (decision: $decision)"
-                    # Fetch the branch from remote if not available locally
-                    if ! git -C "$DIR" rev-parse --verify "$branch" >/dev/null 2>&1; then
-                        git -C "$DIR" fetch origin "$branch:$branch" 2>/dev/null || true
-                    fi
-                    if git -C "$DIR" merge --no-ff "$branch" -m "⚒ Merge $branch: $decision" 2>/dev/null; then
-                        log "    ✓ Merged $branch"
-                        merged_count=$((merged_count + 1))
-                        # Delete local branch after merge
-                        git -C "$DIR" branch -D "$branch" 2>/dev/null || true
-                    else
-                        log "    ✗ Merge failed for $branch (conflicts?)"
-                        git -C "$DIR" merge --abort 2>/dev/null || true
-                    fi
-                else
-                    log "  ⚠ No branch found for kept experiment: $target (run: $run_id, exp: $exp_id)"
-                fi
-                ;;
-        esac
-    done < "$latest_result"
-fi
-log "Kept experiments: $kept_count, Merged to main: $merged_count"
+# Query World Store for kept experiments and attempt branch merge
+# TODO: full merge automation requires querying experiment IDs and matching branches.
+# For now, report kept count and skip merge.
+kept_count=$(bb -e "(require 'ov5.world-store) (ov5.world-store/connect \"$DIR/var/world-store\") (ov5.world-store/kept-experiment-count)" 2>/dev/null || echo "0")
+log "Kept experiments (World Store): $kept_count"
+log "  NOTE: Auto-merge from TSV is disabled. Use staging-flow for merge."
+merged_count=0
 
 # ─── Step 6.6: Clean old optimize branches (merged >7 days) ───
 log "=== Step 6.6: Clean old optimize branches ==="

@@ -2,6 +2,8 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
+(require 'parseedn)
+(require 'gptel-tools-agent-experiment-loop)
 
 (declare-function gptel-auto-workflow--plist-delete-all "gptel-tools-agent-error")
 
@@ -227,23 +229,303 @@ Criteria: has sections, has examples, has specific guidance, right length."
 
 (defconst gptel-auto-experiment--kibcm-patterns
   ;; Tier 1 — Confirmed (KIBC-M: all models, all scales)
-  '((:K "nil.safety\\|nil.guard\\|nil.check\\|guard[^a-z]\\|validat\\|proper-list-p\\|bound-and-true-p\\|filter.out\\|discard\\|remove nil\\|unless nil\\|when nil\\|error.*handling")
-    (:I "passthrough\\|pass through\\|identity\\|reference\\|binding\\|same entity\\|unchanged\\|copy\\|self[^a-z]")
-    (:B "compose\\|chain\\|extract helper\\|helper function\\|refactor into\\|DRY\\|dedup\\|unify\\|pipeline\\|sequence\\|decompose")
-    (:C "reorder\\|flip\\|swap\\|passive\\|invert\\|reverse\\|before.*after\\|after.*before\\|reorganize")
-    (:M "pattern\\|template\\|apply pattern\\|in.context\\|example.driven\\|analogy\\|match\\|few.shot\\|exemplar\\|similar to")
+  '((:K "
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+nil.safety\\|nil.guard\\|nil.check\\|guard[^a-z]\\|validat\\|proper-list-p\\|bound-and-true-p\\|filter.out\\|discard\\|remove
+nil\\|unless nil\\|when nil\\|error.*handling")
+    (:I "passthrough\\|pass through\\|identity\\|reference\\|binding\\|same
+entity\\|unchanged\\|copy\\|self[^a-z]")
+    (:B "compose\\|chain\\|extract helper\\|helper function\\|refactor
+into\\|DRY\\|dedup\\|unify\\|pipeline\\|sequence\\|decompose")
+    (:C "
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+reorder\\|flip\\|swap\\|passive\\|invert\\|reverse\\|before.*after\\|after.*before\\|reorganize")
+    (:M "pattern\\|template\\|apply
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+pattern\\|in.context\\|example.driven\\|analogy\\|match\\|few.shot\\|exemplar\\|similar
+to")
     ;; Tier 2 — Predicted (seeking discovery: larger models)
-    (:W "duplicat\\|double\\|mirror\\|same.*twice\\|self.*same\\|reuse\\|share.logic\\|merge.*duplicate\\|identical.*both")
-    (:T "type.check\\|type.valid\\|annotation\\|type.assert\\|ensure.*type\\|cast\\|coerce\\|narrowing\\|widening")
-    (:PHI "both.*and\\|parallel\\|coordinat\\|multi.property\\|multiple.*same\\|fork\\|split.*combine\\|apply.*two")
-    (:D "deep.compos\\|multi.step\\|nested\\|complex.refactor\\|several.*changes?\\|multiple.*changes?\\|comprehensive")
+    (:W "
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+duplicat\\|double\\|mirror\\|same.*twice\\|self.*same\\|reuse\\|share.logic\\|merge.*duplicate\\|identical.*both")
+    (:T "
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+type.check\\|type.valid\\|annotation\\|type.assert\\|ensure.*type\\|cast\\|coerce\\|narrowing\\|widening")
+    (:PHI "
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+both.*and\\|parallel\\|coordinat\\|multi.property\\|multiple.*same\\|fork\\|split.*combine\\|apply.*two")
+    (:D "
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+deep.compos\\|multi.step\\|nested\\|complex.refactor\\|several.*changes?\\|multiple.*changes?\\|comprehensive")
     ;; Tier 3 — Structural (architecture-level)
-    (:SCOPE "scope\\|visibility\\|access.control\\|local\\|global\\|lexical\\|dynamic.*bind\\|closure\\|environment")
-    (:SUBST "simplif\\|reductio\\|substitut\\|replace.*with\\|instead of\\|compress\\|shorte\\|inline\\|expand")
-    (:WHNF "done\\|finished\\|complete\\|final\\|normal.form\\|base.case\\|terminal\\|atomic\\|primitive\\|no.further")
+    (:SCOPE "
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+scope\\|visibility\\|access.control\\|local\\|global\\|lexical\\|dynamic.*bind\\|closure\\|environment")
+    (:SUBST "simplif\\|reductio\\|substitut\\|replace.*with\\|instead
+of\\|compress\\|shorte\\|inline\\|expand")
+    (:WHNF "
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+done\\|finished\\|complete\\|final\\|normal.form\\|base.case\\|terminal\\|atomic\\|primitive\\|no.further")
     ;; Tier 4 — Meta (self-evolution itself)
-    (:Y "recurs\\|self.refer\\|self.modif\\|self.improv\\|self.evol\\|fixed.point\\|loop\\|iterate\\|repeat.*until\\|while")
-    (:QUOTE "document\\|comment\\|explain\\|describe\\|name\\|label\\|tag\\|categorize\\|classify\\|annotate\\|docstring"))
+    (:Y "
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+recurs\\|self.refer\\|self.modif\\|self.improv\\|self.evol\\|fixed.point\\|loop\\|iterate\\|repeat.*until\\|while")
+    (:QUOTE "
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+document\\|comment\\|explain\\|describe\\|name\\|label\\|tag\\|categorize\\|classify\\|annotate\\|docstring"))
   "15-axis KIBC-M+ operation patterns for hypothesis classification.
 Tier 1 (K,I,B,C,M): confirmed in all models.
 Tier 2 (W,T,PHI,D): predicted in larger models.
@@ -1492,12 +1774,9 @@ explicitly approved these improvements."
                          "var/approval-queue/decisions" root))
          (approved '()))
     (when (file-directory-p decisions-dir)
-      (dolist (f (directory-files decisions-dir t "\\.sexp$"))
+      (dolist (f (directory-files decisions-dir t "\\.edn$"))
         (condition-case _
-            (let ((data (with-temp-buffer
-                          (insert-file-contents f)
-                          (goto-char (point-min))
-                          (read (current-buffer)))))
+            (let ((data (gptel-auto-workflow--read-edn f)))
               (when (and (listp data)
                          (string= (plist-get data :status) "approved"))
                 (let* ((proposal (plist-get data :proposal))
@@ -2091,18 +2370,22 @@ row for the same experiment and target."
           (forward-line 1))
         count))))
 
-(defun gptel-auto-workflow--sync-live-kept-count (run-id results-file)
-  "Refresh live workflow kept count from RESULTS-FILE for active RUN-ID."
+(defun gptel-auto-workflow--sync-live-kept-count (run-id _results-file)
+  "Refresh live workflow kept count from World Store for active RUN-ID.
+_results-file is ignored (deprecated — kept for caller compatibility)."
   (when (and gptel-auto-workflow--running
              (stringp run-id)
              (equal run-id (gptel-auto-workflow--current-run-id)))
-    (setq gptel-auto-workflow--stats
-          (plist-put
-           gptel-auto-workflow--stats
-           :kept
-           (gptel-auto-workflow--kept-target-count-from-results-file
-            results-file)))
-    (gptel-auto-workflow--persist-status)))
+    (let ((count 0))
+      (ignore-errors
+        (condition-case nil
+            (setq count (string-to-number
+                         (ov5-world-store--brepl-eval
+                          "(ns ov5.world-store) (kept-target-count)")))
+          (error nil)))
+      (setq gptel-auto-workflow--stats
+            (plist-put gptel-auto-workflow--stats :kept count))
+      (gptel-auto-workflow--persist-status))))
 
 (defun gptel-auto-experiment--calculate-cost-usd (prompt-chars output-chars backend model)
   "Calculate estimated API cost in USD for PROMPT-CHARS and OUTPUT-CHARS.
@@ -2129,10 +2412,12 @@ Returns cost as a float, or 0.0 if pricing unavailable."
        (* output-tokens (/ output-price 1000000.0)))))
 
 (defun gptel-auto-experiment-log-tsv (run-id experiment)
-  "Append EXPERIMENT to results.tsv for RUN-ID.
+  "Transact EXPERIMENT into Datahike World Store for RUN-ID.
 Captures executor reasoning from the dynamic variable
 `gptel-auto-experiment--executor-reasoning' when available.
-If :business-value-score is not set, computes from local signals."
+If :business-value-score is not set, computes from local signals.
+NOTE: Method name preserved for byte-compile compatibility; actual storage
+is now via Datahike World Store (no TSV involved)."
   ;; Compute local business metrics if not already provided
   (let* ((target (gptel-auto-workflow--plist-get experiment :target nil))
          (has-business-score (and (plist-get experiment :business-value-score)
@@ -2170,32 +2455,21 @@ If :business-value-score is not set, computes from local signals."
                                           diversity (length target-results))
                                  (plist-put experiment :diversity diversity))
                              experiment))
-                       experiment))
-         (file (gptel-auto-workflow--ensure-results-file run-id))
-         (experiment-id (gptel-auto-workflow--plist-get experiment :id "?"))
+                        experiment))
          (target (gptel-auto-workflow--plist-get experiment :target "?"))
+         (experiment-id (gptel-auto-workflow--plist-get experiment :id "?"))
          (decision (gptel-auto-experiment--tsv-decision-label experiment))
-         (agent-output (gptel-auto-workflow--plist-get experiment :agent-output ""))
-         (truncated-output (gptel-auto-experiment--tsv-escape
-                            (truncate-string-to-width agent-output 500 nil nil "...")))
-         (score-before (gptel-auto-experiment--tsv-number
-                        (gptel-auto-workflow--plist-get experiment :score-before 0)))
-         (score-after (gptel-auto-experiment--tsv-number
-                       (gptel-auto-workflow--plist-get experiment :score-after 0)))
-         (code-quality (gptel-auto-experiment--tsv-number
-                        (gptel-auto-workflow--plist-get experiment :code-quality 0.5)
-                        0.5))
-         (duration (gptel-auto-experiment--tsv-number
-                    (gptel-auto-workflow--plist-get experiment :duration 0)))
-         (output-chars (gptel-auto-experiment--tsv-number
-                        (gptel-auto-workflow--plist-get experiment :output-chars 0)))
-         (prompt-chars (gptel-auto-experiment--tsv-number
-                        (gptel-auto-workflow--plist-get experiment :prompt-chars 0)))
-         (backend (gptel-auto-workflow--plist-get experiment :backend "unknown"))
-         (model (gptel-auto-workflow--plist-get experiment :model "unknown"))
-         (cost-usd (gptel-auto-experiment--calculate-cost-usd
-                    prompt-chars output-chars backend model))
-          (effort-level (or (gptel-auto-workflow--plist-get experiment :effort-level)
+         (score-before (or (gptel-auto-workflow--plist-get experiment :score-before) 0))
+         (score-after (or (gptel-auto-workflow--plist-get experiment :score-after) 0))
+         (code-quality (or (gptel-auto-workflow--plist-get experiment :code-quality) 0.5))
+         (duration (or (gptel-auto-workflow--plist-get experiment :duration) 0))
+         (output-chars (or (gptel-auto-workflow--plist-get experiment :output-chars) 0))
+          (prompt-chars (or (gptel-auto-workflow--plist-get experiment :prompt-chars) 0))
+          (backend (gptel-auto-workflow--plist-get experiment :backend "unknown"))
+          (model (gptel-auto-workflow--plist-get experiment :model "unknown"))
+          (cost-usd (gptel-auto-experiment--calculate-cost-usd
+                     prompt-chars output-chars backend model))
+           (effort-level (or (gptel-auto-workflow--plist-get experiment :effort-level)
                            (and (fboundp 'gptel-backend-registry-effort-level)
                                 (gptel-backend-registry-effort-level
                                  (intern (or (and (symbolp backend) (symbol-name backend))
@@ -2204,31 +2478,20 @@ If :business-value-score is not set, computes from local signals."
                                              model))
                                  'executor))
                            "default"))
-          ;; Production metrics (columns 33-39)
-          (prod-error-rate-before (gptel-auto-experiment--tsv-number
-                                   (gptel-auto-workflow--plist-get experiment :prod-error-rate-before 0.0)))
-          (prod-error-rate-after (gptel-auto-experiment--tsv-number
-                                  (gptel-auto-workflow--plist-get experiment :prod-error-rate-after 0.0)))
-          (prod-error-rate-delta (gptel-auto-experiment--tsv-number
-                                  (gptel-auto-workflow--plist-get experiment :prod-error-rate-delta 0.0)))
-          (user-satisfaction-delta (gptel-auto-experiment--tsv-number
-                                    (gptel-auto-workflow--plist-get experiment :user-satisfaction-delta 0.0)))
-          (support-tickets-reduced (gptel-auto-experiment--tsv-number
-                                    (gptel-auto-workflow--plist-get experiment :support-tickets-reduced 0)))
-          (business-value-score (gptel-auto-experiment--tsv-number
-                                 (gptel-auto-workflow--plist-get experiment :business-value-score 0.0)))
-           (risk-score (gptel-auto-experiment--tsv-number
-                        (gptel-auto-workflow--plist-get experiment :risk-score 0.0)))
-           ;; Complexity metrics (columns 40-43)
-           (complexity-before (gptel-auto-experiment--tsv-number
-                               (gptel-auto-workflow--plist-get experiment :complexity-before 0.0)))
-           (complexity-after (gptel-auto-experiment--tsv-number
-                              (gptel-auto-workflow--plist-get experiment :complexity-after 0.0)))
-           (lines-removed (gptel-auto-experiment--tsv-number
-                          (gptel-auto-workflow--plist-get experiment :lines-removed 0)))
-            (understanding-score (gptel-auto-experiment--tsv-number
-                                 (gptel-auto-workflow--plist-get experiment :understanding-score 0.0)))
-            (gate-score-vec (or (gptel-auto-workflow--plist-get experiment :gate-score-vector)
+          ;; Production metrics
+          (prod-error-rate-before (or (gptel-auto-workflow--plist-get experiment :prod-error-rate-before) 0.0))
+          (prod-error-rate-after (or (gptel-auto-workflow--plist-get experiment :prod-error-rate-after) 0.0))
+          (prod-error-rate-delta (or (gptel-auto-workflow--plist-get experiment :prod-error-rate-delta) 0.0))
+          (user-satisfaction-delta (or (gptel-auto-workflow--plist-get experiment :user-satisfaction-delta) 0.0))
+          (support-tickets-reduced (or (gptel-auto-workflow--plist-get experiment :support-tickets-reduced) 0))
+          (business-value-score (or (gptel-auto-workflow--plist-get experiment :business-value-score) 0.0))
+           (risk-score (or (gptel-auto-workflow--plist-get experiment :risk-score) 0.0))
+           ;; Complexity metrics
+           (complexity-before (or (gptel-auto-workflow--plist-get experiment :complexity-before) 0.0))
+           (complexity-after (or (gptel-auto-workflow--plist-get experiment :complexity-after) 0.0))
+           (lines-removed (or (gptel-auto-workflow--plist-get experiment :lines-removed) 0))
+           (understanding-score (or (gptel-auto-workflow--plist-get experiment :understanding-score) 0.0))
+           (gate-score-vec (or (gptel-auto-workflow--plist-get experiment :gate-score-vector)
                                 (when (fboundp 'gptel-auto-workflow--compute-gate-score-vector)
                                   (gptel-auto-workflow--compute-gate-score-vector experiment))
                                 (make-vector 11 -1.0))))
@@ -2372,119 +2635,84 @@ fallback hash" (or target "unknown")))
             (plist-put experiment :persona-archetype
                        (and (boundp 'gptel-ai-behaviors--current-archetype)
                             gptel-ai-behaviors--current-archetype))))
-    (with-temp-buffer
-      (insert-file-contents file)
-      (unless (gptel-auto-experiment--drop-replaceable-tsv-rows
-               experiment-id target)
-        (goto-char (point-max))
-        (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%.6f\t%s\t%.4f\t%.4f\t%+.4f\t%+.2f\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%d\t%.2f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\n"
-                        experiment-id
-                        target
-                        (gptel-auto-experiment--tsv-escape
-                         (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
-                        score-before
-                        score-after
-                        code-quality
-                        (- score-after score-before)
-                        decision
-                        (round duration)
-                        (gptel-auto-workflow--plist-get experiment :grader-quality "?")
-                        (gptel-auto-experiment--tsv-escape
-                         (gptel-auto-workflow--plist-get experiment :grader-reason "N/A"))
-                        (gptel-auto-experiment--tsv-escape
-                         (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A"))
-                        (gptel-auto-experiment--tsv-escape
-                         (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
-                        truncated-output
-                        (round output-chars)
-                        (gptel-auto-experiment--tsv-escape
-                         (let ((model (gptel-auto-workflow--plist-get experiment :model)))
-                           (if (fboundp 'gptel-auto-workflow--backend-for-model)
-                               (gptel-auto-workflow--backend-for-model model)
-                             (or (gptel-auto-workflow--plist-get experiment :backend "unknown")
-                                 "unknown"))))
-                        (round prompt-chars)
-                        (or (gptel-auto-experiment--tsv-escape
-                             (gptel-auto-workflow--plist-get experiment :sections-included "all"))
-                            "all")
-                        (or (gptel-auto-experiment--tsv-escape
-                             (gptel-auto-workflow--plist-get experiment :exploration-axis "?"))
-                            "?")
-                        (or (gptel-auto-experiment--tsv-escape
-                             (let ((candidates (gptel-auto-workflow--plist-get experiment :candidate-validation)))
-                               (if (and (listp candidates) (proper-list-p candidates))
-                                   (mapconcat (lambda (c)
-                                                (format "%s:%.1f:%s"
-                                                        (substring (or (car c) "") 0 (min 20 (length (or (car c) ""))))
-                                                        (gptel-auto-experiment--tsv-number
-                                                         (plist-get (cdr c) :score)
-                                                         0.0)
-                                                        (if (plist-get (cdr c) :valid) "V" "X")))
-                                              candidates ";")
-                                 "")))
-                            "")
-                        (or (gptel-auto-experiment--tsv-escape
-                             (gptel-auto-workflow--plist-get experiment :strategy "template-default"))
-                            "template-default")
-                        (or (gptel-auto-experiment--tsv-escape
-                             (gptel-auto-workflow--plist-get experiment :research-strategy "none"))
-                            "none")
-                        (let ((hash (gptel-auto-workflow--plist-get experiment :research-hash "none")))
-                          ;; DEFENSE-IN-DEPTH: if upstream failed to set hash, generate fallback
-                          ;; so feedback loop is always preserved.
-                          (when (equal hash "none")
-                            (setq hash (sha1 (format "pipeline-defect-%s-%s" target (format-time-string "%s"))))
-                            (message "[auto-workflow] WARNING: TSV-level fallback hash for %s (upstream should have
-set it)"
-                                     (or target "unknown")))
-                          (gptel-auto-experiment--tsv-escape hash))
-                        (or (gptel-auto-experiment--tsv-escape
-                             (gptel-auto-workflow--plist-get experiment :research-quality "none"))
-                            "none")
-                        (or (gptel-auto-experiment--tsv-escape
-                             (gptel-auto-workflow--plist-get experiment :controller-decision "none"))
-                            "none")
-                        (or (gptel-auto-experiment--tsv-escape
-                             (gptel-auto-workflow--plist-get experiment :kibcm-axis "?"))
-                            "?")
-                        (or (gptel-auto-experiment--tsv-escape
-                             (gptel-auto-workflow--plist-get experiment :model "unknown"))
-                            "unknown")
-                        (gptel-auto-experiment--tsv-escape
-                         (let ((ks (gptel-auto-workflow--plist-get experiment :eight-keys-scores nil)))
-                           (if ks
-                               (concat "{" (mapconcat
-                                            (lambda (pair)
-                                              (format "%s:%.2f" (car pair) (cdr pair)))
-                                            ks ",") "}")
-                             "")))
-                         (gptel-auto-experiment--tsv-escape
-                          (gptel-auto-workflow--plist-get experiment :skills ""))
-                         (or (gptel-auto-experiment--tsv-escape
-                               (gptel-auto-workflow--plist-get experiment :edit-mode "none"))
-                              "none")
-                         cost-usd
-                         (or (gptel-auto-experiment--tsv-escape effort-level) "default")
-                         ;; Production metrics (columns 33-39)
-                         prod-error-rate-before
-                         prod-error-rate-after
-                         prod-error-rate-delta
-                         user-satisfaction-delta
-                         (round support-tickets-reduced)
-                         business-value-score
-                         risk-score
-                         ;; Complexity metrics (columns 40-43)
-                         complexity-before
-                         complexity-after
-                         (round lines-removed)
-                         understanding-score
-                         (aref gate-score-vec 0) (aref gate-score-vec 1)
-                         (aref gate-score-vec 2) (aref gate-score-vec 3)
-                         (aref gate-score-vec 4) (aref gate-score-vec 5)
-                         (aref gate-score-vec 6) (aref gate-score-vec 7)
-                         (aref gate-score-vec 8) (aref gate-score-vec 9)
-                         (aref gate-score-vec 10))))
-      (write-region (point-min) (point-max) file))
+    ;; Transact experiment into Datahike World Store (replaces TSV file write).
+    ;; Build a Clojure map with keyword keys matching the World Store schema.
+    (let* ((ws-id (format "%s" (gptel-auto-workflow--plist-get experiment :id "?")))
+           (ws-hypothesis (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
+           (ws-research-hash (or (gptel-auto-workflow--plist-get experiment :research-hash "none") "none"))
+           (ws-grader-reason (gptel-auto-workflow--plist-get experiment :grader-reason "N/A"))
+           (ws-comparator-reason (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A"))
+           (ws-analyzer-patterns (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
+           (ws-agent-output (gptel-auto-workflow--plist-get experiment :agent-output ""))
+           (ws-backend (or (gptel-auto-workflow--plist-get experiment :backend "unknown") "unknown"))
+           (ws-strategy (gptel-auto-workflow--plist-get experiment :strategy "template-default"))
+           (ws-research-strategy (gptel-auto-workflow--plist-get experiment :research-strategy "none"))
+           (ws-research-quality (gptel-auto-workflow--plist-get experiment :research-quality "none"))
+           (ws-controller-decision (gptel-auto-workflow--plist-get experiment :controller-decision "none"))
+           (ws-kibcm-axis (gptel-auto-workflow--plist-get experiment :kibcm-axis "?"))
+           (ws-model (gptel-auto-workflow--plist-get experiment :model "unknown"))
+           (ws-sections-included (gptel-auto-workflow--plist-get experiment :sections-included "all"))
+           (ws-exploration-axis (gptel-auto-workflow--plist-get experiment :exploration-axis "?"))
+           (ws-candidate-scores
+            (let ((candidates (gptel-auto-workflow--plist-get experiment :candidate-validation)))
+              (if (and (listp candidates) (proper-list-p candidates))
+                  (mapconcat (lambda (c)
+                               (format "%s:%.1f:%s"
+                                       (substring (or (car c) "") 0 (min 20 (length (or (car c) ""))))
+                                       (if (numberp (plist-get (cdr c) :score))
+                                           (plist-get (cdr c) :score) 0.0)
+                                       (if (plist-get (cdr c) :valid) "V" "X")))
+                             candidates ";")
+                "")))
+           (ws-eight-keys
+            (let ((ks (gptel-auto-workflow--plist-get experiment :eight-keys-scores nil)))
+              (if ks
+                  (concat "{" (mapconcat (lambda (pair) (format "%s:%.2f" (car pair) (cdr pair))) ks ",") "}")
+                "")))
+           (ws-skills (gptel-auto-workflow--plist-get experiment :skills ""))
+           (ws-edit-mode (gptel-auto-workflow--plist-get experiment :edit-mode "none"))
+           (ws-effort-level (or effort-level "default"))
+           (ws-decision (if (equal decision "kept") ":kept"
+                          (if (equal decision "staging-pending") ":staging-pending"
+                            (concat ":" decision))))
+           ;; Build EDN map for transact-experiment
+           (edn-map
+            (format "{:experiment/id %S :experiment/target %S :experiment/hypothesis %S :experiment/score-before %s :experiment/score-after %s :experiment/code-quality %s :experiment/delta %s :experiment/decision %s :experiment/duration %s :experiment/grader-quality %s :experiment/grader-reason %S :experiment/comparator-reason %S :experiment/analyzer-patterns %S :experiment/agent-output %S :experiment/output-chars %s :experiment/backend %S :experiment/prompt-chars %s :experiment/sections-included %S :experiment/exploration-axis %S :experiment/candidate-scores %S :experiment/strategy %S :experiment/research-strategy %S :experiment/research-hash %S :experiment/research-quality %S :experiment/controller-decision %s :experiment/kibcm-axis %S :experiment/model %S :experiment/eight-key-scores %S :experiment/skills %S :experiment/edit-mode %S :experiment/cost-usd %s :experiment/effort-level %s :experiment/prod-error-rate-before %s :experiment/prod-error-rate-after %s :experiment/prod-error-rate-delta %s :experiment/user-satisfaction-delta %s :experiment/support-tickets-reduced %s :experiment/business-value-score %s :experiment/risk-score %s :experiment/complexity-before %s :experiment/complexity-after %s :experiment/lines-removed %s :experiment/understanding-score %s :experiment/diversity %s :experiment/gate-score-0 %s :experiment/gate-score-1 %s :experiment/gate-score-2 %s :experiment/gate-score-3 %s :experiment/gate-score-4 %s :experiment/gate-score-5 %s :experiment/gate-score-6 %s :experiment/gate-score-7 %s :experiment/gate-score-8 %s :experiment/gate-score-9 %s :experiment/gate-score-10 %s}"
+                    ws-id target ws-hypothesis
+                    (float (or score-before 0.0)) (float (or score-after 0.0))
+                    (float (or code-quality 0.0))
+                    (float (- (or score-after 0.0) (or score-before 0.0)))
+                    ws-decision (round (or duration 0))
+                    (float (or (gptel-auto-workflow--plist-get experiment :grader-quality) 0.0))
+                    ws-grader-reason ws-comparator-reason ws-analyzer-patterns ws-agent-output
+                    (round (or output-chars 0)) ws-backend (round (or prompt-chars 0))
+                    ws-sections-included ws-exploration-axis ws-candidate-scores
+                    ws-strategy ws-research-strategy
+                    (if (equal ws-research-hash "none") (sha1 (format "pipeline-defect-%s-%s" target (format-time-string "%s"))) ws-research-hash)
+                    ws-research-quality
+                    (if (keywordp ws-controller-decision) (format ":%s" ws-controller-decision) (format ":%s" (or ws-controller-decision "unknown")))
+                    ws-kibcm-axis ws-model ws-eight-keys ws-skills ws-edit-mode
+                    (float (or cost-usd 0.0))
+                    (if (keywordp ws-effort-level) (format ":%s" ws-effort-level) (format ":%s" (or ws-effort-level "default")))
+                    (float (or prod-error-rate-before 0.0)) (float (or prod-error-rate-after 0.0)) (float (or prod-error-rate-delta 0.0))
+                    (float (or user-satisfaction-delta 0.0)) (round (or support-tickets-reduced 0))
+                    (float (or business-value-score 0.0)) (float (or risk-score 0.0))
+                    (float (or complexity-before 0.0)) (float (or complexity-after 0.0)) (round (or lines-removed 0))
+                    (float (or understanding-score 0.0))
+                    (float (or (gptel-auto-workflow--plist-get experiment :diversity) 0.0))
+                    (float (or (aref gate-score-vec 0) -1.0)) (float (or (aref gate-score-vec 1) -1.0))
+                    (float (or (aref gate-score-vec 2) -1.0)) (float (or (aref gate-score-vec 3) -1.0))
+                    (float (or (aref gate-score-vec 4) -1.0)) (float (or (aref gate-score-vec 5) -1.0))
+                    (float (or (aref gate-score-vec 6) -1.0)) (float (or (aref gate-score-vec 7) -1.0))
+                    (float (or (aref gate-score-vec 8) -1.0)) (float (or (aref gate-score-vec 9) -1.0))
+                    (float (or (aref gate-score-vec 10) -1.0))))
+           (clj-code (format "(ns ov5.world-store) (transact-experiment %S %s)"
+                            (or run-id "unknown") edn-map)))
+      (condition-case ws-err
+          (ov5-world-store--brepl-eval clj-code)
+        (error
+         (message "[world-store] WARNING: Experiment transact failed: %s"
+                  (error-message-string ws-err)))))
     ;; Keep strategy metrics independent from the per-run TSV.
     (when (fboundp 'gptel-auto-workflow--record-strategy-evaluation)
       (condition-case err
@@ -2560,7 +2788,7 @@ set it)"
     (when (and gptel-auto-workflow-context-db-auto-capture
                (fboundp 'gptel-auto-workflow-context-db-capture))
       (gptel-auto-workflow-context-db-capture experiment))
-    (gptel-auto-workflow--sync-live-kept-count run-id file)))
+    (gptel-auto-workflow--sync-live-kept-count run-id nil)))
 
 (defun gptel-auto-experiment--make-kept-result-callback (run-id exp-result log-fn callback)
   "Return idempotent callback that finalizes EXP-RESULT after optional staging.

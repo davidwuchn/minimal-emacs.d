@@ -1295,7 +1295,7 @@ Automatically adds --no-pager to prevent blocking on pager output."
 SERVER-PREFIX customizes the temporary daemon name prefix.
 EXTRA-ENV entries are prepended ahead of the isolated workflow vars.
 When INCLUDE-MESSAGES-P is non-nil, also isolate messages and snapshot files."
-  (let* ((isolated-status-file (make-temp-file "auto-workflow-status-" nil ".sexp"))
+  (let* ((isolated-status-file (make-temp-file "auto-workflow-status-" nil ".edn"))
          (isolated-messages-file
           (and include-messages-p
                (make-temp-file "auto-workflow-messages-" nil ".txt")))

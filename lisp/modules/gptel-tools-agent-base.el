@@ -794,15 +794,17 @@ allowed for compatibility with isolated tests."
   (list :target target :id experiment-id :stale-run t))
 
 (defun gptel-auto-workflow--results-relative-path (&optional run-id)
-  "Return the relative results path for RUN-ID or the active run."
+  "Return the relative results path for RUN-ID or the active run.
+DEPRECATED as of 2026-06-13: Experiments are now stored in the
+Datahike World Store instead of per-run TSV files."
   (format "var/tmp/experiments/%s/results.tsv"
           (or run-id (gptel-auto-workflow--current-run-id))))
+(make-obsolete 'gptel-auto-workflow--results-relative-path
+               "use World Store (ov5-world-store-query) instead"
+               "2026-06-13")
 
-(defconst gptel-auto-workflow--results-tsv-header
-  "experiment_id\ttarget\thypothesis\tscore_before\tscore_after\tcode_quality\tdelta\tdecision\tduration\tgrader_quality\tgrader_reason\tcomparator_reason\tanalyzer_patterns\tagent_output\toutput_chars\tbackend\tprompt_chars\tsections_included\texploration_axis\tcandidate_scores\tstrategy\tresearch_strategy\tresearch_hash\tresearch_quality\tcontroller_decision\tkibcm_axis\tmodel\teight_key_scores\tskills\tedit_mode\tcost_usd\teffort_level\tprod_error_rate_before\tprod_error_rate_after\tprod_error_rate_delta\tuser_satisfaction_delta\tsupport_tickets_reduced\tbusiness_value_score\trisk_score\tcomplexity_before\tcomplexity_after\tlines_removed\tunderstanding_score\tgate_score:0\tgate_score:1\tgate_score:2\tgate_score:3\tgate_score:4\tgate_score:5\tgate_score:6\tgate_score:7\tgate_score:8\tgate_score:9\tgate_score:10\n"
-  "Header row written to auto-workflow results.tsv artifacts.
-32 core columns + 7 production metrics columns (33-39) + 4 complexity columns
-(40-43) + 11 gate score vector columns (44-54).")
+;; gptel-auto-workflow--results-tsv-header removed 2026-06-13: experiments now
+;; stored in Datahike World Store instead of per-run TSV files.
 
 (defun gptel-auto-experiment--extract-axis (agent-output)
   "Extract exploration axis (A-F) from AGENT-OUTPUT.
@@ -843,19 +845,25 @@ in the hypothesis text. Returns single letter or question mark."
     "?"))
 
 (defun gptel-auto-workflow--results-file-path (&optional run-id)
-  "Return the absolute results.tsv path for RUN-ID or the active run."
+  "Return the absolute results.tsv path for RUN-ID or the active run.
+DEPRECATED as of 2026-06-13: Experiments are now stored in the
+Datahike World Store.  Use `ov5-world-store-query' instead."
   (expand-file-name
-   (gptel-auto-workflow--results-relative-path run-id)
+   (format "var/tmp/experiments/%s/results.tsv"
+           (or run-id (gptel-auto-workflow--current-run-id)))
    (gptel-auto-workflow--worktree-base-root)))
+(make-obsolete 'gptel-auto-workflow--results-file-path
+               "use World Store (ov5-world-store-query) instead"
+               "2026-06-13")
 
-(defun gptel-auto-workflow--ensure-results-file (&optional run-id)
-  "Ensure results.tsv exists for RUN-ID and return its absolute path."
-  (let ((file (gptel-auto-workflow--results-file-path run-id)))
-    (make-directory (file-name-directory file) t)
-    (unless (file-exists-p file)
-      (with-temp-file file
-        (insert gptel-auto-workflow--results-tsv-header)))
-    file))
+(defun gptel-auto-workflow--ensure-results-file (&optional _run-id)
+  "No-op.  Experiments are now stored in the Datahike World Store.
+DEPRECATED as of 2026-06-13; kept for byte-compile compatibility.
+Returns nil."
+  nil)
+(make-obsolete 'gptel-auto-workflow--ensure-results-file
+               "experiments are now in World Store, no TSV file needed"
+               "2026-06-13")
 
 (defun gptel-auto-workflow--tracking-file (&optional run-id)
   "Return orphan commit tracking file path for RUN-ID or the active run."

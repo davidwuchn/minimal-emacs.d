@@ -16,7 +16,10 @@
 ;; Pattern: 'What would a human reviewer notice? Let the system notice too.'
 
 (require 'cl-lib)
+(require 'parseedn)
 (require 'subr-x)
+
+(require 'gptel-tools-agent-experiment-loop)
 
 (declare-function gptel-auto-workflow--expand-workspace-path
   "gptel-tools-agent-base" (path &optional root))
@@ -647,7 +650,7 @@ Returns plist :broken (list of files with errors), :total, :healthy."
 
 (defun gptel-auto-workflow-self-audit-execute ()
   "Run audit, write memory if issues found, return formatted report.
-Also writes structured result to var/tmp/self-audit-result.el for
+Also writes structured result to var/tmp/self-audit-result.edn for
 the pipeline self-heal step to consume."
   (let ((result (gptel-auto-workflow-self-audit-run)))
     (when result
@@ -658,9 +661,8 @@ the pipeline self-heal step to consume."
       (gptel-auto-workflow-self-audit--synthesize-system-health))
     (gptel-auto-workflow-self-audit--format-report result)))
 
-(defun gptel-auto-workflow-self-audit--build-structured-result-content (result)
-  "Build content string for var/tmp/self-audit-result.el from RESULT.
-Uses concat to avoid deeply nested insert/format calls in the write function."
+(defun gptel-auto-workflow-self-audit--build-structured-result-plist (result)
+  "Build plist for var/tmp/self-audit-result.edn from RESULT."
   (let* ((bcc (plist-get result :module-health))
          (bca (plist-get result :backend-cold-start))
          (sca (plist-get result :strategy-cold-start))
@@ -678,52 +680,43 @@ Uses concat to avoid deeply nested insert/format calls in the write function."
          (pricing-days (or (plist-get pricing :days-stale) 0))
          (dvoc-count (or (plist-get dvoc :violation-count) 0))
          (ptgc-ok (or (plist-get ptgc :has-test-gate) nil))
-         (sbc-count (or (plist-get sbc :bypass-count) 0)))
-    (concat
-     ";; self-audit-result.el — structured audit findings\n"
-     ";; Written by gptel-auto-workflow-self-audit-execute\n"
-     ";; Consumed by run-pipeline.sh Step 0.5 for auto-remediation\n"
-     ";;\n"
-     (format "(issues-count . %d)\n" issues)
-     (format "(cold-backends . %S)\n" cold)
-     (format "(unevaluated-strategies . %d)\n" unev)
-     (format "(staging-merge-bottleneck . %S)\n" bottleneck)
-     (format "(pricing-stale . %d)\n" pricing-stale)
-     (format "(pricing-days-stale . %d)\n" pricing-days)
-     (format "(defvar-override-violations . %d)\n" dvoc-count)
-     (format "(pipeline-test-gate . %S)\n" ptgc-ok)
-     (format "(staging-bypass-count . %d)\n" sbc-count)
-     (when broken
-       (format "(broken-modules . %S)\n" (mapcar #'car broken)))
-     ";; Remediation actions for self-heal:\n"
-     (when (> (length cold) 0)
-       "(remediation . force-cold-backends)\n")
-     (when (> unev 0)
-       "(remediation . increase-exploration-rate)\n")
-     (when bottleneck
-       "(remediation . staging-merge-autoresolve)\n")
-     (when (> pricing-stale 0)
-       "(remediation . update-pricing)\n")
-     (when (> (length broken) 0)
-       "(remediation . flag-broken-modules)\n")
-     (format "(audit-timestamp . %S)\n"
-             (plist-get result :timestamp)))))
+         (sbc-count (or (plist-get sbc :bypass-count) 0))
+         (remediations nil))
+    (when (> (length cold) 0)
+      (push 'force-cold-backends remediations))
+    (when (> unev 0)
+      (push 'increase-exploration-rate remediations))
+    (when bottleneck
+      (push 'staging-merge-autoresolve remediations))
+    (when (> pricing-stale 0)
+      (push 'update-pricing remediations))
+    (when (> (length broken) 0)
+      (push 'flag-broken-modules remediations))
+    (list :issues-count issues
+          :cold-backends cold
+          :unevaluated-strategies unev
+          :staging-merge-bottleneck bottleneck
+          :pricing-stale pricing-stale
+          :pricing-days-stale pricing-days
+          :defvar-override-violations dvoc-count
+          :pipeline-test-gate ptgc-ok
+          :staging-bypass-count sbc-count
+          :broken-modules (when broken (mapcar #'car broken))
+          :remediations (nreverse remediations)
+          :audit-timestamp (plist-get result :timestamp))))
 
 (defun gptel-auto-workflow-self-audit--write-structured-result (result)
-  "Write RESULT as a structured file for pipeline self-heal to consume.
-File: var/tmp/self-audit-result.el — contains an alist the bash script
-can grep for specific remediation actions."
+  "Write RESULT as an EDN file for pipeline self-heal to consume.
+File: var/tmp/self-audit-result.edn — read by run-pipeline.sh Step 0.5."
   (when result
     (let* ((root (gptel-auto-workflow-self-audit--root))
            (result-file (expand-file-name
-                         "var/tmp/self-audit-result.el" root))
-           (content (gptel-auto-workflow-self-audit--build-structured-result-content
-                     result)))
+                         "var/tmp/self-audit-result.edn" root))
+           (data (gptel-auto-workflow-self-audit--build-structured-result-plist result)))
       (condition-case err
           (progn
             (make-directory (file-name-directory result-file) t)
-            (with-temp-file result-file
-              (insert content))
+            (gptel-auto-workflow--write-edn result-file data)
             (message "[self-audit] Wrote structured result to %s"
                      result-file))
         (error
@@ -1278,7 +1271,8 @@ exists, and git push origin main appears AFTER the test gate."
 (defun gptel-auto-workflow-self-audit--check-staging-bypass (&optional hours)
   "Analyze recent git log for direct-to-main commits that bypassed staging.
 Scans last HOURS (default 24) for commits to main modifying lisp/modules/*.el.
-Classifies commits: subject containing \='staging\='/\='merge\='/\='PR\='/\='🔄\=' →
+Classifies commits: subject containing
+\='staging\='/\='merge\='/\='PR\='/\='🔄\=' →
 via-staging.
 Returns plist (:bypass-commits :bypass-count :review-commits :hours).
 Each commit plist: (:hash :subject :author)."

@@ -44,7 +44,7 @@ Cleans up all files after BODY completes."
 ;; ── Enqueue Tests ──
 
 (ert-deftest test-approval-queue/enqueue-persist ()
-  "Should enqueue a proposal and persist it as a .sexp file in pending dir."
+  "Should enqueue a proposal and persist it as a .edn file in pending dir."
   (with-approval-queue-sandbox
    (let* ((proposal
            (test-approval-queue--make-proposal
@@ -67,7 +67,7 @@ Cleans up all files after BODY completes."
      (should (> (plist-get entry :created-at) 0.0))
      (should (> (plist-get entry :expires-at)
                 (plist-get entry :created-at)))
-     ;; .sexp file exists in pending dir
+     ;; .edn file exists in pending dir
      (should (file-exists-p filepath))
      ;; File content roundtrips correctly
      (let ((read-entry
@@ -347,16 +347,12 @@ self-tuning executor saw nothing to apply."
             (regular-file
              (gptel-auto-workflow-approval-queue-decisions-file
               (plist-get regular-entry :id)))
-            (self-tune-after
-             (and (file-exists-p self-tune-file)
-                  (with-temp-buffer
-                    (insert-file-contents self-tune-file)
-                    (read (current-buffer)))))
-            (regular-after
-             (and (file-exists-p regular-file)
-                  (with-temp-buffer
-                    (insert-file-contents regular-file)
-                    (read (current-buffer))))))
+             (self-tune-after
+              (and (file-exists-p self-tune-file)
+                   (gptel-auto-workflow-approval-queue--read-sexp-file self-tune-file)))
+             (regular-after
+              (and (file-exists-p regular-file)
+                   (gptel-auto-workflow-approval-queue--read-sexp-file regular-file))))
        ;; Self-tune entry must remain :approved (NOT deployed)
        (should (equal (plist-get self-tune-after :status) "approved"))
        (should-not (plist-get self-tune-after :deployed-at))

@@ -8,13 +8,15 @@
 ;;; Commentary:
 
 ;; Tracks which modules are candidates for code regeneration.
-;; Persists to var/disposable/<module-slug>.sexp sidecar files.
+;; Persists to var/disposable/<module-slug>.edn sidecar files.
 ;; Survives daemon restarts.
 
 ;;; Code:
 
 (require 'cl-lib)
 (require 'subr-x)
+(require 'parseedn)
+(require 'gptel-tools-agent-experiment-loop)
 
 ;; ============================================================================
 ;; Configuration
@@ -49,7 +51,7 @@
 
 (defun gptel-auto-workflow-disposable--file (module)
   "Return sidecar file path for MODULE."
-  (expand-file-name (format "%s.sexp" (gptel-auto-workflow-disposable--slug module))
+  (expand-file-name (format "%s.edn" (gptel-auto-workflow-disposable--slug module))
                     (gptel-auto-workflow-disposable--dir)))
 
 ;; ============================================================================
@@ -58,7 +60,7 @@
 
 (defun gptel-auto-workflow-disposable-mark (module &rest props)
   "Mark MODULE as disposable with optional PROPS.
-Writes a sidecar file with :module, :marked-at, and any PROPS."
+Writes an EDN sidecar file with :module, :marked-at, and any PROPS."
   (let* ((file (gptel-auto-workflow-disposable--file module))
          (existing (gptel-auto-workflow-disposable-read module))
          (entry (append (list :module module
@@ -68,8 +70,7 @@ Writes a sidecar file with :module, :marked-at, and any PROPS."
                         (when existing
                           (list :history (plist-get existing :history))))))
     (make-directory (file-name-directory file) t)
-    (with-temp-file file
-      (prin1 entry (current-buffer)))
+    (gptel-auto-workflow--write-edn file entry)
     (message "[disposable] Marked: %s" (file-name-nondirectory module))
     entry))
 
@@ -83,29 +84,17 @@ Writes a sidecar file with :module, :marked-at, and any PROPS."
 
 (defun gptel-auto-workflow-disposable-read (module)
   "Read disposable tracking entry for MODULE. Returns plist or nil."
-  (let ((file (gptel-auto-workflow-disposable--file module)))
-    (when (file-exists-p file)
-      (condition-case nil
-          (with-temp-buffer
-            (insert-file-contents file)
-            (goto-char (point-min))
-            (read (current-buffer)))
-        (error nil)))))
+  (gptel-auto-workflow--read-edn (gptel-auto-workflow-disposable--file module)))
 
 (defun gptel-auto-workflow-disposable-list ()
   "Return list of all tracked disposable modules."
   (let ((dir (gptel-auto-workflow-disposable--dir))
         (entries nil))
     (when (file-directory-p dir)
-      (dolist (f (directory-files dir t "\\.sexp$"))
-        (condition-case nil
-            (with-temp-buffer
-              (insert-file-contents f)
-              (goto-char (point-min))
-              (let ((entry (read (current-buffer))))
-                (when (plist-get entry :module)
-                  (push entry entries))))
-          (error nil))))
+      (dolist (f (directory-files dir t "\\.edn$"))
+        (let ((entry (gptel-auto-workflow--read-edn f)))
+          (when (and entry (plist-get entry :module))
+            (push entry entries)))))
     (nreverse entries)))
 
 (defun gptel-auto-workflow-disposable-status (module)

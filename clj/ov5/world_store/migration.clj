@@ -25,17 +25,31 @@
        :cost_usd :effort_level :prod_error_rate_before :prod_error_rate_after
        :prod_error_rate_delta :user_satisfaction_delta :support_tickets_reduced
        :business_value_score :risk_score]
-   43 [:experiment_id :target :hypothesis :score_before :score_after
-       :code_quality :delta :decision :duration :grader_quality
-       :grader_reason :comparator_reason :analyzer_patterns :agent_output
-       :output_chars :backend :prompt_chars :sections_included
-       :exploration_axis :candidate_scores :strategy :research_strategy
-       :research_hash :research_quality :controller_decision :kibcm_axis
-       :model :eight_key_scores :skills :edit_mode
-       :cost_usd :effort_level :prod_error_rate_before :prod_error_rate_after
-       :prod_error_rate_delta :user_satisfaction_delta :support_tickets_reduced
-       :business_value_score :risk_score
-       :complexity_before :complexity_after :lines_removed :understanding_score]})
+    43 [:experiment_id :target :hypothesis :score_before :score_after
+        :code_quality :delta :decision :duration :grader_quality
+        :grader_reason :comparator_reason :analyzer_patterns :agent_output
+        :output_chars :backend :prompt_chars :sections_included
+        :exploration_axis :candidate_scores :strategy :research_strategy
+        :research_hash :research_quality :controller_decision :kibcm_axis
+        :model :eight_key_scores :skills :edit_mode
+        :cost_usd :effort_level :prod_error_rate_before :prod_error_rate_after
+        :prod_error_rate_delta :user_satisfaction_delta :support_tickets_reduced
+        :business_value_score :risk_score
+        :complexity_before :complexity_after :lines_removed :understanding_score]
+    54 [:experiment_id :target :hypothesis :score_before :score_after
+        :code_quality :delta :decision :duration :grader_quality
+        :grader_reason :comparator_reason :analyzer_patterns :agent_output
+        :output_chars :backend :prompt_chars :sections_included
+        :exploration_axis :candidate_scores :strategy :research_strategy
+        :research_hash :research_quality :controller_decision :kibcm_axis
+        :model :eight_key_scores :skills :edit_mode
+        :cost_usd :effort_level :prod_error_rate_before :prod_error_rate_after
+        :prod_error_rate_delta :user_satisfaction_delta :support_tickets_reduced
+        :business_value_score :risk_score
+        :complexity_before :complexity_after :lines_removed :understanding_score
+        :gate_score_0 :gate_score_1 :gate_score_2 :gate_score_3 :gate_score_4
+        :gate_score_5 :gate_score_6 :gate_score_7 :gate_score_8 :gate_score_9
+        :gate_score_10]})
 
 ;; Attribute mapping: TSV column → Datahike attribute
 (def attribute-map
@@ -81,7 +95,22 @@
    :complexity_before       :experiment/complexity-before
    :complexity_after        :experiment/complexity-after
    :lines_removed           :experiment/lines-removed
-   :understanding_score     :experiment/understanding-score})
+    :understanding_score     :experiment/understanding-score
+    :gate_score_0            :experiment/gate-score-0
+    :gate_score_1            :experiment/gate-score-1
+    :gate_score_2            :experiment/gate-score-2
+    :gate_score_3            :experiment/gate-score-3
+    :gate_score_4            :experiment/gate-score-4
+    :gate_score_5            :experiment/gate-score-5
+    :gate_score_6            :experiment/gate-score-6
+    :gate_score_7            :experiment/gate-score-7
+    :gate_score_8            :experiment/gate-score-8
+    :gate_score_9            :experiment/gate-score-9
+    :gate_score_10           :experiment/gate-score-10
+    :diversity               :experiment/diversity
+    :persona_category        :experiment/persona-category
+    :persona_archetype       :experiment/persona-archetype
+    :research_context        :experiment/research-context})
 
 ;; -----------------------------------------------------------------------------
 ;; Parsing helpers
@@ -127,8 +156,20 @@
    :experiment/risk-score              parse-double
    :experiment/complexity-before       parse-double
    :experiment/complexity-after        parse-double
-   :experiment/lines-removed           parse-long
-   :experiment/understanding-score     parse-double})
+    :experiment/lines-removed           parse-long
+    :experiment/understanding-score     parse-double
+    :experiment/gate-score-0            parse-double
+    :experiment/gate-score-1            parse-double
+    :experiment/gate-score-2            parse-double
+    :experiment/gate-score-3            parse-double
+    :experiment/gate-score-4            parse-double
+    :experiment/gate-score-5            parse-double
+    :experiment/gate-score-6            parse-double
+    :experiment/gate-score-7            parse-double
+    :experiment/gate-score-8            parse-double
+    :experiment/gate-score-9            parse-double
+    :experiment/gate-score-10           parse-double
+    :experiment/diversity               parse-double})
 
 ;; -----------------------------------------------------------------------------
 ;; Row parsing

@@ -143,7 +143,7 @@ experiment phases do not trip the real pre-grade target validator."
                               calls))
               (should-not (seq-some
                            (lambda (call)
-                             (string-match-p "\\.XXXXXX\\.sexp\\'" call))
+                             (string-match-p "\\.XXXXXX\\.edn\\'" call))
                            calls))
               (should-not (seq-some
                           (lambda (call)
@@ -6497,13 +6497,13 @@ with next backend. This test evaluates the old (non-retry) path."
        previous-results
        (lambda (analysis)
          (setq result analysis))))
-    (should (stringp (plist-get result :patterns)))
+    (should (stringp (plist-get result :previous-summary)))
     (should (string-match-p "Experiment 1: tests-failed"
-                            (plist-get result :patterns)))
+                            (plist-get result :previous-summary)))
     (should (string-match-p "Experiment 2: discarded"
-                            (plist-get result :patterns)))
+                            (plist-get result :previous-summary)))
     (should (string-match-p "doom-loop"
-                            (plist-get result :patterns)))
+                            (plist-get result :previous-summary)))
     (should (cl-some
              (lambda (text)
                (string-match-p "Do not repeat a previous hypothesis" text))
@@ -7681,7 +7681,7 @@ failure."
   "Zero-row runs should still create results.tsv and capture the completion tail."
   (let* ((tmpdir (make-temp-file "gptel-empty-results" t))
          (run-id "run-empty-results")
-         (status-file (expand-file-name "auto-workflow-status.sexp" tmpdir))
+         (status-file (expand-file-name "auto-workflow-status.edn" tmpdir))
          (messages-file (expand-file-name "auto-workflow-messages-tail.txt" tmpdir))
          (results-file (expand-file-name
                         (format "var/tmp/experiments/%s/results.tsv" run-id)
@@ -12046,7 +12046,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   "Wrapper status should reset stale running snapshots with an empty messages tail when the worker is gone."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (messages-file (expand-file-name "auto-workflow-messages-tail.txt" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient
@@ -12078,7 +12078,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   "Wrapper messages should refresh from a reachable daemon before serving cache."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (messages-file (expand-file-name "auto-workflow-messages-tail.txt" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
@@ -12129,7 +12129,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   "Wrapper status should clear active snapshots after completion appears in messages."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (messages-file (expand-file-name "auto-workflow-messages-tail.txt" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient
@@ -12171,7 +12171,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (git-log (make-temp-file "aw-git-log"))
          (daemon-ready (make-temp-file "aw-daemon-ready"))
-         (status-file (expand-file-name "auto-workflow-status.sexp" repo-root))
+         (status-file (expand-file-name "auto-workflow-status.edn" repo-root))
          (fake-git (make-temp-file "fake-git" nil ".py"))
          (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
          (fake-emacs
@@ -12252,7 +12252,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   "Wrapper status should reset stale active phases even when :running is already nil."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient
           (test-auto-workflow--write-shell-script "fake-emacsclient" "exit 1"))
@@ -12281,7 +12281,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   "Wrapper stop should call the live daemon force-stop function and persist idle status."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (messages-file (expand-file-name "auto-workflow-messages-tail.txt" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (eval-log (make-temp-file "aw-stop-eval-log"))
@@ -12342,7 +12342,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   (ert-skip "flaky in batch mode: test isolation issue with async callbacks")
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
          (fake-emacs
@@ -12391,7 +12391,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   "Wrapper status should disable emacsclient alternate-editor fallback for named daemons."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (argv-log (make-temp-file "aw-emacsclient-argv"))
          (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
@@ -12451,7 +12451,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   (ert-skip "flaky in batch mode: test isolation issue with async callbacks")
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (calls-file (expand-file-name "status-calls.txt" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
@@ -12503,7 +12503,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   (ert-skip "flaky in batch mode: test isolation issue with async callbacks")
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (calls-file (expand-file-name "status-calls.txt" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
@@ -12558,7 +12558,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   "Wrapper status should clear stale running state when the live probe only returns nil."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (calls-file (expand-file-name "status-calls.txt" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
@@ -12607,7 +12607,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   (ert-skip "flaky in batch mode: test isolation issue with async callbacks")
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (messages-file (expand-file-name "auto-workflow-messages-tail.txt" status-dir))
          (calls-file (expand-file-name "probe-calls.txt" status-dir))
          (server-name "ov5-auto-workflow-test-timeout")
@@ -12672,7 +12672,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   (ert-skip "flaky in batch mode: test isolation issue with async callbacks")
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (calls-file (expand-file-name "status-calls.txt" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
@@ -12724,7 +12724,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   "Wrapper status should preserve a live snapshot when emacsclient reports a busy server."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
          (fake-emacs
@@ -12763,7 +12763,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   "Wrapper status should preserve a live snapshot on transient connection refusal."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (tmp-root (make-temp-file "aw-tmp" t))
          (server-dir (expand-file-name (format "emacs%d" (user-uid)) tmp-root))
          (server-socket (expand-file-name "ov5-auto-workflow" server-dir))
@@ -12816,7 +12816,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   (ert-skip "flaky in batch mode: test isolation issue with async callbacks")
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (argv-log (make-temp-file "aw-emacsclient-argv"))
          (emacs-log (make-temp-file "aw-emacs-log"))
@@ -12861,7 +12861,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   (ert-skip "flaky in batch mode: test isolation issue with async callbacks")
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (argv-log (make-temp-file "aw-emacsclient-argv"))
          (emacs-log (make-temp-file "aw-emacs-log"))
@@ -12909,7 +12909,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   "Aged active snapshots should still be live-probed and cleared when stale."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (messages-file (expand-file-name "auto-workflow-messages-tail.txt" status-dir))
          (server-name "ov5-auto-workflow-test-stale")
          (tmp-root (make-temp-file "aw-tmp" t))
@@ -12947,7 +12947,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   "Wrapper auto-workflow should clear stale running status when daemon is alive but idle."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
          (fake-emacs
@@ -12991,7 +12991,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   "Wrapper auto-workflow should retry a slow daemon ping before keeping stale running status."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (calls-file (expand-file-name "calls.txt" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
@@ -13047,7 +13047,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   "Wrapper status should clear stale running status when daemon responds with nil."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (tmp-root (make-temp-file "aw-tmp" t))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
@@ -13090,7 +13090,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   "Wrapper status should ignore persisted-active fallback when the live daemon is idle."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (tmp-root (make-temp-file "aw-tmp" t))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
@@ -13135,7 +13135,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   "Wrapper auto-workflow should not start a second daemon after a probe timeout."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (argv-log (make-temp-file "aw-emacsclient-argv"))
          (emacs-log (make-temp-file "aw-emacs-log"))
@@ -13188,7 +13188,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   "Wrapper should restart after a timed-out daemon leaves a stale active snapshot."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (messages-file (expand-file-name "auto-workflow-messages-tail.txt" status-dir))
          (calls-file (expand-file-name "calls.txt" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
@@ -13640,11 +13640,11 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
 
 (ert-deftest regression/auto-workflow/status-file-honors-environment-override ()
   "Workflow status file should honor AUTO_WORKFLOW_STATUS_FILE."
-  (let* ((override-file (make-temp-file "aw-status-override" nil ".sexp"))
+  (let* ((override-file (make-temp-file "aw-status-override" nil ".edn"))
          (process-environment
           (cons (format "AUTO_WORKFLOW_STATUS_FILE=%s" override-file)
                 process-environment))
-         (gptel-auto-workflow-status-file "var/tmp/cron/auto-workflow-status.sexp"))
+         (gptel-auto-workflow-status-file "var/tmp/cron/auto-workflow-status.edn"))
     (unwind-protect
         (should (equal (gptel-auto-workflow--status-file) override-file))
       (when (file-exists-p override-file)
@@ -13652,8 +13652,8 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
 
 (ert-deftest regression/auto-workflow/status-file-explicit-binding-beats-environment-override ()
   "Explicit Lisp bindings should beat AUTO_WORKFLOW_STATUS_FILE."
-  (let* ((override-file (make-temp-file "aw-status-env" nil ".sexp"))
-         (bound-file (make-temp-file "aw-status-bound" nil ".sexp"))
+  (let* ((override-file (make-temp-file "aw-status-env" nil ".edn"))
+         (bound-file (make-temp-file "aw-status-bound" nil ".edn"))
          (process-environment
           (cons (format "AUTO_WORKFLOW_STATUS_FILE=%s" override-file)
                 process-environment))
@@ -13679,7 +13679,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
 
 (ert-deftest regression/auto-workflow/persist-status-refreshes-messages-tail ()
   "Persisting status should also refresh the persisted *Messages* tail."
-  (let* ((status-file (make-temp-file "aw-status-live" nil ".sexp"))
+  (let* ((status-file (make-temp-file "aw-status-live" nil ".edn"))
          (messages-file (make-temp-file "aw-messages-live" nil ".log"))
          (messages-buffer (get-buffer-create "*Messages*"))
          (original-text nil)
@@ -13748,7 +13748,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
 
 (ert-deftest regression/auto-workflow/persist-status-preserves-active-snapshot-from-placeholder ()
   "Idle placeholder writes should not clobber an active persisted snapshot."
-  (let* ((status-file (make-temp-file "aw-status-live" nil ".sexp"))
+  (let* ((status-file (make-temp-file "aw-status-live" nil ".edn"))
          (gptel-auto-workflow-status-file status-file)
          (gptel-auto-workflow--run-id "2026-04-11T111457Z-a298")
          (gptel-auto-workflow--running nil)
@@ -13769,7 +13769,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
 
 (ert-deftest regression/auto-workflow/persist-status-rewrites-current-run-placeholder ()
   "Idle placeholder writes should replace the active snapshot for the same run."
-  (let* ((status-file (make-temp-file "aw-status-live" nil ".sexp"))
+  (let* ((status-file (make-temp-file "aw-status-live" nil ".edn"))
          (run-id "2026-04-11T105552Z-80d6")
          (gptel-auto-workflow-status-file status-file)
          (gptel-auto-workflow--run-id run-id)
@@ -14000,7 +14000,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   "Wrapper should evaluate daemon ELisp inside a guaranteed live fallback buffer."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (argv-log (make-temp-file "aw-emacsclient-argv"))
          (fake-emacsclient
@@ -14056,7 +14056,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   "Wrapper auto-workflow action should queue work from the normal init path."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (messages-file (make-temp-file "aw-messages-tail"))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (argv-log (make-temp-file "aw-emacsclient-argv"))
@@ -14523,7 +14523,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   (ert-skip "flaky: depends on exact PATH and process environment in test harness")
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (argv-log (make-temp-file "aw-emacsclient-argv"))
          (emacs-log (make-temp-file "aw-emacs-log"))
@@ -14783,7 +14783,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   "Wrapper messages action should dump *Messages* to a file, not print buffer text inline."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (argv-log (make-temp-file "aw-emacsclient-argv"))
          (messages-file (make-temp-file "aw-messages-tail"))
@@ -14839,7 +14839,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   "Wrapper messages action should return the last dumped tail without starting a daemon."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (emacs-log (make-temp-file "aw-emacs-log"))
          (messages-file (make-temp-file "aw-messages-tail"))
@@ -14883,7 +14883,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   "Wrapper messages should label cached tails when the daemon is unreachable."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (emacs-log (make-temp-file "aw-emacs-log"))
          (messages-file (make-temp-file "aw-messages-tail"))
@@ -14933,7 +14933,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   ;; TDD: unblocked after cron script refactor
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (emacs-log (make-temp-file "aw-emacs-log"))
          (messages-file (make-temp-file "aw-messages-tail"))
@@ -14983,7 +14983,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
   ;; TDD: unblocked after cron script refactor
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (status-file (expand-file-name "auto-workflow-status.edn" status-dir))
          (messages-file (make-temp-file "aw-messages-tail"))
          (tmp-root (make-temp-file "aw-tmp" t))
          (server-dir (expand-file-name (format "emacs%d" (user-uid)) tmp-root))
@@ -15058,9 +15058,9 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
          (script-dir (expand-file-name "scripts" temp-root))
          (cron-dir (expand-file-name "var/tmp/cron" temp-root))
          (script (expand-file-name "run-auto-workflow-cron.sh" script-dir))
-         (auto-status-file (expand-file-name "auto-workflow-status.sexp" cron-dir))
+         (auto-status-file (expand-file-name "auto-workflow-status.edn" cron-dir))
          (auto-messages-file (expand-file-name "auto-workflow-messages-tail.txt" cron-dir))
-         (research-status-file (expand-file-name "ov5-researcher-status.sexp" cron-dir))
+         (research-status-file (expand-file-name "ov5-researcher-status.edn" cron-dir))
          (research-messages-file (expand-file-name "ov5-researcher-messages-tail.txt" cron-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (argv-log (make-temp-file "aw-emacsclient-argv"))
@@ -15168,7 +15168,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
          (cron-dir (expand-file-name "var/tmp/cron" temp-root))
          (script (expand-file-name "run-auto-workflow-cron.sh" script-dir))
          (research-cache (expand-file-name "ov5-researcher-snapshot-paths.txt" cron-dir))
-         (research-status-file (expand-file-name "ov5-researcher-status.sexp" cron-dir))
+         (research-status-file (expand-file-name "ov5-researcher-status.edn" cron-dir))
          (research-messages-file (expand-file-name "ov5-researcher-messages-tail.txt" cron-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (argv-log (make-temp-file "aw-emacsclient-argv"))
@@ -15200,7 +15200,7 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
           (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
           (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
           (with-temp-file research-cache
-            (insert (expand-file-name "auto-workflow-status.sexp" cron-dir) "\n"
+            (insert (expand-file-name "auto-workflow-status.edn" cron-dir) "\n"
                     (expand-file-name "auto-workflow-messages-tail.txt" cron-dir) "\n"))
           (call-process shell-file-name nil nil nil shell-command-switch
                         (format "%s research >/dev/null 2>&1 || true" script))
@@ -15221,9 +15221,9 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
          (script (expand-file-name "run-auto-workflow-cron.sh" script-dir))
          (auto-cache (expand-file-name "ov5-auto-workflow-snapshot-paths.txt" cron-dir))
          (instincts-cache (expand-file-name "instincts-snapshot-paths.txt" cron-dir))
-         (auto-status-file (expand-file-name "auto-workflow-status.sexp" cron-dir))
+         (auto-status-file (expand-file-name "auto-workflow-status.edn" cron-dir))
          (auto-messages-file (expand-file-name "auto-workflow-messages-tail.txt" cron-dir))
-         (instincts-status-file (expand-file-name "instincts-status.sexp" cron-dir))
+         (instincts-status-file (expand-file-name "instincts-status.edn" cron-dir))
          (instincts-messages-file (expand-file-name "instincts-messages-tail.txt" cron-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (argv-log (make-temp-file "aw-emacsclient-argv"))
@@ -15278,9 +15278,9 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
          (cron-dir (expand-file-name "var/tmp/cron" temp-root))
          (script (expand-file-name "run-auto-workflow-cron.sh" script-dir))
          (research-cache (expand-file-name "ov5-researcher-snapshot-paths.txt" cron-dir))
-         (auto-status-file (expand-file-name "auto-workflow-status.sexp" cron-dir))
+         (auto-status-file (expand-file-name "auto-workflow-status.edn" cron-dir))
          (auto-messages-file (expand-file-name "auto-workflow-messages-tail.txt" cron-dir))
-         (research-status-file (expand-file-name "ov5-researcher-status.sexp" cron-dir))
+         (research-status-file (expand-file-name "ov5-researcher-status.edn" cron-dir))
          (research-messages-file (expand-file-name "ov5-researcher-messages-tail.txt" cron-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (argv-log (make-temp-file "aw-emacsclient-argv"))
@@ -16732,7 +16732,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                            (string-prefix-p "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=" item))
                          captured-env))
               (should-not (equal status-file
-                                 (expand-file-name "var/tmp/cron/auto-workflow-status.sexp"
+                                 (expand-file-name "var/tmp/cron/auto-workflow-status.edn"
                                                    proj-root)))
               (should (equal captured-args '("unit")))
               (should-not (file-exists-p status-file))
@@ -16748,7 +16748,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
   (let* ((temp-dir (make-temp-file "aw-isolated-env" t))
          (process-environment
           (append '("AUTO_WORKFLOW_EMACS_SERVER=live-server"
-                    "AUTO_WORKFLOW_STATUS_FILE=/tmp/live-status.sexp"
+                    "AUTO_WORKFLOW_STATUS_FILE=/tmp/live-status.edn"
                     "AUTO_WORKFLOW_MESSAGES_FILE=/tmp/live-messages.txt"
                     "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=/tmp/live-snapshots.txt")
                   process-environment))
@@ -16788,7 +16788,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
          (messages-buf (get-buffer-create "*Messages*"))
          (isolated-env
           '("AUTO_WORKFLOW_EMACS_SERVER=isolated-server"
-            "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.sexp"
+            "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.edn"
             "PATH=/usr/bin"
             "HOME=/tmp/test-home"))
          (gptel-auto-workflow--subagent-process-environment isolated-env)
@@ -16869,7 +16869,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
   (let* ((target-buf (generate-new-buffer "*test-subagent-deferred-persist*"))
          (isolated-env
           '("AUTO_WORKFLOW_EMACS_SERVER=isolated-server"
-            "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.sexp"
+            "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.edn"
             "PATH=/usr/bin"))
          (gptel-auto-workflow--subagent-process-environment isolated-env)
          (gptel-auto-workflow--defer-subagent-env-persistence t))
@@ -16886,7 +16886,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
          (messages-buf (get-buffer-create "*Messages*"))
          (isolated-env
           '("AUTO_WORKFLOW_EMACS_SERVER=isolated-server"
-            "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.sexp"
+            "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.edn"
             "PATH=/usr/bin"))
          (gptel-auto-workflow--subagent-process-environment isolated-env)
          (process-environment isolated-env)
@@ -16979,7 +16979,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
             (gptel-auto-workflow--current-project "/tmp/project/")
             (process-environment
              (append '("AUTO_WORKFLOW_EMACS_SERVER=live-server"
-                       "AUTO_WORKFLOW_STATUS_FILE=/tmp/live-status.sexp"
+                       "AUTO_WORKFLOW_STATUS_FILE=/tmp/live-status.edn"
                        "AUTO_WORKFLOW_MESSAGES_FILE=/tmp/live-messages.txt"
                        "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=/tmp/live-snapshots.txt")
                      process-environment)))
@@ -17025,7 +17025,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
         (should (file-name-absolute-p status-file))
         (should (file-name-absolute-p messages-file))
         (should (file-name-absolute-p snapshot-file))
-        (should-not (equal status-file "/tmp/live-status.sexp"))
+        (should-not (equal status-file "/tmp/live-status.edn"))
         (should-not (equal messages-file "/tmp/live-messages.txt"))
         (should-not (equal snapshot-file "/tmp/live-snapshots.txt"))
          (should-not (equal server-name "live-server"))
@@ -17050,7 +17050,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
             (gptel-auto-workflow--current-project "/tmp/project/")
             (process-environment
              (append '("AUTO_WORKFLOW_EMACS_SERVER=live-server"
-                       "AUTO_WORKFLOW_STATUS_FILE=/tmp/live-status.sexp"
+                       "AUTO_WORKFLOW_STATUS_FILE=/tmp/live-status.edn"
                        "AUTO_WORKFLOW_MESSAGES_FILE=/tmp/live-messages.txt"
                        "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=/tmp/live-snapshots.txt")
                      process-environment)))
@@ -17102,7 +17102,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                   (gptel-auto-workflow--current-project "/tmp/project/")
                   (process-environment
                    (append '("AUTO_WORKFLOW_EMACS_SERVER=live-server"
-                             "AUTO_WORKFLOW_STATUS_FILE=/tmp/live-status.sexp"
+                             "AUTO_WORKFLOW_STATUS_FILE=/tmp/live-status.edn"
                              "AUTO_WORKFLOW_MESSAGES_FILE=/tmp/live-messages.txt"
                              "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=/tmp/live-snapshots.txt")
                            process-environment)))
@@ -17183,7 +17183,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
   "Registering a request buffer should copy tracked task env onto it."
   (let* ((buf (generate-new-buffer "*test-subagent-request*"))
          (task-env '("AUTO_WORKFLOW_EMACS_SERVER=isolated-server"
-                     "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.sexp"
+                     "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.edn"
                      "PATH=/usr/bin"))
          (my/gptel--agent-task-state (make-hash-table :test 'eql))
          (my/gptel--current-agent-task-id 3))
@@ -17206,7 +17206,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
   "Request buffer registration should defer env persistence until launch completes."
   (let* ((buf (generate-new-buffer "*test-subagent-launching*"))
          (task-env '("AUTO_WORKFLOW_EMACS_SERVER=isolated-server"
-                     "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.sexp"
+                     "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.edn"
                      "PATH=/usr/bin"))
          (my/gptel--agent-task-state (make-hash-table :test 'eql))
          (my/gptel--current-agent-task-id 4))
@@ -17229,7 +17229,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
   "Request buffer registration should honor launch-time env deferral even after re-entry."
   (let* ((buf (generate-new-buffer "*test-subagent-deferred-env*"))
          (task-env '("AUTO_WORKFLOW_EMACS_SERVER=isolated-server"
-                     "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.sexp"
+                     "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.edn"
                      "PATH=/usr/bin"))
          (my/gptel--agent-task-state (make-hash-table :test 'eql))
          (my/gptel--current-agent-task-id 5)
@@ -17255,7 +17255,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
          (target-buf (generate-new-buffer "*test-bash-target*"))
          (target-dir (make-temp-file "test-bash-target" t))
          (isolated-env '("AUTO_WORKFLOW_EMACS_SERVER=isolated-server"
-                         "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.sexp"
+                         "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.edn"
                          "PATH=/usr/bin"))
          (fake-fsm (gptel-make-fsm :info (list :buffer target-buf))))
     (unwind-protect
