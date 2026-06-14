@@ -3,8 +3,8 @@
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
 > **Status**: ✅ **SELF-HEAL + ONTOLOGY REPAIRED** — high-risk routing blocks direct mutation of repair-engine files; ontology-router paren corruption fixed; stale cache removed
-> **Latest**: Agent-regression grader/promotion failures reduced from 32 to 1; daemon reliability hardened (curl orphans fixed, macOS socket pinned, KIBC-M regex repaired, World Store skips gracefully on macOS aarch64). Full unit suite green (3206 tests, 0 unexpected, 89 skipped).
-> **Active Plan**: Push reliability fixes to origin; monitor Pi5 cron for end-to-end completion; investigate remaining `decision-callback-is-idempotent` integration-test abort (likely Datahike branch-switch hang in headless env).
+> **Latest**: `scripts/run-pipeline.sh` rewritten in Clojure/babashka (`clj/ov5/pipeline.clj` + helpers); datahike pod loading made conditional so `bb -m ov5.pipeline` works on macOS aarch64; production.el test regressions fixed. Full unit suite green (3209 tests, 0 unexpected, 89 skipped).
+> **Active Plan**: Monitor Pi5 cron for the new bb-based pipeline; investigate remaining `decision-callback-is-idempotent` integration-test abort.
 > **Pi5**: Auto-evolution active; pre-push hook now blocks broken pushes to main; Pi5 auto-evolved boundary fixes (Preview Mode 2, Edit hashline, Code_Map/Inspect/Replace, plan-mode readonly enforcement)
 
 ---
@@ -43,6 +43,34 @@
 
 ### Blockers
 - Datahike pod has no `macos-aarch64` release, so World Store remains disabled on macOS dev box. Production World Store runs on Pi5 (Linux x86).
+
+---
+
+## Session Note (2026-06-14 — pipeline rewrite to Clojure/babashka)
+
+1. **Rewrote `scripts/run-pipeline.sh`** from ~1600 lines of bash to `clj/ov5/pipeline.clj` (Clojure/babashka).
+   - New helper namespaces: `ov5.pipeline.log`, `ov5.pipeline.process`, `ov5.pipeline.git`, `ov5.pipeline.daemon`.
+   - Full port of pipeline-relevant `run-auto-workflow-cron.sh` actions: `status`, `stop`, `research`, `evolution`, `auto-workflow`, `ensure-worker-daemon`, `wait-for-idle`.
+   - `scripts/run-pipeline.sh` is now a thin POSIX wrapper that execs `bb -m ov5.pipeline`; all callers and env vars preserved.
+   - Added `--dry-run` flag for safe smoke testing.
+2. **Rewrote tests**
+   - `tests/test-run-pipeline-smoke.sh` — validates wrapper, `--help`, `--dry-run`, and isolated project-root execution.
+   - `tests/test-run-pipeline-git-sync.sh` — rewritten to exercise Clojure git helpers via `bb -e`.
+3. **Fixed datahike pod blocker**
+   - Removed eager pod declaration from `bb.edn`; `clj/ov5/world_store.clj` now loads the pod dynamically with graceful fallback on macOS aarch64.
+   - Added `datahike-pod-available?` predicate and skip gates in Clojure World Store tests.
+   - Fixed `.gitignore` so new `clj/ov5/pipeline*.clj` files are tracked.
+4. **Fixed pre-existing production.el regressions** surfaced by the test suite
+   - Removed corrupted 12-newline string literal in table regex.
+   - Restored EDN-backed innovation queue functions and `parseedn` require.
+   - Removed forced `gptel-mementum-headless-auto-approve t` binding in `gptel-auto-workflow--maybe-run-evolution`.
+
+### Verification
+- `bb -m ov5.pipeline --help`: exits 0.
+- Smoke test: 9/9 pass.
+- Git-sync test: 6/6 pass.
+- Full unit suite: 3209 tests, 0 unexpected, 89 skipped.
+- Pushed to `origin/main` as `99c26a478`.
 
 ---
 
