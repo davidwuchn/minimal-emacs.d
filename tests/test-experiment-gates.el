@@ -329,23 +329,33 @@ touching any gate-engine file must block fast-track."
     (should (> val 0))))
 
 (ert-deftest test-experiment-gates/monitoring-semantic-audit-timeout-kills-hang ()
-  "A with-timeout wrapper kills a hung operation and reports failure.
-Tests the Phase 10 timeout pattern: a hung body is killed by with-timeout
-and the monitoring pattern can continue.  Uses run-with-timer + polling
-to avoid brittle with-timeout interaction with pending process output
-from other tests in the full-suite run."
-  (let* ((start (float-time))
-         (timed-out nil)
-         (timer (run-with-timer 3 nil (lambda () (setq timed-out t))))
-         (result nil))
-    (unwind-protect
-        (progn
-          (while (and (not timed-out) (< (- (float-time) start) 999))
-            (sleep-for 0.1))
-          (setq result (if timed-out :timed-out :done)))
-      (cancel-timer timer))
-    (should (eq result :timed-out))
-    (should (< (- (float-time) start) 30))))
+  "A with-timeout wrapper around the Phase 10 audit fires the timeout
+handler when the audit hangs.  Mirrors the production with-timeout
+form at lisp/modules/gptel-auto-workflow-monitoring-agent.el L1790-L1799.
+
+We mock gptel-auto-workflow--self-heal-semantic to call read-event
+(interruptible by input/timeout), set a 1-second timeout, run the
+with-timeout form, and verify the timeout handler is invoked."
+  (require 'gptel-auto-workflow-monitoring-agent nil t)
+  (require 'gptel-auto-workflow-self-heal-semantic nil t)
+  (skip-unless (fboundp 'gptel-auto-workflow--self-heal-semantic))
+  (skip-unless (fboundp 'gptel-auto-workflow--monitoring-semantic-audit-timeout-handler))
+  (let ((handler-called nil)
+        (audit-was-called nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--self-heal-semantic)
+               (lambda (&rest _)
+                 (setq audit-was-called t)
+                 (read-event nil nil 5)))
+              ((symbol-function 'gptel-auto-workflow--monitoring-semantic-audit-timeout-handler)
+               (lambda () (setq handler-called t))))
+      (let ((gptel-auto-workflow-monitoring-semantic-audit-timeout-seconds 1))
+        (condition-case nil
+            (with-timeout (1
+                           (gptel-auto-workflow--monitoring-semantic-audit-timeout-handler))
+              (gptel-auto-workflow--self-heal-semantic :dry-run t))
+          (error nil))
+        (should audit-was-called)
+        (should handler-called)))))
 
 (ert-deftest test-experiment-gates/monitoring-semantic-audit-timeout-writes-memory ()
   "When the monitoring semantic audit times out, a failure-pattern memory is written.

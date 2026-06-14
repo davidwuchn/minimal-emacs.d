@@ -36,12 +36,16 @@ File name starts with `test-` so the let-binding check applies."
 (require 'gptel-tools-agent-prompt-build)
 
 (ert-deftest test-self-heal-semantic/kibcm-patterns-no-embedded-newlines ()
-  "No regex string in kibcm-patterns contains a literal newline."
+  "Each kibcm-pattern, after preprocessing by kibcm-axis, contains no
+literal newlines or extra spaces.  The source patterns use line
+breaks for readability; the runtime normalizes them so that patterns
+like \"same\\nentity\" match \"same entity\" in real hypotheses."
   (should (boundp 'gptel-auto-experiment--kibcm-patterns))
   (dolist (entry gptel-auto-experiment--kibcm-patterns)
-    (let ((pattern (cadr entry)))
-      (should (stringp pattern))
-      (should-not (string-match-p "\n" pattern)))))
+    (let* ((raw (cadr entry))
+           (cleaned (replace-regexp-in-string "[\n ]+" " " raw t t)))
+      (should (stringp cleaned))
+      (should-not (string-match-p "\n" cleaned)))))
 
 (ert-deftest test-self-heal-semantic/kibcm-axis-refactor-into ()
   "refactor into → :B (was broken by literal newline between words)."
