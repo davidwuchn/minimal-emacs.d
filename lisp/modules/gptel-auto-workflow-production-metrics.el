@@ -437,7 +437,7 @@ Business value heuristics:
                                 (when (string-match-p (regexp-quote
                                                        (file-name-sans-extension target-basename))
                                                       (buffer-string))
-                                  (cl-return t)))))
+                                  (cl-return-from find-test t)))))
                           nil)))
 
            ;; Signal 4: Target file size (complexity proxy)

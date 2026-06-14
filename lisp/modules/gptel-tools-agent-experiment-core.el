@@ -1332,8 +1332,9 @@ fallback hash" (or target "unknown")))))
 		                                                    ;; Track token economics for this experiment
 		                                                    (when (fboundp 'gptel-token-economics--track-experiment)
 		                                                      (gptel-token-economics--track-experiment exp-result))
-																(funcall callback exp-result)))))))))
-                                              (if (and (gptel-auto-experiment--teachable-validation-error-p
+                                                           (funcall callback exp-result))))))))))
+                                              (unless finished
+                                                (if (and (gptel-auto-experiment--teachable-validation-error-p
                                                        target validation-error)
                                                       (not (bound-and-true-p gptel-auto-experiment--in-retry)))
                                                  (let ((default-directory experiment-worktree)
