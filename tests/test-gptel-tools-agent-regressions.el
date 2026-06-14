@@ -7975,13 +7975,16 @@ failure."
          (gptel-auto-workflow--research-findings-cache (make-hash-table :test 'equal))
          (gptel-auto-workflow--current-research-context nil)
          (trace-dir (expand-file-name "var/tmp/research-traces" tmpdir))
-         (findings-file (expand-file-name "var/tmp/research-findings.md" tmpdir)))
+         (findings-file (expand-file-name "var/tmp/research-findings.edn" tmpdir)))
     (unwind-protect
         (progn
           (make-directory trace-dir t)
           (make-directory (file-name-directory findings-file) t)
           (with-temp-file findings-file
-            (insert (format "# Research Findings\n\n%s" findings)))
+            (insert (parseedn-print-str
+                     (list :project tmpdir
+                           :updated (format-time-string "%Y-%m-%d %H:%M")
+                           :findings findings))))
           (with-temp-file (expand-file-name (format "trace-%s.json" research-hash) trace-dir)
             (insert (json-encode
                      (list :strategy "trace-strategy"
@@ -8011,12 +8014,15 @@ as nil. If it loads after strategic.el, gethash/puthash would crash with
          ;; Simulate standalone-research.el clobbering the cache to nil
          (gptel-auto-workflow--research-findings-cache nil)
          (gptel-auto-workflow--current-research-context nil)
-         (findings-file (expand-file-name "var/tmp/research-findings.md" tmpdir)))
+         (findings-file (expand-file-name "var/tmp/research-findings.edn" tmpdir)))
     (unwind-protect
         (progn
           (make-directory (file-name-directory findings-file) t)
           (with-temp-file findings-file
-            (insert (format "# Research Findings\n\n%s" findings)))
+            (insert (parseedn-print-str
+                     (list :project tmpdir
+                           :updated (format-time-string "%Y-%m-%d %H:%M")
+                           :findings findings))))
           ;; Must NOT signal "Wrong type argument: hash-table-p, nil"
           (should (equal (gptel-auto-workflow-load-research-findings) findings))
           ;; Context should still be restored even though cache was nil

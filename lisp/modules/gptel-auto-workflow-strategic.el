@@ -28,6 +28,7 @@
 
 (require 'cl-lib)
 (require 'json)
+(require 'parseedn)
 (require 'gptel-tools-agent)
 (require 'gptel-benchmark-subagent nil t)
 (require 'gptel-auto-workflow-research-cache nil t)
@@ -170,7 +171,7 @@ SOURCE defaults to external when FINDINGS look like external research."
 (defcustom gptel-auto-workflow-research-interval (* 4 3600)
   "Interval in seconds between periodic researcher runs.
 Default 4 hours. Set to 0 to disable periodic research.
-Findings stored in var/tmp/research-findings.md for analyzer."
+Findings stored in var/tmp/research-findings.edn for analyzer."
   :type 'integer
   :group 'gptel-tools-agent)
 
@@ -2688,22 +2689,25 @@ Uses topic-specific model if available and topic detected."
 ;;; Periodic Research
 
 (defun gptel-auto-workflow--research-file ()
-  "Return path to research findings cache file."
-  (expand-file-name "var/tmp/research-findings.md"
+  "Return path to research findings cache file (EDN)."
+  (expand-file-name "var/tmp/research-findings.edn"
                     (gptel-auto-workflow--effective-project-root)))
 
 (defun gptel-auto-workflow--research-fresh-enough-p (findings-file)
   "τ Wisdom: check if cached research is fresh enough to skip re-research.
-Returns non-nil if the findings file is <1 hour old and has pattern content."
+Returns non-nil if the findings file is <1 hour old and has non-empty :findings."
   (when (file-exists-p findings-file)
     (let* ((mtime (file-attribute-modification-time (file-attributes findings-file)))
-           (age-seconds (- (float-time) (float-time mtime))))
-      (when (< age-seconds 3600)  ; <1 hour old
-        (with-temp-buffer
-          (insert-file-contents findings-file)
-          (goto-char (point-min))
-          ;; Must have actual pattern content, not just header
-          (> (count-lines (point-min) (point-max)) 5))))))
+           (age-seconds (- (float-time) (float-time mtime)))
+           (data (ignore-errors
+                   (with-temp-buffer
+                     (insert-file-contents findings-file)
+                     (parseedn-read))))
+           (findings (when (hash-table-p data)
+                       (gethash :findings data))))
+      (and (< age-seconds 3600)  ; <1 hour old
+           (stringp findings)
+           (not (string-empty-p (string-trim findings)))))))
 
 (defun gptel-auto-workflow-run-research (&optional completion-callback)
   "Run researcher and store findings to cache.
@@ -2733,11 +2737,11 @@ When COMPLETION-CALLBACK is non-nil, call it after findings are cached."
               (puthash cache-key findings gptel-auto-workflow--research-findings-cache))
            (let ((file (gptel-auto-workflow--research-file)))
              (make-directory (file-name-directory file) t)
-             (with-temp-file file
-               (insert (format "# Research Findings\n\n> Project: %s\n> Updated: %s\n\n%s"
-                               proj-root
-                               (format-time-string "%Y-%m-%d %H:%M")
-                               findings)))
+              (with-temp-file file
+                (insert (parseedn-print-str
+                         (list :project proj-root
+                               :updated (format-time-string "%Y-%m-%d %H:%M")
+                               :findings findings))))
               (message "[research] Findings cached for %s (%d chars)"
                        proj-root (length findings))
               ;; Update dashboards after research completes
@@ -2764,6 +2768,22 @@ When COMPLETION-CALLBACK is non-nil, call it after findings are cached."
                (when completion-callback
                  (funcall completion-callback findings)))))))))
 
+(defun gptel-auto-workflow--read-research-findings-file (file)
+  "Read research findings EDN FILE and return the :findings string.
+Returns empty string if the file is missing or malformed."
+  (if (file-readable-p file)
+      (ignore-errors
+        (let ((data (with-temp-buffer
+                      (insert-file-contents file)
+                      (parseedn-read))))
+          (when (and (consp data) (hash-table-p (car data)))
+            (setq data (car data)))
+          (cond
+           ((hash-table-p data) (or (gethash :findings data) ""))
+           ((listp data) (or (plist-get data :findings) ""))
+           (t ""))))
+    ""))
+
 (defun gptel-auto-workflow-load-research-findings ()
   "Load cached research findings for current project.
 Returns empty string if no cache exists.
@@ -2773,23 +2793,7 @@ Findings are cached per-project."
          (cached (and (hash-table-p gptel-auto-workflow--research-findings-cache)
                       (gethash cache-key gptel-auto-workflow--research-findings-cache)))
          (file (gptel-auto-workflow--research-file))
-         (file-findings nil))
-    (when (file-exists-p file)
-      (setq file-findings
-            (with-temp-buffer
-              (insert-file-contents file)
-              (goto-char (point-min))
-              (let ((content-start nil))
-                (while (and (not (eobp)) (not content-start))
-                  (if (looking-at "^$")
-                      (progn
-                        (forward-line 1)
-                        (setq content-start (point)))
-                    (forward-line 1)))
-                (string-trim
-                 (if content-start
-                     (buffer-substring content-start (point-max))
-                   ""))))))
+         (file-findings (gptel-auto-workflow--read-research-findings-file file)))
     (cond
      ((and (stringp file-findings)
            (not (string-empty-p file-findings))

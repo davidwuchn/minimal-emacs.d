@@ -38,7 +38,7 @@ PIPELINE_SMOKE_ONLY="${PIPELINE_SMOKE_ONLY:-no}"
 QUOTA_RESET_FILE="$DIR/var/tmp/quota-reset-timestamp"
 
 # Research output files
-FINDINGS_FILE="$DIR/var/tmp/research-findings.md"
+FINDINGS_FILE="$DIR/var/tmp/research-findings.edn"
 INTERNAL_FILE="$DIR/var/tmp/internal-research.md"
 SKIP_IF_QUOTA_EXHAUSTED="${SKIP_IF_QUOTA_EXHAUSTED:-no}"
 
@@ -313,22 +313,7 @@ write_research_fallback() {
 
     mkdir -p "$(dirname "$FINDINGS_FILE")"
     cat > "$FINDINGS_FILE" <<EOF
-# Research Findings
-
-> Updated: $(date '+%Y-%m-%d %H:%M')
-> Source type: local-fallback
-> Reason: $reason
-
-## Local Research Fallback
-
-The dedicated researcher daemon did not produce fresh external findings. Use this local context rather than running auto-workflow with no research signal:
-
-- Preserve the feedback loop: every experiment row must include a non-none research hash so AutoTTS can link outcomes back to the research trace.
-- Treat missing research files as a pipeline defect, not a successful empty research run.
-- Prefer structured, machine-parseable research outputs with source, technique, apply-to-us, and verification fields.
-- Guard daemon orchestration boundaries: if a researcher daemon disappears after being observed, fail fast and fall back instead of waiting until the global timeout.
-- Prioritize changes that make self-evolution observable through results.tsv metadata, research traces, and controller decisions.
-
+{:project "${DIR}" :updated "$(date '+%Y-%m-%d %H:%M')" :findings "Local research fallback: $reason. The dedicated researcher daemon did not produce fresh external findings. Treat missing research files as a pipeline defect, not a successful empty research run."}
 EOF
     cat > "$INTERNAL_FILE" <<EOF
 # Internal Code Analysis

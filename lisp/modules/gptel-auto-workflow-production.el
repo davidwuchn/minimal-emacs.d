@@ -531,7 +531,7 @@ Checks:
 1. Research findings file exists and has content
 2. Research context is set for next auto-workflow run
 Returns t if all checks pass, nil with warnings otherwise."
-  (let* ((findings-file (expand-file-name "var/tmp/research-findings.md"
+  (let* ((findings-file (expand-file-name "var/tmp/research-findings.edn"
                                           (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
                                                    (gptel-auto-workflow--worktree-base-root))
                                               user-emacs-directory)))
@@ -736,7 +736,7 @@ Called after research cycle completes."
                         (gptel-auto-workflow--worktree-base-root))
                    default-directory))
          (dash-file (expand-file-name "var/tmp/jtbd-dashboard.md" root))
-         (findings-file (expand-file-name "var/tmp/research-findings.md" root))
+         (findings-file (expand-file-name "var/tmp/research-findings.edn" root))
          (today (format-time-string "%Y-%m-%d %H:%M"))
          (findings-size (if (file-exists-p findings-file)
                             (nth 7 (file-attributes findings-file))
@@ -759,7 +759,7 @@ Called after research cycle completes."
                         (gptel-auto-workflow--worktree-base-root))
                    default-directory))
          (dash-file (expand-file-name "var/tmp/gtm-dashboard.md" root))
-         (findings-file (expand-file-name "var/tmp/research-findings.md" root))
+         (findings-file (expand-file-name "var/tmp/research-findings.edn" root))
          (today (format-time-string "%Y-%m-%d %H:%M"))
          (findings-size (if (file-exists-p findings-file)
                             (nth 7 (file-attributes findings-file))
@@ -1048,7 +1048,7 @@ Returns plist with :experiments-today :keep-rate :hours-per-experiment."
 (defun gptel-auto-workflow--gtm-metrics ()
   "Calculate GTM Mayor metrics from research history.
 Returns plist with :findings-today :strategy-accuracy :pmf-signal."
-  (let* ((findings-file (expand-file-name "var/tmp/research-findings.md"
+  (let* ((findings-file (expand-file-name "var/tmp/research-findings.edn"
                                           (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
                                                    (gptel-auto-workflow--worktree-base-root))
                                               default-directory)))

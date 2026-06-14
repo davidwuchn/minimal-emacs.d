@@ -145,7 +145,7 @@ EOF
 | `var/tmp/cron/auto-workflow-messages-tail.txt` | Persisted message tail |
 | `var/tmp/experiments/*/results.tsv` | Per-run experiment results |
 | `var/tmp/experiments/*/optimize/` | Per-experiment worktree output |
-| `var/tmp/research-findings.md` | Researcher cache |
+| `var/tmp/research-findings.edn` | Researcher cache |
 | `var/tmp/cross-subsystem-state.json` | Cross-subsystem persisted state |
 | `var/approval-queue/pending/` | Pending high-risk proposals |
 | `var/approval-queue/decisions/` | Approved/rejected/expired proposals |

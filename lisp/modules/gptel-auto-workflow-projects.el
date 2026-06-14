@@ -1106,7 +1106,7 @@ Returns nil if PROJECT-ROOT is nil or not found in cache."
           ;; ASSUMPTION: project-root must be a non-empty string for file operations
           (when (and (stringp project-root) (> (length project-root) 0))
             (let* ((findings (gptel-auto-workflow--research-cache-get project-root))
-                   (cache-file (expand-file-name "var/tmp/research-findings.md" project-root))
+                   (cache-file (expand-file-name "var/tmp/research-findings.edn" project-root))
                    (attrs (file-attributes cache-file))
                    (file-size (or (nth 7 attrs) 0)))
               (push (format "  %s:\n    In-memory: %d chars\n    File: %s (%d bytes)"

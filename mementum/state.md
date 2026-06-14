@@ -3,8 +3,8 @@
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
 > **Status**: ✅ **SELF-HEAL + ONTOLOGY REPAIRED** — high-risk routing blocks direct mutation of repair-engine files; ontology-router paren corruption fixed; stale cache removed
-> **Latest**: Major EDN + Datahike migration wave complete and verified — `results.tsv` now lives in Datahike World Store; all machine-to-machine status/queue files use EDN; remaining pre-existing grader/promotion test failures are not migration-related.
-> **Active Plan**: Commit migration; remaining: research-findings.md sidecar, var/tmp/checkpoints/*.ckpt, and the 32 pre-existing agent-regression grader/promotion failures.
+> **Latest**: `var/tmp/research-findings.md` migrated to EDN; active cache converted. All machine-to-machine status/queue/research files now use EDN or Datahike World Store. Remaining: `var/tmp/checkpoints/*.ckpt` and the 32 pre-existing agent-regression grader/promotion failures.
+> **Active Plan**: Commit research-findings EDN migration; next candidate is `var/tmp/checkpoints/*.ckpt` or fix grader/promotion regressions.
 > **Pi5**: Auto-evolution active; pre-push hook now blocks broken pushes to main; Pi5 auto-evolved boundary fixes (Preview Mode 2, Edit hashline, Code_Map/Inspect/Replace, plan-mode readonly enforcement)
 
 ---
@@ -31,6 +31,33 @@
 - `test-gptel-auto-workflow-production-metrics`: 16/16 pass.
 - `test-self-audit`: 15/15 pass.
 - `test-gptel-tools-agent-regressions`: 608/640 pass, 32 unexpected (pre-existing grader/promotion logic, not migration-related).
+
+---
+
+## Session Note (2026-06-14 — research-findings.md → EDN)
+
+1. **Migrated `var/tmp/research-findings.md` → `.edn`**
+   - `gptel-auto-workflow--research-file` returns `.edn` path.
+   - `gptel-auto-workflow-run-research` writes `{:project ... :updated ... :findings ...}` EDN via `parseedn-print-str`.
+   - `gptel-auto-workflow-load-research-findings` and `gptel-auto-workflow--read-research-findings-file` parse EDN and extract `:findings`, handling both hash-table and plist returns from `parseedn-read`.
+   - `gptel-auto-workflow--research-fresh-enough-p` now validates non-empty `:findings` instead of markdown line count.
+2. **Updated all consumers**
+   - `lisp/modules/gptel-auto-workflow-evolution.el`: direct readers now extract `:findings` before Allium/pair-probe parsing.
+   - `lisp/modules/standalone-research.el`: `slr--save-findings` writes compatible EDN.
+   - `lisp/modules/gptel-auto-workflow-production.el`, `gptel-auto-workflow-projects.el`: hardcoded paths updated.
+   - `scripts/run-pipeline.sh`: `write_research_fallback` writes EDN.
+   - Tests, docs, and assistant skill/command docs updated.
+3. **Converted active cache**
+   - `var/tmp/research-findings.md` migrated to `.edn`; stale `.md` worktree copies left for audit.
+
+### Verification
+- `test-gptel-auto-workflow-evolution-regressions`: 290/291 pass (1 skipped).
+- `test-gptel-tools-agent-core`: 67/67 pass.
+- `test-gptel-auto-workflow-production-metrics`: 16/16 pass.
+- `regression/auto-workflow/load-research-findings-restores-context`: pass.
+- `regression/auto-workflow/load-research-findings-nil-cache-no-crash`: pass.
+- `bash -n scripts/run-pipeline.sh` clean.
+- `git diff --check` clean.
 
 ---
 

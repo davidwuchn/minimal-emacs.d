@@ -38,7 +38,7 @@ emacsclient -s /tmp/emacs$(id -u)/gtm-product-org \
 - Human must approve before PMF executes
 
 ## Outputs
-- `var/tmp/research-findings.md` — raw findings
+- `var/tmp/research-findings.edn` — raw findings
 - `mementum/gtm/strategy-roadmap.md` — strategy for PMF
 - `mementum/beads/gtm-to-pmf/*.md` — experiment ideas
 - `var/tmp/jtbd-dashboard.md` — market intelligence

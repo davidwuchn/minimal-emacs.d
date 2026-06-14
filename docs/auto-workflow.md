@@ -104,7 +104,7 @@ Researcher runs every 4 hours via cron, finds:
 - Safety issues (unguarded operations, missing nil checks)
 
 ```
-Cache: var/tmp/research-findings.md
+Cache: var/tmp/research-findings.edn
 Usage: Analyzer loads findings for target selection
 ```
 

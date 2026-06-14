@@ -61,6 +61,22 @@
 (declare-function gptel-backend-name "gptel-request" (backend))
 (declare-function gptel-auto-workflow--edn-to-plist "gptel-tools-agent-experiment-loop" (data))
 
+(defun gptel-auto-workflow--read-research-findings-file (file)
+  "Read research findings EDN FILE and return the :findings string.
+Returns empty string if the file is missing or malformed."
+  (if (file-readable-p file)
+      (ignore-errors
+        (let ((data (with-temp-buffer
+                      (insert-file-contents file)
+                      (parseedn-read))))
+          (when (and (consp data) (hash-table-p (car data)))
+            (setq data (car data)))
+          (cond
+           ((hash-table-p data) (or (gethash :findings data) ""))
+           ((listp data) (or (plist-get data :findings) ""))
+           (t ""))))
+    ""))
+
 (defvar gptel-auto-workflow--champion-keep-rate nil)
 (defvar gptel-backend nil)
 
@@ -1547,7 +1563,7 @@ Writes to var/tmp/evolution/findings.md."
                       (goto-char (point-max)))
                     (push (buffer-substring-no-properties start (point)) recent-insights))))))))
      ;; Read raw research findings from pipeline
-     (let* ((raw-findings-file (expand-file-name "var/tmp/research-findings.md"
+     (let* ((raw-findings-file (expand-file-name "var/tmp/research-findings.edn"
                                                   (gptel-auto-workflow--worktree-base-root)))
             (raw-findings (when (file-readable-p raw-findings-file)
                             (let ((size (file-attribute-size (file-attributes raw-findings-file))))
@@ -1557,10 +1573,10 @@ Writes to var/tmp/evolution/findings.md."
                                          (time-less-p
                                           (time-subtract (current-time) (days-to-time 7))
                                           (file-attribute-modification-time (file-attributes raw-findings-file))))
-                                  (with-temp-buffer
-                                    (insert-file-contents raw-findings-file)
-                                    ;; Clean raw findings: strip LLM conversational noise
-                                    (goto-char (point-min))
+                                    (with-temp-buffer
+                                      (insert (gptel-auto-workflow--read-research-findings-file raw-findings-file))
+                                      ;; Clean raw findings: strip LLM conversational noise
+                                      (goto-char (point-min))
                                     (while (re-search-forward "^\\(?:Researcher result for task:.*$\\|I'll \\(?:conduct\\|follow\\|dig\\|check\\|search\\|fetch\\|look\\|analyze\\|examine\\|explore\\|start\\|use\\|begin\\|try\\|run\\|read\\|review\\|investigate\\).*\\|Good results.*$\\|Let me \\(?:fetch\\|search\\|dig\\|check\\|look\\|analyze\\|examine\\|explore\\|find\\|review\\|investigate\\|see\\).*\\|Based on my research.*$\\|Excellent findings!?.*$\\|Found a relevant.*$\\)" nil t)
                                       (replace-match ""))
                                     ;; Strip remaining conversational lines (first-person present tense)
@@ -4464,7 +4480,7 @@ Guards: skips enrichment when EMA confidence < 0.3 (untrusted research
 signal)."
   (cl-block gptel-auto-workflow--enrich-ontology-from-research
   (let* ((root (gptel-auto-workflow--worktree-base-root))
-         (findings-file (expand-file-name "var/tmp/research-findings.md" root))
+         (findings-file (expand-file-name "var/tmp/research-findings.edn" root))
          (new-concepts nil))
     (let ((ema-conf (or (and (boundp 'gptel-auto-workflow--research-ema-conf)
                               gptel-auto-workflow--research-ema-conf)
@@ -4474,7 +4490,7 @@ signal)."
         (cl-return-from gptel-auto-workflow--enrich-ontology-from-research nil)))
     (when (file-readable-p findings-file)
       (with-temp-buffer
-        (insert-file-contents findings-file)
+        (insert (gptel-auto-workflow--read-research-findings-file findings-file))
         (goto-char (point-min))
         ;; Parse Allium Technique entities: entity Technique { name: "X" source: "Y" ... }
         (while (re-search-forward "Technique\\.created(\\s-*name:\\s-*\\([^,\n]+\\)" nil t)
@@ -4520,11 +4536,11 @@ with Elisp code.
 Queues under :research-probes key in hints for the
 experiment loop to consume."
   (let* ((root (gptel-auto-workflow--worktree-base-root))
-         (findings-file (expand-file-name "var/tmp/research-findings.md" root))
+         (findings-file (expand-file-name "var/tmp/research-findings.edn" root))
          (probes nil))
     (when (file-readable-p findings-file)
       (with-temp-buffer
-        (insert-file-contents findings-file)
+        (insert (gptel-auto-workflow--read-research-findings-file findings-file))
         (goto-char (point-min))
         (while (re-search-forward "\\[pair-probe\\] \\*\\*\\(H[AB]\\)\\*\\*: \\([^\n]+\\)" nil t)
           (let ((label (match-string 1))

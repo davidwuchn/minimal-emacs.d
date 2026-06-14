@@ -2,6 +2,7 @@
 ;;; Bypasses all strategic.el functions. Works even when load-file corrupts them.
 
 (require 'json)
+(require 'parseedn)
 (declare-function gptel-auto-workflow--json-encode-plist "gptel-auto-workflow-ontology-router" (plist))
 (declare-function gptel-benchmark-call-subagent "gptel-benchmark-subagent")
 (define-error 'research-pipeline-defect "Research pipeline defect" 'error)
@@ -102,15 +103,16 @@
       "")))
 
 (defun slr--save-findings (findings &optional file-path)
-  "Save findings to file."
+  "Save findings to EDN file."
   (let ((file (or file-path
-                  (expand-file-name "var/tmp/research-findings.md"
+                  (expand-file-name "var/tmp/research-findings.edn"
                                      (slr--root)))))
     (make-directory (file-name-directory file) t)
     (with-temp-file file
-      (insert (format "# Research Findings\n\n> Updated: %s\n\n%s"
-                      (format-time-string "%Y-%m-%d %H:%M")
-                      findings)))
+      (insert (parseedn-print-str
+               (list :project (slr--root)
+                     :updated (format-time-string "%Y-%m-%d %H:%M")
+                     :findings findings))))
     (message "[slr] Saved %d chars to %s" (length findings) file)))
 
 (defun slr--usable-findings-p (findings)
