@@ -2,10 +2,42 @@
 
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
-> **Status**: ✅ **SELF-HEAL + ONTOLOGY REPAIRED** — high-risk routing blocks direct mutation of repair-engine files; ontology-router paren corruption fixed; stale cache removed
-> **Latest**: NeLisp reader integrated into daemon-repl bracket validation as a second syntax pass; test file malformed-string literal fixed. Full unit suite green (3212 tests, 0 unexpected, 89 skipped).
-> **Active Plan**: Commit daemon-repl + NeLisp reader changes; verify Pi5 cron with bb-based pipeline; investigate remaining `decision-callback-is-idempotent` integration-test abort.
+> **Status**: ✅ **DECISION-CALLBACK ABORT ROOT-CAUSED AND FIXED** — `decision-callback-is-idempotent` now passes; two production fixes staged (not yet committed).
+> **Latest**: Fixed `cl-return` misused inside named `cl-block` in production-metrics; wrapped grader-bypass/validation-retry fallback in `(unless finished ...)` so it does not run after the main keep path.
+> **Active Plan**: Decide whether to commit+push these two fixes; continue investigating pre-existing `empty-localized-commit-keeps-result` abort and `default-grader-retries-allow-second-provider-hop` failure.
 > **Pi5**: Auto-evolution active; pre-push hook now blocks broken pushes to main; Pi5 auto-evolved boundary fixes (Preview Mode 2, Edit hashline, Code_Map/Inspect/Replace, plan-mode readonly enforcement)
+
+---
+
+## Session Note (2026-06-15 — decision-callback abort fixed)
+
+1. **Root cause of `regression/auto-experiment/decision-callback-is-idempotent` non-local exit**
+   - `lisp/modules/gptel-auto-workflow-production-metrics.el` (`gptel-auto-workflow--compute-local-business-value`):
+     - Used `(cl-return t)` inside a named `(cl-block find-test ...)`.
+     - `cl-return` expands to `(throw '--cl-block-nil-- value)`, throwing to the unnamed block tag instead of `--cl-block-find-test--`.
+     - When a matching test file was found, the throw hit a tag whose `catch` had exited, producing the ERT-reported non-local exit.
+   - Fix: changed to `(cl-return-from find-test t)`.
+
+2. **Root cause of `callback-count = 2` after abort was fixed**
+   - `lisp/modules/gptel-tools-agent-experiment-core.el`:
+     - The "benchmark passed / score improved" main path and the grader-bypass/validation-retry fallback path were sequential statements inside `(when grade-passed ...)`.
+     - When benchmark passed and the grader also passed strongly, both paths executed, each creating a kept-result callback and invoking the user callback once.
+   - Fix: wrapped the validation-retry + grader-bypass/discard block in `(unless finished ...)`, so it only runs when the main path did not already fire and set `finished`.
+
+3. **Verification**
+   - `regression/auto-experiment/decision-callback-is-idempotent`: **passes** (was aborting; then failing with callback-count 2).
+   - Byte-compile of both modified files: clean (`byte-compile-error-on-warn t`).
+   - `regression/auto-experiment/default-grader-retries-allow-second-provider-hop`: still fails (pre-existing `wrong-type-argument number-or-marker-p nil` in `gptel-auto-experiment--should-retry-grader-p`).
+   - `regression/auto-experiment/empty-localized-commit-keeps-result`: still aborts with non-local exit (pre-existing, unrelated to the fixes above).
+   - `regression/auto-experiment/*` suite aborts at `empty-localized-commit-keeps-result`, preventing a clean full run of that file.
+
+4. **Cleanups**
+   - Removed generated `packages/nelisp/nelisp-autoloads.el` artifact.
+   - Left untracked `mementum/memories/audit-fix-2026-06-13T14:00:15.md` for user review.
+
+### Next steps
+- Commit the two fixes and push to `origin/main`, or
+- Continue debugging the pre-existing `empty-localized-commit-keeps-result` abort and/or `default-grader-retries-allow-second-provider-hop` failure.
 
 ---
 
