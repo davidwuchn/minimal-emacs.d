@@ -49,7 +49,7 @@
 
 (defn- parse-args
   "Parse *command-line-args* into a map of flags.
-   Returns {:help true|false :smoke true|false :skip-pre-evolution true|false}"
+   Returns {:help true|false :smoke true|false :dry-run true|false :skip-pre-evolution true|false}"
   [args]
   (reduce (fn [acc arg]
             (case arg
@@ -316,15 +316,19 @@
     (when (> (:killed killed-info) 0)
       (log/logf "Killing %d stale daemon process(es)..." (:killed killed-info)))
     (Thread/sleep 3000))
-  ;; Kill stale bg-daemon processes
-  (proc/kill-by-pattern! "bg-daemon")
+  (log/log "Cleanup: killed stale daemons")
+  ;; Kill stale bg-daemon processes (Emacs daemons only, not bb pipeline)
+  (proc/kill-by-pattern! "Emacs.*--bg-daemon")
   (Thread/sleep 2000)
+  (log/log "Cleanup: killed stale bg-daemons")
   ;; Clean stale sockets
   (doseq [sock-name ["server" "pmf-value-stream" "gtm-product-org"]]
     (daemon/clean-stale-socket sock-name))
+  (log/log "Cleanup: cleaned stale sockets")
   ;; Pull latest code
   (log/log "Pulling latest code from origin...")
   (git/git-sync-latest! "pre-workflow" "auto-workflow-pre-pull")
+  (log/log "Cleanup: pulled latest code")
   ;; Stop existing daemons
   (log/log "Stopping any existing daemons to load latest code...")
   (try (daemon/stop-action! {:server-name "pmf-value-stream"}) (catch Exception _ nil))
@@ -364,6 +368,8 @@
                                   "-L" (str root "/lisp/modules")
                                   "-L" (str root "/packages/gptel")
                                   "-L" (str root "/packages/compat")
+                                  "-L" (str root "/var/elpa/parseclj-1.1.1")
+                                  "-L" (str root "/var/elpa/parseedn-1.2.1")
                                   "-l" "gptel"
                                   "--eval"
                                   (str "(progn"
@@ -419,11 +425,11 @@
   (log/log "=== Step 0.5: Auto-fix (ACT on self-audit findings) ===")
   (let [root (log/project-root)
         cold-backends (:cold-backends @env)
-        unevaluated-strategies (:unevaluated-strategies @env)
+        unevaluated-strategies (or (:unevaluated-strategies @env) 0)
         bottleneck (:bottleneck @env)
-        broken-modules (:broken-modules @env)
-        pricing-stale (:pricing-stale @env)
-        days-stale (:days-stale @env)
+        broken-modules (or (:broken-modules @env) 0)
+        pricing-stale (or (:pricing-stale @env) 0)
+        days-stale (or (:days-stale @env) 0)
         remedial (atom 0)]
     ;; Auto-fix 1: Force cold backends
     (when (and cold-backends (not= cold-backends []) (not= cold-backends "nil"))

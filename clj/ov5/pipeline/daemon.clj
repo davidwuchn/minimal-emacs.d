@@ -304,12 +304,12 @@
                             "bash" "-c" inner-cmd]]
             (try
               ;; Start as background process (not waited)
-              (p/process {:out :inherit :err :inherit :env env-opts} setsid-cmd)
+              (apply p/process {:out :inherit :err :inherit :env env-opts} setsid-cmd)
               (catch Exception e
                 (log/logf "ERROR launching daemon via setsid: %s" (.getMessage e))
                 ;; Fallback: launch directly
-                (p/process {:out :inherit :err :inherit :env env-opts} launch-cmd))))
-          (p/process {:out :inherit :err :inherit :env env-opts} launch-cmd)))
+                (apply p/process {:out :inherit :err :inherit :env env-opts} launch-cmd))))
+          (apply p/process {:out :inherit :err :inherit :env env-opts} launch-cmd)))
       ;; 8. Poll up to 150*0.2s for daemon to respond
       (loop [i 0]
         (let [state (check-worker-daemon server-name emacsclient-path)]
@@ -365,18 +365,15 @@
 (defn run-emacsclient-eval
   "Evaluate elisp code on a named daemon socket.
    Returns {:exit N, :out str, :err str}.
-   Handles 'Server not responding', 'Connection refused', and timeouts."
+   Handles 'Server not responding', 'Server did not reply', and timeouts."
   [server-name elisp-code & {:keys [timeout] :or {timeout 10}}]
   (let [emacsclient-path (or (resolve-emacsclient) "emacsclient")]
     (try
-      (let [result @(p/process {:out :string :err :string
-                                :continue true
-                                :timeout timeout
-                                :env {"TMPDIR" "/tmp"}}
-                               emacsclient-path
-                               "-a" "false"
-                               "-s" server-name
-                               "--eval" elisp-code)
+      (let [result (proc/sh emacsclient-path
+                            "-a" "false"
+                            "-s" server-name
+                            "--eval" elisp-code
+                            :timeout timeout)
             out (str/trim (:out result))
             err (str/trim (:err result))
             exit (:exit result)]

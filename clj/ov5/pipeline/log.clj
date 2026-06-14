@@ -121,8 +121,10 @@
         lock-str (try (str/trim (slurp f)) (catch Exception _ nil))]
     (when (and lock-str (not (str/blank? lock-str)))
       (try
-        (let [pid (Long/parseLong lock-str)]
-          (when (.isAlive (java.lang.ProcessHandle/of pid))
+        (let [pid (Long/parseLong lock-str)
+              opt (java.lang.ProcessHandle/of pid)
+              ph (.orElse opt nil)]
+          (when (and ph (.isAlive ph))
             (log "Pipeline already running (PID" pid "), skipping")
             (System/exit 0)))
         (catch NumberFormatException _ nil)))
