@@ -107,8 +107,10 @@
   (let [pid-num (try (Long/parseLong (str pid))
                      (catch NumberFormatException _ nil))]
     (if pid-num
-      (when-let [ph (-> (java.lang.ProcessHandle/of pid-num) .orElse nil)]
-        (.isAlive ph))
+      (let [opt (java.lang.ProcessHandle/of pid-num)
+            ph (.orElse opt nil)]
+        (when ph
+          (.isAlive ph)))
       false)))
 
 (defn wait-for-exit
