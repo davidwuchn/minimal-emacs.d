@@ -29,9 +29,8 @@
    but rather passed as a symbol to the Datahike Datalog engine."
   [filter-map]
   (let [where-clauses (mapv (fn [[attr val]] ['?e attr val]) filter-map)]
-    (list
-     :find (list (list 'pull '?e '[*]) '...)
-     :where where-clauses)))
+    (into [:find '[(pull ?e [*]) ...] :where]
+          where-clauses)))
 
 (defn experiments-by-filters
   "Return all experiments matching a map of attribute filters.
@@ -64,6 +63,15 @@
                             matches))
         keep-rate (if (pos? total) (float (/ kept total)) 0.0)]
     {:kept kept :total total :keep-rate keep-rate}))
+
+(defn backend-strategy-target-stats-readable
+  "Return a one-row EDN vector for the Elisp bridge.
+   Keeps `backend-strategy-target-stats` map-shaped for Clojure callers,
+   while giving Emacs a vector shape that round-trips cleanly through `read`."
+  [backend & [strategy target]]
+  (let [{:keys [kept total keep-rate]}
+        (backend-strategy-target-stats backend strategy target)]
+    [[:kept kept :total total :keep-rate keep-rate]]))
 
 (defn recent-experiments
   "Return the N most recent experiments, sorted by :experiment/id descending.

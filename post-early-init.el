@@ -77,6 +77,17 @@
       (when (> cleaned 0)
         (message "[post-early] Purged %d stale .elc files" cleaned))))))
 
+;; Pin server socket dir to /tmp/emacs$UID/ for workflow daemons.
+;; Prevents TMPDIR drift (from exec-path-from-shell on macOS) from moving
+;; the socket after daemon startup and breaking emacsclient.
+(when (and (daemonp) (my/workflow-daemon-p))
+  (let ((pinned (format "/tmp/emacs%d" (user-uid))))
+    (make-directory pinned t)
+    (setq server-socket-dir pinned)
+    (setq temporary-file-directory "/tmp")
+    (setenv "TMPDIR" "/tmp")
+    (message "[daemon] Pinned workflow socket dir to %s" pinned)))
+
 ;; Set tree-sitter grammar directory early, before any tree-sitter modes are loaded
 ;; Note: user-emacs-directory is already set to var/ by pre-early-init.el
 (setq treesit-extra-load-path

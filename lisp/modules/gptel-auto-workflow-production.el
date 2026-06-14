@@ -4,7 +4,7 @@
 ;; It runs automatically when the auto-workflow daemon is active.
 
 (require 'cl-lib)
-(require 'parseedn)
+(require 'parseedn nil t)
 (require 'gptel-tools-agent-experiment-loop)
 (require 'gptel-auto-workflow-external-sensors nil t)
 (require 'gptel-auto-workflow-production-metrics nil t)
@@ -131,16 +131,16 @@ Skips when a workflow or cron job is active to avoid preempting experiments."
           (message "[auto-workflow] Backtrace logging also failed: %s" (error-message-string log-err))))))
     ;; Mementum maintenance: rebuild index + synthesize candidates.
     ;; Runs every cycle (hourly) but is cheap when no new memories exist.
-    ;; Enable auto-approve in headless so synthesis actually writes files.
+    ;; Respects `gptel-mementum-headless-auto-approve' (default `draft') so
+    ;; unattended synthesis writes to drafts/ for later human review.
     ;; Skip if workflow started during evolution cycle.
     (when (not (bound-and-true-p gptel-auto-workflow--running))
       (condition-case nil
           (when (fboundp 'gptel-mementum-build-index)
             (with-no-warnings
-              (let ((gptel-mementum-headless-auto-approve t))
-                (gptel-mementum-build-index)
-                (when (fboundp 'gptel-mementum-synthesize-all-candidates)
-                  (gptel-mementum-synthesize-all-candidates nil t)))))
+              (gptel-mementum-build-index)
+              (when (fboundp 'gptel-mementum-synthesize-all-candidates)
+                (gptel-mementum-synthesize-all-candidates nil t))))
         (error
          (message "[mementum] Maintenance error in evolution cycle"))))))
 
@@ -791,8 +791,48 @@ Called after research cycle completes."
                              (gptel-auto-workflow--worktree-base-root))
                         default-directory)))
 
+(defun gptel-auto-workflow--innovation-queue-read (&optional queue-file)
+  "Read the innovation queue from QUEUE-FILE or the default queue file.
+Returns a list of plists, or nil if the file does not exist or is empty."
+  (let ((file (or queue-file (gptel-auto-workflow--innovation-queue-file))))
+    (when (and (file-exists-p file)
+               (> (file-attribute-size (file-attributes file)) 0))
+      (condition-case err
+          (with-temp-buffer
+            (insert-file-contents file)
+            (goto-char (point-min))
+            (let ((data (parseedn-read)))
+              (cond
+               ((vectorp data)
+                (mapcar #'gptel-auto-workflow--hash-to-plist (append data nil)))
+               ((and (consp data) (vectorp (car data)))
+                (mapcar #'gptel-auto-workflow--hash-to-plist (append (car data) nil)))
+               ((listp data) data)
+               (t nil))))
+        (error
+         (message "[innovation] Failed to read queue %s: %s" file err)
+         nil)))))
+
+(defun gptel-auto-workflow--hash-to-plist (hash)
+  "Convert a HASH table with keyword keys to a property list."
+  (let (plist)
+    (maphash (lambda (key value)
+               (setq plist (plist-put plist key value)))
+             hash)
+    plist))
+
+(defun gptel-auto-workflow--innovation-queue-write (queue-file queue)
+  "Write QUEUE (a list of plists) as EDN to QUEUE-FILE."
+  (make-directory (file-name-directory queue-file) t)
+  (with-temp-file queue-file
+    (insert ";; Innovation queue (EDN). Each entry is a map with keys:\n")
+    (insert ";; :id :source :technique :expected-impact :status :experiment-id\n")
+    (insert ";; :actual-impact\n")
+    (insert (parseedn-print-str (apply #'vector queue)))
+    (insert "\n")))
+
 (defun gptel-auto-workflow--innovation-queue-add (source technique expected-impact)
-  "Add an innovation idea to the EDN-backed queue.
+  "Add an innovation idea to the queue.
 SOURCE: where the idea came from \(e.g., `GitHub trends',
 `arXiv paper')
 TECHNIQUE: what to try \(e.g., `Hashline editing')
@@ -802,99 +842,52 @@ Returns the new item ID."
          (id (format "innov-%s-%d"
                      (format-time-string "%Y%m%d")
                      (random 10000)))
-         (timestamp (format-time-string "%Y-%m-%d %H:%M"))
          (entry (list :id id
                       :source source
                       :technique technique
                       :expected-impact expected-impact
                       :status "pending"
                       :experiment-id "-"
-                      :actual-impact "-"
-                      :created timestamp))
-         (queue (gptel-auto-workflow--innovation-queue-read queue-file)))
-    (make-directory (file-name-directory queue-file) t)
-    (setq queue (append (seq--into-list queue) (list entry)))
-    (gptel-auto-workflow--innovation-queue-write queue-file queue)
-    (message "[innovation] Queued: %s (%s -> %s)" id technique expected-impact)
+                      :actual-impact "-"))
+         (queue (or (gptel-auto-workflow--innovation-queue-read queue-file) nil)))
+    (gptel-auto-workflow--innovation-queue-write queue-file (append queue (list entry)))
+    (message "[innovation] Queued: %s (%s → %s)" id technique expected-impact)
     id))
 
-(defun gptel-auto-workflow--innovation-queue-read (&optional queue-file)
-  "Read innovation queue from EDN file QUEUE-FILE.
-Returns a list of plists.  Missing or malformed files return nil."
-  (let ((file (or queue-file (gptel-auto-workflow--innovation-queue-file))))
-    (if (file-exists-p file)
-        (condition-case err
-            (let* ((raw (with-temp-buffer
-                          (insert-file-contents file)
-                          (buffer-string)))
-                   (data (parseedn-read-str raw)))
-              (cond
-               ((vectorp data) (mapcar #'gptel-auto-workflow--innovation-queue-item-from-edn (append data nil)))
-               ((listp data) (mapcar #'gptel-auto-workflow--innovation-queue-item-from-edn data))
-               (t nil)))
-          (error
-           (message "[innovation] Failed to read EDN queue %s: %s" file (error-message-string err))
-           nil))
-      nil)))
-
-(defun gptel-auto-workflow--innovation-queue-item-from-edn (item)
-  "Convert an EDN item (hash-table or plist) into a plist."
-  (let ((keys '(:id :source :technique :expected-impact :status :experiment-id :actual-impact :created :updated))
-        result)
-    (dolist (k keys)
-      (let ((v (if (hash-table-p item) (gethash k item) (plist-get item k))))
-        (when v (setq result (plist-put result k v)))))
-    result))
-
-(defun gptel-auto-workflow--innovation-queue-item-to-edn (item)
-  "Convert ITEM plist into a hash-table for EDN serialization."
-  (let ((ht (make-hash-table :test 'equal))
-        (keys '(:id :source :technique :expected-impact :status :experiment-id :actual-impact :created :updated)))
-    (dolist (k keys)
-      (let ((v (plist-get item k)))
-        (when v (puthash k v ht))))
-    ht))
-
-(defun gptel-auto-workflow--innovation-queue-write (queue-file queue)
-  "Write QUEUE as an EDN vector to QUEUE-FILE."
-  (with-temp-file queue-file
-    (insert (parseedn-print-str (vconcat (mapcar #'gptel-auto-workflow--innovation-queue-item-to-edn queue))))
-    (insert "\n")))
-
 (defun gptel-auto-workflow--innovation-queue-update (id status &optional experiment-id actual-impact)
-  "Update an innovation queue item's STATUS by ID.
+  "Update an innovation queue item's STATUS.
+ID: the innovation item ID
+STATUS: new status (pending|running|validated|discarded|deployed)
 EXPERIMENT-ID: optional experiment that tested this idea
 ACTUAL-IMPACT: measured outcome after experiments"
   (let* ((queue-file (gptel-auto-workflow--innovation-queue-file))
-         (timestamp (format-time-string "%Y-%m-%d %H:%M"))
-         (found nil)
-         (queue (mapcar
-                 (lambda (item)
-                   (if (string= (plist-get item :id) id)
-                       (progn
-                         (setq found t)
-                         (plist-put (plist-put item :status status) :updated timestamp)
-                         (when experiment-id
-                           (setq item (plist-put item :experiment-id experiment-id)))
-                         (when actual-impact
-                           (setq item (plist-put item :actual-impact actual-impact)))
-                         item)
-                     item))
-                 (gptel-auto-workflow--innovation-queue-read queue-file))))
-    (when found
-      (gptel-auto-workflow--innovation-queue-write queue-file queue)
-      (message "[innovation] Updated %s -> %s" id status))
-    found))
+         (queue (gptel-auto-workflow--innovation-queue-read queue-file))
+         (updated nil))
+    (when queue
+      (setq updated
+            (mapcar (lambda (item)
+                      (if (string= (plist-get item :id) id)
+                          (list :id id
+                                :source (plist-get item :source)
+                                :technique (plist-get item :technique)
+                                :expected-impact (plist-get item :expected-impact)
+                                :status status
+                                :experiment-id (or experiment-id (plist-get item :experiment-id) "-")
+                                :actual-impact (or actual-impact (plist-get item :actual-impact) "-"))
+                        item))
+                    queue))
+      (gptel-auto-workflow--innovation-queue-write queue-file updated)
+      (message "[innovation] Updated %s → %s" id status))))
 
 (defun gptel-auto-workflow--innovation-queue-list (&optional status-filter)
-  "Return list of innovation queue items as plists.
+  "Return list of innovation queue items.
 Optional STATUS-FILTER limits to items with that status."
   (let ((queue (gptel-auto-workflow--innovation-queue-read)))
-    (if status-filter
-        (cl-remove-if-not (lambda (item)
-                            (string= (plist-get item :status) status-filter))
-                          queue)
-      queue)))
+    (if (null status-filter)
+        queue
+      (cl-remove-if-not (lambda (item)
+                          (string= (plist-get item :status) status-filter))
+                        queue))))
 
 (defun gptel-auto-workflow--innovation-queue-parse-findings (findings)
   "Parse research FINDINGS for innovation ideas and queue them.
@@ -907,7 +900,7 @@ Returns list of queued idea IDs."
         (insert findings)
         (goto-char (point-min))
         (while (re-search-forward
-                "Try \\([^\n]+\\) to \\([^\n]+\\)"
+                "Try \([^\n]+\) to \([^\n]+\)"
                 nil t)
           (let ((technique (match-string 1))
                 (impact (match-string 2)))

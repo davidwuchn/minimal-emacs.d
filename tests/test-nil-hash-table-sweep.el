@@ -12,11 +12,14 @@
                           default-directory)))
 
 (defvar tdd-sweep--known-false-positives
-  '("gptel-prefix-cache--run-id")
+  '("gptel-prefix-cache--run-id"
+    "gptel-auto-workflow--memory-schema-code-links")
   "List of defvar names that the audit flags but are NOT hash tables.
-gptel-prefix-cache--run-id is a string run-id, not a hash table.
-The audit matches it because the word 'cache' appears in nearby
-hash-table operations in the same file.")
+`gptel-prefix-cache--run-id' is a string run-id, not a hash table.
+The audit matches it because the word \"cache\" appears in nearby
+hash-table operations in the same file.
+`gptel-auto-workflow--memory-schema-code-links' is intentionally nil
+for lazy init.")
 
 (defun tdd-sweep--file-issues (file)
   "Return list of (LINE-NO . VAR-NAME) for real nil-hash-table issues in FILE."

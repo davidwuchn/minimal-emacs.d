@@ -215,11 +215,68 @@ experiment phases do not trip the real pre-grade target validator."
             (should (string-match-p "auto-workflow-test-runtime\\." captured-tmp))
             (should (string-prefix-p "ov5-auto-workflow-test-" captured-server))
             (should-not (equal captured-server "ov5-auto-workflow"))))
+       (delete-directory fake-bin t)
+       (delete-directory temp-root t)
+       (delete-directory ambient-runtime t)
+       (when (file-exists-p env-log)
+         (delete-file env-log)))))
+
+(ert-deftest regression/auto-workflow/run-tests-unit-adds-parseedn-and-parseclj-load-paths ()
+  "run-tests.sh unit should add parseedn and parseclj ELPA dirs to Emacs load-path."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (script (expand-file-name "scripts/run-tests.sh" repo-root))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (mktemp-log (make-temp-file "aw-mktemp-log"))
+         (mktemp-counter (make-temp-file "aw-mktemp-counter"))
+         (argv-log (make-temp-file "aw-run-tests-argv"))
+         (fake-mktemp
+          (test-auto-workflow--write-fake-mktemp
+           "fake-mktemp" mktemp-log mktemp-counter))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format
+            "printf '%%s\\n' \"$@\" > %s\nprintf 'Ran 1 tests, 1 results as expected, 0 unexpected, 0 skipped\\n'\n"
+            (shell-quote-argument argv-log))))
+         (base-environment
+          (cl-remove-if
+           (lambda (entry)
+             (string-prefix-p "PATH=" entry))
+           process-environment))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH")))
+                  base-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (rename-file fake-mktemp (expand-file-name "mktemp" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (let ((output (shell-command-to-string (format "%s unit" script))))
+            (should (string-match-p "All ERT tests passed" output))
+            (let* ((argv (with-temp-buffer
+                           (insert-file-contents argv-log)
+                           (split-string (buffer-string) "\n" t)))
+                   (load-paths nil)
+                   (args argv)
+                   (parseedn-prefix (expand-file-name "var/elpa/parseedn-" repo-root))
+                   (parseclj-prefix (expand-file-name "var/elpa/parseclj-" repo-root)))
+              (while args
+                (let ((arg (pop args)))
+                  (when (string= arg "-L")
+                    (push (pop args) load-paths))))
+              (should (cl-some (lambda (path)
+                                 (string-prefix-p parseedn-prefix path))
+                               load-paths))
+              (should (cl-some (lambda (path)
+                                 (string-prefix-p parseclj-prefix path))
+                               load-paths)))))
       (delete-directory fake-bin t)
-      (delete-directory temp-root t)
-      (delete-directory ambient-runtime t)
-      (when (file-exists-p env-log)
-        (delete-file env-log)))))
+      (when (file-exists-p mktemp-log)
+        (delete-file mktemp-log))
+      (when (file-exists-p mktemp-counter)
+        (delete-file mktemp-counter))
+      (when (file-exists-p argv-log)
+        (delete-file argv-log)))))
 
 (ert-deftest regression/auto-workflow/verify-nucleus-uses-bsd-safe-mktemp-template ()
   "verify-nucleus.sh should use a BSD-safe mktemp template without a suffix."
