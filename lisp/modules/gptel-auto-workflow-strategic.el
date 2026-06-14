@@ -2695,7 +2695,8 @@ Uses topic-specific model if available and topic detected."
 
 (defun gptel-auto-workflow--research-fresh-enough-p (findings-file)
   "τ Wisdom: check if cached research is fresh enough to skip re-research.
-Returns non-nil if the findings file is <1 hour old and has non-empty :findings."
+Returns non-nil if the findings file is <1 hour old and has non-empty
+:findings."
   (when (file-exists-p findings-file)
     (let* ((mtime (file-attribute-modification-time (file-attributes findings-file)))
            (age-seconds (- (float-time) (float-time mtime)))

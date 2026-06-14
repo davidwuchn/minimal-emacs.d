@@ -22,8 +22,14 @@
      (defun ov5-world-store-connect () (error "brepl unavailable")))
    (unless (fboundp 'ov5-world-store-disconnect)
      (defun ov5-world-store-disconnect () nil))
-   (unless (fboundp 'ov5-world-store-connected-p)
-     (defun ov5-world-store-connected-p () nil))))
+(unless (fboundp 'ov5-world-store-connected-p)
+      (defun ov5-world-store-connected-p () nil))))
+
+(defun test-world-store--skip-if-unavailable ()
+  "Skip test if World Store/Datahike pod is unavailable."
+  (unless (and (fboundp 'ov5-world-store--datahike-pod-available-p)
+               (ov5-world-store--datahike-pod-available-p))
+    (ert-skip "World Store/Datahike pod unavailable")))
 
 ;; ── Test isolation ──
 
@@ -44,6 +50,7 @@ Port base is 8000 to avoid bootstrap (7800) and query (7900) tests."
          (nrepl-port (+ 8000 id))
          (ov5-world-store-directory db-path)
          (ov5-world-store-nrepl-port nrepl-port))
+    (test-world-store--skip-if-unavailable)
     (when (file-exists-p db-path)
       (delete-directory db-path t))
     (unwind-protect

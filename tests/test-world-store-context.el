@@ -16,6 +16,12 @@
    (defun ov5-world-store-disconnect () nil)
    (defun ov5-world-store-connected-p () nil)))
 
+(defun test-world-store--skip-if-unavailable ()
+  "Skip test if World Store/Datahike pod is unavailable."
+  (unless (and (fboundp 'ov5-world-store--datahike-pod-available-p)
+               (ov5-world-store--datahike-pod-available-p))
+    (ert-skip "World Store/Datahike pod unavailable")))
+
 (defvar test-world-store--context-counter 200)
 
 (defun test-world-store--next-context-id ()
@@ -30,6 +36,7 @@
          (nrepl-port (+ 8100 id))
          (ov5-world-store-directory db-path)
          (ov5-world-store-nrepl-port nrepl-port))
+    (test-world-store--skip-if-unavailable)
     (when (file-exists-p db-path)
       (delete-directory db-path t))
     (unwind-protect

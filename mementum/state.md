@@ -3,9 +3,46 @@
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
 > **Status**: ✅ **SELF-HEAL + ONTOLOGY REPAIRED** — high-risk routing blocks direct mutation of repair-engine files; ontology-router paren corruption fixed; stale cache removed
-> **Latest**: Agent-regression grader/promotion failures reduced from 32 to 1 (remaining: `decision-callback-is-idempotent` integration test aborts on 30s ERT timeout, likely Datahike branch-switch hang in headless test env).
-> **Active Plan**: Investigate remaining aborted integration test; next candidate is hardening World Store branch-switch timeout or mocking it in tests.
+> **Latest**: Agent-regression grader/promotion failures reduced from 32 to 1; daemon reliability hardened (curl orphans fixed, macOS socket pinned, KIBC-M regex repaired, World Store skips gracefully on macOS aarch64). Full unit suite green (3206 tests, 0 unexpected, 89 skipped).
+> **Active Plan**: Push reliability fixes to origin; monitor Pi5 cron for end-to-end completion; investigate remaining `decision-callback-is-idempotent` integration-test abort (likely Datahike branch-switch hang in headless env).
 > **Pi5**: Auto-evolution active; pre-push hook now blocks broken pushes to main; Pi5 auto-evolved boundary fixes (Preview Mode 2, Edit hashline, Code_Map/Inspect/Replace, plan-mode readonly enforcement)
+
+---
+
+## Session Note (2026-06-14 — daemon reliability + macOS hardening)
+
+1. **Grader curl orphan leak fixed**
+   - Root cause: grader timeout auto-passed without aborting the live gptel-curl request; cleanup fallback compared `process-buffer` (curl temp buffer) against `request-buf` (parent buffer), so orphaned curl processes accumulated.
+   - `lisp/modules/gptel-tools-agent-benchmark.el`: `gptel-abort` on `grade-buffer` before auto-pass on timeout.
+   - `lisp/modules/gptel-tools-agent-subagent.el`: capture live `gptel-curl` process in task state under `:curl-process`.
+   - `lisp/modules/gptel-tools-agent-git.el`: kill stored `:curl-process`; fix fallback to iterate `gptel--request-alist` matching by FSM `:buffer` instead of `process-buffer`.
+   - `post-init.el`: curl `--max-time` changed from 900 to 840 (margin under 900s grade timeout).
+2. **macOS daemon socket hardening**
+   - `post-early-init.el`: for workflow daemons, pin `server-socket-dir` to `/tmp/emacs$UID/`, `setenv TMPDIR /tmp`, `setq temporary-file-directory /tmp`.
+   - `lisp/init-system.el`: do not sync `TMPDIR` via `exec-path-from-shell` for workflow daemons.
+   - `post-init.el`: replace `file-exists-p` self-heal with connectivity check (`emacsclient -s sock -a false -e t`); delete stale socket before heal.
+   - `lisp/init-ai.el`: use pinned `server-socket-dir` variable, fallback `/tmp/emacs$UID/`.
+   - `AGENTS.md`: update `λ socket_path` rule to pin workflow sockets under `/tmp/emacs$(id -u)/`.
+   - `scripts/run-pipeline.sh` and `run-auto-workflow-cron.sh`: `export TMPDIR=/tmp` so `emacsclient` resolves the pinned socket.
+3. **KIBC-M regex repaired**
+   - `lisp/modules/gptel-tools-agent-prompt-build.el`: removed literal newlines and fixed single-backslash alternation; source now uses `\\|` so Elisp reads it as regex `\|`. All 12 kibcm tests pass.
+4. **`split-string` nil guard**
+   - `lisp/modules/gptel-tools-agent-experiment-core.el`: guarded `split-string` on `gptel-auto-workflow--last-prompt-sections` with `stringp` + `not-string-empty-p`.
+5. **World Store graceful degradation on macOS aarch64**
+   - `lisp/modules/gptel-ext-world-store.el`: added `ov5-world-store--datahike-pod-available-p` (cached `bb` pod check); `--ensure-nrepl` returns nil if pod unavailable; `--brepl-eval` wraps errors in `condition-case`; `-connect` sets `'unavailable` sentinel.
+   - Five `test-world-store-*.el` files now skip when Datahike pod is unavailable. 34 World Store tests: 3 pass, 31 skipped on macOS aarch64.
+
+### Verification
+- Full unit suite: 3206 tests, 0 unexpected, 89 skipped (World Store on macOS aarch64). Runtime ~220s.
+- `test-self-heal-semantic`: 132/132 pass.
+- `test-experiment-gates`: 16/16 pass.
+- `test-kibcm-*` (12 tests): 12/12 pass.
+- `test-experiment-by-filters-bug` (split-string nil guard): pass.
+- `bash -n` clean on modified shell scripts.
+- `git diff --check` clean.
+
+### Blockers
+- Datahike pod has no `macos-aarch64` release, so World Store remains disabled on macOS dev box. Production World Store runs on Pi5 (Linux x86).
 
 ---
 

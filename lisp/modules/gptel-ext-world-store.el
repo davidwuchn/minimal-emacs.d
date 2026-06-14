@@ -87,35 +87,61 @@ Falls back to CLI brepl when nil.")
                                (buffer-string))))))
       7888))  ;; default bb nREPL port
 
+(defvar ov5-world-store--datahike-pod-available nil
+  "Cached result of Datahike pod availability check.")
+
+(defun ov5-world-store--datahike-pod-available-p ()
+  "Return non-nil if the Datahike pod can be loaded by bb.
+Caches the result in `ov5-world-store--datahike-pod-available'.
+Uses `bb -e' to load the pod declared in bb.edn."
+  (unless (booleanp ov5-world-store--datahike-pod-available)
+    (setq ov5-world-store--datahike-pod-available
+          (condition-case nil
+              (zerop (call-process "bb" nil nil nil
+                                   "-e"
+                                   "(require '[babashka.pods :as pods]) (pods/load-pod 'replikativ/datahike \"0.8.1697\")"))
+            (error nil))))
+  ov5-world-store--datahike-pod-available)
+
 (defun ov5-world-store--ensure-nrepl ()
   "Ensure bb nREPL server is running. Start if not.
-Also establish or reconnect the persistent nREPL client connection."
-  (unless (and ov5-world-store--nrepl-process
-               (process-live-p ov5-world-store--nrepl-process))
-    (let ((port (ov5-world-store--nrepl-port)))
-      (message "[world-store] Starting bb nREPL server on port %d..." port)
-      ;; --init clj/ov5/world_store.clj ensures the query namespace is loaded
-      ;; on the server side.  Without this, (ns ov5.world-store.query) in
-      ;; eval forms fails because the server's classpath doesn't auto-load
-      ;; source files when switching namespaces.
-      ;;
-      ;; IMPORTANT: --init must come BEFORE the nrepl-server subcommand
-      ;; (it's a global bb flag, not a subcommand arg).
-      (setq ov5-world-store--nrepl-process
-            (start-process "bb-nrepl" "*bb-nrepl*"
-                          "bb" "--init" "clj/ov5/world_store.clj"
-                          "nrepl-server" (format "%d" port)))
-      ;; --init loads world_store.clj (~1.5k lines, ~5s on cold start).
-      ;; Old value (2s) was enough for nrepl-server but not for --init.
-      (sleep-for 8)  ;; Give server time to start AND load --init file
-      (message "[world-store] nREPL server started")))
-  ;; Reconnect persistent nREPL client if server is live but client is not
-  (when (and ov5-world-store--nrepl-process
-             (process-live-p ov5-world-store--nrepl-process)
-             (not (and ov5-world-store--persistent-nrepl-available
-                       ov5-world-store--nrepl-client-buffer
-                       (buffer-live-p ov5-world-store--nrepl-client-buffer))))
-    (ov5-world-store--init-persistent-nrepl)))
+Also establish or reconnect the persistent nREPL client connection.
+Returns non-nil if the nREPL server is live."
+  (if (ov5-world-store--datahike-pod-available-p)
+      (progn
+        (unless (and ov5-world-store--nrepl-process
+                     (process-live-p ov5-world-store--nrepl-process))
+          (let ((port (ov5-world-store--nrepl-port)))
+            (message "[world-store] Starting bb nREPL server on port %d..." port)
+            ;; --init clj/ov5/world_store.clj ensures the query namespace is loaded
+            ;; on the server side.  Without this, (ns ov5.world-store.query) in
+            ;; eval forms fails because the server's classpath doesn't auto-load
+            ;; source files when switching namespaces.
+            ;;
+            ;; IMPORTANT: --init must come BEFORE the nrepl-server subcommand
+            ;; (it's a global bb flag, not a subcommand arg).
+            (setq ov5-world-store--nrepl-process
+                  (start-process "bb-nrepl" "*bb-nrepl*"
+                                "bb" "--init" "clj/ov5/world_store.clj"
+                                "nrepl-server" (format "%d" port)))
+            ;; --init loads world_store.clj (~1.5k lines, ~5s on cold start).
+            ;; Old value (2s) was enough for nrepl-server but not for --init.
+            (sleep-for 8)  ;; Give server time to start AND load --init file
+            (if (process-live-p ov5-world-store--nrepl-process)
+                (message "[world-store] nREPL server started")
+              (message "[world-store] nREPL server died (Datahike pod?)")
+              (setq ov5-world-store--nrepl-process nil))))
+        ;; Reconnect persistent nREPL client if server is live but client is not
+        (when (and ov5-world-store--nrepl-process
+                   (process-live-p ov5-world-store--nrepl-process)
+                   (not (and ov5-world-store--persistent-nrepl-available
+                             ov5-world-store--nrepl-client-buffer
+                             (buffer-live-p ov5-world-store--nrepl-client-buffer))))
+          (ov5-world-store--init-persistent-nrepl))
+        (and ov5-world-store--nrepl-process
+             (process-live-p ov5-world-store--nrepl-process)))
+    (message "[world-store] Datahike pod unavailable; nREPL not started")
+    nil))
 
 ;; ── Persistent nREPL Client ──
 
@@ -226,19 +252,21 @@ output format.  Signals an error on any failure — the caller
 (defun ov5-world-store--brepl-eval (code)
   "Evaluate Clojure CODE via the fastest available nREPL path.
 Prefer the persistent nREPL client connection; fall back to CLI brepl
-on failure.  Return the result string or signal an error."
-  (ov5-world-store--ensure-nrepl)
-  (if (and ov5-world-store--persistent-nrepl-available
-           ov5-world-store--nrepl-client-buffer
-           (buffer-live-p ov5-world-store--nrepl-client-buffer))
-      (condition-case err
-          (ov5-world-store--persistent-nrepl-eval code)
-        (ov5-world-store--nrepl-eval-error
-         (message "[world-store] Persistent nREPL eval failed, falling back: %s"
-                  (error-message-string err))
-         (setq ov5-world-store--persistent-nrepl-available nil)
-         (ov5-world-store--brepl-eval-fallback code)))
-    (ov5-world-store--brepl-eval-fallback code)))
+on failure.  Return the result string or nil if unavailable."
+  (when (ov5-world-store--ensure-nrepl)
+    (condition-case nil
+        (if (and ov5-world-store--persistent-nrepl-available
+                 ov5-world-store--nrepl-client-buffer
+                 (buffer-live-p ov5-world-store--nrepl-client-buffer))
+            (condition-case err
+                (ov5-world-store--persistent-nrepl-eval code)
+              (ov5-world-store--nrepl-eval-error
+               (message "[world-store] Persistent nREPL eval failed, falling back: %s"
+                        (error-message-string err))
+               (setq ov5-world-store--persistent-nrepl-available nil)
+               (ov5-world-store--brepl-eval-fallback code)))
+          (ov5-world-store--brepl-eval-fallback code))
+      (error nil))))
 
 (defun ov5-world-store--brepl-eval-fallback (code)
   "Evaluate Clojure CODE via CLI brepl or shell-command.
@@ -272,13 +300,16 @@ This is the existing fallback path extracted from the original
 (defun ov5-world-store-connect ()
   "Connect to the World Store. Starts nREPL if needed."
   (interactive)
-  (ov5-world-store--ensure-nrepl)
-  (let ((result (ov5-world-store--brepl-eval
-                 (format "(load-file \"clj/ov5/world_store.clj\") (ns ov5.world-store) (connect \"%s\")"
-                         ov5-world-store-directory))))
-    (setq ov5-world-store--connected t)
-    (message "[world-store] Connected: %s" result)
-    t))
+  (if (ov5-world-store--ensure-nrepl)
+      (let ((result (ov5-world-store--brepl-eval
+                     (format "(load-file \"clj/ov5/world_store.clj\") (ns ov5.world-store) (connect \"%s\")"
+                             ov5-world-store-directory))))
+        (setq ov5-world-store--connected t)
+        (message "[world-store] Connected: %s" result)
+        t)
+    (setq ov5-world-store--connected 'unavailable)
+    (message "[world-store] Cannot connect: nREPL server not available")
+    nil))
 
 ;;;###autoload
 (defun ov5-world-store-disconnect ()
@@ -293,7 +324,7 @@ This is the existing fallback path extracted from the original
 
 (defun ov5-world-store-connected-p ()
   "Return non-nil if connected to the World Store."
-  ov5-world-store--connected)
+  (eq ov5-world-store--connected t))
 
 ;; -----------------------------------------------------------------------------
 ;; CRUD

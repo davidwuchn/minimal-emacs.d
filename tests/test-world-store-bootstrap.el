@@ -18,6 +18,12 @@
    (defun ov5-world-store-disconnect () nil)
    (defun ov5-world-store-connected-p () nil)))
 
+(defun test-world-store--skip-if-unavailable ()
+  "Skip test if World Store/Datahike pod is unavailable."
+  (unless (and (fboundp 'ov5-world-store--datahike-pod-available-p)
+               (ov5-world-store--datahike-pod-available-p))
+    (ert-skip "World Store/Datahike pod unavailable")))
+
 (defvar test-world-store--test-counter 0
   "Counter for unique test IDs.")
 
@@ -34,6 +40,7 @@ Binds `ov5-world-store-directory' and `ov5-world-store-nrepl-port' uniquely."
          (nrepl-port (+ 7800 id))
          (ov5-world-store-directory db-path)
          (ov5-world-store-nrepl-port nrepl-port))
+    (test-world-store--skip-if-unavailable)
     ;; Clean up any existing DB
     (when (file-exists-p db-path)
       (delete-directory db-path t))
@@ -161,5 +168,13 @@ Binds `ov5-world-store-directory' and `ov5-world-store-nrepl-port' uniquely."
      (let ((count (ov5-world-store-experiment-count)))
        (should (numberp count))
        (should (>= count 2))))))
+
+;; -----------------------------------------------------------------------------
+;; Availability Test
+
+(ert-deftest test-world-store-bootstrap/datahike-availability-detected ()
+  "The Datahike pod availability check returns a boolean and is cached."
+  (require 'gptel-ext-world-store)
+  (should (memq (ov5-world-store--datahike-pod-available-p) '(t nil))))
 
 ;;; test-world-store-bootstrap.el ends here

@@ -39,6 +39,8 @@
   "experiments-by-filter should return matching experiments, not nil.
 Bug: returns nil for valid input."
   (skip-unless (executable-find "brepl"))
+  (skip-unless (and (fboundp 'ov5-world-store--datahike-pod-available-p)
+                    (ov5-world-store--datahike-pod-available-p)))
   (tdd-qf--with-store
    (ov5-world-store-transact
     '((:experiment/id "e1" :experiment/backend "MiniMax" :experiment/decision "kept")))
