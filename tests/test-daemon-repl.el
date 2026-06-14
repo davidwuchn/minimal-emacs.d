@@ -422,3 +422,42 @@ retry-only branch is reached."
 
 (provide 'test-daemon-repl)
 ;;; test-daemon-repl.el ends here
+(ert-deftest test-daemon-repl/validate-brackets-error-pos-points-to-error ()
+  "When brackets are unbalanced, :error-pos should point AT the error,
+not at end of buffer.  check-parens signals user-error but the point
+position when the error is caught depends on what check-parens left it
+at.  If the implementation falls back to (point) after the error, the
+position may be at the end of the file rather than the actual error.
+
+This is a usability bug: the error position is supposed to help users
+locate the syntax error, but pointing to the end of the file is worse
+than no position at all."
+  (let* ((code "(defun foo () (let ((x 1))")
+         (result (gptel-daemon-repl-validate-brackets code))
+         (error-pos (plist-get result :error-pos))
+         (content-length (length code)))
+    (when (and (not (plist-get result :valid))
+               error-pos)
+      ;; The error position should be inside the file, not at the end.
+      ;; If it's at the end, that's a bug.
+      ;; Specifically, error should be around position 16-20 (the unmatched open paren).
+      (should (< error-pos content-length))
+      (should (> error-pos 0)))))
+
+
+(ert-deftest test-daemon-repl/validate-brackets-error-pos-is-meaningful ()
+  ":error-pos should be a meaningful position (not 1, not length).
+check-parens signals user-error, but the point position when caught
+in the error handler is unreliable.  The fix is to find the
+unmatched paren ourselves by scanning the file-content string."
+  (let* ((code "(defun foo () (let ((x 1))")
+         (result (gptel-daemon-repl-validate-brackets code))
+         (error-pos (plist-get result :error-pos))
+         (content-length (length code)))
+    (when (and (not (plist-get result :valid))
+               error-pos)
+      ;; The error position should be in the LATER half of the code (where the
+      ;; unmatched paren actually is), not at position 1 (start) or at the
+      ;; end.  Specifically, the unmatched open paren is at position 14-20.
+      (should (>= error-pos 10))
+      (should (<= error-pos (- content-length 1))))))

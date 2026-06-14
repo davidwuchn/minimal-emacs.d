@@ -249,10 +249,50 @@ Only reads strings; does not execute code."
       (nelisp-reader-error
        (let* ((data (cdr err))
               (msg (car data))
-              (pos (and (cdr data) (integerp (cadr data)) (cadr data))))
+               (pos (and (cdr data) (integerp (cadr data)) (cadr data))))
          (list :nelisp-reader-valid nil
                :nelisp-reader-error (format "NeLisp reader: %s" msg)
                :nelisp-reader-error-pos pos))))))
+
+(defun gptel-daemon-repl--find-unmatched-paren-pos (file-content)
+  "Return 0-indexed position of the first unmatched parenthesis in
+FILE-CONTENT, or nil if all parens balance.  Walks the string tracking
+depth, skipping strings (between unescaped double quotes) and line
+comments (from `;' to end-of-line).  Returns the position of the first
+extra `)' if depth goes negative, or the position of the first unmatched
+`(' if depth is positive at end."
+  (let ((depth 0)
+        (pos 0)
+        (len (length file-content))
+        (in-string nil)
+        (escape nil)
+        (in-line-comment nil)
+        (last-unmatched-open-pos nil))
+    (catch 'found
+      (while (< pos len)
+        (let ((c (aref file-content pos)))
+          (cond
+           (in-line-comment
+            (when (= c ?\n) (setq in-line-comment nil)))
+           (in-string
+            (cond (escape (setq escape nil))
+                  ((= c ?\\) (setq escape t))
+                  ((= c ?\") (setq in-string nil))))
+           (t
+            (cond
+             ((= c ?\;) (setq in-line-comment t))
+             ((= c ?\") (setq in-string t))
+             ((= c ?\()
+              (setq depth (1+ depth))
+              (when (and (> depth 0) (null last-unmatched-open-pos))
+                (setq last-unmatched-open-pos pos)))
+             ((= c ?\))
+              (setq depth (1- depth))
+              (when (< depth 0)
+                (throw 'found pos))))))
+        (setq pos (1+ pos)))
+      (when (> depth 0)
+        last-unmatched-open-pos)))))
 
 (defun gptel-daemon-repl-validate-brackets (file-content)
   "Validate brackets/syntax in FILE-CONTENT string.
@@ -280,8 +320,8 @@ Only writes a temp file when the self-heal fixer is needed."
             (error
              (setq err-msg (error-message-string err))
              ;; check-parens signals user-error without position data,
-             ;; so fall back to point position as best approximate.
-             (setq error-pos (point))
+             ;; so fall back to scanning the source ourselves.
+             (setq error-pos (gptel-daemon-repl--find-unmatched-paren-pos file-content))
              nil)))
          (reader-result (gptel-daemon-repl--validate-with-nelisp-reader file-content)))
     (if valid-p
