@@ -316,15 +316,19 @@
     (when (> (:killed killed-info) 0)
       (log/logf "Killing %d stale daemon process(es)..." (:killed killed-info)))
     (Thread/sleep 3000))
-  ;; Kill stale bg-daemon processes
-  (proc/kill-by-pattern! "bg-daemon")
+  (log/log "Cleanup: killed stale daemons")
+  ;; Kill stale bg-daemon processes (Emacs daemons only, not bb pipeline)
+  (proc/kill-by-pattern! "Emacs.*--bg-daemon")
   (Thread/sleep 2000)
+  (log/log "Cleanup: killed stale bg-daemons")
   ;; Clean stale sockets
   (doseq [sock-name ["server" "pmf-value-stream" "gtm-product-org"]]
     (daemon/clean-stale-socket sock-name))
+  (log/log "Cleanup: cleaned stale sockets")
   ;; Pull latest code
   (log/log "Pulling latest code from origin...")
   (git/git-sync-latest! "pre-workflow" "auto-workflow-pre-pull")
+  (log/log "Cleanup: pulled latest code")
   ;; Stop existing daemons
   (log/log "Stopping any existing daemons to load latest code...")
   (try (daemon/stop-action! {:server-name "pmf-value-stream"}) (catch Exception _ nil))
