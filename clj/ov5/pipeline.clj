@@ -49,7 +49,7 @@
 
 (defn- parse-args
   "Parse *command-line-args* into a map of flags.
-   Returns {:help true|false :smoke true|false :skip-pre-evolution true|false}"
+   Returns {:help true|false :smoke true|false :dry-run true|false :skip-pre-evolution true|false}"
   [args]
   (reduce (fn [acc arg]
             (case arg
