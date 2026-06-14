@@ -374,6 +374,31 @@ This gives OV5 a concrete signal to detect and self-heal hung detectors."
       (should (string-match-p "Semantic audit timed out" (nth 2 (car calls))))
       (should (string-match-p "hung detector" (nth 2 (car calls)))))))
 
+(ert-deftest test-experiment-gates/last-prompt-sections-nil-safe ()
+  "The prompt-sections split must tolerate nil/empty values.
+When gptel-auto-experiment-build-prompt does not set
+`gptel-auto-workflow--last-prompt-sections', the trace path must not
+signal `wrong-type-argument' on (split-string nil \",\")."
+  (require 'gptel-tools-agent-experiment-core)
+  (let ((gptel-auto-workflow--last-prompt-sections nil))
+    (should-not
+     (and (boundp 'gptel-auto-workflow--last-prompt-sections)
+          (stringp gptel-auto-workflow--last-prompt-sections)
+          (not (string-empty-p gptel-auto-workflow--last-prompt-sections))
+          (split-string gptel-auto-workflow--last-prompt-sections ","))))
+  (let ((gptel-auto-workflow--last-prompt-sections ""))
+    (should-not
+     (and (boundp 'gptel-auto-workflow--last-prompt-sections)
+          (stringp gptel-auto-workflow--last-prompt-sections)
+          (not (string-empty-p gptel-auto-workflow--last-prompt-sections))
+          (split-string gptel-auto-workflow--last-prompt-sections ","))))
+  (let ((gptel-auto-workflow--last-prompt-sections "a,b,c"))
+    (should (equal (and (boundp 'gptel-auto-workflow--last-prompt-sections)
+                        (stringp gptel-auto-workflow--last-prompt-sections)
+                        (not (string-empty-p gptel-auto-workflow--last-prompt-sections))
+                        (split-string gptel-auto-workflow--last-prompt-sections ","))
+                   '("a" "b" "c")))))
+
 ;; ── Provide ──
 
 (provide 'test-experiment-gates)
