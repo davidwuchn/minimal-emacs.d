@@ -1,5 +1,8 @@
 ;;; init-treesit.el --- Tree-sitter auto configuration -*- no-byte-compile: t; lexical-binding: t; -*-
 
+(use-package treesit-auto
+  :ensure t)
+
 (require 'treesit-auto)
 
 ;; Languages to enable. This filters treesit-auto-recipe-list.

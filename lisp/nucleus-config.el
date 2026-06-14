@@ -29,6 +29,21 @@
   (add-hook 'gptel-mode-hook #'nucleus--header-line-apply-preset-label))
 
 (with-eval-after-load 'gptel-agent
-  (ignore-errors (nucleus-presets-setup)))
+  (condition-case err
+      (nucleus-presets-setup)
+    (error
+     (let ((log (expand-file-name "var/log/nucleus-presets-setup-error.log"
+                                  minimal-emacs-user-directory)))
+       (with-temp-file log
+         (insert (format-time-string "%Y-%m-%dT%H:%M:%S "))
+         (prin1 err (current-buffer))
+         (insert "\n\nBacktrace:\n")
+         (let ((standard-output (current-buffer))
+               (debug-on-error nil))
+           (backtrace))))
+     (message "[nucleus] presets setup failed: %s (see %s)"
+              (error-message-string err)
+              (expand-file-name "var/log/nucleus-presets-setup-error.log"
+                                minimal-emacs-user-directory)))))
 
 ;;; nucleus-config.el ends here
