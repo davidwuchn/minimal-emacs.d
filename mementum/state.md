@@ -3,8 +3,8 @@
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
 > **Status**: ✅ **SELF-HEAL + ONTOLOGY REPAIRED** — high-risk routing blocks direct mutation of repair-engine files; ontology-router paren corruption fixed; stale cache removed
-> **Latest**: `var/tmp/research-findings.md` migrated to EDN; active cache converted. All machine-to-machine status/queue/research files now use EDN or Datahike World Store. Remaining: `var/tmp/checkpoints/*.ckpt` and the 32 pre-existing agent-regression grader/promotion failures.
-> **Active Plan**: Commit research-findings EDN migration; next candidate is `var/tmp/checkpoints/*.ckpt` or fix grader/promotion regressions.
+> **Latest**: `var/tmp/checkpoints/*.ckpt` migrated to EDN; active checkpoint is `active.edn` with legacy `.ckpt` auto-conversion. All high-priority machine-to-machine files now use EDN or Datahike World Store. Remaining: the 32 pre-existing agent-regression grader/promotion failures.
+> **Active Plan**: Commit checkpoint EDN migration; next candidate is fixing the 32 pre-existing grader/promotion regressions.
 > **Pi5**: Auto-evolution active; pre-push hook now blocks broken pushes to main; Pi5 auto-evolved boundary fixes (Preview Mode 2, Edit hashline, Code_Map/Inspect/Replace, plan-mode readonly enforcement)
 
 ---
@@ -31,6 +31,24 @@
 - `test-gptel-auto-workflow-production-metrics`: 16/16 pass.
 - `test-self-audit`: 15/15 pass.
 - `test-gptel-tools-agent-regressions`: 608/640 pass, 32 unexpected (pre-existing grader/promotion logic, not migration-related).
+
+---
+
+## Session Note (2026-06-14 — checkpoints.ckpt → EDN)
+
+1. **Migrated `var/tmp/checkpoints/*.ckpt` → `.edn`** (`lisp/modules/gptel-ext-checkpoint.el`, `tests/test-gptel-ext-checkpoint.el`)
+   - Serialization now uses `parseedn-print-str` and shared `gptel-auto-workflow--read-edn` / `gptel-auto-workflow--edn-to-plist` helpers.
+   - Active checkpoint path changed to `active.edn`; archived checkpoints use `history/<run-id>.edn`.
+   - Legacy JSON `.ckpt` files are automatically loaded, converted to EDN, and renamed to `.ckpt.migrated`.
+   - Added roundtrip tests for serialization, save/load, archive extension, legacy migration, and empty results.
+   - Fixed latent paren issues in `gptel-checkpoint--stale-lock-p` and `gptel-checkpoint-snapshot-loop-state`.
+
+### Verification
+- `check-parens` clean on `lisp/modules/gptel-ext-checkpoint.el` and `tests/test-gptel-ext-checkpoint.el`.
+- `batch-byte-compile` clean on `lisp/modules/gptel-ext-checkpoint.el` and `tests/test-gptel-ext-checkpoint.el`.
+- `test-gptel-ext-checkpoint`: 5/5 pass.
+- `bash -n scripts/*.sh` clean.
+- `git diff --check` clean.
 
 ---
 

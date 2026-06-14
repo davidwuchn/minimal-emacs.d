@@ -35,13 +35,15 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require 'json)
+(require 'parseedn)
 
 ;; Forward declarations
 (declare-function gptel-circuit-state "gptel-ext-circuit-breaker" (component))
 (declare-function gptel-circuit-status "gptel-ext-circuit-breaker")
 (declare-function gptel-circuit--save-persistent "gptel-ext-circuit-breaker")
-(declare-function gptel-auto-workflow--json-encode-plist "gptel-auto-workflow-ontology-router" (plist))
+(declare-function gptel-auto-workflow--write-edn "gptel-tools-agent-experiment-loop" (file data))
+(declare-function gptel-auto-workflow--read-edn "gptel-tools-agent-experiment-loop" (file))
+(declare-function gptel-auto-workflow--edn-to-plist "gptel-tools-agent-experiment-loop" (data))
 
 (defgroup gptel-checkpoint nil
   "Workflow state persistence and recovery."
@@ -67,6 +69,10 @@
 
 (defun gptel-checkpoint--active-path ()
   "Return path to active checkpoint file."
+  (expand-file-name "active.edn" (gptel-checkpoint--base-dir)))
+
+(defun gptel-checkpoint--legacy-active-path ()
+  "Return legacy .ckpt active checkpoint path for migration."
   (expand-file-name "active.ckpt" (gptel-checkpoint--base-dir)))
 
 (defun gptel-checkpoint--lock-path ()
@@ -110,33 +116,31 @@
 
 ;;; ─── Serialization ───
 
-(defun gptel-checkpoint--serialize (data)
-  "Serialize checkpoint DATA to JSON string."
-  (let ((plist
-         (list :version (gptel-checkpoint-data-version data)
-               :state (symbol-name (gptel-checkpoint-data-state data))
-               :run-id (gptel-checkpoint-data-run-id data)
-               :project-root (gptel-checkpoint-data-project-root data)
-               :targets (gptel-checkpoint-data-targets data)
-               :current-target (gptel-checkpoint-data-current-target data)
-               :targets-done (gptel-checkpoint-data-targets-done data)
-               :targets-failed (gptel-checkpoint-data-targets-failed data)
-               :current-exp-id (gptel-checkpoint-data-current-exp-id data)
-               :current-exp-count (gptel-checkpoint-data-current-exp-count data)
-               :current-best-score (or (gptel-checkpoint-data-current-best-score data) 0.0)
-               :no-improvement-count (gptel-checkpoint-data-no-improvement-count data)
-               :results (mapcar #'gptel-checkpoint--serialize-result
-                               (gptel-checkpoint-data-results data))
-               :total-experiments (gptel-checkpoint-data-total-experiments data)
-               :started-at (gptel-checkpoint-data-started-at data)
-               :checkpoint-at (gptel-checkpoint-data-checkpoint-at data)
-               :last-target-at (gptel-checkpoint-data-last-target-at data)
-               :experiment-loop-snapshot (gptel-checkpoint-data-experiment-loop-snapshot data)
-               :metadata (gptel-checkpoint-data-metadata data))))
-    (gptel-auto-workflow--json-encode-plist plist)))
+(defun gptel-checkpoint--to-plist (data)
+  "Convert checkpoint DATA struct to an EDN-serializable plist."
+  (list :version (gptel-checkpoint-data-version data)
+        :state (symbol-name (gptel-checkpoint-data-state data))
+        :run-id (gptel-checkpoint-data-run-id data)
+        :project-root (gptel-checkpoint-data-project-root data)
+        :targets (vconcat (gptel-checkpoint-data-targets data))
+        :current-target (gptel-checkpoint-data-current-target data)
+        :targets-done (vconcat (gptel-checkpoint-data-targets-done data))
+        :targets-failed (vconcat (gptel-checkpoint-data-targets-failed data))
+        :current-exp-id (gptel-checkpoint-data-current-exp-id data)
+        :current-exp-count (gptel-checkpoint-data-current-exp-count data)
+        :current-best-score (or (gptel-checkpoint-data-current-best-score data) 0.0)
+        :no-improvement-count (gptel-checkpoint-data-no-improvement-count data)
+        :results (vconcat (mapcar #'gptel-checkpoint--result-to-plist
+                                  (gptel-checkpoint-data-results data)))
+        :total-experiments (gptel-checkpoint-data-total-experiments data)
+        :started-at (gptel-checkpoint-data-started-at data)
+        :checkpoint-at (gptel-checkpoint-data-checkpoint-at data)
+        :last-target-at (gptel-checkpoint-data-last-target-at data)
+        :experiment-loop-snapshot (gptel-checkpoint-data-experiment-loop-snapshot data)
+        :metadata (gptel-checkpoint-data-metadata data)))
 
-(defun gptel-checkpoint--serialize-result (result)
-  "Serialize a single experiment RESULT plist to alist for JSON."
+(defun gptel-checkpoint--result-to-plist (result)
+  "Convert a single experiment RESULT plist to a normalized plist."
   (let ((fields '(:id :target :target-type :score-before :score-after :kept
                   :decision :grader-reason :comparator-reason :hypothesis
                   :research-hash :timestamp :duration :code-quality
@@ -144,40 +148,61 @@
     (cl-loop for field in fields
              for val = (plist-get result field)
              when val
-              collect (cons (substring (symbol-name field) 1) val))))
+             append (list field val))))
 
-(defun gptel-checkpoint--deserialize (json-string)
-  "Deserialize JSON-STRING to checkpoint-data struct."
-  (let* ((json-object-type 'plist)
-         (json-array-type 'list)
-         (json-key-type 'keyword)
-         (plist (json-read-from-string json-string)))
-    (gptel-checkpoint-data-create
-     :version (or (plist-get plist :version) 1)
-     :state (intern (or (plist-get plist :state) "pending"))
-     :run-id (plist-get plist :run-id)
-     :project-root (plist-get plist :project-root)
-     :targets (plist-get plist :targets)
-     :current-target (plist-get plist :current-target)
-     :targets-done (plist-get plist :targets-done)
-     :targets-failed (plist-get plist :targets-failed)
-     :current-exp-id (or (plist-get plist :current-exp-id) 1)
-     :current-exp-count (or (plist-get plist :current-exp-count) 0)
-     :current-best-score (or (plist-get plist :current-best-score) 0.0)
-     :no-improvement-count (or (plist-get plist :no-improvement-count) 0)
-     :results (mapcar #'gptel-checkpoint--deserialize-result
-                      (or (plist-get plist :results) []))
-     :total-experiments (or (plist-get plist :total-experiments) 0)
-     :started-at (plist-get plist :started-at)
-     :checkpoint-at (plist-get plist :checkpoint-at)
-     :last-target-at (plist-get plist :last-target-at)
-     :experiment-loop-snapshot (plist-get plist :experiment-loop-snapshot)
-     :metadata (plist-get plist :metadata))))
+(defun gptel-checkpoint--serialize (data)
+  "Serialize checkpoint DATA to an EDN string."
+  (parseedn-print-str (gptel-checkpoint--to-plist data)))
+
+(defun gptel-checkpoint--serialize-result (result)
+  "Serialize a single experiment RESULT plist to a normalized plist."
+  (gptel-checkpoint--result-to-plist result))
+
+(defun gptel-checkpoint--deserialize (edn-string)
+  "Deserialize EDN-STRING to checkpoint-data struct."
+  (let ((plist (gptel-auto-workflow--edn-to-plist
+                (parseedn-read-str edn-string))))
+    (gptel-checkpoint--plist-to-data plist)))
+
+(defun gptel-checkpoint--plist-to-data (plist)
+  "Convert deserialized checkpoint PLIST to `gptel-checkpoint-data' struct."
+  (gptel-checkpoint-data-create
+   :version (or (plist-get plist :version) 1)
+   :state (intern (or (plist-get plist :state) "pending"))
+   :run-id (plist-get plist :run-id)
+   :project-root (plist-get plist :project-root)
+   :targets (append (plist-get plist :targets) nil)
+   :current-target (plist-get plist :current-target)
+   :targets-done (append (plist-get plist :targets-done) nil)
+   :targets-failed (append (plist-get plist :targets-failed) nil)
+   :current-exp-id (or (plist-get plist :current-exp-id) 1)
+   :current-exp-count (or (plist-get plist :current-exp-count) 0)
+   :current-best-score (or (plist-get plist :current-best-score) 0.0)
+   :no-improvement-count (or (plist-get plist :no-improvement-count) 0)
+   :results (mapcar #'gptel-checkpoint--plist-to-result
+                    (append (plist-get plist :results) nil))
+   :total-experiments (or (plist-get plist :total-experiments) 0)
+   :started-at (plist-get plist :started-at)
+   :checkpoint-at (plist-get plist :checkpoint-at)
+   :last-target-at (plist-get plist :last-target-at)
+   :experiment-loop-snapshot (plist-get plist :experiment-loop-snapshot)
+   :metadata (plist-get plist :metadata)))
+
+(defun gptel-checkpoint--plist-to-result (plist)
+  "Convert deserialized result PLIST back to normalized plist."
+  (let ((fields '(:id :target :target-type :score-before :score-after :kept
+                  :decision :grader-reason :comparator-reason :hypothesis
+                  :research-hash :timestamp :duration :code-quality
+                  :staging-branch :staging-status)))
+    (cl-loop for field in fields
+             for val = (plist-get plist field)
+             when val
+             append (list field val))))
 
 (defun gptel-checkpoint--deserialize-result (alist)
-  "Deserialize result alist to plist."
+  "Compatibility shim: deserialize result from legacy alist to plist."
   (cl-loop for (key . val) in alist
-           collect (intern (concat ":" key)) into result
+           collect (intern (concat ":" (if (symbolp key) (symbol-name key) key))) into result
            and when val
            collect val into result
            finally return result))
@@ -217,14 +242,15 @@ concurrently recovering the same checkpoint."
                      (file-attributes lock-path)))
              (age-seconds (- (float-time) (float-time mtime))))
         (or (>= age-seconds 300)   ; lock older than 5 minutes
-            (let ((owner (ignore-errors
-                          (with-temp-buffer
-                            (insert-file-contents lock-path)
-                            (string-trim (buffer-string)))))
-                  (self-pid (number-to-string (emacs-pid))))
-              (and owner (not (string= owner self-pid))
+            (let* ((owner (ignore-errors
+                            (with-temp-buffer
+                              (insert-file-contents lock-path)
+                              (string-trim (buffer-string)))))
+                   (self-pid (number-to-string (emacs-pid))))
+              (and owner
+                   (not (string= owner self-pid))
                    (not (and (fboundp 'list-system-processes)
-                             (member owner (list-system-processes))))))))))
+                             (member owner (list-system-processes)))))))))))
 
 ;;; ─── Active Checkpoint ───
 
@@ -254,51 +280,107 @@ Returns non-nil if saved."
             timestamp)
       (make-directory base-dir t)
       (condition-case err
-          (let ((json (gptel-checkpoint--serialize gptel-checkpoint--current)))
+          (let ((edn (gptel-checkpoint--serialize gptel-checkpoint--current)))
             (with-temp-file tmp-path
-              (insert json))
+              (insert edn)
+              (insert "\n"))
             (rename-file tmp-path active-path 'ok-if-exists)
             (setq gptel-checkpoint--dirty nil)
-            (message "[checkpoint] Saved: %s (%d results, target=%s, exp=%d)"
+            (message "[checkpoint] Saved: %s (%d results, target=%s, exp=%s)"
                      (gptel-checkpoint-data-run-id gptel-checkpoint--current)
                      (length (gptel-checkpoint-data-results gptel-checkpoint--current))
                      (or (gptel-checkpoint-data-current-target gptel-checkpoint--current) "none")
-                     (gptel-checkpoint-data-current-exp-id gptel-checkpoint--current))
+                     (or (gptel-checkpoint-data-current-exp-id gptel-checkpoint--current) 1))
             t)
         (error
          (message "[checkpoint] Save failed: %s" err)
          nil)))))
 
-(defun gptel-checkpoint--load ()
-  "Load active checkpoint from disk.
-Returns checkpoint-data struct or nil if none exists."
-  (let ((active-path (gptel-checkpoint--active-path)))
-    (when (file-exists-p active-path)
+(defun gptel-checkpoint--load-from-path (active-path)
+  "Load checkpoint from ACTIVE-PATH.  Returns data struct or nil."
+  (condition-case err
+      (with-temp-buffer
+        (insert-file-contents active-path)
+        (let ((data (gptel-checkpoint--deserialize (buffer-string))))
+          (message "[checkpoint] Loaded checkpoint: run=%s state=%s targets=%d results=%d"
+                   (gptel-checkpoint-data-run-id data)
+                   (gptel-checkpoint-data-state data)
+                   (length (gptel-checkpoint-data-targets data))
+                   (length (gptel-checkpoint-data-results data)))
+          data))
+    (error
+     (message "[checkpoint] Load failed: %s" err)
+     nil)))
+
+(defun gptel-checkpoint--load-legacy ()
+  "Load legacy JSON .ckpt checkpoint if present, returning data or nil."
+  (let ((legacy-path (gptel-checkpoint--legacy-active-path)))
+    (when (file-exists-p legacy-path)
       (condition-case err
           (with-temp-buffer
-            (insert-file-contents active-path)
-            (let ((data (gptel-checkpoint--deserialize (buffer-string))))
-              (message "[checkpoint] Loaded checkpoint: run=%s state=%s targets=%d results=%d"
-                       (gptel-checkpoint-data-run-id data)
-                       (gptel-checkpoint-data-state data)
-                       (length (gptel-checkpoint-data-targets data))
-                       (length (gptel-checkpoint-data-results data)))
+            (insert-file-contents legacy-path)
+            (let* ((json-object-type 'plist)
+                   (json-array-type 'list)
+                   (json-key-type 'keyword)
+                   (plist (json-read-from-string (buffer-string)))
+                   (data (gptel-checkpoint-data-create
+                          :version (or (plist-get plist :version) 1)
+                          :state (intern (or (plist-get plist :state) "pending"))
+                          :run-id (plist-get plist :run-id)
+                          :project-root (plist-get plist :project-root)
+                          :targets (plist-get plist :targets)
+                          :current-target (plist-get plist :current-target)
+                          :targets-done (plist-get plist :targets-done)
+                          :targets-failed (plist-get plist :targets-failed)
+                          :current-exp-id (or (plist-get plist :current-exp-id) 1)
+                          :current-exp-count (or (plist-get plist :current-exp-count) 0)
+                          :current-best-score (or (plist-get plist :current-best-score) 0.0)
+                          :no-improvement-count (or (plist-get plist :no-improvement-count) 0)
+                          :results (mapcar #'gptel-checkpoint--deserialize-result
+                                           (or (plist-get plist :results) []))
+                          :total-experiments (or (plist-get plist :total-experiments) 0)
+                          :started-at (plist-get plist :started-at)
+                          :checkpoint-at (plist-get plist :checkpoint-at)
+                          :last-target-at (plist-get plist :last-target-at)
+                          :experiment-loop-snapshot (plist-get plist :experiment-loop-snapshot)
+                          :metadata (plist-get plist :metadata))))
+              (message "[checkpoint] Migrated legacy .ckpt: run=%s"
+                       (gptel-checkpoint-data-run-id data))
               data))
         (error
-         (message "[checkpoint] Load failed: %s" err)
+         (message "[checkpoint] Legacy load failed: %s" err)
          nil)))))
+
+(defun gptel-checkpoint--load ()
+  "Load active checkpoint from disk.
+Returns checkpoint-data struct or nil if none exists.
+Prefers EDN; falls back to legacy JSON .ckpt and converts it."
+  (let ((active-path (gptel-checkpoint--active-path))
+        (legacy-path (gptel-checkpoint--legacy-active-path)))
+    (cond
+     ((file-exists-p active-path)
+      (gptel-checkpoint--load-from-path active-path))
+     ((file-exists-p legacy-path)
+      (let ((data (gptel-checkpoint--load-legacy)))
+        (when data
+          (setq gptel-checkpoint--current data)
+          (setq gptel-checkpoint--dirty t)
+          (gptel-checkpoint--save)
+          (rename-file legacy-path (concat legacy-path ".migrated") 'ok-if-exists))
+        data))
+     (t nil))))
 
 (defun gptel-checkpoint--archive (run-id)
   "Archive current checkpoint to history."
   (let* ((active-path (gptel-checkpoint--active-path))
          (history-dir (gptel-checkpoint--history-dir))
          (archived-path (expand-file-name
-                        (format "%s.ckpt" run-id)
-                        history-dir)))
+                         (format "%s.edn" run-id)
+                          history-dir)))
     (when (file-exists-p active-path)
       (make-directory history-dir t)
       (rename-file active-path archived-path 'ok-if-exists)
-      (message "[checkpoint] Archived checkpoint: %s" run-id))))
+      (message "[checkpoint] Archived checkpoint: %s -> %s" run-id archived-path))))
 
 ;;; ─── Checkpoint Lifecycle ───
 
@@ -470,12 +552,12 @@ Uses advisory lock to prevent concurrent recovery race."
                  (done (gptel-checkpoint-data-targets-done data))
                  (failed (gptel-checkpoint-data-targets-failed data))
                  (skip-set (append done failed))
-                 (resume-targets
-                  (if (null skip-set)
-                      all-targets
-                    (cl-remove-if
-                     (lambda (t) (member t skip-set))
-                     all-targets))))
+                  (resume-targets
+                   (if (null skip-set)
+                       all-targets
+                     (cl-remove-if
+                      (lambda (target) (member target skip-set))
+                      all-targets))))
             ;; If current target is not done/failed, add it as first resume target
             (let ((current (gptel-checkpoint-data-current-target data)))
               (when (and current
@@ -535,7 +617,8 @@ Call this periodically from the experiment loop."
             :captured-at (format-time-string "%Y-%m-%dT%H:%M:%SZ"))))
       (setf (gptel-checkpoint-data-experiment-loop-snapshot
              gptel-checkpoint--current) snapshot)
-      (gptel-checkpoint--mark-dirty));; Auto-save every 5 snapshots to reduce I/O
+      (gptel-checkpoint--mark-dirty)
+      ;; Auto-save every 5 snapshots to reduce I/O
       (when (and (boundp 'gptel-checkpoint--snapshot-count)
                  (zerop (% (cl-incf gptel-checkpoint--snapshot-count) 5)))
         (gptel-checkpoint--save)))))
@@ -558,7 +641,7 @@ Also cleans up stale recovery locks."
       (message "[checkpoint] Removed stale recovery lock"))
     ;; Clean old history checkpoints
     (when (file-directory-p history-dir)
-      (dolist (file (directory-files history-dir t "\\.ckpt\\'"))
+      (dolist (file (directory-files history-dir t "\\.\\(?:edn\\|ckpt\\)\\'"))
         (let* ((mtime (file-attribute-modification-time (file-attributes file)))
                (age-seconds (- now (float-time mtime))))
           (when (>= age-seconds max-age-seconds)
