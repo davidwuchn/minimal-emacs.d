@@ -63,5 +63,13 @@
        :result)
       (should called))))
 
+(ert-deftest test-gptel-tools-agent-subagent/loads-context-activity-function ()
+  "Loading gptel-tools-agent-subagent must transitively make
+my/gptel--agent-task-note-context-activity bound.  The file adds
+advice on write-region that calls this function; if it isn't bound,
+every write-region call during tests fails with void-function."
+  (require 'gptel-tools-agent-subagent)
+  (should (fboundp 'my/gptel--agent-task-note-context-activity)))
+
 (provide 'test-gptel-tools-agent-subagent)
 ;;; test-gptel-tools-agent-subagent.el ends here

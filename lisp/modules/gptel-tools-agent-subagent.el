@@ -3,6 +3,7 @@
 
 (require 'cl-lib)
 (require 'subr-x)
+(require 'gptel-tools-agent-git)
 
 ;; Forward declarations for dynamic variables from gptel-agent package
 (defvar my/gptel--current-agent-task-id)
