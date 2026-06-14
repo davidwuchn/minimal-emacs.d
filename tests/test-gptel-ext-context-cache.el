@@ -139,10 +139,10 @@
 ;;; Tests for known model context windows
 
 (ert-deftest cache/known-models/qwen-37-plus ()
-  "Qwen3.7-Plus should have 131072 context (replaces retired qwen3.5-plus)."
+  "Qwen3.7-Plus should have 1M context (replaces retired qwen3.5-plus)."
   (test--context-cache-setup)
   (should (assoc "qwen3.7-plus" my/gptel--known-model-context-windows))
-  (should (= (cdr (assoc "qwen3.7-plus" my/gptel--known-model-context-windows)) 131072)))
+  (should (= (cdr (assoc "qwen3.7-plus" my/gptel--known-model-context-windows)) 1000000)))
 
 (ert-deftest cache/known-models/gpt-4o ()
   "GPT-4o should have 128k context."
