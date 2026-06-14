@@ -23,7 +23,22 @@
 
 ;; Phase 1: Register directives and hooks (needs gptel-config only)
 (with-eval-after-load 'gptel-config
-  (ignore-errors (nucleus--register-gptel-directives))
+  (condition-case err
+      (nucleus--register-gptel-directives)
+    (error
+     (let ((log (expand-file-name "var/log/nucleus-directives-setup-error.log"
+                                  minimal-emacs-user-directory)))
+       (with-temp-file log
+         (insert (format-time-string "%Y-%m-%dT%H:%M:%S "))
+         (prin1 err (current-buffer))
+         (insert "\n\nBacktrace:\n")
+         (let ((standard-output (current-buffer))
+               (debug-on-error nil))
+           (backtrace)))
+       (message "[nucleus] directives setup failed: %s (see %s)"
+                (error-message-string err)
+                (expand-file-name "var/log/nucleus-directives-setup-error.log"
+                                  minimal-emacs-user-directory)))))
   (add-hook 'gptel-mode-hook #'nucleus-sync-tool-profile)
   (add-hook 'gptel-mode-hook #'nucleus-tool-sanity-check)
   (add-hook 'gptel-mode-hook #'nucleus--header-line-apply-preset-label))
