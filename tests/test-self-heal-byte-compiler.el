@@ -114,6 +114,30 @@
           (should (gptel-auto-workflow--check-parens f)))
       (delete-file f))))
 
+(ert-deftest tdd/self-heal/fix-docstring-width/skips-data-string-literals ()
+  "fix-docstring-width must only wrap DOCSTRINGS, not arbitrary string
+literals.  A long regex/data string in a non-defining form (e.g. the
+kibcm-patterns entry (:KEY \"a\\\\|b\\\\|c ...\")) must be preserved
+verbatim.  Regression: the fixer used to word-wrap any long string
+followed by ) or (, corrupting regex alternation by inserting literal
+newlines mid-string (which passed check-parens so rollback never
+caught it)."
+  (let ((f (make-temp-file "self-heal-test" nil ".el"))
+        (regex "nil.safety\\\\|nil.guard\\\\|guard tab\\\\|validat\\\\|remove nil\\\\|unless nil\\\\|when nil\\\\|error handling"))
+    (unwind-protect
+        (progn
+          (write-region (concat "(:K \"" regex "\")") nil f)
+          (let ((fixes (gptel-auto-workflow--fix-docstring-width f)))
+            (should (equal 0 fixes))
+            (with-temp-buffer
+              (insert-file-contents f)
+              (should (string-match-p (regexp-quote regex)
+                                      (buffer-string)))
+              (should-not (string-match-p "\n" (buffer-substring-no-properties
+                                                 (line-beginning-position 1)
+                                                 (line-end-position 1)))))))
+      (delete-file f))))
+
 ;; ─── fix-unescaped-quotes ───
 ;; Fixes 'word' patterns in docstrings to \='word\='.
 

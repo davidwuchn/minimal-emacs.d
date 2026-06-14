@@ -8376,10 +8376,37 @@ Uses `byte-compile-log-warning-function' to capture position for line numbers."
           (byte-compile-from-buffer (current-buffer)))))
     (nreverse captured)))
 
+(defun gptel-auto-workflow--docstring-position-p (pps)
+  "Return non-nil if PPS (a `syntax-ppss' state) is inside a string
+that occupies the docstring slot of a defining form.
+A defining form's head symbol names begins with \"def\", \"define-\",
+or \"cl-def\".  Forms like (:KEY ...) or (\"name\" ...) are NOT
+defining forms, so their string literals are data, not docstrings."
+  (let ((enclosing (nth 1 pps)))
+    (and enclosing
+         (save-excursion
+           (goto-char enclosing)
+           (forward-char 1)
+           (skip-chars-forward " \t")
+           (let ((head (thing-at-point 'sexp)))
+             (and (stringp head)
+                  (memq (aref head 0) '(?d ?D))
+                  (or (string-prefix-p "def" head)
+                      (string-prefix-p "Def" head)
+                      (string-prefix-p "DEF" head)
+                      (string-prefix-p "define-" head)
+                      (string-prefix-p "Define-" head)
+                      (string-prefix-p "cl-def" head)
+                      (string-prefix-p "Cl-def" head)
+                      (string-prefix-p "CL-def" head))))))))
+
 (defun gptel-auto-workflow--fix-docstring-width (file)
   "Auto-fix docstrings wider than 80 chars in FILE.
 Finds strings via syntax-ppss, wraps long lines in docstrings.
-Returns number of fixes."
+Only wraps strings that sit in the docstring slot of a defining form
+\(defun/defvar/defcustom/define-*, etc.) so that long data strings
+such as regex literals (e.g. kibcm-patterns `(:K \"a\\\\|b ...\")`)
+are preserved verbatim.  Returns number of fixes."
   (let ((fixes 0))
     (with-current-buffer (find-file-noselect file)
       (emacs-lisp-mode)
@@ -8395,6 +8422,7 @@ Returns number of fixes."
                                    (1- (point))))
                    (text (buffer-substring-no-properties str-start str-end)))
               (when (and (> (length text) 78)
+                         (gptel-auto-workflow--docstring-position-p pps)
                          (save-excursion
                            (goto-char (1+ str-end))
                            (skip-chars-forward " \t\n")
