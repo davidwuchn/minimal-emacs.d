@@ -3,8 +3,8 @@
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
 > **Status**: ✅ **SELF-HEAL + ONTOLOGY REPAIRED** — high-risk routing blocks direct mutation of repair-engine files; ontology-router paren corruption fixed; stale cache removed
-> **Latest**: `var/tmp/checkpoints/*.ckpt` migrated to EDN; active checkpoint is `active.edn` with legacy `.ckpt` auto-conversion. All high-priority machine-to-machine files now use EDN or Datahike World Store. Remaining: the 32 pre-existing agent-regression grader/promotion failures.
-> **Active Plan**: Commit checkpoint EDN migration; next candidate is fixing the 32 pre-existing grader/promotion regressions.
+> **Latest**: Agent-regression grader/promotion failures reduced from 32 to 1 (remaining: `decision-callback-is-idempotent` integration test aborts on 30s ERT timeout, likely Datahike branch-switch hang in headless test env).
+> **Active Plan**: Investigate remaining aborted integration test; next candidate is hardening World Store branch-switch timeout or mocking it in tests.
 > **Pi5**: Auto-evolution active; pre-push hook now blocks broken pushes to main; Pi5 auto-evolved boundary fixes (Preview Mode 2, Edit hashline, Code_Map/Inspect/Replace, plan-mode readonly enforcement)
 
 ---
@@ -31,6 +31,29 @@
 - `test-gptel-auto-workflow-production-metrics`: 16/16 pass.
 - `test-self-audit`: 15/15 pass.
 - `test-gptel-tools-agent-regressions`: 608/640 pass, 32 unexpected (pre-existing grader/promotion logic, not migration-related).
+
+---
+
+## Session Note (2026-06-14 — agent-regression grader/promotion fixes)
+
+1. **Fixed `gptel-auto-experiment--promote-correctness-fix-decision` bypass logic**
+   - `grade-bypass-p` now only triggers when structural metrics actually drop (`quality-delta < 0` or `combined-delta < 0`), preventing it from overriding standard promotion on positive-quality ties.
+   - `correctness-bypass-p` now requires gate rejection and a structural metric drop, so it only overrides rejections caused by guard-code quality penalties, not rejections for insufficient quality gain.
+   - Promotion tests: 10/10 pass; tie-rejection tests: 6/6 pass.
+
+2. **Fixed nil-initialized counters causing `wrong-type-argument number-or-marker-p nil`**
+   - `gptel-auto-experiment--api-error-count` now defaults to `0` in `gptel-tools-agent-error.el`, `gptel-tools-agent-experiment-loop.el`, and `gptel-tools-agent-main.el`.
+   - `gptel-auto-experiment-max-per-provider-attempts` now defaults to `3` in `gptel-tools-agent-error.el` and `gptel-tools-agent-benchmark.el`.
+   - `gptel-tools-agent-error.el`: `gptel-auto-experiment--should-reduce-experiments-p` now guards nil with `(or ... 0)`.
+
+3. **Fixed `split-string(nil ",")` in `gptel-tools-agent-experiment-core.el`**
+   - `gptel-auto-workflow--trace-strategy-execution` now checks `stringp` before splitting `gptel-auto-workflow--last-prompt-sections`.
+
+### Verification
+- `test-gptel-tools-agent-regressions`: 640/641 completed, **0 unexpected**, 1 aborted (`decision-callback-is-idempotent` hits 30s ERT timeout, likely Datahike `ov5-world-store-branch-switch` hanging in mocked worktree test).
+- `test-gptel-ext-checkpoint`: 5/5 pass.
+- `check-parens` clean on all modified `.el` files.
+- `batch-byte-compile` clean (only pre-existing warnings).
 
 ---
 

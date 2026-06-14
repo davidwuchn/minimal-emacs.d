@@ -33,7 +33,7 @@
 (declare-function my/gptel--invoke-callback-safely "gptel-tools-agent-subagent")
 (declare-function gptel-auto-workflow--worktree-needs-submodule-hydration-p "gptel-tools-agent-worktree")
 (defvar gptel-auto-experiment-max-aux-subagent-retries nil)
-(defvar gptel-auto-experiment-max-per-provider-attempts nil)
+(defvar gptel-auto-experiment-max-per-provider-attempts 3)
 (defvar gptel-auto-experiment-min-quality-gain-on-score-tie)
 (defvar gptel-auto-experiment-use-subagents)
 (defvar gptel-auto-workflow--current-target nil)

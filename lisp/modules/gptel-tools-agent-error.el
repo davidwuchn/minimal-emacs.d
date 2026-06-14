@@ -37,10 +37,10 @@
 (defvar gptel-auto-experiment-rate-limit-max-retry-delay nil)
 (defvar gptel-auto-experiment--api-error-threshold 5)
 (defvar gptel-auto-experiment--no-improvement-count nil)
-(defvar gptel-auto-experiment--api-error-count nil)
+(defvar gptel-auto-experiment--api-error-count 0)
 (defvar gptel-auto-experiment-max-grader-retries nil)
 (defvar gptel-auto-experiment-max-retries)
-(defvar gptel-auto-experiment-max-per-provider-attempts nil)
+(defvar gptel-auto-experiment-max-per-provider-attempts 3)
 (defvar gptel-auto-experiment--quota-exhausted nil)
 (defvar gptel-auto-workflow--run-id nil)
 (defvar gptel-auto-experiment--grading-target nil)
@@ -868,7 +868,8 @@ Also logs agent-output snippet for debugging when category is :unknown."
 
 (defun gptel-auto-experiment--should-reduce-experiments-p ()
   "Check if we should reduce experiment count due to API issues."
-  (>= gptel-auto-experiment--api-error-count gptel-auto-experiment--api-error-threshold))
+  (>= (or gptel-auto-experiment--api-error-count 0)
+      gptel-auto-experiment--api-error-threshold))
 
 (defun gptel-auto-experiment--adaptive-max-experiments (original-max)
   "Return adjusted experiment count based on API error rate."

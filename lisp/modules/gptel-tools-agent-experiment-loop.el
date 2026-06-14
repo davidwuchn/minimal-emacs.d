@@ -40,7 +40,7 @@
 (defvar gptel-auto-experiment--quota-exhausted nil)
 (defvar gptel-auto-experiment--consecutive-timeout-threshold 3
   "Stop experiments on a target after this many consecutive timeouts.")
-(defvar gptel-auto-experiment--api-error-count nil)
+(defvar gptel-auto-experiment--api-error-count 0)
 (defvar gptel-auto-experiment--api-error-threshold 5)
 (defvar gptel-auto-experiment-delay-between nil)
 (defvar gptel-auto-workflow--status-run-id nil)

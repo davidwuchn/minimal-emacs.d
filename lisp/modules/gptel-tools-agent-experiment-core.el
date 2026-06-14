@@ -562,10 +562,10 @@ threshold %.2f — aborting experiment %d/%d for %s"
                      strategy-name
                      target
                      (length prompt)
-                      (and (boundp 'gptel-auto-workflow--last-prompt-sections)
-                           (stringp gptel-auto-workflow--last-prompt-sections)
-                           (not (string-empty-p gptel-auto-workflow--last-prompt-sections))
-                           (split-string gptel-auto-workflow--last-prompt-sections ","))))
+                       (and (boundp 'gptel-auto-workflow--last-prompt-sections)
+                            (stringp gptel-auto-workflow--last-prompt-sections)
+                            (not (string-empty-p gptel-auto-workflow--last-prompt-sections))
+                            (split-string gptel-auto-workflow--last-prompt-sections ","))))
                    (setq executor-prompt prompt)
                     ;; Clear prompt override after consumption (one-shot mechanism)
                     (setq gptel-auto-workflow--experiment-prompt-override nil)

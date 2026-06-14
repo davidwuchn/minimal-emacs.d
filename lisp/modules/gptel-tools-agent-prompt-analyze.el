@@ -274,17 +274,22 @@ documentation improvements that the structural model can't evaluate."
                (>= quality-delta -0.12)
                (>= score-delta -0.01)
                (>= combined-delta -0.05)))
-         (grade-bypass-p
-          (and (listp decision)
-               (not (plist-get decision :keep))
-               grade-confirms-quality-p))
-         (correctness-bypass-p
-          (and (listp decision)
-               (not (plist-get decision :keep))
-               correctness-fix-p
-               (not speculative-hypothesis-p)
-               strong-grade-p
-               score-acceptable-p))
+          (grade-bypass-p
+           (and (listp decision)
+                (not (plist-get decision :keep))
+                (or (< quality-delta 0)
+                    (< combined-delta 0))
+                grade-confirms-quality-p))
+          (correctness-bypass-p
+           (and (listp decision)
+                (not (plist-get decision :keep))
+                gate-rejected-p
+                (or (< quality-delta 0)
+                    (< combined-delta 0))
+                correctness-fix-p
+                (not speculative-hypothesis-p)
+                strong-grade-p
+                score-acceptable-p))
          (override-note
           (cond
            (grade-bypass-p

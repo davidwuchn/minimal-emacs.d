@@ -92,7 +92,7 @@
 co-occur.
 Reset to 0 on any healthy cycle. When >=3, clears cron-safe-step to force a
 fresh cycle.")
-(defvar gptel-auto-experiment--api-error-count nil)
+(defvar gptel-auto-experiment--api-error-count 0)
 (defvar gptel-auto-experiment--quota-exhausted nil)
 (defvar gptel-auto-experiment-delay-between nil)
 (defvar gptel-auto-experiment-max-retries nil)
