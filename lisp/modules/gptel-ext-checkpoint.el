@@ -35,7 +35,9 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'json)
 (require 'parseedn)
+(require 'gptel-tools-agent-experiment-loop)
 
 ;; Forward declarations
 (declare-function gptel-circuit-state "gptel-ext-circuit-breaker" (component))

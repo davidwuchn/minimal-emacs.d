@@ -139,5 +139,14 @@
     (should (= 0 (gptel-checkpoint-data-current-exp-count round)))
     (should (= 0.0 (gptel-checkpoint-data-current-best-score round)))))
 
+(ert-deftest test-gptel-checkpoint-loads-required-dependencies ()
+  "Loading gptel-ext-checkpoint must transitively make every function
+it calls (including legacy JSON migration) bound.  Catches missing
+requires for `json' (json-read-from-string) and
+`gptel-tools-agent-experiment-loop' (gptel-auto-workflow--edn-to-plist)."
+  (require 'gptel-ext-checkpoint)
+  (should (fboundp 'json-read-from-string))
+  (should (fboundp 'gptel-auto-workflow--edn-to-plist)))
+
 (provide 'test-gptel-ext-checkpoint)
 ;;; test-gptel-ext-checkpoint.el ends here
