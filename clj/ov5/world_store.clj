@@ -3,9 +3,37 @@
    Provides CRUD operations over Datahike."
   (:require [babashka.pods :as pods]))
 
-(pods/load-pod 'replikativ/datahike "0.8.1697")
+;; ── Pod loading ──────────────────────────────────────────────────────────
+;; Try to load the datahike pod. On unsupported platforms (e.g. macOS aarch64)
+;; the download will fail; we catch the error and degrade gracefully.
+;;
+;; Functions use the `d*` helper below instead of `d/...` directly because
+;; babashka's SCI compiler resolves namespace aliases during analysis (before
+;; evaluation), so `d/` forms would fail to compile when the pod is unavailable.
+;; `d*` uses `requiring-resolve` at runtime, avoiding compile-time resolution.
+(def ^:private pod-ok?
+  (try
+    (pods/load-pod 'replikativ/datahike "0.8.1697")
+    true
+    (catch Throwable t
+      (binding [*out* *err*]
+        (println "[world-store] Datahike pod unavailable:" (.getMessage t)
+                 "- degrading gracefully"))
+      false)))
 
-(require '[datahike.pod :as d])
+(defn- d*
+  "Dynamically resolve and call a datahike.pod function.
+   Returns nil when pod is unavailable (guarded by pod-ok?)."
+  [fn-name & args]
+  (when pod-ok?
+    (let [f (requiring-resolve (symbol "datahike.pod" (name fn-name)))]
+      (apply f args))))
+
+(defn datahike-pod-available?
+  "Returns true if the Datahike pod loaded successfully.
+   Used by tests to skip when the pod is unavailable."
+  []
+  pod-ok?)
 
 ;; -----------------------------------------------------------------------------
 ;; State
@@ -225,24 +253,26 @@
 
 (defn connect-to-path
   "Connect to a Datahike store at `db-path`. Creates store if it doesn't exist.
-   Returns [conn config] without setting global state."
+   Returns [conn config] without setting global state.
+   Returns [nil nil] when the Datahike pod is unavailable."
   [db-path]
-  (let [uuid (path-to-uuid db-path)
-        cfg {:store {:backend :file
-                     :id uuid
-                     :path db-path}
-             :keep-history? true
-             :schema-flexibility :read}]
-    (when-not (d/database-exists? cfg)
-      (d/create-database cfg))
-    (let [conn (d/connect cfg)]
-      ;; Ensure schema is present (idempotent upsert)
-      (try
-        (d/transact conn base-schema)
-        (catch Exception _
-          ;; Schema may already exist; that's fine
-          nil))
-      [conn cfg])))
+  (when pod-ok?
+    (let [uuid (path-to-uuid db-path)
+          cfg {:store {:backend :file
+                       :id uuid
+                       :path db-path}
+               :keep-history? true
+               :schema-flexibility :read}]
+      (when-not (d* 'database-exists? cfg)
+        (d* 'create-database cfg))
+      (let [conn (d* 'connect cfg)]
+        ;; Ensure schema is present (idempotent upsert)
+        (try
+          (d* 'transact conn base-schema)
+          (catch Exception _
+            ;; Schema may already exist; that's fine
+            nil))
+        [conn cfg]))))
 
 (defn connect
   "Connect to a Datahike store at `path`. Creates store if it doesn't exist.
@@ -254,13 +284,15 @@
     conn))
 
 (defn disconnect
-  "Disconnect from the current store."
+  "Disconnect from the current store.
+   Returns nil when the Datahike pod is unavailable."
   []
-  (when-let [conn @store-conn]
-    (d/release-db (d/db conn))
-    (reset! store-conn nil)
-    (reset! store-config nil)
-    true))
+  (when pod-ok?
+    (when-let [conn @store-conn]
+      (d* 'release-db (d* 'db conn))
+      (reset! store-conn nil)
+      (reset! store-config nil)
+      true)))
 
 (defn connected?
   "Return true if a store connection is active."
@@ -277,31 +309,36 @@
 
 (defn transact
   "Transact `data` (vector of maps) into the store.
-   Returns the transaction report."
+   Returns the transaction report, or nil when the pod is unavailable."
   [data]
-  (when-let [conn @store-conn]
-    (d/transact conn data)))
+  (when pod-ok?
+    (when-let [conn @store-conn]
+      (d* 'transact conn data))))
 
 (defn query
   "Run a Datalog `q` query against the current store.
-   `q` is a quoted Datalog vector. Optional `args` for additional inputs."
+   `q` is a quoted Datalog vector. Optional `args` for additional inputs.
+   Returns nil when the Datahike pod is unavailable."
   [q & args]
-  (when-let [conn @store-conn]
-    (let [db (d/db conn)]
-      (if (seq args)
-        (apply d/q q db args)
-        (d/q q db)))))
+  (when pod-ok?
+    (when-let [conn @store-conn]
+      (let [db (d* 'db conn)]
+        (if (seq args)
+          (apply d* 'q q db args)
+          (d* 'q q db))))))
 
 (defn entity
   "Look up entity by `attr` and `val`. Returns the entity as a plain map.
-   Example: (entity :experiment/id \"exp-123\")"
+   Example: (entity :experiment/id \"exp-123\")
+   Returns nil when the Datahike pod is unavailable."
   [attr val]
-  (when-let [conn @store-conn]
-    (let [db (d/db conn)
-          result (d/q '[:find (pull ?e [*]) :in $ ?attr ?val
-                        :where [?e ?attr ?val]]
-                      db attr val)]
-      (first (first result)))))
+  (when pod-ok?
+    (when-let [conn @store-conn]
+      (let [db (d* 'db conn)
+            result (d* 'q '[:find (pull ?e [*]) :in $ ?attr ?val
+                          :where [?e ?attr ?val]]
+                        db attr val)]
+        (first (first result))))))
 
 (defn all-experiments
   "Return all experiment entities."

@@ -96,4 +96,5 @@ __pycache__/
 !plans/**/*.md
 !bb.edn
 !clj/
+!clj/**/
 !clj/**/*.clj

@@ -12,9 +12,16 @@
 ;; connection for every change.
 
 (ns ov5.world-store.query-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [ov5.world-store.query :as q]
             [ov5.world-store :as ws]))
+
+;; Skip all tests when the Datahike pod is unavailable (e.g. macOS aarch64).
+(use-fixtures :once
+  (fn [tests]
+    (if (ws/datahike-pod-available?)
+      (tests)
+      (println "[query-test] SKIP: Datahike pod unavailable"))))
 
 ;; ═══════════════════════════════════════════════════════════════════════════
 ;; Unit tests: behavior with mocked query function
