@@ -272,8 +272,12 @@ This ensures the system can collect data for new strategy+target pairs."
                   (lambda () nil))
                  ((symbol-function 'gptel-auto-workflow--load-research-traces)
                   (lambda () nil)))
-        ;; With 15% exploration rate, probability of 0 successes in 100 trials
-        ;; is (0.85)^100 ≈ 0.000013 — negligible flakiness.
+        ;; Seed the RNG so the trial count is deterministic across runs.
+        ;; Without this, other tests in the full suite consume random numbers
+        ;; and shift the RNG state, making this statistical test flake ~6% of
+        ;; the time (Binomial(100, 0.15) exceeds 20 with probability ~6%).
+        ;; This seed yields ~15 runs (the 0.15 * 100 expectation).
+        (random "exploration-seed-42")
         (let ((runs 0))
           (dotimes (_ 100)
             (when (gptel-auto-workflow--should-run-experiment-p "new-strat" "new-target")
