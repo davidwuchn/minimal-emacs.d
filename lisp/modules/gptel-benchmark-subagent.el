@@ -176,12 +176,16 @@ Auto-applies LLM backend failover when current provider is rate-limited."
                               type (my/gptel--sanitize-for-logging (format "%s" result) 100)))))
   ;; GUARD: Ensure required nucleus tools are loaded before launching subagent.
   ;; In deferred-init daemons, tool modules may not be loaded yet when the
-  ;; first subagent fires. Force-require gptel-tools to warm the registry.
+  ;; first subagent fires. Force-require gptel-tools and explicitly call setup
+  ;; to warm the registry. The with-eval-after-load in gptel-tools.el only runs
+  ;; once, so we must call setup explicitly if tools aren't registered yet.
   (when (and (fboundp 'gptel-get-tool)
              (not (ignore-errors (gptel-get-tool "Bash"))))
     (condition-case nil
         (progn
           (require 'gptel-tools)
+          (when (fboundp 'gptel-tools-setup)
+            (gptel-tools-setup))
           (message "[subagent] Warmed nucleus tool registry for %s" type))
       (error (message "[subagent] Could not warm tool registry for %s" type))))
   (if (and gptel-benchmark-use-subagents

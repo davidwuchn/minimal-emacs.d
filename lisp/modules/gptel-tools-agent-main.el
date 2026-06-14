@@ -1007,6 +1007,24 @@ If unhealthy and rollback succeeds, returns t after recovery."
         (error
          (message "[self-heal] ⚠ Module load failed: %s" (error-message-string err))
          (setq healthy nil))))
+    ;; Check 3.5: Tool registry — ensure critical tools are registered
+    ;; OV5 self-detection: catch "Cannot find tool Bash" errors that occur
+    ;; when subagents are called before tools are registered.
+    (when healthy
+      (condition-case err
+          (progn
+            (when (and (fboundp 'gptel-get-tool)
+                       (not (ignore-errors (gptel-get-tool "Bash"))))
+              (message "[self-heal] ⚠ Bash tool not registered — warming tool registry")
+              (require 'gptel-tools)
+              (when (fboundp 'gptel-tools-setup)
+                (gptel-tools-setup))
+              (unless (ignore-errors (gptel-get-tool "Bash"))
+                (message "[self-heal] ⚠ Tool registry warm failed — Bash still unavailable")
+                (setq healthy nil))))
+        (error
+         (message "[self-heal] ⚠ Tool registry check failed: %s" (error-message-string err))
+         (setq healthy nil))))
     (if healthy
         (message "[self-heal] ✓ System healthy — %d critical functions bound, syntax OK"
                  (length gptel-auto-workflow--critical-functions))
