@@ -13,6 +13,22 @@
 
 ---
 
+## Session Note (2026-06-15 — daemon resolver fallback fix)
+
+1. **Fixed blank-output short-circuit in daemon resolver**
+   - `clj/ov5/pipeline/daemon.clj`: added `sh-path` so blank `command -v` output becomes `nil` before `or` fallback chains.
+   - `resolve-emacsclient` and `resolve-emacs` now fall through to Homebrew / app bundle paths correctly.
+
+2. **Added and strengthened tests**
+   - `clj/ov5/pipeline/daemon_test.clj`: covered valid-path and fallback branches for both resolvers.
+   - Review found one weak fallback case; tests were tightened to fully isolate second-fallback and app-bundle branches.
+
+3. **Verification**
+   - `bb -f clj/ov5/test_runner.clj` -> 53 tests, 88 assertions, 0 failures, 0 errors.
+
+4. **Memory stored**
+   - `mementum/memories/blank-shell-output-short-circuits-or.md`
+
 ## Session Note (2026-06-15 — decision-callback abort fixed)
 
 1. **Root cause of `regression/auto-experiment/decision-callback-is-idempotent` non-local exit**

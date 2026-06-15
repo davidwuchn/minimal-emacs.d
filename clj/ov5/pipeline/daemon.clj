@@ -60,10 +60,18 @@
 ;; Emacsclient / Emacs resolution (ported from lines 103-147)
 ;; ═══════════════════════════════════════════════════════════════════════════════
 
+(defn- sh-path
+  "Like sh-out, but returns nil when stdout is blank (command not found).
+   Prevents empty-string from short-circuiting or fallback chains."
+  [& args]
+  (let [result (apply sh-out args)]
+    (when (not (str/blank? result))
+      result)))
+
 (defn resolve-emacsclient
   "Find emacsclient binary. Returns path string or nil."
   []
-  (or (try (sh-out "bash" "-c" "command -v emacsclient") (catch Exception _ nil))
+  (or (try (sh-path "bash" "-c" "command -v emacsclient") (catch Exception _ nil))
       (when (.exists (io/file "/opt/homebrew/bin/emacsclient"))
         "/opt/homebrew/bin/emacsclient")
       (when (.exists (io/file "/usr/local/bin/emacsclient"))
@@ -72,7 +80,7 @@
 (defn resolve-emacs
   "Find emacs binary. Returns path string or nil."
   []
-  (or (try (sh-out "bash" "-c" "command -v emacs") (catch Exception _ nil))
+  (or (try (sh-path "bash" "-c" "command -v emacs") (catch Exception _ nil))
       (when (.exists (io/file "/opt/homebrew/bin/emacs"))
         "/opt/homebrew/bin/emacs")
       (when (.exists (io/file "/usr/local/bin/emacs"))
