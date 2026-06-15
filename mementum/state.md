@@ -2,9 +2,9 @@
 
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
-> **Status**: ✅ **DECISION-CALLBACK ABORT ROOT-CAUSED AND FIXED** — `decision-callback-is-idempotent` now passes; two production fixes staged (not yet committed).
-> **Latest**: Fixed `cl-return` misused inside named `cl-block` in production-metrics; wrapped grader-bypass/validation-retry fallback in `(unless finished ...)` so it does not run after the main keep path.
-> **Active Plan**: Decide whether to commit+push these two fixes; continue investigating pre-existing `empty-localized-commit-keeps-result` abort and `default-grader-retries-allow-second-provider-hop` failure.
+> **Status**: ✅ **DECISION-CALLBACK FIXES COMMITTED AND PUSHED** — `decision-callback-is-idempotent` passes; merged Pi5 auto-evolved fixes before push.
+> **Latest**: Commits `3d8cc17cd` and `4fc6273d5` on `origin/main`. Pi5 had evolved Clojure pipeline fixes and daemon-repl improvements that were merged.
+> **Active Plan**: Continue investigating pre-existing `empty-localized-commit-keeps-result` abort and `default-grader-retries-allow-second-provider-hop` failure, or move on to Pi5 cron verification.
 > **Pi5**: Auto-evolution active; pre-push hook now blocks broken pushes to main; Pi5 auto-evolved boundary fixes (Preview Mode 2, Edit hashline, Code_Map/Inspect/Replace, plan-mode readonly enforcement)
 
 ---
@@ -36,8 +36,8 @@
    - Left untracked `mementum/memories/audit-fix-2026-06-13T14:00:15.md` for user review.
 
 ### Next steps
-- Commit the two fixes and push to `origin/main`, or
-- Continue debugging the pre-existing `empty-localized-commit-keeps-result` abort and/or `default-grader-retries-allow-second-provider-hop` failure.
+- ✅ Commit and push fixes — done (merged Pi5 changes, pre-push test/audit gates passed).
+- Continue debugging the pre-existing `empty-localized-commit-keeps-result` abort and/or `default-grader-retries-allow-second-provider-hop` failure, or move on to Pi5 cron verification with the bb-based pipeline.
 
 ---
 
