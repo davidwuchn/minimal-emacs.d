@@ -1,14 +1,14 @@
 ;;; test-heartbeat-daemon-init-strong.el --- Stronger test for heartbeat-at-init -*- lexical-binding: t; -*-
 
+(defvar test-heartbeat-daemon-init--repo-root
+  (file-name-directory
+   (directory-file-name
+    (file-name-directory (or load-file-name buffer-file-name default-directory)))))
+
 (ert-deftest test-heartbeat-daemon-init/function-is-inside-daemonp-block ()
   "The gptel-auto-workflow--start-heartbeat-timer call must be inside
 the (when (daemonp) ...) block in post-init.el."
-  (let* ((root (or (and (boundp 'user-emacs-directory)
-                        (file-name-directory
-                         (directory-file-name
-                          (file-name-directory user-emacs-directory))))
-                   default-directory))
-         (f (expand-file-name "post-init.el" root)))
+  (let ((f (expand-file-name "post-init.el" test-heartbeat-daemon-init--repo-root)))
     (skip-unless (file-exists-p f))
     (with-temp-buffer
       (insert-file-contents f)

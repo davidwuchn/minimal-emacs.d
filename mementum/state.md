@@ -13,6 +13,23 @@
 
 ---
 
+## Session Note (2026-06-15 — heartbeat daemon-init test fix)
+
+1. **Synced to remote and reviewed incoming change**
+   - Fast-forwarded to `origin/main` commit `e9001b9f` (`✓ test: stronger heartbeat-at-daemon-init test catches lazy-load regression`).
+   - Review found the new test resolved the repo root from `user-emacs-directory`, which pointed at the home directory and caused a skip.
+
+2. **Fixed the test by TDD**
+   - `tests/test-heartbeat-daemon-init-strong.el`: captured repo root at load time via top-level `defvar` using `load-file-name` / `buffer-file-name` / `default-directory`.
+   - The regression test now actually executes and validates the eager heartbeat init in `post-init.el`.
+
+3. **Verification**
+   - Targeted heartbeat test: pass.
+   - Full unit gate: `./scripts/run-tests.sh unit` -> 3225 tests, 3136 expected, 0 unexpected, 89 skipped.
+
+4. **Memory stored**
+   - `mementum/memories/ert-load-file-name-repo-root.md`
+
 ## Session Note (2026-06-15 — daemon resolver fallback fix)
 
 1. **Fixed blank-output short-circuit in daemon resolver**
