@@ -11,6 +11,23 @@
 
 ---
 
+## Session Note (2026-06-15 — innovation queue EDN restore + headless auto-approve fix)
+
+1. **Restored the innovation queue to EDN-backed storage**
+   - `lisp/modules/gptel-auto-workflow-production.el` now uses `mementum/innovation-queue.edn` again.
+   - Recovered the historical EDN read/write/add/update/list helpers from commit `53916165`.
+
+2. **Fixed the evolution runner regression**
+   - Removed the forced `let ((gptel-mementum-headless-auto-approve t))` binding from `gptel-auto-workflow--maybe-run-evolution`.
+   - The runner now respects the existing headless policy (`nil` / `draft` / `t`) instead of overriding it.
+
+3. **Verification**
+   - `./scripts/run-tests.sh unit test-production/maybe-run-evolution-no-auto-approve`: pass
+   - `./scripts/run-tests.sh unit`: 3228 tests, 3139 expected, 0 unexpected, 89 skipped
+
+4. **Memory stored**
+   - `mementum/memories/headless-auto-approve-defaults.md`
+
 ## Session Note (2026-06-15 — `failed-verification-does-not-fall-through` root cause fixed)
 
 1. **Root cause of `(void-variable bench)` and swallowed `defun`**

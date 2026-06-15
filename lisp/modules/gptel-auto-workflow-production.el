@@ -129,16 +129,14 @@ Skips when a workflow or cron job is active to avoid preempting experiments."
           (message "[auto-workflow] Backtrace logging also failed: %s" (error-message-string log-err))))))
     ;; Mementum maintenance: rebuild index + synthesize candidates.
     ;; Runs every cycle (hourly) but is cheap when no new memories exist.
-    ;; Enable auto-approve in headless so synthesis actually writes files.
     ;; Skip if workflow started during evolution cycle.
     (when (not (bound-and-true-p gptel-auto-workflow--running))
       (condition-case nil
           (when (fboundp 'gptel-mementum-build-index)
             (with-no-warnings
-              (let ((gptel-mementum-headless-auto-approve t))
-                (gptel-mementum-build-index)
-                (when (fboundp 'gptel-mementum-synthesize-all-candidates)
-                  (gptel-mementum-synthesize-all-candidates nil t)))))
+              (gptel-mementum-build-index)
+              (when (fboundp 'gptel-mementum-synthesize-all-candidates)
+                (gptel-mementum-synthesize-all-candidates nil t))))
         (error
          (message "[mementum] Maintenance error in evolution cycle"))))))
 
@@ -796,67 +794,70 @@ Called after research cycle completes."
 
 (defun gptel-auto-workflow--innovation-queue-file ()
   "Return the innovation queue file path."
-  (expand-file-name "mementum/innovation-queue.md"
+  (expand-file-name "mementum/innovation-queue.edn"
                     (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
                              (gptel-auto-workflow--worktree-base-root))
                         default-directory)))
 
+(defun gptel-auto-workflow--innovation-queue-read (&optional queue-file)
+  "Read the innovation queue from QUEUE-FILE or the default queue file.
+Returns a list of plists, or nil if the file does not exist or is empty."
+  (let ((file (or queue-file (gptel-auto-workflow--innovation-queue-file))))
+    (when (and (file-exists-p file)
+               (> (file-attribute-size (file-attributes file)) 0))
+      (condition-case err
+          (with-temp-buffer
+            (insert-file-contents file)
+            (goto-char (point-min))
+            (let ((data (parseedn-read)))
+              (cond
+               ((vectorp data)
+                (mapcar #'gptel-auto-workflow--hash-to-plist (append data nil)))
+               ((and (consp data) (vectorp (car data)))
+                (mapcar #'gptel-auto-workflow--hash-to-plist (append (car data) nil)))
+               ((listp data) data)
+               (t nil))))
+        (error
+         (message "[innovation] Failed to read queue %s: %s" file err)
+         nil)))))
+
+(defun gptel-auto-workflow--hash-to-plist (hash)
+  "Convert a HASH table with keyword keys to a property list."
+  (let (plist)
+    (maphash (lambda (key value)
+               (setq plist (plist-put plist key value)))
+             hash)
+    plist))
+
+(defun gptel-auto-workflow--innovation-queue-write (queue-file queue)
+  "Write QUEUE (a list of plists) as EDN to QUEUE-FILE."
+  (make-directory (file-name-directory queue-file) t)
+  (with-temp-file queue-file
+    (insert ";; Innovation queue (EDN). Each entry is a map with keys:\n")
+    (insert ";; :id :source :technique :expected-impact :status :experiment-id :actual-impact\n")
+    (insert (parseedn-print-str (apply #'vector queue)))
+    (insert "\n")))
+
 (defun gptel-auto-workflow--innovation-queue-add (source technique expected-impact)
   "Add an innovation idea to the queue.
 SOURCE: where the idea came from \(e.g., `GitHub trends',
-`arXiv paper'\)
-TECHNIQUE: what to try \(e.g., `Hashline editing'\)
-EXPECTED-IMPACT: predicted outcome \(e.g., `+15% keep-rate'\)
+`arXiv paper')
+TECHNIQUE: what to try \(e.g., `Hashline editing')
+EXPECTED-IMPACT: predicted outcome \(e.g., `+15% keep-rate')
 Returns the new item ID."
   (let* ((queue-file (gptel-auto-workflow--innovation-queue-file))
          (id (format "innov-%s-%d"
                      (format-time-string "%Y%m%d")
                      (random 10000)))
-         (timestamp (format-time-string "%Y-%m-%d %H:%M"))
-         (entry (format "| %s | %s | %s | %s | pending | - | - |\n"
-                        id source technique expected-impact)))
-    (when (file-exists-p queue-file)
-      (let ((content (with-temp-buffer
-                       (insert-file-contents queue-file)
-                       (buffer-string))))
-        ;; Insert after the header row.  Match the table header line
-        ;; and replace it with header + separator + new entry.  This
-        ;; puts the new entry directly after the separator, on row 3.
-        ;;
-        ;; NOTE: the previous version embedded a 33-blank-line regex
-        ;; that made this function only match files with exactly 33
-        ;; blank lines between header and separator.  No real markdown
-        ;; table has that, so the function silently failed to insert.
-        (setq content
-              (replace-regexp-in-string
-               (concat
-                "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n"
-                "
-
-
-
-
-
-
-
-
-
-
-
-
-|----|--------|-----------|-----------------|--------|---------------|---------------|\n")
-               (concat
-                "| ID | Source | Technique | Expected Impact | Status | Experiment ID | Actual Impact |\n"
-                "|----|--------|-----------|-----------------|--------|---------------|---------------|\n"
-                entry)
-               content))
-        ;; Update timestamp
-        (setq content (replace-regexp-in-string
-                       "<!-- UPDATED -->"
-                       timestamp
-                       content))
-        (with-temp-file queue-file
-          (insert content))))
+         (entry (list :id id
+                      :source source
+                      :technique technique
+                      :expected-impact expected-impact
+                      :status "pending"
+                      :experiment-id "-"
+                      :actual-impact "-"))
+         (queue (or (gptel-auto-workflow--innovation-queue-read queue-file) nil)))
+    (gptel-auto-workflow--innovation-queue-write queue-file (append queue (list entry)))
     (message "[innovation] Queued: %s (%s → %s)" id technique expected-impact)
     id))
 
@@ -867,72 +868,33 @@ STATUS: new status (pending|running|validated|discarded|deployed)
 EXPERIMENT-ID: optional experiment that tested this idea
 ACTUAL-IMPACT: measured outcome after experiments"
   (let* ((queue-file (gptel-auto-workflow--innovation-queue-file))
-         (timestamp (format-time-string "%Y-%m-%d %H:%M")))
-    (when (file-exists-p queue-file)
-      (let ((content (with-temp-buffer
-                       (insert-file-contents queue-file)
-                       (buffer-string))))
-        ;; Update the matching row
-        (setq content
-              (replace-regexp-in-string
-               (format "| %s | \\([^|]+\\) | \\([^|]+\\) | \\([^|]+\\) | \\([^|]+\\) | \\([^|]+\\) |
-\\([^|]+\\) |"
-                       (regexp-quote id))
-               (lambda (match)
-                 (let* ((parts (split-string match " | "))
-                        (cols (mapcar (lambda (s) (string-trim s)) parts)))
-                   (format "| %s | %s | %s | %s | %s | %s | %s |"
-                           id
-                           (nth 1 cols)
-                           (nth 2 cols)
-                           (nth 3 cols)
-                           status
-                           (or experiment-id (nth 5 cols))
-                           (or actual-impact (nth 6 cols)))))
-               content))
-        ;; Update timestamp
-        (setq content (replace-regexp-in-string
-                       "<!-- UPDATED -->"
-                       timestamp
-                       content))
-        (with-temp-file queue-file
-          (insert content))))
-    (message "[innovation] Updated %s → %s" id status)))
+         (queue (gptel-auto-workflow--innovation-queue-read queue-file))
+         (updated nil))
+    (when queue
+      (setq updated
+            (mapcar (lambda (item)
+                      (if (string= (plist-get item :id) id)
+                          (list :id id
+                                :source (plist-get item :source)
+                                :technique (plist-get item :technique)
+                                :expected-impact (plist-get item :expected-impact)
+                                :status status
+                                :experiment-id (or experiment-id (plist-get item :experiment-id) "-")
+                                :actual-impact (or actual-impact (plist-get item :actual-impact) "-"))
+                        item))
+                    queue))
+      (gptel-auto-workflow--innovation-queue-write queue-file updated)
+      (message "[innovation] Updated %s → %s" id status))))
 
 (defun gptel-auto-workflow--innovation-queue-list (&optional status-filter)
   "Return list of innovation queue items.
 Optional STATUS-FILTER limits to items with that status."
-  (let* ((queue-file (gptel-auto-workflow--innovation-queue-file))
-         items)
-    (when (file-exists-p queue-file)
-      (with-temp-buffer
-        (insert-file-contents queue-file)
-        (goto-char (point-min))
-        ;; Skip to queue table
-        (while (and (not (eobp))
-                    (not (looking-at "| ID |")))
-          (forward-line 1))
-        ;; Skip header and separator
-        (forward-line 2)
-        ;; Parse rows
-        (while (and (not (eobp))
-                    (looking-at "|"))
-          (let* ((line (buffer-substring (line-beginning-position) (line-end-position)))
-                 (parts (split-string line " | "))
-                 (cols (mapcar #'string-trim parts)))
-            (when (>= (length cols) 7)
-              (let ((item (list :id (nth 0 cols)
-                               :source (nth 1 cols)
-                               :technique (nth 2 cols)
-                               :expected-impact (nth 3 cols)
-                               :status (nth 4 cols)
-                               :experiment-id (nth 5 cols)
-                               :actual-impact (nth 6 cols))))
-                (when (or (null status-filter)
+  (let ((queue (gptel-auto-workflow--innovation-queue-read)))
+    (if (null status-filter)
+        queue
+      (cl-remove-if-not (lambda (item)
                           (string= (plist-get item :status) status-filter))
-                  (push item items)))))
-          (forward-line 1))))
-    (nreverse items)))
+                        queue))))
 
 (defun gptel-auto-workflow--innovation-queue-parse-findings (findings)
   "Parse research FINDINGS for innovation ideas and queue them.
@@ -945,7 +907,7 @@ Returns list of queued idea IDs."
         (insert findings)
         (goto-char (point-min))
         (while (re-search-forward
-                "Try \\([^\n]+\\) to \\([^\n]+\\)"
+                "Try \([^\n]+\) to \([^\n]+\)"
                 nil t)
           (let ((technique (match-string 1))
                 (impact (match-string 2)))

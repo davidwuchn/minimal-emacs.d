@@ -508,6 +508,20 @@ Returns nil if valid, or error message string if invalid."
 
 ;; ─── Cheap Diff Content Sanity Check ───
 
+(defun gptel-auto-experiment--diff-text-debug-artifact (diff-text)
+  "Return an error string when DIFF-TEXT contains a top-level debug artifact."
+  (let ((debug-form nil)
+        (debug-prefixes '("+(message" "+( insert" "+(insert"
+                          "+(print" "+(princ" "+(debug")))
+    (dolist (line (split-string diff-text "\n"))
+      (dolist (prefix debug-prefixes)
+        (when (and (null debug-form)
+                   (string-prefix-p prefix line))
+          (setq debug-form (substring line (length prefix))))))
+    (when debug-form
+      (format "Cheap check: debug artifact in diff (top-level %s)"
+              debug-form))))
+
 (defun gptel-auto-experiment--validate-diff-text (diff-text)
   "Analyze DIFF-TEXT (a git diff string) for dangerous patterns.
 Returns nil if content seems reasonable, or an error string.
@@ -523,18 +537,8 @@ Extracted from `gptel-auto-experiment--validate-diff-content' for testability."
    ((string-match-p
      "\\+```\\(emacs-lisp\\|lisp\\|elisp\\)?" diff-text)
     (format "Cheap check: LLM markdown artifacts in diff (``` blocks)"))
-   ;; Check for debug artifacts: print/insert at top level
-    ((let ((debug-form nil)
-           (debug-prefixes '("+(message" "+( insert" "+(insert"
-                             "+(print" "+(princ" "+(debug"))))
-       (dolist (line (split-string diff-text "\n"))
-         (dolist (prefix debug-prefixes)
-           (when (and (null debug-form)
-                      (string-prefix-p prefix line))
-             (setq debug-form (substring line (length prefix))))))
-       (when debug-form
-         (format "Cheap check: debug artifact in diff (top-level %s)"
-                 debug-form)))))
+    ;; Check for debug artifacts: print/insert at top level
+    ((gptel-auto-experiment--diff-text-debug-artifact diff-text))
    ;; Check for vandalism: removal of error handling patterns
     ((string-match-p
       "^-.*condition-case\\|^-.*ignore-errors\\|^-.*noninteractive"
