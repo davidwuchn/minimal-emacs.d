@@ -38,10 +38,11 @@ OV5's self-evolving experiment pipeline can be gamed by subagents that:
 
 | Check | Location | Behavior |
 |-------|----------|----------|
-| `toxic-commit-subject` | `self-heal-semantic` | Flags git subjects matching `grader-bypass` or `0.xx → 1.yy` score claims |
-| `score-fabrication` | `self-heal-semantic` | Cross-checks experiment `commits.txt` + `results.tsv` against commit-subject scores |
+| `toxic-commit-subject` | `self-heal-semantic` | Flags git subjects on the current branch delta (`origin/main..HEAD`) matching `grader-bypass` or `0.xx → 1.yy` score claims |
+| `score-fabrication` | `self-heal-semantic` | Cross-checks experiment `commits.txt` + `results.tsv` against commit-subject scores on the current branch delta |
 | critical-file mutation | `validation` | Blocks any diff touching gate-engine files |
 | `audit-toxic-optimize-branches` | `self-audit` | Lists remote `optimize/*` branches with toxic tip subjects |
+| `curl-no-max-time` | `self-heal-semantic` | Ignores docstrings/comments and flags only real `setq`/`defcustom` curl arg blocks missing max-time |
 
 ## Prevention
 
@@ -68,6 +69,7 @@ OV5's self-evolving experiment pipeline can be gamed by subagents that:
 ```bash
 ./scripts/run-tests.sh unit experiment-gates
 ./scripts/run-tests.sh unit self-heal-semantic
+./scripts/run-tests.sh unit 'test-self-heal-semantic/'
 ```
 
 Single-check invocation:

@@ -620,21 +620,23 @@ Only checks files in lisp/modules/ and post-init.el, not upstream gptel."
         (while (re-search-forward
                 "gptel-curl-extra-args\\|gptel-curl--common-args\\|executor-curl-extra"
                 nil t)
-          ;; Scan forward for the closing paren of the list
-          (let ((start (match-beginning 0))
-                (end (condition-case nil
-                         (save-excursion
-                           (backward-char)
-                           (forward-list)
-                           (point))
-                       (error nil))))
-            (when end
-              (let ((block (buffer-substring start end)))
-                (unless (string-match "--max-time\\|--connect-timeout" block)
-                  (setq issues (1+ issues))
-                  (gptel-auto-workflow--semantic-audit-record
-                   file (line-number-at-pos start) 'curl-no-max-time
-                   (format "gptel-curl-args block missing --max-time in %s" base)))))))))
+          ;; Skip matches inside strings or comments (e.g., docstring mentions)
+          (unless (nth 8 (syntax-ppss))
+            ;; Scan forward for the closing paren of the list
+            (let ((start (match-beginning 0))
+                  (end (condition-case nil
+                           (save-excursion
+                             (backward-char)
+                             (forward-list)
+                             (point))
+                         (error nil))))
+              (when end
+                (let ((block (buffer-substring start end)))
+                  (unless (string-match "--max-time\\|--connect-timeout" block)
+                    (setq issues (1+ issues))
+                    (gptel-auto-workflow--semantic-audit-record
+                     file (line-number-at-pos start) 'curl-no-max-time
+                     (format "gptel-curl-args block missing --max-time in %s" base))))))))))
     issues))
 
 ;; ── Check 16: Toxic commit subjects (grader-bypass / score-fabrication) ──
@@ -655,8 +657,8 @@ Detects:
 
 (cl-defun gptel-auto-workflow--audit-toxic-commit-subject (file)
   "Scan recent git history for toxic grader-bypass commit subjects.
-Uses git log --all --since=90 days ago --format=%s once per audit cycle
-so the scan stays bounded as history grows.
+Uses git log origin/main..HEAD --since=90 days ago --format=%s once per
+audit cycle so the scan stays bounded as history grows.
 FILE accepted for dispatch, ignored.
 Returns count of flagged commits."
   (when gptel-auto-workflow--toxic-commit-subject-done
@@ -665,14 +667,14 @@ Returns count of flagged commits."
   (let ((issues 0))
     (condition-case nil
         (let ((output (shell-command-to-string
-                        "git log --all --since='90 days ago' --format=%s")))
+                        "git log origin/main..HEAD --since='90 days ago' --format=%s")))
           (dolist (subject (split-string output "\n" t))
             (when (gptel-auto-workflow--toxic-commit-subject-p subject)
               (setq issues (1+ issues))
               (gptel-auto-workflow--semantic-audit-record
                file 0 'toxic-commit-subject
                (format "Toxic commit subject: %s" subject)))))
-      (error (message "[self-heal-semantic] git log --all failed — skipping toxic-commit-subject
+      (error (message "[self-heal-semantic] git log origin/main..HEAD failed — skipping toxic-commit-subject
 check")))
     issues))
 
@@ -713,7 +715,7 @@ Maps commit SHA (string) to commit subject (string).
 Limits scan to the last 90 days to keep runtime bounded."
   (condition-case nil
       (let ((output (shell-command-to-string
-                     "git log --all --since='90 days ago' --format='%H %s'")))
+                     "git log origin/main..HEAD --since='90 days ago' --format='%H %s'")))
         (dolist (line (split-string output "\n" t))
           (when (string-match "\\`\\([0-9a-f]\\{40\\}\\) \\(.+\\)" line)
             (puthash (match-string 1 line) (match-string 2 line)

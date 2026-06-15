@@ -2092,6 +2092,23 @@ an infinite loop caused by syntax-propertize interacting with
   "Orphaned-curl fixer is registered in the fixer alist."
   (should (assq 'orphaned-curl-process gptel-auto-workflow--semantic-fixer-alist)))
 
+;; ── Check 15 hardening: curl-no-max-time false positives ──
+
+(ert-deftest test-self-heal-semantic/curl-no-max-time-skips-docstring ()
+  "Docstring mention of gptel-curl-extra-args does not trigger curl-no-max-time.
+Regression: the regex matched a docstring reference to `gptel-curl-extra-args'
+in gptel-ext-abort.el, causing a false positive."
+  (let* ((content
+          "(defun install-curl-timeouts ()
+  \"Set `gptel-curl-extra-args' for fast failure on stalls.\"
+  (setq gptel-curl-extra-args
+        (list \"--connect-timeout\" \"20\" \"--max-time\" \"300\")))")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-curl-no-max-time file)))
+          (should (= issues 0)))
+      (test-self-heal-semantic--cleanup file))))
+
 ;; ── Check 16: Toxic commit subject detection ──
 
 (ert-deftest test-self-heal-semantic/toxic-commit-subject-detects-grader-bypass ()
@@ -2104,7 +2121,7 @@ an infinite loop caused by syntax-propertize interacting with
           (setq gptel-auto-workflow--toxic-commit-subject-done nil)
           (cl-letf (((symbol-function 'shell-command-to-string)
                      (lambda (cmd)
-                        (if (string-match-p "git log --all --since='90 days ago' --format=%s" cmd)
+                        (if (string-match-p "git log origin/main..HEAD --since='90 days ago' --format=%s" cmd)
                            (concat "Normal commit\n"
                                    "◈ Grader-bypass: rebase experiment 0.40 → 1.00 (+150%)\n"
                                    "Another clean commit\n")
@@ -2125,7 +2142,7 @@ an infinite loop caused by syntax-propertize interacting with
           (setq gptel-auto-workflow--toxic-commit-subject-done nil)
           (cl-letf (((symbol-function 'shell-command-to-string)
                      (lambda (cmd)
-                        (if (string-match-p "git log --all --since='90 days ago' --format=%s" cmd)
+                        (if (string-match-p "git log origin/main..HEAD --since='90 days ago' --format=%s" cmd)
                            "Fix bug in parser\nAdd feature X\nRefactor module Y\n"
                          ""))))
             (let ((issues (gptel-auto-workflow--audit-toxic-commit-subject file)))
@@ -2161,7 +2178,7 @@ an infinite loop caused by syntax-propertize interacting with
                          (expand-file-name path "/tmp/ov5-fake-root"))))
                     ((symbol-function 'shell-command-to-string)
                      (lambda (cmd)
-                        (if (string-match-p "git log --all --since='90 days ago' --format='%H %s'" cmd)
+                        (if (string-match-p "git log origin/main..HEAD --since='90 days ago' --format='%H %s'" cmd)
                            "abc123def456789012345678901234567890abcd ◈ Grader-bypass: 0.40 → 0.60 (+50%)\n"
                          (funcall orig-shell-cmd cmd))))
                     ((symbol-function 'directory-files)
@@ -2218,7 +2235,8 @@ an infinite loop caused by syntax-propertize interacting with
       (message "Semantic audit completed in %.1f seconds (%d files, %d issues)"
                elapsed (plist-get result :files-checked)
                (plist-get result :total-issues))
-      (should (< elapsed 30)))))
+      (should (< elapsed 30))
+      (should (= (plist-get result :total-issues) 0)))))
 
 ;; ── Regression: daemon self-deadlock via call-process emacsclient ──
 
