@@ -2265,5 +2265,32 @@ uses call-process emacsclient to drive EXTERNAL target daemons."
         (should-not (string-match-p "(call-process[ \t\n]+\"emacsclient\""
                                     (buffer-string)))))))
 
+;; ── Regression: heartbeat must start at daemon init ──
+
+(ert-deftest test-self-heal-semantic/heartbeat-starts-at-daemon-init ()
+  "post-init.el must start the heartbeat timer inside (when (daemonp))
+so an IDLE daemon writes a fresh heartbeat.  Otherwise the external
+watchdog (watchdog-daemon.sh) sees a forever-stale heartbeat and
+force-restarts every 30 min whenever a >5s git/test op makes the 5s
+emacsclient ping miss (stale heartbeat + failed ping => 'frozen').
+The heartbeat timer used to start only mid-workflow; idle daemons
+never wrote one.  Guard the daemon-init form, not lazy after-load."
+  (let (root (dir (file-name-directory
+                   (or load-file-name buffer-file-name
+                       (expand-file-name default-directory)))))
+    ;; Walk up until we find the dir containing post-init.el (project root).
+    (while (and dir (not root) (not (string= dir "/")))
+      (if (file-exists-p (expand-file-name "post-init.el" dir))
+          (setq root dir)
+        (setq dir (file-name-directory (directory-file-name dir)))))
+    (let ((f (and root (expand-file-name "post-init.el" root))))
+      (skip-unless (and f (file-exists-p f)))
+    (with-temp-buffer
+      (insert-file-contents f)
+      (let ((content (buffer-string)))
+        ;; The heartbeat start must live inside the (when (daemonp)) block.
+        (should (string-match-p "(when (daemonp)" content))
+        (should (string-match-p "gptel-auto-workflow--start-heartbeat-timer" content)))))))
+
 (provide 'test-self-heal-semantic)
 ;;; test-self-heal-semantic.el ends here
