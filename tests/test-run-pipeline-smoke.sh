@@ -63,7 +63,8 @@ fi
 
 section "Wrapper resolves project root"
 
-if grep -q 'exec bb -m ov5.pipeline' "$WRAPPER"; then
+# Accept either a bare `bb` or a resolved "$BB_BIN" (cron PATH may lack mise shims).
+if grep -qE 'exec "?(\$BB_BIN|bb)"? -m ov5\.pipeline' "$WRAPPER"; then
   pass "wrapper delegates to bb -m ov5.pipeline"
 else
   fail "wrapper does not delegate to bb -m ov5.pipeline"
