@@ -352,11 +352,11 @@ Regression: (wrong-type-argument number-or-marker-p exp-001) crash."
               ((symbol-function 'gptel-auto-workflow--monitoring-cycle)
                (lambda () nil))
               ((symbol-function 'gptel-auto-workflow--statechart-rebuild-and-persist)
-               (lambda () (setq statechart-called t)))
+                (lambda () (setq statechart-called t)))
               ((symbol-function 'gptel-auto-workflow--maybe-run-evolution)
-               (lambda () nil))
+                (lambda () nil))
               ((symbol-function 'run-with-idle-timer)
-               (lambda (_secs _fn) nil)))
+                (lambda (&rest _) nil)))
       (condition-case err
           (gptel-auto-workflow--experiment-complete-hook
            (list :id 5 :research-hash "none"))

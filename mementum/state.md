@@ -70,6 +70,7 @@
    - Focused production test file passes cleanly with the new regression coverage.
    - Live `pmf-value-stream` daemon stayed up after restart (`pid 118962`), ran scheduled evolution, and did not re-emit the `exp-001` number-or-marker crash.
    - Current evolution log shows a generic mementum maintenance warning plus a 60s timeout fallback, but no daemon crash loop.
+   - Pre-push gate exposed a bad `run-with-idle-timer` stub arity in the numeric-id regression; fixed to `&rest` and re-ran the full production test file successfully.
 
 4. **Memory stored**
    - `mementum/memories/string-experiment-id-normalization.md`
