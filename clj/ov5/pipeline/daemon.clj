@@ -294,7 +294,7 @@
                              "MINIMAL_EMACS_WORKFLOW_DAEMON" "1"})
             launch-cmd [emacs-path
                         "--init-directory" repo-path
-                        "--daemon" server-name
+                        (str "--daemon=" server-name)
                         "--eval" "(setq native-comp-jit-compilation nil gc-cons-threshold (* 50 1024 1024))"]]
         ;; Try setsid for session isolation
         (if (sh-ok? "command" "-v" "setsid")
