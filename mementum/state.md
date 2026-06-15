@@ -39,6 +39,41 @@
 
 ---
 
+## Session Note (2026-06-15 — mementum synthesis time-value fix)
+
+1. **Root cause of the generic maintenance warning**
+   - `gptel-mementum-check-synthesis-candidates` used `cl-reduce #'max` over `file-attribute-modification-time` values.
+   - Those values are native time lists, so `max` raised `wrong-type-argument number-or-marker-p` and the wrapper reduced it to `[mementum] Maintenance error in evolution cycle`.
+
+2. **Fix**
+   - Replaced numeric `max` with a `time-less-p` reducer.
+   - Added a regression test that synthesizes 3 temp memory files and proves candidate discovery no longer crashes.
+
+3. **Verification**
+   - Focused regression test passed.
+   - Fresh daemon restart reached `[mementum] Synthesis candidates (4): ...` and no longer emitted the maintenance warning from this code path.
+
+4. **Memory stored**
+   - `mementum/memories/time-less-p-for-file-times.md`
+
+## Session Note (2026-06-15 — experiment-complete-hook string-id crash fix)
+
+1. **Root cause of the live daemon crash**
+   - `gptel-auto-workflow--experiment-complete-hook` in `lisp/modules/gptel-auto-workflow-production.el` used raw `plist-get experiment :id` in modulo checks.
+   - String ids like `"exp-001"` reached `%` / `zerop` and triggered `wrong-type-argument number-or-marker-p exp-001`.
+
+2. **Fix**
+   - Added `gptel-auto-workflow--normalize-exp-id`.
+   - Replaced both experiment-id modulo gates with the normalized numeric id.
+
+3. **Verification**
+   - Focused production test file passes cleanly with the new regression coverage.
+   - Live `pmf-value-stream` daemon stayed up after restart (`pid 118962`), ran scheduled evolution, and did not re-emit the `exp-001` number-or-marker crash.
+   - Current evolution log shows a generic mementum maintenance warning plus a 60s timeout fallback, but no daemon crash loop.
+
+4. **Memory stored**
+   - `mementum/memories/string-experiment-id-normalization.md`
+
 ## Session Note (2026-06-15 — heartbeat daemon-init test fix)
 
 1. **Synced to remote and reviewed incoming change**

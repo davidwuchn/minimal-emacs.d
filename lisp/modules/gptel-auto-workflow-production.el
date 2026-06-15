@@ -170,6 +170,18 @@ Reset when research context changes.")
 
 (defvar gptel-auto-workflow--stats nil)
 (defvar gptel-auto-workflow-human-decision-gate nil)
+
+(defun gptel-auto-workflow--normalize-exp-id (raw-id)
+  "Normalize RAW-ID to a numeric experiment id.
+Returns integer: if RAW-ID is a number, round it; if it is a string,
+extract the first digit sequence (e.g. \"exp-001\" => 1); otherwise 0."
+  (cond ((numberp raw-id) (round raw-id))
+        ((stringp raw-id)
+         (if (string-match "[0-9]+" raw-id)
+             (string-to-number (match-string 0 raw-id))
+           0))
+        (t 0)))
+
 (defun gptel-auto-workflow--experiment-complete-hook (experiment)
   "Hook called when EXPERIMENT completes.
 Records to mementum and triggers evolution if needed."
@@ -238,7 +250,7 @@ Records to mementum and triggers evolution if needed."
       (error (message "[monitoring] Monitoring cycle error: %s" err))))
 
   ;; Rebuild pipeline statechart every N experiments (Markov-chain gate tracking)
-  (let ((exp-id (or (plist-get experiment :id) 0)))
+  (let ((exp-id (gptel-auto-workflow--normalize-exp-id (plist-get experiment :id))))
     (when (and (fboundp 'gptel-auto-workflow--statechart-rebuild-and-persist)
                (> exp-id 0)
                (zerop (% exp-id gptel-auto-workflow-statechart-rebuild-interval)))
@@ -257,7 +269,7 @@ Records to mementum and triggers evolution if needed."
                   (error-message-string err))))))
 
   ;; Run evolution every N experiments
-  (let ((exp-id (or (plist-get experiment :id) 0)))
+  (let ((exp-id (gptel-auto-workflow--normalize-exp-id (plist-get experiment :id))))
     (when (and (> exp-id 0)
                (zerop (% exp-id 5))
                (fboundp 'gptel-auto-workflow-evolution-run-cycle))

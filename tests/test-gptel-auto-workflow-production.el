@@ -10,6 +10,7 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'gptel-auto-workflow-production)
+(require 'gptel-auto-workflow-pipeline-statechart nil t)
 
 ;;; Customization tests
 
@@ -276,6 +277,93 @@ cycle starts a workflow (gptel-auto-workflow--running becomes non-nil)."
           (gptel-auto-workflow--maybe-run-evolution)
         (error nil))
       (should-not mementum-called))))
+
+;; ─── String experiment-id regression ───
+
+(ert-deftest test-production/normalize-exp-id-helper ()
+  "normalize-exp-id must return numeric values for string/number/nil inputs."
+  (should (= 1 (gptel-auto-workflow--normalize-exp-id "exp-001")))
+  (should (= 42 (gptel-auto-workflow--normalize-exp-id "exp-042")))
+  (should (= 7 (gptel-auto-workflow--normalize-exp-id 7)))
+  (should (= 3 (gptel-auto-workflow--normalize-exp-id 3.14)))
+  (should (= 0 (gptel-auto-workflow--normalize-exp-id nil)))
+  (should (= 0 (gptel-auto-workflow--normalize-exp-id "no-digits"))))
+
+(ert-deftest test-production/experiment-complete-hook-string-id-no-error ()
+  "Hook must not error when experiment :id is a string like \"exp-001\".
+Regression: (wrong-type-argument number-or-marker-p exp-001) crash."
+  (skip-unless (fboundp 'gptel-auto-workflow--experiment-complete-hook))
+  (let ((gptel-auto-workflow--research-batch-results nil)
+        (gptel-auto-workflow-statechart-rebuild-interval 1)
+        (statechart-called nil)
+        (evolution-called nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--mementum-record-experiment)
+               (lambda (_) nil))
+              ((symbol-function 'gptel-auto-workflow--capture-experiment-context)
+               (lambda (_) nil))
+              ((symbol-function 'gptel-auto-workflow--write-experiment-provenance)
+               (lambda (_) nil))
+              ((symbol-function 'gptel-auto-workflow--context-db-persist)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow--record-holographic-experiment)
+               (lambda (_) nil))
+              ((symbol-function 'gptel-auto-workflow--bead-update-from-experiment)
+               (lambda (_) nil))
+              ((symbol-function 'gptel-auto-workflow--update-pmf-dashboard-metrics)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow--monitoring-cycle)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow--statechart-rebuild-and-persist)
+               (lambda () (setq statechart-called t)))
+              ((symbol-function 'gptel-auto-workflow--maybe-run-evolution)
+               (lambda () (setq evolution-called t)))
+              ((symbol-function 'run-with-idle-timer)
+               (lambda (_secs _fn) (setq evolution-called t))))
+      (condition-case err
+          (gptel-auto-workflow--experiment-complete-hook
+           (list :id "exp-001" :research-hash "none"))
+        (error
+         (ert-fail (format "Hook errored: %s" (error-message-string err)))))
+      ;; With rebuild-interval=1 and exp-id=1, 1%1=0 so statechart should be called
+      (should statechart-called)
+      ;; exp-id=1, 1%5=1 so evolution should NOT be called
+      (should-not evolution-called))))
+
+(ert-deftest test-production/experiment-complete-hook-numeric-id-still-works ()
+  "Hook must still work normally with numeric experiment :id."
+  (skip-unless (fboundp 'gptel-auto-workflow--experiment-complete-hook))
+  (let ((gptel-auto-workflow--research-batch-results nil)
+        (gptel-auto-workflow-statechart-rebuild-interval 5)
+        (statechart-called nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--mementum-record-experiment)
+               (lambda (_) nil))
+              ((symbol-function 'gptel-auto-workflow--capture-experiment-context)
+               (lambda (_) nil))
+              ((symbol-function 'gptel-auto-workflow--write-experiment-provenance)
+               (lambda (_) nil))
+              ((symbol-function 'gptel-auto-workflow--context-db-persist)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow--record-holographic-experiment)
+               (lambda (_) nil))
+              ((symbol-function 'gptel-auto-workflow--bead-update-from-experiment)
+               (lambda (_) nil))
+              ((symbol-function 'gptel-auto-workflow--update-pmf-dashboard-metrics)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow--monitoring-cycle)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow--statechart-rebuild-and-persist)
+               (lambda () (setq statechart-called t)))
+              ((symbol-function 'gptel-auto-workflow--maybe-run-evolution)
+               (lambda () nil))
+              ((symbol-function 'run-with-idle-timer)
+               (lambda (_secs _fn) nil)))
+      (condition-case err
+          (gptel-auto-workflow--experiment-complete-hook
+           (list :id 5 :research-hash "none"))
+        (error
+         (ert-fail (format "Hook errored: %s" (error-message-string err)))))
+      ;; exp-id=5, interval=5 => 5%5=0 so statechart should be called
+      (should statechart-called))))
 
 (provide 'test-gptel-auto-workflow-production)
 ;;; test-gptel-auto-workflow-production.el ends here

@@ -329,12 +329,13 @@ Returns list of synthesis candidates."
             (let ((knowledge-page
                    (expand-file-name (format "mementum/knowledge/%s.md" topic)
                                      (gptel-auto-workflow--project-root)))
-                  (newest-memory-time
-                   (cl-reduce #'max
-                              (mapcar (lambda (f)
-                                        (file-attribute-modification-time
-                                         (file-attributes f)))
-                                      files))))
+                   (newest-memory-time
+                    (cl-reduce (lambda (a b)
+                                 (if (time-less-p a b) b a))
+                               (mapcar (lambda (f)
+                                         (file-attribute-modification-time
+                                          (file-attributes f)))
+                                       files))))
               (unless (and (file-exists-p knowledge-page)
                            (time-less-p newest-memory-time
                                         (file-attribute-modification-time

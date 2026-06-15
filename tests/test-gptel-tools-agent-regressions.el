@@ -21491,6 +21491,36 @@ meaning nothing was ever dropped and the function returned an oversized list."
     (should (= (length truncated) 3))
     (should (equal truncated '("aaa" "bbb" "ccc")))))
 
+(ert-deftest regression/mementum/check-synthesis-candidates-handles-time-values ()
+  "`gptel-mementum-check-synthesis-candidates' must handle
+file-attribute-modification-time values gracefully.
+These values are time lists (HIGH LOW USEC PSEC), not numbers, so
+cl-reduce with #'max would signal wrong-type-argument without the fix."
+  (unless (fboundp 'gptel-mementum-check-synthesis-candidates)
+    (require 'gptel-tools-agent-research))
+  (let* ((temp-root (make-temp-file "mementum-time-check" t))
+         (memories-dir (expand-file-name "mementum/memories" temp-root))
+         (gptel-auto-workflow--project-root-override temp-root)
+         (candidates nil))
+    (make-directory memories-dir t)
+    (unwind-protect
+        (progn
+          ;; Create 3 memory files sharing a common extracted topic
+          (dolist (stem '("check-time-value-a"
+                          "check-time-value-b"
+                          "check-time-value-c"))
+            (with-temp-file
+                (expand-file-name (format "%s.md" stem) memories-dir)
+              (insert "---\ntitle: " stem "\ndate: 2026-06-15\n"
+                      "---\n\n# " stem "\n\nTest.\n")))
+          ;; Must not signal wrong-type-argument number-or-marker-p
+          (setq candidates (gptel-mementum-check-synthesis-candidates))
+          (should candidates)
+          (should (cl-some (lambda (c)
+                             (>= (plist-get c :count) 3))
+                           candidates)))
+      (delete-directory temp-root t))))
+
 (ert-deftest regression/auto-workflow/run-async-gate-uses-truthiness ()
   "run-async should block when pending-decisions-p returns truthy non-t value."
   (let ((gptel-auto-workflow--running nil)
