@@ -7,11 +7,49 @@
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
 > **Status**: ✅ **EMPTY-LOCALIZED ABORT FIXED AND PUSHED** — `empty-localized-commit-keeps-result`, `repeated-focus-symbol-skips-grading`, and `decision-callback-is-idempotent` now pass; pre-push gate reports 0 unexpected failures.
-> **Latest**: Committed `73f995c4e` (paren fix pushed to origin); now improving daemon-repl validation with NeLisp reader.
+> **Latest**: Pushed `6301ce5d3` — NeLisp reader integrated into experiment validation and preview replacement gates.
 
 ---
 
-## Session Note (2026-06-15 — NeLisp-enhanced daemon-repl validation in progress)
+## Session Note (2026-06-15 — NeLisp reader gates in validation + preview)
+
+1. **Experiment validation NeLisp pass** (`lisp/modules/gptel-tools-agent-validation.el`)
+   - Added `gptel-auto-experiment--validate-code-with-nelisp-reader`.
+   - Runs after `forward-sexp-file` in `gptel-auto-experiment--validate-code`.
+   - Only activates when `gptel-daemon-repl--validate-with-nelisp-reader` and `gptel-daemon-repl--nelisp-reader-load` are available.
+   - Returns `"NeLisp reader rejected FILE: REASON"` on syntax errors.
+
+2. **Preview replacement NeLisp gate** (`lisp/modules/gptel-tools-preview.el`)
+   - Added `my/gptel--preview-validate-elisp-replacement`.
+   - Invoked inside `my/gptel--preview-file-change` before showing the diff.
+   - Only checks paths ending in `.el`; skips non-Elisp files.
+   - Aborts preview with an error callback when NeLisp rejects the replacement.
+
+3. **Tests**
+   - `regression/auto-workflow/validate-code-uses-nelisp-reader-for-malformed-string`
+   - `regression/auto-workflow/validate-code-nelisp-reader-allows-valid-files`
+   - `preview/file-change/rejects-malformed-elisp-via-nelisp`
+   - `preview/file-change/allows-valid-elisp-via-nelisp`
+   - `preview/file-change/non-elisp-skips-nelisp-validation`
+
+4. **Daemon-repl form-by-form reader** (`lisp/modules/gptel-ext-daemon-repl.el`)
+   - Added `gptel-daemon-repl--read-all-forms-with-positions` for partial-form recovery.
+   - Added 2 tests in `tests/test-daemon-repl.el`.
+
+5. **Verification**
+   - `test-gptel-tools-agent-validation.el` + `test-gptel-tools-preview.el` + `test-daemon-repl.el`: 119 tests, 115 expected, 0 unexpected, 4 skipped.
+   - Validate-code regression subset: 14/14 pass.
+   - Byte-compile of modified `.el` files: clean.
+   - Pre-push gate: 0 unexpected failures.
+   - Pushed as `842185dd9` and `6301ce5d3` to `origin/main`.
+
+### Next steps
+- Monitor pre-grade validation in live experiments for false positives.
+- Consider extending NeLisp gate to ApplyPatch/raw-diff path preview.
+
+---
+
+## Session Note (2026-06-15 — NeLisp-enhanced daemon-repl validation complete)
 
 1. **NeLisp reader capabilities (from `packages/nelisp/src/nelisp-reader.el`)**
    - Pure-Elisp s-expression reader with public API: `nelisp-reader-read`, `nelisp-reader-read-from-string`, `nelisp-reader-read-from-string-with-position`, `nelisp-reader-read-all`.
@@ -32,14 +70,13 @@
    - `validate-brackets-nelisp-error-type-classifies-string`
    - `validate-brackets-nelisp-paren-imbalance-permits-fix`
    - `validate-brackets-nelisp-position-used`
+   - `read-all-forms-with-positions-parses-forms`
+   - `read-all-forms-with-positions-locates-broken-form`
 
 4. **Verification**
-   - `test-daemon-repl` suite: 35 tests, 33 expected, 0 unexpected, 2 skipped.
+   - `test-daemon-repl` suite: 37 tests, 35 expected, 0 unexpected, 2 skipped.
    - File loads cleanly (`no-byte-compile` header; source load OK).
    - Manual spot checks confirm string errors skip the fixer and paren errors still auto-fix.
-
-### Next steps
-- Stage, run pre-commit, commit, and push the daemon-repl improvements.
 
 ---
 
