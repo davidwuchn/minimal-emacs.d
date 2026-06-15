@@ -318,12 +318,17 @@
                 ;; Fallback: launch directly
                 (apply p/process {:out :inherit :err :inherit :env env-opts} launch-cmd))))
           (apply p/process {:out :inherit :err :inherit :env env-opts} launch-cmd)))
-      ;; 8. Poll up to 150*0.2s for daemon to respond
+      ;; 8. Poll up to 300*0.2s (60s) for daemon to respond.  Research
+      ;;    daemons (gtm-product-org) settle later than the workflow daemon
+      ;;    — post-init runs a "Restarting server" cycle and research-cache
+      ;;    hydration.  30s (the old 150-iteration cap) raced the verify on
+      ;;    slower hosts and returned a false :failed even though the daemon
+      ;;    was alive seconds later.
       (loop [i 0]
         (let [state (check-worker-daemon server-name emacsclient-path)]
           (if (= :alive state)
             :started
-            (if (< i 150)
+            (if (< i 300)
               (do (Thread/sleep 200) (recur (inc i)))
               (do
                 (log/logf "failed to start worker daemon: %s" server-name)
