@@ -229,30 +229,68 @@ Returns t if loaded successfully, nil otherwise."
         (featurep 'nelisp-reader))
     (error nil)))
 
+(defconst gptel-daemon-repl--nelisp-paren-error-messages
+  '("unterminated list"
+    "unexpected `)\""
+    "unexpected `]\""
+    "expected `)' after dotted tail"
+    "dot not allowed in vector"
+    "splice outside list"
+    "comma outside backquote")
+  "NeLisp reader error messages that indicate a paren/bracket imbalance.
+When the NeLisp reader reports one of these, the self-heal paren fixer
+is a reasonable fallback.")
+
+(defun gptel-daemon-repl--nelisp-error-is-paren-imbalance-p (msg)
+  "Return t if NeLisp error message MSG is a paren/bracket imbalance."
+  (and (stringp msg)
+       (cl-some (lambda (pat) (string-match-p (regexp-quote pat) msg))
+                gptel-daemon-repl--nelisp-paren-error-messages)))
+
 (defun gptel-daemon-repl--validate-with-nelisp-reader (file-content)
   "Run NeLisp reader over FILE-CONTENT as a second syntax pass.
 Returns plist:
   :nelisp-reader-valid t/nil
   :nelisp-reader-error string or nil
   :nelisp-reader-error-pos integer or nil
+  :nelisp-reader-error-type symbol or nil
+    One of `paren-imbalance', `string', `hash-syntax', `atom',
+    `trailing-input', or `other'.
+  :nelisp-reader-paren-imbalance-p t/nil
 Only reads strings; does not execute code."
   (if (not (featurep 'nelisp-reader))
       (list :nelisp-reader-valid t
             :nelisp-reader-error nil
-            :nelisp-reader-error-pos nil)
+            :nelisp-reader-error-pos nil
+            :nelisp-reader-error-type nil
+            :nelisp-reader-paren-imbalance-p nil)
     (condition-case err
         (progn
           (nelisp-reader-read-all file-content)
           (list :nelisp-reader-valid t
                 :nelisp-reader-error nil
-                :nelisp-reader-error-pos nil))
+                :nelisp-reader-error-pos nil
+                :nelisp-reader-error-type nil
+                :nelisp-reader-paren-imbalance-p nil))
       (nelisp-reader-error
        (let* ((data (cdr err))
               (msg (car data))
-               (pos (and (cdr data) (integerp (cadr data)) (cadr data))))
+              (pos (and (cdr data) (integerp (cadr data)) (cadr data)))
+              (paren-p (gptel-daemon-repl--nelisp-error-is-paren-imbalance-p msg))
+              (type (cond
+                     ((string-match-p "unterminated string" msg) 'string)
+                     ((string-match-p "string" msg) 'string)
+                     ((string-match-p "unsupported `#'" msg) 'hash-syntax)
+                     ((string-match-p "lone `#'" msg) 'hash-syntax)
+                     ((string-match-p "char literal" msg) 'atom)
+                     ((string-match-p "trailing input" msg) 'trailing-input)
+                     (paren-p 'paren-imbalance)
+                     (t 'other))))
          (list :nelisp-reader-valid nil
                :nelisp-reader-error (format "NeLisp reader: %s" msg)
-               :nelisp-reader-error-pos pos))))))
+               :nelisp-reader-error-pos pos
+               :nelisp-reader-error-type type
+               :nelisp-reader-paren-imbalance-p paren-p))))))
 
 (defun gptel-daemon-repl--find-unmatched-paren-pos (file-content)
   "Return 0-indexed position of the first unmatched open paren in
@@ -304,6 +342,8 @@ Returns plist:
   :nelisp-reader-valid t/nil
   :nelisp-reader-error string or nil
   :nelisp-reader-error-pos integer or nil
+  :nelisp-reader-error-type symbol or nil
+  :nelisp-reader-paren-imbalance-p t/nil
 Only writes a temp file when the self-heal fixer is needed."
   ;; Ensure NeLisp reader is loaded lazily once.
   (unless (featurep 'nelisp-reader)
@@ -327,7 +367,14 @@ Only writes a temp file when the self-heal fixer is needed."
         (append (list :valid t :fixed-content file-content :error nil :error-pos nil)
                 reader-result)
       (if (and gptel-daemon-repl-validate-brackets
-               (fboundp 'gptel-auto-workflow--fix-unbalanced-parens))
+               (fboundp 'gptel-auto-workflow--fix-unbalanced-parens)
+               ;; Only attempt the paren fixer when the NeLisp reader agrees
+               ;; the problem is a paren/bracket imbalance (or it is absent).
+               ;; String literals, hash-syntax errors, etc. are not fixable by
+               ;; inserting/deleting parens and running the fixer can corrupt
+               ;; the file.
+               (or (plist-get reader-result :nelisp-reader-valid)
+                   (plist-get reader-result :nelisp-reader-paren-imbalance-p)))
           (let ((temp-file (make-temp-file "daemon-repl-validate-" nil ".el")))
             (unwind-protect
                 (progn
@@ -338,17 +385,32 @@ Only writes a temp file when the self-heal fixer is needed."
                                  (insert-file-contents temp-file)
                                  (buffer-string))))
                     (if (string= fixed file-content)
-                      (append (list :valid nil :fixed-content nil
-                                    :error err-msg
-                                    :error-pos error-pos)
-                              reader-result)
-                      (append (list :valid t :fixed-content fixed :error nil
-                                    :error-pos nil)
-                              reader-result))))
+                        (append (list :valid nil :fixed-content nil
+                                      :error err-msg
+                                      :error-pos (or (plist-get reader-result :nelisp-reader-error-pos)
+                                                     error-pos))
+                                reader-result)
+                      ;; Re-validate the fixed content with NeLisp reader to
+                      ;; ensure the fixer did not introduce a different class
+                      ;; of error (e.g. a bad string literal).
+                      (let ((fixed-reader-result
+                             (gptel-daemon-repl--validate-with-nelisp-reader fixed)))
+                        (if (plist-get fixed-reader-result :nelisp-reader-valid)
+                            (append (list :valid t :fixed-content fixed :error nil
+                                          :error-pos nil)
+                                    fixed-reader-result)
+                          (append (list :valid nil :fixed-content nil
+                                        :error (or (plist-get fixed-reader-result :nelisp-reader-error)
+                                                   err-msg)
+                                        :error-pos (or (plist-get fixed-reader-result :nelisp-reader-error-pos)
+                                                       error-pos))
+                                  fixed-reader-result))))))
               (delete-file temp-file)))
         (append (list :valid nil :fixed-content nil
-                      :error err-msg
-                      :error-pos error-pos)
+                      :error (or (plist-get reader-result :nelisp-reader-error)
+                                 err-msg)
+                      :error-pos (or (plist-get reader-result :nelisp-reader-error-pos)
+                                     error-pos))
                 reader-result)))))
 
 ;;; ── File Watch + Auto-Eval ──

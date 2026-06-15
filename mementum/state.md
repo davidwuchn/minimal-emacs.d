@@ -7,7 +7,39 @@
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
 > **Status**: ✅ **EMPTY-LOCALIZED ABORT FIXED AND PUSHED** — `empty-localized-commit-keeps-result`, `repeated-focus-symbol-skips-grading`, and `decision-callback-is-idempotent` now pass; pre-push gate reports 0 unexpected failures.
-> **Latest**: Committed `45615d5a8` (paren fix: `failed-verification-does-not-fall-through` now passes).
+> **Latest**: Committed `73f995c4e` (paren fix pushed to origin); now improving daemon-repl validation with NeLisp reader.
+
+---
+
+## Session Note (2026-06-15 — NeLisp-enhanced daemon-repl validation in progress)
+
+1. **NeLisp reader capabilities (from `packages/nelisp/src/nelisp-reader.el`)**
+   - Pure-Elisp s-expression reader with public API: `nelisp-reader-read`, `nelisp-reader-read-from-string`, `nelisp-reader-read-from-string-with-position`, `nelisp-reader-read-all`.
+   - Supports atoms, strings with escapes, lists, vectors, quotes, backquote, char literals, block comments (`#|...|#`), records (`#s(...)`), radix ints.
+   - Does **not** support `#N=`/`#N#`, `##`, `#,`, `#@N`, bignums, bool-vectors, hash-tables.
+   - No repair/auto-fix; signals `nelisp-reader-error` with a reason list (message + optional position).
+
+2. **Enhancements made to `lisp/modules/gptel-ext-daemon-repl.el`**
+   - `gptel-daemon-repl--validate-with-nelisp-reader` now returns:
+     - `:nelisp-reader-error-type` — `paren-imbalance`, `string`, `hash-syntax`, `atom`, `trailing-input`, or `other`
+     - `:nelisp-reader-paren-imbalance-p` — t when the error is a paren/bracket imbalance
+   - `gptel-daemon-repl-validate-brackets` now:
+     - Only invokes `gptel-auto-workflow--fix-unbalanced-parens` when NeLisp classifies the error as `paren-imbalance` (or NeLisp is absent), preventing corruption of string/hash-syntax errors.
+     - Reports NeLisp's error position when available instead of the slower manual re-scan.
+     - Re-validates the fixed content with NeLisp before declaring `:valid t`.
+
+3. **Tests added to `tests/test-daemon-repl.el`**
+   - `validate-brackets-nelisp-error-type-classifies-string`
+   - `validate-brackets-nelisp-paren-imbalance-permits-fix`
+   - `validate-brackets-nelisp-position-used`
+
+4. **Verification**
+   - `test-daemon-repl` suite: 35 tests, 33 expected, 0 unexpected, 2 skipped.
+   - File loads cleanly (`no-byte-compile` header; source load OK).
+   - Manual spot checks confirm string errors skip the fixer and paren errors still auto-fix.
+
+### Next steps
+- Stage, run pre-commit, commit, and push the daemon-repl improvements.
 
 ---
 

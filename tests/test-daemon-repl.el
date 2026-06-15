@@ -466,3 +466,30 @@ the first unmatched open is the defun's own `(' at position 0."
       ;; (the `(' starting the defun).  Return 0 — not 1, not length.
       (should (>= error-pos 0))
       (should (< error-pos content-length)))))
+
+(ert-deftest test-daemon-repl/validate-brackets-nelisp-error-type-classifies-string ()
+  "Malformed string literals are classified as :string, not paren imbalance."
+  (let* ((code "(defun f ()\n  (message \"hello)\n  (+ 1 2))")
+         (result (gptel-daemon-repl-validate-brackets code)))
+    (when (plist-get result :nelisp-reader-error)
+      (should (eq (plist-get result :nelisp-reader-error-type) 'string))
+      (should-not (plist-get result :nelisp-reader-paren-imbalance-p)))))
+
+(ert-deftest test-daemon-repl/validate-brackets-nelisp-paren-imbalance-permits-fix ()
+  "Unterminated list is classified as paren-imbalance and can be auto-fixed."
+  (let* ((code "(defun f ()\n  (let ((x 1))\n    (+ x 2))\n\n(defun g ()\n  (+ 3 4))")
+         (result (gptel-daemon-repl-validate-brackets code)))
+    (when (plist-get result :nelisp-reader-error)
+      (should (eq (plist-get result :nelisp-reader-error-type) 'paren-imbalance))
+      (should (plist-get result :nelisp-reader-paren-imbalance-p))
+      (when (fboundp 'gptel-auto-workflow--fix-unbalanced-parens)
+        (should (plist-get result :fixed-content))
+        (should (plist-get result :valid))))))
+
+(ert-deftest test-daemon-repl/validate-brackets-nelisp-position-used ()
+  "For an unexpected close paren, NeLisp's position is exposed."
+  (let* ((code "(+ 1 2))")
+         (result (gptel-daemon-repl-validate-brackets code)))
+    (when (plist-get result :nelisp-reader-error)
+      (should (plist-get result :nelisp-reader-error-pos))
+      (should (numberp (plist-get result :nelisp-reader-error-pos))))))
