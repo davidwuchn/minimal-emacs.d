@@ -369,11 +369,15 @@
   [server-name elisp-code & {:keys [timeout] :or {timeout 10}}]
   (let [emacsclient-path (or (resolve-emacsclient) "emacsclient")]
     (try
-      (let [result (proc/sh emacsclient-path
+      (let [result (p/shell {:out :string
+                             :err :string
+                             :continue true
+                             :timeout (* timeout 1000)
+                             :env {"TMPDIR" "/tmp"}}
+                            emacsclient-path
                             "-a" "false"
                             "-s" server-name
-                            "--eval" elisp-code
-                            :timeout timeout)
+                            "--eval" elisp-code)
             out (str/trim (:out result))
             err (str/trim (:err result))
             exit (:exit result)]
