@@ -44,11 +44,27 @@
 (defvar sr--skill-index nil
   "Alist of (skill-dir . (category . content)) for all loaded skills.")
 
+(defvar sr--skills-dir
+  (let ((root (or load-file-name buffer-file-name default-directory)))
+    (if (stringp root)
+        (let* ((dir (file-name-directory root))
+               (dir (directory-file-name dir))
+               (dir (file-name-directory dir))
+               (dir (directory-file-name dir))
+               (dir (file-name-directory dir)))
+          (expand-file-name "assistant/skills" dir))
+      default-directory))
+  "Directory containing skill subdirs, captured at load time.
+In batch tests, user-emacs-directory may be redirected to var/, so we
+fall back to a path derived from this file's location.")
+
 (defun sr--build-index ()
   "Scan assistant/skills/ and build index: (dir . (category . content))."
-  (let* ((skills-dir (expand-file-name "assistant/skills"
-                      (or (bound-and-true-p user-emacs-directory)
-                          default-directory)))
+  (let* ((user-dir (or (bound-and-true-p user-emacs-directory) default-directory))
+         (skills-dir (or (and (file-directory-p
+                               (expand-file-name "assistant/skills" user-dir))
+                              (expand-file-name "assistant/skills" user-dir))
+                         sr--skills-dir))
          (index nil))
     (when (file-directory-p skills-dir)
       (dolist (dir (directory-files skills-dir t "^[^_]"))
@@ -165,9 +181,11 @@ Penalty is subtracted from score. Ported from ontology-router
 
 (defun sr--skill-stale-p (skill-dir)
   "Check if SKILL-DIR's content files are stale (not modified in 90 days)."
-  (let* ((skills-dir (expand-file-name "assistant/skills"
-                      (or (bound-and-true-p user-emacs-directory)
-                          default-directory)))
+  (let* ((user-dir (or (bound-and-true-p user-emacs-directory) default-directory))
+         (skills-dir (or (and (file-directory-p
+                               (expand-file-name "assistant/skills" user-dir))
+                              (expand-file-name "assistant/skills" user-dir))
+                         sr--skills-dir))
          (full-dir (expand-file-name skill-dir skills-dir))
          (latest-mtime 0))
     (dolist (f '("SKILL.md" "agent-behavior.md"))
