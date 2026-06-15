@@ -36,3 +36,53 @@ even when the target IS in the log."
       (delete-directory test-root t)
       (fmakunbound 'gptel-auto-workflow--expand-workspace-path)
       (setq default-directory old-default))))
+
+(ert-deftest test-production-metrics/signal-1-returns-nil-when-no-log-mentions-target ()
+  "When the target basename does NOT appear in any error log,
+:support-tickets-reduced should be 0 (not silently-fire from the
+cl-return bug).  This is a complementary test: the bug caused the
+function to ALWAYS return nil, so we need to verify it also returns
+nil correctly in the negative case."
+  (let* ((test-root "/tmp/test-bv-signal-1-neg")
+         (log-dir (expand-file-name "var/log/" test-root))
+         (log-file (expand-file-name "test.log" log-dir))
+         (old-default default-directory))
+    (unwind-protect
+        (progn
+          (fset 'gptel-auto-workflow--expand-workspace-path
+                (lambda (&rest _) test-root))
+          (make-directory log-dir t)
+          (with-temp-file log-file
+            (insert "ERROR: completely different file mentioned here\n"))
+          (let* ((result (gptel-auto-workflow--compute-local-business-value
+                          "my-target-basename.el"))
+                 (tickets (plist-get result :support-tickets-reduced)))
+            (should (= tickets 0))))
+      (delete-directory test-root t)
+      (fmakunbound 'gptel-auto-workflow--expand-workspace-path)
+      (setq default-directory old-default))))
+
+(ert-deftest test-production-metrics/signal-1-finds-target-in-second-log-file ()
+  "When the target is mentioned in the SECOND log file (not the first),
+Signal 1 should still fire.  This exercises the dolist's continuation
+behavior — the original cl-return bug would have swallowed the throw
+on the second log, but with cl-return-from the dolist continues."
+  (let* ((test-root "/tmp/test-bv-signal-1-second")
+         (log-dir (expand-file-name "var/log/" test-root))
+         (old-default default-directory))
+    (unwind-protect
+        (progn
+          (fset 'gptel-auto-workflow--expand-workspace-path
+                (lambda (&rest _) test-root))
+          (make-directory log-dir t)
+          (with-temp-file (expand-file-name "01.log" log-dir)
+            (insert "Unrelated error in some-other-file.el\n"))
+          (with-temp-file (expand-file-name "02.log" log-dir)
+            (insert "ERROR: target mentioned here: my-target-basename.el\n"))
+          (let* ((result (gptel-auto-workflow--compute-local-business-value
+                          "my-target-basename.el"))
+                 (tickets (plist-get result :support-tickets-reduced)))
+            (should (= tickets 1))))
+      (delete-directory test-root t)
+      (fmakunbound 'gptel-auto-workflow--expand-workspace-path)
+      (setq default-directory old-default))))
