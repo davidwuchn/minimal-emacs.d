@@ -365,5 +365,51 @@ Regression: (wrong-type-argument number-or-marker-p exp-001) crash."
       ;; exp-id=5, interval=5 => 5%5=0 so statechart should be called
       (should statechart-called))))
 
+(ert-deftest test-production/innovation-queue-parse-findings-adds-matched-patterns ()
+  "parse-findings should scan findings for 'Try X to Y' patterns and
+add each match as a queue item.  Returns the list of added IDs."
+  (skip-unless (fboundp 'gptel-auto-workflow--innovation-queue-parse-findings))
+  (let* ((root (make-temp-file "ov5-prod-" t))
+         (queue-dir (expand-file-name "mementum" root))
+         (queue-file (expand-file-name "innovation-queue.edn" queue-dir))
+         (findings "# Findings
+
+Try Hashline editing to reduce edit errors
+Try Auto-approve to streamline headless runs
+Try Memory EDN to fix corruption
+
+Other text that doesn't match the pattern."))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                   (lambda () root)))
+          (let ((ids (gptel-auto-workflow--innovation-queue-parse-findings findings)))
+            (should (= 3 (length ids)))
+            (should (file-exists-p queue-file))
+            (let ((queue (gptel-auto-workflow--innovation-queue-read queue-file)))
+              (should (= 3 (length queue)))
+              (should (string= "Hashline editing" (plist-get (nth 0 queue) :technique)))
+              (should (string= "reduce edit errors" (plist-get (nth 0 queue) :expected-impact)))
+              (should (string= "Auto-approve" (plist-get (nth 1 queue) :technique)))
+              (should (string= "Memory EDN" (plist-get (nth 2 queue) :technique)))
+              (dolist (item queue)
+                (should (string= "research findings" (plist-get item :source)))))))
+      (delete-directory root t))))
+
+(ert-deftest test-production/innovation-queue-parse-findings-empty-input ()
+  "parse-findings with no matching patterns should return an empty list
+and not create the queue file."
+  (skip-unless (fboundp 'gptel-auto-workflow--innovation-queue-parse-findings))
+  (let* ((root (make-temp-file "ov5-prod-" t))
+         (queue-dir (expand-file-name "mementum" root))
+         (queue-file (expand-file-name "innovation-queue.edn" queue-dir))
+         (findings "No matches here at all."))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+                   (lambda () root)))
+          (let ((ids (gptel-auto-workflow--innovation-queue-parse-findings findings)))
+            (should (null ids))
+            (should-not (file-exists-p queue-file))))
+      (delete-directory root t))))
+
 (provide 'test-gptel-auto-workflow-production)
 ;;; test-gptel-auto-workflow-production.el ends here

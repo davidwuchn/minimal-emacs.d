@@ -907,7 +907,7 @@ Returns list of queued idea IDs."
         (insert findings)
         (goto-char (point-min))
         (while (re-search-forward
-                "Try \([^\n]+\) to \([^\n]+\)"
+                "Try \\([^\n]+\\) to \\([^\n]+\\)"
                 nil t)
           (let ((technique (match-string 1))
                 (impact (match-string 2)))
