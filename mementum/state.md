@@ -7,9 +7,35 @@
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
 > **Status**: ✅ **EMPTY-LOCALIZED ABORT FIXED AND PUSHED** — `empty-localized-commit-keeps-result`, `repeated-focus-symbol-skips-grading`, and `decision-callback-is-idempotent` now pass; pre-push gate reports 0 unexpected failures.
-> **Latest**: Committed and pushed `89410b066` (rebased onto Pi5 daemon-launch fixes).
-> **Active Plan**: Decide whether to tackle batch-level test isolation in `test-gptel-tools-agent-regressions.el` or move on to Pi5 cron verification.
-> **Pi5**: Auto-evolution active; pre-push hook now blocks broken pushes to main; Pi5 auto-evolved boundary fixes (Preview Mode 2, Edit hashline, Code_Map/Inspect/Replace, plan-mode readonly enforcement)
+> **Latest**: Committed `45615d5a8` (paren fix: `failed-verification-does-not-fall-through` now passes).
+
+---
+
+## Session Note (2026-06-15 — `failed-verification-does-not-fall-through` root cause fixed)
+
+1. **Root cause of `(void-variable bench)` and swallowed `defun`**
+   - `lisp/modules/gptel-tools-agent-experiment-core.el` (`gptel-auto-experiment-run`):
+     - Commit `3d8cc17cd` added `(unless finished ...)` around the validation-retry + grader-bypass fallback but shifted only one `)` at line 1335.
+     - This left `let* bench` closing at line 1335 while `when grade-passed` continued to line 1733, so the fallback referenced `bench` and `validation-error` outside their scope.
+     - The same imbalance left `cl-defun` open so it swallowed `defun gptel-auto-experiment--refine`.
+   - Fix: moved 1 `)` from line 1335 to line 1733 (so `let* bench` and `when grade-passed` enclose the fallback), and moved 1 `)` from `defun refine` end to `cl-defun` `launch-executor` end.
+
+2. **Root cause of grader-bypass fall-through on failed verification**
+   - With `passed=nil`, `effective-score=0.3`, `baseline=0.4`, the fallback's grader-bypass logic still fired because `gptel-auto-experiment--grader-bypass-p` only checks grader/benchmark signals, not score improvement.
+   - The test expected `:comparator-reason "verification-failed"` and `:kept nil`.
+   - Fix: guarded grader-bypass with `(or passed (> effective-score baseline))`, matching the main keep-path condition.
+
+3. **Verification**
+   - `regression/auto-experiment/failed-verification-does-not-fall-through`: **passes** individually.
+   - `regression/auto-experiment/decision-callback-is-idempotent`: still passes individually.
+   - `regression/auto-experiment/empty-localized-commit-keeps-result`: still passes individually.
+   - `regression/auto-experiment/repeated-focus-symbol-skips-grading`: still passes individually.
+   - `regression/auto-experiment/default-grader-retries-allow-second-provider-hop`: still passes individually.
+   - Full `regression/auto-experiment` batch run: still shows ~34 failures due to global-state pollution between tests; many pass alone.
+   - Pre-commit hook: passes.
+
+### Next steps
+- Decide whether to push `45615d5a8` to `origin` (Pi5) and continue addressing batch-level test isolation, or switch to Pi5 cron verification.
 
 ---
 

@@ -1332,7 +1332,7 @@ fallback hash" (or target "unknown")))))
 		                                                    ;; Track token economics for this experiment
 		                                                    (when (fboundp 'gptel-token-economics--track-experiment)
 		                                                      (gptel-token-economics--track-experiment exp-result))
-                                                           (funcall callback exp-result))))))))))
+                                                            (funcall callback exp-result)))))))))
                                               (unless finished
                                                 (if (and (gptel-auto-experiment--teachable-validation-error-p
                                                        target validation-error)
@@ -1614,9 +1614,11 @@ fallback hash" (or target "unknown")))))
                                                    (let* ((_grade-genuine nil)
                                                           (_grade-genuine2 nil)
                                                           (grader-bypass
-                                                           (gptel-auto-experiment--grader-bypass-p
-                                                            grade-passed grade-score grade-total grade bench
-                                                            validation-error tests-passed))
+                                                           (and (or passed
+                                                                    (> effective-score baseline))
+                                                                (gptel-auto-experiment--grader-bypass-p
+                                                                 grade-passed grade-score grade-total grade bench
+                                                                 validation-error tests-passed)))
                                                           (reason
                                                            (if grader-bypass
                                                                (format "grader-bypass:%s"
@@ -1730,7 +1732,7 @@ fallback hash" (or target "unknown")))))
                                                           ;; Track token economics for this experiment
                                                           (when (fboundp 'gptel-token-economics--track-experiment)
                                                             (gptel-token-economics--track-experiment exp-result))
-                                                          (funcall callback exp-result)))))))))
+                                                          (funcall callback exp-result))))))))))
                                            ))))))))))))))))
                    (let ((raw-executor-callback executor-callback))
                      (setq executor-callback
@@ -1792,7 +1794,7 @@ fallback hash" (or target "unknown")))))
                                      (when (fboundp 'gptel-token-economics--track-experiment)
                                        (gptel-token-economics--track-experiment exp-result))
                                      (funcall callback exp-result))))))))
-                   (funcall launch-executor))))))))))
+                   (funcall launch-executor)))))))))))
 
 
 (defun gptel-auto-experiment--refine (target validation-error grade-details
@@ -1908,7 +1910,7 @@ Called when the grader passed but the benchmark/validation failed."
                                            :provisional-commit-hash provisional-commit-hash
                                            :experiment-branch experiment-branch))))))))))
      refine-prompt target experiment-worktree nil nil nil
-       (bound-and-true-p gptel-auto-experiment-active-grace)))))
+       (bound-and-true-p gptel-auto-experiment-active-grace))))
 
 (defconst gptel-auto-experiment--placeholder-hypothesis-exact-patterns
   '("[What CODE change and why]"
