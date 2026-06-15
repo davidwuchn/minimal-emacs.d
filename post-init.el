@@ -233,13 +233,16 @@ Only reloads for top-level frames (not Corfu child frames) and only once per fra
   ;; concludes "frozen").  A live event loop keeps this timer firing
   ;; every 30s; a truly frozen main thread starves it → stale → watchdog
   ;; restarts.  That is the correct invariant.
-  (with-eval-after-load 'gptel-tools-agent-experiment-loop
-    (when (fboundp 'gptel-auto-workflow--start-heartbeat-timer)
-      (condition-case err
-          (gptel-auto-workflow--start-heartbeat-timer)
-        (error
-         (message "[heartbeat] Failed to start init heartbeat: %s"
-                  (error-message-string err))))))
+  ;; Eager-require the module so the heartbeat starts immediately at init
+  ;; instead of waiting for its first lazy load (which can race the
+  ;; watchdog's first 30-min check and cause a false "stale" restart).
+  (condition-case err
+      (progn
+        (require 'gptel-tools-agent-experiment-loop)
+        (when (fboundp 'gptel-auto-workflow--start-heartbeat-timer)
+          (gptel-auto-workflow--start-heartbeat-timer)))
+    (error
+     (message "[heartbeat] Init heartbeat failed: %s" (error-message-string err))))
   
   ;; Hard curl timeout prevents orphaned subprocesses from hanging the daemon.
   ;; Without --max-time, curl blocks indefinitely when server closes connection
