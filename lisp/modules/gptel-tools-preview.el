@@ -15,6 +15,8 @@
 
 (declare-function my/gptel-make-temp-file "gptel-ext-core")
 (declare-function my/gptel-permit-tool "gptel-ext-tool-permits")
+(declare-function gptel-daemon-repl--validate-with-nelisp-reader "gptel-ext-daemon-repl")
+(declare-function gptel-daemon-repl--nelisp-reader-load "gptel-ext-daemon-repl")
 
 ;;; Customization
 
@@ -262,6 +264,24 @@ This is a blocking call - user must respond before Emacs continues."
 
 ;;; File Change Preview (path + original + replacement → diff)
 
+(defun my/gptel--preview-validate-elisp-replacement (path replacement)
+  "Run NeLisp reader validation on REPLACEMENT when PATH is an Elisp file.
+Returns nil if valid, unavailable, or non-Elisp.  Returns an error message
+string if the NeLisp reader detects a syntax error."
+  (when (and (stringp path)
+             (string-suffix-p ".el" path)
+             (fboundp 'gptel-daemon-repl--validate-with-nelisp-reader)
+             (fboundp 'gptel-daemon-repl--nelisp-reader-load))
+    (gptel-daemon-repl--nelisp-reader-load)
+    (when (featurep 'nelisp-reader)
+      (let ((result (gptel-daemon-repl--validate-with-nelisp-reader
+                     (or replacement ""))))
+        (unless (plist-get result :nelisp-reader-valid)
+          (format "NeLisp reader rejected %s: %s"
+                  path
+                  (or (plist-get result :nelisp-reader-error)
+                      "unknown syntax error")))))))
+
 (defun my/gptel--preview-file-change (buffer path original replacement callback)
   "Preview file change for BUFFER.
 
@@ -277,6 +297,10 @@ Skips preview when `my/gptel--preview-bypass-p' returns non-nil."
      ((not (stringp original))
       (funcall callback (format "Error: Original content must be a string, got %s"
                                 (type-of original))))
+     ((let ((syntax-error (my/gptel--preview-validate-elisp-replacement path replacement)))
+        (when syntax-error
+          (funcall callback (format "Error: %s" syntax-error)))
+        syntax-error))
      ((and (> gptel-tools-preview-max-replacement-size 0)
            replacement
            (> (length replacement) gptel-tools-preview-max-replacement-size))

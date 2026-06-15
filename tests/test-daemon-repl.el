@@ -493,3 +493,23 @@ the first unmatched open is the defun's own `(' at position 0."
     (when (plist-get result :nelisp-reader-error)
       (should (plist-get result :nelisp-reader-error-pos))
       (should (numberp (plist-get result :nelisp-reader-error-pos))))))
+
+(ert-deftest test-daemon-repl/read-all-forms-with-positions-parses-forms ()
+  "Form-by-form reader returns parsed forms and last position."
+  (gptel-daemon-repl--nelisp-reader-load)
+  (let* ((code "(defun f () 1)\n\n(defun g () 2)")
+         (result (gptel-daemon-repl--read-all-forms-with-positions code)))
+    (when (featurep 'nelisp-reader)
+      (should (= 2 (length (plist-get result :forms))))
+      (should-not (plist-get result :error))
+      (should (> (plist-get result :last-pos) 0)))))
+
+(ert-deftest test-daemon-repl/read-all-forms-with-positions-locates-broken-form ()
+  "Form-by-form reader returns the last good position when a later form fails."
+  (gptel-daemon-repl--nelisp-reader-load)
+  (let ((code "(defun f () 1)\n\n(defun g () 2 ; missing close\n(+ 3 4)"))
+    (let ((result (gptel-daemon-repl--read-all-forms-with-positions code)))
+      (when (featurep 'nelisp-reader)
+        (should (plist-get result :error))
+        (should (= 1 (length (plist-get result :forms))))
+        (should (= 0 (plist-get result :last-pos)))))))

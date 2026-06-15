@@ -260,6 +260,71 @@
     (should callback-called)
     (should (string-prefix-p "Preview disabled" callback-result))))
 
+(ert-deftest preview/file-change/rejects-malformed-elisp-via-nelisp ()
+  "Should abort preview when NeLisp reader detects malformed Elisp replacement."
+  (require 'gptel-ext-daemon-repl nil t)
+  (skip-unless (fboundp 'gptel-daemon-repl--validate-with-nelisp-reader))
+  (let ((callback-called nil)
+        (callback-result nil))
+    (cl-letf (((symbol-function 'gptel-daemon-repl--validate-with-nelisp-reader)
+               (lambda (_content)
+                 (list :nelisp-reader-valid nil
+                       :nelisp-reader-error "unterminated string"
+                       :nelisp-reader-error-pos 10
+                       :nelisp-reader-error-type 'string
+                       :nelisp-reader-paren-imbalance-p nil))))
+      (my/gptel--preview-file-change
+       (current-buffer)
+       "test.el"
+       "original"
+       "(message \"broken)"
+       (lambda (r) (setq callback-called t callback-result r))))
+    (should callback-called)
+    (should (string-match-p "NeLisp reader rejected" callback-result))))
+
+(ert-deftest preview/file-change/allows-valid-elisp-via-nelisp ()
+  "Should continue to preview when NeLisp reader accepts Elisp replacement."
+  (require 'gptel-ext-daemon-repl nil t)
+  (skip-unless (fboundp 'gptel-daemon-repl--validate-with-nelisp-reader))
+  (let ((callback-called nil)
+        (callback-result nil))
+    (cl-letf (((symbol-function 'gptel-daemon-repl--validate-with-nelisp-reader)
+               (lambda (_content)
+                 (list :nelisp-reader-valid t
+                       :nelisp-reader-error nil
+                       :nelisp-reader-error-pos nil
+                       :nelisp-reader-error-type nil
+                       :nelisp-reader-paren-imbalance-p nil))))
+      (my/gptel--preview-file-change
+       (current-buffer)
+       "test.el"
+       "original"
+       "(message \"ok\")"
+       (lambda (r) (setq callback-called t callback-result r))))
+    ;; In batch mode the minibuffer prompt aborts, so the callback fires.
+    ;; The important thing is that it did not fire for a NeLisp syntax error.
+    (should callback-called)
+    (should-not (string-match-p "NeLisp reader rejected" callback-result))))
+
+(ert-deftest preview/file-change/non-elisp-skips-nelisp-validation ()
+  "Should not invoke NeLisp reader for non-Elisp replacements."
+  (let ((callback-called nil)
+        (callback-result nil)
+        (nelisp-called nil))
+    (cl-letf (((symbol-function 'gptel-daemon-repl--validate-with-nelisp-reader)
+               (lambda (_content)
+                 (setq nelisp-called t)
+                 (list :nelisp-reader-valid t))))
+      (my/gptel--preview-file-change
+       (current-buffer)
+       "test.txt"
+       "original"
+       "replacement"
+       (lambda (r) (setq callback-called t callback-result r))))
+    (should-not nelisp-called)
+    ;; Callback fires in batch mode because the prompt aborts.
+    (should callback-called)))
+
 ;;; Tests for my/gptel--preview-patch (bypass paths)
 
 (ert-deftest preview/patch/bypass-when-disabled ()

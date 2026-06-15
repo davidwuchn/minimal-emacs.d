@@ -12060,6 +12060,38 @@ The new defaults (4GB force-stop, 3GB GC) replace the old hardcoded 1.5GB."
           (should-not (gptel-auto-experiment--validate-code file)))
       (delete-file file))))
 
+(ert-deftest regression/auto-workflow/validate-code-uses-nelisp-reader-for-malformed-string ()
+  "Code validation should invoke the NeLisp reader and flag malformed strings."
+  (require 'gptel-ext-daemon-repl nil t)
+  (skip-unless (fboundp 'gptel-daemon-repl--validate-with-nelisp-reader))
+  (let ((file (make-temp-file "validate-code-nelisp" nil ".el")))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "(defun validate-code-nelisp-target ()\n"
+                    "  (message \"unterminated))\n"))
+          (cl-letf (((symbol-function 'gptel-auto-experiment--forward-sexp-file)
+                     (lambda (_file) nil)))
+            (let ((result (gptel-auto-experiment--validate-code file)))
+              (should (stringp result))
+              (should (string-match-p "NeLisp reader rejected" result)))))
+      (delete-file file))))
+
+(ert-deftest regression/auto-workflow/validate-code-nelisp-reader-allows-valid-files ()
+  "NeLisp validation should not reject structurally valid Elisp."
+  (require 'gptel-ext-daemon-repl nil t)
+  (skip-unless (fboundp 'gptel-daemon-repl--validate-with-nelisp-reader))
+  (let ((file (make-temp-file "validate-code-nelisp-ok" nil ".el")))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "(defun validate-code-nelisp-ok-target ()\n"
+                    "  (message \"hello\"))\n"))
+          (cl-letf (((symbol-function 'gptel-auto-experiment--forward-sexp-file)
+                     (lambda (_file) nil)))
+            (should-not (gptel-auto-experiment--validate-code file))))
+      (delete-file file))))
+
 (ert-deftest regression/subagent-cache/does-not-store-quota-errors ()
   "Transient quota failures should never poison the subagent cache."
   (let ((my/gptel-subagent-cache-ttl 300)

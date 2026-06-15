@@ -618,5 +618,39 @@ Call this on daemon startup."
     (add-hook 'emacs-lisp-mode-hook #'gptel-daemon-repl-install-save-hooks)
     (message "[daemon-repl] Initialized — watching for .el changes")))
 
+(defun gptel-daemon-repl--read-all-forms-with-positions (file-content)
+  "Read FILE-CONTENT form-by-form using the NeLisp reader.
+Returns a plist:
+  :forms list of parsed forms
+  :error nil or the nelisp-reader-error data
+  :error-pos nil or the position where parsing failed
+  :last-pos integer position after the last successfully parsed form
+If the content parses completely, :error is nil.  If parsing fails,
+:forms contains all forms read up to the failure point."
+  (if (not (featurep 'nelisp-reader))
+      (list :forms nil :error nil :error-pos nil :last-pos 0)
+    (let ((pos 0)
+          (len (length file-content))
+          (forms nil)
+          (last-pos 0))
+      (condition-case err
+          (progn
+            (while (< pos len)
+              (let ((res (nelisp-reader-read-from-string-with-position
+                          file-content pos)))
+                (push (car res) forms)
+                (setq last-pos pos)
+                (setq pos (cdr res))))
+            (list :forms (nreverse forms)
+                  :error nil
+                  :error-pos nil
+                  :last-pos last-pos))
+        (nelisp-reader-error
+         (let ((data (cdr err)))
+           (list :forms (nreverse forms)
+                 :error data
+                 :error-pos (and (cdr data) (integerp (cadr data)) (cadr data))
+                 :last-pos last-pos)))))))
+
 (provide 'gptel-ext-daemon-repl)
 ;;; gptel-ext-daemon-repl.el ends here

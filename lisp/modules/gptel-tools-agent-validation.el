@@ -4,6 +4,9 @@
 (require 'cl-lib)
 (require 'subr-x)
 
+(declare-function gptel-daemon-repl--validate-with-nelisp-reader "gptel-ext-daemon-repl" (file-content))
+(declare-function gptel-daemon-repl--nelisp-reader-load "gptel-ext-daemon-repl" ())
+
 (defvar minimal-emacs-user-directory nil)
 (defcustom gptel-auto-experiment-validation-process-timeout 30
   "Maximum seconds for pre-grade validation subprocesses."
@@ -451,6 +454,23 @@ Returns nil if structurally valid, or an error message string."
                    (file-relative-name file)
                    (error-message-string err)))))
 
+(defun gptel-auto-experiment--validate-code-with-nelisp-reader (file content)
+  "Run NeLisp reader validation on FILE with CONTENT.
+Returns nil if the reader is unavailable or CONTENT parses successfully.
+Returns an error message string if the NeLisp reader detects a syntax
+error that `forward-sexp' / `read' may miss, such as malformed strings
+or invalid # syntax."
+  (when (and (fboundp 'gptel-daemon-repl--validate-with-nelisp-reader)
+             (fboundp 'gptel-daemon-repl--nelisp-reader-load))
+    (gptel-daemon-repl--nelisp-reader-load)
+    (when (featurep 'nelisp-reader)
+      (let ((result (gptel-daemon-repl--validate-with-nelisp-reader content)))
+        (unless (plist-get result :nelisp-reader-valid)
+          (format "NeLisp reader rejected %s: %s"
+                  (file-relative-name file)
+                  (or (plist-get result :nelisp-reader-error)
+                      "unknown syntax error")))))))
+
 (defun gptel-auto-experiment--validate-code (file)
   "Validate code in FILE for syntax and dangerous patterns.
 Returns nil if valid, or error message string if invalid."
@@ -460,6 +480,7 @@ Returns nil if valid, or error message string if invalid."
       (let ((content (gptel-auto-workflow--read-file-contents file))
             forms)
         (or (gptel-auto-experiment--forward-sexp-file file)
+            (gptel-auto-experiment--validate-code-with-nelisp-reader file content)
             (cond
              ((null content)
               (format "Empty or unreadable file: %s" file))
