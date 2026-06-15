@@ -3036,9 +3036,9 @@ must not override it to MiniMax via setq-local in subagent buffers."
                 gptel-auto-workflow--lambda-verification-results verification-results)
           (make-directory (expand-file-name "var/tmp" root) t)
           (with-temp-file (expand-file-name "var/tmp/cross-subsystem-state.edn" root)
-            (insert "{:lambda-strikes {\"DashScope\" 1}, :lambda-dead {\"MiniMax\" 123.0}, :lambda-results {\"DeepSeek\" alive}}"))
+            (insert "{:lambda-strikes {\"DeepSeek\" 1}, :lambda-dead {\"MiniMax\" 123.0}, :lambda-results {\"DeepSeek\" alive}}"))
           (gptel-auto-workflow--restore-next-cycle-hints)
-          (should (= 1 (gethash "DashScope" strike-count)))
+          (should (= 1 (gethash "DeepSeek" strike-count)))
           (should (= 123.0 (gethash "MiniMax" dead-until)))
           (should (eq 'alive (gethash "DeepSeek" verification-results))))
       (delete-directory root t)
@@ -3092,7 +3092,7 @@ when a gptel backend and agent config are available."
 
 (ert-deftest tdd/evolution/per-task-model-map-covers-all-backends ()
   "Every agent type in per-task-model-map must have entries for all 5 backends."
-  (let ((backends '("MiniMax" "moonshot" "DashScope" "DeepSeek"))
+  (let ((backends '("MiniMax" "moonshot" "DeepSeek"))
         (agent-types '("analyzer" "grader" "executor" "researcher" "reviewer" "comparator"))
         (map (and (boundp 'gptel-auto-workflow-per-task-model-map)
                   gptel-auto-workflow-per-task-model-map))
@@ -3118,10 +3118,9 @@ when a gptel backend and agent config are available."
       (dolist (entry map)
         (let* ((backend (nth 1 entry))
                (model (cddr entry))
-               (backend-prefix (cond
+                (backend-prefix (cond
                                 ((string= backend "MiniMax") "minimax")
                                 ((string= backend "moonshot") "kimi")
-                                ((string= backend "DashScope") "qwen\\|glm")
                                 ((string= backend "DeepSeek") "deepseek")
                                 ((string= backend "DeepSeek") "deepseek-v4-flash")
                                 (t nil))))
@@ -3139,25 +3138,19 @@ Now passes in batch — module loading fixed."
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
          '(("MiniMax" . "MiniMax-M3")
            ("DeepSeek" . "deepseek-v4-pro")
-           ("DashScope" . "qwen3.6-plus")
            ("moonshot" . "kimi-k2.6")
-           ("TokenPlan" . "qwen3.7-max")
            ("Z-AI" . "glm-5.1")
            ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")
            ("Copilot" . "gpt-5.4-mini")))
         (gptel-auto-workflow-headless-subagent-fallbacks
          '(("MiniMax" . "MiniMax-M3")
            ("DeepSeek" . "deepseek-v4-pro")
-           ("DashScope" . "qwen3.6-plus")
            ("moonshot" . "kimi-k2.6")
-           ("TokenPlan" . "qwen3.7-max")
            ("Z-AI" . "glm-5.1")
            ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")
            ("Copilot" . "gpt-5.4-mini"))))
     (dolist (test '(("MiniMax" . "MiniMax-M3")
-                    ("DeepSeek" . "deepseek-v4-pro")
-                    ("DashScope" . "qwen3.6-plus")
-                    ))
+                    ("DeepSeek" . "deepseek-v4-pro")))
       (let* ((backend (car test))
              (expected (cdr test))
              (actual (gptel-auto-workflow--default-model-for-backend backend)))
@@ -3182,8 +3175,7 @@ DeepSeek flash: $0.14/M input, $0.28/M output, $0.003/M cache-hit, 80% cache.
     (should (< cost 0.0008))))
 
 (ert-deftest tdd/cost/model-cost-no-cache-backend ()
-  "model-cost does not apply cache to backends without :cache-hit pricing.
-DashScope has no cache-hit pricing → cache-rate should be 0."
+  "model-cost does not apply cache to backends without :cache-hit pricing."
   :expected-result (if noninteractive :passed :passed)
   (let ((gptel-ai-behaviors--cache-hit-rate 0.8)
         (cost (gptel-ai-behaviors--model-cost "some-unknown-model" 10000 5000)))

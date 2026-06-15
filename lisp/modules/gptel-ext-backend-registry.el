@@ -77,25 +77,6 @@
          :speed medium
          :thinking-policy on)))
 
-    (DashScope
-     :host "coding.dashscope.aliyuncs.com"
-     :models (qwen3.7-plus qwen3.6-plus)
-     :default-model qwen3.7-plus
-       :model-metadata
-       ((qwen3.7-plus
-         :context-window 1000000
-         :pricing-cny-input 6 :pricing-cny-output 24
-         :pricing-input 0.83 :pricing-output 3.31 :pricing-cache-hit 0.08
-         :capabilities (code-generation reasoning)
-         :speed medium
-         :thinking-policy on)
-        (qwen3.6-plus
-         :context-window 1000000
-         :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
-         :capabilities (code-generation tool-calls)
-         :speed medium
-         :thinking-policy on)))
-
     (Z-AI
      :host "open.bigmodel.cn"
      :models (glm-5.1 glm-5 glm-4.7)
@@ -125,65 +106,8 @@
          :pricing-input 0.50 :pricing-output 1.50
          :capabilities (code-generation)
          :speed fast
-         :thinking-policy off)))
-
-      (TokenPlan
-       :host "token-plan.cn-beijing.maas.aliyuncs.com"
-       :models (qwen3.7-max qwen3.7-plus qwen3.6-plus qwen3.6-flash deepseek-v4-pro deepseek-v4-flash kimi-k2.6 glm-5.1)
-       :default-model qwen3.7-max
-       :model-metadata
-       ((qwen3.7-max
-          :context-window 1000000
-          :pricing-cny-input 12 :pricing-cny-output 36
-          :pricing-input 1.66 :pricing-output 4.97 :pricing-cache-hit 0.17
-          :capabilities (reasoning code-generation)
-          :speed medium
-          :thinking-policy on)
-         (qwen3.7-plus
-          :context-window 1000000
-          :pricing-cny-input 6 :pricing-cny-output 24
-          :pricing-input 0.83 :pricing-output 3.31 :pricing-cache-hit 0.08
-          :capabilities (code-generation reasoning)
-          :speed medium
-          :thinking-policy on)
-         (qwen3.6-plus
-          :context-window 1000000
-          :pricing-input 0.29 :pricing-output 1.14 :pricing-cache-hit 0.06
-          :capabilities (code-generation tool-calls)
-          :speed medium
-          :thinking-policy on)
-         (qwen3.6-flash
-          :context-window 1000000
-          :pricing-cny-input 4.8 :pricing-cny-output 28.8
-          :pricing-input 0.66 :pricing-output 3.97 :pricing-cache-hit 0.07
-          :capabilities (code-generation)
-          :speed fast
-          :thinking-policy on)
-        (deepseek-v4-pro
-         :context-window 1000000
-         :pricing-input 0.43 :pricing-output 0.86 :pricing-cache-hit 0.004
-         :capabilities (reasoning code-generation)
-         :speed slow
-         :thinking-policy auto)
-        (deepseek-v4-flash
-         :context-window 1000000
-         :pricing-input 0.14 :pricing-output 0.28 :pricing-cache-hit 0.003
-         :capabilities (code-generation)
-         :speed fast
-         :thinking-policy auto)
-        (kimi-k2.6
-         :context-window 262144
-         :pricing-cny-input 15 :pricing-cny-output 60
-         :pricing-input 2.07 :pricing-output 8.28 :pricing-cache-hit 0.28
-         :capabilities (code-generation tool-calls long-context)
-         :speed medium
-         :thinking-policy auto)
-        (glm-5.1
-         :context-window 128000
-         :pricing-input 0.50 :pricing-output 2.00
-         :capabilities (code-generation)
-         :speed medium
-         :thinking-policy on))))
+          :thinking-policy off)))
+  )
   "Unified backend registry.
 Each entry: (BACKEND-NAME :host HOST :models (MODELS...) :default-model MODEL
              :model-metadata ((MODEL :context-window N :pricing-input X ...)))
@@ -195,41 +119,29 @@ When adding/updating models, ONLY edit this structure.")
 
 (defconst gptel-task-type-model-defaults
   '((analyzer   . ((MiniMax . MiniMax-M3)
-                    (TokenPlan . qwen3.7-max)
-                    (DashScope . qwen3.7-plus)
                     (moonshot . kimi-k2.6)
                     (DeepSeek . deepseek-v4-flash)))
      (grader     . ((Z-AI . glm-5.1)
                     (MiniMax . MiniMax-M3)
-                    (TokenPlan . qwen3.7-max)
-                    (DashScope . qwen3.7-plus)
                     (DeepSeek . deepseek-v4-pro)
                     (moonshot . kimi-k2.6)
                     (CF-Gateway . \@cf/moonshotai/kimi-k2.6)))
      (executor   . ((Z-AI . glm-5.1)
                     (MiniMax . MiniMax-M3)
-                    (TokenPlan . qwen3.6-flash)
                     (DeepSeek . deepseek-v4-flash)
                     (CF-Gateway . \@cf/moonshotai/kimi-k2.6)
-                    (DashScope . qwen3.7-plus)
                     (moonshot . kimi-k2.6)))
      (researcher . ((MiniMax . MiniMax-M3)
-                    (TokenPlan . qwen3.7-max)
-                    (DashScope . qwen3.7-plus)
                     (DeepSeek . deepseek-v4-pro)
                     (moonshot . kimi-k2.6)
                     (CF-Gateway . \@cf/moonshotai/kimi-k2.6)))
      (reviewer   . ((Z-AI . glm-5.1)
                     (MiniMax . MiniMax-M3)
-                    (TokenPlan . qwen3.7-max)
-                    (DashScope . qwen3.7-plus)
                     (DeepSeek . deepseek-v4-pro)
                     (moonshot . kimi-k2.6)
                     (CF-Gateway . \@cf/moonshotai/kimi-k2.6)))
      (comparator . ((Z-AI . glm-5.1)
                     (MiniMax . MiniMax-M3)
-                    (TokenPlan . qwen3.7-max)
-                    (DashScope . qwen3.7-plus)
                     (DeepSeek . deepseek-v4-pro)
                     (moonshot . kimi-k2.6)
                     (CF-Gateway . \@cf/moonshotai/kimi-k2.6))))
@@ -240,10 +152,10 @@ this.")
 ;;; Fallback Chains
 
 (defconst gptel-fallback-chains
-  '((executor  . (MiniMax moonshot TokenPlan Z-AI DeepSeek CF-Gateway DashScope Copilot))
-    (analyzer  . (MiniMax moonshot TokenPlan Z-AI DeepSeek CF-Gateway DashScope Copilot))
-    (grader    . (MiniMax moonshot TokenPlan Z-AI CF-Gateway DeepSeek DashScope Copilot))
-    (default   . (MiniMax moonshot TokenPlan Z-AI CF-Gateway DeepSeek DashScope Copilot)))
+  '((executor  . (MiniMax moonshot Z-AI DeepSeek CF-Gateway Copilot))
+    (analyzer  . (MiniMax moonshot Z-AI DeepSeek CF-Gateway Copilot))
+    (grader    . (MiniMax moonshot Z-AI CF-Gateway DeepSeek Copilot))
+    (default   . (MiniMax moonshot Z-AI CF-Gateway DeepSeek Copilot)))
   "Fallback chain ordering per task type.
 Backends are tried in this order when rate-limited or failing.
 DeepSeek first for executor (proven to make edits).
@@ -256,8 +168,6 @@ emergency use only.")
 (defconst gptel-backend-effort-levels
   '((deepseek-v4-pro . ((xhigh . "high") (high . "medium") (default . "low")))
     (deepseek-v4-flash . ((xhigh . "high") (high . "medium") (default . "low")))
-    (qwen3.7-max . ((xhigh . "high") (high . "medium") (default . "low")))
-    (qwen3.7-plus . ((xhigh . "high") (high . "medium") (default . "low")))
     (kimi-k2.6 . ((xhigh . "high") (high . "medium") (default . "low")))
     (glm-5.1 . ((xhigh . "high") (high . "medium") (default . "low"))))
   "Effort level mapping per backend/model.
@@ -445,8 +355,8 @@ Looks up :thinking-policy from gptel-backend-registry.
        (if (eq effective 'off)
            '(:enable_thinking nil)
          '(:enable_thinking t)))
-      ;; Bailian/DashScope models use :enable_thinking
-      (t
+       ;; Default for other models: use :enable_thinking
+       (t
        (if (eq effective 'off)
            '(:enable_thinking nil)
          '(:enable_thinking t))))))

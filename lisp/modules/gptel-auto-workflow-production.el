@@ -991,8 +991,7 @@ Creates file if it doesn't exist."
     (dolist (section '((current-focus . "JTBD Step 1: Market Definition")
                        (research-strategy . "- Pattern: research-research-none\n- Sources: GitHub, Reddit, HackerNews\n-
 Depth: 3 turns max")
-                       (backend-prefs . "- Executor: moonshot → MiniMax → DeepSeek\n- Researcher: DeepSeek → moonshot →
-DashScope\n- Validator: DashScope → DeepSeek")
+                        (backend-prefs . "- Executor: moonshot → MiniMax → DeepSeek\n- Researcher: DeepSeek → moonshot\n- Validator: DeepSeek")
                        (target-rules . "1. Prioritize files with TODOs/FIXMEs\n2. Skip files modified in last 24h\n3.
 Focus on modules with < 60% keep-rate")
                        (experiment-strategy . "- Max experiments per run: 5\n- Timeout: 900s per experiment\n- Staging:

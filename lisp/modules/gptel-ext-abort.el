@@ -26,7 +26,7 @@
 (defcustom my/gptel-curl-max-time 300
   "Maximum seconds for a single gptel curl request.
 Increased from 180 to 300 because executor subagent code-generation
-prompts (20-30KB) routinely exceed 180s on DashScope and DeepSeek.
+prompts (20-30KB) routinely exceed 180s on DeepSeek and other backends.
 Analyzer/grader/comparator are smaller (30-60s)."
   :type 'integer
   :group 'my/gptel-interrupt)
@@ -45,7 +45,7 @@ Analyzer/grader/comparator are smaller (30-60s)."
   "Set `gptel-curl-extra-args' for fast failure on stalls.
 NOTE: Low-speed timeout (-y/-Y) removed - caused false positives for
 subagents.
-Backend-specific timeouts (DashScope 900s, Moonshot 900s) handle long-running
+Backend-specific timeouts (Moonshot 900s) handle long-running
 calls."
   (setq gptel-curl-extra-args
         (list
@@ -56,7 +56,7 @@ calls."
          ;; for >15s without streaming output. Backend :curl-args override
          ;; max-time but low-speed detection is independent.
          ;; NOTE: --http1.1 is intentionally NOT set here globally.
-         ;; It caused DashScope (and other HTTP/2-capable backends) to fail on
+         ;; It caused some HTTP/2-capable backends to fail on
          ;; large request bodies (e.g. subagent 3rd turn with full file content).
          ;; Moonshot backend already declares --http1.1 in its own :curl-args slot,
          ;; so it still gets the workaround it needs.

@@ -18,6 +18,8 @@
                                           (or load-file-name buffer-file-name default-directory)))))
   (add-to-list 'load-path gptel-agent-dir))
 
+(require 'gptel-nucleus-context-intercept)
+
 (condition-case load-err
     (load-file (expand-file-name "../lisp/modules/gptel-nucleus-context-intercept.el"
                                  (file-name-directory
@@ -561,11 +563,6 @@ into lambda notation symbols like lambda x y z that are much shorter")
   "Backend identified as moonshot (Kimi) for kimi-* models."
   (when (fboundp 'gptel-auto-workflow--backend-for-model)
     (should (string= "moonshot" (gptel-auto-workflow--backend-for-model "kimi-k2.6")))))
-
-(ert-deftest tdd/live-h2h/backend-for-model-qwen ()
-  "Backend identified as DashScope for qwen* models."
-  (when (fboundp 'gptel-auto-workflow--backend-for-model)
-    (should (string= "DashScope" (gptel-auto-workflow--backend-for-model "qwen3.6-plus")))))
 
 (ert-deftest tdd/live-h2h/backend-for-model-minimax-m3 ()
   "Backend identified as MiniMax for MiniMax-M3 model."

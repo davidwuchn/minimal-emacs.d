@@ -53,58 +53,32 @@ Ordered by keep-rate from experiment data.")
 (defvar gptel-auto-workflow-headless-subagent-fallbacks nil)
 ;; ─── Sieve-Based Backend Classification (verbum Phase 5) ───
 ;; Dynamically generated from `gptel-backend-registry' capabilities metadata.
-;; Qwen3 family (DashScope) → single-neuron (high compression, deterministic).
-;; All others → distributed (lower compression, more redundancy).
 
 (defun gptel-auto-workflow--generate-sieve-types ()
   "Generate sieve-type alist from backend registry.
 Returns list of (BACKEND-OR-MODEL . sieve-type) entries.
-Backend classification uses backend name only.
-Model classification uses model name (or inherits from qwen backend)."
+Default sieve type is distributed."
   (let ((result '()))
     (dolist (entry gptel-backend-registry)
       (let* ((backend-name (symbol-name (car entry)))
-             (models (plist-get (cdr entry) :models))
-             ;; Backend classified by its own name only
-             (backend-is-qwen (string-match-p "qwen" (downcase backend-name)))
-             ;; Any model contains qwen (for wildcard entry)
-             (any-model-qwen (cl-some (lambda (m)
-                                        (string-match-p "qwen"
-                                                        (downcase (symbol-name m))))
-                                      models)))
-        ;; Backend entry: classified by backend name only
-        (push (cons backend-name (if backend-is-qwen 'single-neuron 'distributed))
-              result)
-        ;; Model entries: classified by model name
+             (models (plist-get (cdr entry) :models)))
+        ;; Backend entry: default distributed
+        (push (cons backend-name 'distributed) result)
+        ;; Model entries: default distributed
         (dolist (model models)
-          (let ((model-name (symbol-name model))
-                (model-is-qwen (string-match-p "qwen"
-                                               (downcase (symbol-name model)))))
-            (push (cons model-name
-                        (if model-is-qwen 'single-neuron 'distributed))
-                  result)))
-        ;; Model family wildcard for Qwen
-        (when (or backend-is-qwen any-model-qwen)
-          (push (cons "qwen" 'single-neuron) result))))
+          (let ((model-name (symbol-name model)))
+            (push (cons model-name 'distributed) result)))))
     result))
 
 (defvar gptel-auto-workflow--backend-sieve-types
   (gptel-auto-workflow--generate-sieve-types)
   "Sieve-type classification per backend/model (verbum crystal spine discovery).
-single-neuron: high compression, deterministic at bottleneck (Qwen3 family).
-distributed: lower compression, more redundancy (Mistral, OLMo, etc.).
 Dynamically generated from `gptel-backend-registry'.")
 
 (defun gptel-auto-workflow--backend-sieve-type (backend-or-model)
   "Return sieve-type for BACKEND-OR-MODEL: single-neuron or distributed.
-Looks up by backend name first, then model name.
-Based on verbum crystal spine research (sessions 109-112)."
+Looks up by backend name first, then model name."
   (or (cdr (assoc backend-or-model gptel-auto-workflow--backend-sieve-types))
-      ;; Try to match partial model name (e.g., "qwen" in "qwen3.6-plus")
-      (cl-some (lambda (entry)
-                 (when (string-match-p (car entry) backend-or-model)
-                   (cdr entry)))
-               gptel-auto-workflow--backend-sieve-types)
       'distributed))  ; Default to distributed for unknown backends
 
 (defun gptel-auto-workflow--target-deterministic-p (target)
@@ -611,19 +585,17 @@ The boost is proportional to the phase's measured strength."
   (let* ((category (when target (gptel-auto-workflow--categorize-target target)))
          (needed-phase (when category (gptel-auto-workflow--phase-for-category category)))
          ;; Backend-specific phase strength (defaults from verbum measurements)
-         ;; In production, these would be measured per-backend via the
-         ;; moiré grating decoder. For now, use heuristics based on
-         ;; backend architecture (Qwen→emits well, DeepSeek→executes well).
-         (phase-strengths
-          (cond ((string-match-p "DeepSeek" backend)
-                 '((:build . 0.8) (:execute . 1.1) (:emit . 0.7)))
-                ((string-match-p "DashScope\\|qwen" backend)
-                 '((:build . 0.9) (:execute . 0.8) (:emit . 1.0)))
-                ((string-match-p "MiniMax" backend)
-                 '((:build . 1.0) (:execute . 0.9) (:emit . 0.8)))
-                ((string-match-p "moonshot\\|kimi" backend)
-                 '((:build . 0.7) (:execute . 1.0) (:emit . 1.1)))
-                (t '((:build . 1.0) (:execute . 1.0) (:emit . 1.0)))))
+          ;; In production, these would be measured per-backend via the
+          ;; moiré grating decoder. For now, use heuristics based on
+          ;; backend architecture (DeepSeek→executes well).
+          (phase-strengths
+           (cond ((string-match-p "DeepSeek" backend)
+                  '((:build . 0.8) (:execute . 1.1) (:emit . 0.7)))
+                 ((string-match-p "MiniMax" backend)
+                  '((:build . 1.0) (:execute . 0.9) (:emit . 0.8)))
+                 ((string-match-p "moonshot\\|kimi" backend)
+                  '((:build . 0.7) (:execute . 1.0) (:emit . 1.1)))
+                 (t '((:build . 1.0) (:execute . 1.0) (:emit . 1.0)))))
          (phase-str (cdr (assq needed-phase phase-strengths))))
     (* (or phase-str 1.0) 15.0)))  ; Scale to 0-15 points
 
@@ -647,7 +619,7 @@ reasoning_effort high.
 Historical keep-rate advantage \(25% vs 16%\) is offset
 by throughput impact.
 Fallback chain: MiniMax-M3 -> moonshot/k2.6 ->
-DeepSeek v4-pro -> DashScope -> Copilot.")
+DeepSeek v4-pro -> Copilot.")
 
 ;; ─── Fallback Chain Reordering ───
 
@@ -1457,29 +1429,22 @@ Probation threshold auto-tunes from VSM health when available
   (>= (gptel-auto-workflow--backend-health-level backend) 3))
 
 (defvar gptel-auto-workflow--task-backend-preference
-  '(("analyzer"   "DashScope" . 0.10)
-    ("analyzer"   "MiniMax"   . 0.20)
+  '(("analyzer"   "MiniMax"   . 0.20)
     ("analyzer"   "DeepSeek"  . 0.30)
-    ("grader"     "DashScope" . 0.10)
     ("grader"     "MiniMax"   . 0.20)
     ("grader"     "DeepSeek"  . 0.30)
-    ("executor"   "DashScope" . 0.10)
     ("executor"   "MiniMax"   . 0.20)
     ("executor"   "DeepSeek"  . 0.30)
-    ("researcher" "DashScope" . 0.10)
     ("researcher" "MiniMax"   . 0.20)
     ("researcher" "DeepSeek"  . 0.30)
-    ("reviewer"   "DashScope" . 0.10)
     ("reviewer"   "MiniMax"   . 0.20)
     ("reviewer"   "DeepSeek"  . 0.30)
-    ("comparator" "DashScope" . 0.10)
     ("comparator" "MiniMax"   . 0.20)
     ("comparator" "DeepSeek"  . 0.30))
   "Per-task-type backend preference boost added to ranking score.
 Larger values shift routing toward backends best suited for each task:
 - DeepSeek V4 thinks → analyzer, researcher
-- moonshot/Kimi elaborates → grader
-- DashScope/Qwen executes → executor")
+- moonshot/Kimi elaborates → grader")
 
 (defconst gptel-auto-workflow--preference-persist-file
   "assistant/strategies/provider-routing/backend-preference.el"
@@ -2739,7 +2704,7 @@ hard gate: if a backend fails the lambda compiler check, it's not used."
               ;; Cold-start exploration boost: backends with very few
               ;; experiments get a temporary score lift so they can
               ;; accumulate data and prove themselves. Without this,
-              ;; established backends (DashScope, DeepSeek) permanently
+              ;; established backends (DeepSeek) permanently
               ;; dominate and new backends (moonshot/kimi-k2.6) never
               ;; get a chance to compete.
               (cold-start-boost

@@ -26,7 +26,6 @@
 (defvar test-model-context-bytes
   '((kimi-k2\.5        . 400000)
     (kimi-for-coding    . 400000)
-    (qwen3\.5-plus      . 400000)
     (glm-5              . 350000)
     (glm-4\.7           . 350000)
     (deepseek-v4-flash  . 3000000)

@@ -17,7 +17,7 @@
 (defvar recentf-mode)
 (defvar apheleia-skip-functions)
 (defvar apheleia-global-mode)
-(defvar gptel--dashscope)
+(defvar gptel--deepseek)
 (defvar gptel--deepseek)
 (defvar test-auto-workflow--restore-counter)
 
@@ -4632,24 +4632,24 @@ delivers a :stale-run sentinel without grading, benchmarking, or logging."
 
 (ert-deftest regression/auto-workflow/headless-analyzer-provider-override-prefers-available-fallback ()
   "Headless analyzer should keep MiniMax as primary workhorse."
-  (let* ((dashscope-backend
-          (gptel-make-openai "DashScope"
-            :host "coding.dashscope.aliyuncs.com"
+  (let* ((deepseek-backend
+          (gptel-make-openai "DeepSeek"
+            :host "api.deepseek.com"
             :key (lambda () "token")
-            :models '(qwen3.7-plus qwen3.6-plus)))
-         (had-dashscope (boundp 'gptel--dashscope))
-         (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
+            :models '(deepseek-v4-pro deepseek-v4-flash)))
+         (had-deepseek (boundp 'gptel--deepseek))
+         (old-deepseek (and had-deepseek (symbol-value 'gptel--deepseek)))
          (preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
          (gptel-auto-workflow--headless t)
          (gptel-auto-workflow-persistent-headless t)
          (gptel-auto-workflow--current-project "/tmp/project"))
     (unwind-protect
         (progn
-          (set 'gptel--dashscope dashscope-backend)
+          (set 'gptel--deepseek deepseek-backend)
           (cl-letf (((symbol-function 'my/gptel-api-key)
                      (lambda (host)
                        (pcase host
-                         ("coding.dashscope.aliyuncs.com" "token")
+                         ("api.deepseek.com" "token")
                          ("api.minimaxi.com" "token")
                          (_ nil))))
                     ((symbol-function 'message)
@@ -4661,30 +4661,30 @@ delivers a :stale-run sentinel without grading, benchmarking, or logging."
               (should (equal (plist-get override :model) "minimax-m2.7-highspeed"))
               (should (equal (plist-get preset :backend) "MiniMax"))
               (should (equal (plist-get preset :model) "minimax-m2.7-highspeed")))))
-      (if had-dashscope
-          (set 'gptel--dashscope old-dashscope)
-        (makunbound 'gptel--dashscope)))))
+      (if had-deepseek
+          (set 'gptel--deepseek old-deepseek)
+        (makunbound 'gptel--deepseek)))))
 
 (ert-deftest regression/auto-workflow/headless-executor-provider-override-prefers-available-fallback ()
   "Headless executor should keep MiniMax as primary workhorse."
-  (let* ((dashscope-backend
-          (gptel-make-openai "DashScope"
-            :host "coding.dashscope.aliyuncs.com"
+  (let* ((deepseek-backend
+          (gptel-make-openai "DeepSeek"
+            :host "api.deepseek.com"
             :key (lambda () "token")
-            :models '(qwen3.7-plus)))
-         (had-dashscope (boundp 'gptel--dashscope))
-         (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
+            :models '(deepseek-v4-pro)))
+         (had-deepseek (boundp 'gptel--deepseek))
+         (old-deepseek (and had-deepseek (symbol-value 'gptel--deepseek)))
          (preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
          (gptel-auto-workflow--headless t)
          (gptel-auto-workflow-persistent-headless t)
          (gptel-auto-workflow--current-project "/tmp/project"))
     (unwind-protect
         (progn
-          (set 'gptel--dashscope dashscope-backend)
+          (set 'gptel--deepseek deepseek-backend)
           (cl-letf (((symbol-function 'my/gptel-api-key)
                      (lambda (host)
                        (pcase host
-                         ("coding.dashscope.aliyuncs.com" "token")
+                         ("api.deepseek.com" "token")
                          ("api.minimaxi.com" "token")
                          (_ nil))))
                     ((symbol-function 'message)
@@ -4696,9 +4696,9 @@ delivers a :stale-run sentinel without grading, benchmarking, or logging."
                 (should (equal (plist-get override :model) "minimax-m2.7-highspeed"))
                 (should (equal (plist-get preset :backend) "MiniMax"))
                 (should (equal (plist-get preset :model) "minimax-m2.7-highspeed")))))
-       (if had-dashscope
-           (set 'gptel--dashscope old-dashscope)
-         (makunbound 'gptel--dashscope)))))
+       (if had-deepseek
+           (set 'gptel--deepseek old-deepseek)
+         (makunbound 'gptel--deepseek)))))
 
 (ert-deftest regression/auto-workflow/moonshot-header-accepts-request-info ()
   "Moonshot failover backend should accept the request info plist."
@@ -4776,63 +4776,63 @@ delivers a :stale-run sentinel without grading, benchmarking, or logging."
   (let ((gptel-auto-workflow-headless-fallback-agents
          '("analyzer" "executor" "grader" "reviewer"))
         (gptel-auto-workflow-headless-subagent-fallbacks
-         '(("DashScope" . "qwen3.6-plus")
+         '(("DeepSeek" . "deepseek-v4-flash")
            ("DeepSeek" . "deepseek-v4-flash")
            ("MiniMax" . "minimax-m2.7-highspeed")))
         (gptel-auto-workflow-executor-rate-limit-fallbacks
          '(("MiniMax" . "minimax-m2.7-highspeed")
-           ("DashScope" . "qwen3.6-plus"))))
+           ("DeepSeek" . "deepseek-v4-flash"))))
     (cl-letf (((symbol-function 'gptel-auto-workflow--ranked-subagent-backends)
                (lambda (&optional _agent-type)
                  '(("MiniMax" . "minimax-m2.7-highspeed")
-                   ("DashScope" . "qwen3.6-plus")))))
+                   ("DeepSeek" . "deepseek-v4-flash")))))
       ;; Non-executor agents now route through ranked-subagent-backends too,
       ;; so analyzer chain matches the ranked mock (MiniMax first).
       (should (equal (gptel-auto-workflow--rate-limit-failover-candidates "analyzer")
                      '(("MiniMax" . "minimax-m2.7-highspeed")
-                       ("DashScope" . "qwen3.6-plus"))))
+                       ("DeepSeek" . "deepseek-v4-flash"))))
       ;; Executor also routes through ranked with agent-type passed.
       (should (equal (gptel-auto-workflow--rate-limit-failover-candidates "executor")
                      '(("MiniMax" . "minimax-m2.7-highspeed")
-                       ("DashScope" . "qwen3.6-plus")))))))
+                       ("DeepSeek" . "deepseek-v4-flash")))))))
 
 (ert-deftest regression/auto-workflow/best-model-for-task-handles-dotted-map-entry ()
   "Per-task model entries use dotted pairs, so the model is in cddr."
   (let ((gptel-auto-workflow-per-task-model-map
-         '(("analyzer" "DashScope" . "qwen3.6-plus"))))
-    (should (equal (gptel-auto-workflow--best-model-for-task "analyzer" "DashScope")
-                   "qwen3.6-plus"))))
+         '(("analyzer" "DeepSeek" . "deepseek-v4-flash"))))
+    (should (equal (gptel-auto-workflow--best-model-for-task "analyzer" "DeepSeek")
+                   "deepseek-v4-flash"))))
 
 (ert-deftest regression/auto-workflow/model-valid-for-backend-blocks-cross-backend-leak ()
   "model-valid-for-backend-p must reject wrong models for a backend.
-kimi-k2.6 belongs to moonshot, not DashScope.  minimax-m2.7-highspeed belongs
-to MiniMax.  Neither should validate for DashScope backend."
+kimi-k2.6 belongs to moonshot, not DeepSeek.  minimax-m2.7-highspeed belongs
+to MiniMax.  Neither should validate for DeepSeek backend."
   (let ((gptel-auto-workflow-per-task-model-map
-         '(("executor" "DashScope" . "qwen3.6-plus")
+         '(("executor" "DeepSeek" . "deepseek-v4-flash")
            ("executor" "moonshot" . "kimi-k2.6")
            ("executor" "MiniMax" . "minimax-m2.7-highspeed")))
         (gptel-auto-workflow-headless-subagent-fallbacks
-         '(("DashScope" . "qwen3.6-plus")
+         '(("DeepSeek" . "deepseek-v4-flash")
            ("moonshot" . "kimi-k2.6")
            ("MiniMax" . "minimax-m2.7-highspeed"))))
-    ;; Wrong model for DashScope: must be rejected
+    ;; Wrong model for DeepSeek: must be rejected
     (should-not (gptel-auto-workflow--model-valid-for-backend-p
-                 "kimi-k2.6" "DashScope"))
+                 "kimi-k2.6" "DeepSeek"))
     (should-not (gptel-auto-workflow--model-valid-for-backend-p
-                 "minimax-m2.7-highspeed" "DashScope"))
+                 "minimax-m2.7-highspeed" "DeepSeek"))
     ;; Wrong model for moonshot: must be rejected
     (should-not (gptel-auto-workflow--model-valid-for-backend-p
-                 "qwen3.6-plus" "moonshot"))
+                 "deepseek-v4-flash" "moonshot"))
     (should-not (gptel-auto-workflow--model-valid-for-backend-p
                  "minimax-m2.7-highspeed" "moonshot"))
     ;; Wrong model for MiniMax: must be rejected
     (should-not (gptel-auto-workflow--model-valid-for-backend-p
-                 "qwen3.6-plus" "MiniMax"))
+                 "deepseek-v4-flash" "MiniMax"))
     (should-not (gptel-auto-workflow--model-valid-for-backend-p
                  "kimi-k2.6" "MiniMax"))
     ;; Correct models: must be accepted
     (should (gptel-auto-workflow--model-valid-for-backend-p
-             "qwen3.6-plus" "DashScope"))
+             "deepseek-v4-flash" "DeepSeek"))
     (should (gptel-auto-workflow--model-valid-for-backend-p
              "kimi-k2.6" "moonshot"))
     (should (gptel-auto-workflow--model-valid-for-backend-p
@@ -4842,26 +4842,26 @@ to MiniMax.  Neither should validate for DashScope backend."
   "best-model-for-task must return the correct model for each backend,
 regardless of Phase π historical data for other backends."
   (let ((gptel-auto-workflow-per-task-model-map
-         '(("executor" "DashScope" . "qwen3.6-plus")
+         '(("executor" "DeepSeek" . "deepseek-v4-flash")
            ("executor" "moonshot" . "kimi-k2.6")
            ("executor" "MiniMax" . "minimax-m2.7-highspeed")
            ("executor" "DeepSeek" . "deepseek-v4-pro")))
         (gptel-auto-workflow-headless-subagent-fallbacks
-         '(("DashScope" . "qwen3.6-plus")
+         '(("DeepSeek" . "deepseek-v4-flash")
            ("moonshot" . "kimi-k2.6")
            ("MiniMax" . "minimax-m2.7-highspeed")
            ("DeepSeek" . "deepseek-v4-flash"))))
     ;; Simulate a target that had historical success with kimi-k2.6
     ;; (e.g. from a past moonshot experiment).  Phase π should NOT leak
-    ;; this model to DashScope or MiniMax dispatches.
+    ;; this model to DeepSeek or MiniMax dispatches.
     (let ((gptel-auto-workflow--current-target "lisp/modules/nucleus-prompts.el"))
       ;; Mock best-model-for-target: make it return kimi-k2.6 for all backends
       ;; (simulating the cross-backend leak scenario).
       (cl-letf (((symbol-function 'gptel-auto-workflow--best-model-for-target)
                  (lambda (_target _backend) "kimi-k2.6")))
-        ;; DashScope: must return qwen3.6-plus, NOT kimi-k2.6
-        (should (equal (gptel-auto-workflow--best-model-for-task "executor" "DashScope")
-                       "qwen3.6-plus"))
+        ;; DeepSeek: must return deepseek-v4-flash, NOT kimi-k2.6
+        (should (equal (gptel-auto-workflow--best-model-for-task "executor" "DeepSeek")
+                       "deepseek-v4-flash"))
         ;; MiniMax: must return minimax-m2.7-highspeed, NOT kimi-k2.6
         (should (equal (gptel-auto-workflow--best-model-for-task "executor" "MiniMax")
                        "minimax-m2.7-highspeed"))
@@ -4872,17 +4872,17 @@ regardless of Phase π historical data for other backends."
         (should (equal (gptel-auto-workflow--best-model-for-task "executor" "moonshot")
                        "kimi-k2.6"))))))
 
-(ert-deftest regression/auto-workflow/dashscope-executor-always-gets-qwen3.6-plus ()
-  "DashScope executor must always be dispatched with qwen3.6-plus model.
+(ert-deftest regression/auto-workflow/deepseek-executor-always-gets-deepseek-v4-flash ()
+  "DeepSeek executor must always be dispatched with deepseek-v4-flash model.
 Regression test for the Phase π cross-backend leak that caused all 31
-DashScope experiments to use kimi-k2.6 or minimax-m2.7-highspeed instead
-of DashScope's own model."
+DeepSeek experiments to use kimi-k2.6 or minimax-m2.7-highspeed instead
+of DeepSeek's own model."
   (let ((gptel-auto-workflow-per-task-model-map
-         '(("executor" "DashScope" . "qwen3.6-plus")
+         '(("executor" "DeepSeek" . "deepseek-v4-flash")
            ("executor" "moonshot" . "kimi-k2.6")
            ("executor" "MiniMax" . "minimax-m2.7-highspeed")))
         (gptel-auto-workflow-headless-subagent-fallbacks
-         '(("DashScope" . "qwen3.6-plus")
+         '(("DeepSeek" . "deepseek-v4-flash")
            ("moonshot" . "kimi-k2.6")
            ("MiniMax" . "minimax-m2.7-highspeed"))))
     (dolist (target '("lisp/modules/nucleus-prompts.el"
@@ -4890,20 +4890,20 @@ of DashScope's own model."
                       "lisp/modules/gptel-auto-workflow-evolution.el"
                       "unknown-target-that-has-no-history.el"))
       (let ((gptel-auto-workflow--current-target target)
-            (model (gptel-auto-workflow--best-model-for-task "executor" "DashScope")))
-        (should (equal model "qwen3.6-plus"))
+            (model (gptel-auto-workflow--best-model-for-task "executor" "DeepSeek")))
+        (should (equal model "deepseek-v4-flash"))
         (should-not (equal model "kimi-k2.6"))
         (should-not (equal model "minimax-m2.7-highspeed"))))))
 
 (ert-deftest regression/auto-workflow/provider-rate-limit-failover-applies-across-headless-subagents ()
   "A backend rate limit should fail over all headless subagents using it."
-  (let* ((dashscope-backend
-          (gptel-make-openai "DashScope"
-            :host "coding.dashscope.aliyuncs.com"
+  (let* ((deepseek-backend
+          (gptel-make-openai "DeepSeek"
+            :host "api.deepseek.com"
             :key (lambda () "token")
-            :models '(qwen3.7-plus qwen3.6-plus)))
-         (had-dashscope (boundp 'gptel--dashscope))
-         (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
+            :models '(deepseek-v4-pro deepseek-v4-flash)))
+         (had-deepseek (boundp 'gptel--deepseek))
+         (old-deepseek (and had-deepseek (symbol-value 'gptel--deepseek)))
          (preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
          (gptel-auto-workflow--headless t)
          (gptel-auto-workflow-persistent-headless t)
@@ -4912,19 +4912,19 @@ of DashScope's own model."
           '("analyzer" "comparator" "executor" "grader" "reviewer"))
          (gptel-auto-workflow-headless-subagent-fallbacks
           '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("DashScope" . "qwen3.6-plus")))
+            ("DeepSeek" . "deepseek-v4-flash")))
          (gptel-auto-workflow-executor-rate-limit-fallbacks
           '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("DashScope" . "qwen3.6-plus")))
+            ("DeepSeek" . "deepseek-v4-flash")))
          (gptel-auto-workflow--rate-limited-backends nil)
          (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
     (unwind-protect
         (progn
-          (set 'gptel--dashscope dashscope-backend)
+          (set 'gptel--deepseek deepseek-backend)
           (cl-letf (((symbol-function 'my/gptel-api-key)
                      (lambda (host)
                        (pcase host
-                         ("coding.dashscope.aliyuncs.com" "token")
+                         ("api.deepseek.com" "token")
                          ("api.minimaxi.com" "token")
                          (_ nil))))
                     ((symbol-function 'message)
@@ -4937,32 +4937,32 @@ of DashScope's own model."
               (let ((override
                      (gptel-auto-workflow--maybe-override-subagent-provider
                       agent-type preset)))
-                (should (eq (plist-get override :backend) dashscope-backend))
-                (should (eq (plist-get override :model) 'qwen3.6-plus))))))
+                (should (eq (plist-get override :backend) deepseek-backend))
+                (should (eq (plist-get override :model) 'deepseek-v4-flash))))))
       (setq gptel-auto-workflow--rate-limited-backends nil
             gptel-auto-workflow--runtime-subagent-provider-overrides nil)
-      (if had-dashscope
-          (set 'gptel--dashscope old-dashscope)
-        (makunbound 'gptel--dashscope)))))
+      (if had-deepseek
+          (set 'gptel--deepseek old-deepseek)
+        (makunbound 'gptel--deepseek)))))
 
 (ert-deftest regression/auto-workflow/provider-rate-limit-failover-skips-already-limited-backends ()
   "Provider failover should advance past backends already rate-limited this run."
-  (let* ((dashscope-backend
-          (gptel-make-openai "DashScope"
-            :host "coding.dashscope.aliyuncs.com"
+  (let* ((deepseek-backend
+          (gptel-make-openai "DeepSeek"
+            :host "api.deepseek.com"
             :key (lambda () "token")
-            :models '(qwen3.7-plus qwen3.6-plus)))
+            :models '(deepseek-v4-pro deepseek-v4-flash)))
          (deepseek-backend
           (gptel-make-openai "DeepSeek"
             :host "api.deepseek.com"
             :key (lambda () "token")
             :models '(deepseek-v4-flash deepseek-v4-pro)))
-         (had-dashscope (boundp 'gptel--dashscope))
-         (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
+         (had-deepseek (boundp 'gptel--deepseek))
+         (old-deepseek (and had-deepseek (symbol-value 'gptel--deepseek)))
          (had-deepseek (boundp 'gptel--deepseek))
          (old-deepseek (and had-deepseek (symbol-value 'gptel--deepseek)))
          (minimax-preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
-         (dashscope-preset '(:backend "DashScope" :model "qwen3.6-plus"))
+         (deepseek-preset '(:backend "DeepSeek" :model "deepseek-v4-flash"))
          (gptel-auto-workflow--headless t)
          (gptel-auto-workflow-persistent-headless t)
          (gptel-auto-workflow--current-project "/tmp/project")
@@ -4970,23 +4970,23 @@ of DashScope's own model."
           '("analyzer" "comparator" "executor" "grader" "reviewer"))
          (gptel-auto-workflow-headless-subagent-fallbacks
            '(("MiniMax" . "minimax-m2.7-highspeed")
-             ("DashScope" . "qwen3.6-plus")
+             ("DeepSeek" . "deepseek-v4-flash")
              ("DeepSeek" . "deepseek-v4-flash")))
          (gptel-auto-workflow-executor-rate-limit-fallbacks
            '(("MiniMax" . "minimax-m2.7-highspeed")
-             ("DashScope" . "qwen3.6-plus")
+             ("DeepSeek" . "deepseek-v4-flash")
              ("DeepSeek" . "deepseek-v4-flash")))
          (gptel-auto-workflow--rate-limited-backends nil)
          (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
     (unwind-protect
         (progn
-          (set 'gptel--dashscope dashscope-backend)
+          (set 'gptel--deepseek deepseek-backend)
           (set 'gptel--deepseek deepseek-backend)
           (cl-letf (((symbol-function 'my/gptel-api-key)
                      (lambda (host)
                        (pcase host
                          ("api.deepseek.com" "token")
-                         ("coding.dashscope.aliyuncs.com" "token")
+                         ("api.deepseek.com" "token")
                          ("api.minimaxi.com" "token")
                          (_ nil))))
                     ((symbol-function 'message)
@@ -4995,7 +4995,7 @@ of DashScope's own model."
              "grader" minimax-preset
              "Error: Task grader could not finish task \"Grade output\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")")
             (gptel-auto-workflow--maybe-activate-rate-limit-failover
-             "executor" dashscope-preset
+             "executor" deepseek-preset
              "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")")
              (let ((override
                     (gptel-auto-workflow--maybe-override-subagent-provider
@@ -5004,22 +5004,22 @@ of DashScope's own model."
                (should (eq (plist-get override :model) 'deepseek-v4-flash)))))
       (setq gptel-auto-workflow--rate-limited-backends nil
             gptel-auto-workflow--runtime-subagent-provider-overrides nil)
-      (if had-dashscope
-          (set 'gptel--dashscope old-dashscope)
-        (makunbound 'gptel--dashscope))
+      (if had-deepseek
+          (set 'gptel--deepseek old-deepseek)
+        (makunbound 'gptel--deepseek))
        (if had-deepseek
            (set 'gptel--deepseek old-deepseek)
          (makunbound 'gptel--deepseek)))))
 
 (ert-deftest regression/auto-workflow/provider-failover-activates-on-overloaded-errors ()
   "Headless provider failover should also activate on retryable overload errors."
-  (let* ((dashscope-backend
-          (gptel-make-openai "DashScope"
-            :host "coding.dashscope.aliyuncs.com"
+  (let* ((deepseek-backend
+          (gptel-make-openai "DeepSeek"
+            :host "api.deepseek.com"
             :key (lambda () "token")
-            :models '(qwen3.7-plus qwen3.6-plus)))
-         (had-dashscope (boundp 'gptel--dashscope))
-         (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
+            :models '(deepseek-v4-pro deepseek-v4-flash)))
+         (had-deepseek (boundp 'gptel--deepseek))
+         (old-deepseek (and had-deepseek (symbol-value 'gptel--deepseek)))
          (preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
          (overloaded-error
           "Error: Task grader could not finish task \"Grade output\". Error details: (:type \"overloaded_error\" :message \"cluster overloaded (2064)\" :http_code \"529\")")
@@ -5030,19 +5030,19 @@ of DashScope's own model."
           '("analyzer" "comparator" "executor" "grader" "reviewer"))
          (gptel-auto-workflow-headless-subagent-fallbacks
           '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("DashScope" . "qwen3.6-plus")))
+            ("DeepSeek" . "deepseek-v4-flash")))
          (gptel-auto-workflow-executor-rate-limit-fallbacks
           '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("DashScope" . "qwen3.6-plus")))
+            ("DeepSeek" . "deepseek-v4-flash")))
          (gptel-auto-workflow--rate-limited-backends nil)
          (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
     (unwind-protect
         (progn
-          (set 'gptel--dashscope dashscope-backend)
+          (set 'gptel--deepseek deepseek-backend)
           (cl-letf (((symbol-function 'my/gptel-api-key)
                      (lambda (host)
                        (pcase host
-                         ("coding.dashscope.aliyuncs.com" "token")
+                         ("api.deepseek.com" "token")
                          ("api.minimaxi.com" "token")
                          (_ nil))))
                     ((symbol-function 'message)
@@ -5053,23 +5053,23 @@ of DashScope's own model."
             (let ((override
                    (gptel-auto-workflow--maybe-override-subagent-provider
                     "grader" preset)))
-              (should (eq (plist-get override :backend) dashscope-backend))
-              (should (eq (plist-get override :model) 'qwen3.6-plus)))))
+              (should (eq (plist-get override :backend) deepseek-backend))
+              (should (eq (plist-get override :model) 'deepseek-v4-flash)))))
       (setq gptel-auto-workflow--rate-limited-backends nil
             gptel-auto-workflow--runtime-subagent-provider-overrides nil)
-      (if had-dashscope
-          (set 'gptel--dashscope old-dashscope)
-        (makunbound 'gptel--dashscope)))))
+      (if had-deepseek
+          (set 'gptel--deepseek old-deepseek)
+        (makunbound 'gptel--deepseek)))))
 
 (ert-deftest regression/auto-workflow/provider-failover-activates-on-curl-exit-56 ()
   "Headless provider failover should also activate on curl 56 transport errors."
-  (let* ((dashscope-backend
-          (gptel-make-openai "DashScope"
-            :host "coding.dashscope.aliyuncs.com"
+  (let* ((deepseek-backend
+          (gptel-make-openai "DeepSeek"
+            :host "api.deepseek.com"
             :key (lambda () "token")
-            :models '(qwen3.7-plus qwen3.6-plus)))
-         (had-dashscope (boundp 'gptel--dashscope))
-         (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
+            :models '(deepseek-v4-pro deepseek-v4-flash)))
+         (had-deepseek (boundp 'gptel--deepseek))
+         (old-deepseek (and had-deepseek (symbol-value 'gptel--deepseek)))
          (preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
          (curl-error
           "Error: Task executor could not finish task \"x\". Error details: \"Curl failed with exit code 56. See Curl manpage for details.\"")
@@ -5080,19 +5080,19 @@ of DashScope's own model."
           '("analyzer" "comparator" "executor" "grader" "reviewer"))
          (gptel-auto-workflow-headless-subagent-fallbacks
           '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("DashScope" . "qwen3.6-plus")))
+            ("DeepSeek" . "deepseek-v4-flash")))
          (gptel-auto-workflow-executor-rate-limit-fallbacks
           '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("DashScope" . "qwen3.6-plus")))
+            ("DeepSeek" . "deepseek-v4-flash")))
          (gptel-auto-workflow--rate-limited-backends nil)
          (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
     (unwind-protect
         (progn
-          (set 'gptel--dashscope dashscope-backend)
+          (set 'gptel--deepseek deepseek-backend)
           (cl-letf (((symbol-function 'my/gptel-api-key)
                      (lambda (host)
                        (pcase host
-                         ("coding.dashscope.aliyuncs.com" "token")
+                         ("api.deepseek.com" "token")
                          ("api.minimaxi.com" "token")
                          (_ nil))))
                     ((symbol-function 'message)
@@ -5103,27 +5103,27 @@ of DashScope's own model."
             (should (equal (alist-get "executor"
                                       gptel-auto-workflow--runtime-subagent-provider-overrides
                                       nil nil #'string=)
-                           '("DashScope" . "qwen3.6-plus")))
+                           '("DeepSeek" . "deepseek-v4-flash")))
             (let ((override
                    (gptel-auto-workflow--maybe-override-subagent-provider
                     "executor" preset)))
-              (should (eq (plist-get override :backend) dashscope-backend))
-              (should (eq (plist-get override :model) 'qwen3.6-plus)))))
+              (should (eq (plist-get override :backend) deepseek-backend))
+              (should (eq (plist-get override :model) 'deepseek-v4-flash)))))
       (setq gptel-auto-workflow--rate-limited-backends nil
             gptel-auto-workflow--runtime-subagent-provider-overrides nil)
-      (if had-dashscope
-          (set 'gptel--dashscope old-dashscope)
-        (makunbound 'gptel--dashscope)))))
+      (if had-deepseek
+          (set 'gptel--deepseek old-deepseek)
+        (makunbound 'gptel--deepseek)))))
 
 (ert-deftest regression/auto-workflow/provider-failover-activates-on-webclient-server-errors ()
   "Headless provider failover should activate on retryable server transport errors."
-  (let* ((dashscope-backend
-          (gptel-make-openai "DashScope"
-            :host "coding.dashscope.aliyuncs.com"
+  (let* ((deepseek-backend
+          (gptel-make-openai "DeepSeek"
+            :host "api.deepseek.com"
             :key (lambda () "token")
-            :models '(qwen3.7-plus qwen3.6-plus)))
-         (had-dashscope (boundp 'gptel--dashscope))
-         (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
+            :models '(deepseek-v4-pro deepseek-v4-flash)))
+         (had-deepseek (boundp 'gptel--deepseek))
+         (old-deepseek (and had-deepseek (symbol-value 'gptel--deepseek)))
          (preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
          (server-error
           "Error: Task executor could not finish task \"x\". Error details: (:code \"system_error\" :message \"org.springframework.web.reactive.function.client.WebClientRequestException\" :param :null :type \"server_error\")")
@@ -5134,19 +5134,19 @@ of DashScope's own model."
           '("analyzer" "comparator" "executor" "grader" "reviewer"))
          (gptel-auto-workflow-headless-subagent-fallbacks
           '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("DashScope" . "qwen3.6-plus")))
+            ("DeepSeek" . "deepseek-v4-flash")))
          (gptel-auto-workflow-executor-rate-limit-fallbacks
           '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("DashScope" . "qwen3.6-plus")))
+            ("DeepSeek" . "deepseek-v4-flash")))
          (gptel-auto-workflow--rate-limited-backends nil)
          (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
     (unwind-protect
         (progn
-          (set 'gptel--dashscope dashscope-backend)
+          (set 'gptel--deepseek deepseek-backend)
           (cl-letf (((symbol-function 'my/gptel-api-key)
                      (lambda (host)
                        (pcase host
-                         ("coding.dashscope.aliyuncs.com" "token")
+                         ("api.deepseek.com" "token")
                          ("api.minimaxi.com" "token")
                          (_ nil))))
                     ((symbol-function 'message)
@@ -5157,27 +5157,27 @@ of DashScope's own model."
             (should (equal (alist-get "executor"
                                       gptel-auto-workflow--runtime-subagent-provider-overrides
                                       nil nil #'string=)
-                           '("DashScope" . "qwen3.6-plus")))
+                           '("DeepSeek" . "deepseek-v4-flash")))
             (let ((override
                    (gptel-auto-workflow--maybe-override-subagent-provider
                     "executor" preset)))
-              (should (eq (plist-get override :backend) dashscope-backend))
-              (should (eq (plist-get override :model) 'qwen3.6-plus)))))
+              (should (eq (plist-get override :backend) deepseek-backend))
+              (should (eq (plist-get override :model) 'deepseek-v4-flash)))))
       (setq gptel-auto-workflow--rate-limited-backends nil
             gptel-auto-workflow--runtime-subagent-provider-overrides nil)
-       (if had-dashscope
-           (set 'gptel--dashscope old-dashscope)
-         (makunbound 'gptel--dashscope)))))
+       (if had-deepseek
+           (set 'gptel--deepseek old-deepseek)
+         (makunbound 'gptel--deepseek)))))
 
 (ert-deftest regression/auto-workflow/provider-failover-activates-on-authorized-errors ()
   "Headless provider failover should activate on provider auth failures."
-  (let* ((dashscope-backend
-          (gptel-make-openai "DashScope"
-            :host "coding.dashscope.aliyuncs.com"
+  (let* ((deepseek-backend
+          (gptel-make-openai "DeepSeek"
+            :host "api.deepseek.com"
             :key (lambda () "token")
-            :models '(qwen3.7-plus qwen3.6-plus)))
-         (had-dashscope (boundp 'gptel--dashscope))
-         (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
+            :models '(deepseek-v4-pro deepseek-v4-flash)))
+         (had-deepseek (boundp 'gptel--deepseek))
+         (old-deepseek (and had-deepseek (symbol-value 'gptel--deepseek)))
          (preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
          (auth-error
           "Error: Task executor could not finish task \"x\". Error details: (:type \"authorized_error\" :message \"token is unusable (1004)\" :http_code \"401\")")
@@ -5188,19 +5188,19 @@ of DashScope's own model."
           '("analyzer" "comparator" "executor" "grader" "reviewer"))
          (gptel-auto-workflow-headless-subagent-fallbacks
           '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("DashScope" . "qwen3.6-plus")))
+            ("DeepSeek" . "deepseek-v4-flash")))
          (gptel-auto-workflow-executor-rate-limit-fallbacks
           '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("DashScope" . "qwen3.6-plus")))
+            ("DeepSeek" . "deepseek-v4-flash")))
          (gptel-auto-workflow--rate-limited-backends nil)
          (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
     (unwind-protect
         (progn
-          (set 'gptel--dashscope dashscope-backend)
+          (set 'gptel--deepseek deepseek-backend)
           (cl-letf (((symbol-function 'my/gptel-api-key)
                      (lambda (host)
                        (pcase host
-                         ("coding.dashscope.aliyuncs.com" "token")
+                         ("api.deepseek.com" "token")
                          ("api.minimaxi.com" "token")
                          (_ nil))))
                     ((symbol-function 'message)
@@ -5211,27 +5211,27 @@ of DashScope's own model."
             (should (equal (alist-get "executor"
                                       gptel-auto-workflow--runtime-subagent-provider-overrides
                                       nil nil #'string=)
-                           '("DashScope" . "qwen3.6-plus")))
+                           '("DeepSeek" . "deepseek-v4-flash")))
             (let ((override
                    (gptel-auto-workflow--maybe-override-subagent-provider
                     "executor" preset)))
-              (should (eq (plist-get override :backend) dashscope-backend))
-              (should (eq (plist-get override :model) 'qwen3.6-plus)))))
+              (should (eq (plist-get override :backend) deepseek-backend))
+              (should (eq (plist-get override :model) 'deepseek-v4-flash)))))
       (setq gptel-auto-workflow--rate-limited-backends nil
             gptel-auto-workflow--runtime-subagent-provider-overrides nil)
-       (if had-dashscope
-           (set 'gptel--dashscope old-dashscope)
-         (makunbound 'gptel--dashscope)))))
+       (if had-deepseek
+           (set 'gptel--deepseek old-deepseek)
+         (makunbound 'gptel--deepseek)))))
 
 (ert-deftest regression/auto-workflow/provider-failover-activates-on-access-terminated-errors ()
   "Headless provider failover should activate on billing-cycle access termination."
-  (let* ((dashscope-backend
-          (gptel-make-openai "DashScope"
-            :host "coding.dashscope.aliyuncs.com"
+  (let* ((deepseek-backend
+          (gptel-make-openai "DeepSeek"
+            :host "api.deepseek.com"
             :key (lambda () "token")
-            :models '(qwen3.7-plus qwen3.6-plus)))
-         (had-dashscope (boundp 'gptel--dashscope))
-         (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
+            :models '(deepseek-v4-pro deepseek-v4-flash)))
+         (had-deepseek (boundp 'gptel--deepseek))
+         (old-deepseek (and had-deepseek (symbol-value 'gptel--deepseek)))
          (preset '(:backend "moonshot" :model "kimi-k2.6"))
          (access-terminated-error
           "Error: Task executor could not finish task \"x\". Error details: (:message \"You've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle. Upgrade to get more: https://www.kimi.com/code/console?from=quota-upgrade\" :type \"access_terminated_error\")")
@@ -5243,20 +5243,20 @@ of DashScope's own model."
          (gptel-auto-workflow-headless-subagent-fallbacks
           '(("MiniMax" . "minimax-m2.7-highspeed")
             ("moonshot" . "kimi-k2.6")
-            ("DashScope" . "qwen3.6-plus")))
+            ("DeepSeek" . "deepseek-v4-flash")))
          (gptel-auto-workflow-executor-rate-limit-fallbacks
           '(("MiniMax" . "minimax-m2.7-highspeed")
             ("moonshot" . "kimi-k2.6")
-            ("DashScope" . "qwen3.6-plus")))
+            ("DeepSeek" . "deepseek-v4-flash")))
          (gptel-auto-workflow--rate-limited-backends nil)
          (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
     (unwind-protect
         (progn
-          (set 'gptel--dashscope dashscope-backend)
+          (set 'gptel--deepseek deepseek-backend)
           (cl-letf (((symbol-function 'my/gptel-api-key)
                      (lambda (host)
                        (pcase host
-                         ("coding.dashscope.aliyuncs.com" "token")
+                         ("api.deepseek.com" "token")
                          ("api.kimi.com" "token")
                          (_ nil))))
                     ((symbol-function 'message)
@@ -5267,23 +5267,23 @@ of DashScope's own model."
             (let ((override
                    (gptel-auto-workflow--maybe-override-subagent-provider
                     "executor" preset)))
-              (should (eq (plist-get override :backend) dashscope-backend))
-              (should (eq (plist-get override :model) 'qwen3.6-plus)))))
+              (should (eq (plist-get override :backend) deepseek-backend))
+              (should (eq (plist-get override :model) 'deepseek-v4-flash)))))
       (setq gptel-auto-workflow--rate-limited-backends nil
             gptel-auto-workflow--runtime-subagent-provider-overrides nil)
-      (if had-dashscope
-          (set 'gptel--dashscope old-dashscope)
-        (makunbound 'gptel--dashscope)))))
+      (if had-deepseek
+          (set 'gptel--deepseek old-deepseek)
+        (makunbound 'gptel--deepseek)))))
 
 (ert-deftest regression/auto-workflow/provider-failover-advances-past-billing-cycle-usage-limits ()
   "Headless failover should skip Moonshot after a billing-cycle usage-limit error."
-  (let* ((dashscope-backend
-          (gptel-make-openai "DashScope"
-            :host "coding.dashscope.aliyuncs.com"
+  (let* ((deepseek-backend
+          (gptel-make-openai "DeepSeek"
+            :host "api.deepseek.com"
             :key (lambda () "token")
-            :models '(qwen3.7-plus qwen3.6-plus)))
-         (had-dashscope (boundp 'gptel--dashscope))
-         (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
+            :models '(deepseek-v4-pro deepseek-v4-flash)))
+         (had-deepseek (boundp 'gptel--deepseek))
+         (old-deepseek (and had-deepseek (symbol-value 'gptel--deepseek)))
          (preset '(:backend "moonshot" :model "kimi-k2.6"))
          (usage-limit-error
           "Error: Task grader could not finish task \"Grade output\". Error details: (:message \"You've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle. Upgrade to get more: https://www.kimi.com/code/console?from=quota-upgrade\" :type \"access_terminated_error\")")
@@ -5295,20 +5295,20 @@ of DashScope's own model."
          (gptel-auto-workflow-headless-subagent-fallbacks
           '(("MiniMax" . "minimax-m2.7-highspeed")
             ("moonshot" . "kimi-k2.6")
-            ("DashScope" . "qwen3.6-plus")))
+            ("DeepSeek" . "deepseek-v4-flash")))
          (gptel-auto-workflow-executor-rate-limit-fallbacks
           '(("MiniMax" . "minimax-m2.7-highspeed")
             ("moonshot" . "kimi-k2.6")
-            ("DashScope" . "qwen3.6-plus")))
+            ("DeepSeek" . "deepseek-v4-flash")))
          (gptel-auto-workflow--rate-limited-backends '("MiniMax"))
          (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
     (unwind-protect
         (progn
-          (set 'gptel--dashscope dashscope-backend)
+          (set 'gptel--deepseek deepseek-backend)
           (cl-letf (((symbol-function 'my/gptel-api-key)
                      (lambda (host)
                        (pcase host
-                         ("coding.dashscope.aliyuncs.com" "token")
+                         ("api.deepseek.com" "token")
                          (_ nil))))
                     ((symbol-function 'message)
                      (lambda (&rest _) nil)))
@@ -5318,32 +5318,32 @@ of DashScope's own model."
             (let ((override
                    (gptel-auto-workflow--maybe-override-subagent-provider
                     "grader" preset)))
-              (should (eq (plist-get override :backend) dashscope-backend))
-              (should (eq (plist-get override :model) 'qwen3.6-plus)))))
+              (should (eq (plist-get override :backend) deepseek-backend))
+              (should (eq (plist-get override :model) 'deepseek-v4-flash)))))
       (setq gptel-auto-workflow--rate-limited-backends nil
             gptel-auto-workflow--runtime-subagent-provider-overrides nil)
-      (if had-dashscope
-          (set 'gptel--dashscope old-dashscope)
-        (makunbound 'gptel--dashscope)))))
+      (if had-deepseek
+          (set 'gptel--deepseek old-deepseek)
+        (makunbound 'gptel--deepseek)))))
 
 (ert-deftest regression/auto-workflow/executor-rate-limit-failover-promotes-runtime-fallback ()
-  "Executor should fail over after a DashScope rate-limit error in headless mode."
+  "Executor should fail over after a DeepSeek rate-limit error in headless mode."
   (ert-skip "flaky in batch mode: test isolation issue with async callbacks")
   (let* ((deepseek-backend
           (gptel-make-openai "DeepSeek"
             :host "api.deepseek.com"
             :key (lambda () "token")
             :models '(deepseek-v4-flash deepseek-v4-pro)))
-         (dashscope-backend
-          (gptel-make-openai "DashScope"
-            :host "coding.dashscope.aliyuncs.com"
+         (deepseek-backend
+          (gptel-make-openai "DeepSeek"
+            :host "api.deepseek.com"
             :key (lambda () "token")
-            :models '(qwen3.7-plus)))
+            :models '(deepseek-v4-pro)))
          (had-deepseek (boundp 'gptel--deepseek))
          (old-deepseek (and had-deepseek (symbol-value 'gptel--deepseek)))
-         (had-dashscope (boundp 'gptel--dashscope))
-         (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
-         (preset '(:backend "DashScope" :model "qwen3.6-plus"))
+         (had-deepseek (boundp 'gptel--deepseek))
+         (old-deepseek (and had-deepseek (symbol-value 'gptel--deepseek)))
+         (preset '(:backend "DeepSeek" :model "deepseek-v4-flash"))
          (gptel-auto-workflow--headless t)
          (gptel-auto-workflow-persistent-headless t)
          (gptel-auto-workflow--current-project "/tmp/project")
@@ -5351,12 +5351,12 @@ of DashScope's own model."
     (unwind-protect
         (progn
           (set 'gptel--deepseek deepseek-backend)
-          (set 'gptel--dashscope dashscope-backend)
+          (set 'gptel--deepseek deepseek-backend)
           (cl-letf (((symbol-function 'my/gptel-api-key)
                      (lambda (host)
                        (pcase host
                          ("api.deepseek.com" "token")
-                         ("coding.dashscope.aliyuncs.com" "token")
+                         ("api.deepseek.com" "token")
                          ("api.minimaxi.com" "token")
                          (_ nil))))
                     ((symbol-function 'message)
@@ -5372,20 +5372,20 @@ of DashScope's own model."
       (if had-deepseek
           (set 'gptel--deepseek old-deepseek)
         (makunbound 'gptel--deepseek))
-      (if had-dashscope
-          (set 'gptel--dashscope old-dashscope)
-        (makunbound 'gptel--dashscope)))))
+      (if had-deepseek
+          (set 'gptel--deepseek old-deepseek)
+        (makunbound 'gptel--deepseek)))))
 
 (ert-deftest regression/auto-workflow/clearing-runtime-provider-overrides-restores-executor-headless-default ()
   "Clearing runtime overrides should restore the preferred headless executor provider."
   (ert-skip "flaky in batch mode: test isolation issue with async callbacks")
-  (let* ((dashscope-backend
-          (gptel-make-openai "DashScope"
-            :host "coding.dashscope.aliyuncs.com"
+  (let* ((deepseek-backend
+          (gptel-make-openai "DeepSeek"
+            :host "api.deepseek.com"
             :key (lambda () "token")
-            :models '(qwen3.7-plus)))
-         (had-dashscope (boundp 'gptel--dashscope))
-         (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
+            :models '(deepseek-v4-pro)))
+         (had-deepseek (boundp 'gptel--deepseek))
+         (old-deepseek (and had-deepseek (symbol-value 'gptel--deepseek)))
          (preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
          (gptel-auto-workflow--headless t)
          (gptel-auto-workflow-persistent-headless t)
@@ -5394,22 +5394,22 @@ of DashScope's own model."
           '(("executor" . ("DeepSeek" . "deepseek-chat")))))
     (unwind-protect
         (progn
-          (set 'gptel--dashscope dashscope-backend)
+          (set 'gptel--deepseek deepseek-backend)
           (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
           (cl-letf (((symbol-function 'my/gptel-api-key)
                      (lambda (host)
                        (pcase host
-                         ("coding.dashscope.aliyuncs.com" "token")
+                         ("api.deepseek.com" "token")
                          (_ nil))))
                     ((symbol-function 'message)
                      (lambda (&rest _) nil)))
             (let ((override
                    (gptel-auto-workflow--maybe-override-subagent-provider "executor" preset)))
-               (should (eq (plist-get override :backend) dashscope-backend))
-               (should (eq (plist-get override :model) 'qwen3.6-plus)))))
-       (if had-dashscope
-           (set 'gptel--dashscope old-dashscope)
-         (makunbound 'gptel--dashscope)))))
+               (should (eq (plist-get override :backend) deepseek-backend))
+               (should (eq (plist-get override :model) 'deepseek-v4-flash)))))
+       (if had-deepseek
+           (set 'gptel--deepseek old-deepseek)
+         (makunbound 'gptel--deepseek)))))
 
 (ert-deftest regression/auto-workflow/migrates-previous-headless-fallback-agents ()
   "Hot reload should migrate the prior fallback-agent default to the new one."
@@ -5461,11 +5461,11 @@ of DashScope's own model."
       (put 'gptel-auto-experiment-validation-retry-active-grace 'customized-value old-customized)
       (put 'gptel-auto-experiment-validation-retry-active-grace 'theme-value old-theme))))
 
-(ert-deftest regression/auto-workflow/migrates-legacy-headless-subagent-fallbacks-to-dashscope-first ()
+(ert-deftest regression/auto-workflow/migrates-legacy-headless-subagent-fallbacks-to-deepseek-first ()
   "Legacy headless subagent defaults should not restore MiniMax-first routing."
   (let* ((legacy-subagent
           '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("DashScope" . "qwen3.6-plus")
+            ("DeepSeek" . "deepseek-v4-flash")
             ("DeepSeek" . "deepseek-chat")
             ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
             ("Gemini" . "gemini-3.1-pro-preview")))
@@ -5487,7 +5487,7 @@ of DashScope's own model."
             (should (member 'gptel-auto-workflow-headless-subagent-fallbacks
                             (gptel-auto-workflow--migrate-legacy-provider-defaults))))
            (should (equal gptel-auto-workflow-headless-subagent-fallbacks
-                          '(("DashScope" . "qwen3.6-plus")
+                          '(("DeepSeek" . "deepseek-v4-flash")
                             ("DeepSeek" . "deepseek-v4-flash")
                             ("moonshot" . "kimi-k2.6")
                             ("CF-Gateway" . "@cf/openai/gpt-oss-120b")
@@ -5505,7 +5505,7 @@ of DashScope's own model."
          (legacy-rate-limit
           '(("DeepSeek" . "deepseek-chat")
             ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
-            ("DashScope" . "qwen3.6-plus")
+            ("DeepSeek" . "deepseek-v4-flash")
             ("Gemini" . "gemini-3.1-pro-preview")))
          (old-headless gptel-auto-workflow-headless-fallback-agents)
          (old-rate-limit gptel-auto-workflow-executor-rate-limit-fallbacks)
@@ -5542,7 +5542,7 @@ of DashScope's own model."
           (should (equal gptel-auto-workflow-executor-rate-limit-fallbacks
                          '(("MiniMax" . "minimax-m2.7-highspeed")
                            ("moonshot" . "kimi-k2.6")
-                           ("DashScope" . "qwen3.6-plus")
+                           ("DeepSeek" . "deepseek-v4-flash")
                            ("DeepSeek" . "deepseek-v4-pro")
                            ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")))))
       (setq gptel-auto-workflow-headless-fallback-agents old-headless
@@ -5891,7 +5891,7 @@ of DashScope's own model."
                                   :passed t
                                   :details "ok")))))
               ((symbol-function 'gptel-auto-experiment--remaining-provider-failover-candidate)
-               (lambda (&rest _args) '("DashScope" . "qwen3.6-plus")))
+               (lambda (&rest _args) '("DeepSeek" . "deepseek-v4-flash")))
               ((symbol-function 'run-with-timer)
                (lambda (_secs _repeat fn &rest args)
                  (cl-incf scheduled-retries)
@@ -6195,7 +6195,7 @@ of DashScope's own model."
                      (funcall callback
                               "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")")
                    ;; Second call: success with fallback
-                   (funcall callback "Executor result with DashScope"))))
+                   (funcall callback "Executor result with DeepSeek"))))
               ((symbol-function 'gptel-auto-workflow--backend-available-p)
                (lambda (name)
                  (push name used-backends)
@@ -6208,8 +6208,8 @@ of DashScope's own model."
          (setq final-result result))
        "executor" "test" "test prompt")
       (should (= calls 2))
-      (should (equal final-result "Executor result with DashScope"))
-      (should (member "DashScope" used-backends)))))
+      (should (equal final-result "Executor result with DeepSeek"))
+      (should (member "DeepSeek" used-backends)))))
 
 (ert-deftest regression/auto-experiment/backend-fallback-returns-original-on-non-429 ()
   "Backend fallback should not retry on non-rate-limit errors."
@@ -6256,7 +6256,7 @@ of DashScope's own model."
        (lambda (result)
          (setq final-result result))
        "executor" "test" "test prompt")
-      ;; Should try MiniMax + all fallbacks (DashScope, DeepSeek, CF-Gateway, Gemini)
+      ;; Should try MiniMax + all fallbacks (DeepSeek, DeepSeek, CF-Gateway, Gemini)
       (should (= calls 5))
       (should (string-match-p "rate_limit_error" final-result)))))
 
@@ -6264,10 +6264,10 @@ of DashScope's own model."
   "gptel-auto-workflow--maybe-override-subagent-provider should respect forced backend."
   (ert-skip "flaky in batch mode: test isolation issue with async callbacks")
   (let ((preset '(:backend "MiniMax" :model minimax-m2.7-highspeed :use-tools t))
-        (gptel-auto-experiment--forced-backend '("DashScope" . "qwen3.6-plus")))
+        (gptel-auto-experiment--forced-backend '("DeepSeek" . "deepseek-v4-flash")))
     (let ((result (gptel-auto-workflow--maybe-override-subagent-provider "executor" preset)))
-      (should (string= (plist-get result :backend) "DashScope"))
-      (should (eq (plist-get result :model) 'qwen3.6-plus)))))
+      (should (string= (plist-get result :backend) "DeepSeek"))
+      (should (eq (plist-get result :model) 'deepseek-v4-flash)))))
 
 (ert-deftest regression/auto-experiment/run-with-retry-skips-hard-runtime-timeout-retries ()
   "Retry helper should not reschedule hard executor timeout failures.
@@ -10398,7 +10398,7 @@ This guards the grader completion path from crashing during TSV logging."
                ((symbol-function 'gptel-auto-workflow--activate-provider-failover)
                 (lambda (_agent preset reason &optional skip-blacklist)
                   (setq failover-call (list preset reason skip-blacklist))
-                  '("DashScope" . "qwen3.6-plus")))
+                  '("DeepSeek" . "deepseek-v4-flash")))
               ((symbol-function 'gptel-auto-workflow--current-run-id)
                (lambda () "run-1234"))
               ((symbol-function 'gptel-auto-workflow--run-callback-live-p)
@@ -21372,17 +21372,17 @@ index 5ab25fae..da61bf7d 100644
 @@ -99,48 +99,7 @@
 -       :speed fast)))
 -
--     (TokenPlan
--      :host \"token-plan.cn-beijing.maas.aliyuncs.com\"
--      :models (qwen3.7-max qwen3.6-plus)
--      :default-model qwen3.7-max
+-     (LegacyBackend
+-      :host \"legacy.example.com\"
+-      :models (deepseek-v4-pro deepseek-v4-flash)
+-      :default-model deepseek-v4-pro
 -      :model-metadata
--      ((qwen3.7-max
+-      ((deepseek-v4-pro
 -        :context-window 131072
 -        :pricing-input 0.29 :pricing-output 1.14
 -        :capabilities (reasoning code-generation)
 -        :speed medium)
--       (qwen3.6-plus
+-       (deepseek-v4-flash
 -        :context-window 131072
 -        :pricing-input 0.29 :pricing-output 1.14
 -        :capabilities (code-generation tool-calls)
@@ -21449,7 +21449,7 @@ Even if LLM gives 9/9, destructive changes should be rejected."
 
 ## Analysis
 
-**Output**: The user removed the TokenPlan backend configuration.
+**Output**: The user removed the LegacyBackend backend configuration.
 
 **Expected behaviors**:
 1. change clearly described - PASS ✓
@@ -21473,10 +21473,10 @@ index 5ab25fae..da61bf7d 100644
 @@ -99,48 +99,7 @@
 -       :speed fast)))
 -
--     (TokenPlan
--      :host \"token-plan.cn-beijing.maas.aliyuncs.com\"
--      :models (qwen3.7-max qwen3.6-plus)
--      :default-model qwen3.7-max")
+-     (LegacyBackend
+-      :host \"legacy.example.com\"
+-      :models (deepseek-v4-pro deepseek-v4-flash)
+-      :default-model deepseek-v4-pro")
          (expected '("change clearly described"
                     "change is minimal and focused"
                     "improves code"

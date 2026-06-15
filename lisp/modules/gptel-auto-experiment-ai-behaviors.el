@@ -1302,9 +1302,8 @@ Used to normalize keep-rate by cost.")
     pricing)
   "Per-model pricing in USD per 1M tokens (:input :output :cache-hit).
 AUTO-GENERATED from `gptel-backend-registry' — edit pricing in that file.
-DeepSeek: api-docs.deepseek.com, MiniMax: platform.minimaxi.com,
-DashScope: help.aliyun.com context-cache docs. Verified 2026-06-01.
-ALL backends through Bailian support implicit cache (auto-enabled).")
+DeepSeek: api-docs.deepseek.com, MiniMax: platform.minimaxi.com.
+ALL backends support implicit cache (auto-enabled).")
 
 (defvar gptel-ai-behaviors--cache-hit-rate 0.8
   "Estimated KV cache hit rate (0-1) for DeepSeek API input tokens.
@@ -1435,7 +1434,7 @@ Aggregates across subagents and models for each (category strategy backend)."
             (cost-entry (gethash cost-key gptel-ai-behaviors--cost-stats))
             (cost (if cost-entry (cdr cost-entry) 0.0)))
         (when (and category subagent model)
-          (dolist (backend '("DeepSeek" "MiniMax" "DashScope" "moonshot"))
+          (dolist (backend '("DeepSeek" "MiniMax" "moonshot"))
             (when (let ((case-fold-search t))
                     (string-match-p (regexp-quote backend) (or model "")))
               (let* ((uni-key (list category subagent backend))

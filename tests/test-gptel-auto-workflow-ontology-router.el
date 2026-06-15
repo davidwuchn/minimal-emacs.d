@@ -51,13 +51,11 @@
 (defvar test-onto-router--mock-headless-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
     ("moonshot" . "kimi-k2.6")
-    ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-v4-flash"))
   "Mock headless fallback list for ontology-router tests.")
 
 (defvar test-onto-router--mock-executor-fallbacks
-  '(("DashScope" . "qwen3.6-plus")
-    ("DeepSeek" . "deepseek-v4-flash")
+  '(("DeepSeek" . "deepseek-v4-flash")
     ("moonshot" . "kimi-k2.6")
     ("MiniMax" . "minimax-m2.7-highspeed"))
   "Mock executor fallback list for ontology-router tests.")
@@ -120,7 +118,7 @@
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
          '(("DeepSeek" . "deepseek-v4-flash")
            ("MiniMax" . "minimax-m2.7-highspeed")
-           ("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")
            ("moonshot" . "kimi-k2.6")))
         (mock-results
          (list
@@ -131,7 +129,7 @@
         (should (= 4 (length reordered)))
         (should (assoc "moonshot" reordered))
         (should (assoc "MiniMax" reordered))
-        (should (assoc "DashScope" reordered))
+        (should (assoc "DeepSeek" reordered))
         (should (assoc "DeepSeek" reordered))
         (should (assoc "MiniMax" reordered))))))
 
@@ -201,13 +199,13 @@
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
          '(("DeepSeek" . "deepseek-v4-flash")
            ("MiniMax" . "minimax-m2.7-highspeed")
-           ("DashScope" . "qwen3.6-plus")
+           ("DeepSeek" . "deepseek-v4-flash")
            ("moonshot" . "kimi-k2.6")))
         (mock-results
          (list
-          (list :backend "DashScope" :target "lisp/modules/gptel-tools-agent.el" :decision "kept")
-          (list :backend "DashScope" :target "lisp/modules/gptel-tools-agent.el" :decision "kept")
-          (list :backend "DashScope" :target "lisp/modules/gptel-tools-agent.el" :decision "kept")
+          (list :backend "DeepSeek" :target "lisp/modules/gptel-tools-agent.el" :decision "kept")
+          (list :backend "DeepSeek" :target "lisp/modules/gptel-tools-agent.el" :decision "kept")
+          (list :backend "DeepSeek" :target "lisp/modules/gptel-tools-agent.el" :decision "kept")
           (list :backend "MiniMax"    :target "lisp/modules/gptel-tools-agent.el" :decision "discarded"))))
     (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
                (lambda () mock-results))
@@ -215,7 +213,7 @@
       ;; gptel-tools-agent.el is :agentic, which has no override (nil)
       ;; So it should use normal performance ordering
       (let ((reordered (gptel-auto-workflow--reorder-fallbacks-by-ontology nil "lisp/modules/gptel-tools-agent.el")))
-        (should (string= "DashScope" (caar reordered)))))))
+        (should (string= "DeepSeek" (caar reordered)))))))
 
 ;; ─── Integration Tests ───
 
@@ -227,9 +225,9 @@
          (copy-tree test-onto-router--mock-headless-fallbacks))
         (mock-results
          (list
-          (list :backend "DashScope" :decision "kept")
-          (list :backend "DashScope" :decision "kept")
-          (list :backend "DashScope" :decision "kept")))
+          (list :backend "DeepSeek" :decision "kept")
+          (list :backend "DeepSeek" :decision "kept")
+          (list :backend "DeepSeek" :decision "kept")))
         (original-order (copy-tree test-onto-router--mock-headless-fallbacks)))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
@@ -237,8 +235,8 @@
                   ((symbol-function 'random) (lambda (_) 999)))
           ;; Apply ontology ordering
           (gptel-auto-workflow--apply-ontology-fallback-order)
-          ;; Should have reordered (DashScope has 100% keep rate)
-          (should (string= "DashScope" (caar gptel-auto-workflow-executor-rate-limit-fallbacks)))
+          ;; Should have reordered (DeepSeek has 100% keep rate)
+          (should (string= "DeepSeek" (caar gptel-auto-workflow-executor-rate-limit-fallbacks)))
           ;; Reset
           (gptel-auto-workflow--reset-fallback-order)
           ;; Should be back to original
@@ -571,7 +569,7 @@ All known backends now support lambda notation; no async verification needed."
   (let ((gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
         (gptel-auto-workflow--backend-lambda-health-cache nil))
     (should (eq :healthy (gptel-auto-workflow--verify-backend-lambda-impl "moonshot" "kimi-k2.6")))
-    (should (eq :healthy (gptel-auto-workflow--verify-backend-lambda-impl "DashScope" "qwen3.6-plus")))))
+    (should (eq :healthy (gptel-auto-workflow--verify-backend-lambda-impl "DeepSeek" "deepseek-v4-flash")))))
 
 (ert-deftest tdd/lambda-verify/response-contains-lambda ()
   "response-contains-lambda-p detects lambda expressions."
@@ -585,16 +583,15 @@ All known backends now support lambda notation; no async verification needed."
 
 (ert-deftest tdd/sieve/classify-by-backend-name ()
   "Sieve classification works by backend name only (not model names)."
-  (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "DashScope")))
+  (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "DeepSeek")))
   (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "moonshot")))
   (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "Unknown"))))
 
 (ert-deftest tdd/sieve/classify-by-model-name ()
   "Sieve classification works by model name."
-  (should (eq 'single-neuron (gptel-auto-workflow--backend-sieve-type "qwen3.6-plus")))
-  (should (eq 'single-neuron (gptel-auto-workflow--backend-sieve-type "qwen")))
-  (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "kimi-k2.6")))
-  (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "deepseek-v4-flash"))))
+  (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "deepseek-v4-flash")))
+  (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "MiniMax-M3")))
+  (should (eq 'distributed (gptel-auto-workflow--backend-sieve-type "kimi-k2.6"))))
 
 (ert-deftest tdd/sieve/deterministic-target-detection ()
   "Deterministic targets are identified correctly."
@@ -604,22 +601,22 @@ All known backends now support lambda notation; no async verification needed."
   (should-not (gptel-auto-workflow--target-deterministic-p "gptel-auto-workflow-strategy.el"))
   (should-not (gptel-auto-workflow--target-deterministic-p nil)))
 
-(ert-deftest tdd/sieve/apply-sieve-boosts-qwen ()
-  "Sieve routing boosts Qwen for deterministic tasks."
-  (let ((scored (list (list :backend "DashScope" :model "qwen3.6-plus" :score 45.0)
+(ert-deftest tdd/sieve/apply-sieve-no-boost-all-distributed ()
+  "When all backends are distributed, sieve routing applies no special boosts."
+  (let ((scored (list (list :backend "DeepSeek" :model "deepseek-v4-flash" :score 45.0)
                       (list :backend "moonshot" :model "kimi-k2.6" :score 60.0))))
     (setq scored (gptel-auto-workflow--apply-sieve-routing scored "test-validation.el"))
-    ;; DashScope/qwen should be boosted to 55, moonshot stays at 60
-    (should (= 55.0 (plist-get (car scored) :score)))
+    ;; Both backends are distributed, no single-neuron boost applies
+    (should (= 45.0 (plist-get (car scored) :score)))
     (should (= 60.0 (plist-get (cadr scored) :score)))))
 
-(ert-deftest tdd/sieve/apply-sieve-boosts-distributed-for-creative ()
-  "Sieve routing boosts distributed backends for creative tasks."
-  (let ((scored (list (list :backend "DashScope" :model "qwen3.6-plus" :score 50.0)
+(ert-deftest tdd/sieve/apply-sieve-no-boost-for-creative ()
+  "Sieve routing treats all backends the same for creative tasks."
+  (let ((scored (list (list :backend "DeepSeek" :model "deepseek-v4-flash" :score 50.0)
                       (list :backend "moonshot" :model "kimi-k2.6" :score 35.0))))
     (setq scored (gptel-auto-workflow--apply-sieve-routing scored "gptel-auto-workflow-strategy.el"))
-    ;; moonshot should be boosted to 45, DashScope stays at 50
-    (should (= 50.0 (plist-get (car scored) :score)))
+    ;; All backends are distributed, creative task → uniform +10 boost
+    (should (= 60.0 (plist-get (car scored) :score)))
     (should (= 45.0 (plist-get (cadr scored) :score)))))
 
 ;; ─── Cross-Backend Consistency (verbum Phase 6) ───
@@ -638,7 +635,7 @@ All known backends now support lambda notation; no async verification needed."
   (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
              (lambda ()
                (list (list :target "a.el" :backend "moonshot" :kibcm-axis ":B")
-                     (list :target "a.el" :backend "DashScope" :kibcm-axis ":B")))))
+                     (list :target "a.el" :backend "DeepSeek" :kibcm-axis ":B")))))
     (let ((result (gptel-auto-workflow--cross-backend-consistency "a.el")))
       (should (plist-get result :consistent))
       (should (= 1.0 (plist-get result :agreement-ratio))))))
@@ -648,7 +645,7 @@ All known backends now support lambda notation; no async verification needed."
   (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
              (lambda ()
                (list (list :target "a.el" :backend "moonshot" :kibcm-axis ":B")
-                     (list :target "a.el" :backend "DashScope" :kibcm-axis ":K")))))
+                     (list :target "a.el" :backend "DeepSeek" :kibcm-axis ":K")))))
     (let ((result (gptel-auto-workflow--cross-backend-consistency "a.el")))
       (should-not (plist-get result :consistent))
       (should (= 0.5 (plist-get result :agreement-ratio)))
@@ -659,9 +656,9 @@ All known backends now support lambda notation; no async verification needed."
   (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
              (lambda ()
                (list (list :target "a.el" :backend "moonshot" :kibcm-axis ":B")
-                     (list :target "a.el" :backend "DashScope" :kibcm-axis ":B")
+                     (list :target "a.el" :backend "DeepSeek" :kibcm-axis ":B")
                      (list :target "b.el" :backend "moonshot" :kibcm-axis ":B")
-                     (list :target "b.el" :backend "DashScope" :kibcm-axis ":K")))))
+                     (list :target "b.el" :backend "DeepSeek" :kibcm-axis ":K")))))
     (let ((result (gptel-auto-workflow--check-all-targets-consistency)))
       (should (= 2 (plist-get result :total)))
       (should (= 1 (plist-get result :consistent)))
@@ -717,7 +714,7 @@ All known backends now support lambda notation; no async verification needed."
                (list (list :target "a.el" :backend "moonshot" :kibcm-axis ":B" :decision "kept")
                      (list :target "b.el" :backend "moonshot" :kibcm-axis ":B" :decision "kept")
                      (list :target "c.el" :backend "moonshot" :kibcm-axis ":B" :decision "discarded")
-                     (list :target "a.el" :backend "DashScope" :kibcm-axis ":B" :decision "kept")))))
+                     (list :target "a.el" :backend "DeepSeek" :kibcm-axis ":B" :decision "kept")))))
     (let ((result (gptel-auto-workflow--get-axis-performance-stats "moonshot" ":B")))
       (should (= 2 (plist-get result :kept)))
       (should (= 3 (plist-get result :total)))
@@ -795,17 +792,15 @@ All known backends now support lambda notation; no async verification needed."
   (let ((gptel-auto-workflow-headless-subagent-fallbacks
          '(("DeepSeek" . "deepseek-v4-flash")
            ("MiniMax" . "minimax-m2.7-highspeed")
-           ("DashScope" . "qwen3.6-plus")
            ("moonshot" . "kimi-k2.6")))
         (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
     (puthash "moonshot" :healthy gptel-auto-workflow--lambda-verification-results)
-    (puthash "DashScope" :degraded gptel-auto-workflow--lambda-verification-results)
-    (puthash "DeepSeek" :unknown gptel-auto-workflow--lambda-verification-results)
+    (puthash "MiniMax" :degraded gptel-auto-workflow--lambda-verification-results)
     (let ((result (gptel-auto-workflow--lambda-verification-report)))
       (should (= 1 (plist-get result :healthy)))
       (should (= 1 (plist-get result :degraded)))
-      (should (> (plist-get result :unknown) 0))
-      (should (= 4 (plist-get result :total))))))
+      (should (= 1 (plist-get result :unknown)))
+      (should (= 3 (plist-get result :total))))))
 
 (ert-deftest tdd/lambda-verify/penalty-degraded ()
   "apply-verification-penalty penalizes degraded backends."
@@ -834,11 +829,10 @@ All known backends now support lambda notation; no async verification needed."
 ;; ─── Ranked Subagent Backends Tests ───
 ;; Tests for ranked-subagent-backends tiebreaking and keep-rate floor
 
-(ert-deftest regression/ontology-router/ranked-dashscope-first-on-tie ()
-  "DashScope should be first when all backends have equal keep-rate."
+(ert-deftest regression/ontology-router/ranked-deepseek-first-on-tie ()
+  "DeepSeek should be first when all backends have equal keep-rate."
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
-          '(("DashScope" . "qwen3.6-plus")
-            ("DeepSeek" . "deepseek-v4-flash")
+          '(("DeepSeek" . "deepseek-v4-flash")
             ("moonshot" . "kimi-k2.6")
             ("MiniMax" . "minimax-m2.7-highspeed")
             ()))
@@ -848,32 +842,30 @@ All known backends now support lambda notation; no async verification needed."
     (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
                (lambda (&rest _) (list :kept 0 :total 0 :keep-rate nil))))
       (let ((ranked (gptel-auto-workflow--ranked-subagent-backends)))
-        (should (string= "DashScope" (caar ranked)))
-        (should (string= "qwen3.6-plus" (cdar ranked)))))))
+        (should (string= "DeepSeek" (caar ranked)))
+        (should (string= "deepseek-v4-flash" (cdar ranked)))))))
 
 (ert-deftest regression/ontology-router/ranked-keeps-all-backends ()
   "ranked-subagent-backends should include all backends from fallback list."
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
-         '(("DashScope" . "qwen3.6-plus")
-           ("DeepSeek" . "deepseek-v4-flash")
+         '(("DeepSeek" . "deepseek-v4-flash")
            ("moonshot" . "kimi-k2.6")
-           ("MiniMax" . "minimax-m2.7-highspeed")
-           ())))
+           ("MiniMax" . "minimax-m2.7-highspeed")))
+        (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
+        (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal)))
     (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
                (lambda (&rest _) (list :kept 0 :total 0 :keep-rate nil))))
       (let ((ranked (gptel-auto-workflow--ranked-subagent-backends)))
-        (should (= 5 (length ranked)))
-        (should (assoc "DashScope" ranked))
+        (should (= 3 (length ranked)))
         (should (assoc "DeepSeek" ranked))
         (should (assoc "moonshot" ranked))
-        (should (assoc "MiniMax" ranked))
         (should (assoc "MiniMax" ranked))))))
 
 (ert-deftest regression/ontology-router/bayesian-keep-rate-floor ()
   "Backends with < 3 experiments should get 0.25 floor, not actual rate."
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
-          '(("DashScope" . "qwen3.6-plus")
-            ("DeepSeek" . "deepseek-v4-flash")
+          '(("DeepSeek" . "deepseek-v4-flash")
             ("moonshot" . "kimi-k2.6")
             ("MiniMax" . "minimax-m2.7-highspeed")
             ()))
@@ -883,20 +875,19 @@ All known backends now support lambda notation; no async verification needed."
     (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
                (lambda (backend &rest _)
                  (cond
-                  ((string= backend "DashScope")
+                  ((string= backend "DeepSeek")
                    (list :kept 0 :total 1 :keep-rate 0.0))
                   ((string= backend "DeepSeek")
                    (list :kept 2 :total 8 :keep-rate 0.25))
                   (t (list :kept 0 :total 0 :keep-rate nil))))))
       (let ((ranked (gptel-auto-workflow--ranked-subagent-backends)))
-        (should (string= "DashScope" (caar ranked)))
+        (should (string= "DeepSeek" (caar ranked)))
         (should (assoc "DeepSeek" ranked))))))
 
 (ert-deftest regression/ontology-router/ranked-analyzer-prefers-deepseek ()
   "Analyzer routing should rank DeepSeek first due to preference boost."
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
-         '(("DashScope" . "qwen3.6-plus")
-           ("DeepSeek" . "deepseek-v4-flash")
+         '(("DeepSeek" . "deepseek-v4-flash")
            ("MiniMax" . "minimax-m2.7-highspeed")))
         (gptel-auto-workflow--task-backend-preference
          '(("analyzer" "DeepSeek" . 0.15))))
@@ -909,8 +900,7 @@ All known backends now support lambda notation; no async verification needed."
 (ert-deftest regression/ontology-router/ranked-grader-prefers-moonshot ()
   "Grader routing should rank moonshot first due to preference boost."
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
-         '(("DashScope" . "qwen3.6-plus")
-           ("DeepSeek" . "deepseek-v4-flash")
+         '(("DeepSeek" . "deepseek-v4-flash")
            ("moonshot" . "kimi-k2.6")
            ("MiniMax" . "minimax-m2.7-highspeed")))
         (gptel-auto-workflow--task-backend-preference
@@ -921,26 +911,24 @@ All known backends now support lambda notation; no async verification needed."
         (should (string= "moonshot" (caar ranked)))
         (should (string= "kimi-k2.6" (cdar ranked)))))))
 
-(ert-deftest regression/ontology-router/ranked-executor-prefers-dashscope ()
-  "Executor routing should rank DashScope first due to preference boost."
+(ert-deftest regression/ontology-router/ranked-executor-prefers-deepseek ()
+  "Executor routing should rank DeepSeek first due to preference boost."
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
-         '(("DashScope" . "qwen3.6-plus")
-           ("DeepSeek" . "deepseek-v4-flash")
+         '(("DeepSeek" . "deepseek-v4-flash")
            ("moonshot" . "kimi-k2.6")
            ("MiniMax" . "minimax-m2.7-highspeed")))
         (gptel-auto-workflow--task-backend-preference
-         '(("executor" "DashScope" . 0.15))))
+         '(("executor" "DeepSeek" . 0.15))))
     (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
                (lambda (&rest _) (list :kept 0 :total 0 :keep-rate nil))))
       (let ((ranked (gptel-auto-workflow--ranked-subagent-backends "executor")))
-        (should (string= "DashScope" (caar ranked)))
-        (should (string= "qwen3.6-plus" (cdar ranked)))))))
+        (should (string= "DeepSeek" (caar ranked)))
+        (should (string= "deepseek-v4-flash" (cdar ranked)))))))
 
 (ert-deftest regression/ontology-router/ranked-no-agent-type-preserves-order ()
   "Calling ranked-subagent-backends without agent-type should keep default order."
   (let ((gptel-auto-workflow-executor-rate-limit-fallbacks
-          '(("DashScope" . "qwen3.6-plus")
-            ("DeepSeek" . "deepseek-v4-flash")
+          '(("DeepSeek" . "deepseek-v4-flash")
             ("MiniMax" . "minimax-m2.7-highspeed")))
          (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
          (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
@@ -948,8 +936,8 @@ All known backends now support lambda notation; no async verification needed."
     (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
                (lambda (&rest _) (list :kept 0 :total 0 :keep-rate nil))))
       (let ((ranked (gptel-auto-workflow--ranked-subagent-backends)))
-        (should (string= "DashScope" (caar ranked)))
-        (should (= 3 (length ranked)))))))
+        (should (string= "DeepSeek" (caar ranked)))
+        (should (= 2 (length ranked)))))))
 
 ;; ─── Backend Preference Evolution Tests ───
 
@@ -964,14 +952,13 @@ All known backends now support lambda notation; no async verification needed."
                 ;; DeepSeek/B: 3 kept + 2 discarded = 5
                 (make-list 3 (list :backend "DeepSeek" :kibcm-axis "B" :decision "kept"))
                 (make-list 2 (list :backend "DeepSeek" :kibcm-axis "B" :decision "discarded"))
-                ;; DashScope/A: 3 kept + 3 discarded = 6
-                (make-list 3 (list :backend "DashScope" :kibcm-axis "A" :decision "kept"))
-                (make-list 3 (list :backend "DashScope" :kibcm-axis "A" :decision "discarded"))))))
+                ;; DeepSeek/A: 3 kept + 3 discarded = 6
+                (make-list 3 (list :backend "DeepSeek" :kibcm-axis "A" :decision "kept"))
+                (make-list 3 (list :backend "DeepSeek" :kibcm-axis "A" :decision "discarded"))))))
     (let ((rates (gptel-auto-workflow--backend-per-axis-keep-rates)))
-      (should (= 3 (length rates)))
+      (should (= 2 (length rates)))
       (should (assoc '("DeepSeek" . "A") rates))
-      (should (assoc '("DeepSeek" . "B") rates))
-      (should (assoc '("DashScope" . "A") rates)))))
+      (should (assoc '("DeepSeek" . "B") rates)))))
 
 (ert-deftest regression/ontology-router/per-axis-min-5-samples ()
   "Pairs with < 5 samples should be excluded from keep-rate analysis."
@@ -989,20 +976,17 @@ All known backends now support lambda notation; no async verification needed."
   "Preference evolution should adjust boost when axis keep-rate differs from global."
   (let ((gptel-auto-workflow--task-backend-preference
          '(("analyzer" "DeepSeek" . 0.15)
-           ("executor" "DashScope" . 0.15)))
+           ("executor" "DeepSeek" . 0.15)))
         (gptel-auto-workflow--preference-persist-file
          (make-temp-file "aw-pref-test-" nil ".el")))
     (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
                (lambda ()
-                 ;; DeepSeek global: 3/10 = 0.3, axis A: 4/5 = 0.8, delta=+0.50
-                 ;; DashScope global: 0/10 = 0.0, axis D: 0/5 = 0.0, delta=0.0
+                 ;; DeepSeek global: 7/22 ~= 0.32, axis A (analyzer): 5/5 = 1.0, delta ~= 0.52
                  (append
-                  (make-list 3 (list :backend "DeepSeek" :kibcm-axis "B" :decision "kept"))
-                  (make-list 7 (list :backend "DeepSeek" :kibcm-axis "B" :decision "discarded"))
-                  (make-list 4 (list :backend "DeepSeek" :kibcm-axis "A" :decision "kept"))
-                  (make-list 1 (list :backend "DeepSeek" :kibcm-axis "A" :decision "discarded"))
-                  (make-list 10 (list :backend "DashScope" :kibcm-axis "A" :decision "discarded"))
-                  (make-list 5 (list :backend "DashScope" :kibcm-axis "D" :decision "discarded")))))
+                  (make-list 2 (list :backend "DeepSeek" :kibcm-axis "B" :decision "kept"))
+                  (make-list 10 (list :backend "DeepSeek" :kibcm-axis "B" :decision "discarded"))
+                  (make-list 5 (list :backend "DeepSeek" :kibcm-axis "D" :decision "discarded"))
+                  (make-list 5 (list :backend "DeepSeek" :kibcm-axis "A" :decision "kept")))))
               ((symbol-function 'gptel-auto-workflow--worktree-base-root)
                (lambda () (make-temp-file "aw-pref-root-" t))))
       (let* ((changed (gptel-auto-workflow--evolve-backend-preference))
@@ -1162,12 +1146,12 @@ SPECS is a list of (backend decision days-ago ...) triples."
   "When all experiments are from today, decayed should equal raw rate."
   (let* ((results
           (append (make-mock-results-with-dates
-                   (mapcar (lambda (_) '("DashScope" "kept" 0))
+                   (mapcar (lambda (_) '("DeepSeek" "kept" 0))
                            (number-sequence 1 3)))
                   (make-mock-results-with-dates
-                   (mapcar (lambda (_) '("DashScope" "discarded" 0))
+                   (mapcar (lambda (_) '("DeepSeek" "discarded" 0))
                            (number-sequence 1 7)))))
-         (stats (gptel-auto-workflow--decayed-keep-rate results "DashScope" 14.0)))
+         (stats (gptel-auto-workflow--decayed-keep-rate results "DeepSeek" 14.0)))
     (should (>= (plist-get stats :keep-rate) 0.29))
     (should (<= (plist-get stats :keep-rate) 0.31))
     (should (= 10 (plist-get stats :raw-total)))
@@ -1196,14 +1180,14 @@ SPECS is a list of (backend decision days-ago ...) triples."
                             (mapcar (lambda (_) '("DeepSeek" "kept" 0))
                                     (number-sequence 1 5)))
                            (make-mock-results-with-dates
-                            (mapcar (lambda (_) '("DashScope" "discarded" 0))
+                            (mapcar (lambda (_) '("MiniMax" "discarded" 0))
                                     (number-sequence 1 10)))))
          (ds-stats (gptel-auto-workflow--decayed-keep-rate results "DeepSeek" 14.0))
-         (dash-stats (gptel-auto-workflow--decayed-keep-rate results "DashScope" 14.0)))
+         (mm-stats (gptel-auto-workflow--decayed-keep-rate results "MiniMax" 14.0)))
     (should (= 5 (plist-get ds-stats :raw-total)))
     (should (>= (plist-get ds-stats :keep-rate) 0.99))
-    (should (= 10 (plist-get dash-stats :raw-total)))
-    (should (<= (plist-get dash-stats :keep-rate) 0.01))))
+    (should (= 10 (plist-get mm-stats :raw-total)))
+    (should (<= (plist-get mm-stats :keep-rate) 0.01))))
 
 (ert-deftest tdd/decay-keep-rate/old-days-ago-returns-zero-weight ()
   "Old experiments past several half-lives should have near-zero weight."
@@ -1223,8 +1207,7 @@ SPECS is a list of (backend decision days-ago ...) triples."
   "Backend with high keep-rate on target's axis should get a boost."
   (let ((gptel-auto-workflow--current-target "lisp/modules/gptel-ext-retry.el")
         (gptel-auto-workflow-executor-rate-limit-fallbacks
-         '(("DashScope" . "qwen3.6-plus")
-           ("DeepSeek" . "deepseek-v4-flash")
+         '(("DeepSeek" . "deepseek-v4-flash")
            ("MiniMax" . "minimax-m2.7-highspeed")))
         (gptel-auto-workflow--task-backend-preference nil)
         (gptel-auto-workflow--holographic-memory
@@ -1237,7 +1220,7 @@ SPECS is a list of (backend decision days-ago ...) triples."
               ((symbol-function 'gptel-auto-workflow--backend-per-axis-keep-rates)
                (lambda ()
                  '((("DeepSeek" . ":E") . 0.9)
-                   (("DashScope" . ":E") . 0.3)
+                   (("DeepSeek" . ":E") . 0.3)
                    (("MiniMax" . ":E") . 0.2))))
               ((symbol-function 'gptel-auto-workflow--get-holographic-consensus)
                (lambda (target)
@@ -1249,8 +1232,7 @@ SPECS is a list of (backend decision days-ago ...) triples."
   "Without holographic consensus, target axis is unknown, no per-axis boost."
   (let ((gptel-auto-workflow--current-target "some/unknown/file.el")
         (gptel-auto-workflow-executor-rate-limit-fallbacks
-         '(("DashScope" . "qwen3.6-plus")
-           ("DeepSeek" . "deepseek-v4-flash")))
+         '(("DeepSeek" . "deepseek-v4-flash")))
         (gptel-auto-workflow--task-backend-preference nil)
         (gptel-auto-workflow--holographic-memory nil)
         (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
@@ -1262,14 +1244,13 @@ SPECS is a list of (backend decision days-ago ...) triples."
                (lambda (_)
                  (list :axis "?" :count 0 :total 0 :confidence 0.0))))
       (let ((ranked (gptel-auto-workflow--ranked-subagent-backends "analyzer")))
-        (should (string= "DashScope" (caar ranked)))))))
+        (should (string= "DeepSeek" (caar ranked)))))))
 
 (ert-deftest tdd/axis-pref/no-boost-when-confidence-low ()
   "When holographic confidence is < 0.5, should not apply axis boost."
   (let ((gptel-auto-workflow--current-target "uncertain-target.el")
         (gptel-auto-workflow-executor-rate-limit-fallbacks
-         '(("DashScope" . "qwen3.6-plus")
-           ("DeepSeek" . "deepseek-v4-flash")))
+         '(("DeepSeek" . "deepseek-v4-flash")))
         (gptel-auto-workflow--task-backend-preference nil)
         (gptel-auto-workflow--holographic-memory
          '((("uncertain-target.el" . ":K") . 2)))
@@ -1285,14 +1266,13 @@ SPECS is a list of (backend decision days-ago ...) triples."
                (lambda (_)
                  (list :axis ":K" :count 2 :total 5 :confidence 0.4))))
       (let ((ranked (gptel-auto-workflow--ranked-subagent-backends "analyzer")))
-        (should (string= "DashScope" (caar ranked)))))))
+        (should (string= "DeepSeek" (caar ranked)))))))
 
 (ert-deftest tdd/axis-pref/boost-scales-with-axis-keep-rate ()
   "Boost magnitude should be proportional to the axis keep-rate delta."
   (let ((gptel-auto-workflow--current-target "target.el")
         (gptel-auto-workflow-executor-rate-limit-fallbacks
-         '(("DashScope" . "qwen3.6-plus")
-           ("DeepSeek" . "deepseek-v4-flash")))
+         '(("DeepSeek" . "deepseek-v4-flash")))
         (gptel-auto-workflow--task-backend-preference nil)
         (gptel-auto-workflow--holographic-memory
          '((("target.el" . ":B") . 10)))
@@ -1304,7 +1284,7 @@ SPECS is a list of (backend decision days-ago ...) triples."
               ((symbol-function 'gptel-auto-workflow--backend-per-axis-keep-rates)
                (lambda ()
                  '((("DeepSeek" . ":B") . 0.9)
-                   (("DashScope" . ":B") . 0.4))))
+                   (("DeepSeek" . ":B") . 0.4))))
               ((symbol-function 'gptel-auto-workflow--get-holographic-consensus)
                (lambda (_)
                  (list :axis ":B" :count 10 :total 12 :confidence 0.83))))
@@ -1315,10 +1295,9 @@ SPECS is a list of (backend decision days-ago ...) triples."
 
 (ert-deftest tdd/run-cooldown/cooldown-excludes-failed-backend ()
   "Backends in the run cooldown list should be excluded from ranking."
-  (let ((gptel-auto-workflow--run-failed-backends '("DashScope"))
+  (let ((gptel-auto-workflow--run-failed-backends '("DeepSeek"))
         (gptel-auto-workflow-executor-rate-limit-fallbacks
-         '(("DashScope" . "qwen3.6-plus")
-           ("DeepSeek" . "deepseek-v4-flash")
+         '(("DeepSeek" . "deepseek-v4-flash")
            ("MiniMax" . "minimax-m2.7-highspeed")))
         (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
         (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
@@ -1327,17 +1306,15 @@ SPECS is a list of (backend decision days-ago ...) triples."
     (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
                (lambda (&rest _) (list :kept 5 :total 10 :keep-rate 0.5))))
       (let ((ranked (gptel-auto-workflow--ranked-subagent-backends "analyzer")))
-        (should (= 2 (length ranked)))
-        (should-not (assoc "DashScope" ranked))
-        (should (assoc "DeepSeek" ranked))
+        (should (= 1 (length ranked)))
+        (should-not (assoc "DeepSeek" ranked))
         (should (assoc "MiniMax" ranked))))))
 
 (ert-deftest tdd/run-cooldown/empty-cooldown-allows-all ()
   "Empty cooldown list should not exclude any backends."
   (let ((gptel-auto-workflow--run-failed-backends nil)
         (gptel-auto-workflow-executor-rate-limit-fallbacks
-         '(("DashScope" . "qwen3.6-plus")
-           ("DeepSeek" . "deepseek-v4-flash")))
+         '(("DeepSeek" . "deepseek-v4-flash")))
         (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
         (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
         (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
@@ -1345,16 +1322,15 @@ SPECS is a list of (backend decision days-ago ...) triples."
     (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
                (lambda (&rest _) (list :kept 5 :total 10 :keep-rate 0.5))))
       (let ((ranked (gptel-auto-workflow--ranked-subagent-backends "analyzer")))
-        (should (= 2 (length ranked)))
-        (should (assoc "DashScope" ranked))
+        (should (= 1 (length ranked)))
         (should (assoc "DeepSeek" ranked))))))
 
 (ert-deftest tdd/run-cooldown/clear-cooldown-resets-exclusions ()
   "Clearing the cooldown list should bring failed backends back."
-  (let ((gptel-auto-workflow--run-failed-backends '("DashScope"))
+  (let ((gptel-auto-workflow--run-failed-backends '("DeepSeek"))
         (gptel-auto-workflow-executor-rate-limit-fallbacks
-         '(("DashScope" . "qwen3.6-plus")
-           ("DeepSeek" . "deepseek-v4-flash")))
+         '(("DeepSeek" . "deepseek-v4-flash")
+           ("MiniMax" . "minimax-m2.7-highspeed")))
         (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
         (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
         (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
@@ -1362,13 +1338,15 @@ SPECS is a list of (backend decision days-ago ...) triples."
     (cl-letf (((symbol-function 'gptel-auto-workflow--get-backend-performance-stats)
                (lambda (&rest _) (list :kept 5 :total 10 :keep-rate 0.5))))
       (let ((ranked (gptel-auto-workflow--ranked-subagent-backends "analyzer")))
-        (should-not (assoc "DashScope" ranked)))
+        (should (= 1 (length ranked)))
+        (should-not (assoc "DeepSeek" ranked))
+        (should (assoc "MiniMax" ranked)))
       ;; Clear cooldown
       (gptel-auto-workflow--clear-run-failed-backends)
       (let ((ranked (gptel-auto-workflow--ranked-subagent-backends "analyzer")))
         (should (= 2 (length ranked)))
-        (should (assoc "DashScope" ranked))
-        (should (assoc "DeepSeek" ranked))))))
+        (should (assoc "DeepSeek" ranked))
+        (should (assoc "MiniMax" ranked))))))
 
 ;; ─── Routing Context for Prompt Injection Tests ───
 
@@ -1417,8 +1395,8 @@ SPECS is a list of (backend decision days-ago ...) triples."
                  (list :kept 5 :total 10 :keep-rate 0.5)))
               ((symbol-function 'gptel-auto-workflow--safe-backend-name)
                (lambda (b) b)))
-      (let ((ctx (gptel-auto-workflow--routing-context "DashScope" "qwen3.6-plus")))
-        (should (string-match-p "DashScope" ctx))
+      (let ((ctx (gptel-auto-workflow--routing-context "DeepSeek" "deepseek-v4-flash")))
+        (should (string-match-p "DeepSeek" ctx))
         (should (string-match-p "healthy" ctx))))))
 
 ;; ─── Auto-Recovery from Probation Tests ───
@@ -1431,11 +1409,11 @@ SPECS is a list of (backend decision days-ago ...) triples."
          (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
          (gptel-auto-workflow--lambda-last-strike-time (make-hash-table :test 'equal))
          (gptel-auto-workflow--evolution-next-cycle-hints nil))
-    (puthash "DashScope" 3 gptel-auto-workflow--lambda-strike-count)
-    (puthash "DashScope" old-time gptel-auto-workflow--lambda-last-strike-time)
+    (puthash "DeepSeek" 3 gptel-auto-workflow--lambda-strike-count)
+    (puthash "DeepSeek" old-time gptel-auto-workflow--lambda-last-strike-time)
     ;; 3 strikes + old timestamp → should be level 2 (degraded), not 3 (probation)
-    (should (= 2 (gptel-auto-workflow--backend-health-level "DashScope")))
-    (should (= 0.65 (gptel-auto-workflow--backend-health-weight "DashScope")))))
+    (should (= 2 (gptel-auto-workflow--backend-health-level "DeepSeek")))
+    (should (= 0.65 (gptel-auto-workflow--backend-health-weight "DeepSeek")))))
 
 (ert-deftest tdd/health-auto-recovery/recent-strike-stays-probation ()
   "Backend with recent strike should stay at probation level."
@@ -1471,7 +1449,7 @@ SPECS is a list of (backend decision days-ago ...) triples."
                 (list :target "foo.el" :backend "DeepSeek" :model "deepseek-v4-flash" :decision "kept")
                 (list :target "foo.el" :backend "DeepSeek" :model "deepseek-v4-pro" :decision "kept")
                 (list :target "foo.el" :backend "DeepSeek" :model "deepseek-v4-flash" :decision "discarded")
-                (list :target "foo.el" :backend "DashScope" :model "qwen3.6-plus" :decision "kept")
+                (list :target "foo.el" :backend "DeepSeek" :model "deepseek-v4-flash" :decision "kept")
                 (list :target "bar.el" :backend "DeepSeek" :model "deepseek-v4-flash" :decision "kept"))))
             ((symbol-function 'gptel-auto-workflow--model-combination-valid-p)
              (lambda (_) t)))  ; all combinations valid in test
@@ -1493,13 +1471,14 @@ SPECS is a list of (backend decision days-ago ...) triples."
   (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
              (lambda ()
                (list
-                (list :target "foo.el" :backend "DashScope" :model "qwen3.6-plus" :decision "kept")
-                (list :target "foo.el" :backend "DashScope" :model "qwen3.6-plus" :decision "kept")
+                (list :target "foo.el" :backend "DeepSeek" :model "deepseek-v4-flash" :decision "kept")
+                (list :target "foo.el" :backend "DeepSeek" :model "deepseek-v4-flash" :decision "discarded")
                 (list :target "foo.el" :backend "DeepSeek" :model "deepseek-v4-pro" :decision "kept"))))
             ((symbol-function 'gptel-auto-workflow--model-combination-valid-p)
              (lambda (_) t)))
     (let ((model (gptel-auto-workflow--best-model-for-target "foo.el" "DeepSeek")))
-      ;; Only DeepSeek models for this target → one kept
+      ;; deepseek-v4-flash: 1 kept / 2 total = 50%, deepseek-v4-pro: 1 kept / 1 total = 100%
+      ;; → deepseek-v4-pro wins deterministically
       (should (string= "deepseek-v4-pro" model)))))
 
 ;; ─── Routing Audit Trail Tests ───
@@ -1509,8 +1488,7 @@ SPECS is a list of (backend decision days-ago ...) triples."
   (let ((gptel-auto-workflow--routing-audit-log nil)
         (gptel-auto-workflow--current-target "test-target.el")
         (gptel-auto-workflow-executor-rate-limit-fallbacks
-         '(("DashScope" . "qwen3.6-plus")
-           ("DeepSeek" . "deepseek-v4-flash")))
+         '(("DeepSeek" . "deepseek-v4-flash")))
         (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
         (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
         (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
@@ -1531,7 +1509,7 @@ SPECS is a list of (backend decision days-ago ...) triples."
   (let ((gptel-auto-workflow--routing-audit-log nil)
         (gptel-auto-workflow--current-target "target.el")
         (gptel-auto-workflow-executor-rate-limit-fallbacks
-         '(("DashScope" . "qwen3.6-plus")))
+         '(("DeepSeek" . "deepseek-v4-flash")))
         (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
         (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
         (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))
@@ -1550,8 +1528,8 @@ SPECS is a list of (backend decision days-ago ...) triples."
          (list (list :timestamp (float-time) :selected-backend "DeepSeek"
                      :selected-model "deepseek-v4-pro" :agent-type "analyzer"
                      :vsm-adjustments '("S4:explore→30%"))
-               (list :timestamp (float-time) :selected-backend "DashScope"
-                     :selected-model "qwen3.6-plus" :agent-type "executor"))))
+               (list :timestamp (float-time) :selected-backend "DeepSeek"
+                     :selected-model "deepseek-v4-flash" :agent-type "executor"))))
     (let ((summary (gptel-auto-workflow--audit-trail-summary)))
       (should (= 2 (plist-get summary :total-decisions))))))
 
@@ -1560,7 +1538,7 @@ SPECS is a list of (backend decision days-ago ...) triples."
   (let ((gptel-auto-workflow--routing-audit-log
          (list (list :timestamp (float-time) :selected-backend "DeepSeek"
                      :vsm-adjustments '("S2:delta→20%+rate→40%" "S4:explore→30%"))
-               (list :timestamp (float-time) :selected-backend "DashScope"
+               (list :timestamp (float-time) :selected-backend "DeepSeek"
                      :vsm-adjustments '("S2:delta→20%+rate→40%")))))
     (let* ((summary (gptel-auto-workflow--audit-trail-summary))
            (vsm (plist-get summary :vsm-adjustments)))

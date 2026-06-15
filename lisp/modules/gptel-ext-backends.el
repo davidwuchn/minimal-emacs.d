@@ -26,16 +26,6 @@ to avoid pinentry failures in headless daemon mode.  This mirrors
     (when decrypted
       (string-trim decrypted))))
 
-;;; DashScope Backend - uses OpenAI-compatible API
-;;; No custom parser needed - standard OpenAI SSE format
-
-(defun gptel-make-dashscope (name &rest args)
-  "Register a DashScope backend with NAME.
-Uses standard OpenAI-compatible format - no custom parser needed.
-ARGS are passed to `gptel-make-openai'."
-  (declare (indent 1))
-  (apply #'gptel-make-openai name args))
-
 ;; --- Provider Backends ---
 (defvar gptel--copilot (gptel-make-gh-copilot "Copilot"))
 
@@ -56,22 +46,6 @@ ARGS are passed to `gptel-make-openai'."
                :request-params (:thinking (:type "adaptive")
                                :reasoning_split t
                                :max_completion_tokens 8192)))))
-
-(defvar gptel--dashscope
-  (gptel-make-dashscope "DashScope"
-    :host "coding.dashscope.aliyuncs.com"
-    :key (lambda () (my/gptel-api-key "coding.dashscope.aliyuncs.com"))
-    :stream t
-    :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
-    :models '((qwen3.7-plus
-               :request-params (:enable_thinking t))
-              (qwen3.6-plus
-               :request-params (:enable_thinking t))
-              qwen3-max-2026-01-23 qwen3-coder-next qwen3-coder-plus kimi-k2.5
-              (glm-5
-               :request-params (:enable_thinking t))
-              (glm-4.7
-               :request-params (:enable_thinking t)))))
 
 (defvar gptel--z-ai
   (gptel-make-openai "Z-AI"
@@ -119,28 +93,6 @@ ARGS are passed to `gptel-make-openai'."
               (deepseek-v4-pro
                :request-params (:thinking (:type "enabled")
                                 :reasoning_effort "high")))))
-
-(defvar gptel--token-plan
-  (gptel-make-openai "TokenPlan"
-    :host "token-plan.cn-beijing.maas.aliyuncs.com"
-    :endpoint "/compatible-mode/v1/chat/completions"
-    :key (lambda () (my/gptel-api-key "token-plan.cn-beijing.maas.aliyuncs.com"))
-    :stream t
-    :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
-    :models '((qwen3.7-max
-               :request-params (:enable_thinking t))
-              (qwen3.6-plus
-               :request-params (:enable_thinking t))
-              (qwen3.6-flash
-               :request-params (:enable_thinking t))
-              (deepseek-v4-pro
-               :request-params (:enable_thinking t))
-              (deepseek-v4-flash
-               :request-params (:enable_thinking t))
-              kimi-k2.6
-               (glm-5.1
-                :request-params (:enable_thinking t))
-              MiniMax-M2.5)))
 
 (defvar gptel--cf-gateway
   (gptel-make-openai "CF-Gateway"

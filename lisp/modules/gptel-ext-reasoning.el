@@ -239,7 +239,7 @@ OpenRouter/Anthropic when the model emits a tool call with a nil function name
                   (progn (plist-put msg :tool_calls nil)
                          ;; :content may be :null (gptel's JSON null sentinel) OR
                          ;; Elisp nil (json-serialize encodes nil as {}, causing
-                         ;; DashScope/OpenAI 400 "got object instead of string").
+                         ;; OpenAI-compatible API 400 "got object instead of string").
                          (let ((c (plist-get msg :content)))
                            (when (or (eq c :null) (null c))
                              (plist-put msg :content ""))))

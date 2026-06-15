@@ -559,8 +559,7 @@ Returns plist :gap-count, :isolated, :low-confidence, :self-refs, :mismatches."
 (defun gptel-auto-workflow-self-audit--write-memory (audit-result)
   "Write an audit-fix scratch file when issues are found."
   (when (and audit-result (> (or (plist-get audit-result :issues) 0) 0))
-    (let* ((root (gptel-auto-workflow-self-audit--root))
-           (memory-dir (gptel-auto-workflow-self-audit--audit-fix-dir))
+    (let* ((memory-dir (gptel-auto-workflow-self-audit--audit-fix-dir))
            (ts (plist-get audit-result :timestamp))
            (filename (expand-file-name
                        (concat "audit-fix-" ts ".md")
@@ -750,8 +749,7 @@ Returns plist :before-issues, :after-issues, :improved-p, :delta."
 (defun gptel-auto-workflow-self-audit--read-audit-memories ()
   "Read all audit-fix-*.md scratch files and return list of plists.
 Each plist has :file, :timestamp, :issues, :cold, :unev, :bottleneck."
-  (let* ((root (gptel-auto-workflow-self-audit--root))
-         (mem-dir (gptel-auto-workflow-self-audit--audit-fix-dir))
+  (let* ((mem-dir (gptel-auto-workflow-self-audit--audit-fix-dir))
          (memories '()))
     (when (file-directory-p mem-dir)
       (dolist (f (directory-files mem-dir t "audit-fix-.*\\.md$"))
@@ -983,7 +981,7 @@ Returns number of signals applied."
 ;;; Pricing freshness check (token-economics foundation)
 
 (defun gptel-auto-workflow-self-audit--parse-pricing-knowledge ()
-  "Parse mementum/knowledge/bailian-pricing.md and return pricing alist.
+  "Parse pricing knowledge file and return pricing alist.
 Each entry: (:model :input-cny :output-cny :cache-cny :context :last-updated).
 Extracts last-updated from frontmatter for freshness tracking."
   (let* ((root (gptel-auto-workflow-self-audit--root))
@@ -1057,7 +1055,7 @@ Returns plist (:input :output :cache :context) or nil."
                     :context (or (plist-get mplist :context-window) 0)))))))))
 
 (defun gptel-auto-workflow-self-audit--check-pricing-freshness ()
-  "Compare bailian-pricing.md knowledge page against gptel-backend-registry.
+  "Compare pricing knowledge page against gptel-backend-registry.
 Returns plist (:stale-count :discrepancies :knowledge-count :last-updated
 :days-stale).
 Each discrepancy: (:model :provider :field :expected :actual).
@@ -1152,8 +1150,8 @@ Also flags if the knowledge page hasn't been updated in >30 days."
                         (plist-get d :actual)))
               disc "\n")
         (when (> days-stale 30)
-          "\n⚠ Knowledge page >30 days stale — update from Bailian console")
-        "\n→ Resolve: update registry OR update bailian-pricing.md")))))
+          "\n⚠ Knowledge page >30 days stale — update from provider console")
+        "\n→ Resolve: update registry OR update pricing knowledge")))))
 
 ;;; Gate-integrity checks (OV5 pipeline control-flow)
 

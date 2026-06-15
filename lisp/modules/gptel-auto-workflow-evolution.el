@@ -7465,7 +7465,7 @@ reflection logic may be broken"
                      (setq gptel-auto-workflow--force-grader-backends
                            (if (fboundp 'gptel-backend-registry-fallback-chain-as-cons)
                                (mapcar #'cdr (gptel-backend-registry-fallback-chain-as-cons 'grader))
-                             '("deepseek-v4-flash" "deepseek-v4-pro" "qwen3.7-max")))
+                              '("deepseek-v4-flash" "deepseek-v4-pro")))
                      (message "[self-heal]   → Forced grader backends: %S"
                               gptel-auto-workflow--force-grader-backends)))
                  ("simplify-experiment-prompt"

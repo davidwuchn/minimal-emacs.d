@@ -626,7 +626,7 @@ Detects deletion of:
 - Public variables: (defvar NAME ...) or (defcustom NAME ...) where NAME
   doesn't start with \\='gptel--\\='
 - Backend registrations: Any deletion containing backend names
-  (TokenPlan, DeepSeek, etc.)
+  (DeepSeek, etc.)
 
 Private definitions (starting with \\='gptel--\\=' or containing
 \\='--internal\\=) are considered safe to delete."
@@ -639,7 +639,7 @@ Private definitions (starting with \\='gptel--\\=' or containing
         (while (and (not destructive-p)
                     (re-search-forward "^-" nil t))
           (let ((line (buffer-substring (line-beginning-position) (line-end-position))))
-            (when (string-match-p "\\bTokenPlan\\|DeepSeek\\|MiniMax\\|CF-Gateway\\|Copilot\\|DashScope\\|Z-AI\\b" line)
+            (when (string-match-p "\\bDeepSeek\\|MiniMax\\|CF-Gateway\\|Copilot\\|Z-AI\\b" line)
               (setq destructive-p t))))
         ;; Check 2: Public defun/defvar/defcustom deletion
         (goto-char (point-min))

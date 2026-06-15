@@ -31,10 +31,6 @@
   "MiniMax backend should be registered."
   (should (boundp 'gptel--minimax)))
 
-(ert-deftest test-backends/dashscope-backend-exists ()
-  "DashScope backend should be registered."
-  (should (boundp 'gptel--dashscope)))
-
 (ert-deftest test-backends/moonshot-backend-exists ()
   "Moonshot backend should be registered."
   (should (boundp 'gptel--moonshot)))
@@ -50,11 +46,6 @@
   (let ((backend gptel--minimax))
     (should (gptel-backend-models backend))))
 
-(ert-deftest test-backends/dashscope-has-models ()
-  "DashScope backend should have models defined."
-  (let ((backend gptel--dashscope))
-    (should (gptel-backend-models backend))))
-
 (ert-deftest test-backends/moonshot-has-models ()
   "Moonshot backend should have models defined."
   (let ((backend gptel--moonshot))
@@ -65,11 +56,6 @@
 (ert-deftest test-backends/minimax-has-curl-args ()
   "MiniMax backend should have custom curl args."
   (let ((backend gptel--minimax))
-    (should (gptel-backend-curl-args backend))))
-
-(ert-deftest test-backends/dashscope-has-curl-args ()
-  "DashScope backend should have custom curl args."
-  (let ((backend gptel--dashscope))
     (should (gptel-backend-curl-args backend))))
 
 (provide 'test-gptel-ext-backends)

@@ -2632,7 +2632,6 @@ exhaustion.")
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
   '(("DeepSeek" . "deepseek-v4-pro")
     ("MiniMax" . "MiniMax-M3")
-    ("DashScope" . "qwen3.6-plus")
     ("moonshot" . "kimi-k2.6"))
   "Ordered backend/model fallbacks for headless
 auto-workflow subagents.
@@ -2640,8 +2639,6 @@ auto-workflow subagents.
 DeepSeek first \(deep reasoning for complex tasks\),
 then MiniMax \(fast, no thinking mode — ideal for
 analysis/grader tasks\),
-then DashScope \(qwen3.6-plus — reinstated 2026-05-31
-after quota recovery\),
 then moonshot \(kimi-k2.6 — temporarily rate-limited
 due to quota exhaustion\).
 CF-Gateway removed — does not support tool calls reliably.
@@ -2674,27 +2671,21 @@ Returns alist of (AGENT-TYPE BACKEND . MODEL) entries."
 
 (defcustom gptel-auto-workflow-per-task-model-map
   '(    ("analyzer"   "MiniMax"    . "MiniMax-M3")
-    ("analyzer"   "DashScope"  . "qwen3.6-plus")
     ("analyzer"   "moonshot"   . "kimi-k2.6")
     ("analyzer"   "DeepSeek"   . "deepseek-v4-flash")
     ("grader"     "MiniMax"    . "MiniMax-M3")
-    ("grader"     "DashScope"  . "qwen3.6-plus")
     ("grader"     "DeepSeek"   . "deepseek-v4-pro")
     ("grader"     "moonshot"   . "kimi-k2.6")
-    ("executor"   "DashScope"  . "qwen3.6-plus")
     ("executor"   "moonshot"   . "kimi-k2.6")
     ("executor"   "DeepSeek"   . "deepseek-v4-flash")
     ("executor"   "MiniMax"    . "MiniMax-M3")
     ("researcher" "MiniMax"    . "MiniMax-M3")
-    ("researcher" "DashScope"  . "qwen3.6-plus")
     ("researcher" "DeepSeek"   . "deepseek-v4-pro")
     ("researcher" "moonshot"   . "kimi-k2.6")
     ("reviewer"   "MiniMax"    . "MiniMax-M3")
-    ("reviewer"   "DashScope"  . "qwen3.6-plus")
     ("reviewer"   "DeepSeek"   . "deepseek-v4-pro")
     ("reviewer"   "moonshot"   . "kimi-k2.6")
     ("comparator" "MiniMax"    . "MiniMax-M3")
-    ("comparator" "DashScope"  . "qwen3.6-plus")
     ("comparator" "DeepSeek"   . "deepseek-v4-pro")
     ("comparator" "moonshot"   . "kimi-k2.6"))
   "Per-task-type model selection for each backend.
@@ -2726,7 +2717,6 @@ and advance through the configured fallback chain instead.")
     ("DeepSeek" . "api.deepseek.com")
     ("Gemini" . "generativelanguage.googleapis.com")
     ("CF-Gateway" . "gateway.ai.cloudflare.com")
-    ("DashScope" . "coding.dashscope.aliyuncs.com")
     ("Z-AI" . "open.bigmodel.cn")
     ("moonshot" . "api.kimi.com"))
   "Map gptel backend names to auth-source hosts for workflow failover.")
@@ -2736,7 +2726,6 @@ and advance through the configured fallback chain instead.")
     ("DeepSeek" . gptel--deepseek)
     ("Gemini" . gptel--gemini)
     ("CF-Gateway" . gptel--cf-gateway)
-    ("DashScope" . gptel--dashscope)
     ("Z-AI" . gptel--z-ai)
     ("moonshot" . gptel--moonshot))
   "Map gptel backend names to the corresponding backend object variables.")
@@ -2766,7 +2755,7 @@ if no per-task mapping exists for this backend."
       ;; ASSUMPTION: The historical model must be a known model for this
       ;; backend (from the per-task model map or fallback chain).  This
       ;; prevents stale data from injecting wrong models (e.g. kimi-k2.6
-      ;; for DashScope when only qwen3.6-plus is valid).
+      ;; for an incompatible backend).
       (and (boundp 'gptel-auto-workflow--current-target)
            gptel-auto-workflow--current-target
            (fboundp 'gptel-auto-workflow--best-model-for-target)
@@ -2828,8 +2817,7 @@ If BACKEND is not found, returns \"unknown\"."
 
 (defun gptel-auto-workflow--backend-for-model (model)
   "Derive the backend provider name from a MODEL string.
-Returns a string like \"DeepSeek\", \"MiniMax\", \"moonshot\", \"DashScope\",
-etc.
+Returns a string like \"DeepSeek\", \"MiniMax\", \"moonshot\", etc.
 Returns \"unknown\" when model is nil, empty, or unrecognized."
   (cond
    ((or (null model) (not (stringp model)) (string= model ""))
@@ -2838,7 +2826,6 @@ Returns \"unknown\" when model is nil, empty, or unrecognized."
    ((string-prefix-p "minimax" model) "MiniMax")
    ((string-prefix-p "MiniMax" model) "MiniMax")
    ((string-prefix-p "kimi" model) "moonshot")
-   ((string-prefix-p "qwen" model) "DashScope")
    ((string-prefix-p "gpt" model) "OpenAI")
    ((string-prefix-p "claude" model) "Anthropic")
    ((string-prefix-p "gemini" model) "Google")
@@ -2846,8 +2833,8 @@ Returns \"unknown\" when model is nil, empty, or unrecognized."
 
 (defun gptel-auto-workflow--backend-object (backend-name)
   "Return the backend object for BACKEND-NAME, or nil when unavailable.
-BACKEND-NAME may be a string (\"DashScope\"), a keyword (:DashScope),
-a symbol (DashScope), or already a backend object.  Keywords and
+BACKEND-NAME may be a string (\"DeepSeek\"), a keyword (:DeepSeek),
+a symbol (DeepSeek), or already a backend object.  Keywords and
 symbols are converted to strings for lookup."
   (cond
    ;; Already a backend object — return as-is
@@ -2899,17 +2886,14 @@ the user has not explicitly customized the variable."
              'gptel-auto-workflow-headless-subagent-fallbacks)
       (when (member gptel-auto-workflow-headless-subagent-fallbacks
                     '((("MiniMax" . "minimax-m2.7-highspeed")
-                       ("DashScope" . "qwen3.6-plus")
                        ("DeepSeek" . "deepseek-chat")
                        ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
                        ("Gemini" . "gemini-3.1-pro-preview"))
-                       (("DashScope" . "qwen3.6-plus")
-                        ("moonshot" . "kimi-k2.6")
-    ("DeepSeek" . "deepseek-v4-pro")
-                        ("MiniMax" . "minimax-m2.7-highspeed"))))
+                      (("DeepSeek" . "deepseek-v4-pro")
+                       ("moonshot" . "kimi-k2.6")
+                       ("MiniMax" . "minimax-m2.7-highspeed"))))
          (setq gptel-auto-workflow-headless-subagent-fallbacks
-               '(("DashScope" . "qwen3.6-plus")
-                 ("DeepSeek" . "deepseek-v4-pro")
+               '(("DeepSeek" . "deepseek-v4-pro")
                  ("moonshot" . "kimi-k2.6")
                  ("MiniMax" . "minimax-m2.7-highspeed")))
         (push 'gptel-auto-workflow-headless-subagent-fallbacks migrated)))
@@ -2919,12 +2903,10 @@ the user has not explicitly customized the variable."
                  (equal gptel-auto-workflow-executor-rate-limit-fallbacks
                    '(("DeepSeek" . "deepseek-chat")
                      ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
-                     ("DashScope" . "qwen3.6-plus")
                      ("Gemini" . "gemini-3.1-pro-preview"))))
           (setq gptel-auto-workflow-executor-rate-limit-fallbacks
                 '(("MiniMax" . "minimax-m2.7-highspeed")
                   ("moonshot" . "kimi-k2.6")
-                  ("DashScope" . "glm-5")
                   ("DeepSeek" . "deepseek-v4-pro")))
         (push 'gptel-auto-workflow-executor-rate-limit-fallbacks migrated)))
     (unless (gptel-auto-workflow--custom-var-user-customized-p
@@ -2974,18 +2956,17 @@ Returns the static fallback chain as a last resort.
 
 For executors, the static fallback chain takes priority because the dynamic
 router aggregates data across ALL task types — a backend that's fast for
-analysis/compare may still be too slow for code generation (DashScope:
+analysis/compare may still be too slow for code generation (e.g.,
 0% keep-rate on executor, consistently times out at 1080s)."
   (cond
    ((not (stringp agent-type)) nil)
    ((string= agent-type "executor")
-    ;; Executor: trust the hand-tuned static fallback chain as primary.
-    ;; The onto-router's aggregate ranking puts DashScope first (fast for
-    ;; non-generative tasks) but DashScope has 0% keep-rate on executor.
-    ;; DeepSeek has 25% keep-rate on :agentic tasks — it should be first.
-    ;; Do NOT sort by router position: if DashScope is at position 0 in the
-    ;; aggregate ranking, sorting by it would put DashScope first again.
-    ;; Only remove backends the router explicitly deprioritizes.
+     ;; Executor: trust the hand-tuned static fallback chain as primary.
+     ;; The onto-router's aggregate ranking may put fast backends first
+     ;; (good for non-generative tasks) but they may have 0% keep-rate on
+     ;; executor. DeepSeek has 25% keep-rate on :agentic tasks — it should
+     ;; be first. Do NOT sort by router position blindly.
+     ;; Only remove backends the router explicitly deprioritizes.
     (or (and (boundp 'gptel-auto-workflow-executor-rate-limit-fallbacks)
              gptel-auto-workflow-executor-rate-limit-fallbacks
              (let ((ranked (and (fboundp 'gptel-auto-workflow--ranked-subagent-backends)
@@ -3056,9 +3037,9 @@ chain so that subagent calls do not fall through to the mode-hook default
     ;; When headless mode is active, prefer the ranked backend chain
     ;; over any preset backend or the global gptel-backend.  The
     ;; executor agent config often has :backend \"MiniMax\" hardcoded in
-    ;; its agent plist — this overrides even a non-nil preset backend
-    ;; so DashScope is used first (avoiding MiniMax rate-limit death
-    ;; spiral on first subagent call).
+     ;; its agent plist — this overrides even a non-nil preset backend
+     ;; so the preferred headless fallback is used first (avoiding MiniMax
+     ;; rate-limit death spiral on first subagent call).
     (if (and (fboundp 'gptel-auto-workflow--headless-provider-override-active-p)
              (gptel-auto-workflow--headless-provider-override-active-p)
              (fboundp 'gptel-auto-workflow--rate-limit-failover-candidates)

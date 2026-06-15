@@ -116,24 +116,7 @@ under `lexical-binding: t'.")
 Avoids repeated filtering of the same symbol list.")
 
 (defvar my/gptel--known-model-context-windows
-  '(;; Qwen (Alibaba) - Bailian pricing tiers confirm 1M context for latest models
-    ("qwen3.7-max" . 1000000)
-    ("qwen3.7-plus" . 1000000)
-    ("qwen3.6-plus" . 1000000)
-    ("qwen3.6-flash" . 1000000)
-    ("qwen3-coder-next" . 131072)
-    ("qwen3-coder-plus" . 1000000)
-    ("qwen3-max-2026-01-23" . 262144)
-    ("qwen3-coder" . 131072)
-    ("qwen-plus" . 1000000)
-    ("qwen-flash" . 1000000)
-    ("qwen-max" . 131072)
-    ("qwen2.5-max" . 131072)
-    ("qwen2.5-72b" . 131072)
-    ("qwen2.5-32b" . 131072)
-    ("qwen2.5-14b" . 131072)
-    ("qwen2.5-7b" . 131072)
-    ;; Gemini (Google)
+  '(;; Gemini (Google)
     ("gemini-3" . 1048576)
     ("gemini-2.5" . 1048576)
     ("gemini-1.5" . 1048576)
@@ -188,7 +171,6 @@ IMPORTANT: Keep this updated! If you don't know a model's context window,
 check the provider's documentation first before assuming defaults.
 
 Sources:
-- Qwen: https://help.aliyun.com/zh/model-studio/getting-started/models
 - Gemini: https://openrouter.ai/models/google/gemini-2.5-pro-preview
 - Claude: https://openrouter.ai/models/anthropic/claude-sonnet-4
 - DeepSeek: https://api-docs.deepseek.com/zh-cn/quick_start/pricing
@@ -197,43 +179,7 @@ Sources:
 https://developers.cloudflare.com/workers-ai/models/kimi-k2.6/")
 
 (defvar my/gptel--known-model-metadata
-  '(;; Qwen (Alibaba via DashScope/Bailian) — Bailian pricing as of 2026-06
-    ;; qwen3.7-max: ¥12/¥36 per 1M tokens in/out (2026-05-20)
-    ("qwen3.7-max"
-     :context-window 1000000
-     :pricing-input 1.66 :pricing-output 4.97
-     :max-output 131072
-     :features (streaming tools reasoning)
-     :description "Qwen3.7 Max - SOTA reasoning, 1M context, ¥12/¥36")
-    ;; qwen3.7-plus: tiered ¥2→6/¥8→24 per 1M (0-256K / 256K-1M)
-    ("qwen3.7-plus"
-     :context-window 1000000
-     :pricing-input 0.83 :pricing-output 3.31
-     :max-output 131072
-     :features (streaming tools reasoning)
-     :description "Qwen3.7 Plus - 1M context, tiered ¥2-6/¥8-24")
-    ("qwen3-coder-next"
-     :context-window 131072
-     :pricing-input 0.3 :pricing-output 1.2
-     :max-output 16384
-     :features (streaming tools vision)
-     :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp" "application/pdf")
-     :description "Qwen3 Coder Next - fast coding model, 131k context, VISION")
-     ("qwen3-coder-plus"
-      :context-window 1000000
-      :pricing-input 0.6 :pricing-output 2.4
-      :max-output 65536
-      :features (streaming tools vision)
-      :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp" "application/pdf")
-       :description "Qwen3 Coder Plus - advanced coding, 1M context, VISION")
-      ("qwen3-max-2026-01-23"
-     :context-window 262144
-     :pricing-input 2.5 :pricing-output 10.0
-     :max-output 32768
-     :features (streaming tools vision)
-     :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp" "application/pdf")
-     :description "Qwen3 Max - best quality, 256k context, VISION ENABLED")
-    ;; Gemini
+  '(;; Gemini
     ("gemini-2.5-pro"
      :context-window 1048576
      :pricing-input 1.25 :pricing-output 5.0
@@ -266,7 +212,7 @@ https://developers.cloudflare.com/workers-ai/models/kimi-k2.6/")
      :pricing-input 12.0 :pricing-output 24.0
      :max-output 384000
      :description "DeepSeek V4 Pro - 1M context, thinking-enabled reasoning model")
-     ;; MiniMax — Bailian pricing as of 2026-06 (permanent 50% off applied)
+     ;; MiniMax — pricing as of 2026-06 (permanent 50% off applied)
      ;; MiniMax-M3: tiered 512K/1M. ¥4.2→2.1 / ¥16.8→8.4 / ¥0.84→0.42
      ("MiniMax-M3"
       :context-window 1000000
@@ -307,7 +253,7 @@ context")
      :pricing-input 0.15 :pricing-output 0.6
      :max-output 16384
      :description "GPT-4o Mini - fast, cheap")
-     ;; Kimi — Bailian pricing as of 2026-06
+     ;; Kimi — pricing as of 2026-06
      ("@cf/moonshotai/kimi-k2.6"
       :context-window 262144
       :pricing-input 2.07 :pricing-cached-input 0.28 :pricing-output 8.28
@@ -882,23 +828,6 @@ Description: %s"
      :pricing-model "Per-model, passthrough pricing"
      :features (streaming tools reasoning)
      :notes "Use --http1.1 for curl, some models support reasoning tokens")
-
-    (dashscope
-     :description "Alibaba DashScope - Qwen, GLM models"
-     :rate-limit "60 req/min (free tier), higher for paid"
-     :pricing-model "Per-model, tiered by context length"
-     :features (streaming tools reasoning)
-      :notes "Qwen3.7-max/plus/flash all have 1M context. Reasoning models need streaming or fast response."
-      :context-windows
-      ((qwen3.7-max . 1000000)
-       (qwen3.7-plus . 1000000)
-       (qwen3.6-plus . 1000000)
-       (qwen3.6-flash . 1000000)
-      (qwen3-coder-next . 131072)
-      (qwen3-coder-plus . 1000000)
-      (qwen3-max-2026-01-23 . 262144)
-      (glm-5 . 131072)
-      (glm-4.7 . 131072)))
 
     (deepseek
      :description "DeepSeek - V4 Flash and V4 Pro models"

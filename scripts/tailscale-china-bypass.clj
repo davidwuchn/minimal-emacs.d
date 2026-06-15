@@ -392,8 +392,7 @@
 
   ;; Test China AI services
   (println "\n=== Testing China AI Services ===")
-  (let [ai-services [{:name "dashscope.aliyuncs.com" :url "https://coding.dashscope.aliyuncs.com/v1"}
-                     {:name "minimaxi.com" :ip "8.130.49.194"}
+  (let [ai-services [{:name "minimaxi.com" :ip "8.130.49.194"}
                      {:name "moonshot.cn" :ip "103.143.17.156"}
                      {:name "kimi.com" :ip "103.143.17.156"}
                      {:name "bigmodel.cn" :ip "119.23.85.51"}]

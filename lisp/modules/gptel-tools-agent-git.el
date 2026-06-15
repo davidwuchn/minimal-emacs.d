@@ -150,7 +150,7 @@ before reaching the mandatory SCORE line at the end of output."
 (defcustom my/gptel-subagent-stream nil
   "Whether to use streaming mode for subagent requests.
 When nil (default), subagents use non-streaming mode which is more reliable
-on backends with streaming issues (e.g., DashScope HTTP parse errors).
+on backends with streaming issues (e.g., HTTP parse errors).
 When t, subagents use streaming mode for incremental display."
   :type 'boolean
   :group 'gptel-tools-agent)
@@ -341,7 +341,7 @@ FSM-local snapshot so later tool dispatch matches the request payload."
 
 ;; PATCH: Override gptel-agent--task to add tracking-marker for parent buffer
 ;; position and large-result truncation.  Respects `my/gptel-subagent-stream'
-;; (default nil = non-streaming for reliability with DashScope).
+;; (default nil = non-streaming for reliability).
 
 (defvar gptel-auto-workflow--defer-subagent-env-persistence nil
   "When non-nil, defer buffer-local subagent env persistence until launch ends.")

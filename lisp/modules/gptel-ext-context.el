@@ -120,15 +120,6 @@ Preview mode never requires confirmation since original is preserved."
   :type 'boolean
   :group 'my/gptel-auto-compact)
 
-(defcustom my/gptel-auto-compact-threshold-dashscope 0.60
-  "Fraction of context window at which to compact for DashScope backends.
-
-DashScope has undocumented server-side timeout limits that cause failures
-at high token counts even with long client timeouts. Default 0.60 means
-compact at 60% of context window to stay within safe limits."
-  :type 'number
-  :group 'my/gptel-auto-compact)
-
 (defcustom my/gptel-auto-delegate-enabled t
   "When non-nil, auto-delegate to subagent when context exceeds limits.
 
@@ -170,11 +161,10 @@ Tool results larger than this are truncated with a marker."
 
 (defun my/gptel--backend-type ()
   "Return backend type keyword for current `gptel-backend'.
-Returns :dashscope, :gemini, :openai, :copilot, or :unknown."
+Returns :gemini, :openai, :copilot, or :unknown."
   (cond
    ((not (boundp 'gptel-backend)) :unknown)
    ((not gptel-backend) :unknown)
-   ((eq gptel-backend (bound-and-true-p gptel--dashscope)) :dashscope)
    ((eq gptel-backend (bound-and-true-p gptel--gemini)) :gemini)
    ((eq gptel-backend (bound-and-true-p gptel--copilot)) :copilot)
    ((eq gptel-backend (bound-and-true-p gptel--deepseek)) :deepseek)
@@ -183,11 +173,8 @@ Returns :dashscope, :gemini, :openai, :copilot, or :unknown."
    (t :unknown)))
 
 (defun my/gptel--effective-threshold ()
-  "Return effective threshold based on backend type.
-DashScope uses lower threshold due to server-side timeout limits."
-  (let ((threshold (if (eq (my/gptel--backend-type) :dashscope)
-                       my/gptel-auto-compact-threshold-dashscope
-                     my/gptel-auto-compact-threshold)))
+  "Return effective threshold based on backend type."
+  (let ((threshold my/gptel-auto-compact-threshold))
     (if (and (numberp threshold) (> threshold 0))
         threshold
       0.8)))
@@ -232,7 +219,7 @@ Returns (tokens window threshold-fraction percentage-threshold)."
   "Return non-nil when current buffer should be compacted.
 
 Only returns t when tokens >= threshold% of context window.
-Uses backend-specific thresholds (lower for DashScope)."
+Uses backend-specific thresholds."
   (let* ((chars (buffer-size))
          (buffer-ready (and my/gptel-auto-compact-enabled
                             (bound-and-true-p gptel-mode)

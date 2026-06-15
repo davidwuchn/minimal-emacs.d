@@ -240,7 +240,7 @@ registered in nucleus-config."
 ;; PRE-SERIALIZATION CONTENT SANITIZER
 ;; ==============================================================================
 ;; json-serialize encodes Elisp nil as {} (empty object), not null or "".
-;; Any message with :content nil will cause a DashScope/OpenAI 400:
+;; Any message with :content nil will cause an OpenAI-compatible API 400:
 ;;   "Invalid type for 'messages.[N].content': expected string or array, got object"
 ;; This runs as :before advice on gptel-curl--get-args to catch any nil :content
 ;; that slipped through earlier guards (e.g. in the inject-prompt-strip-nil-tools

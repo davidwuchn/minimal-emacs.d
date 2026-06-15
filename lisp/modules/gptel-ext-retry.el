@@ -30,8 +30,6 @@ Returns alist of (MODEL-OR-BACKEND-STRING . BYTES-LIMIT)."
      ("gpt-oss-120b"       . 350000)
      ("@cf/moonshotai/kimi-k2.6" . 800000)
      ("kimi-for-coding"    . 400000)
-     ("qwen3-coder-next"   . 400000)
-     ("qwen3-max-2026-01-23" . 400000)
      ("deepseek-chat"      . 3000000)
      ("deepseek-reasoner"  . 3000000)
      ("kimi-k2.5"          . 800000))   ; legacy alias for k2.6
@@ -873,7 +871,7 @@ applies progressive trimming (tool results, reasoning, tools array)
 before the request is sent.
 
 Set to nil to disable pre-send compaction (rely on retry trimming only).
-Default is 200KB — conservative for DashScope/Moonshot endpoints that
+Default is 200KB — conservative for Moonshot endpoints that
 tend to reset connections around 250-300KB."
   :type '(choice (const :tag "Disabled" nil) integer)
   :group 'gptel)
@@ -894,17 +892,11 @@ intelligent compression."
   :group 'gptel)
 
 (defvar my/gptel-auto-compact--cheap-overrides
-  '(("DeepSeek" . "deepseek-v4-flash")
-    ("DashScope" . "qwen3.6-flash")
-    ("TokenPlan" . "qwen3.6-flash"))
+  '(("DeepSeek" . "deepseek-v4-flash"))
   "Cheap model overrides per backend for auto-compact.
 When a backend appears in the headless fallback chain, its model
 is replaced with the cheaper variant listed here (if any).
-Backends not listed use their default fallback model.
-
-Auto-compact deliberately avoids qwen*max and qwen*plus variants:
-compaction runs frequently on huge messages, so we want fast + cheap.
-qwen*flash is preferred.")
+Backends not listed use their default fallback model.")
 
 (defvar my/gptel-auto-compact--extra-backends
   '(("Z-AI" . "glm-4.7")
@@ -922,10 +914,8 @@ Skips rate-limited backends."
   (let ((chain (if (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
                    gptel-auto-workflow-headless-subagent-fallbacks
                  ;; Fallback if headless chain not loaded.
-                 ;; Auto-compact chain: flash models only (no max/plus).
-                 '(("DeepSeek" . "deepseek-v4-flash")
-                   ("DashScope" . "qwen3.6-flash")
-                   ("TokenPlan" . "qwen3.6-flash"))))
+                 ;; Auto-compact chain: flash models only.
+                 '(("DeepSeek" . "deepseek-v4-flash")))
         (excluded (if (boundp 'gptel-auto-workflow--rate-limited-backends)
                       gptel-auto-workflow--rate-limited-backends
                     nil)))
@@ -937,7 +927,7 @@ Skips rate-limited backends."
                                 model)))
      (cl-loop for (backend . model) in my/gptel-auto-compact--extra-backends
               unless (member backend excluded)
-              collect (cons backend model)))))
+              collect (cons backend model))))))
 
 (defun my/gptel--run-compaction-pass (info pass-num bytes-limit bytes-var trimmed-total-var pass-var trim-fn &optional pass-msg)
   "Execute a single compaction pass in `my/gptel--compact-payload'.
@@ -981,25 +971,16 @@ EDGE CASE: TRIM-FN may return nil or 0 — handled gracefully."
     ("kimi-k2.6"          . 800000)
     ("kimi-k2.5"          . 800000)   ; legacy alias for k2.6
     ("kimi-for-coding"    . 400000)
-    ("qwen3.7-max"        . 3000000)  ; 1M tokens ≈ 3.5MB
-    ("qwen3.7-plus"       . 3000000)  ; 1M tokens, Bailian tiered ¥2-6/¥8-24
-    ("qwen3.6-plus"       . 3000000)  ; 1M tokens
-    ("qwen3.6-flash"      . 3000000)  ; 1M tokens, Bailian tiered ¥1.2-4.8/¥7.2-28.8
-    ("qwen3-coder-next"   . 400000)
-    ("qwen3-coder-plus"   . 3000000)  ; 1M tokens ≈ 3.5MB, leave room for output
-    ("qwen3-max-2026-01-23" . 400000)
     ("glm-5.1"            . 700000)   ; 200K tokens
     ("glm-5"              . 350000)   ; 128K tokens
     ("glm-4.7"            . 350000)
     ("minimax"            . 350000)   ; minimax-m2.7-highspeed, MiniMax-M2.5, etc.
     ("MiniMax"            . 350000)   ; legacy PascalCase variants
-    ("qwen3."             . 400000)   ; qwen3.6-plus, qwen3.7-plus, etc.
     ("deepseek-v4-flash"  . 3000000)  ; 1M tokens ≈ 3.5MB, leave room for output
     ("deepseek-v4-pro"    . 3000000)
     ("deepseek-chat"      . 3000000)
     ("deepseek-reasoner"  . 3000000)
     ("moonshot"           . 800000)   ; kimi-k2.6 default, 262K tokens
-    ("DashScope"          . 400000)   ; qwen3.6-plus default, 131K tokens
     ("DeepSeek"           . 3000000)  ; deepseek-v4-pro default, 1M tokens
     ("MiniMax"            . 350000))  ; minimax-m2.7 default
   "Approximate max JSON byte size per model.

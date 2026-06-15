@@ -178,7 +178,7 @@ Keywords are matched case-insensitively against user prompts.
 Task types (and preferred models):
   code          → implementer (glm-5.1) or delegate (deepseek-v4-pro)
   review        → delegate-opus (claude-opus-4.8) or delegate-strong (gpt-5.4)
-  research      → delegate (deepseek-v4-pro) or delegate-qwen (qwen3.7-max)
+  research      → delegate (deepseek-v4-pro)
   creative      → delegate-creative (minimax-m3)
   orchestration → @maintainer (kimi-k2.6)")
 

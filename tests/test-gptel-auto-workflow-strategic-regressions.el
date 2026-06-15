@@ -85,21 +85,21 @@ Note: This test fails in batch mode because retry uses run-with-timer async sche
               ((symbol-function 'gptel-auto-workflow--analyzer-failover-candidate)
                (lambda ()
                  (and (= call-count 1)
-                      '("DashScope" . "qwen3.6-plus"))))
-              ((symbol-function 'gptel-auto-workflow--parse-targets)
-               (lambda (_response)
-                 (if (= call-count 1)
-                     (progn
-                       (setq gptel-auto-workflow--analyzer-quota-exhausted t)
-                       nil)
-                   '("lisp/modules/fallback-target.el"))))
-              ((symbol-function 'gptel-benchmark-call-subagent)
-               (lambda (_type _description _prompt callback &optional _timeout)
-                 (cl-incf call-count)
-                 (funcall callback "[]")))
-              ((symbol-function 'message)
-               (lambda (format-string &rest args)
-                 (push (apply #'format format-string args) messages))))
+                      '("DeepSeek" . "deepseek-v4-flash"))))
+               ((symbol-function 'gptel-auto-workflow--parse-targets)
+                (lambda (_response)
+                  (if (= call-count 1)
+                      (progn
+                        (setq gptel-auto-workflow--analyzer-quota-exhausted t)
+                        nil)
+                    '("lisp/modules/fallback-target.el"))))
+               ((symbol-function 'gptel-benchmark-call-subagent)
+                (lambda (_type _description _prompt callback &optional _timeout)
+                  (cl-incf call-count)
+                  (funcall callback "[]")))
+               ((symbol-function 'message)
+                (lambda (format-string &rest args)
+                  (push (apply #'format format-string args) messages))))
       (gptel-auto-workflow--ask-analyzer-with-findings
        nil
        (lambda (targets)
@@ -109,7 +109,7 @@ Note: This test fails in batch mode because retry uses run-with-timer async sche
       (should-not gptel-auto-workflow--analyzer-quota-exhausted)
       (should
        (member
-        "[auto-workflow] Retrying analyzer target selection with DashScope/qwen3.6-plus"
+        "[auto-workflow] Retrying analyzer target selection with DeepSeek/deepseek-v4-flash"
         messages)))))
 
 (ert-deftest regression/auto-workflow-strategic/select-targets-falls-back-on-analyzer-transient-failure ()
@@ -183,18 +183,18 @@ Note: This test fails in batch mode because retry uses run-with-timer async sche
               ((symbol-function 'gptel-auto-workflow--analyzer-failover-candidate)
                (lambda ()
                  (and (= call-count 1)
-                      '("DashScope" . "qwen3.6-plus"))))
-              ((symbol-function 'gptel-auto-workflow--parse-targets)
-               (lambda (_response)
-                 (setq gptel-auto-workflow--analyzer-quota-exhausted t)
-                 nil))
-              ((symbol-function 'gptel-benchmark-call-subagent)
-               (lambda (_type _description _prompt callback &optional _timeout)
-                 (cl-incf call-count)
-                 (funcall callback "[]")))
-              ((symbol-function 'message)
-               (lambda (format-string &rest args)
-                 (push (apply #'format format-string args) messages))))
+                      '("DeepSeek" . "deepseek-v4-flash"))))
+               ((symbol-function 'gptel-auto-workflow--parse-targets)
+                (lambda (_response)
+                  (setq gptel-auto-workflow--analyzer-quota-exhausted t)
+                  nil))
+               ((symbol-function 'gptel-benchmark-call-subagent)
+                (lambda (_type _description _prompt callback &optional _timeout)
+                  (cl-incf call-count)
+                  (funcall callback "[]")))
+               ((symbol-function 'message)
+                (lambda (format-string &rest args)
+                  (push (apply #'format format-string args) messages))))
       (gptel-auto-workflow-select-targets
        (lambda (targets)
          (setq selected targets)))
@@ -202,7 +202,7 @@ Note: This test fails in batch mode because retry uses run-with-timer async sche
       (should (equal selected '("lisp/modules/static-target.el")))
       (should
        (member
-        "[auto-workflow] Retrying analyzer target selection with DashScope/qwen3.6-plus"
+        "[auto-workflow] Retrying analyzer target selection with DeepSeek/deepseek-v4-flash"
         messages))
        (should (member "[auto-workflow] Analyzer quota exhausted; using static targets"
                        messages)))))

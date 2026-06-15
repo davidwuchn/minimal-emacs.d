@@ -79,29 +79,7 @@ test_backend "Z-AI/glm5.1" \
   "open.bigmodel.cn" \
   "glm-5.1" \
   '"thinking":{"type":"disabled"}' \
-  '"max_tokens":50'
-
-# DashScope -- Test via Bailian compatible endpoint (TokenPlan already verified enable_thinking)
-# The coding.dashscope.aliyuncs.com host uses a different path. Skip direct test.
-echo "  ⚠ SKIP DashScope/qwen3.6: needs dashscope.aliyuncs.com key (verified via TokenPlan)"
-
-test_backend "TokenPlan/qwen3.7" \
-  "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions" \
-  "token-plan.cn-beijing.maas.aliyuncs.com" \
-  "qwen3.7-max" \
-  '"enable_thinking":false'
-
-test_backend "TokenPlan/dsv4-flash" \
-  "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions" \
-  "token-plan.cn-beijing.maas.aliyuncs.com" \
-  "deepseek-v4-flash" \
-  '"enable_thinking":false'
-
-test_backend "TokenPlan/glm5.1" \
-  "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions" \
-  "token-plan.cn-beijing.maas.aliyuncs.com" \
-  "glm-5.1" \
-  '"enable_thinking":false'
+   '"max_tokens":50'
 
 echo ""
 echo "--- Thinking ENABLED ---"

@@ -48,15 +48,15 @@ SAMPLE="$TMPDIR_TEST/agent.md"
 cat > "$SAMPLE" <<'EOF'
 ---
 description: A test agent
-model: bailian-token-plan/old-model
+model: some-provider/old-model
 ---
 body
 EOF
 
 # Run the perl command that update_model should use
-perl -pi -e 's|^model:.*|model: bailian-token-plan/kimi-k2.6|' "$SAMPLE"
+perl -pi -e 's|^model:.*|model: some-provider/kimi-k2.6|' "$SAMPLE"
 
-if grep -q "^model: bailian-token-plan/kimi-k2.6" "$SAMPLE"; then
+if grep -q "^model: some-provider/kimi-k2.6" "$SAMPLE"; then
     pass "perl -pi -e correctly replaces model line"
 else
     fail "perl -pi -e did not replace model line"
@@ -79,9 +79,9 @@ body
 EOF
 
 # Insert model after description, removing any existing model line
-perl -i -pe 'if (/^model:/) { $_ = ""; } elsif (/^description:/) { $_ = $_ . "model: bailian-token-plan/kimi-k2.6\n"; }' "$SAMPLE2"
+perl -i -pe 'if (/^model:/) { $_ = ""; } elsif (/^description:/) { $_ = $_ . "model: some-provider/kimi-k2.6\n"; }' "$SAMPLE2"
 
-if grep -q "^model: bailian-token-plan/kimi-k2.6" "$SAMPLE2"; then
+if grep -q "^model: some-provider/kimi-k2.6" "$SAMPLE2"; then
     pass "perl inserts model after description"
 else
     fail "perl did not insert model after description"

@@ -21,12 +21,7 @@
 ;;; Known models (subset of models validated in this repo)
 
 (defconst test-agent-known-models
-  '("qwen3.6-plus"
-    "qwen3.7-plus"
-    "qwen3-max-2026-01-23"
-    "qwen3-coder-plus"
-    "qwen3-coder-next"
-    "glm-5"
+  '("glm-5"
     "deepseek-v4-flash"
     "deepseek-v4-pro"
     "deepseek-chat"

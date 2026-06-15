@@ -126,10 +126,10 @@
 (ert-deftest test-error/first-available-skips-malformed-candidates ()
   "Malformed provider candidates should not crash fallback selection."
   (cl-letf (((symbol-function 'gptel-auto-workflow--backend-available-p)
-             (lambda (backend) (string= backend "DashScope"))))
+             (lambda (backend) (string= backend "DeepSeek"))))
     (should (equal (gptel-auto-workflow--first-available-provider-candidate
-                    '("MiniMax" ("DashScope" . "qwen3.6-plus")))
-                   '("DashScope" . "qwen3.6-plus")))))
+                    '("MiniMax" ("DeepSeek" . "deepseek-v4-flash")))
+                   '("DeepSeek" . "deepseek-v4-flash")))))
 
 (provide 'test-gptel-tools-agent-error)
 ;;; test-gptel-tools-agent-error.el ends here

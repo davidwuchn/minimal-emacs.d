@@ -1494,8 +1494,8 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
 ;; ((nil . ((gptel-auto-workflow-targets . ("src/main.el" "src/utils.el"))
 ;;          (gptel-auto-experiment-max-per-target . 3)
 ;;          (gptel-auto-experiment-time-budget . 900)
-;;          (gptel-backend . gptel--dashscope)
-;;          (gptel-model . qwen3.7-plus))))
+;;          (gptel-backend . gptel--deepseek)
+;;          (gptel-model . deepseek-v4-pro))))
 
 (defvar gptel-auto-workflow--project-root-override nil
   "Override for project root when running from non-git directory.

@@ -138,12 +138,6 @@
 
 ;;; Tests for known model context windows
 
-(ert-deftest cache/known-models/qwen-37-plus ()
-  "Qwen3.7-Plus should have 1M context (replaces retired qwen3.5-plus)."
-  (test--context-cache-setup)
-  (should (assoc "qwen3.7-plus" my/gptel--known-model-context-windows))
-  (should (= (cdr (assoc "qwen3.7-plus" my/gptel--known-model-context-windows)) 1000000)))
-
 (ert-deftest cache/known-models/gpt-4o ()
   "GPT-4o should have 128k context."
   (test--context-cache-setup)
@@ -182,11 +176,6 @@
 
 ;;; Tests for provider contracts
 
-(ert-deftest cache/provider-contracts/dashscope ()
-  "DashScope contract should exist."
-  (test--context-cache-setup)
-  (should (assq 'dashscope my/gptel-provider-contracts)))
-
 (ert-deftest cache/provider-contracts/openai ()
   "OpenAI contract should exist."
   (test--context-cache-setup)
@@ -198,14 +187,6 @@
   (should (assq 'anthropic my/gptel-provider-contracts)))
 
 ;;; Tests for my/gptel-get-model-metadata
-
-(ert-deftest cache/metadata/qwen-37-plus ()
-  "Should return metadata for Qwen3.7-Plus."
-  (test--context-cache-setup)
-  (let ((meta (my/gptel-get-model-metadata "qwen3.7-plus")))
-    (should meta)
-    (should (= (plist-get meta :context-window) 1000000))
-    (should (plist-get meta :description))))
 
 (ert-deftest cache/metadata/cf-gpt-oss-120b ()
   "Should return Cloudflare GPT-OSS 120B metadata."
@@ -237,18 +218,18 @@
 (ert-deftest cache/metadata/partial-match ()
   "Should match model name partially."
   (test--context-cache-setup)
-  (let ((meta (my/gptel-get-model-metadata "qwen3.7-plus-today")))
+  (let ((meta (my/gptel-get-model-metadata "gemini-2.5-pro-today")))
     (should meta)
-    (should (= (plist-get meta :context-window) 1000000))))
+    (should (= (plist-get meta :context-window) 1048576))))
 
 (ert-deftest cache/metadata/partial-match-nil-overrides-shorter-prefix ()
   "A longer partial match with nil should not fall back to a shorter prefix."
   (test--context-cache-setup)
   (should-not
    (my/gptel--alist-partial-match
-    '(("qwen" . (:context-window 1000000))
-      ("qwen3.7-plus" . nil))
-    "qwen3.7-plus-preview")))
+    '(("gemini" . (:context-window 1000000))
+      ("gemini-2.5" . nil))
+    "gemini-2.5-pro-preview")))
 
 (ert-deftest cache/gptel-tables/string-model-finds-symbol-entry ()
   "String model ids should still find symbol-keyed gptel table entries."
