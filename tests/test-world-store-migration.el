@@ -63,7 +63,7 @@
          (insert "1\ttest.el\tfix bug\t0.5\t0.8\t0.7\t0.3\tkept\t120\t0.9\tgood\t:ok\tnil\toutput\t100\tMiniMax\t50\tall\t?\t\tdirect\tnone\thash123\thigh\tpersisted\t?\tmodel1\t\t\tnone\n")
          (insert "2\ttest2.el\trefactor\t0.4\t0.6\t0.6\t0.2\tdiscarded\t90\t0.7\tmeh\t:ok\tnil\toutput2\t80\tGemini\t40\tall\t?\t\tdirect\tnone\thash456\tlow\tpersisted\t?\tmodel2\t\t\tnone\n"))
        ;; Run migration via brepl, passing store path
-       (let ((code (format "(load-file \"clj/ov5/world_store.clj\") (load-file \"clj/ov5/world_store/migration.clj\") (ns ov5.world-store.migration) (migrate-directory \"%s\" \"%s\")" tsv-dir ov5-world-store-directory)))
+       (let ((code (format "(load-file \"clj/ov5/world_store/migration.clj\") (ns ov5.world-store.migration) (migrate-directory \"%s\" \"%s\")" tsv-dir ov5-world-store-directory)))
          (ov5-world-store--brepl-eval code))
        ;; Verify count
        (let ((count (ov5-world-store-experiment-count)))
@@ -96,7 +96,7 @@
          (insert "experiment_id\ttarget\thypothesis\tscore_before\tscore_after\tcode_quality\tdelta\tdecision\tduration\tgrader_quality\tgrader_reason\tcomparator_reason\tanalyzer_patterns\tagent_output\toutput_chars\tbackend\tprompt_chars\tsections_included\texploration_axis\tcandidate_scores\tstrategy\tresearch_strategy\tresearch_hash\tresearch_quality\tcontroller_decision\tkibcm_axis\tmodel\teight_key_scores\tskills\tedit_mode\tcost_usd\teffort_level\tprod_error_rate_before\tprod_error_rate_after\tprod_error_rate_delta\tuser_satisfaction_delta\tsupport_tickets_reduced\tbusiness_value_score\trisk_score\tcomplexity_before\tcomplexity_after\tlines_removed\tunderstanding_score\n")
          (insert "1\tbaz.el\th3\t0.6\t0.9\t0.8\t0.3\tkept\t120\t0.9\tg\t:ok\tnil\to\t70\tB3\t30\tall\t?\t\ts3\tnone\th3\thigh\tpersisted\t?\tm3\t\t\tnone\t0.02\tmed\t0.2\t0.1\t-0.1\t0.3\t2\t60\t15\t5\t3\t10\t0.8\n"))
        ;; Migrate all
-       (let ((code (format "(load-file \"clj/ov5/world_store.clj\") (load-file \"clj/ov5/world_store/migration.clj\") (ns ov5.world-store.migration) (migrate-directory \"%s\" \"%s\")" base-dir ov5-world-store-directory)))
+       (let ((code (format "(load-file \"clj/ov5/world_store/migration.clj\") (ns ov5.world-store.migration) (migrate-directory \"%s\" \"%s\")" base-dir ov5-world-store-directory)))
          (ov5-world-store--brepl-eval code))
        ;; Should have 3 experiments
        (let ((count (ov5-world-store-experiment-count)))
@@ -115,11 +115,11 @@
          (insert "experiment_id\ttarget\thypothesis\tscore_before\tscore_after\tcode_quality\tdelta\tdecision\tduration\tgrader_quality\tgrader_reason\tcomparator_reason\tanalyzer_patterns\tagent_output\toutput_chars\tbackend\tprompt_chars\tsections_included\texploration_axis\tcandidate_scores\tstrategy\tresearch_strategy\tresearch_hash\tresearch_quality\tcontroller_decision\tkibcm_axis\tmodel\teight_key_scores\tskills\tedit_mode\n")
          (insert "1\tfoo.el\th1\t0.5\t0.8\t0.7\t0.3\tkept\t100\t0.9\tg\t:ok\tnil\to\t50\tB1\t20\tall\t?\t\ts1\tnone\th1\thigh\tpersisted\t?\tm1\t\t\tnone\n"))
        ;; First migration
-       (let ((code (format "(load-file \"clj/ov5/world_store.clj\") (load-file \"clj/ov5/world_store/migration.clj\") (ns ov5.world-store.migration) (migrate-directory \"%s\" \"%s\")" tsv-dir ov5-world-store-directory)))
+       (let ((code (format "(load-file \"clj/ov5/world_store/migration.clj\") (ns ov5.world-store.migration) (migrate-directory \"%s\" \"%s\")" tsv-dir ov5-world-store-directory)))
          (ov5-world-store--brepl-eval code))
        (let ((count1 (ov5-world-store-experiment-count)))
          ;; Second migration (same data)
-         (let ((code (format "(load-file \"clj/ov5/world_store.clj\") (load-file \"clj/ov5/world_store/migration.clj\") (ns ov5.world-store.migration) (migrate-directory \"%s\" \"%s\")" tsv-dir ov5-world-store-directory)))
+         (let ((code (format "(load-file \"clj/ov5/world_store/migration.clj\") (ns ov5.world-store.migration) (migrate-directory \"%s\" \"%s\")" tsv-dir ov5-world-store-directory)))
            (ov5-world-store--brepl-eval code))
          (let ((count2 (ov5-world-store-experiment-count)))
            ;; Count should be same (upsert)

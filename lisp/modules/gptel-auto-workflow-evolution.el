@@ -311,9 +311,8 @@ Caches when MAX-AGE-DAYS is nil for cycle-local reuse."
              ;; Query World Store via brepl — returns EDN: [[:id "..." :target "..." ...] ...]
              (edn-str
               (condition-case nil
-                  (ov5-world-store--brepl-eval
-                   "(do (load-file \"clj/ov5/world_store.clj\") (ns ov5.world-store) (connect
-\"var/world-store\") (all-experiments-readable))")
+                   (ov5-world-store--brepl-eval
+                   "(ns ov5.world-store) (connect \"var/world-store\") (all-experiments-readable)")
                 (error nil)))
              (store-results (when (and edn-str (not (string-empty-p edn-str)))
                               (ignore-errors

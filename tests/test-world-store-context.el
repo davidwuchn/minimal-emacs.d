@@ -66,7 +66,7 @@
        (with-temp-file ctx-file
          (insert "(:id 1 :target \"foo.el\" :business-rationale \"fix bug\" :causal-chain ((\"cause\" . \"effect\")) :decision-rationale \"good fix\" :learned \"test lesson\" :expected-impact \"better code\" :observed-impact \"confirmed\" :risk-score 0.2)\n"))
        ;; Unify context
-       (let ((code (format "(load-file \"clj/ov5/world_store.clj\") (load-file \"clj/ov5/world_store/context.clj\") (ns ov5.world-store.context) (ws/connect \"%s\") (unify-context-sidecar \"%s\")" ov5-world-store-directory ctx-file)))
+       (let ((code (format "(load-file \"clj/ov5/world_store/context.clj\") (ns ov5.world-store.context) (ws/connect \"%s\") (unify-context-sidecar \"%s\")" ov5-world-store-directory ctx-file)))
          (ov5-world-store--brepl-eval code))
        ;; Verify unified entity has context data
        (let ((entity (ov5-world-store-entity :experiment/id "ctx-test#1")))
@@ -92,7 +92,7 @@
        (with-temp-file app-file
          (insert "((:experiment-id 1 :target \"bar.el\" :decision \"kept\" :approval-type :auto-approved :timestamp \"2026-06-11T12:00:00Z\" :risk-score 0.3))\n"))
        ;; Unify approval
-       (let ((code (format "(load-file \"clj/ov5/world_store.clj\") (load-file \"clj/ov5/world_store/context.clj\") (ns ov5.world-store.context) (ws/connect \"%s\") (unify-approval-history \"%s\")" ov5-world-store-directory app-file)))
+       (let ((code (format "(load-file \"clj/ov5/world_store/context.clj\") (ns ov5.world-store.context) (ws/connect \"%s\") (unify-approval-history \"%s\")" ov5-world-store-directory app-file)))
          (ov5-world-store--brepl-eval code))
        ;; Verify
        (let ((entity (ov5-world-store-entity :experiment/id "app-test#1")))
@@ -116,7 +116,7 @@
        (with-temp-file risk-file
          (insert "((:pattern-name \"baz.el\" :approval-type :auto-approved :risk-factors (:scope-factor 0.1 :complexity-factor 0.2) :count 1 :confidence 0.8 :timestamp \"2026-06-11T12:00:00Z\"))\n"))
        ;; Unify risk
-       (let ((code (format "(load-file \"clj/ov5/world_store.clj\") (load-file \"clj/ov5/world_store/context.clj\") (ns ov5.world-store.context) (ws/connect \"%s\") (unify-risk-patterns \"%s\")" ov5-world-store-directory risk-file)))
+       (let ((code (format "(load-file \"clj/ov5/world_store/context.clj\") (ns ov5.world-store.context) (ws/connect \"%s\") (unify-risk-patterns \"%s\")" ov5-world-store-directory risk-file)))
          (ov5-world-store--brepl-eval code))
        ;; Verify
        (let ((entity (ov5-world-store-entity :experiment/id "risk-test#1")))

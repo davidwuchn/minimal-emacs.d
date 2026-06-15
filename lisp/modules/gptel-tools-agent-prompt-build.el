@@ -252,7 +252,6 @@ Tier 2 (W,T,PHI,D): predicted in larger models.
 Tier 3 (SCOPE,SUBST,WHNF): structural/architecture operations.
 Tier 4 (Y,QUOTE): meta/self-referential operations.
 Like verbum's lambda_kernel_probes.py: 400 probes across 15 axes.")
-
 (defun gptel-auto-experiment--kibcm-axis (hypothesis)
   "Classify HYPOTHESIS into KIBC-M operation axis (:K :I :B :C :M or nil)."
   (when (stringp hypothesis)

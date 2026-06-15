@@ -35,11 +35,21 @@ File name starts with `test-` so the let-binding check applies."
 
 (require 'gptel-tools-agent-prompt-build)
 
+(defconst test-self-heal-semantic--root
+  (file-name-directory (or load-file-name buffer-file-name default-directory))
+  "Project root for self-heal semantic tests.")
+
+(defun test-self-heal-semantic--reload-prompt-build ()
+  "Reload prompt-build so KIBCM tests do not depend on prior suite state."
+  (load-file (expand-file-name "../lisp/modules/gptel-tools-agent-prompt-build.el"
+                               test-self-heal-semantic--root)))
+
 (ert-deftest test-self-heal-semantic/kibcm-patterns-no-embedded-newlines ()
   "Each kibcm-pattern, after preprocessing by kibcm-axis, contains no
 literal newlines or extra spaces.  The source patterns use line
 breaks for readability; the runtime normalizes them so that patterns
 like \"same\\nentity\" match \"same entity\" in real hypotheses."
+  (test-self-heal-semantic--reload-prompt-build)
   (should (boundp 'gptel-auto-experiment--kibcm-patterns))
   (dolist (entry gptel-auto-experiment--kibcm-patterns)
     (let* ((raw (cadr entry))
@@ -49,18 +59,22 @@ like \"same\\nentity\" match \"same entity\" in real hypotheses."
 
 (ert-deftest test-self-heal-semantic/kibcm-axis-refactor-into ()
   "refactor into → :B (was broken by literal newline between words)."
+  (test-self-heal-semantic--reload-prompt-build)
   (should (eq :B (gptel-auto-experiment--kibcm-axis "refactor into helper function"))))
 
 (ert-deftest test-self-heal-semantic/kibcm-axis-same-entity ()
   "same entity → :I (was broken by literal newline between words)."
+  (test-self-heal-semantic--reload-prompt-build)
   (should (eq :I (gptel-auto-experiment--kibcm-axis "same entity as before"))))
 
 (ert-deftest test-self-heal-semantic/kibcm-axis-instead-of ()
   "instead of → :SUBST (was broken by literal newline between words)."
+  (test-self-heal-semantic--reload-prompt-build)
   (should (eq :SUBST (gptel-auto-experiment--kibcm-axis "replace with instead of compress"))))
 
 (ert-deftest test-self-heal-semantic/kibcm-axis-similar-to ()
   "similar to → :M (was broken by literal newline between words)."
+  (test-self-heal-semantic--reload-prompt-build)
   (should (eq :M (gptel-auto-experiment--kibcm-axis "similar to the example"))))
 
 ;; ── Test 2: (let ...) binding functions detection ──
