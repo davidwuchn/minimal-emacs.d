@@ -157,15 +157,17 @@ Tries multiple patterns in order:
 (defun gptel-auto-experiment--count-consecutive-strategy (target strategy previous-results)
   "Count consecutive experiments on TARGET using STRATEGY, 0-indexed.
 Returns number of consecutive experiments with this strategy."
-  (let ((count 0))
+  (let ((count 0)
+        (done nil))
     (dolist (r (reverse previous-results))
-      (when (and (equal (plist-get r :target) target)
-                 (equal (plist-get r :strategy) strategy))
-        (cl-incf count))
-      (when (and (equal (plist-get r :target) target)
-                 (not (equal (plist-get r :strategy) strategy)))
-        ;; Found a different strategy — stop counting
-        (cl-return)))
+      (unless done
+        (when (and (equal (plist-get r :target) target)
+                   (equal (plist-get r :strategy) strategy))
+          (cl-incf count))
+        (when (and (equal (plist-get r :target) target)
+                   (not (equal (plist-get r :strategy) strategy)))
+          ;; Found a different strategy — stop counting
+          (setq done t))))
     count))
 
 (defun gptel-auto-experiment--summarize (hypothesis)
@@ -1055,7 +1057,7 @@ Relative paths are resolved from the project root."
           (gptel-auto-workflow--read-edn file)
         (error
          (message "[auto-workflow] Failed to read status snapshot: %s" err)
-         (cl-return))))))
+         nil)))))
 
 (defun gptel-auto-workflow--suppress-ask-user-about-supersession-threat (orig-fn &rest args)
   "Suppress supersession threat prompts in headless mode."

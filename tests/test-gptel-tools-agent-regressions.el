@@ -808,7 +808,7 @@ delivers a :stale-run sentinel without grading, benchmarking, or logging."
          (grade-call-count 0)
          (benchmark-call-count 0)
          (gptel-auto-experiment-auto-push nil)
-         (gptel-auto-workflow-use-staging nil)
+         (gptel-auto-workflow-use-staging t)
          (provider-error
           "Error: Task executor could not finish task \"Experiment 1: optimize lisp/modules/gptel-tools-agent-git.el\". Error details: (:message \"The supported field is invalid\")"))
     (unwind-protect
@@ -913,7 +913,7 @@ delivers a :stale-run sentinel without grading, benchmarking, or logging."
          (runagent-call-count 0)
          (grade-call-count 0)
          (gptel-auto-experiment-auto-push nil)
-         (gptel-auto-workflow-use-staging nil)
+         (gptel-auto-workflow-use-staging t)
          (gptel-auto-workflow--strategy-evolution-enabled nil))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
@@ -1007,7 +1007,7 @@ delivers a :stale-run sentinel without grading, benchmarking, or logging."
          (runagent-call-count 0)
          (grade-call-count 0)
          (gptel-auto-experiment-auto-push nil)
-         (gptel-auto-workflow-use-staging nil)
+         (gptel-auto-workflow-use-staging t)
          (gptel-auto-workflow--strategy-evolution-enabled nil))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
@@ -1101,7 +1101,7 @@ delivers a :stale-run sentinel without grading, benchmarking, or logging."
          (runagent-call-count 0)
          (grade-call-count 0)
          (gptel-auto-experiment-auto-push nil)
-         (gptel-auto-workflow-use-staging nil)
+         (gptel-auto-workflow-use-staging t)
          (gptel-auto-workflow--strategy-evolution-enabled nil))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
@@ -1218,7 +1218,7 @@ delivers a :stale-run sentinel without grading, benchmarking, or logging."
          (runagent-call-count 0)
          (grade-call-count 0)
          (gptel-auto-experiment-auto-push nil)
-         (gptel-auto-workflow-use-staging nil)
+         (gptel-auto-workflow-use-staging t)
          (gptel-auto-experiment-max-grader-retries 0)
          (gptel-auto-experiment-retry-delay 0))
     (unwind-protect
@@ -2214,7 +2214,7 @@ delivers a :stale-run sentinel without grading, benchmarking, or logging."
           (with-current-buffer worktree-buf
             (setq-local default-directory (file-name-as-directory worktree-dir)))
           (let ((gptel-auto-experiment-auto-push nil)
-                (gptel-auto-workflow-use-staging nil)
+                (gptel-auto-workflow-use-staging t)
                 (gptel-auto-workflow--running t)
                 (gptel-auto-workflow--run-id "run-timeout-salvage"))
             (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
@@ -2310,7 +2310,7 @@ delivers a :stale-run sentinel without grading, benchmarking, or logging."
           (with-current-buffer worktree-buf
             (setq-local default-directory (file-name-as-directory worktree-dir)))
           (let ((gptel-auto-experiment-auto-push nil)
-                (gptel-auto-workflow-use-staging nil)
+                (gptel-auto-workflow-use-staging t)
                 (gptel-auto-workflow--running t)
                 (gptel-auto-workflow--run-id "run-timeout-no-salvage"))
             (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
@@ -2522,7 +2522,7 @@ delivers a :stale-run sentinel without grading, benchmarking, or logging."
           (with-current-buffer worktree-buf
             (setq-local default-directory (file-name-as-directory worktree-dir)))
           (let ((gptel-auto-experiment-auto-push nil)
-                (gptel-auto-workflow-use-staging nil)
+                (gptel-auto-workflow-use-staging t)
                 (gptel-auto-experiment-max-grader-retries 1)
                 (gptel-auto-experiment-retry-delay 0)
                 (gptel-auto-experiment--api-error-count 0))
@@ -6412,7 +6412,7 @@ with next backend. This test evaluates the old (non-retry) path."
            (logged-result nil)
            (result nil)
            (gptel-auto-experiment-auto-push nil)
-           (gptel-auto-workflow-use-staging nil)
+           (gptel-auto-workflow-use-staging t)
            (gptel-auto-experiment--best-score 0.4)
            (gptel-auto-experiment--no-improvement-count 0))
       (unwind-protect
@@ -6939,7 +6939,7 @@ failure."
         (result nil)
         (temp-dir (make-temp-file "exp-worktree" t))
         (gptel-auto-experiment-auto-push nil)
-        (gptel-auto-workflow-use-staging nil))
+        (gptel-auto-workflow-use-staging t))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
                    (test-auto-workflow--valid-worktree-stub temp-dir))
@@ -7009,7 +7009,7 @@ failure."
         (result nil)
         (temp-dir (make-temp-file "exp-worktree" t))
         (gptel-auto-experiment-auto-push nil)
-        (gptel-auto-workflow-use-staging nil))
+         (gptel-auto-workflow-use-staging t))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
                    (test-auto-workflow--valid-worktree-stub temp-dir))
@@ -17581,7 +17581,7 @@ Fails in batch due to argument count mismatch on lambda — passes when run indi
          (benchmark-call-count 0)
          (prepare-call-count 0)
          (gptel-auto-experiment-auto-push nil)
-         (gptel-auto-workflow-use-staging nil)
+         (gptel-auto-workflow-use-staging t)
          (gptel-auto-experiment-max-grader-retries 0)
          (gptel-auto-experiment-retry-delay 0)
          (gptel-auto-experiment--api-error-count 0)
@@ -17693,7 +17693,7 @@ Fails in batch due to argument count mismatch on lambda — passes when run indi
          (benchmark-call-count 0)
          (prepare-call-count 0)
          (gptel-auto-experiment-auto-push nil)
-         (gptel-auto-workflow-use-staging nil)
+         (gptel-auto-workflow-use-staging t)
          (gptel-auto-experiment-max-grader-retries 1)
          (gptel-auto-experiment-retry-delay 0)
          (gptel-auto-experiment--api-error-count 0)

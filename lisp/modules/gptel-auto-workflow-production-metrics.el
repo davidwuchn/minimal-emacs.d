@@ -408,7 +408,7 @@ Business value heuristics:
                     (insert-file-contents log nil 0 50000)  ; First 50KB
                     (goto-char (point-min))
                     (when (re-search-forward (regexp-quote target-basename) nil t)
-                      (cl-return t)))))
+                      (cl-return-from check-logs t)))))
               nil))
 
            ;; Signal 2: Does the target have byte-compile warnings?
