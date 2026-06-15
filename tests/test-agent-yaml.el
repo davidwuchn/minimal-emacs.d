@@ -65,12 +65,14 @@ Returns plist of frontmatter fields, or nil if invalid."
             (forward-line 1))
           (nreverse result))))))
 
+(defvar test-agent-yaml--repo-root
+  (file-name-directory
+   (directory-file-name
+    (file-name-directory (or load-file-name buffer-file-name default-directory)))))
+
 (defun test-agent--get-agents-dir ()
   "Get the agents directory path."
-  (let ((emacs-dir (or (bound-and-true-p user-emacs-directory)
-                       (getenv "USER_EMACS_DIRECTORY")
-                       default-directory)))
-    (expand-file-name "assistant/agents/" emacs-dir)))
+  (expand-file-name "assistant/agents/" test-agent-yaml--repo-root))
 
 (defun test-agent--list-agent-files ()
   "List all agent markdown files."

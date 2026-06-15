@@ -145,11 +145,15 @@ Graded relevance: 3 = expected, 1 = degraded/near-miss (SkillRouter-style).")
 
 ;; ─── Skill Index Builder ───
 
+(defvar ov5-routing--repo-root
+  (file-name-directory
+   (directory-file-name
+    (file-name-directory (or load-file-name buffer-file-name default-directory)))))
+
 (defun ov5-routing--load-skill-index ()
   "Build index of all available skills: (dir . content) alist."
   (let* ((skills-dir (expand-file-name "assistant/skills"
-                     (or (bound-and-true-p user-emacs-directory)
-                         default-directory)))
+                     ov5-routing--repo-root))
          (index nil))
     (when (file-directory-p skills-dir)
       (dolist (dir (directory-files skills-dir t "^[^_]"))
