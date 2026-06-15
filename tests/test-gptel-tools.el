@@ -39,12 +39,15 @@
 
 (defvar test-tools--temp-dir nil)
 (defvar test-tools--original-roots nil)
+(defvar test-tools--orig-expand-workspace-path
+  (when (fboundp 'gptel-auto-workflow--expand-workspace-path)
+    (symbol-function 'gptel-auto-workflow--expand-workspace-path)))
 
 (defun test-tools--setup ()
-  (setq test-tools--original-roots gptel-auto-workflow--allowed-workspace-roots)
+  (setq test-tools--original-roots (copy-sequence gptel-auto-workflow--allowed-workspace-roots))
   (setq test-tools--temp-dir (make-temp-file "gptel-tools-test-" t))
   (setq gptel-auto-workflow--allowed-workspace-roots
-        (append gptel-auto-workflow--allowed-workspace-roots (list test-tools--temp-dir))))
+        (list test-tools--temp-dir)))
 
 (defun test-tools--teardown ()
   (when test-tools--original-roots
@@ -54,7 +57,14 @@
 
 (defmacro test-tools--with-temp (&rest body)
   (declare (indent 0))
-  `(unwind-protect (progn (test-tools--setup) ,@body) (test-tools--teardown)))
+  `(unwind-protect
+       (progn
+         (test-tools--setup)
+         (let ((default-directory (file-name-as-directory test-tools--temp-dir)))
+           (cl-letf (((symbol-function 'gptel-auto-workflow--expand-workspace-path)
+                      test-tools--orig-expand-workspace-path))
+             ,@body)))
+     (test-tools--teardown)))
 
 (defun test-tools--write-file (name content)
   (let ((path (expand-file-name name test-tools--temp-dir)))
@@ -194,11 +204,14 @@
          (gptel-auto-workflow--run-project-root root)
          (gptel-auto-workflow--project-root-override nil)
          (gptel-auto-workflow--current-project nil)
+         (default-directory root)
          (file (expand-file-name "boundary-test-inside.el" root)))
     (unwind-protect
-        (progn
-          (with-temp-file file (insert "(defun foo () 1)"))
-          (should (stringp (my/gptel--read-file-safe file))))
+        (cl-letf (((symbol-function 'gptel-auto-workflow--expand-workspace-path)
+                   test-tools--orig-expand-workspace-path))
+          (progn
+            (with-temp-file file (insert "(defun foo () 1)"))
+            (should (stringp (my/gptel--read-file-safe file)))))
       (when (file-exists-p file)
         (delete-file file)))))
 
