@@ -66,7 +66,7 @@
 (defn logf
   "Log a format-string message. (logf \"thing: %s\" val)"
   [fmt & args]
-  (apply log (apply format fmt args)))
+  (log (apply format fmt args)))
 
 ;; ---- log rotation ----
 
