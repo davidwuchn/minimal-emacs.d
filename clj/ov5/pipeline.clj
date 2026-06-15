@@ -201,8 +201,9 @@
                              (concat ["bb" "-m" "ov5.pipeline"]
                                      *command-line-args*))]
         (try
-          (p/exec {:inherit true} (into-array String args))
-          (catch Exception _ nil))
+          (p/exec {:inherit true} args)
+          (catch Exception e
+            (log/logf "Bootstrap: re-exec failed: %s" (.getMessage e))))
         (System/exit 0)))))
 
 (defn- acquire-lock!
