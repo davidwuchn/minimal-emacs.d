@@ -6,8 +6,8 @@
 >
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
-> **Status**: ✅ **EMPTY-LOCALIZED ABORT FIXED AND PUSHED** — `empty-localized-commit-keeps-result`, `repeated-focus-symbol-skips-grading`, and `decision-callback-is-idempotent` now pass individually; broader `regression/auto-experiment` suite still shows 37 failures when run in batch due to test-state pollution (each failing test passes in isolation).
-> **Latest**: Committed and pushed `08b931b9a` (merged Pi5 daemon-launch fixes).
+> **Status**: ✅ **EMPTY-LOCALIZED ABORT FIXED AND PUSHED** — `empty-localized-commit-keeps-result`, `repeated-focus-symbol-skips-grading`, and `decision-callback-is-idempotent` now pass; pre-push gate reports 0 unexpected failures.
+> **Latest**: Committed and pushed `89410b066` (rebased onto Pi5 daemon-launch fixes).
 > **Active Plan**: Decide whether to tackle batch-level test isolation in `test-gptel-tools-agent-regressions.el` or move on to Pi5 cron verification.
 > **Pi5**: Auto-evolution active; pre-push hook now blocks broken pushes to main; Pi5 auto-evolved boundary fixes (Preview Mode 2, Edit hashline, Code_Map/Inspect/Replace, plan-mode readonly enforcement)
 
