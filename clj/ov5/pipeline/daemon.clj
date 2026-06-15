@@ -63,7 +63,7 @@
 (defn resolve-emacsclient
   "Find emacsclient binary. Returns path string or nil."
   []
-  (or (try (sh-out "command" "-v" "emacsclient") (catch Exception _ nil))
+  (or (try (sh-out "bash" "-c" "command -v emacsclient") (catch Exception _ nil))
       (when (.exists (io/file "/opt/homebrew/bin/emacsclient"))
         "/opt/homebrew/bin/emacsclient")
       (when (.exists (io/file "/usr/local/bin/emacsclient"))
@@ -72,7 +72,7 @@
 (defn resolve-emacs
   "Find emacs binary. Returns path string or nil."
   []
-  (or (try (sh-out "command" "-v" "emacs") (catch Exception _ nil))
+  (or (try (sh-out "bash" "-c" "command -v emacs") (catch Exception _ nil))
       (when (.exists (io/file "/opt/homebrew/bin/emacs"))
         "/opt/homebrew/bin/emacs")
       (when (.exists (io/file "/usr/local/bin/emacs"))
@@ -297,7 +297,7 @@
                         (str "--daemon=" server-name)
                         "--eval" "(setq native-comp-jit-compilation nil gc-cons-threshold (* 50 1024 1024))"]]
         ;; Try setsid for session isolation
-        (if (sh-ok? "command" "-v" "setsid")
+        (if (sh-ok? "bash" "-c" "command -v setsid")
           (let [setsid-cmd ["setsid" "env"
                             "-u" "DISPLAY" "-u" "WAYLAND_DISPLAY"
                             "-u" "WAYLAND_SOCKET" "-u" "XAUTHORITY"
@@ -650,16 +650,21 @@
    - pmf-value-stream: poll status via daemon, check experiment count via World Store
    - gtm-product-org (researcher): wait for findings file freshness
    Returns :complete or :timeout"
-  [{:keys [action max-wait-ms socket-name min-start-wait-ms
-           project-root findings-file pipeline-start-time]
+  [{:keys [action max-wait-ms socket-name min-start-wait-ms findings-file pipeline-start-time]
     :or {max-wait-ms 900000     ;; 15 min default
          socket-name "pmf-value-stream"
          min-start-wait-ms 60000 ;; 60s
-         project-root (project-root)
-         findings-file (str (project-root) "/var/tmp/research-findings.edn")
          pipeline-start-time (quot (System/currentTimeMillis) 1000)}
     :as opts}]
-  (let [poll-interval-ms (* 1000 (try (Long/parseLong (System/getenv "POLL_INTERVAL"))
+  ;; NOTE: project-root is intentionally NOT a :keys binding.  When a name is
+  ;; both a destructured key and the private fn `project-root', Clojure/sci
+  ;; evaluates :or defaults in a scope where later :or entries see the earlier
+  ;; defaulted local — so `(project-root)' in findings-file's :or called the
+  ;; STRING value of the project-root local, throwing ClassCastException.
+  ;; Hoisting into this let calls the fn cleanly.
+  (let [project-root (or (:project-root opts) (project-root))
+        findings-file (or findings-file (str project-root "/var/tmp/research-findings.edn"))
+        poll-interval-ms (* 1000 (try (Long/parseLong (System/getenv "POLL_INTERVAL"))
                                       (catch Exception _ 30)))
         deadline (+ (System/currentTimeMillis) max-wait-ms)
         emacsclient-path (or (resolve-emacsclient) "emacsclient")]
@@ -669,64 +674,62 @@
       (if (>= elapsed max-wait-ms)
         (do (log/logf "WARNING: %s did not complete within %ds" action (quot max-wait-ms 1000))
             :timeout)
-        (let [now (System/currentTimeMillis)]
-          (if (= socket-name "pmf-value-stream")
-            ;; Behavior 1: pmf-value-stream — poll status via daemon
-            (let [status (try (status-action! opts) (catch Exception _ {:phase "unknown"}))
-                  phase (:phase status)
-                  running (:running status)]
-              (if (and (or (#{"idle" "complete" "skipped" "quota-exhausted"} phase)
-                           (false? running))
-                       ;; Check experiments produced
-                       (try
-                         (let [ws-connect (requiring-resolve 'ov5.world-store/connect)
-                               ws-exp-count (requiring-resolve 'ov5.world-store/experiment-count)
-                               ws-path (str project-root "/var/world-store")]
-                           (when ws-connect (ws-connect ws-path))
-                           (if ws-exp-count
-                             (> (ws-exp-count) 0)
-                             (>= elapsed 300000)))
-                         (catch Exception _
-                           (>= elapsed 300000)))) ;; >5min with no experiments = done
-                (do (log/logf "%s completed after %ds" action (quot elapsed 1000))
-                    :complete)
-                (do
-                  (when (>= elapsed 300000)
-                    ;; Still idle after 5min with no experiments = daemon done
-                    (log/logf "%s completed after %ds (no experiments after 5min idle, daemon likely done)"
-                             action (quot elapsed 1000))
-                    :complete))
-                ))
-            ;; Behavior 2: gtm-product-org — researcher daemon
-            (let [findings (io/file findings-file)]
-              (if (and (.exists findings)
-                       (> (.length findings) 100)
-                       (>= (/ (.lastModified findings) 1000) pipeline-start-time))
-                (do (log/logf "%s completed after %ds (findings file ready)" action (quot elapsed 1000))
-                    :complete)
-                ;; Check daemon phase
-                (let [phase-eval (try
-                                   (run-emacsclient-eval socket-name
-                                                         (str "(if (and (boundp 'gptel-auto-workflow--stats)"
-                                                              "gptel-auto-workflow--stats)"
-                                                              "(plist-get gptel-auto-workflow--stats :phase)"
-                                                              "\"unknown\")")
-                                                         :timeout 3)
-                                   (catch Exception _ {:exit 1 :out "unknown" :err ""}))]
-                  (if (and (str/includes? (:out phase-eval) "complete")
-                           daemon-seen)
-                    (do (log/logf "%s daemon phase=complete after %ds" action (quot elapsed 1000))
+        (let [now (System/currentTimeMillis)
+              result (if (= socket-name "pmf-value-stream")
+                ;; Behavior 1: pmf-value-stream — poll status via daemon
+                (let [status (try (status-action! opts) (catch Exception _ {:phase "unknown"}))
+                      phase (:phase status)
+                      running (:running status)]
+                  (if (and (or (#{"idle" "complete" "skipped" "quota-exhausted"} phase)
+                               (false? running))
+                           ;; Check experiments produced
+                           (try
+                             (let [ws-connect (requiring-resolve 'ov5.world-store/connect)
+                                   ws-exp-count (requiring-resolve 'ov5.world-store/experiment-count)
+                                   ws-path (str project-root "/var/world-store")]
+                               (when ws-connect (ws-connect ws-path))
+                               (if ws-exp-count
+                                 (> (ws-exp-count) 0)
+                                 (>= elapsed 300000)))
+                             (catch Exception _
+                               (>= elapsed 300000)))) ;; >5min with no experiments = done
+                    (do (log/logf "%s completed after %ds" action (quot elapsed 1000))
                         :complete)
-                    ;; Check if daemon is alive
-                    (if (= :alive (check-worker-daemon socket-name emacsclient-path))
-                      :continue-pm-loop   ;; daemon alive, keep polling
-                      (if daemon-seen
-                        (do (log/logf "WARNING: %s daemon stopped after %ds without findings" action (quot elapsed 1000))
-                            :failed)
-                        (if (>= elapsed min-start-wait-ms)
-                          (do (log/logf "WARNING: %s daemon was not observed within %ds" action (quot elapsed 1000))
-                              :failed)
-                          :continue-pm-loop))))))
-              ;; fallthrough to poll
-              (Thread/sleep poll-interval-ms)
-              (recur (+ elapsed poll-interval-ms) (or daemon-seen true)))))))))
+                    (do
+                      (when (>= elapsed 300000)
+                        ;; Still idle after 5min with no experiments = daemon done
+                        (log/logf "%s completed after %ds (no experiments after 5min idle, daemon likely done)"
+                                 action (quot elapsed 1000))
+                        :complete))))
+                ;; Behavior 2: gtm-product-org — researcher daemon
+                (let [findings (io/file findings-file)]
+                  (if (and (.exists findings)
+                           (> (.length findings) 100)
+                           (>= (/ (.lastModified findings) 1000) pipeline-start-time))
+                    (do (log/logf "%s completed after %ds (findings file ready)" action (quot elapsed 1000))
+                        :complete)
+                    ;; Check daemon phase
+                    (let [phase-eval (try
+                                       (run-emacsclient-eval socket-name
+                                                             (str "(if (and (boundp 'gptel-auto-workflow--stats)"
+                                                                  "gptel-auto-workflow--stats)"
+                                                                  "(plist-get gptel-auto-workflow--stats :phase)"
+                                                                  "\"unknown\")")
+                                                             :timeout 3)
+                                       (catch Exception _ {:exit 1 :out "unknown" :err ""}))]
+                      (cond
+                        (and (str/includes? (:out phase-eval) "complete") daemon-seen)
+                        (do (log/logf "%s daemon phase=complete after %ds" action (quot elapsed 1000)) :complete)
+                        (= :alive (check-worker-daemon socket-name emacsclient-path))
+                        :continue-pm-loop   ;; daemon alive, keep polling
+                        daemon-seen
+                        (do (log/logf "WARNING: %s daemon stopped after %ds without findings" action (quot elapsed 1000)) :failed)
+                        (>= elapsed min-start-wait-ms)
+                        (do (log/logf "WARNING: %s daemon was not observed within %ds" action (quot elapsed 1000)) :failed)
+                        :else :continue-pm-loop)))))]
+          ;; Only keep polling when the branch asked us to; otherwise return promptly.
+          (if (#{:continue-pm-loop nil} result)
+            (do (Thread/sleep poll-interval-ms)
+                (recur (+ elapsed poll-interval-ms) (or daemon-seen
+                                                        (= :alive (check-worker-daemon socket-name emacsclient-path)))))
+            result))))))
