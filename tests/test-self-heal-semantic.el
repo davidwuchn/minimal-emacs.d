@@ -2220,5 +2220,32 @@ an infinite loop caused by syntax-propertize interacting with
                (plist-get result :total-issues))
       (should (< elapsed 30)))))
 
+;; ── Regression: daemon self-deadlock via call-process emacsclient ──
+
+(ert-deftest test-self-heal-semantic/no-emacsclient-self-call-in-daemon-init ()
+  "Daemon init files must never (call-process \"emacsclient\" ...) to
+check their OWN socket — that self-deadlocks: call-process blocks the
+main thread, so the server loop can never service the very request the
+child just sent.  The 30s socket self-heal timer in post-init had this
+bug and froze the daemon ~30s after every startup, tripping the
+external watchdog into a 30-min restart loop (2026-06-13..15).
+
+Use in-process liveness (process-live-p server-process) instead.
+
+Scoped to daemon-init files only: gptel-ext-daemon-repl legitimately
+uses call-process emacsclient to drive EXTERNAL target daemons."
+  (let* ((root (file-name-directory
+                (directory-file-name
+                 (file-name-directory (or load-file-name buffer-file-name default-directory)))))
+         (init-files (delq nil
+                           (mapcar (lambda (f) (let ((full (expand-file-name f root)))
+                                                 (and (file-exists-p full) full)))
+                                   (list "post-init.el" "post-early-init.el")))))
+    (dolist (f init-files)
+      (with-temp-buffer
+        (insert-file-contents f)
+        (should-not (string-match-p "(call-process[ \t\n]+\"emacsclient\""
+                                    (buffer-string)))))))
+
 (provide 'test-self-heal-semantic)
 ;;; test-self-heal-semantic.el ends here
