@@ -3,6 +3,7 @@
 # - Blocks commits with merge conflict markers
 # - Blocks commits of worktree/temporary files
 # - Verifies submodule sync
+# - Structural checks staged .el files (parens, top-level definitions)
 # - Byte-compiles staged .el files
 
 set -euo pipefail
@@ -44,7 +45,77 @@ else
     "$repo_root/scripts/check-submodule-sync.sh" --cached
 fi
 
-# ─── 4. Byte-compile staged .el files ───
+# ─── 4. Structural checks for staged .el files ───
+staged_el_files=$(echo "$staged_files" | grep '\.el$' || true)
+if [[ -n "$staged_el_files" ]]; then
+    echo "pre-commit: running structural checks on staged .el files..."
+    failed=0
+    while IFS= read -r file; do
+        [[ -z "$file" ]] && continue
+        if [[ -f "$repo_root/$file" ]]; then
+            pkg_load_args=()
+            for pkg_dir in "$repo_root/var/elpa"/*/; do
+                [[ -d "$pkg_dir" ]] && pkg_load_args+=(-L "$pkg_dir")
+            done
+            for pkg_dir in "$repo_root/packages"/*/; do
+                [[ -d "$pkg_dir" ]] && pkg_load_args+=(-L "$pkg_dir")
+            done
+
+            # 4a. check-parens / forward-sexp pass
+            if ! emacs -Q --batch \
+                    -L "$repo_root" -L "$repo_root/lisp" -L "$repo_root/lisp/modules" \
+                    "${pkg_load_args[@]}" \
+                    --eval "(with-temp-buffer (insert-file-contents \"$repo_root/$file\") (delay-mode-hooks (emacs-lisp-mode)) (goto-char (point-min)) (while (not (eobp)) (forward-sexp)))" \
+                    >/dev/null 2>&1; then
+                echo "  FAIL: $file — unbalanced parentheses or unreadable structure"
+                failed=1
+                continue
+            fi
+
+            # 4b. Ensure every defun/cl-defun/defmacro/defconst/defvar/defcustom/defgroup/defsubst/defface is at top level.
+            # This catches misplaced parens that swallow later definitions (e.g. defun inside defun).
+            check_script='/tmp/pre-commit-top-level-def-check.el'
+            cat > "$check_script" <<'CHECK_EOF'
+(let ((file (car command-line-args-left))
+      (errors nil))
+  (with-temp-buffer
+    (insert-file-contents file)
+    (delay-mode-hooks (emacs-lisp-mode))
+    (goto-char (point-min))
+    (while (re-search-forward "^(\\(defun\\|cl-defun\\|defmacro\\|defconst\\|defvar\\|defcustom\\|defgroup\\|defsubst\\|defface\\)\\s-+\\(\\S-+\\)" nil t)
+      (let ((name (match-string 2))
+            (pos (match-beginning 0)))
+        (goto-char pos)
+        (when (> (car (syntax-ppss)) 0)
+          (push (format "%s:%d: %s is nested (not top-level)" file pos name) errors))
+        (goto-char (match-end 0))))
+    (if errors
+        (progn
+          (dolist (e (nreverse errors)) (message "%s" e))
+          (kill-emacs 1))
+      (message "OK: top-level definitions in %s" file))))
+CHECK_EOF
+            if ! check_out=$(emacs -Q --batch \
+                    -L "$repo_root" -L "$repo_root/lisp" -L "$repo_root/lisp/modules" \
+                    "${pkg_load_args[@]}" \
+                    -l "$check_script" "$repo_root/$file" 2>&1); then
+                echo "$check_out"
+                echo "  FAIL: $file — nested top-level definition detected"
+                failed=1
+                rm -f "$check_script"
+                continue
+            fi
+            rm -f "$check_script"
+            echo "$check_out" | grep "^OK:" || true
+        fi
+    done <<< "$staged_el_files"
+    if [[ $failed -ne 0 ]]; then
+        echo "pre-commit: structural errors found. Fix before committing."
+        exit 1
+    fi
+fi
+
+# ─── 5. Byte-compile staged .el files ───
 staged_el_files=$(echo "$staged_files" | grep '\.el$' || true)
 if [[ -n "$staged_el_files" ]]; then
     echo "pre-commit: byte-compiling staged .el files..."
