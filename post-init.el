@@ -222,6 +222,24 @@ Only reloads for top-level frames (not Corfu child frames) and only once per fra
           (message "[server] Explicitly started server: %s" server-name))
       (error
        (message "[server] Failed to start server: %s" (error-message-string err)))))
+
+  ;; Start the heartbeat timer at daemon init so it ALWAYS runs while the
+  ;; daemon lives (not only during an active workflow).  The external
+  ;; watchdog (watchdog-daemon.sh) treats a stale heartbeat as "frozen";
+  ;; if the heartbeat only starts mid-workflow, an idle daemon has a
+  ;; forever-stale heartbeat and gets force-restarted every 30 min even
+  ;; when it is merely briefly busy (a >5s git/test op causes the 5s
+  ;; emacsclient ping to miss, and with no fresh heartbeat the watchdog
+  ;; concludes "frozen").  A live event loop keeps this timer firing
+  ;; every 30s; a truly frozen main thread starves it → stale → watchdog
+  ;; restarts.  That is the correct invariant.
+  (with-eval-after-load 'gptel-tools-agent-experiment-loop
+    (when (fboundp 'gptel-auto-workflow--start-heartbeat-timer)
+      (condition-case err
+          (gptel-auto-workflow--start-heartbeat-timer)
+        (error
+         (message "[heartbeat] Failed to start init heartbeat: %s"
+                  (error-message-string err))))))
   
   ;; Hard curl timeout prevents orphaned subprocesses from hanging the daemon.
   ;; Without --max-time, curl blocks indefinitely when server closes connection
