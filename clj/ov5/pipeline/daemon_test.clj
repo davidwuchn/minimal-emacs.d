@@ -38,16 +38,23 @@
     ;; Behavior 2: gtm-product-org — when the daemon is not alive and
     ;; findings file doesn't exist, return :failed (promptly).
     ;; The OLD bug would discard this and run to :timeout.
-    (let [result (with-redefs [d/check-worker-daemon (fn [& _] :dead)
-                               d/resolve-emacsclient (fn [] "fake-emacsclient")
-                               d/run-emacsclient-eval (fn [& _] {:exit 0 :out "" :err ""})]
-                   (d/wait-for-idle! {:action :test
-                                      :socket-name "gtm-product-org"
-                                      :max-wait-ms 60000    ; 60s budget
-                                      :min-start-wait-ms 0
-                                      :pipeline-start-time 0}))]
-      (is (= :failed result)
-          (format "wait-for-idle! researcher branch should return :failed; got %s" result)))))
+    (let* [tmp (java.io.File/createTempFile "missing-findings-" ".edn")
+           missing-findings (str tmp ".nonexistent")]
+      (.delete tmp)
+      (let [check-fn (fn [& _] :dead)
+            emacsclient-fn (fn [] "fake-emacsclient")
+            eval-fn (fn [& _] {:exit 0 :out "" :err ""})]
+        (let [result (with-redefs [d/check-worker-daemon check-fn
+                                   d/resolve-emacsclient emacsclient-fn
+                                   d/run-emacsclient-eval eval-fn]
+                       (d/wait-for-idle! {:action :test
+                                          :socket-name "gtm-product-org"
+                                          :findings-file missing-findings
+                                          :max-wait-ms 60000
+                                          :min-start-wait-ms 0
+                                          :pipeline-start-time 0}))]
+          (is (= :failed result)
+              (format "wait-for-idle! researcher branch should return :failed; got %s" result)))))))
 
 ;; --- resolve-emacsclient ---
 
