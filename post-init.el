@@ -234,12 +234,19 @@ Only reloads for top-level frames (not Corfu child frames) and only once per fra
     (message "[post-init] Set gptel curl --max-time 840s for daemon"))
   
   (defun my/server-socket-healthy-p (sock)
-    "Return t if SOCK exists and emacsclient can connect."
-    (and (file-exists-p sock)
-         (executable-find "emacsclient")
-         (let ((exit (call-process "emacsclient" nil nil nil
-                                   "-s" sock "-a" "false" "-e" "t")))
-           (eq exit 0))))
+    "Return non-nil if the server socket SOCK is live.
+Checks the in-process `server-process' rather than round-tripping
+through emacsclient.  A synchronous `call-process' that invokes
+emacsclient back into THIS SAME DAEMON self-deadlocks: `call-process'
+blocks the main thread waiting for the child, so the server loop never
+services the very request the child just sent — both wait forever.
+This deadlocked the daemon ~30s after every startup (the self-heal
+timer fired at t+30s and froze the main thread), which in turn made the
+external watchdog restart the daemon every 30 minutes in a loop."
+    (and (boundp 'server-process)
+         (processp server-process)
+         (process-live-p server-process)
+         (file-exists-p sock)))
 
   ;; Self-heal: check every 30s and recreate socket if unreachable
   (run-at-time 30 30

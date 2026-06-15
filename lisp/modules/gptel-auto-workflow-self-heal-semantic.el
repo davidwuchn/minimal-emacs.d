@@ -1984,9 +1984,14 @@ live-tree mutation is performed."
 Optional ERT-SELECTOR is passed as the second argument for targeted testing.
 Returns (PASS-P . OUTPUT-STRING).
 When no tests/ directory exists, returns (t . \"no tests directory\").
-Uses `call-process' to capture both stdout+stderr AND the exit code,
-so the pass/fail decision is based on the script's exit status, not
-fragile output parsing."
+
+Runs the subprocess via `make-process' and pumps the event loop with
+`accept-process-output' while waiting, instead of a blocking
+`call-process'.  The full unit suite takes ~10min; `call-process' would
+freeze the daemon's main thread for the entire run (no timers, no
+emacsclient, no heartbeat), tripping the external watchdog into a
+restart loop.  Keeping the event loop serviced lets the server socket
+answer, the heartbeat timer fire, and `with-timeout' have effect."
   (let ((test-dir (expand-file-name "tests" worktree-dir))
         (script (expand-file-name "scripts/run-tests.sh" worktree-dir)))
     (cond
@@ -1997,20 +2002,29 @@ fragile output parsing."
      (t
       (let* ((default-directory worktree-dir)
              (stdout-buf (generate-new-buffer " *ov5-ert-stdout*"))
-             (stderr-file (make-temp-file "ov5-ert-stderr-"))
-              (exit-code
-               (unwind-protect
-                   (apply #'call-process "bash" nil (list stdout-buf stderr-file) nil
-                          (shell-quote-argument script) "unit"
-                          (if ert-selector (list ert-selector) nil))
-                 (with-current-buffer stdout-buf
-                   (goto-char (point-max))
-                   (insert-file-contents stderr-file))
-                 (delete-file stderr-file)))
-             (output (string-trim
-                      (with-current-buffer stdout-buf (buffer-string)))))
-        (kill-buffer stdout-buf)
-        (cons (zerop exit-code) output))))))
+             (stderr-buf (generate-new-buffer " *ov5-ert-stderr*"))
+             (args (append (list script "unit")
+                           (when ert-selector (list ert-selector))))
+             (proc (make-process
+                    :name "ov5-ert"
+                    :buffer stdout-buf
+                    :stderr stderr-buf
+                    :command (cons "bash" args)
+                    :connection-type 'pipe
+                    :noquery t)))
+        ;; Pump the event loop until the process exits.  accept-process-output
+        ;; with nil PROCESS services ALL processes with pending I/O (including
+        ;; the emacs server socket and other timers), so the daemon stays
+        ;; responsive during the ~10min run.
+        (while (process-live-p proc)
+          (accept-process-output nil 0.1))
+        (let ((exit-code (process-exit-status proc))
+              (output (string-trim
+                       (concat (with-current-buffer stdout-buf (buffer-string))
+                               (with-current-buffer stderr-buf (buffer-string))))))
+           (kill-buffer stdout-buf)
+           (kill-buffer stderr-buf)
+           (cons (zerop exit-code) output)))))))
 
 (defun gptel-auto-workflow--self-heal-file-via-ov5 (file)
   "Heal FILE in an OV5 temporary worktree, then promote only if valid.

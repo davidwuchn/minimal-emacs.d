@@ -1051,6 +1051,37 @@ matched '0 unexpected' and inverted the gate."
             (should (stringp (cdr result)))))
       (delete-directory tmpdir t))))
 
+(ert-deftest test-self-heal-semantic/run-ert-services-event-loop ()
+  "run-ert-in-worktree must keep the event loop serviced while the test
+subprocess runs.  Synchronous `call-process' blocks the main thread for
+the whole ~10min unit run, freezing the daemon (no timers, no
+emacsclient, no heartbeat) and tripping the external watchdog into a
+restart loop.  Using `make-process' + `accept-process-output' lets
+timers fire and the server socket answer during the run."
+  (let* ((tmpdir (make-temp-file "ov5-ert-test-" t))
+         (test-dir (expand-file-name "tests/" tmpdir))
+         (script-dir (expand-file-name "scripts/" tmpdir))
+         (tick-count 0)
+         (tick-timer nil))
+    (unwind-protect
+        (progn
+          (make-directory test-dir t)
+          (make-directory script-dir t)
+          ;; Slow script: ~2s of output so the subprocess is alive long
+          ;; enough for the repeating timer to fire several times.
+          (with-temp-file (expand-file-name "run-tests.sh" script-dir)
+            (insert "#!/bin/bash\nfor i in 1 2 3 4; do sleep 0.5; done\necho 'Ran 1 tests, 1 expected, 0 unexpected'\nexit 0\n"))
+          (chmod (expand-file-name "run-tests.sh" script-dir) #o755)
+          (setq tick-timer (run-with-timer 0 0.2
+                                           (lambda () (cl-incf tick-count))))
+          (let ((result (gptel-auto-workflow--run-ert-in-worktree tmpdir)))
+            (should (car result))
+            ;; Over a ~2s run a 0.2s repeating timer fires ~10x.
+            ;; A blocking call-process would leave tick-count near 0/1.
+            (should (> tick-count 3))))
+      (when tick-timer (cancel-timer tick-timer))
+      (delete-directory tmpdir t))))
+
 (ert-deftest test-self-heal-semantic/run-ert-real-fail-output ()
   "run-ert-in-worktree returns (nil . _) when script outputs real ERT fail text
 and exits non-zero.  Real ERT output on fail contains 'FAILED' and a non-zero

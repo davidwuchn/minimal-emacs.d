@@ -148,26 +148,55 @@ test runs to complete. Exit code 124 if timeout expires."
 Uses GNU timeout(1) to prevent indefinite hangs during long verification runs.
 Returns 124 if timeout expired, or the actual process exit code otherwise.
 
-This avoids false watchdog force-stops when long local verification phases
-block
-Emacs long enough for a queued watchdog check to fire immediately afterward."
+Runs PROGRAM via `make-process' and pumps the event loop with
+`accept-process-output' while waiting, instead of a blocking
+`call-process'.  This function fronts the ~10min baseline test warm-up
+and verification runs; `call-process' would freeze the daemon's main
+thread for the whole run (no timers, no emacsclient, no heartbeat),
+tripping the external watchdog into a restart loop.  Pumping the event
+loop keeps the server socket, heartbeat timer, and `with-timeout'
+live during the run.
+
+DESTINATION semantics follow a subset of `call-process': a buffer
+\(output appended there), t (current buffer), or nil (discarded to a
+temp buffer).  INFILE and DISPLAY are accepted for call-compatibility
+but not used by the async path."
   (let ((workflow-active (or gptel-auto-workflow--running
                              gptel-auto-workflow--cron-job-running))
         (use-timeout (and (stringp program)
-                           (or (string= program "bash")
-                               (string= program "sh")
-                               (string= program "emacs")
-                               (string-suffix-p ".sh" program)))))
+                          (or (string= program "bash")
+                              (string= program "sh")
+                              (string= program "emacs")
+                              (string-suffix-p ".sh" program))))
+        (out-buf (cond ((bufferp destination) destination)
+                       ((eq destination t) (current-buffer))
+                       (t (generate-new-buffer " *ov5-watchdog-stdout*"))))
+        (own-buf (not (or (bufferp destination) (eq destination t)))))
+    (ignore infile display)  ; accepted for call-process API compat, unused by async path
     (when workflow-active
       (when (timerp gptel-auto-workflow--watchdog-timer)
         (cancel-timer gptel-auto-workflow--watchdog-timer))
       (setq gptel-auto-workflow--watchdog-timer nil))
     (unwind-protect
-        (if (and use-timeout (not noninteractive))
-            (apply #'call-process "timeout" infile destination display
-                   (number-to-string gptel-auto-workflow--process-timeout-secs)
-                   program args)
-          (apply #'call-process program infile destination display args))
+        (let* ((cmd (if (and use-timeout (not noninteractive))
+                        (append (list "timeout"
+                                      (number-to-string gptel-auto-workflow--process-timeout-secs)
+                                      program)
+                                args)
+                      (cons program args)))
+               (proc (make-process
+                      :name "ov5-watchdog-proc"
+                      :buffer out-buf
+                      :command cmd
+                      :connection-type 'pipe
+                      :noquery t)))
+          ;; Pump the event loop until the process exits.  accept-process-output
+          ;; with nil PROCESS services ALL processes with pending I/O (including
+          ;; the emacs server socket and other timers).
+          (while (process-live-p proc)
+            (accept-process-output nil 0.1))
+          (process-exit-status proc))
+      (when own-buf (kill-buffer out-buf))
       (when workflow-active
         (gptel-auto-workflow--update-progress)
         (gptel-auto-workflow--persist-status)

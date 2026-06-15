@@ -47,6 +47,29 @@
   "Call process with watchdog function should exist."
   (should (fboundp 'gptel-auto-workflow--call-process-with-watchdog)))
 
+(ert-deftest test-main/call-process-with-watchdog-services-event-loop ()
+  "call-process-with-watchdog must keep the event loop serviced while the
+subprocess runs.  It is used for the ~10min baseline test warm-up and
+verification runs; a blocking `call-process' would freeze the daemon's
+main thread (no timers, no emacsclient, no heartbeat) and trip the
+external watchdog into a restart loop.  The run must pump the event
+loop so a repeating timer fires during it."
+  (let ((tick-count 0)
+        (tick-timer nil)
+        (out-buf (generate-new-buffer " *cpw-test*")))
+    (unwind-protect
+        (progn
+          (setq tick-timer (run-with-timer 0 0.2 (lambda () (cl-incf tick-count))))
+          ;; ~2s subprocess: long enough for the 0.2s timer to fire many times.
+          (let ((exit (gptel-auto-workflow--call-process-with-watchdog
+                       "bash" nil out-buf nil "-c"
+                       "for i in 1 2 3 4; do sleep 0.5; done; echo done")))
+            (should (zerop exit))
+            ;; A blocking call-process leaves tick-count near 0/1.
+            (should (> tick-count 3))))
+      (when tick-timer (cancel-timer tick-timer))
+      (kill-buffer out-buf))))
+
 ;;; After-experiment hook integration tests
 
 (ert-deftest test-main/after-experiment-hook-var-declared ()
