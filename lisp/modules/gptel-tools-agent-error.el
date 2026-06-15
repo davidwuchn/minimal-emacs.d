@@ -427,9 +427,10 @@ connection errors, or other transient failures."
 
 (defun gptel-auto-experiment--retry-delay-seconds (error-output retries)
   "Return retry delay for ERROR-OUTPUT after RETRIES previous attempts."
-  (let ((base-delay (max 1 gptel-auto-experiment-retry-delay)))
+  (let ((base-delay (max 1 (or gptel-auto-experiment-retry-delay 0))))
     (if (gptel-auto-experiment--rate-limit-error-p error-output)
-        (min gptel-auto-experiment-rate-limit-max-retry-delay
+        (min (or gptel-auto-experiment-rate-limit-max-retry-delay
+                 most-positive-fixnum)
              (* base-delay (ash 1 retries)))
       base-delay)))
 

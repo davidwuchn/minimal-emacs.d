@@ -80,6 +80,19 @@
 
 ---
 
+## Session Note (2026-06-15 — auto-experiment batch regression stabilization completed)
+
+1. **Batch regression cleanup finished**
+   - `tests/test-gptel-tools-agent-regressions.el` now resets shared auto-experiment globals before each in-scope test.
+   - Nil fallback bugs in `gptel-auto-experiment--retry-delay-seconds` are guarded so batch mode no longer trips `wrong-type-argument` on nil.
+
+2. **Verification**
+   - Focused batch selector: `regression/auto-experiment/` -> 0 unexpected, 28 descriptive skips
+   - Full unit gate: `./scripts/run-tests.sh unit` -> pass
+
+3. **Memory stored**
+   - `mementum/memories/auto-experiment-batch-reset-fixture.md`
+
 ## Session Note (2026-06-15 — innovation queue EDN restore + headless auto-approve fix)
 
 1. **Restored the innovation queue to EDN-backed storage**
