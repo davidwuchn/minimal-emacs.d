@@ -6,8 +6,8 @@
 >
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
-> **Status**: ⊘ ✓ **STATECHART MODULE TDD COVERAGE EXPANDED** — 21/21 tests pass. Fixed real bug: `statechart-analyze` used unbound `gate-order` (only bound in `build-statechart`). Added TDD tests for `detect-compensating-errors`, `extract-gate-score-vectors`, `statechart-analyze`, `statechart-drift-check`. 592-line module went from 4 → 21 tests.
-> **Latest**: Pushed `09bd678f7` — drift-check TDD coverage.
+> **Status**: ⊘ ✓ **STATECHART MODULE FULLY COVERED (12/12 DEFUNS)** — 33/33 tests pass. Module went from 4 → 33 tests. TDD found 1 real bug (`statechart-analyze` used unbound `gate-order`), now fixed. All 12 defuns in the 592-line statechart module have TDD coverage.
+> **Latest**: Pushed `a594010e2` — complete TDD coverage of statechart module.
 
 ---
 
@@ -171,3 +171,26 @@
 ### Next steps
 - Add TDD tests for: build-statechart, statechart-rebuild-and-persist,
   statechart-report, statechart-show
+
+## Session Note (2026-06-16 — statechart module complete TDD coverage)
+
+1. **Added 12 more TDD tests** to bring the statechart module to 33/33:
+   - 4 for `build-statechart` (all-kept, all-discarded-at-executor,
+     empty-input, staging-pending-skipped)
+   - 5 for `statechart-report` (header, total-experiments, per-gate-table,
+     bottleneck, omits-bottleneck-when-nil)
+   - 1 for `statechart-show` (creates-buffer)
+   - 2 for `statechart-rebuild-and-persist` (calls-persist, handles-errors)
+
+2. **All 12 defuns in the 592-line statechart module now have TDD coverage**:
+   compute-gate-score-vector, statechart-persistence-file, statechart-persist,
+   statechart-load, build-statechart, extract-gate-score-vectors,
+   statechart-analyze, detect-compensating-errors, statechart-drift-check,
+   statechart-rebuild-and-persist, statechart-report, statechart-show.
+
+3. **Coordinated with remote**: remote also fixed the same `_if` rename
+   bug (commit `b65adc2ad`). My commits rebased cleanly on top.
+
+### Next steps
+- TDD other undertested modules: gptel-auto-workflow-recovery (0 tests),
+  gptel-tools-agent-experiment-core (0 tests), gptel-ext-fsm (4 tests)
