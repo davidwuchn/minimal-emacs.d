@@ -1,13 +1,13 @@
 # Mementum State
 
-> **Last pipeline**: 2026-06-16 12:07 (zero-run → now running)
+> **Last pipeline**: 2026-06-16 18:21 (rebased and pushed)
 > **Next pipeline**: scheduled
-> **Plan**: /Users/davidwu/.emacs.d/mementum/knowledge/plans/pipeline-runs/run-20260616-115759/
+> **Plan**: /home/davidwu/.emacs.d/mementum/knowledge/plans/pipeline-runs/run-20260616-180000/
 >
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
-> **Status**: ⚒ **HELIUM-INSPIRED CACHING + PRE-COMMIT HOOK FIX** — Added response cache (LLM outputs) and intermediate result cache (target categorization). Fixed pre-commit hook infinite loop with `save-match-data` around `looking-at`.
-> **Latest**: Implemented Helium-inspired three-level caching strategy and fixed pre-commit hook timeout.
+> **Status**: ⚒ ⊘ ✓ **AUTO-EVOLUTION RENAME BUGS REVERTED + TDD REGRESSION TEST** — The OV5 pipeline had touched 12+ lisp modules, renaming function parameters and special forms to suppress byte-compile warnings. All reverted. Added `test-strategic/filter-large-files-no-void-functions` to catch the `_if`/`_let` rename pattern.
+> **Latest**: Pushed `7b979d318` — `💡` memory: auto-evolution-rename-bugs.
 
 ---
 
@@ -379,3 +379,35 @@
 
 4. **Memory stored**
    - `mementum/memories/insight-response-cache-implementation.md`
+
+## Session Note (2026-06-16 — auto-evolution rename bugs fixed by TDD)
+
+1. **Detected auto-evolution pipeline's broken rename pattern**
+   - The OV5 auto-evolution pipeline (Pi5 daemon) had touched 12+ lisp modules
+   - Pattern: `(defvar X nil)` + parameter rename `X → _X` + body still uses `X`
+   - Special forms also renamed: `if → _if`, `let → _let`, `let* → _let*`,
+     `if-let* → _if-let*`, `when → _when`
+   - Innovation queue refactor (`.edn` → `.md`) had its own bugs (12-blank-line 
+     regex same as the 33-blank-line bug it claimed to fix)
+   - state.md was truncated from 301 lines to 6 (reverted)
+
+2. **TDD: confirmed bug class via behavioral tests**
+   - `test-fsm/register-id` FAILED with `(stringp nil)` because the function
+     ignored its parameter and read the global `fsm` (nil)
+   - New test `test-strategic/filter-large-files-no-void-functions` caught the
+     `_if` rename with `Symbol's function definition is void: _if`
+   - TDD cycle: RED (re-introduce bug → 1 test fails) → GREEN (revert → 11/11 pass)
+
+3. **Reverted all broken auto-fixes**
+   - 12 lisp files + state.md + production.el (innovation queue)
+   - Verified: 207/207 tests pass on clean codebase (fsm-utils, strategic,
+     checkpoint, self-heal-semantic test suites)
+
+4. **Stored memory and added TDD regression test**
+   - `mementum/memories/auto-evolution-rename-bugs.md` documents the bug class
+   - `tests/test-gptel-auto-workflow-strategic.el`: added regression test
+   - Committed: `ed6304385` (✓ test), `7b979d318` (💡 memory), pushed to origin
+
+### Next steps
+- Watch for the rename pattern in future pipeline runs
+- Consider adding a linter that scans `(defvar X nil)` + `(_X ...)` in same file
