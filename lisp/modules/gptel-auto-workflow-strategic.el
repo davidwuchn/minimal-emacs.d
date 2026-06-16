@@ -290,7 +290,7 @@ buffer."
   (let (result)
     (dolist (file files (reverse result))
       (when (and (file-exists-p file)
-                 (let ((line-count (if (executable-find "wc")
+                 (let ((line-count (_if (executable-find "wc")
                                        (with-temp-buffer
                                          (condition-case err (call-process "wc" nil t nil "-l" file))
                                          (string-to-number (string-trim (buffer-string))))
@@ -576,6 +576,7 @@ Returns nil if data not available."
   (let* ((data-dir (expand-file-name "assistant/skills/researcher-prompt/data"
                                       (gptel-auto-workflow--effective-project-root)))
           (topic-file (expand-file-name "topic-performance.json" data-dir)))
+
     (when (file-exists-p topic-file)
       (condition-case err
           (let* ((data (gptel-auto-workflow--json-read-hash-safe topic-file))
@@ -778,6 +779,7 @@ and timeout-heavy targets for the researcher to investigate."
        (lambda (target counts)
          (when (> (car counts) 10)
             (let ((keep-rate (if (> (car counts) 0)
+
                                 (/ (float (cdr counts)) (car counts)) 0.0)))
              (push (cons target (list :total (car counts) :kept (cdr counts)
                                       :rate keep-rate))
@@ -1302,6 +1304,7 @@ no tree-sitter)
                  (unless called
                    (setq called t)
                     (let* ((candidate (if (stringp response)
+
                                          response
                                        (format "%s" response)))
                           (trimmed (string-trim candidate))
@@ -1642,6 +1645,7 @@ analyzer-time-budget govern."
                         (push failed-backend
                               gptel-auto-workflow--analyzer-failed-backends))
                        (if-let* ((candidate
+
                                  (and (< attempt 2)        ; max 3 total attempts
                                       (null targets)
                                       (or gptel-auto-workflow--analyzer-quota-exhausted
@@ -1684,6 +1688,7 @@ Returns updated targets list."
    ((not (and (stringp proj-root) (not (string-empty-p proj-root)))) targets)
    (t
      (let ((abs-path (if (file-name-absolute-p file)
+
                         file
                       (expand-file-name file proj-root)))
           (root-prefix (if (string-suffix-p "/" proj-root)
@@ -2672,6 +2677,7 @@ Uses topic-specific model if available and topic detected."
                    (plist-get controller-config :model-n-traces)) 0))
     (when (and intercept weights)
        (let* ((has-urls (if (string-match-p "https?://" (or output-text "")) 1 0))
+
              (has-structure (if (string-match-p "## .*\n" (or output-text "")) 1 0))
              (has-code (if (string-match-p "```" (or output-text "")) 1 0))
              (source-own 1) ;; Assume own-repo for current context

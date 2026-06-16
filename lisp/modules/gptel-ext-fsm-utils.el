@@ -94,7 +94,7 @@ nested agent calls."
             (puthash id _fsm my/gptel--fsm-registry)
             id)))))
 
-(defun my/gptel--fsm-unregister (fsm-or-id)
+(defun my/gptel--fsm-unregister (_fsm-or-id)
   "Remove FSM from registry by FSM struct or ID.
 
 ASSUMPTION: Input is either FSM struct or ID string.
@@ -116,6 +116,7 @@ in various call contexts (parent agent vs child agent cleanup)."
             (when fsm
               (remhash fsm my/gptel--fsm-registry)
               (remhash fsm-or-id my/gptel--fsm-registry)))
+
       (let ((id (gethash fsm-or-id my/gptel--fsm-registry)))
         (when id
           (remhash fsm-or-id my/gptel--fsm-registry)
@@ -263,7 +264,7 @@ Returns FSM struct or nil if not found."
                       (let ((id (my/gptel--fsm-get-id fsm)))
                         (and id (equal id context-id)))))
                 (coerce-id (id)
-                  (let ((fsm (and (stringp id)
+                  (let ((_fsm (and (stringp id)
                                   (my/gptel--fsm-get-by-id id))))
                     (and (my/gptel--fsm-p fsm)
                          (matches-context-p fsm)
@@ -493,7 +494,7 @@ PROACTIVE MITIGATION: Can be called periodically or after operations
 to ensure registry remains in valid state.
 
 Returns t on success, signals error on failure."
-  (let ((fsm-counts (make-hash-table :test 'eq)))
+  (let ((_fsm-counts (make-hash-table :test 'eq)))
     (cl-letf (((symbol-function 'validate-entry)
                (lambda (key value)
                  (cond
@@ -516,6 +517,7 @@ Returns t on success, signals error on failure."
                      (let* ((_fsm-via-id (gethash id my/gptel--fsm-registry)))
                        (unless (eq _fsm-via-id key)
                          (error "FSM registry invariant violated: FSM→ID bidirectional mismatch for FSM %S (expected ID %S, got %S)" key id _fsm-via-id)))
+
                      (let ((count (gethash key fsm-counts 0)))
                        (puthash key (1+ count) fsm-counts))))
                   (t

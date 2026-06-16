@@ -68,6 +68,7 @@ SIGNALS an error if SLUG contains path traversal or invalid characters."
     (error "Slug must not start with a path separator"))
   (let* ((_root (gptel-tools-memory--project-root))
          (_ (when (null _root)
+
               (error "Project root must not be nil; check `gptel-tools-memory--project-root'")))
          (base-dir (expand-file-name
                     (if knowledge-p
@@ -154,6 +155,7 @@ SIGNALS an error if TOPIC is a non-string, non-nil value."
   "List available memories, optionally filtered by TOPIC."
   (let* ((_root (gptel-tools-memory--project-root))
          (_ (when (null _root)
+
               (error "Project root must not be nil; check `gptel-tools-memory--project-root'")))
          (mem-dir (expand-file-name gptel-tools-memory-dir _root))
          (know-dir (expand-file-name gptel-tools-memory-knowledge-dir _root))
