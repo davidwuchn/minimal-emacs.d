@@ -204,7 +204,7 @@ legitimate subagent work. Set to nil to disable.\")")
 
 (ert-deftest test-self-heal-semantic/audit-checks-variable-defined ()
   "The audit checks alist is defined with all checks."
-  (should (= (length gptel-auto-workflow--semantic-audit-checks) 18))
+  (should (= (length gptel-auto-workflow--semantic-audit-checks) 19))
   (should (assq 'let-binding-function gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'hardcoded-limit gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'score-zero-bug gptel-auto-workflow--semantic-audit-checks))
@@ -218,7 +218,8 @@ legitimate subagent work. Set to nil to disable.\")")
   (should (assq 'void-defvar gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'daemon-hang gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'nil-hash-table gptel-auto-workflow--semantic-audit-checks))
-  (should (assq 'unbound-declared-function-call gptel-auto-workflow--semantic-audit-checks)))
+  (should (assq 'unbound-declared-function-call gptel-auto-workflow--semantic-audit-checks))
+  (should (assq 'daemon-server-start gptel-auto-workflow--semantic-audit-checks)))
 
 ;; ── Test 10: Missing provide detection ──
 
@@ -450,6 +451,74 @@ After fix: catches ALL errors via (error ...)."
                           (insert-file-contents file)
                           (buffer-string))))
             (should (string-match-p "(and (fboundp 'external-helper)" result))))
+      (test-self-heal-semantic--cleanup file))))
+
+;; ── Test 7.5: Unguarded declared-function calls from advice/hooks ──
+
+;; ── Test 7.6: server-start during daemon init ──
+
+(ert-deftest test-self-heal-semantic/detects-server-start-in-daemon-block ()
+  "Detects explicit server-start inside (when (daemonp) ...)."
+  (let* ((content
+          "(when (daemonp)\n  (server-start)\n  (message \"daemon init\"))\n")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-daemon-server-start file)))
+          (should (>= issues 1)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/detects-server-start-top-level ()
+  "Detects explicit server-start at top level of init file."
+  (let* ((content
+          "(server-start)\n")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-daemon-server-start file)))
+          (should (>= issues 1)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/skips-server-start-in-string ()
+  "Skips server-start inside strings/docstrings."
+  (let* ((content
+          "(defun helper ()\n  \"Do not call (server-start) here.\"\n  nil)\n")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-daemon-server-start file)))
+          (should (= issues 0)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/fix-replaces-server-start ()
+  "Fixer replaces server-start with an explanatory message."
+  (let* ((content
+          "(when (daemonp)\n  (server-start)\n  (message \"daemon init\"))\n")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (let ((fixed (gptel-auto-workflow--fix-daemon-server-start file)))
+            (should (= fixed 1)))
+          (let ((result (with-temp-buffer
+                          (insert-file-contents file)
+                          (buffer-string))))
+            (should-not (string-match-p "(server-start" result))
+            (should (string-match-p "Daemon framework starts server automatically" result))))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/daemon-server-start-in-checks ()
+  "New audit check is registered in `gptel-auto-workflow--semantic-audit-checks'."
+  (should (assq 'daemon-server-start gptel-auto-workflow--semantic-audit-checks)))
+
+(ert-deftest test-self-heal-semantic/daemon-server-start-in-fixers ()
+  "New fixer is registered in `gptel-auto-workflow--semantic-fixer-alist'."
+  (should (assq 'daemon-server-start gptel-auto-workflow--semantic-fixer-alist)))
+
+(ert-deftest test-self-heal-semantic/skips-server-start-in-non-daemon-branch ()
+  "Skips server-start inside (when (not (daemonp)) ...)."
+  (let* ((content
+          "(when (not (daemonp))\n  (server-start))\n")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-daemon-server-start file)))
+          (should (= issues 0)))
       (test-self-heal-semantic--cleanup file))))
 
 ;; ── Test 8: Excessive blank line detection ──

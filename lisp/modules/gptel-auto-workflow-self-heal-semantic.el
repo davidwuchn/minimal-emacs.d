@@ -937,6 +937,102 @@ Returns count of issues found."
 ;; ── Check 18: Unbound declared-function calls from advice/hooks ──
 
 
+;; ── Check 19: server-start during daemon init ──
+
+(defun gptel-auto-workflow--audit-daemon-server-start (file)
+  "Audit FILE for explicit `server-start' calls in init files.
+When Emacs is started with --daemon, `server-start' should not be called
+from init files: the daemon framework starts the server automatically after
+init finishes.  Calling it during init can stop an existing server and
+restart it, reloading init files and racing into 'End of file during
+parsing'.  The only safe context is inside a non-daemon branch such as
+`(when (not (daemonp)) (server-start))'.  Returns count of issues found."
+  (let ((issues 0))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (emacs-lisp-mode)
+      (goto-char (point-min))
+      (while (re-search-forward "(server-start\\b" nil t)
+        (let ((form-start (match-beginning 0))
+              (state (save-excursion (syntax-ppss (match-beginning 0)))))
+          (unless (or (nth 3 state) (nth 4 state))
+            ;; Walk up enclosing lists.  If any ancestor is a non-daemon
+            ;; conditional (when/if/unless (not (daemonp)) ...), consider it
+            ;; safe.  Otherwise flag it.
+            (let ((safe nil)
+                  (pos form-start)
+                  (seen nil))
+              (while (and pos (not safe))
+                (let ((parent-start
+                       (save-excursion
+                         (nth 1 (syntax-ppss pos)))))
+                  (when (and parent-start (not (memq parent-start seen)))
+                    (push parent-start seen)
+                    (save-excursion
+                      (goto-char parent-start)
+                      (let ((head (condition-case nil
+                                      (read (current-buffer))
+                                    (error nil))))
+                        (when (and (consp head)
+                                   (memq (car head) '(when if unless))
+                                   (>= (length head) 2))
+                          (let ((condition (nth 1 head)))
+                            (when (and (consp condition)
+                                       (eq (car condition) 'not)
+                                       (consp (cdr condition))
+                                       (let ((negated (cadr condition)))
+                                         (or (eq negated 'daemonp)
+                                             (and (consp negated)
+                                                  (eq (car negated) 'daemonp)
+                                                  (null (cdr negated))))))
+                              (setq safe t)))))))
+                  (setq pos parent-start)))
+              (unless safe
+                (setq issues (1+ issues))
+                (gptel-auto-workflow--semantic-audit-record
+                 file (line-number-at-pos form-start)
+                 'daemon-server-start
+                 "Explicit (server-start) in init file is unsafe when running as daemon")))))))
+    issues))
+
+(defun gptel-auto-workflow--fix-daemon-server-start (file)
+  "Remove or comment out explicit `server-start' calls in FILE.
+Returns number of calls removed.  This is a conservative fix: it replaces
+`(server-start)' with a message explaining that the daemon framework
+handles server startup."
+  (let ((fixed 0)
+        (original-content (with-temp-buffer
+                            (insert-file-contents file)
+                            (buffer-string))))
+    (with-temp-buffer
+      (insert original-content)
+      (emacs-lisp-mode)
+      (goto-char (point-min))
+      (let ((positions nil))
+        (while (re-search-forward "(server-start\\b" nil t)
+          (let ((form-start (match-beginning 0))
+                (state (save-excursion (syntax-ppss (match-beginning 0)))))
+            (unless (or (nth 3 state) (nth 4 state))
+              (push form-start positions))))
+        (dolist (pos (sort positions #'>))
+          (goto-char pos)
+          (let ((form-end (condition-case nil
+                              (save-excursion
+                                (forward-sexp 1)
+                                (point))
+                            (error (1+ pos)))))
+            (delete-region pos form-end)
+            (insert "(message \"[server] Daemon framework starts server automatically; removed explicit server-start\")")
+            (cl-incf fixed))))
+      (when (> fixed 0)
+        (gptel-auto-workflow--fix-validate-and-write
+         (current-buffer) file original-content
+         :no-load-check t :no-subprocess-check t)))
+    (when (> fixed 0)
+      (message "[self-heal-semantic] Replaced %d server-start call(s) in %s"
+               fixed (file-name-nondirectory file)))
+    fixed))
+
 (defun gptel-auto-workflow--extract-function-symbol (arg)
   "Extract a function symbol from ARG which may be SYM, (function SYM), or (quote
 SYM)."
@@ -1119,7 +1215,8 @@ is loaded.  Returns count of issues found."
     (curl-no-max-time . gptel-auto-workflow--audit-curl-no-max-time)
     (toxic-commit-subject . gptel-auto-workflow--audit-toxic-commit-subject)
     (score-fabrication . gptel-auto-workflow--audit-score-fabrication)
-    (unbound-declared-function-call . gptel-auto-workflow--audit-unbound-declared-function-calls))
+     (unbound-declared-function-call . gptel-auto-workflow--audit-unbound-declared-function-calls)
+     (daemon-server-start . gptel-auto-workflow--audit-daemon-server-start))
   "Alist of audit check name (symbol) to audit function.")
 
 ;; ── Check 8: condition-case with unbound err ──
@@ -2163,7 +2260,8 @@ is safe for side-effect-only helpers.  Returns number of calls fixed."
     (void-defvar . gptel-auto-workflow--fix-void-defvars)
     (nil-hash-table . gptel-auto-workflow--fix-nil-hash-tables)
     (orphaned-curl-process . gptel-auto-workflow--fix-orphaned-curl-processes)
-    (unbound-declared-function-call . gptel-auto-workflow--fix-unbound-declared-function-calls))
+     (unbound-declared-function-call . gptel-auto-workflow--fix-unbound-declared-function-calls)
+     (daemon-server-start . gptel-auto-workflow--fix-daemon-server-start))
   "Alist mapping audit issue type (symbol) to its auto-fixer function.
 Adding a new auto-fixer is now a one-line change to this alist.
 Each fixer must take FILE as argument and return fix count (0 = no-op).")
