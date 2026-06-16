@@ -106,6 +106,20 @@ Invalidated on run end.")
 (defvar gptel-prefix-cache--response-cache-misses 0
   "Counter for response cache misses in current run.")
 
+;; ─── Intermediate Result Cache State (Helium-Inspired) ───
+
+(defvar gptel-prefix-cache--intermediate-results (make-hash-table :test 'equal)
+  "Hash table for materialized intermediate results within a run.
+Keys are strings: (result-type . input-hash).
+Values are plists: (:result :timestamp :metadata).
+Cleared on run end. Inspired by Helium's intermediate result materialization.")
+
+(defvar gptel-prefix-cache--intermediate-cache-hits 0
+  "Counter for intermediate cache hits in current run.")
+
+(defvar gptel-prefix-cache--intermediate-cache-misses 0
+  "Counter for intermediate cache misses in current run.")
+
 (defvar gptel-prefix-cache--cross-run-stats nil
   "Plist of aggregated statistics across runs.
 Keys: :runs :total-hits :total-misses :total-compactions
@@ -1018,6 +1032,8 @@ Returns the metrics file path."
          (cross gptel-prefix-cache--cross-run-stats)
          (response-total (+ gptel-prefix-cache--response-cache-hits
                             gptel-prefix-cache--response-cache-misses))
+         (intermediate-total (+ gptel-prefix-cache--intermediate-cache-hits
+                                gptel-prefix-cache--intermediate-cache-misses))
          (entry `((timestamp . ,(format-time-string "%Y-%m-%dT%H:%M:%S"))
                   (run-id . ,(or gptel-prefix-cache--run-id "unknown"))
                   (hits . ,(plist-get current :hits))
@@ -1031,13 +1047,20 @@ Returns the metrics file path."
                   (cross-run-runs . ,(or (plist-get cross :runs) 0))
                   (cross-run-total-hits . ,(or (plist-get cross :total-hits) 0))
                   (cross-run-total-compactions . ,(or (plist-get cross :total-compactions) 0))
-                  (response-cache-hits . ,gptel-prefix-cache--response-cache-hits)
-                  (response-cache-misses . ,gptel-prefix-cache--response-cache-misses)
-                  (response-cache-hit-rate . ,(if (> response-total 0)
-                                                  (/ (float gptel-prefix-cache--response-cache-hits)
-                                                     response-total)
-                                                0.0))
-                  (response-cache-size . ,(hash-table-count gptel-prefix-cache--response-cache)))))
+                   (response-cache-hits . ,gptel-prefix-cache--response-cache-hits)
+                   (response-cache-misses . ,gptel-prefix-cache--response-cache-misses)
+                   (response-cache-hit-rate . ,(if (> response-total 0)
+                                                   (/ (float gptel-prefix-cache--response-cache-hits)
+                                                      response-total)
+                                                 0.0))
+                   (response-cache-size . ,(hash-table-count gptel-prefix-cache--response-cache))
+                   (intermediate-cache-hits . ,gptel-prefix-cache--intermediate-cache-hits)
+                   (intermediate-cache-misses . ,gptel-prefix-cache--intermediate-cache-misses)
+                   (intermediate-cache-hit-rate . ,(if (> intermediate-total 0)
+                                                       (/ (float gptel-prefix-cache--intermediate-cache-hits)
+                                                          intermediate-total)
+                                                     0.0))
+                   (intermediate-cache-size . ,(hash-table-count gptel-prefix-cache--intermediate-results)))))
     (make-directory metrics-dir t)
     (let ((existing
            (if (file-exists-p metrics-file)
@@ -1067,8 +1090,9 @@ Resets per-run counters."
         gptel-prefix-cache--hit-counter 0
         gptel-prefix-cache--miss-counter 0
         gptel-prefix-cache--compaction-counter 0)
-  ;; Clear response cache for fresh run
+  ;; Clear caches for fresh run
   (gptel-prefix-cache--response-cache-clear)
+  (gptel-prefix-cache--intermediate-clear)
   ;; Try to load persisted state first
   (unless (gptel-prefix-cache-load-from-file)
     ;; Fall back to computing fresh
@@ -1078,8 +1102,9 @@ Resets per-run counters."
   "Hook to call when run ends.
 Saves prefix cache state, aggregates statistics, auto-tunes threshold,
 then invalidates in-memory cache."
-  ;; Log response cache stats before clearing
+  ;; Log cache stats before clearing
   (message "[prefix-cache] Run end: %s" (gptel-prefix-cache--response-cache-stats))
+  (message "[prefix-cache] Run end: %s" (gptel-prefix-cache--intermediate-stats))
   ;; Aggregate cross-run statistics
   (let ((current (gptel-prefix-cache-stats-current-run)))
     (setq gptel-prefix-cache--cross-run-stats
@@ -1103,7 +1128,111 @@ then invalidates in-memory cache."
       (error nil)))
   (gptel-prefix-cache-invalidate)
   (gptel-prefix-cache--response-cache-clear)
+  (gptel-prefix-cache--intermediate-clear)
   (setq gptel-prefix-cache--compaction-archive nil))
+
+;; ─── Intermediate Result Cache (Helium-Inspired Materialization) ───
+
+(defcustom gptel-prefix-cache-intermediate-cache-enabled t
+  "When non-nil, cache intermediate computation results within a run.
+Examples: target categorization, baseline quality scores.
+Prevents redundant computation across experiments."
+  :type 'boolean
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-prefix-cache-intermediate-cache-max-size 1000
+  "Maximum number of intermediate results to cache per run."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
+(defun gptel-prefix-cache--compute-intermediate-key (result-type input)
+  "Compute cache key for RESULT-TYPE and INPUT.
+Returns string key or nil if caching not applicable."
+  (when (and result-type input
+             (not (if (stringp input)
+                      (string-empty-p input)
+                    (null input))))
+    (let* ((input-str (if (stringp input) input (format "%S" input)))
+           (input-hash (substring (sha1 (string-to-unibyte input-str)) 0 16)))
+      (format "%s:%s" result-type input-hash))))
+
+(defun gptel-prefix-cache--intermediate-lookup (key)
+  "Look up cached intermediate result for KEY.
+Returns result plist or nil if not found."
+  (when (and gptel-prefix-cache-intermediate-cache-enabled key)
+    (let ((entry (gethash key gptel-prefix-cache--intermediate-results)))
+      (when entry
+        (cl-incf gptel-prefix-cache--intermediate-cache-hits)
+        (message "[prefix-cache] Intermediate cache HIT: %s" key)
+        (plist-get entry :result)))))
+
+(defun gptel-prefix-cache--intermediate-store (key result &optional metadata)
+  "Store RESULT for KEY with optional METADATA.
+Evicts oldest entry if cache exceeds max size."
+  (when (and gptel-prefix-cache-intermediate-cache-enabled key result)
+    ;; Evict oldest if at capacity
+    (when (>= (hash-table-count gptel-prefix-cache--intermediate-results)
+              gptel-prefix-cache-intermediate-cache-max-size)
+      (gptel-prefix-cache--intermediate-evict-oldest))
+    ;; Store new entry
+    (puthash key
+             (list :result result
+                   :timestamp (current-time)
+                   :metadata metadata)
+             gptel-prefix-cache--intermediate-results)
+    (cl-incf gptel-prefix-cache--intermediate-cache-misses)
+    (message "[prefix-cache] Intermediate cache STORE: %s (size=%d)"
+             key (hash-table-count gptel-prefix-cache--intermediate-results))))
+
+(defun gptel-prefix-cache--intermediate-evict-oldest ()
+  "Evict the oldest entry from the intermediate cache (LRU)."
+  (let ((oldest-key nil)
+        (oldest-time (current-time)))
+    (maphash
+     (lambda (key entry)
+       (let ((timestamp (plist-get entry :timestamp)))
+         (when (time-less-p timestamp oldest-time)
+           (setq oldest-time timestamp
+                 oldest-key key))))
+     gptel-prefix-cache--intermediate-results)
+    (when oldest-key
+      (remhash oldest-key gptel-prefix-cache--intermediate-results)
+      (message "[prefix-cache] Intermediate cache LRU evict: %s" oldest-key))))
+
+(defun gptel-prefix-cache--intermediate-clear ()
+  "Clear the intermediate result cache and reset counters."
+  (clrhash gptel-prefix-cache--intermediate-results)
+  (setq gptel-prefix-cache--intermediate-cache-hits 0
+        gptel-prefix-cache--intermediate-cache-misses 0)
+  (message "[prefix-cache] Intermediate cache cleared"))
+
+(defun gptel-prefix-cache--intermediate-stats ()
+  "Return intermediate cache statistics as human-readable string."
+  (let ((total (+ gptel-prefix-cache--intermediate-cache-hits
+                  gptel-prefix-cache--intermediate-cache-misses)))
+    (format "[prefix-cache] Intermediate cache: hits=%d misses=%d hit-rate=%.1f%% size=%d/%d"
+            gptel-prefix-cache--intermediate-cache-hits
+            gptel-prefix-cache--intermediate-cache-misses
+            (if (> total 0)
+                (* 100.0 (/ (float gptel-prefix-cache--intermediate-cache-hits) total))
+              0.0)
+            (hash-table-count gptel-prefix-cache--intermediate-results)
+            gptel-prefix-cache-intermediate-cache-max-size)))
+
+(defun gptel-prefix-cache-with-intermediate (result-type input compute-fn)
+  "Get or compute intermediate result for RESULT-TYPE and INPUT.
+If cached, returns cached result immediately.
+If not cached, calls COMPUTE-FN with INPUT, caches result, and returns it.
+Returns the result (cached or freshly computed)."
+  (let* ((key (gptel-prefix-cache--compute-intermediate-key result-type input))
+         (cached (gptel-prefix-cache--intermediate-lookup key)))
+    (if cached
+        cached
+      ;; Cache miss: compute and store
+      (let ((result (funcall compute-fn input)))
+        (when (and key result)
+          (gptel-prefix-cache--intermediate-store key result (list :input input)))
+        result))))
 
 ;; ─── Response Cache (Helium-Inspired Result-Level Caching) ───
 

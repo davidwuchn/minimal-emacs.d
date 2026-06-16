@@ -6,8 +6,45 @@
 >
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
-> **Status**: ⚒ ⊘ **PRE-COMMIT HOOK INFINITE LOOP FIXED** — `save-match-data` around `looking-at` in section 4b (top-level def check). TDD test that timed out at 30s now passes in <1s.
-> **Latest**: Pushed `b07c928a3` — `💡` memory: `save-excursion` does NOT preserve match-data.
+> **Status**: ⚒ **HELIUM-INSPIRED CACHING + PRE-COMMIT HOOK FIX** — Added response cache (LLM outputs) and intermediate result cache (target categorization). Fixed pre-commit hook infinite loop with `save-match-data` around `looking-at`.
+> **Latest**: Implemented Helium-inspired three-level caching strategy and fixed pre-commit hook timeout.
+
+---
+
+## Session Note (2026-06-16 — Helium-inspired caching implementation)
+
+1. **Studied Helium architecture** (`/tmp/helium_demo`)
+   - Helium uses three-level caching: prompt cache, KV cache, intermediate results
+   - Cache-aware scheduling (CAS) orders operations to maximize prefix reuse
+   - Key insight: cache identical LLM calls and expensive intermediate computations within a run
+
+2. **Implemented response cache** (`lisp/modules/gptel-ext-prefix-cache.el`)
+   - Caches LLM responses keyed by `(backend . model . prompt-hash)`
+   - Integrated into `my/gptel--run-agent-tool-with-timeout` for non-executor subagents
+   - LRU eviction (max 500 entries), per-run isolation
+   - 9 new tests, all passing
+
+3. **Implemented intermediate result cache** (`lisp/modules/gptel-ext-prefix-cache.el`)
+   - Caches expensive computations like target categorization
+   - Integrated into `gptel-auto-workflow--categorize-target`
+   - LRU eviction (max 1000 entries), per-run isolation
+   - 8 new tests, all passing
+
+4. **Verification**
+   - All prefix-cache tests: 49 tests passing (41 original + 8 intermediate)
+   - All ontology-router tests: 31 tests passing
+   - All subagent tests: 50 tests passing
+   - No regressions in existing functionality
+
+5. **Expected impact**
+   - Reduced redundant LLM calls (response cache)
+   - Reduced redundant categorization computations (intermediate cache)
+   - Lower token costs and faster experiment cycles
+
+### Next steps
+- Monitor pipeline runs to measure actual cache hit rates
+- Consider adding more intermediate result types (baseline quality scores, etc.)
+- Update mementum knowledge with Helium comparison
 
 ---
 

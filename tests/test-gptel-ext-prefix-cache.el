@@ -870,5 +870,116 @@
     (should (null (gptel-prefix-cache--response-cache-lookup "key1"))))
   (gptel-prefix-cache--response-cache-clear))
 
+;; ─── Intermediate Cache Tests (Helium-Inspired) ───
+
+(ert-deftest test-intermediate-cache-compute-key ()
+  "Test that intermediate cache key is computed correctly."
+  (let ((key (gptel-prefix-cache--compute-intermediate-key "target-category" "lisp/module.el")))
+    (should (stringp key))
+    (should (string-match-p "target-category:" key))
+    ;; Same inputs should produce same key
+    (should (equal key (gptel-prefix-cache--compute-intermediate-key "target-category" "lisp/module.el")))
+    ;; Different input should produce different key
+    (should-not (equal key (gptel-prefix-cache--compute-intermediate-key "target-category" "lisp/other.el")))
+    ;; Different type should produce different key
+    (should-not (equal key (gptel-prefix-cache--compute-intermediate-key "baseline-quality" "lisp/module.el")))))
+
+(ert-deftest test-intermediate-cache-store-and-lookup ()
+  "Test storing and retrieving intermediate results from cache."
+  (gptel-prefix-cache--intermediate-clear)
+  (let ((key "target-category:abc123")
+        (result :programming))
+    ;; Store result
+    (gptel-prefix-cache--intermediate-store key result)
+    ;; Lookup should return stored result
+    (should (equal (gptel-prefix-cache--intermediate-lookup key) result))
+    ;; Hit counter should be 1
+    (should (= gptel-prefix-cache--intermediate-cache-hits 1))
+    ;; Miss counter should be 1 (from store)
+    (should (= gptel-prefix-cache--intermediate-cache-misses 1))
+    ;; Lookup again should increment hit counter
+    (gptel-prefix-cache--intermediate-lookup key)
+    (should (= gptel-prefix-cache--intermediate-cache-hits 2)))
+  (gptel-prefix-cache--intermediate-clear))
+
+(ert-deftest test-intermediate-cache-miss ()
+  "Test that missing key returns nil."
+  (gptel-prefix-cache--intermediate-clear)
+  (should (null (gptel-prefix-cache--intermediate-lookup "nonexistent-key")))
+  (gptel-prefix-cache--intermediate-clear))
+
+(ert-deftest test-intermediate-cache-clear ()
+  "Test that clear resets cache and counters."
+  ;; Store something
+  (gptel-prefix-cache--intermediate-store "key1" :result1)
+  (gptel-prefix-cache--intermediate-lookup "key1")
+  ;; Verify non-empty
+  (should (> (hash-table-count gptel-prefix-cache--intermediate-results) 0))
+  (should (or (> gptel-prefix-cache--intermediate-cache-hits 0)
+              (> gptel-prefix-cache--intermediate-cache-misses 0)))
+  ;; Clear
+  (gptel-prefix-cache--intermediate-clear)
+  ;; Verify empty
+  (should (= (hash-table-count gptel-prefix-cache--intermediate-results) 0))
+  (should (= gptel-prefix-cache--intermediate-cache-hits 0))
+  (should (= gptel-prefix-cache--intermediate-cache-misses 0)))
+
+(ert-deftest test-intermediate-cache-with-intermediate-hit ()
+  "Test with-intermediate serves from cache on hit."
+  (gptel-prefix-cache--intermediate-clear)
+  ;; Pre-populate cache
+  (let ((key (gptel-prefix-cache--compute-intermediate-key "target-category" "test.el")))
+    (gptel-prefix-cache--intermediate-store key :programming))
+  ;; Call with-intermediate — should serve from cache
+  (let ((compute-called nil)
+        (result (gptel-prefix-cache-with-intermediate
+                 "target-category" "test.el"
+                 (lambda (input)
+                   (setq compute-called t)
+                   :agentic))))
+    (should (eq result :programming))
+    (should-not compute-called))  ; compute-fn should not be called on cache hit
+  (gptel-prefix-cache--intermediate-clear))
+
+(ert-deftest test-intermediate-cache-with-intermediate-miss ()
+  "Test with-intermediate computes and caches on miss."
+  (gptel-prefix-cache--intermediate-clear)
+  ;; First call: cache miss, should compute and store
+  (let ((result (gptel-prefix-cache-with-intermediate
+                 "target-category" "new-target.el"
+                 (lambda (input) :natural-language))))
+    (should (eq result :natural-language)))
+  ;; Second call: cache hit, should return cached value
+  (let ((result2 (gptel-prefix-cache-with-intermediate
+                  "target-category" "new-target.el"
+                  (lambda (input) :agentic))))  ; Different value, but should return cached
+    (should (eq result2 :natural-language)))  ; Should return cached value, not :agentic
+  (gptel-prefix-cache--intermediate-clear))
+
+(ert-deftest test-intermediate-cache-stats ()
+  "Test intermediate cache stats reporting."
+  (gptel-prefix-cache--intermediate-clear)
+  ;; Store and lookup to generate stats
+  (gptel-prefix-cache--intermediate-store "key1" :result1)
+  (gptel-prefix-cache--intermediate-lookup "key1")
+  (gptel-prefix-cache--intermediate-lookup "key1")
+  (let ((stats (gptel-prefix-cache--intermediate-stats)))
+    (should (stringp stats))
+    (should (string-match-p "hits=2" stats))
+    (should (string-match-p "misses=1" stats))
+    (should (string-match-p "hit-rate=66" stats)))  ; 2/3 ≈ 66%
+  (gptel-prefix-cache--intermediate-clear))
+
+(ert-deftest test-intermediate-cache-disabled ()
+  "Test that intermediate cache respects enabled flag."
+  (gptel-prefix-cache--intermediate-clear)
+  (let ((gptel-prefix-cache-intermediate-cache-enabled nil))
+    ;; Store should be no-op when disabled
+    (gptel-prefix-cache--intermediate-store "key1" :result1)
+    (should (= (hash-table-count gptel-prefix-cache--intermediate-results) 0))
+    ;; Lookup should return nil when disabled
+    (should (null (gptel-prefix-cache--intermediate-lookup "key1"))))
+  (gptel-prefix-cache--intermediate-clear))
+
 (provide 'test-gptel-ext-prefix-cache)
 ;;; test-gptel-ext-prefix-cache.el ends here

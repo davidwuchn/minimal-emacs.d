@@ -40,6 +40,7 @@
 (declare-function gptel-auto-workflow--memory-schema-record-evolution "gptel-auto-workflow-memory-schema")
 (declare-function gptel-auto-workflow--unified-graph-best-backend-for "gptel-auto-workflow-memory-schema")
 (declare-function gptel-auto-workflow--unified-graph-neighbors "gptel-auto-workflow-memory-schema")
+(declare-function gptel-prefix-cache-with-intermediate "gptel-ext-prefix-cache")
 
 (defvar gptel-auto-workflow-executor-rate-limit-fallbacks
   (mapcar (lambda (backend)
@@ -330,11 +331,23 @@ Returns float 0.0-1.0 or nil if no data."
   "Categorize TARGET for backend routing.
 Return :programming, :tool-calls, :agentic, or :natural-language.
 Primary: graph-driven classification from memory schema (entity walk +
-schema signatures).  Fallback: regex heuristics from filename patterns."
+schema signatures).  Fallback: regex heuristics from filename patterns.
+Uses intermediate result cache to avoid redundant computation within a run."
   (when target
-    (or (when (fboundp 'gptel-auto-workflow--memory-schema-category-for-target)
-          (gptel-auto-workflow--memory-schema-category-for-target target))
-        (gptel-auto-workflow--categorize-target-by-regex target))))
+    (if (and (fboundp 'gptel-prefix-cache-with-intermediate)
+             (boundp 'gptel-prefix-cache-intermediate-cache-enabled)
+             gptel-prefix-cache-intermediate-cache-enabled)
+        ;; Use intermediate cache
+        (gptel-prefix-cache-with-intermediate
+         "target-category" target
+         (lambda (tgt)
+           (or (when (fboundp 'gptel-auto-workflow--memory-schema-category-for-target)
+                 (gptel-auto-workflow--memory-schema-category-for-target tgt))
+               (gptel-auto-workflow--categorize-target-by-regex tgt))))
+      ;; Fallback: no cache
+      (or (when (fboundp 'gptel-auto-workflow--memory-schema-category-for-target)
+            (gptel-auto-workflow--memory-schema-category-for-target target))
+          (gptel-auto-workflow--categorize-target-by-regex target)))))
 
 (defun gptel-auto-workflow--categorize-target-by-regex (target)
   "Regex-based categorization fallback for TARGET.
