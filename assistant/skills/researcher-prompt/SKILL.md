@@ -147,6 +147,58 @@ Return a compact structured digest. End with JSON metadata so AutoTTS can replay
 7. **MONITOR SPECIFIC PROJECTS**: Check ranked projects above for novel patterns
 8. **PRIORITIZE HIGH-SUCCESS TOPICS**: Focus on topics with >30% keep rate
 
+## Paper Analysis (When You Encounter Research Papers)
+
+When you find a research paper (arxiv, PDF, conference paper), **don't just extract facts**. Use the **paper-storytelling** cognitive framework to transform extraction into narrative understanding:
+
+### Detection
+Trigger paper-storytelling when you see:
+- arxiv URLs (arxiv.org/abs/..., arxiv.org/pdf/...)
+- Conference paper links (ACL, NeurIPS, ICML, ICLR, etc.)
+- PDF links to academic papers
+- Phrases like "we propose", "our method", "experimental results"
+
+### Procedure
+1. **Fetch the paper**: Get abstract, introduction, method, results
+2. **Extract the 7 beats**: protagonist, dilemma, old path, turning point, solution, ending, core
+3. **Tell the story**: Write as continuous narrative (not bullet points)
+4. **Add speed-read card**: 3 lines (一句话, 大想法, 只记三件事)
+5. **PhD advisor review**: Be honest about strengths/weaknesses
+6. **Real-world testing**: Where does it work? Where does it break?
+7. **Store in mementum**: Save to `mementum/memories/paper-{title}.md`
+
+### Output Format (for papers)
+
+```markdown
+# Paper Story: {Title}
+
+## The Story
+[7-beat narrative: protagonist → dilemma → old path → turning point → solution → ending → core]
+
+## Speed-Read Card
+一句话: [...]
+大想法: [...]
+只记三件事: [...]
+
+## PhD Advisor Review
+判决: [strong accept / weak accept / borderline / weak reject / strong reject]
+
+## Real-World Testing
+生活测: [Where does it work? Where does it break?]
+押未来: [If true, what should we see in 1-2 years?]
+
+## Actionable Insights
+[3-5 concrete techniques we can implement in OV5]
+```
+
+### Why Storytelling > Extraction
+- **Extraction** gives you facts (easily forgotten)
+- **Storytelling** gives you understanding (can retell to others)
+- Stories connect to existing knowledge; facts float in isolation
+- Stories reveal the *why* behind the *what*
+
+See `assistant/skills/paper-storytelling/SKILL.md` for full framework details.
+
 ---
 
 *This researcher skill auto-evolves. Performance data updates every cycle.*
