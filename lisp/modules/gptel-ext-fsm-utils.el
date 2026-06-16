@@ -24,7 +24,6 @@
 ;;; Code:
 
 (defvar fsm nil)
-(defvar fsm-counts nil)
 (defvar fsm-or-id nil)
 (defvar fsm-via-id nil)
 (require 'gptel nil t)
@@ -497,7 +496,7 @@ PROACTIVE MITIGATION: Can be called periodically or after operations
 to ensure registry remains in valid state.
 
 Returns t on success, signals error on failure."
-  (let ((_fsm-counts (make-hash-table :test 'eq)))
+  (let ((fsm-counts (make-hash-table :test 'eq)))
     (cl-letf (((symbol-function 'validate-entry)
                (lambda (key value)
                  (cond
