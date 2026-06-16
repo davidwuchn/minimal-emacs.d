@@ -740,7 +740,7 @@
                     (let [phase-eval (try
                                        (run-emacsclient-eval socket-name
                                                              (str "(if (and (boundp 'gptel-auto-workflow--stats)"
-                                                                  "gptel-auto-workflow--stats)"
+                                                                          "gptel-auto-workflow--stats)"
                                                                   "(plist-get gptel-auto-workflow--stats :phase)"
                                                                   "\"unknown\")")
                                                              :timeout 3)
@@ -748,6 +748,13 @@
                       (cond
                         (and (str/includes? (:out phase-eval) "complete") daemon-seen)
                         (do (log/logf "%s daemon phase=complete after %ds" action (quot elapsed 1000)) :complete)
+                        ;; CRITICAL FIX: Check timeout BEFORE checking if daemon is alive
+                        ;; This prevents infinite polling when daemon is stuck
+                        (>= elapsed max-wait-ms)
+                        (do (log/logf "WARNING: %s did not complete within %ds — killing daemon"
+                                      action (quot max-wait-ms 1000))
+                            (discard-stale-worker-daemon! socket-name)
+                            :timeout)
                         (= :alive (check-worker-daemon socket-name emacsclient-path))
                         :continue-pm-loop   ;; daemon alive, keep polling
                         daemon-seen
