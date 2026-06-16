@@ -1124,15 +1124,16 @@ TIMESTAMP defaults to `current-time'."
 
 (defun my/gptel--agent-task-note-message-activity (format-string &rest args)
   "Treat worktree-context messages as executor activity."
-  (let* ((text (and (stringp format-string)
-                    (condition-case nil
-                        (apply #'format format-string args)
-                      (error format-string))))
-         (activity-path (my/gptel--agent-task-message-activity-path text)))
-    (unless (my/gptel--ignore-agent-activity-message-p text)
-      (if activity-path
-          (my/gptel--agent-task-note-context-activity activity-path nil)
-        (my/gptel--agent-task-note-context-activity)))))
+  (when (fboundp 'my/gptel--agent-task-note-context-activity)
+    (let* ((text (and (stringp format-string)
+                      (condition-case nil
+                          (apply #'format format-string args)
+                        (error format-string))))
+           (activity-path (my/gptel--agent-task-message-activity-path text)))
+      (unless (my/gptel--ignore-agent-activity-message-p text)
+        (if activity-path
+            (my/gptel--agent-task-note-context-activity activity-path nil)
+          (my/gptel--agent-task-note-context-activity))))))
 
 (while (advice-member-p #'my/gptel--agent-task-note-message-activity 'message)
   (advice-remove 'message #'my/gptel--agent-task-note-message-activity))

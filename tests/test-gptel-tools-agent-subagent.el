@@ -73,3 +73,30 @@ every write-region call during tests fails with void-function."
 
 (provide 'test-gptel-tools-agent-subagent)
 ;;; test-gptel-tools-agent-subagent.el ends here
+
+(ert-deftest test-gptel-tools-agent-subagent/write-region-advice-safe-when-context-activity-unbound ()
+  "my/gptel--agent-task-note-write-region-activity is the :after advice
+on write-region.  When my/gptel--agent-task-note-context-activity is
+NOT bound (e.g., if gptel-tools-agent-git hasn't loaded), the advice
+must silently skip — not raise void-function.  Regression for the
+fad42a82d8 bug.  The fix in the when-let*: ((fboundp 'my/gptel--agent-task-note-context-activity))
+ensures the function is bound before the body runs."
+  (require 'gptel-tools-agent-subagent)
+  (require 'gptel-tools-agent-git)
+  ;; Sanity: the function should currently be bound after loading
+  (should (fboundp 'my/gptel--agent-task-note-context-activity))
+  (let ((saved-def (symbol-function 'my/gptel--agent-task-note-context-activity)))
+    (unwind-protect
+        (progn
+          (fmakunbound 'my/gptel--agent-task-note-context-activity)
+          (should-not (fboundp 'my/gptel--agent-task-note-context-activity))
+          (let ((tmp-file (make-temp-file "ov5-subagent-write-region" nil ".el")))
+            (unwind-protect
+                (progn
+                  (with-temp-buffer
+                    (insert ";; test content\n")
+                    (write-region (point-min) (point-max) tmp-file)))
+              (delete-file tmp-file))))
+      ;; Restore: fset the saved definition
+      (fset 'my/gptel--agent-task-note-context-activity saved-def)
+      (should (fboundp 'my/gptel--agent-task-note-context-activity)))))

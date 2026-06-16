@@ -101,5 +101,28 @@
   (should-not (string-match-p "\n"
                 (my/gptel--sanitize-for-logging "line1\nline2"))))
 
+(ert-deftest git/message-advice-safe-when-context-activity-unbound ()
+  "my/gptel--agent-task-note-message-activity is the :before advice
+on `message'.  When my/gptel--agent-task-note-context-activity is
+NOT bound (e.g., if gptel-tools-agent-subagent hasn't loaded), the
+advice must silently skip — not raise void-function.
+
+Regression for the same bug class as fad42a82d8 fix on the write-region
+advice, but in the message advice path which was NOT fixed by fad42a82d8."
+  (require 'gptel-tools-agent-git)
+  (require 'gptel-tools-agent-subagent)
+  (let ((saved-def (symbol-function 'my/gptel--agent-task-note-context-activity)))
+    (unwind-protect
+        (progn
+          (fmakunbound 'my/gptel--agent-task-note-context-activity)
+          (should-not (fboundp 'my/gptel--agent-task-note-context-activity))
+          (condition-case err
+              (progn (message "test message") t)
+            (error
+             (ert-fail (format "message advice raised: %s" (error-message-string err))))))
+      ;; Restore: fset the saved definition (works even if require was no-op)
+      (fset 'my/gptel--agent-task-note-context-activity saved-def)
+      (should (fboundp 'my/gptel--agent-task-note-context-activity)))))
+
 (provide 'test-gptel-tools-agent-git)
 ;;; test-gptel-tools-agent-git.el ends here
