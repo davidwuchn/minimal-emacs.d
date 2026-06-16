@@ -265,3 +265,49 @@ heuristic)."
 
 (provide 'test-pipeline-statechart)
 ;;; test-pipeline-statechart.el ends here
+
+;;; ─── TDD coverage for extract-gate-score-vectors ───
+;;;
+;;; Behavior: walks parsed TSV records, extracts :gate-score-vector
+;;; if present, otherwise falls back to compute-gate-score-vector.
+
+(ert-deftest test-pipeline-statechart/extract-gate-score-vectors-uses-existing-vector ()
+  "If a record has :gate-score-vector (a vector), use it directly."
+  (let* ((v1 (vector 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 0.0))
+         (records (list (list :gate-score-vector v1))))
+    (let ((result (gptel-auto-workflow--extract-gate-score-vectors records)))
+      (should (= 1 (length result)))
+      (should (equal v1 (car result))))))
+
+(ert-deftest test-pipeline-statechart/extract-gate-score-vectors-fallback-to-compute ()
+  "If a record has :kept t but no :gate-score-vector, fall back to
+gptel-auto-workflow--compute-gate-score-vector."
+  (let* ((records (list (list :kept t :grader-quality 5 :decision "keep"))))
+    (let ((result (gptel-auto-workflow--extract-gate-score-vectors records)))
+      (should (= 1 (length result)))
+      (should (vectorp (car result))))))
+
+(ert-deftest test-pipeline-statechart/extract-gate-score-vectors-skip-record-with-no-data ()
+  "A record with neither :gate-score-vector nor :kept/:decision is
+silently dropped (not an error)."
+  (let ((records (list (list :foo "bar"))))  ; no relevant keys
+    (let ((result (gptel-auto-workflow--extract-gate-score-vectors records)))
+      (should (null result)))))
+
+(ert-deftest test-pipeline-statechart/extract-gate-score-vectors-empty-input ()
+  "Empty input list returns nil."
+  (should (null (gptel-auto-workflow--extract-gate-score-vectors nil))))
+
+(ert-deftest test-pipeline-statechart/extract-gate-score-vectors-preserves-order ()
+  "Multiple records are processed in input order (FIFO)."
+  (let* ((v1 (vector 0.1 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
+         (v2 (vector 0.2 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
+         (v3 (vector 0.3 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
+         (records (list (list :gate-score-vector v1)
+                        (list :gate-score-vector v2)
+                        (list :gate-score-vector v3))))
+    (let ((result (gptel-auto-workflow--extract-gate-score-vectors records)))
+      (should (= 3 (length result)))
+      (should (equal v1 (nth 0 result)))
+      (should (equal v2 (nth 1 result)))
+      (should (equal v3 (nth 2 result))))))
