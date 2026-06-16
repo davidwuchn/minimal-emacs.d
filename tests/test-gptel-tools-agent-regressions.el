@@ -3934,6 +3934,55 @@ delivers a :stale-run sentinel without grading, benchmarking, or logging."
             (should (= (length completed-results) 1))
             (should (equal (plist-get (car completed-results) :target) "target"))
             (should (equal (plist-get (car completed-results) :id) 1))))
+       (delete-directory project-root t))))
+
+(ert-deftest regression/auto-experiment/loop-tolerates-nil-delay-between ()
+  "The experiment loop must not signal a number-or-marker-p error when
+`gptel-auto-experiment-delay-between' is nil.
+
+In the wild this happened when experiment-loop.el declared the variable
+with a nil default before subagent.el's defcustom (30) could initialize it.
+The `(> gptel-auto-experiment-delay-between 0)' comparison then threw
+\"Wrong type argument: number-or-marker-p, nil\" and the executor callback
+reported a callback error instead of continuing."
+  (test-auto-experiment--reset-auto-experiment-globals)
+  (let* ((project-root (file-name-as-directory (make-temp-file "aw-project" t)))
+         (gptel-auto-experiment-delay-between nil)  ; the broken state
+         (gptel-auto-experiment-max-per-target 1)
+         (gptel-auto-experiment-no-improvement-threshold 99)
+         (gptel-auto-workflow--run-project-root project-root)
+         (gptel-auto-workflow--current-project project-root)
+         (gptel-auto-workflow--run-id "run-1")
+         (gptel-auto-workflow--running t)
+         completed-results
+         errored)
+    (unwind-protect
+        (progn
+          (cl-letf (((symbol-function 'gptel-auto-experiment-benchmark)
+                     (lambda (&rest _) '(:eight-keys 0.4)))
+                    ((symbol-function 'gptel-auto-experiment--code-quality-score)
+                     (lambda () 0.5))
+                    ((symbol-function 'message)
+                     (lambda (&rest _) nil))
+                    ((symbol-function 'gptel-auto-experiment--run-with-retry)
+                     (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results cb &optional _retry-count)
+                       (funcall cb (list :target "target"
+                                         :id 1
+                                         :score-after 0.4
+                                         :kept nil
+                                         :agent-output "no-op")))))
+            (with-temp-buffer
+              (setq default-directory project-root)
+              (condition-case err
+                  (gptel-auto-experiment-loop
+                   "target"
+                   (lambda (results)
+                     (setq completed-results results)))
+                (error
+                 (setq errored (error-message-string err))))
+              (should-not errored)
+              (should (>= (length completed-results) 1))
+              (should (equal (plist-get (car completed-results) :target) "target")))))
       (delete-directory project-root t))))
 
 (ert-deftest regression/gptel-agent/truncate-buffer-prefixes-modeline-temp-artifacts ()

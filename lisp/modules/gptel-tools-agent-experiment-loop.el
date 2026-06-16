@@ -42,7 +42,7 @@
   "Stop experiments on a target after this many consecutive timeouts.")
 (defvar gptel-auto-experiment--api-error-count 0)
 (defvar gptel-auto-experiment--api-error-threshold 5)
-(defvar gptel-auto-experiment-delay-between nil)
+(defvar gptel-auto-experiment-delay-between)
 (defvar gptel-auto-workflow--status-run-id nil)
 (defvar gptel-auto-workflow--defer-subagent-env-persistence nil)
 (defvar gptel-auto-workflow--staging-worktree-dir nil)
@@ -517,6 +517,15 @@ ORIGINAL TASK:
 Uses local state captured in closure for parallel execution safety.
 Adapts max-experiments based on API error rate."
   (cl-block gptel-auto-experiment-loop
+    ;; Self-heal: a nil/non-numeric delay-between caused
+    ;; `Wrong type argument: number-or-marker-p, nil' when the loop decided
+    ;; whether to schedule the next experiment via run-with-timer. This can
+    ;; happen when experiment-loop.el's forward defvar shadows subagent.el's
+    ;; defcustom (30) during load ordering.
+    (unless (numberp gptel-auto-experiment-delay-between)
+      (message "[auto-experiment] Self-heal: delay-between was %S, defaulting to 0"
+               gptel-auto-experiment-delay-between)
+      (setq gptel-auto-experiment-delay-between 0))
     (let* ((workflow-root (gptel-auto-workflow--resolve-run-root))
          (loop-buffer (current-buffer))
          baseline
@@ -699,7 +708,7 @@ Adapts max-experiments based on API error rate."
                                    (or (bound-and-true-p gptel-auto-workflow--headless)
                                        (bound-and-true-p gptel-auto-workflow-persistent-headless)
                                        (bound-and-true-p gptel-auto-workflow--cron-job-running))))
-                              (if (and (> gptel-auto-experiment-delay-between 0)
+                              (if (and (> (or gptel-auto-experiment-delay-between 0) 0)
                                        (not headless-run))
                                   (run-with-timer gptel-auto-experiment-delay-between nil continue)
                                 ;; Headless cron runs should advance immediately. The
