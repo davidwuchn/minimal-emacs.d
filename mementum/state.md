@@ -2,12 +2,43 @@
 
 > **Last pipeline**: 2026-06-16 18:31 (zero-run)
 > **Next pipeline**: scheduled
-> **Plan**: /home/davidwu/.emacs.d/mementum/knowledge/plans/pipeline-runs/run-20260616-190000/
+> **Plan**: /Users/davidwu/.emacs.d/mementum/knowledge/plans/pipeline-runs/run-20260616-180011/
 >
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
-> **Status**: ⊘ ✓ **STATECHART MODULE FULLY COVERED (12/12 DEFUNS)** — 33/33 tests pass. Module went from 4 → 33 tests. TDD found 1 real bug (`statechart-analyze` used unbound `gate-order`), now fixed. All 12 defuns in the 592-line statechart module have TDD coverage.
-> **Latest**: Pushed `a594010e2` — complete TDD coverage of statechart module.
+> **Status**: 💡 **AUTO-RESEARCH STUDY COMPLETE** — Analyzed auto_research paper writing skill, identified 5 highest-leverage gaps for OV5 researcher improvement.
+> **Latest**: Studied auto_research paper writing skill, created gap analysis in `mementum/knowledge/auto-research-vs-ov5-gaps.md` and memory in `mementum/memories/insight-auto-research-paper-writing-gaps.md`.
+
+---
+
+## Session Note (2026-06-16 — Auto-research paper writing study)
+
+1. **Studied auto_research paper writing skill** (https://victorchen96.github.io/auto_research/skill/paper-writing.html)
+   - Auto-research models scientific paper writing as hierarchical skill group
+   - 5 sub-skills: Literature Survey, Paper Structure, Experiment Design, Figures/Tables, Peer Review
+   - 4 quality gates: Literature, Experiment, Structure, Figures, Final Review
+   - Produces 8.5/10 survey papers autonomously through iterative review loops
+
+2. **Identified 5 highest-leverage gaps for OV5**
+   - **Gap 1: Structured literature survey** — OV5 does ad-hoc research; auto-research has 4-stage pipeline with LQS scoring
+   - **Gap 2: Research quality gates** — OV5 has 7 gates for code but none for research; auto-research has 5 gates
+   - **Gap 3: Peer review simulation** — OV5 has single-grader; auto-research has 5 reviewer personas with weakness routing
+   - **Gap 4: Iterative improvement loop** — OV5 doesn't track score progression; auto-research progresses 6.0 → 8.5+
+   - **Gap 5: Hypothesis pre-registration** — OV5 experiments lack statistical planning; auto-research requires pre-registration
+
+3. **Strategic insight**
+   - Auto-research optimizes **research quality** through structured pipelines and peer review
+   - OV5 optimizes **code improvement** through experiment loops and self-healing
+   - Integration opportunity: add auto-research's research pipeline to OV5's code improvement loop
+
+4. **Implementation priority**
+   - Start with structured literature survey (foundation)
+   - Then research quality gates (standards)
+   - Then peer review simulation (iteration driver)
+
+5. **Documentation created**
+   - `mementum/knowledge/auto-research-vs-ov5-gaps.md` — Full gap analysis
+   - `mementum/memories/insight-auto-research-paper-writing-gaps.md` — Key insights
 
 ---
 
@@ -145,52 +176,3 @@
 ---
 
 *Active Mementum v1.1 — duplicate daemon bug fixed, Helium-inspired caching implemented, daemon environment hardened*
-
-## Session Note (2026-06-16 — statechart module TDD coverage)
-
-1. **Discovered real bug via TDD**: `statechart-analyze` called
-   `detect-compensating-errors` with `gate-order` (unbound in its scope).
-   The variable is only bound in `build-statechart`. Any test calling
-   `statechart-analyze` directly would throw `void-variable gate-order`.
-   Fix: use `gates` (which IS bound in statechart-analyze).
-
-2. **Added 13 TDD tests** to `tests/test-pipeline-statechart.el`:
-   - 5 for `detect-compensating-errors` (early-fail+high-grader, low-grader
-     ignored, no-early-fails ignored, mixed input, empty input)
-   - 4 for `statechart-analyze` (returns required keys, bottleneck is
-     lowest p-pass, lossiest-gate is highest abs fail, phi keep-rate-max
-     is positive)
-   - 3 for `statechart-drift-check` (identical no drift, drops above
-     threshold, improvement no alert)
-   - 5 for `extract-gate-score-vectors` (uses existing vector, fallback
-     to compute, skip record with no data, empty input, preserves order)
-
-3. **Module coverage**: 4 → 21 tests for the 592-line statechart module.
-   6 of 12 defuns now have TDD coverage.
-
-### Next steps
-- Add TDD tests for: build-statechart, statechart-rebuild-and-persist,
-  statechart-report, statechart-show
-
-## Session Note (2026-06-16 — statechart module complete TDD coverage)
-
-1. **Added 12 more TDD tests** to bring the statechart module to 33/33:
-   - 4 for `build-statechart` (all-kept, all-discarded-at-executor,
-     empty-input, staging-pending-skipped)
-   - 5 for `statechart-report` (header, total-experiments, per-gate-table,
-     bottleneck, omits-bottleneck-when-nil)
-   - 1 for `statechart-show` (creates-buffer)
-   - 2 for `statechart-rebuild-and-persist` (calls-persist, handles-errors)
-
-2. **All 12 defuns in the 592-line statechart module now have TDD coverage**:
-   compute-gate-score-vector, statechart-persistence-file, statechart-persist,
-   statechart-load, build-statechart, extract-gate-score-vectors,
-   statechart-analyze, detect-compensating-errors, statechart-drift-check,
-   statechart-rebuild-and-persist, statechart-report, statechart-show.
-
-3. **Coordinated with remote**: remote also fixed the same `_if` rename
-   bug (commit `b65adc2ad`). My commits rebased cleanly on top.
-
-### Next steps
-- TDD other undertested modules: gptel-auto-workflow-recovery (0 tests),
-  gptel-tools-agent-experiment-core (0 tests), gptel-ext-fsm (4 tests)
