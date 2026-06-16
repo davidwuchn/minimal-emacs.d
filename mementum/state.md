@@ -299,3 +299,25 @@
 
 3. **Memory stored**
    - `mementum/memories/daemon-resolver-blank-output-fallback.md`
+
+## Session Note (2026-06-16 — Helium workflow optimization study)
+
+1. **Studied [helium_demo](https://github.com/mlsys-io/helium_demo)** — MLSys paper on workflow-aware LLM serving.
+   - **Key insight**: Agent workflow performance is dominated by LLM call latency. Caching (prompts, KV, intermediate results) and cache-aware scheduling are the most effective optimizations.
+   - **Helium's three-level caching**: (1) Prompt cache (result-level LRU for temperature==0), (2) KV cache (prefix-level with precomputation), (3) Intermediate result reuse via CacheFetchOp.
+   - **Cache-aware scheduling (CAS)**: Builds scheduling tree from radix tree of prompt prefixes. Orders ops to maximize KV cache reuse.
+   - **Operator deduplication**: Signature-based merging of functionally equivalent ops across agent graphs.
+
+2. **Strategic insight**: Helium optimizes **within a single workflow run** (caching, scheduling). OV5 optimizes **across workflow runs** (ontology learning, self-healing). Integration opportunity: add helium's within-run optimizations to OV5's existing across-run learning.
+
+3. **Highest-leverage gaps for OV5**:
+   - (1) Prompt prefix caching — cache identical subagent prompts across experiments in same run
+   - (2) Intermediate result materialization — persist research findings per-run for reuse
+   - (3) Cache-aware scheduling — order subagent dispatches to maximize prefix sharing
+   - (4) Speculative parallel branches — launch candidate hypotheses concurrently
+
+4. **Implementation priority**: Start with prompt prefix caching (lowest effort, highest impact). Add `gptel-ext-prefix-cache.el` with per-run LRU cache keyed by `(backend . model . prompt-hash)`.
+
+5. **Memory stored**
+   - `mementum/knowledge/helium-vs-ov5-gaps.md`
+   - `mementum/memories/insight-helium-workflow-optimization-gaps.md`
