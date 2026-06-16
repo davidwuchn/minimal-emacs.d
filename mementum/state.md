@@ -6,8 +6,43 @@
 >
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
-> **Status**: 💡 **AUTO-RESEARCH STUDY COMPLETE** — Analyzed auto_research paper writing skill, identified 5 highest-leverage gaps for OV5 researcher improvement.
-> **Latest**: Full ERT suite green (3343 tests, 0 unexpected). Fixed systematic auto-evolution `_prefix` corruption in FSM utils, strategic.el, and run-ert async output drain.
+> **Status**: 💡 **FUSION + AUTO-RESEARCH STUDIES COMPLETE** — Analyzed OpenRouter Fusion multi-model research and auto_research paper writing skill. Identified 6+5 highest-leverage gaps for OV5 researcher.
+> **Latest**: Full ERT suite green (3343 tests, 0 unexpected). Fixed `_prefix` corruption. Studied Fusion (self-fusion = 6.7pt boost) and auto_research (5 sub-skills, 4 quality gates).
+
+---
+
+## Session Note (2026-06-16 — OpenRouter Fusion study)
+
+1. **Studied OpenRouter Fusion** (https://openrouter.ai/blog/announcements/fusion-beats-frontier/)
+   - Fusion dispatches research to panel of models in parallel, judge model produces structured analysis
+   - DRACO benchmark (100 deep research tasks, ~39 weighted criteria, 4 categories)
+   - Key results: Fable 5 + GPT-5.5 = 69.0% vs Fable 5 alone = 65.3%
+   - Budget panel (Gemini 3 Flash + Kimi K2.6 + DeepSeek V4 Pro) = 64.7%, beats GPT-5.5 (60.0%)
+   - Self-fusion (Opus 4.8 × 2) = 65.5% vs solo = 58.8% — 6.7pt boost from synthesis alone
+
+2. **Explored OV5 researcher architecture** (thorough exploration via task agent)
+   - Single-model dispatch (MiniMax-M3) per research session
+   - AutoTTS multi-turn controller (5 decisions: STOP/CONTINUE/BRANCH/WIDEN/CUT)
+   - No multi-model fusion, no cross-model verification, no structured consensus
+   - Heuristic scoring (URL count, structure, length) — no DRACO benchmark
+   - Strengths: strategy champion league, controller design agent, trace replay cache, mementum synthesis
+
+3. **Identified 6 highest-leverage gaps**
+   - Gap 1: Multi-model research panel (parallel dispatch + judge)
+   - Gap 2: Self-fusion (same model ×2, proven 6.7pt boost) — lowest effort
+   - Gap 3: Budget panel strategy (cost-aware panel from backend registry)
+   - Gap 4: Structured consensus analysis (consensus, contradictions, blind spots)
+   - Gap 5: Research benchmark (DRACO-like eval for research quality)
+   - Gap 6: Contamination prevention (exclude eval domains from search)
+
+4. **Strategic insight**
+   - Synthesis > selection for research tasks
+   - OV5 has infrastructure (backend registry, subagent dispatch) — missing fusion layer
+   - Integration: add fusion as research variant in champion league
+
+5. **Documentation created**
+   - `mementum/knowledge/fusion-vs-ov5-researcher-gaps.md` — full gap analysis
+   - `mementum/memories/insight-fusion-multi-model-research-beats-frontier.md` — key insights
 
 ---
 
@@ -25,15 +60,11 @@
 
 3. **Fixed async run-ert output drain** (`lisp/modules/gptel-auto-workflow-self-heal-semantic.el`)
    - Switched `gptel-auto-workflow--run-ert-in-worktree` from blocking `call-process` to `make-process` + event-loop pumping.
-   - Added final `(while (accept-process-output proc 0.1))` to drain output that arrives after process exit; this fixed a flaky failure in `test-self-heal-semantic/run-ert-rejects-on-failure` under full-suite load.
+   - Added final `(while (accept-process-output proc 0.1))` to drain output that arrives after process exit.
 
 4. **Full verification**
-   - `scripts/run-tests.sh unit` equivalent full suite: 3343 tests, 3253 expected, 0 unexpected, 90 skipped.
+   - Full suite: 3343 tests, 3253 expected, 0 unexpected, 90 skipped.
    - Committed and pushed as `241a5732e`.
-
-### Next steps
-- Monitor next pipeline run (scheduled) for actual experiment production now that daemon restart loop and async blocking issues are resolved.
-- Continue retiring remaining auto-evolution `_prefix` corruption if new failures appear.
 
 ---
 
