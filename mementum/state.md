@@ -7,7 +7,33 @@
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
 > **Status**: 💡 **AUTO-RESEARCH STUDY COMPLETE** — Analyzed auto_research paper writing skill, identified 5 highest-leverage gaps for OV5 researcher improvement.
-> **Latest**: Studied auto_research paper writing skill, created gap analysis in `mementum/knowledge/auto-research-vs-ov5-gaps.md` and memory in `mementum/memories/insight-auto-research-paper-writing-gaps.md`.
+> **Latest**: Full ERT suite green (3343 tests, 0 unexpected). Fixed systematic auto-evolution `_prefix` corruption in FSM utils, strategic.el, and run-ert async output drain.
+
+---
+
+## Session Note (2026-06-16 — Systematic `_prefix` corruption fixes + full suite green)
+
+1. **Fixed FSM utils corruption** (`lisp/modules/gptel-ext-fsm-utils.el`)
+   - Auto-evolution had renamed parameters/locals to `_fsm-or-id`, `_fsm-counts`, `_fsm` while the function bodies still referenced the unprefixed names, causing `void-variable` errors.
+   - Restored `fsm-or-id`, `fsm-counts`, and `fsm` names.
+   - FSM utils tests: 24 tests pass.
+
+2. **Fixed strategic.el corruption** (`lisp/modules/gptel-auto-workflow-strategic.el`)
+   - `if` special form had been renamed to `_if`, causing `void-function` errors in `gptel-auto-workflow--filter-large-files`.
+   - Restored `if`.
+   - Strategic tests: 20 tests pass.
+
+3. **Fixed async run-ert output drain** (`lisp/modules/gptel-auto-workflow-self-heal-semantic.el`)
+   - Switched `gptel-auto-workflow--run-ert-in-worktree` from blocking `call-process` to `make-process` + event-loop pumping.
+   - Added final `(while (accept-process-output proc 0.1))` to drain output that arrives after process exit; this fixed a flaky failure in `test-self-heal-semantic/run-ert-rejects-on-failure` under full-suite load.
+
+4. **Full verification**
+   - `scripts/run-tests.sh unit` equivalent full suite: 3343 tests, 3253 expected, 0 unexpected, 90 skipped.
+   - Committed and pushed as `241a5732e`.
+
+### Next steps
+- Monitor next pipeline run (scheduled) for actual experiment production now that daemon restart loop and async blocking issues are resolved.
+- Continue retiring remaining auto-evolution `_prefix` corruption if new failures appear.
 
 ---
 
