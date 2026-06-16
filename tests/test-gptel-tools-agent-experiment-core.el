@@ -137,3 +137,38 @@ Catches auto-evolution rename bugs (_if, _let*, _when)."
   (should (numberp (gptel-auto-experiment--increment-no-improvement-count)))
   (should (numberp (gptel-auto-experiment--increment-no-improvement-count)))
   (should (>= gptel-auto-experiment--no-improvement-count 3)))
+
+(ert-deftest test-experiment-core/pre-existing-breakage-p-non-string ()
+  "Non-string target returns nil."
+  (should-not (gptel-auto-experiment--pre-existing-breakage-p nil))
+  (should-not (gptel-auto-experiment--pre-existing-breakage-p 42))
+  (should-not (gptel-auto-experiment--pre-existing-breakage-p '(a b))))
+
+(ert-deftest test-experiment-core/pre-existing-breakage-p-empty-string ()
+  "Empty string returns nil."
+  (should-not (gptel-auto-experiment--pre-existing-breakage-p "")))
+
+(ert-deftest test-experiment-core/pre-existing-breakage-p-not-in-cache ()
+  "Target not in cache returns nil."
+  (should-not (gptel-auto-experiment--pre-existing-breakage-p "/tmp/unknown-file-xyz.el")))
+
+(ert-deftest test-experiment-core/pre-existing-breakage-p-byte-compiles-nil ()
+  "If :byte-compiles is nil in cached state, return t (pre-existing broken)."
+  (puthash "/tmp/broken-file.el" (list :byte-compiles nil :syntax-ok t)
+           gptel-auto-experiment--target-state-cache)
+  (should (gptel-auto-experiment--pre-existing-breakage-p "/tmp/broken-file.el"))
+  (remhash "/tmp/broken-file.el" gptel-auto-experiment--target-state-cache))
+
+(ert-deftest test-experiment-core/pre-existing-breakage-p-syntax-ok-nil ()
+  "If :syntax-ok is nil in cached state, return t (pre-existing broken)."
+  (puthash "/tmp/syntax-bad.el" (list :byte-compiles t :syntax-ok nil)
+           gptel-auto-experiment--target-state-cache)
+  (should (gptel-auto-experiment--pre-existing-breakage-p "/tmp/syntax-bad.el"))
+  (remhash "/tmp/syntax-bad.el" gptel-auto-experiment--target-state-cache))
+
+(ert-deftest test-experiment-core/pre-existing-breakage-p-all-good ()
+  "If cached state has both :byte-compiles and :syntax-ok truthy, return nil."
+  (puthash "/tmp/good-file.el" (list :byte-compiles t :syntax-ok t)
+           gptel-auto-experiment--target-state-cache)
+  (should-not (gptel-auto-experiment--pre-existing-breakage-p "/tmp/good-file.el"))
+  (remhash "/tmp/good-file.el" gptel-auto-experiment--target-state-cache))
