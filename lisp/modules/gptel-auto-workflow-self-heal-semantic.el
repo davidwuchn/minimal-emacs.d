@@ -2464,6 +2464,10 @@ answer, the heartbeat timer fire, and `with-timeout' have effect."
         ;; responsive during the ~10min run.
         (while (process-live-p proc)
           (accept-process-output nil 0.1))
+        ;; Drain any output that arrived after the last live check but before
+        ;; the process status was updated.  In batch runs short mock scripts
+        ;; can exit before their stdout has been delivered to the buffer.
+        (while (accept-process-output proc 0.1))
         (let ((exit-code (process-exit-status proc))
               (output (string-trim
                        (concat (with-current-buffer stdout-buf (buffer-string))

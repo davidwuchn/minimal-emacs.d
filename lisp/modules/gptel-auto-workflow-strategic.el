@@ -290,7 +290,7 @@ buffer."
   (let (result)
     (dolist (file files (reverse result))
       (when (and (file-exists-p file)
-                 (let ((line-count (_if (executable-find "wc")
+                 (let ((line-count (if (executable-find "wc")
                                        (with-temp-buffer
                                          (condition-case err (call-process "wc" nil t nil "-l" file))
                                          (string-to-number (string-trim (buffer-string))))

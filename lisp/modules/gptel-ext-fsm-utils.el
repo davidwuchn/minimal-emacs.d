@@ -94,7 +94,7 @@ nested agent calls."
             (puthash id _fsm my/gptel--fsm-registry)
             id)))))
 
-(defun my/gptel--fsm-unregister (_fsm-or-id)
+(defun my/gptel--fsm-unregister (fsm-or-id)
   "Remove FSM from registry by FSM struct or ID.
 
 ASSUMPTION: Input is either FSM struct or ID string.
@@ -264,7 +264,7 @@ Returns FSM struct or nil if not found."
                       (let ((id (my/gptel--fsm-get-id fsm)))
                         (and id (equal id context-id)))))
                 (coerce-id (id)
-                  (let ((_fsm (and (stringp id)
+                  (let ((fsm (and (stringp id)
                                   (my/gptel--fsm-get-by-id id))))
                     (and (my/gptel--fsm-p fsm)
                          (matches-context-p fsm)
@@ -494,7 +494,7 @@ PROACTIVE MITIGATION: Can be called periodically or after operations
 to ensure registry remains in valid state.
 
 Returns t on success, signals error on failure."
-  (let ((_fsm-counts (make-hash-table :test 'eq)))
+  (let ((fsm-counts (make-hash-table :test 'eq)))
     (cl-letf (((symbol-function 'validate-entry)
                (lambda (key value)
                  (cond
