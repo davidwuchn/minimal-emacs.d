@@ -496,8 +496,10 @@ Returns a single expression that can be read back with `read'."
           skill-graph--molecules)))
 
 (defun skill-graph--restore (nodes edges molecules)
-  "Restore skill graph from serialized data."
-  (clrhash skill-graph--nodes)
+  "Restore skill graph from serialized data.
+Merges persisted stats with existing nodes instead of replacing."
+  ;; Don't clear nodes - merge stats for existing skills
+  ;; Only clear edges and molecules since they'll be rebuilt
   (clrhash skill-graph--edges)
   (setq skill-graph--molecules nil)
   (dolist (n nodes)
@@ -505,13 +507,17 @@ Returns a single expression that can be read back with `read'."
           (level (cadr n))
           (path (caddr n))
           (stats (cadddr n)))
-      (puthash id
-               (skill-graph-node-create
-                :id id
-                :level level
-                :path path
-                :stats stats)
-               skill-graph--nodes)))
+      (if-let ((existing (gethash id skill-graph--nodes)))
+          ;; Update stats for existing node
+          (setf (skill-graph-node-stats existing) stats)
+        ;; Add new node if not already loaded from disk
+        (puthash id
+                 (skill-graph-node-create
+                  :id id
+                  :level level
+                  :path path
+                  :stats stats)
+                 skill-graph--nodes))))
   (dolist (e edges)
     (let ((from (car e))
           (to (cadr e))
