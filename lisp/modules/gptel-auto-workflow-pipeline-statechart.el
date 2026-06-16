@@ -396,7 +396,7 @@ Returns plist with :bottleneck, :bottlenecks, :expected-keep-rate,
              :compensating-errors
              (gptel-auto-workflow--detect-compensating-errors
               (gptel-auto-workflow--extract-gate-score-vectors records)
-              gate-order)
+              gates)
              :computed-at (float-time)))))
 
 (defun gptel-auto-workflow--detect-compensating-errors (gate-score-vectors gate-order)
