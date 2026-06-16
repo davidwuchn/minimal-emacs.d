@@ -64,6 +64,50 @@
 
 ---
 
+## Session Note (2026-06-16 — auto-experiment phase 3 completed)
+
+1. **Phase 3 landed**
+   - Callback-dispatch, prompt-build, and loop-gate tests now use current harness contracts.
+   - The byte-compiled grader short-circuit is fixed with explicit control flow.
+
+2. **Verification**
+   - Phase 3 focused selector: 130 expected, 16 skipped, 1 expected failure, 0 unexpected
+   - Full unit gate: pass
+
+3. **Memory stored**
+   - `mementum/memories/byte-compiled-grader-short-circuit-guard.md`
+
+## Session Note (2026-06-16 — auto-experiment phase 2 completed)
+
+1. **Phase 2 landed**
+   - Callback-dispatch tests now mock the timeout wrapper instead of the inner agent tool.
+   - Prompt-build nil-argument tests now stub the missing research/context helpers.
+   - The byte-compiled grader short-circuit now uses explicit control flow and no longer dispatches after aborted output.
+
+2. **Verification**
+   - Phase 2 focused selector: 5 pass, 3 skipped, 0 unexpected
+   - Full unit gate: pass
+
+3. **Memory stored**
+   - `mementum/memories/byte-compiled-grader-short-circuit-guard.md`
+
+## Session Note (2026-06-15 — auto-experiment regression follow-up in progress)
+
+1. **Follow-up plan created**
+   - Added `plans/auto-experiment-regression-reenable/` to chase the remaining fixable auto-experiment batch regressions.
+   - Phase 1 focuses on shared-state isolation hardening and re-enabling the grade/retry cluster.
+
+2. **Current status**
+   - Shared-reset helper expanded for grade state, counters, and retry/refine flags.
+   - Focused batch selector still shows 28 descriptive skips after Phase 1; four formerly targeted tests were re-skipped for deeper issues.
+
+3. **Verification**
+   - Focused selector: `regression/auto-experiment/` -> 0 unexpected, 28 skipped
+   - Full unit gate: pass
+
+4. **Memory stored**
+   - `mementum/memories/auto-experiment-batch-reset-fixture.md`
+
 ## Session Note (2026-06-15 — NeLisp reader gates in validation + preview)
 
 1. **Experiment validation NeLisp pass** (`lisp/modules/gptel-tools-agent-validation.el`)
