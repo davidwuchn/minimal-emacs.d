@@ -7,7 +7,34 @@
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
 > **Status**: ⊘ **CRITICAL FIXED: Pipeline timeout bug** — Fixed wait-for-idle! timeout check order. Researcher daemon stuck 2+ hours now properly killed after 15min timeout.
-> **Latest**: Studied ljg-skills (5.9k stars), identified 6 highest-leverage gaps for OV5 skills system. Key insight: ljg provides cognitive framework skills (thinking methodologies) while OV5 provides technical capability skills. Best integration: adopt ljg's cognitive frameworks as research skills.
+> **Latest**: Hardened self-heal unused-variable fixer and fixed world-store regressions from datahike pod enablement. Full ERT suite green: 3398 tests, 0 unexpected.
+
+---
+
+## Session Note (2026-06-16 — Self-heal _prefix corruption hardening + world-store regression fixes)
+
+1. **Synced with remote and found regressions**
+   - Remote commit `ce40a5260` fixed datahike pod availability check (was always returning nil due to `(booleanp nil)` being t).
+   - After sync, full ERT suite went from green to 10 unexpected failures.
+   - Also found running daemon had re-corrupted `strategic.el` (`if` → `_if`) and `prompt-analyze.el` with blank lines.
+
+2. **Hardened self-heal unused-variable fixer** (`lisp/modules/gptel-auto-workflow-evolution.el`)
+   - Root cause: `gptel-auto-workflow--fix-unused-variables` used naive regex `(\<VAR\>` on lines containing `let`/`defun`, renaming every occurrence including special forms (`if` → `_if`) and prefixes (`file-name-*` → `_file-name-*`).
+   - Added blocklist for special forms and fboundp symbols.
+   - Added non-symbol-next-char guard to regex so `file` rename no longer matches `file-name-nondirectory`.
+   - Added TDD regression tests for `_if` and `_file-name` corruption.
+
+3. **Fixed world-store regressions from enabled pod**
+   - `parse-all-results` crashed with `wrong-type-argument sequencep 99` when brepl fallback returned a scalar.
+     - Fixed by coercing only sequences and skipping non-sequence entities.
+   - `ensure-nrepl` reused a global nREPL process even when tests requested a different port, causing branch tests to operate on the wrong store.
+     - Added `ov5-world-store--nrepl-process-port` tracking and restart on port mismatch.
+   - `ov5-world-store-branch-delete` and `ov5-world-store-branch-promote` swallowed Clojure exceptions and unconditionally returned `t`.
+     - Now signal errors when brepl-eval returns nil.
+
+4. **Verification**
+   - Full ERT suite: 3398 tests, 3340 expected, 0 unexpected, 58 skipped.
+   - Committed and pushed as `239dd84ec`.
 
 ---
 
