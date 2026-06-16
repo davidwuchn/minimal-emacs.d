@@ -218,6 +218,39 @@ caught it)."
           (should (gptel-auto-workflow--check-parens f)))
       (delete-file f))))
 
+(ert-deftest tdd/self-heal/fix-unused-variables/skips-special-form-names ()
+  "A variable named like a special form must not corrupt calls to that form.
+Regression: auto-fix renamed every `(if' on a let/defun line to `(_if'
+when an unused variable happened to be named `if'."
+  (let ((f (make-temp-file "self-heal-test" nil ".el")))
+    (unwind-protect
+        (progn
+          (write-region "(defun foo (if)\n  (let ((x (if t 1 2)))\n    x))\n" nil f)
+          (let* ((warnings (list (cons 1 "Unused lexical argument `if'")))
+                 (fixes (gptel-auto-workflow--fix-unused-variables f warnings)))
+            (should (= fixes 0))
+            (with-temp-buffer
+              (insert-file-contents f)
+              (should-not (string-match-p "_if" (buffer-string)))
+              (should (string-match-p "(if t 1 2)" (buffer-string))))))
+      (delete-file f))))
+
+(ert-deftest tdd/self-heal/fix-unused-variables/skips-built-in-function-names ()
+  "A variable named like a built-in must not corrupt calls to that function.
+Regression: auto-fix renamed `(file-name-nondirectory file)' to
+`(_file-name-nondirectory file)' when an unused arg was named `file'."
+  (let ((f (make-temp-file "self-heal-test" nil ".el")))
+    (unwind-protect
+        (progn
+          (write-region "(defun foo (file)\n  (file-name-nondirectory file))\n" nil f)
+          (let* ((warnings (list (cons 1 "Unused lexical argument `file'")))
+                 (fixes (gptel-auto-workflow--fix-unused-variables f warnings)))
+            (should (= fixes 0))
+            (with-temp-buffer
+              (insert-file-contents f)
+              (should-not (string-match-p "_file-name" (buffer-string))))))
+      (delete-file f))))
+
 ;; ─── fix-free-variables ───
 
 (ert-deftest tdd/self-heal/fix-free-variables/adds-defvar ()

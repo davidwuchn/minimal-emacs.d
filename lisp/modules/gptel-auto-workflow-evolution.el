@@ -8331,8 +8331,16 @@ Call when keep_rate improves after fix."
     "proposed" "pattern" "var" "w" "fc" "remaining" "target-line"
     "has-free-err" "arglist" "arglist-start" "def-args" "min-args"
     "ls" "lt" "ov" "nv" "self-iter" "self-clean" "cur-count"
-    "prev-count" "still-unclean" "unclean" "all-files")
-  "Variables internal to self-heal fixers.  Never rename these.")
+    "prev-count" "still-unclean" "unclean" "all-files"
+    ;; Special forms and built-ins that must never be renamed.  Renaming
+    ;; `if' to `_if' corrupts every conditional on the same line; renaming
+    ;; `file' to `_file' corrupts every `file-name-*' call on the same line.
+    "if" "if-let" "if-let*" "when" "when-let" "when-let*" "unless"
+    "cond" "let" "let*" "lambda" "file" "data" "result" "body" "form"
+    "key" "val" "err" "it")
+  "Variables internal to self-heal fixers.  Never rename these.
+Also includes special forms and common parameter names whose rename has
+historically caused systematic prefix corruption elsewhere on the line.")
 
 (defun gptel-auto-workflow--edit-distance (s1 s2)
   "Return Levenshtein edit distance between S1 and S2."
@@ -8490,30 +8498,41 @@ Only fixes docstrings.  Returns number of fixes."
     fixes))
 
 (defun gptel-auto-workflow--fix-unused-variables (file warnings)
-  "Auto-fix unused lexical variables/arguments in FILE by prefixing with _.
-Only renames binding sites.  Skips self-heal internal vars.
-WARNINGS is alist of (LINE . TEXT).  Returns number of fixes."
+  "Auto-fix unused lexical variables/arguments in FILE by prefixing with _.\nOnly
+renames binding sites. Skips self-heal internal vars, special\nforms, and
+bound functions whose rename would corrupt callers on the\nsame line (e.g.
+renaming `file' to `_file' mangles `file-name-*').\nWARNINGS is alist of (LINE
+. TEXT). Returns number of fixes."
   (let ((fixes 0)
         (renames nil))
     (with-current-buffer (find-file-noselect file)
       (dolist (w warnings)
         (when (string-match "Unused lexical \\(?:argument\\|variable\\) [`']\\([^']+\\)['`]" (cdr w))
           (let* ((var (match-string 1 (cdr w)))
-                 (new-var (concat "_" var)))
-            (when (and (not (string-prefix-p "_" var))
-                       (not (member var gptel-auto-workflow--self-heal-internal-vars)))
+                 (new-var (concat "_" var))
+                 (sym (intern-soft var)))
+            (when (and var
+                       (not (string-prefix-p "_" var))
+                       (not (member var gptel-auto-workflow--self-heal-internal-vars))
+                       (not (and sym (special-form-p sym)))
+                       (not (and sym (fboundp sym))))
               (push (cons var new-var) renames)))))
       (dolist (rename (delete-dups renames))
         (let* ((ov (car rename))
                (nv (cdr rename)))
           (goto-char (point-min))
-          (while (re-search-forward (concat "(\\<" (regexp-quote ov) "\\>") nil t)
+          ;; Match "(<var>" only when <var> is a complete symbol and the next
+          ;; character is NOT a symbol constituent (in particular NOT "-").
+          ;; Without this guard renaming `file' to `_file' also rewrites
+          ;; `file-name-nondirectory' to `_file-name-nondirectory' because
+          ;; "-" is non-word and `\>' matches after "file".
+          (while (re-search-forward (concat "(\\<" (regexp-quote ov) "\\>\\([^-[:alnum:]_]\\|$\\)") nil t)
             (with-no-warnings
               (let* ((ls (line-beginning-position))
                      (lt (buffer-substring-no-properties ls (line-end-position))))
                 (when (or (string-match-p "\\<let\\*?\\>" lt)
                           (string-match-p "\\<defun\\|\\<cl-defun\\|\\<defmacro\\|\\<lambda\\>" lt))
-                  (replace-match (concat "(" nv) t t)
+                  (replace-match (concat "(" nv (match-string 1)) t t)
                   (setq fixes (1+ fixes))))))))
       (when (> fixes 0) (save-buffer))
       (kill-buffer (current-buffer)))
