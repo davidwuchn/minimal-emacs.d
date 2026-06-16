@@ -6,8 +6,8 @@
 >
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
-> **Status**: ✓ **TIMEOUT FIX VERIFIED + PAPER-STORYTELLING IMPLEMENTED** — Pipeline timeout fix confirmed working (completed in 26min). Implemented ljg-skills paper-storytelling cognitive framework. Self-heal hardened, world-store regressions fixed.
-> **Latest**: Manual pipeline test confirmed timeout fix works: research timed out after 900s, pipeline continued with partial findings, completed all 7 steps. Implemented paper-storytelling skill (7-beat narrative spine) and research-paper-flow workflow. Hardened self-heal unused-variable fixer and fixed world-store regressions. Full ERT suite green: 3398 tests, 0 unexpected.
+> **Status**: ✓ **SKILL GRAPH FIX VERIFIED** — Fixed skill-graph--restore to merge stats instead of replacing nodes. Now loads all 30+ skills correctly (was loading only 1 from stale persisted file). Paper-storytelling and research-paper-flow skills now available in skill graph.
+> **Latest**: Fixed critical bug where skill-graph-init only loaded 1 skill. Root cause: skill-graph--restore cleared all nodes before restoring from persisted file. Fix: merge stats for existing nodes, add new nodes from persisted file. Verified: 30 skills now loaded including paper-storytelling and research-paper-flow.
 
 ---
 
@@ -35,6 +35,41 @@
 4. **Verification**
    - Full ERT suite: 3398 tests, 3340 expected, 0 unexpected, 58 skipped.
    - Committed and pushed as `239dd84ec`.
+
+---
+
+## Session Note (2026-06-17 — Skill graph fix: loads all 30+ skills)
+
+1. **Discovered critical bug**
+   - skill-graph-init only loaded 1 skill (researcher-prompt) instead of 30+
+   - Paper-storytelling and research-paper-flow skills were not available in skill graph
+   - Root cause: skill-graph--restore cleared all nodes before restoring from persisted file
+
+2. **Root cause analysis**
+   - skill-graph-init calls skill-graph-load-all-skills (loads from disk)
+   - Then calls skill-graph-load (loads from persisted file)
+   - skill-graph--restore called (clrhash skill-graph--nodes) which cleared all loaded skills
+   - Then restored only the 1 skill from stale persisted file (var/tmp/skill-graph.eld)
+
+3. **Fix applied** (`lisp/modules/gptel-auto-workflow-skill-graph.el`)
+   - Removed (clrhash skill-graph--nodes) from skill-graph--restore
+   - Now updates stats for existing nodes instead of clearing all nodes
+   - Adds new nodes from persisted file if not already loaded from disk
+   - Preserves edge and molecule clearing (those are rebuilt)
+
+4. **Verification**
+   - After fix: skill-graph-init loads 30 skills (was 1)
+   - paper-storytelling: loaded ✓
+   - research-paper-flow: loaded ✓
+   - All other skills: loaded ✓
+
+5. **Impact**
+   - Paper-storytelling cognitive framework now available for researcher
+   - Skill routing can now use all 30+ skills
+   - Skill graph evolution can track all skill combinations
+
+6. **Commit**
+   - `cc3799cf2` — fix: skill-graph--restore merges stats instead of replacing nodes
 
 ---
 
