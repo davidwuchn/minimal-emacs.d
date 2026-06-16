@@ -21,7 +21,7 @@
           (when (file-exists-p stale)
             (delete-file stale)
             (message "[post-init] Cleaned stale daemon socket: %s" stale)))
-      (error nil)))
+      (error nil))))
 
 ;; Add the local lisp directory to Emacs' load path using the true root directory
 ;; (not user-emacs-directory, since we changed that to var/)
@@ -311,4 +311,4 @@ external watchdog restart the daemon every 30 minutes in a loop."
                                    (error 'ERR))))
                     (if (or (eq result2 t) (eq result2 nil))
                         (message "[CRITICAL] Fixed pending-decisions-p after reload")
-                      (message "[CRITICAL] FAILED to fix pending-decisions-p (still returns %s)" result2)))))))))
+                       (message "[CRITICAL] FAILED to fix pending-decisions-p (still returns %s)" result2))))))))
