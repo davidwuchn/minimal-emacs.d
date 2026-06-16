@@ -7,7 +7,7 @@
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
 > **Status**: ⊘ **CRITICAL FIXED: Pipeline timeout bug** — Fixed wait-for-idle! timeout check order. Researcher daemon stuck 2+ hours now properly killed after 15min timeout.
-> **Latest**: Fixed critical bug in clj/ov5/pipeline/daemon.clj: timeout check moved before daemon alive check. Pipeline now enforces 900s timeout and kills stuck daemons.
+> **Latest**: Studied ljg-skills (5.9k stars), identified 6 highest-leverage gaps for OV5 skills system. Key insight: ljg provides cognitive framework skills (thinking methodologies) while OV5 provides technical capability skills. Best integration: adopt ljg's cognitive frameworks as research skills.
 
 ---
 
@@ -56,6 +56,42 @@
 - Monitor next pipeline run to verify timeout fix works
 - Investigate why researcher subagent gets stuck (LLM timeout? infinite loop?)
 - Consider implementing Fusion self-fusion (lowest-effort improvement from study)
+
+---
+
+## Session Note (2026-06-16 — ljg-skills study and gap analysis)
+
+1. **Studied ljg-skills** (https://github.com/lijigang/ljg-skills, 5.9k stars, 687 forks)
+   - Collection of cognitive framework skills for Claude Code
+   - Each skill is a structured thinking methodology, not a technical capability
+   - Key skills: ljg-learn (8-dimension concept anatomy), ljg-paper (7-beat narrative spine), ljg-paper-river (recursive citation tracing), ljg-think (vertical deep-drill), ljg-roundtable (multi-persona debate)
+   - Design patterns: trigger words, visual output (PNG cards, ASCII diagrams), storytelling, workflow composition, Denote integration
+
+2. **Explored OV5 skills system** (thorough exploration via task agent)
+   - 4 skill registries: assistant/skills/ (25), packages/nucleus/skills/ (8), .opencode/skills/ (7), .agents/skills/ (4)
+   - 3-level hierarchy: atoms → molecules → compounds
+   - Ontology-driven routing: multi-dimensional scoring (task-overlap, category-fit, keyword-depth, keep-rate, trend, confidence, holographic)
+   - Skill graph: edge weights updated by experiment outcomes
+   - Champion league: per-axis champions crowned by keep-rate
+   - Strengths: automated evolution, ontology routing, skill graph, governance
+   - Weaknesses: no cognitive frameworks, no visual output, no storytelling, no depth tools, no multi-perspective, no interactive UX
+
+3. **Identified 6 highest-leverage gaps**
+   - Gap 1: Cognitive framework skills for research (paper-storytelling, citation-tracing, concept-anatomy, deep-drill, multi-perspective)
+   - Gap 2: Visual output for research (PNG cards, ASCII diagrams, org-mode reports)
+   - Gap 3: Interactive skill browser (Emacs UI for skill graph visualization)
+   - Gap 4: Natural language skill invocation (trigger-word system)
+   - Gap 5: Workflow composition (interactive tool to chain skills)
+   - Gap 6: Multi-persona research (structured debate, multi-model panels)
+
+4. **Strategic insight**
+   - ljg optimizes **human cognition** (thinking methodologies); OV5 optimizes **automated evolution** (skills improve through experiments)
+   - Integration: adopt ljg's cognitive frameworks as OV5 research skills → gives OV5 both depth (8-dimension analysis) and evolution (automated improvement)
+   - Best integration path: (1) cognitive framework skills, (2) trigger-word system, (3) visual output, (4) skill browser, (5) workflow composition, (6) multi-persona research
+
+5. **Documentation created**
+   - `mementum/knowledge/ljg-skills-vs-ov5-gaps.md` — full gap analysis
+   - `mementum/memories/insight-ljg-skills-cognitive-frameworks.md` — key insights
 
 ---
 
