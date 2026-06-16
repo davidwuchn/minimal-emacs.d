@@ -2,12 +2,12 @@
 
 > **Last pipeline**: 2026-06-16 18:31 (zero-run)
 > **Next pipeline**: scheduled
-> **Plan**: /Users/davidwu/.emacs.d/mementum/knowledge/plans/pipeline-runs/run-20260616-180011/
+> **Plan**: /home/davidwu/.emacs.d/mementum/knowledge/plans/pipeline-runs/run-20260616-190000/
 >
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
-> **Status**: ⊘ **DUPLICATE DAEMON BUG FIXED** — `ensure-worker-daemon!` now returns early when daemon is already alive, preventing multiple pmf-value-stream/gtm-product-org processes.
-> **Latest**: Fixed duplicate daemon creation bug — killed 5 duplicate pmf-value-stream and 2 duplicate gtm-product-org daemons, fixed `ensure-worker-daemon!` to return early.
+> **Status**: ⊘ ✓ **STATECHART MODULE TDD COVERAGE EXPANDED** — 21/21 tests pass. Fixed real bug: `statechart-analyze` used unbound `gate-order` (only bound in `build-statechart`). Added TDD tests for `detect-compensating-errors`, `extract-gate-score-vectors`, `statechart-analyze`, `statechart-drift-check`. 592-line module went from 4 → 21 tests.
+> **Latest**: Pushed `09bd678f7` — drift-check TDD coverage.
 
 ---
 
@@ -145,3 +145,29 @@
 ---
 
 *Active Mementum v1.1 — duplicate daemon bug fixed, Helium-inspired caching implemented, daemon environment hardened*
+
+## Session Note (2026-06-16 — statechart module TDD coverage)
+
+1. **Discovered real bug via TDD**: `statechart-analyze` called
+   `detect-compensating-errors` with `gate-order` (unbound in its scope).
+   The variable is only bound in `build-statechart`. Any test calling
+   `statechart-analyze` directly would throw `void-variable gate-order`.
+   Fix: use `gates` (which IS bound in statechart-analyze).
+
+2. **Added 13 TDD tests** to `tests/test-pipeline-statechart.el`:
+   - 5 for `detect-compensating-errors` (early-fail+high-grader, low-grader
+     ignored, no-early-fails ignored, mixed input, empty input)
+   - 4 for `statechart-analyze` (returns required keys, bottleneck is
+     lowest p-pass, lossiest-gate is highest abs fail, phi keep-rate-max
+     is positive)
+   - 3 for `statechart-drift-check` (identical no drift, drops above
+     threshold, improvement no alert)
+   - 5 for `extract-gate-score-vectors` (uses existing vector, fallback
+     to compute, skip record with no data, empty input, preserves order)
+
+3. **Module coverage**: 4 → 21 tests for the 592-line statechart module.
+   6 of 12 defuns now have TDD coverage.
+
+### Next steps
+- Add TDD tests for: build-statechart, statechart-rebuild-and-persist,
+  statechart-report, statechart-show
