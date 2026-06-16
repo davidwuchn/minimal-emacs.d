@@ -1,13 +1,13 @@
 # Mementum State
 
-> **Last pipeline**: 2026-06-16 18:31 (zero-run)
+> **Last pipeline**: 2026-06-17 00:14 (zero-run, timeout fix verified ✓)
 > **Next pipeline**: scheduled
-> **Plan**: /Users/davidwu/.emacs.d/mementum/knowledge/plans/pipeline-runs/run-20260616-180011/
+> **Plan**: /Users/davidwu/.emacs.d/mementum/knowledge/plans/pipeline-runs/run-20260616-234849/
 >
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
-> **Status**: ⊘ **CRITICAL FIXED: Pipeline timeout bug** — Fixed wait-for-idle! timeout check order. Researcher daemon stuck 2+ hours now properly killed after 15min timeout.
-> **Latest**: Hardened self-heal unused-variable fixer and fixed world-store regressions from datahike pod enablement. Full ERT suite green: 3398 tests, 0 unexpected.
+> **Status**: ✓ **TIMEOUT FIX VERIFIED + PAPER-STORYTELLING IMPLEMENTED** — Pipeline timeout fix confirmed working (completed in 26min). Implemented ljg-skills paper-storytelling cognitive framework. Self-heal hardened, world-store regressions fixed.
+> **Latest**: Manual pipeline test confirmed timeout fix works: research timed out after 900s, pipeline continued with partial findings, completed all 7 steps. Implemented paper-storytelling skill (7-beat narrative spine) and research-paper-flow workflow. Hardened self-heal unused-variable fixer and fixed world-store regressions. Full ERT suite green: 3398 tests, 0 unexpected.
 
 ---
 
@@ -38,51 +38,70 @@
 
 ---
 
-## Session Note (2026-06-16 — Critical: Researcher daemon stuck, pipeline timeout broken — FIXED)
+## Session Note (2026-06-17 — Timeout fix verification)
 
-1. **Discovered critical operational issue**
-   - Pipeline started at 19:07:45, reached Step 1: Research at 19:08:00
-   - Pipeline log shows "Waiting for research to complete (max 900s)..."
-   - Current time: 21:22 — pipeline has been "waiting" for 2+ hours
-   - Max wait is 900s (15 minutes) but timeout never triggered
-   - Researcher daemon (gtm-product-org, PID 48789) running for 2h14m
-   - No research findings produced, no research traces generated
-   - Pipeline process already exited but daemon kept running
+1. **Manual pipeline test**
+   - Started pipeline at 23:48:43
+   - Research started at 23:48:55
+   - Research timed out at 00:04:00 (900s = 15 minutes) ✓
+   - Pipeline continued with partial findings ✓
+   - Completed all 7 steps at 00:14:34 (total 26 minutes) ✓
+   - No more hanging forever ✓
 
-2. **Root cause analysis**
-   - Pipeline timeout mechanism in `clj/ov5/pipeline/daemon.clj` `wait-for-idle!` broken
-   - Bug: Researcher daemon behavior checked if daemon was alive BEFORE checking timeout
-   - If daemon was alive but stuck (LLM call hanging), loop continued forever
-   - Timeout check only happened at start of next iteration, but elapsed never incremented
-   - Result: pipeline waited 2+ hours instead of 15 minutes
+2. **Timeout fix confirmed**
+   - `clj/ov5/pipeline/daemon.clj` wait-for-idle! now checks timeout BEFORE daemon alive
+   - When elapsed >= max-wait-ms, logs warning and kills stuck daemon
+   - Pipeline enforces 900s timeout even when daemon is stuck
 
-3. **Immediate fix applied**
-   - Killed stuck researcher daemon: `pkill -f "gtm-product-org"`
-   - Verified daemon killed, no pipeline process running
+3. **Issues found during test**
+   - Old stuck daemon (PID 98987) from previous run had to be manually killed
+   - Old stuck pmf-value-stream daemon (PID 41661) also had to be killed
+   - Pipeline cleanup doesn't always kill all daemons on exit
 
-4. **Code fix applied** (`clj/ov5/pipeline/daemon.clj`)
-   - Moved timeout check BEFORE daemon alive check in cond chain
-   - Now when elapsed >= max-wait-ms:
-     - Log timeout warning
-     - Call discard-stale-worker-daemon! to kill stuck daemon
-     - Return :timeout immediately
-   - Ensures pipeline enforces 900s timeout even when daemon is stuck
+4. **Next steps**
+   - Investigate why researcher subagent gets stuck (LLM timeout? infinite loop?)
+   - Add daemon cleanup on pipeline exit (ensure all daemons killed)
+   - Consider implementing Fusion self-fusion (lowest-effort improvement from study)
 
-5. **Impact**
-   - Pipeline has not produced experiments since 18:31 (zero-run)
-   - Multiple pipeline runs stuck at research phase
-   - Resources wasted on stuck daemons
-   - Fixed: timeout now properly enforced, stuck daemons killed
+---
 
-6. **Verification**
-   - Clojure syntax test passed
-   - Committed as `1467f24d7`
-   - Pushed to origin and upstream
+## Session Note (2026-06-16 — Paper-storytelling implementation)
 
-### Next steps
-- Monitor next pipeline run to verify timeout fix works
-- Investigate why researcher subagent gets stuck (LLM timeout? infinite loop?)
-- Consider implementing Fusion self-fusion (lowest-effort improvement from study)
+1. **Implemented paper-storytelling cognitive framework skill**
+   - Created `assistant/skills/paper-storytelling/SKILL.md`
+   - 7-beat narrative spine: protagonist → dilemma → old path → turning point → solution → ending → core
+   - Speed-read card (3 lines: 一句话, 大想法, 只记三件事)
+   - PhD advisor review (honest assessment)
+   - Real-world testing (where it works/breaks)
+   - Verification gates and Eight Keys reference
+
+2. **Implemented research-paper-flow workflow**
+   - Created `assistant/skills/research-paper-flow/SKILL.md`
+   - Workflow chain: researcher → paper-storytelling
+   - Automatically invoked when researcher detects paper URLs
+   - 4-step procedure: initial scan → deep analysis → insights extraction → mementum storage
+
+3. **Updated researcher-prompt skill**
+   - Added paper analysis section with detection triggers (arxiv, PDF, conference links)
+   - Procedure for invoking paper-storytelling
+   - Output format for paper stories
+   - Explanation of why storytelling > extraction
+
+4. **Impact**
+   - Transforms research from surface-level extraction to narrative understanding
+   - Stories are retellable; facts are easily forgotten
+   - Stories connect to existing knowledge; facts float in isolation
+   - Stories reveal the *why* behind the *what*
+
+5. **Integration**
+   - Skills auto-loaded by skill-graph from assistant/skills/
+   - Researcher detects paper URLs and invokes paper-storytelling
+   - Stories stored in mementum/memories/paper-{title}.md
+   - Actionable insights feed into experiment hypothesis generation
+
+6. **Commits**
+   - `4ac0541ac` — ⚒ implement paper-storytelling cognitive framework skill
+   - `c3ea01b75` — ◈ state: paper-storytelling implementation documented
 
 ---
 
@@ -120,20 +139,39 @@
    - `mementum/knowledge/ljg-skills-vs-ov5-gaps.md` — full gap analysis
    - `mementum/memories/insight-ljg-skills-cognitive-frameworks.md` — key insights
 
-6. **Implementation started**
-   - Created `assistant/skills/paper-storytelling/SKILL.md` — 7-beat narrative spine for research papers
-   - Created `assistant/skills/research-paper-flow/SKILL.md` — workflow chain (researcher → paper-storytelling)
-   - Updated `assistant/skills/researcher-prompt/SKILL.md` — added paper analysis section with detection triggers
-   - Committed as `4ac0541ac`
-   - Skills auto-loaded by skill-graph from assistant/skills/
-   - Researcher detects paper URLs (arxiv, PDF, conference links) and invokes paper-storytelling
-   - Stories stored in mementum/memories/paper-{title}.md
-   - Actionable insights feed into experiment hypothesis generation
+---
 
-### Next steps
-- Monitor researcher to verify paper detection works
-- Track story keep-rate in experiments
-- Consider adding other ljg cognitive frameworks (concept-anatomy, deep-drill, citation-tracing)
+## Session Note (2026-06-16 — Pipeline timeout fix)
+
+1. **Discovered critical operational issue**
+   - Pipeline stuck at "Waiting for research to complete" since 19:08 (2+ hours)
+   - Max wait is 900s (15 minutes) but timeout never triggered
+   - Researcher daemon (gtm-product-org, PID 48789) running for 2h14m
+   - No research findings produced, no research traces generated
+   - Pipeline process already exited but daemon kept running
+
+2. **Root cause analysis**
+   - Pipeline timeout mechanism in `clj/ov5/pipeline/daemon.clj` `wait-for-idle!` broken
+   - Bug: Researcher daemon behavior checked if daemon was alive BEFORE checking timeout
+   - If daemon was alive but stuck (LLM call hanging), loop continued forever
+   - Timeout check only happened at start of next iteration, but elapsed never incremented
+   - Result: pipeline waited 2+ hours instead of 15 minutes
+
+3. **Immediate fix applied**
+   - Killed stuck researcher daemon: `pkill -f "gtm-product-org"`
+   - Verified daemon killed, no pipeline process running
+
+4. **Code fix applied** (`clj/ov5/pipeline/daemon.clj`)
+   - Moved timeout check BEFORE daemon alive check in cond chain
+   - Now when elapsed >= max-wait-ms:
+     - Log timeout warning
+     - Call discard-stale-worker-daemon! to kill stuck daemon
+     - Return :timeout immediately
+   - Ensures pipeline enforces 900s timeout even when daemon is stuck
+
+5. **Commits**
+   - `1467f24d7` — ⊘ fix: pipeline timeout broken for researcher daemon
+   - `d761e8695` — ◈ state: pipeline timeout fix documented
 
 ---
 
@@ -172,28 +210,6 @@
 
 ---
 
-## Session Note (2026-06-16 — Systematic `_prefix` corruption fixes + full suite green)
-
-1. **Fixed FSM utils corruption** (`lisp/modules/gptel-ext-fsm-utils.el`)
-   - Auto-evolution had renamed parameters/locals to `_fsm-or-id`, `_fsm-counts`, `_fsm` while the function bodies still referenced the unprefixed names, causing `void-variable` errors.
-   - Restored `fsm-or-id`, `fsm-counts`, and `fsm` names.
-   - FSM utils tests: 24 tests pass.
-
-2. **Fixed strategic.el corruption** (`lisp/modules/gptel-auto-workflow-strategic.el`)
-   - `if` special form had been renamed to `_if`, causing `void-function` errors in `gptel-auto-workflow--filter-large-files`.
-   - Restored `if`.
-   - Strategic tests: 20 tests pass.
-
-3. **Fixed async run-ert output drain** (`lisp/modules/gptel-auto-workflow-self-heal-semantic.el`)
-   - Switched `gptel-auto-workflow--run-ert-in-worktree` from blocking `call-process` to `make-process` + event-loop pumping.
-   - Added final `(while (accept-process-output proc 0.1))` to drain output that arrives after process exit.
-
-4. **Full verification**
-   - Full suite: 3343 tests, 3253 expected, 0 unexpected, 90 skipped.
-   - Committed and pushed as `241a5732e`.
-
----
-
 ## Session Note (2026-06-16 — Auto-research paper writing study)
 
 1. **Studied auto_research paper writing skill** (https://victorchen96.github.io/auto_research/skill/paper-writing.html)
@@ -220,14 +236,14 @@
    - Then peer review simulation (iteration driver)
 
 5. **Documentation created**
-   - `mementum/knowledge/auto-research-vs-ov5-gaps.md` — Full gap analysis
-   - `mementum/memories/insight-auto-research-paper-writing-gaps.md` — Key insights
+   - `mementum/knowledge/auto-research-vs-ov5-gaps.md` — full gap analysis
+   - `mementum/memories/insight-auto-research-paper-writing-gaps.md` — key insights
 
 ---
 
-## Session Note (2026-06-16 — Duplicate daemon creation bug fix)
+## Session Note (2026-06-16 — Duplicate daemon bug fix)
 
-1. **Root cause identified**: Auto-workflow not producing experiments
+1. **Discovered critical operational issue**
    - Pipeline log showed "Auto-workflow queued: :completed" but no experiments produced
    - Status file showed `:running t :phase "running"` but daemon not responding to emacsclient
    - Found **5 duplicate pmf-value-stream daemons** and **2 duplicate gtm-product-org daemons** running simultaneously
@@ -252,110 +268,11 @@
 5. **Verification**
    - Clojure syntax test passed
    - Committed as `110589252`
+   - Pushed to origin and upstream
 
-### Impact
-- Auto-workflow should now execute properly without daemon conflicts
-- Pipeline should produce experiments as expected
-- No more emacsclient timeouts due to socket contention
-
----
-
-## Session Note (2026-06-16 — Helium-inspired caching implementation)
-
-1. **Studied Helium architecture** (`/tmp/helium_demo`)
-   - Helium uses three-level caching: prompt cache, KV cache, intermediate results
-   - Cache-aware scheduling (CAS) orders operations to maximize prefix reuse
-   - Key insight: cache identical LLM calls and expensive intermediate computations within a run
-
-2. **Implemented response cache** (`lisp/modules/gptel-ext-prefix-cache.el`)
-   - Caches LLM responses keyed by `(backend . model . prompt-hash)`
-   - Integrated into `my/gptel--run-agent-tool-with-timeout` for non-executor subagents
-   - LRU eviction (max 500 entries), per-run isolation
-   - 9 new tests, all passing
-
-3. **Implemented intermediate result cache** (`lisp/modules/gptel-ext-prefix-cache.el`)
-   - Caches expensive computations like target categorization
-   - Integrated into `gptel-auto-workflow--categorize-target`
-   - LRU eviction (max 1000 entries), per-run isolation
-   - 8 new tests, all passing
-
-4. **Verification**
-   - All prefix-cache tests: 49 tests passing (41 original + 8 intermediate)
-   - All ontology-router tests: 31 tests passing
-   - All subagent tests: 50 tests passing
-   - No regressions in existing functionality
-
-5. **Expected impact**
-   - Reduced redundant LLM calls (response cache)
-   - Reduced redundant categorization computations (intermediate cache)
-   - Lower token costs and faster experiment cycles
-
-### Next steps
-- Monitor pipeline runs to measure actual cache hit rates
-- Consider adding more intermediate result types (baseline quality scores, etc.)
-- Update mementum knowledge with Helium comparison
+6. **Documentation created**
+   - `mementum/memories/insight-researcher-daemon-stuck-timeout-broken.md` — memory of critical issue
 
 ---
 
-## Session Note (2026-06-16 — daemon environment + self-heal coverage)
-
-1. **Restarted pipeline and diagnosed failures**
-   - Old daemon (started before fixes) was in a `server-start` restart loop, producing `End of file during parsing: post-init.el`.
-   - Newer daemon ran but project was skipped: `[auto-workflow] Cron error at step "cleanup-worktrees": Searching for program: Permission denied, gpg`.
-   - Root cause: `clj/ov5/pipeline/daemon.clj` replaced the child process environment with `env-opts` that omitted `PATH`, so `gpg` was not found and `.authinfo.gpg` could not be decrypted.
-
-2. **Fixed daemon environment** (`clj/ov5/pipeline/daemon.clj`)
-   - Added `"PATH" (or (System/getenv "PATH") "")` to `env-opts` so spawned Emacs daemons inherit the parent PATH.
-   - Verified in fresh pipeline run: `[eca-security] Credentials loaded from /Users/davidwu/.authinfo.gpg`.
-
-3. **Added self-heal semantic audits so OV5 can detect/fix alone**
-   - `daemon-server-start`: flags explicit `(server-start)` in init files (safe only inside `(when (not (daemonp)) ...)`).
-   - `daemon-launcher-env`: flags `clj/ov5/pipeline/daemon.clj` `env-opts` missing `PATH` or `TMPDIR`.
-   - Fixers registered for both issue types.
-
-4. **Verification**
-   - `test-self-heal-semantic` targeted run: 154 tests, 154 results as expected, 0 unexpected.
-   - Fresh pipeline run started successfully, daemon loads without `End of file during parsing`, research completes with external findings.
-   - Auto-workflow is running (researcher subagent still active); monitoring for experiment production.
-
-### Next steps
-- Monitor current pipeline run for first successful experiments.
-- Consider adding runtime PATH/gpg sanity check at daemon startup.
-
----
-
-## Session Note (2026-06-16 — daemon restart loop + pre-commit false positives)
-
-1. **Fixed daemon restart loop / `End of file during parsing`** (`post-init.el`)
-   - Removed explicit `(server-start)` call inside the `(when (daemonp) ...)` block.
-   - The `--daemon` flag already starts the server after init files load; calling `server-start` during init saw an unbound `server-process`, stopped/restarted the server, and reloaded init files, racing into `End of file during parsing` on macOS.
-
-2. **Fixed daemon socket path environment** (`clj/ov5/pipeline/daemon.clj`)
-   - Added `"TMPDIR" "/tmp"` to `env-opts` for the spawned Emacs process.
-   - Babashka's process `:env` replaces the parent environment entirely, so `TMPDIR` from `run-pipeline.sh` was lost and `emacsclient` could not find the daemon socket.
-
-3. **Fixed pre-commit hook false positives** (`.git/hooks/pre-commit`)
-   - `top_level_def_after_line_1_p` regex matched `defun` inside strings (e.g., test fixtures with `(defun foo`).
-   - Added `skip_strings_and_comments` helper using `syntax-ppss` to skip string/comment content before scanning for top-level defs.
-   - Pre-commit hook now correctly ignores `defun` inside strings and comments.
-
-4. **Added self-heal semantic audit for `server-start` in daemon init**
-   - New audit: `daemon-server-start` — flags `(server-start)` calls in `post-init.el`, `post-early-init.el`, `init-*.el` that are not guarded by `(when (not (daemonp)) ...)`.
-   - Auto-fixer wraps unguarded `(server-start)` in `(when (not (daemonp)) (server-start))`.
-   - Prevents future daemon restart loops from this root cause.
-
-5. **Added self-heal semantic audit for daemon launcher env**
-   - New audit: `daemon-launcher-env` — flags `clj/ov5/pipeline/daemon.clj` `env-opts` missing `PATH` or `TMPDIR`.
-   - Auto-fixer injects missing env vars into the `env-opts` map.
-   - Prevents future daemon environment issues from this root cause.
-
-6. **Verification**
-   - `check-parens` clean on all modified `.el` files.
-   - `bash -n` clean on `scripts/run-pipeline.sh`.
-   - `test-self-heal-semantic`: 154 tests, 154 results as expected, 0 unexpected.
-   - Pre-commit hook passes on staged files.
-   - Committed as `096175ac6`.
-
----
-
-*Active Mementum v1.1 — duplicate daemon bug fixed, Helium-inspired caching implemented, daemon environment hardened*
+*Active Mementum v1.1 — timeout fix verified, paper-storytelling implemented, ljg-skills studied, Fusion studied, auto-research studied, duplicate daemon bug fixed*
