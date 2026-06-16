@@ -61,5 +61,29 @@ Increased from 180 — all backends are slow from this network."
   (let ((gptel-auto-workflow--headless t))
     (should (gptel-auto-workflow--skip-headless-target-p "lisp/modules/gptel-tools-bash.el"))))
 
+;;; TDD regression: filter-large-files must not call void _if (or _let/_when)
+;;;
+;;; Auto-evolution pipeline once renamed special forms to `_<name>` to
+;;; suppress byte-compile warnings, breaking functions that depend on
+;;; them. This test calls the affected function with valid args and
+;;; checks it returns a list (i.e., does not throw void-function).
+;;;
+;;; If this test fails with "Symbol's function definition is void: _if"
+;;; (or _let, _let*, _when, _cond), the special-form rename bug has
+;;; regressed. Fix: revert the rename in lisp/modules/.
+
+(ert-deftest test-strategic/filter-large-files-no-void-functions ()
+  "filter-large-files must use real `if` (not `_if`).
+
+Regression for the auto-evolution bug where `if` was renamed to `_if`
+in attempt to suppress byte-compile warnings. The result is a
+void-function error at call time."
+  (let ((result (gptel-auto-workflow--filter-large-files
+                 (list "lisp/modules/gptel-auto-workflow-strategic.el")
+                 10000)))
+    (should (listp result))
+    ;; The strategic.el file is real and exists
+    (should (member "lisp/modules/gptel-auto-workflow-strategic.el" result))))
+
 (provide 'test-gptel-auto-workflow-strategic)
 ;;; test-gptel-auto-workflow-strategic.el ends here
