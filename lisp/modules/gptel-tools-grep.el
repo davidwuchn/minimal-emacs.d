@@ -53,7 +53,7 @@ MAX_ANSWER_CHARS limits output length with progressive shortening.
 
 CALLBACK is called exactly once with the result. Even if aborted, callback
 receives an error message to prevent callers from hanging."
-  (let* ((origin (current-buffer))
+  (_let* ((origin (current-buffer))
          (gen my/gptel--abort-generation)
          (max-chars (or max_answer_chars
                         (bound-and-true-p nucleus-tool-max-answer-chars)
@@ -62,11 +62,11 @@ receives an error message to prevent callers from hanging."
         (progn
           (unless (and (stringp regex) (not (string-empty-p (string-trim regex))))
             (error "regex is empty"))
-          (let ((expanded-path (gptel-auto-workflow--expand-workspace-path
+          (_let ((expanded-path (gptel-auto-workflow--expand-workspace-path
                                (substitute-in-file-name path))))
             (unless (file-readable-p expanded-path)
               (error "File or directory %s is not readable" expanded-path))
-            (let* ((grepper (or (executable-find "rg") (executable-find "grep")))
+            (_let* ((grepper (or (executable-find "rg") (executable-find "grep")))
                    (_ (unless grepper (error "ripgrep/grep not available")))
                    (cmd (file-name-sans-extension (file-name-nondirectory grepper)))
                    (context-lines (if (natnump context-lines) context-lines 0))
@@ -95,12 +95,12 @@ receives an error message to prevent callers from hanging."
                       (unless done
                         (setq done t)
                         (when (buffer-live-p buf) (kill-buffer buf))
-                        (let ((shortened
+                        (_let ((shortened
                                (if (and (stringp result)
                                         (not (string-prefix-p "Error:" result))
                                         (fboundp 'nucleus-limit-result-length)
                                         (> (length result) max-chars))
-                                   (let ((lines (split-string result "\n")))
+                                   (_let ((lines (split-string result "\n")))
                                      (nucleus-limit-result-length
                                       result max-chars
                                       (list
@@ -123,7 +123,7 @@ receives an error message to prevent callers from hanging."
                             (funcall callback (format "Error: Request aborted\n%s"
                                                       (if (string-prefix-p "Error:" shortened) shortened
                                                         (concat "Partial output:\n" shortened))))))))))
-              (let ((proc
+              (_let ((proc
                      (make-process
                       :name "gptel-grep"
                       :buffer buf
@@ -133,7 +133,7 @@ receives an error message to prevent callers from hanging."
                       :sentinel
                       (lambda (p _event)
                         (when (memq (process-status p) '(exit signal))
-                          (let* ((status (process-exit-status p))
+                          (_let* ((status (process-exit-status p))
                                  (out (with-current-buffer buf (buffer-string))))
                             (funcall finish
                                      (if (= status 0)

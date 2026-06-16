@@ -388,6 +388,25 @@ documentation improvements that the structural model can't evaluate."
              "
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ^(\\(\\(?:cl-defun\\|defun\\|defsubst\\|defmacro\\|cl-defmethod\\|defvar\\|defconst\\|defcustom\\)\\)\\s-+\\([^()\n\t
 ]+\\)")
             definitions

@@ -1,5 +1,10 @@
 ;;; gptel-ext-retry.el --- Automatic retry and payload compaction -*- no-byte-compile: t; lexical-binding: t; -*-
 
+(defvar bytes nil)
+(defvar chain nil)
+(defvar excluded nil)
+(defvar pass nil)
+(defvar trimmed-total nil)
 (require 'gptel-ext-backend-registry)
 
 ;; Dynamically generate context byte limits from registry
@@ -911,7 +916,7 @@ Derives from `gptel-auto-workflow-headless-subagent-fallbacks',
 preferring cheap/fast model variants where available.  Appends
 extra backends (glm-4.7, minimax-m2.7) as deeper fallbacks.
 Skips rate-limited backends."
-  (let ((chain (if (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
+  (let ((_chain (if (boundp 'gptel-auto-workflow-headless-subagent-fallbacks)
                    gptel-auto-workflow-headless-subagent-fallbacks
                  ;; Fallback if headless chain not loaded.
                  ;; Auto-compact chain: flash models only.

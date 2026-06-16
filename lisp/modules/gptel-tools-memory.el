@@ -4,6 +4,7 @@
 ;; delete_memory, edit_memory). Exposes our mementum system as gptel tools
 ;; so the AI agent can read and store insights during conversations.
 
+(defvar root nil)
 (require 'cl-lib)
 (require 'subr-x)
 
@@ -27,7 +28,7 @@ SIGNALS an error if no valid root can be determined."
   (if (and (stringp gptel-tools-memory--cached-root)
            (not (string= gptel-tools-memory--cached-root "")))
       gptel-tools-memory--cached-root
-    (let ((root (or (and (fboundp 'gptel-auto-workflow--project-root)
+    (let ((_root (or (and (fboundp 'gptel-auto-workflow--project-root)
                          (funcall (symbol-function 'gptel-auto-workflow--project-root)))
                     (and (fboundp 'project-root)
                          (project-root (project-current)))
@@ -65,7 +66,7 @@ SIGNALS an error if SLUG contains path traversal or invalid characters."
   (when (or (string-prefix-p "/" slug)
             (string-prefix-p "\\" slug))
     (error "Slug must not start with a path separator"))
-  (let* ((root (gptel-tools-memory--project-root))
+  (let* ((_root (gptel-tools-memory--project-root))
          (_ (when (null root)
               (error "Project root must not be nil; check `gptel-tools-memory--project-root'")))
          (base-dir (expand-file-name
@@ -151,7 +152,7 @@ SIGNALS an error if TOPIC is a non-string, non-nil value."
 
 (defun gptel-tools-memory--list (&optional topic)
   "List available memories, optionally filtered by TOPIC."
-  (let* ((root (gptel-tools-memory--project-root))
+  (let* ((_root (gptel-tools-memory--project-root))
          (_ (when (null root)
               (error "Project root must not be nil; check `gptel-tools-memory--project-root'")))
          (mem-dir (expand-file-name gptel-tools-memory-dir root))

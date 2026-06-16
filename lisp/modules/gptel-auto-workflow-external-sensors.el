@@ -369,7 +369,8 @@ Returns normalized feedback entry."
 
 (defun gptel-auto-workflow--aggregate-feedback-sentiment (feedback-items)
   "Aggregate sentiment from multiple FEEDBACK-ITEMS.
-Returns plist with :positive, :negative, :neutral counts and :satisfaction-rate."
+Returns plist with :positive, :negative, :neutral counts and
+:satisfaction-rate."
   (let ((positive 0)
         (negative 0)
         (neutral 0))
@@ -416,7 +417,8 @@ Returns plist with :business-value-score."
 
 (defun gptel-auto-workflow--calculate-business-value-score (metrics weights)
   "Calculate weighted business value score from METRICS and WEIGHTS.
-METRICS is a plist with :error-rate-improvement, :satisfaction-improvement, etc.
+METRICS is a plist with :error-rate-improvement, :satisfaction-improvement,
+etc.
 WEIGHTS is a plist with :error-rate-weight, :user-satisfaction-weight, etc.
 Returns weighted score 0.0-1.0."
   (let* ((error-rate-improvement (or (plist-get metrics :error-rate-improvement) 0.0))

@@ -33,6 +33,7 @@
 
 ;;; Code:
 
+(defvar gate-order nil)
 (require 'cl-lib)
 
 (declare-function gptel-auto-workflow--parse-all-results "gptel-auto-workflow-evolution")

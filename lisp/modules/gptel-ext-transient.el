@@ -7,6 +7,7 @@
 
 ;;; Code:
 
+(defvar gptel--crowdsourced-prompts-url nil)
 (require 'cl-lib)
 (require 'seq)
 (require 'gptel)

@@ -46,7 +46,8 @@
     (:efficiency-score . :avg-efficiency)
     (:completion-score . :avg-completion)
     (:constraint-score . :avg-constraints))
-  "Mapping from score types to their corresponding average keys in summary output.")
+  "Mapping from score types to their corresponding average keys in summary
+output.")
 
 ;;; Cancel Support
 
@@ -152,7 +153,8 @@ This consolidates the common plist detection pattern used across the module."
 (defun gptel-benchmark--keyword-plist-p (obj)
   "Check if OBJ is a keyword-keyed plist suitable for plist-get operations.
 Unlike `gptel-benchmark--plist-p', this is more permissive - it accepts
-any proper list with keyword keys at even positions, not requiring even length.
+any proper list with keyword keys at even positions, not requiring even
+length.
 Used to distinguish plists from dotted-pair alists like ((:a . 1) (:b . 2)).
 Returns nil for dotted pairs, alists with symbol keys, or non-list types."
   (and (proper-list-p obj)

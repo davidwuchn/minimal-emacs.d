@@ -1,4 +1,5 @@
 ; -*- lexical-binding: t; -*-
+(defvar stage-ok nil)
 (require 'cl-lib)
 (require 'parseedn)
 (eval-when-compile
@@ -577,11 +578,11 @@ threshold %.2f — aborting experiment %d/%d for %s"
                                     :score-after 0
                                     :error "empty-prompt"))
                       (cl-return-from gptel-auto-experiment-run))
-                (setq executor-callback
-                      (lambda (agent-output)
-                   (gptel-auto-experiment--call-in-context
-                    experiment-buffer experiment-worktree
-                    (lambda ()
+                    (setq executor-callback
+                       (lambda (executor-output)
+                    (gptel-auto-experiment--call-in-context
+                     experiment-buffer experiment-worktree
+                     (lambda ()
                       (if (gptel-auto-experiment--stale-run-p run-id)
                         (unless finished
                           (setq finished t)
@@ -591,11 +592,11 @@ threshold %.2f — aborting experiment %d/%d for %s"
                                    (gptel-auto-experiment--stale-run-result
                                     target experiment-id)))
                       (let ((salvaged-agent-output
-                             (gptel-auto-experiment--timeout-salvage-output
-                              agent-output executor-prompt target experiment-worktree)))
-                        (setq effective-agent-output
-                              (or salvaged-agent-output agent-output)
-                              ;; Capture actual backend AFTER executor completes.
+                               (gptel-auto-experiment--timeout-salvage-output
+                               executor-output executor-prompt target experiment-worktree)))
+                         (setq effective-agent-output
+                               (or salvaged-agent-output executor-output)
+                               ;; Capture actual backend AFTER executor completes.
                               ;; gptel-backend may have been dynamically rebound by
                               ;; cl-progv inside the subagent task override — after
                               ;; the callback runs, the global default (MiniMax) is

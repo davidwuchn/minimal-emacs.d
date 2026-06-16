@@ -170,8 +170,8 @@ Does not affect persisted JSONL files."
 
 (defun gptel-conversion-unit-validate (id &optional status)
   "Mark conversion unit ID as validated.
-Optional STATUS defaults to `\='validated'.
-Can also be `\='rejected'."
+Optional STATUS defaults to `\=\='validated\='.
+Can also be `\=\='rejected\='."
   (let ((unit (gptel-conversion-unit-get id)))
     (when unit
       (setf (gptel-conversion-unit-validation-status unit)

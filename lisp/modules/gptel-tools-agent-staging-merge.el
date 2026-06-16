@@ -840,7 +840,8 @@ commits are preserved."
 
 (defun gptel-auto-workflow--push-staging ()
    "Push staging branch to the shared remote after successful verification.
-Unlike per-experiment optimize branches, staging is a shared integration branch,
+Unlike per-experiment optimize branches, staging is a shared integration
+branch,
 so this push must not rewrite remote history. Use --force-with-lease so that
 concurrent pipeline pushes to staging don't cause non-fast-forward rejection."
   (let ((staging (gptel-auto-workflow--require-staging-branch))

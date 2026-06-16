@@ -197,7 +197,8 @@
     (when (and (not (str/blank? head-before))
                (not= head-before head-after))
       (log/log "Bootstrap: HEAD updated, re-execing with latest code")
-      (let [args (concat ["bb" "-m" "ov5.pipeline"] *command-line-args*)]
+      (let [args (into [] (concat ["bb" "-m" "ov5.pipeline"]
+                                  *command-line-args*))]
         (try
           (apply p/exec {:inherit true} args)
           (catch Exception e

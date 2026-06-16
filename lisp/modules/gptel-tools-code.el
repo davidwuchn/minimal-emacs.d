@@ -387,7 +387,7 @@ MSG is the original error message, FILE-PATH is the file being operated on."
           (checkdoc-with-point
            (goto-char (point-min))
            (while (and (not (eobp)) (< (length issues) 50))
-             (let ((err (checkdoc-next-error)))
+             (let ((_err (checkdoc-next-error)))
                (when err
                  (let ((line (line-number-at-pos)))
                    (push (format "%s:%d: %s"

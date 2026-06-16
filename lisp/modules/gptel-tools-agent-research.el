@@ -430,7 +430,8 @@ CANDIDATE is plist with :topic :count :files.
 Implements λ termination(x): synthesis ≡ AI | approval ≡ human.
 Returns t if synthesis was initiated, nil otherwise.
 
-CALLBACK-RUN-ID freezes the owning workflow identity for stale-callback checks.
+CALLBACK-RUN-ID freezes the owning workflow identity for stale-callback
+checks.
 
 Note: Call `gptel-mementum-ensure-agents' first for batch processing."
   (let* ((topic (plist-get candidate :topic))

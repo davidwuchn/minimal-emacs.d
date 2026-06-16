@@ -1,4 +1,5 @@
 ;;; -*- lexical-binding: t; -*-
+(defvar agent-output nil)
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)

@@ -34,6 +34,8 @@
 
 ;;; Code:
 
+(defvar base-dir nil)
+(defvar expand-file-name nil)
 (require 'cl-lib)
 (require 'json)
 (require 'parseedn)
@@ -274,7 +276,7 @@ concurrently recovering the same checkpoint."
   "Save current checkpoint to disk if dirty.
 Returns non-nil if saved."
   (when (and gptel-checkpoint--dirty gptel-checkpoint--current)
-    (let* ((base-dir (gptel-checkpoint--base-dir))
+    (let* ((_base-dir (gptel-checkpoint--base-dir))
            (active-path (gptel-checkpoint--active-path))
            (tmp-path (concat active-path ".tmp"))
            (timestamp (format-time-string "%Y-%m-%dT%H:%M:%SZ")))
@@ -392,7 +394,7 @@ PROJECT-ROOT defaults to workflow base root.
 METADATA is an optional plist of extra data.
 Returns the new checkpoint-data struct."
   (gptel-checkpoint--save)  ; save any previous checkpoint first
-  (let* ((base-dir (gptel-checkpoint--base-dir))
+  (let* ((_base-dir (gptel-checkpoint--base-dir))
          (proj-root (or project-root
                        (and (fboundp 'gptel-auto-workflow--worktree-base-root)
                             (ignore-errors (gptel-auto-workflow--worktree-base-root)))

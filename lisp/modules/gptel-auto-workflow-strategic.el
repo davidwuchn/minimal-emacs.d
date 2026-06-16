@@ -26,6 +26,9 @@
 
 ;;; Code:
 
+(defvar candidate nil)
+(defvar data-dir nil)
+(defvar proj-root nil)
 (require 'cl-lib)
 (require 'json)
 (require 'parseedn)
@@ -265,7 +268,7 @@ falls back to the user's Emacs configuration directory."
 
 (defun gptel-auto-workflow--discover-targets ()
   "Discover all Elisp files in lisp/modules/ as potential targets."
-  (let* ((proj-root (gptel-auto-workflow--effective-project-root))
+  (let* ((_proj-root (gptel-auto-workflow--effective-project-root))
          (modules-dir (expand-file-name "lisp/modules" proj-root))
          (targets '()))
     (when (file-directory-p modules-dir)
@@ -287,7 +290,7 @@ buffer."
   (let (result)
     (dolist (file files (reverse result))
       (when (and (file-exists-p file)
-                 (let ((line-count (if (executable-find "wc")
+                 (let ((line-count (_if (executable-find "wc")
                                        (with-temp-buffer
                                          (condition-case err (call-process "wc" nil t nil "-l" file))
                                          (string-to-number (string-trim (buffer-string))))
@@ -317,7 +320,7 @@ EDGE CASE: Only caches context when shell commands produce non-empty output.
 BUG FIX: Uses `equal' not `eq' for cache key comparison — `eq' on strings
 compares object identity, causing cache misses when a freshly-computed
 string has the same content but different identity."
-  (let* ((proj-root (gptel-auto-workflow--effective-project-root))
+  (let* ((_proj-root (gptel-auto-workflow--effective-project-root))
          (cache-ttl (* 5 60))
          (now (float-time))
          (cache-entry (and (listp gptel-auto-workflow--context-cache)
@@ -379,7 +382,7 @@ empty context")
 Returns structured findings from codebase analysis, recent experiment results,
 and git history — providing actionable self-evolution data without internet.
 MULTI-LAYER ANALYSIS: code patterns + experiment failures + git trends."
-  (let ((proj-root (gptel-auto-workflow--effective-project-root))
+  (let ((_proj-root (gptel-auto-workflow--effective-project-root))
         (sections nil))
     ;; Layer 1: Codebase anti-pattern scan
     (let ((patterns '(("cl-return-from" . "Missing cl-block wrapper")
@@ -570,9 +573,9 @@ EDGE CASE: Empty plist data returns empty hash table (not nil)."
   "Load meta-learning data for researcher skill.
 Reads topic-performance.json and enriches with ontology category data.
 Returns nil if data not available."
-  (let* ((data-dir (expand-file-name "assistant/skills/researcher-prompt/data" 
-                                     (gptel-auto-workflow--effective-project-root)))
-         (topic-file (expand-file-name "topic-performance.json" data-dir)))
+  (let* ((data-dir (expand-file-name "assistant/skills/researcher-prompt/data"
+                                      (gptel-auto-workflow--effective-project-root)))
+          (topic-file (expand-file-name "topic-performance.json" data-dir)))
     (when (file-exists-p topic-file)
       (condition-case err
           (let* ((data (gptel-auto-workflow--json-read-hash-safe topic-file))
@@ -774,7 +777,7 @@ and timeout-heavy targets for the researcher to investigate."
       (maphash
        (lambda (target counts)
          (when (> (car counts) 10)
-           (let ((keep-rate (if (> (car counts) 0)
+           (let ((keep-rate (_if (> (car counts) 0)
                                 (/ (float (cdr counts)) (car counts)) 0.0)))
              (push (cons target (list :total (car counts) :kept (cdr counts)
                                       :rate keep-rate))
@@ -1094,7 +1097,7 @@ Returns empty string when no trace data is available."
 When `gptel-auto-workflow--current-experiment-axis' is set, tries the
 axis-specific file first (strategy-guidance-K.json), falling back to global.
 Returns plist with beta, own-priority, etc, or nil if not found."
-  (let* ((data-dir (expand-file-name "assistant/skills/researcher-prompt/data"
+  (let* ((_data-dir (expand-file-name "assistant/skills/researcher-prompt/data"
                                      (gptel-auto-workflow--effective-project-root)))
          (axis (and (boundp 'gptel-auto-workflow--current-experiment-axis)
                     gptel-auto-workflow--current-experiment-axis
@@ -1293,12 +1296,12 @@ no tree-sitter)
       (when (fboundp 'gptel-auto-experiment--maybe-failover-main-backend)
         (gptel-auto-experiment--maybe-failover-main-backend))
       ;; Use idempotent callback wrapper to prevent duplicate invocations
-      (let ((digest-callback
+      (let ((_digest-callback
              (let ((called nil))
                (lambda (response _info)
                  (unless called
                    (setq called t)
-                   (let* ((candidate (if (stringp response)
+                   (let* ((candidate (_if (stringp response)
                                          response
                                        (format "%s" response)))
                           (trimmed (string-trim candidate))
@@ -1540,7 +1543,7 @@ META-LEARNING: Loads evolved research skills from mementum."
             (when (and (fboundp 'gptel-auto-workflow--query-experiments)
                        (boundp 'gptel-auto-workflow-targets)
                        gptel-auto-workflow-targets)
-              (let ((sample-query (or (car gptel-auto-workflow-targets) "optimization"))
+              (let ((_sample-query (or (car gptel-auto-workflow-targets) "optimization"))
                     (similar (gptel-auto-workflow--query-experiments
                               (or (car gptel-auto-workflow-targets) "") 5)))
                 (when similar
@@ -1638,7 +1641,7 @@ analyzer-time-budget govern."
                                               gptel-auto-workflow--analyzer-failed-backends)))
                         (push failed-backend
                               gptel-auto-workflow--analyzer-failed-backends))
-                      (if-let* ((candidate
+                      (_if-let* ((candidate
                                  (and (< attempt 2)        ; max 3 total attempts
                                       (null targets)
                                       (or gptel-auto-workflow--analyzer-quota-exhausted
@@ -1680,7 +1683,7 @@ Returns updated targets list."
    ((not (gptel-auto-workflow--nonempty-string-p file)) targets)
    ((not (and (stringp proj-root) (not (string-empty-p proj-root)))) targets)
    (t
-    (let ((abs-path (if (file-name-absolute-p file)
+    (let ((abs-path (_if (file-name-absolute-p file)
                         file
                       (expand-file-name file proj-root)))
           (root-prefix (if (string-suffix-p "/" proj-root)
@@ -1785,7 +1788,7 @@ BEHAVIOR: Only consumes quota slots when targets are actually added."
 (defun gptel-auto-workflow--parse-targets (response)
   "Parse LLM RESPONSE to extract target file list.
 Logs when fallback to regex parsing is used."
-  (let ((proj-root (gptel-auto-workflow--effective-project-root))
+  (let ((_proj-root (gptel-auto-workflow--effective-project-root))
         (max-targets gptel-auto-workflow-max-targets-per-run)
         (normalized-response (gptel-auto-workflow--normalize-response response)))
     (cond
@@ -1803,7 +1806,7 @@ Logs when fallback to regex parsing is used."
                (gptel-auto-workflow--response-snippet normalized-response 120))
       nil)
      (t
-      (let ((json-targets (gptel-auto-workflow--parse-json-targets
+      (let* ((json-targets (gptel-auto-workflow--parse-json-targets
                            normalized-response proj-root max-targets)))
         (if json-targets
             json-targets
@@ -2263,7 +2266,7 @@ BEHAVIOR: Validates filtered result is a list before using it, falls back to
 unfiltered targets."
   (when (functionp callback)
     (gptel-auto-workflow--clear-analyzer-error-state)
-    (let* ((proj-root (gptel-auto-workflow--effective-project-root))
+    (let* ((_proj-root (gptel-auto-workflow--effective-project-root))
            (static-targets
             (gptel-auto-workflow--filter-valid-targets
              gptel-auto-workflow-targets
@@ -2668,7 +2671,7 @@ Uses topic-specific model if available and topic detected."
                      (plist-get topic-model :n-traces)
                    (plist-get controller-config :model-n-traces)) 0))
     (when (and intercept weights)
-      (let* ((has-urls (if (string-match-p "https?://" (or output-text "")) 1 0))
+      (let* ((has-urls (_if (string-match-p "https?://" (or output-text "")) 1 0))
              (has-structure (if (string-match-p "## .*\n" (or output-text "")) 1 0))
              (has-code (if (string-match-p "```" (or output-text "")) 1 0))
              (source-own 1) ;; Assume own-repo for current context
@@ -2718,7 +2721,7 @@ Findings available to analyzer during target selection.
 Findings are cached per-project.
 When COMPLETION-CALLBACK is non-nil, call it after findings are cached."
   (interactive)
-  (let* ((proj-root (gptel-auto-workflow--effective-project-root))
+  (let* ((_proj-root (gptel-auto-workflow--effective-project-root))
          (cache-key (gptel-auto-workflow--normalized-cache-key proj-root))
          (findings-file (gptel-auto-workflow--research-file)))
     ;; τ Wisdom: skip if cache is fresh enough
@@ -2789,7 +2792,7 @@ Returns empty string if the file is missing or malformed."
   "Load cached research findings for current project.
 Returns empty string if no cache exists.
 Findings are cached per-project."
-  (let* ((proj-root (gptel-auto-workflow--effective-project-root))
+  (let* ((_proj-root (gptel-auto-workflow--effective-project-root))
          (cache-key (gptel-auto-workflow--normalized-cache-key proj-root))
          (cached (and (hash-table-p gptel-auto-workflow--research-findings-cache)
                       (gethash cache-key gptel-auto-workflow--research-findings-cache)))
@@ -2859,7 +2862,7 @@ Set `gptel-auto-workflow-research-interval' to control frequency."
 When called interactively, displays formatted status.
 When called programmatically, returns a status plist."
   (interactive)
-  (let* ((proj-root (gptel-auto-workflow--effective-project-root))
+  (let* ((_proj-root (gptel-auto-workflow--effective-project-root))
          (cache-key (gptel-auto-workflow--normalized-cache-key proj-root))
          ;; Ensure nil-safety: initialize cache if needed
          (_ (when (null gptel-auto-workflow--research-findings-cache)

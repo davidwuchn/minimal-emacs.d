@@ -67,7 +67,7 @@ results with `:timed-out t'."
   "Hash table mapping (FILE . FIXER-NAME) → float-time of last attempt.
 Reset at the start of each self-heal cycle.")
 
-(defun gptel-auto-workflow--fixer-rate-limit-p (file fixer-name)
+(defun gptel-auto-workflow--fixer-rate-limit-p (_file fixer-name)
   "Return t if FIXER-NAME was attempted on FILE too recently.
 Returns nil (allow) if rate limiting is disabled or no history exists."
   (when (and gptel-auto-workflow--fix-attempt-history
@@ -78,7 +78,7 @@ Returns nil (allow) if rate limiting is disabled or no history exists."
                       (* 60 gptel-auto-workflow--fixer-rate-limit-minutes))))
       (and last-time (> last-time cutoff)))))
 
-(defun gptel-auto-workflow--fixer-rate-limit-record (file fixer-name)
+(defun gptel-auto-workflow--fixer-rate-limit-record (_file fixer-name)
   "Record that FIXER-NAME was attempted on FILE at the current time."
   (when (and gptel-auto-workflow--fix-attempt-history
              (> gptel-auto-workflow--fixer-rate-limit-minutes 0))
@@ -99,10 +99,10 @@ Returns nil (allow) if rate limiting is disabled or no history exists."
 
 (defvar gptel-auto-workflow--semantic--top-level-cache
   (make-hash-table :test 'equal)
-  "Cache of (file . first-defun-line) -> first-defun-line.
+  "Cache of (_file . first-defun-line) -> first-defun-line.
 Used to determine if a line is before the first defun (i.e., top-level).")
 
-(defun gptel-auto-workflow--semantic--top-level-line-p (file line)
+(defun gptel-auto-workflow--semantic--top-level-line-p (_file line)
   "Return t if LINE in FILE is before the first defun (top-level form).
 Top-level forms (defvar/defcustom) hold persistent state, not temp resources."
   (let* ((key (cons file nil))
@@ -119,7 +119,7 @@ Top-level forms (defvar/defcustom) hold persistent state, not temp resources."
     (or (null first-defun-line)
         (< line first-defun-line))))
 
-(defun gptel-auto-workflow--semantic-audit-record (file line type message)
+(defun gptel-auto-workflow--semantic-audit-record (_file line type message)
   "Record a semantic audit issue at FILE:LINE of TYPE with MESSAGE.
 Top-level risk-node issues are filtered out (they are persistent caches,
 not temporary resources). For other issue types, all issues are recorded."
@@ -131,7 +131,7 @@ not temporary resources). For other issue types, all issues are recorded."
 
 ;; ── Check 1: (let ...) used to bind functions (should be cl-letf) ──
 
-(defun gptel-auto-workflow--audit-let-binding-functions (file)
+(defun gptel-auto-workflow--audit-let-binding-functions (_file)
   "Audit FILE for `(let ((some-fn ...)))` patterns."
   (let ((issues 0))
     (progn
@@ -151,7 +151,7 @@ not temporary resources). For other issue types, all issues are recorded."
 
 ;; ── Check 2: Hardcoded resource limits ──
 
-(defun gptel-auto-workflow--audit-hardcoded-limits (file)
+(defun gptel-auto-workflow--audit-hardcoded-limits (_file)
   "Audit FILE for hardcoded resource limits.
 Skips lines that are comments, docstrings, or string literals."
   (let ((issues 0))
@@ -188,7 +188,7 @@ Skips lines that are comments, docstrings, or string literals."
 
 ;; ── Check 3: score=0 logic ──
 
-(defun gptel-auto-workflow--audit-score-zero-bug (file)
+(defun gptel-auto-workflow--audit-score-zero-bug (_file)
   "Audit FILE for the bug pattern (greater-than score 0) as grader-broken.
 Flags only when the check is part of a wider `if`/`cond` form where
 the alternative branch classifies as \='broken\=' or \='error\='.
@@ -233,7 +233,7 @@ When code calls these without (fboundp '...) or condition-case,
 the function is brittle in test environments where the package
 providing these functions is not loaded.")
 
-(defun gptel-auto-workflow--audit-unguarded-external-calls (file)
+(defun gptel-auto-workflow--audit-unguarded-external-calls (_file)
   "Audit FILE for unguarded calls to external functions.
 Reports calls to gptel-agent-read-file (or other registered external
 functions) that are NOT preceded by a (fboundp '...) check or wrapped
@@ -293,7 +293,7 @@ defun as the call, not just the immediately preceding lines."
 
 ;; ── Check 5: Excessive blank lines ──
 
-(defun gptel-auto-workflow--audit-blank-lines (file)
+(defun gptel-auto-workflow--audit-blank-lines (_file)
   "Audit FILE for excessive blank lines (3+ consecutive).
 Blank-line accumulation is a common artifact of auto-merge/auto-generated
 code. More than 2 consecutive blank lines indicate cruft.
@@ -338,7 +338,7 @@ Returns number of blocks found."
 
 ;; ── Check 6: Unbalanced parens/brackets ──
 
-(defun gptel-auto-workflow--audit-unbalanced-parens (file)
+(defun gptel-auto-workflow--audit-unbalanced-parens (_file)
   "Audit FILE for unbalanced parens/brackets.
 Catches the `End of file during parsing' class of bugs where editing
 introduces a missing or extra close paren. Uses Emacs's built-in
@@ -365,7 +365,7 @@ are also reported."
                 (error-message-string err)))))
     issues))
 
-(defun gptel-auto-workflow--find-paren-balance-line (file)
+(defun gptel-auto-workflow--find-paren-balance-line (_file)
   "Find the line where paren balance goes negative in FILE.
 Returns line number, or nil if file is balanced."
   (cl-block nil
@@ -395,7 +395,7 @@ Returns line number, or nil if file is balanced."
 
 ;; ── Check 7: Missing provide statement ──
 
-(defun gptel-auto-workflow--audit-missing-provide (file)
+(defun gptel-auto-workflow--audit-missing-provide (_file)
   "Audit FILE for missing (provide \='feature) statement.
 Modules without provide cannot be required by other modules.
 Returns 1 if missing, 0 if present."
@@ -409,7 +409,7 @@ Returns 1 if missing, 0 if present."
       (setq has-provide t))
     (unless has-provide
       (setq issues 1)
-      (let ((suggested (file-name-sans-extension
+      (let ((suggested (_file-name-sans-extension
                         (file-name-nondirectory file))))
         (gptel-auto-workflow--semantic-audit-record
          file 1
@@ -455,7 +455,7 @@ symbols in docstrings)."
       (when (buffer-name syntax-copy)
         (kill-buffer syntax-copy)))))
 
-(defun gptel-auto-workflow--audit-void-defvars (file)
+(defun gptel-auto-workflow--audit-void-defvars (_file)
   "Audit FILE for bare (defvar SYMBOL) without an initial value.
 Bare defvars do not make the variable special under lexical-binding,
 causing void-variable errors at runtime.  Returns count of bare defvars."
@@ -515,7 +515,7 @@ causing void-variable errors at runtime.  Returns count of bare defvars."
 (defun gptel-auto-workflow--audit-daemon-hang--impl ()
   "Check if pmf-value-stream daemon is hung on orphaned subprocesses."
   (condition-case nil
-      (let ((uid (user-uid))
+      (let ((_uid (user-uid))
             (daemon-pid nil)
             (sock (format "/tmp/emacs%d/pmf-value-stream" (user-uid))))
         (with-temp-buffer
@@ -537,7 +537,7 @@ causing void-variable errors at runtime.  Returns count of bare defvars."
         1)
     (error 0)))
 
-(cl-defun gptel-auto-workflow--audit-daemon-hang (file)
+(cl-defun gptel-auto-workflow--audit-daemon-hang (_file)
   "Audit for daemon subprocess hang. FILE accepted for dispatch, ignored."
   (when gptel-auto-workflow--daemon-hang-done (cl-return-from gptel-auto-workflow--audit-daemon-hang 0))
   (setq gptel-auto-workflow--daemon-hang-done t)
@@ -548,7 +548,7 @@ causing void-variable errors at runtime.  Returns count of bare defvars."
 (defvar gptel-auto-workflow--orphaned-curl-count nil
   "Enable count throttling? (Currently unused, but defined.)")
 
-(cl-defun gptel-auto-workflow--audit-orphaned-curl-processes (file)
+(cl-defun gptel-auto-workflow--audit-orphaned-curl-processes (_file)
   "Audit for orphaned gptel-curl subprocesses on the system.
 Returns count of orphaned processes.  FILE accepted for dispatch, ignored.
 An orphan is a gptel-curl process running >15 minutes with no FSM entry
@@ -577,7 +577,7 @@ threshold (default 8)."
                orphans alive))
     orphans))
 
-(defun gptel-auto-workflow--fix-orphaned-curl-processes (file)
+(defun gptel-auto-workflow--fix-orphaned-curl-processes (_file)
   "Kill orphaned gptel-curl processes.  FILE accepted for dispatch, ignored.
 Returns number of processes killed."
   (let ((killed 0))
@@ -604,11 +604,11 @@ Returns number of processes killed."
 
 ;; ── Check 15: missing --max-time in curl args ──
 
-(defun gptel-auto-workflow--audit-curl-no-max-time (file)
+(defun gptel-auto-workflow--audit-curl-no-max-time (_file)
   "Audit FILE for curl arg blocks missing --max-time.
 Returns count of blocks without --max-time.
 Only checks files in lisp/modules/ and post-init.el, not upstream gptel."
-  (let ((base (file-name-nondirectory file))
+  (let ((base (_file-name-nondirectory file))
         (issues 0))
     (when (and (stringp base)
                (or (string-suffix-p ".el" base)
@@ -655,7 +655,7 @@ Detects:
 (defvar gptel-auto-workflow--toxic-commit-subject-done nil
   "Set to t after toxic-commit-subject check runs to skip per-file re-check.")
 
-(cl-defun gptel-auto-workflow--audit-toxic-commit-subject (file)
+(cl-defun gptel-auto-workflow--audit-toxic-commit-subject (_file)
   "Scan recent git history for toxic grader-bypass commit subjects.
 Uses git log origin/main..HEAD --since=90 days ago --format=%s once per
 audit cycle so the scan stays bounded as history grows.
@@ -683,7 +683,7 @@ check")))
 (defvar gptel-auto-workflow--score-fabrication-done nil
   "Set to t after score-fabrication check runs to skip per-file re-check.")
 
-(cl-defun gptel-auto-workflow--audit-score-fabrication (file)
+(cl-defun gptel-auto-workflow--audit-score-fabrication (_file)
   "Detect experiment result claims inconsistent with actual benchmark TSV files.
 Scans var/tmp/experiments/*/commits.txt and var/tmp/experiments/*/results.tsv.
 Flags commits whose claimed score-after in subject differs from TSV
@@ -894,7 +894,7 @@ BUFFER must be visiting the file content in `emacs-lisp-mode'."
                   (error nil))))))
         nil))))
 
-(defun gptel-auto-workflow--audit-nil-hash-tables (file)
+(defun gptel-auto-workflow--audit-nil-hash-tables (_file)
   "Audit FILE for hash tables initialized to nil.
 Detects (defvar NAME nil) where NAME is used with hash-table
 functions (gethash, puthash, maphash, clrhash) in the same file.
@@ -1070,7 +1070,7 @@ Returns number of issues fixed."
       (goto-char (point-min))
       ;; Find env-opts form: (merge {"EMACSNATIVELOADPATH" "" ...})
       (while (re-search-forward "(env-opts[ \t\n]+(merge[ \t\n]+{\"EMACSNATIVELOADPATH\"[ \t\n]+\"\"" nil t)
-        (let ((block-start (match-beginning 0))
+        (let ((_block-start (match-beginning 0))
               (map-start (match-end 0)))
           (condition-case nil
               (let* ((map-end (save-excursion
@@ -1321,7 +1321,7 @@ is loaded.  Returns count of issues found."
 
 ;; ── Check 8: condition-case with unbound err ──
 
-(defun gptel-auto-workflow--audit-condition-case-unbound-err (file)
+(defun gptel-auto-workflow--audit-condition-case-unbound-err (_file)
   "Audit FILE for condition-case handlers that reference err without binding.
 Returns count of such bugs."
   (let ((issues 0))
@@ -1385,7 +1385,7 @@ Returns count of such bugs."
 
 ;; ── Check 9: Risk nodes (TSP-inspired) ──
 
-(defun gptel-auto-workflow--audit-risk-nodes (file)
+(defun gptel-auto-workflow--audit-risk-nodes (_file)
   "Audit FILE for risk nodes — critical decision points where failures emerge.
 Inspired by TSP paper (2606.03489v1): identifies fine-grained risk nodes.
 Detects:
@@ -1502,7 +1502,7 @@ Returns count of risk nodes found."
                     user-emacs-directory)
   "JSONL file storing risk-node training pairs.")
 
-(defun gptel-auto-workflow--risk-node-types-in-file (file)
+(defun gptel-auto-workflow--risk-node-types-in-file (_file)
   "Return list of risk node type symbols found in FILE.
 Types: risk-node-resource, risk-node-api.
 Returns nil if file doesn't exist or no risk nodes found."
@@ -1685,7 +1685,7 @@ Returns number of pairs recorded."
   "Format kept (successful) risk-node training pairs for prompt inclusion.
 MAX-PAIRS limits how many to include (default 10).
 Returns a string suitable for insertion into prompts."
-  (let* ((file gptel-auto-workflow--risk-node-training-pairs-file)
+  (let* ((_file gptel-auto-workflow--risk-node-training-pairs-file)
          (max-pairs (or max-pairs 10))
          (pairs nil))
     (when (file-exists-p file)
@@ -1776,7 +1776,7 @@ In all failure cases, log a warning and return nil."
            (insert original-content)))
         nil))))
 
-(defun gptel-auto-workflow--fix-validate-after-write (file original-content)
+(defun gptel-auto-workflow--fix-validate-after-write (_file original-content)
   "Validate FILE after a fix write.
 If `check-parens' fails, restore ORIGINAL-CONTENT.
 Returns t if valid, nil if restored."
@@ -1793,7 +1793,7 @@ Returns t if valid, nil if restored."
            (insert original-content)))
        nil))))
 
-(defun gptel-auto-workflow--fix-unguarded-external-calls (file)
+(defun gptel-auto-workflow--fix-unguarded-external-calls (_file)
   "Fix unguarded calls to external functions in FILE.
 Wraps calls like (fn ...) with (and (fboundp \='fn) (fn ...)).
 Returns number of calls fixed.  Safe: only adds guards, never changes logic."
@@ -1869,7 +1869,7 @@ Returns number of calls fixed.  Safe: only adds guards, never changes logic."
                    fixed (file-name-nondirectory file)))))
     fixed))
 
-(defun gptel-auto-workflow--fix-excessive-blank-lines (file)
+(defun gptel-auto-workflow--fix-excessive-blank-lines (_file)
   "Fix excessive blank lines in FILE: compress 3+ to 1 separator.
 Returns number of blocks fixed.  Safe: only modifies blank lines,
 never touches code structure."
@@ -1931,12 +1931,12 @@ never touches code structure."
                      fixed (file-name-nondirectory file))))))
     fixed))
 
-(defun gptel-auto-workflow--fix-missing-provide (file)
+(defun gptel-auto-workflow--fix-missing-provide (_file)
   "Add (provide \='feature) statement to FILE if missing.
 Feature name is derived from filename (e.g., gptel-foo.el -> gptel-foo).
 Idempotent: returns 0 if file already has provide statement.
 Returns 1 if fixed, 0 if no change needed."
-  (let ((fixed 0)
+  (let* ((fixed 0)
         (feature (file-name-sans-extension (file-name-nondirectory file)))
         (has-provide nil)
         (new-content nil))
@@ -1975,7 +1975,7 @@ Returns 1 if fixed, 0 if no change needed."
                      feature (file-name-nondirectory file))))))
     fixed))
 
-(defun gptel-auto-workflow--fix-unbalanced-parens (file)
+(defun gptel-auto-workflow--fix-unbalanced-parens (_file)
   "Fix unbalanced parens in FILE using Emacs built-in sexp scanning.
 Uses `scan-sexps' to find the exact imbalance position, then deletes
 excess close parens at the error position or inserts missing close
@@ -2041,7 +2041,7 @@ Returns 1 if fixed, 0 if already balanced or unfixable."
     (if made-change 1 0)))
 
 
-(defun gptel-auto-workflow--fix-condition-case-unbound-err (file)
+(defun gptel-auto-workflow--fix-condition-case-unbound-err (_file)
   "Fix condition-case nil handlers that reference err without binding.
 Changes (condition-case nil ... (error ... err ...))
 to (condition-case err ... (error ... err ...)).
@@ -2092,7 +2092,7 @@ removes or changes logic."
 
 ;; ── Fix: nil-initialized hash tables ──
 
-(defun gptel-auto-workflow--fix-nil-hash-tables (file)
+(defun gptel-auto-workflow--fix-nil-hash-tables (_file)
   "Fix nil-initialized hash table defvars in FILE.
 Changes (defvar NAME nil ...) to (defvar NAME (make-hash-table :test 'equal)
 ...)
@@ -2106,7 +2106,7 @@ Returns number of fixes applied."
       (insert-file-contents file)
       (setq original-content (buffer-string))
       (goto-char (point-min))
-      (let ((file-content (buffer-string)))
+      (let ((_file-content (buffer-string)))
         (while (re-search-forward
                 "^(defvar[ \t]+\\([a-z][a-z0-9-]*\\)[ \t]+nil\\b" nil t)
           (let ((var-name (match-string 1)))
@@ -2136,7 +2136,7 @@ Returns number of fixes applied."
                fixed (file-name-nondirectory file)))
     fixed))
 
-(cl-defun gptel-auto-workflow--semantic-audit-file (file &key (_auto-fix nil))
+(cl-defun gptel-auto-workflow--semantic-audit-file (_file &key (_auto-fix nil))
   "Run all semantic audit checks on FILE.
 Wraps each check in condition-case so a buggy check doesn't
 crash the whole audit (e.g., unbalanced-parens check throwing
@@ -2385,13 +2385,13 @@ Matches temp test fixture files (created by
 which uses `make-temp-file \"ov5-test-\"').  Files outside lisp/modules/
 are also direct-safe regardless of name, handled in the route function.")
 
-(defun gptel-auto-workflow--self-heal-route-for-file (file)
+(defun gptel-auto-workflow--self-heal-route-for-file (_file)
   "Return healing route plist for FILE.
 :mode is `direct' for temp/test fixture files or files outside lisp/modules/.
 Everything else defaults to `ov5-worktree' deferred validation.
 The monitor and daemon-repl can use this to decide which file to heal
 and how much validation is required."
-  (let ((name (file-name-nondirectory file)))
+  (let ((name (_file-name-nondirectory file)))
     (if (or (string-match-p gptel-auto-workflow--self-heal-direct-safe-file-pattern name)
             (not (string-match-p "lisp/modules/" file)))
         (list :mode 'direct
@@ -2401,11 +2401,11 @@ and how much validation is required."
             :reason 'default-deferred
             :file file))))
 
-(defun gptel-auto-workflow--self-heal-route-mode (file)
+(defun gptel-auto-workflow--self-heal-route-mode (_file)
   "Return only the self-heal route mode for FILE."
   (plist-get (gptel-auto-workflow--self-heal-route-for-file file) :mode))
 
-(defun gptel-auto-workflow--self-heal-file-dispatch (file)
+(defun gptel-auto-workflow--self-heal-file-dispatch (_file)
   "Heal FILE using the route selected by `self-heal-route-for-file'.
 High-risk repair-engine files are deferred to
 `gptel-auto-workflow--self-heal-file-via-ov5' when available; otherwise no
@@ -2472,7 +2472,7 @@ answer, the heartbeat timer fire, and `with-timeout' have effect."
            (kill-buffer stderr-buf)
            (cons (zerop exit-code) output)))))))
 
-(defun gptel-auto-workflow--self-heal-file-via-ov5 (file)
+(defun gptel-auto-workflow--self-heal-file-via-ov5 (_file)
   "Heal FILE in an OV5 temporary worktree, then promote only if valid.
 This is the safe path for repair-engine files.  It refuses dirty target files
 because a HEAD worktree cannot faithfully represent uncommitted live edits."
@@ -2517,7 +2517,7 @@ because a HEAD worktree cannot faithfully represent uncommitted live edits."
                        (check-parens))
                       (load-file target)
                       ;; ERT gate: run targeted or full unit tests before promotion.
-                      (let* ((fname (file-name-nondirectory file))
+                      (let* ((fname (_file-name-nondirectory file))
                              (selector (cdr (assoc fname gptel-auto-workflow--self-heal-ert-selectors)))
                              (ert-result (gptel-auto-workflow--run-ert-in-worktree worktree selector)))
                         (if (car ert-result)
@@ -2541,7 +2541,7 @@ because a HEAD worktree cannot faithfully represent uncommitted live edits."
                                      :file abs-file
                                      :worktree worktree))))))))))))
 
-(defun gptel-auto-workflow--self-heal-file-has-conflict-p (file)
+(defun gptel-auto-workflow--self-heal-file-has-conflict-p (_file)
   "Return non-nil if FILE contains an unresolved merge conflict marker.
 Matches `<<<<<<<' only at the start of a line (optionally preceded by
 whitespace), which is how git produces conflict markers.  This avoids
@@ -2579,7 +2579,7 @@ Keyword arguments:
                ;; Also scan changed files for excessive blank lines
                ;; (merge conflicts and stash pops can silently introduce them).
                (dolist (line (split-string porcelain "\n" t))
-                 (let ((file (cadr (split-string line))))
+                 (let* ((_file (cadr (split-string line))))
                    (when (and file (string-suffix-p ".el" file))
                      (let ((issues (gptel-auto-workflow--audit-blank-lines file)))
                        (when (> issues 0)
@@ -2602,12 +2602,12 @@ fix before self-heal"
         ;; ── Pre-fix git snapshot (Step 5 safety layer) ──
         (unless (or dry-run no-git-snapshot)
           (dolist (entry (plist-get result :report))
-            (let* ((file (plist-get entry :file))
+            (let* ((_file (plist-get entry :file))
                    (fname (file-name-nondirectory file)))
               (when (not (member file snapshotted-files))
                 ;; Run git from the file's directory so the correct repo is found.
                 (condition-case nil
-                    (let ((default-directory (file-name-directory file)))
+                    (let ((default-directory (_file-name-directory file)))
                       (call-process "git" nil nil nil "add" "--" file)
                       (condition-case nil
                           (call-process "git" nil nil nil "commit" "-m"
@@ -2624,7 +2624,7 @@ fix before self-heal"
         ;; Skip entirely when dry-run is t (Step 4 safety layer)
         (unless dry-run
           (dolist (entry (plist-get result :report))
-            (let* ((file (plist-get entry :file))
+            (let* ((_file (plist-get entry :file))
                    (log (plist-get entry :log))
                    (present-types
                     (delete-dups
@@ -2656,7 +2656,7 @@ fix before self-heal"
         (plist-put result :auto-fixed total-fixed)
         result))))
 
-(defun gptel-auto-workflow--self-heal-file (file)
+(defun gptel-auto-workflow--self-heal-file (_file)
   "Targeted self-heal: audit and fix FILE only.
 Returns plist with :issues, :auto-fixed, :files-checked.
 Logs a conversion unit if fixes were applied and the conversion-unit
@@ -2728,7 +2728,7 @@ This is the entry point for batch-anchored evolution."
 Defaults to `mementum/batch-anchor-report.md' under `user-emacs-directory'.
 Returns plist with :types (list of failure type symbols) and :top-type
 (the most frequent failure type), or nil if no report exists."
-  (let ((file (or report-file
+  (let ((_file (or report-file
                   (expand-file-name "mementum/batch-anchor-report.md"
                                     user-emacs-directory))))
     (when (file-exists-p file)

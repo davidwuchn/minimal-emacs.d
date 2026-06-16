@@ -39,6 +39,10 @@
 
 ;;; Code:
 
+(defvar run-id nil)
+(defvar can-recover nil)
+(defvar resume-targets nil)
+(defvar run-root nil)
 (require 'cl-lib)
 
 ;; Forward declarations
@@ -179,7 +183,7 @@ Contains :recovered :run-id :resume-targets etc.")
 (defun gptel-recovery--validate-worktree-state (&optional run-id)
   "Validate that worktree state is consistent for recovery.
 Returns (cons valid-p reason) where reason explains why invalid."
-  (let* ((run-root (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
+  (let* ((_run-root (or (and (fboundp 'gptel-auto-workflow--worktree-base-root)
                              (ignore-errors (gptel-auto-workflow--worktree-base-root)))
                         (expand-file-name "~/.emacs.d/")))
          (worktree-base (expand-file-name "var/worktrees" run-root)))
@@ -244,7 +248,7 @@ Returns count of cleaned worktrees."
   "Attempt to recover from checkpoint.
 Returns recovery context plist, or nil if no recovery possible."
   (gptel-recovery--ensure-loaded)
-  (let ((checkpoint-data nil)
+  (let ((_checkpoint-data nil)
         (recovery-ctx nil))
     ;; Step 1: Cleanup stale state
     (when gptel-auto-workflow-recovery-cleanup-on-start
@@ -375,7 +379,7 @@ The wrapper:
   6. Stops checkpoint timer on exit
   7. Saves circuit-breaker state on exit"
   (lambda (&rest args)
-    (let ((run-id (or (and (boundp 'gptel-auto-workflow--run-id)
+    (let ((_run-id (or (and (boundp 'gptel-auto-workflow--run-id)
                            gptel-auto-workflow--run-id)
                       (format-time-string "run-%Y%m%d-%H%M%S"))))
       ;; Begin checkpoint

@@ -900,7 +900,8 @@ Learned from validation failures, injected as anti-patterns into prompts.")
 
 (defun gptel-ai-behaviors--record-validation-error (target error-msg)
   "Record a validation ERROR-MSG for TARGET's category.
-Extracts the error pattern (e.g., \\='unbalanced parentheses\\=', \\='cl-return-from\\=')
+Extracts the error pattern (e.g., \\='unbalanced parentheses\\=',
+\\='cl-return-from\\=')
 and increments the counter for (category × pattern)."
   (when (and target (stringp error-msg) (fboundp 'gptel-auto-workflow--categorize-target))
     (let* ((category (gptel-auto-workflow--categorize-target target))

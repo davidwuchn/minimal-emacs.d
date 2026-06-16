@@ -6,6 +6,8 @@
 
 ;;; Code:
 
+(defvar ok nil)
+(defvar warnings nil)
 (require 'cl-lib)
 
 (defvar nucleus--validation-cache nil
@@ -89,7 +91,7 @@ Returns (status . message) where status is:
   "Count validation RESULTS by status.
 
 Returns list (ok warnings errors) counts."
-  (let ((ok 0) (warnings 0) (errors 0))
+  (let ((_ok 0) (_warnings 0) (errors 0))
     (when (proper-list-p results)
       (cl-loop for result in results
                when (and (consp result) (consp (cdr result)))
