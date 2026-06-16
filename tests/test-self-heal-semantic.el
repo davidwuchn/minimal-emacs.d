@@ -204,7 +204,7 @@ legitimate subagent work. Set to nil to disable.\")")
 
 (ert-deftest test-self-heal-semantic/audit-checks-variable-defined ()
   "The audit checks alist is defined with all checks."
-  (should (= (length gptel-auto-workflow--semantic-audit-checks) 17))
+  (should (= (length gptel-auto-workflow--semantic-audit-checks) 18))
   (should (assq 'let-binding-function gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'hardcoded-limit gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'score-zero-bug gptel-auto-workflow--semantic-audit-checks))
@@ -217,7 +217,8 @@ legitimate subagent work. Set to nil to disable.\")")
   (should (assq 'provide-inside-defun gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'void-defvar gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'daemon-hang gptel-auto-workflow--semantic-audit-checks))
-  (should (assq 'nil-hash-table gptel-auto-workflow--semantic-audit-checks)))
+  (should (assq 'nil-hash-table gptel-auto-workflow--semantic-audit-checks))
+  (should (assq 'unbound-declared-function-call gptel-auto-workflow--semantic-audit-checks)))
 
 ;; ── Test 10: Missing provide detection ──
 
@@ -383,6 +384,72 @@ After fix: catches ALL errors via (error ...)."
     (unwind-protect
         (let ((issues (gptel-auto-workflow--audit-unbalanced-parens file)))
           (should (>= issues 1)))
+      (test-self-heal-semantic--cleanup file))))
+
+;; ── Test 7.5: Unguarded declared-function calls from advice/hooks ──
+
+(ert-deftest test-self-heal-semantic/detects-unbound-declared-call-in-advice ()
+  "Detects an advice function calling a declare-function target without guard."
+  (let* ((content
+          "(defun dummy-fn () \"dummy\")
+(declare-function external-helper \"other-file\" (arg))
+(defun my-advice (arg)
+  (external-helper arg))
+(advice-add 'dummy-fn :after #'my-advice)
+")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-unbound-declared-function-calls file)))
+          (should (>= issues 1)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/skips-guarded-declared-call-in-advice ()
+  "Skips calls already wrapped with (fboundp 'fn)."
+  (let* ((content
+          "(defun dummy-fn () \"dummy\")
+(declare-function external-helper \"other-file\" (arg))
+(defun my-advice (arg)
+  (when (fboundp 'external-helper)
+    (external-helper arg)))
+(advice-add 'dummy-fn :after #'my-advice)
+")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-unbound-declared-function-calls file)))
+          (should (= issues 0)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/skips-declared-call-in-normal-function ()
+  "Only entrypoints registered as advice/hooks are checked."
+  (let* ((content
+          "(declare-function external-helper \"other-file\" (arg))
+(defun regular-fn (arg)
+  (external-helper arg))
+")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-unbound-declared-function-calls file)))
+          (should (= issues 0)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/fix-wraps-unbound-declared-call ()
+  "Fixer wraps the unguarded call with (and (fboundp 'fn) ...)."
+  (let* ((content
+          "(defun dummy-fn () \"dummy\")
+(declare-function external-helper \"other-file\" (arg))
+(defun my-advice (arg)
+  (external-helper arg))
+(advice-add 'dummy-fn :after #'my-advice)
+")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (progn
+          (let ((fixed (gptel-auto-workflow--fix-unbound-declared-function-calls file)))
+            (should (= fixed 1)))
+          (let ((result (with-temp-buffer
+                          (insert-file-contents file)
+                          (buffer-string))))
+            (should (string-match-p "(and (fboundp 'external-helper)" result))))
       (test-self-heal-semantic--cleanup file))))
 
 ;; ── Test 8: Excessive blank line detection ──
@@ -569,7 +636,8 @@ causing void-function errors when gptel-agent was not loaded."
   (should (assq 'unguarded-external-call gptel-auto-workflow--semantic-fixer-alist))
   (should (assq 'missing-provide gptel-auto-workflow--semantic-fixer-alist))
   (should (assq 'unbalanced-parens gptel-auto-workflow--semantic-fixer-alist))
-  (should (assq 'provide-inside-defun gptel-auto-workflow--semantic-fixer-alist)))
+  (should (assq 'provide-inside-defun gptel-auto-workflow--semantic-fixer-alist))
+  (should (assq 'unbound-declared-function-call gptel-auto-workflow--semantic-fixer-alist)))
 
 (ert-deftest test-self-heal-semantic/routes-defaults-to-ov5-worktree ()
   "Files in lisp/modules/ default to ov5-worktree deferred validation."
@@ -2082,15 +2150,17 @@ an infinite loop caused by syntax-propertize interacting with
       (ignore-errors (delete-file file)))))
 
 (ert-deftest test-self-heal-semantic/audit-checks-includes-new-checks ()
-  "New checks 14 and 15 are registered in the audit-checks alist."
+  "New checks 14, 15, and 18 are registered in the audit-checks alist."
   (should (assq 'orphaned-curl-process gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'curl-no-max-time gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'toxic-commit-subject gptel-auto-workflow--semantic-audit-checks))
-  (should (assq 'score-fabrication gptel-auto-workflow--semantic-audit-checks)))
+  (should (assq 'score-fabrication gptel-auto-workflow--semantic-audit-checks))
+  (should (assq 'unbound-declared-function-call gptel-auto-workflow--semantic-audit-checks)))
 
 (ert-deftest test-self-heal-semantic/fixer-includes-orphaned-curl ()
   "Orphaned-curl fixer is registered in the fixer alist."
-  (should (assq 'orphaned-curl-process gptel-auto-workflow--semantic-fixer-alist)))
+  (should (assq 'orphaned-curl-process gptel-auto-workflow--semantic-fixer-alist))
+  (should (assq 'unbound-declared-function-call gptel-auto-workflow--semantic-fixer-alist)))
 
 ;; ── Check 15 hardening: curl-no-max-time false positives ──
 

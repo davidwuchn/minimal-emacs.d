@@ -933,6 +933,174 @@ Returns count of issues found."
                     var-name))))))))
       issues)))
 
+
+;; ── Check 18: Unbound declared-function calls from advice/hooks ──
+
+
+(defun gptel-auto-workflow--extract-function-symbol (arg)
+  "Extract a function symbol from ARG which may be SYM, (function SYM), or (quote
+SYM)."
+  (cond ((symbolp arg) arg)
+        ((and (listp arg) (memq (car arg) '(function quote))
+              (symbolp (cadr arg)))
+         (cadr arg))
+        (t nil)))
+
+(defun gptel-auto-workflow--collect-declared-functions (file)
+  "Return alist of (SYMBOL . SOURCE-FILE-STRING) from FILE's declare-function
+forms."
+  (let ((result nil))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (emacs-lisp-mode)
+      (goto-char (point-min))
+      (while (re-search-forward "^(declare-function\\_>" nil t)
+        (let ((form-start (match-beginning 0)))
+          (condition-case nil
+              (let ((form (save-excursion
+                            (goto-char form-start)
+                            (read (current-buffer)))))
+                (when (and (listp form)
+                           (eq (car form) 'declare-function)
+                           (>= (length form) 3))
+                  (let ((fn (nth 1 form))
+                        (src (nth 2 form)))
+                    (when (and (symbolp fn) (stringp src))
+                      (push (cons fn src) result)))))
+            (error nil)))))
+    (nreverse result)))
+
+(defun gptel-auto-workflow--collect-early-entrypoint-functions (file)
+  "Return list of function symbols registered via advice-add or add-hook in FILE.
+Only captures named functions (#\='name or \='name), not lambdas."
+  (let ((result nil))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (emacs-lisp-mode)
+      (goto-char (point-min))
+      ;; advice-add: (advice-add 'sym :where FUNCTION)
+      (while (re-search-forward "^(advice-add\\_>" nil t)
+        (condition-case nil
+            (let ((form (save-excursion
+                          (goto-char (match-beginning 0))
+                          (read (current-buffer)))))
+              (when (and (listp form) (>= (length form) 4))
+                (let ((fn-sym
+                       (gptel-auto-workflow--extract-function-symbol
+                        (nth 3 form))))
+                  (when fn-sym
+                    (push fn-sym result)))))
+          (error nil)))
+      (goto-char (point-min))
+      ;; add-hook: (add-hook 'hook FUNCTION)
+      (while (re-search-forward "^(add-hook\\_>" nil t)
+        (condition-case nil
+            (let ((form (save-excursion
+                          (goto-char (match-beginning 0))
+                          (read (current-buffer)))))
+              (when (and (listp form) (>= (length form) 3))
+                (let ((fn-sym
+                       (gptel-auto-workflow--extract-function-symbol
+                        (nth 2 form))))
+                  (when fn-sym
+                    (push fn-sym result)))))
+          (error nil))))
+    (delete-dups result)))
+
+(defun gptel-auto-workflow--call-has-fboundp-guard-p (fn call-pos)
+  "Return t if the call to FN at CALL-POS is inside an fboundp guard.
+Walks up enclosing lists and accepts (when/if/unless/and/or (fboundp \\='FN)
+...)
+forms."
+  (let ((guarded nil)
+        (pos call-pos))
+    (while (and pos (not guarded))
+      (let ((parent-start
+              (save-excursion
+                (nth 1 (syntax-ppss pos)))))
+        (when parent-start
+          (save-excursion
+            (goto-char parent-start)
+            (let ((head (condition-case nil
+                            (read (current-buffer))
+                          (error nil))))
+              (when (and (consp head)
+                         (memq (car head) '(when if unless and or))
+                         (>= (length head) 2))
+                (let ((condition (nth 1 head)))
+                  (when (and (consp condition)
+                             (eq (car condition) 'fboundp)
+                             (>= (length condition) 2)
+                             (equal (cadr condition)
+                                    (list 'quote fn)))
+                    (setq guarded t)))))))
+        (setq pos parent-start)))
+    guarded))
+
+(defun gptel-auto-workflow--audit-unbound-declared-function-calls (file)
+  "Audit FILE for unguarded calls to declared external functions
+from advice/hook entrypoints.
+Many runtime void-function crashes happen because an advice or hook
+entrypoint fires before the module providing a declared-function helper
+is loaded.  Returns count of issues found."
+  (let ((issues 0)
+        (declared (gptel-auto-workflow--collect-declared-functions file))
+        (entrypoints (gptel-auto-workflow--collect-early-entrypoint-functions file)))
+    (when (and declared entrypoints)
+      (with-temp-buffer
+        (insert-file-contents file)
+        (emacs-lisp-mode)
+        (dolist (entry-fn entrypoints)
+          (let ((defun-start
+                 (save-excursion
+                   (goto-char (point-min))
+                   (when (re-search-forward
+                          (format "^(\\(cl-\\)?defun[ \t]+%s\\_>"
+                                  (regexp-quote (symbol-name entry-fn)))
+                          nil t)
+                     (match-beginning 0)))))
+            (when defun-start
+              (let ((defun-end (condition-case nil
+                                   (save-excursion
+                                     (goto-char defun-start)
+                                     (forward-sexp 1)
+                                     (point))
+                                 (error nil))))
+                (when defun-end
+                  (dolist (decl declared)
+                    (let ((fn (car decl))
+                          (fn-name (symbol-name (car decl))))
+                      (goto-char (1+ defun-start))
+                      (let ((iter 0))
+                        (while (and (< iter 1000)
+                                    (re-search-forward
+                                     (format "\\_<%s\\_>"
+                                             (regexp-quote fn-name))
+                                     defun-end t))
+                          (cl-incf iter)
+                          (let ((call-start (match-beginning 0)))
+                            (when (eq (char-before call-start) ?\()
+                              (let ((form-start (1- call-start)))
+                                (unless (or
+                                         ;; inside string or comment
+                                         (save-excursion
+                                           (let ((state
+                                                  (save-excursion
+                                                    (syntax-ppss form-start))))
+                                             (or (nth 3 state)
+                                                 (nth 4 state))))
+                                         ;; already guarded
+                                         (gptel-auto-workflow--call-has-fboundp-guard-p
+                                          fn form-start))
+                                  (cl-incf issues)
+                                  (gptel-auto-workflow--semantic-audit-record
+                                   file
+                                   (line-number-at-pos call-start)
+                                   'unbound-declared-function-call
+                                   (format
+                                    "Advice/hook function %s calls declared %s without (fboundp '%s) guard"
+                                    entry-fn fn fn)))))))))))))))))
+    issues))
 (defvar gptel-auto-workflow--semantic-audit-checks
   '((let-binding-function . gptel-auto-workflow--audit-let-binding-functions)
     (hardcoded-limit . gptel-auto-workflow--audit-hardcoded-limits)
@@ -950,7 +1118,8 @@ Returns count of issues found."
     (orphaned-curl-process . gptel-auto-workflow--audit-orphaned-curl-processes)
     (curl-no-max-time . gptel-auto-workflow--audit-curl-no-max-time)
     (toxic-commit-subject . gptel-auto-workflow--audit-toxic-commit-subject)
-    (score-fabrication . gptel-auto-workflow--audit-score-fabrication))
+    (score-fabrication . gptel-auto-workflow--audit-score-fabrication)
+    (unbound-declared-function-call . gptel-auto-workflow--audit-unbound-declared-function-calls))
   "Alist of audit check name (symbol) to audit function.")
 
 ;; ── Check 8: condition-case with unbound err ──
@@ -1908,6 +2077,80 @@ instead of fixing each failure individually."
         (insert "\n")))
     (buffer-string)))
 
+
+(defun gptel-auto-workflow--fix-unbound-declared-function-calls (file)
+  "Wrap unguarded declared-function calls from advice/hook functions in FILE.
+Uses and so the call returns nil when the function is unbound, which
+is safe for side-effect-only helpers.  Returns number of calls fixed."
+  (let ((fixed 0)
+        (declared (gptel-auto-workflow--collect-declared-functions file))
+        (entrypoints (gptel-auto-workflow--collect-early-entrypoint-functions file)))
+    (when (and declared entrypoints)
+      (with-temp-buffer
+        (insert-file-contents file)
+        (let ((original-content (buffer-string))
+              (fixes nil))
+          (emacs-lisp-mode)
+          (dolist (entry-fn entrypoints)
+            (let ((defun-start
+                   (save-excursion
+                     (goto-char (point-min))
+                     (when (re-search-forward
+                            (format "^(\\(cl-\\)?defun[ \t]+%s\\_>"
+                                    (regexp-quote (symbol-name entry-fn)))
+                            nil t)
+                       (match-beginning 0)))))
+              (when defun-start
+                (let ((defun-end (condition-case nil
+                                     (save-excursion
+                                       (goto-char defun-start)
+                                       (forward-sexp 1)
+                                       (point))
+                                   (error nil))))
+                  (when defun-end
+                    (dolist (decl declared)
+                      (let ((fn (car decl))
+                            (fn-name (symbol-name (car decl))))
+                        (goto-char (1+ defun-start))
+                        (let ((iter 0))
+                          (while (and (< iter 1000)
+                                      (re-search-forward
+                                       (format "\\_<%s\\_>"
+                                               (regexp-quote fn-name))
+                                       defun-end t))
+                            (cl-incf iter)
+                            (let ((call-start (match-beginning 0)))
+                              (when (eq (char-before call-start) ?\()
+                                (let ((form-start (1- call-start)))
+                                  (unless (or
+                                           ;; inside string or comment
+                                           (save-excursion
+                                             (let ((state
+                                                    (save-excursion
+                                                      (syntax-ppss form-start))))
+                                               (or (nth 3 state)
+                                                   (nth 4 state))))
+                                           ;; already guarded
+                                           (gptel-auto-workflow--call-has-fboundp-guard-p
+                                            fn form-start))
+                                    (push (cons form-start fn) fixes))))))))))))))
+          ;; Apply fixes from bottom to top
+          (dolist (fix (sort fixes (lambda (a b) (> (car a) (car b)))))
+            (let ((form-start (car fix))
+                  (fn (cdr fix)))
+              (goto-char form-start)
+              (insert (format "(and (fboundp '%s) " (symbol-name fn)))
+              (forward-sexp 1)
+              (insert ")")
+              (cl-incf fixed)))
+          (when (> fixed 0)
+            (gptel-auto-workflow--fix-validate-and-write
+             (current-buffer) file original-content
+             :no-load-check t :no-subprocess-check t)))))
+    (when (> fixed 0)
+      (message "[self-heal-semantic] Added fboundp guards to %d declared call(s) in %s"
+               fixed (file-name-nondirectory file)))
+    fixed))
 ;; ── Integration with existing self-heal pipeline ──
 
 (defvar gptel-auto-workflow--semantic-fixer-alist
@@ -1919,7 +2162,8 @@ instead of fixing each failure individually."
     (provide-inside-defun . gptel-auto-workflow--fix-provide-inside-defun)
     (void-defvar . gptel-auto-workflow--fix-void-defvars)
     (nil-hash-table . gptel-auto-workflow--fix-nil-hash-tables)
-    (orphaned-curl-process . gptel-auto-workflow--fix-orphaned-curl-processes))
+    (orphaned-curl-process . gptel-auto-workflow--fix-orphaned-curl-processes)
+    (unbound-declared-function-call . gptel-auto-workflow--fix-unbound-declared-function-calls))
   "Alist mapping audit issue type (symbol) to its auto-fixer function.
 Adding a new auto-fixer is now a one-line change to this alist.
 Each fixer must take FILE as argument and return fix count (0 = no-op).")

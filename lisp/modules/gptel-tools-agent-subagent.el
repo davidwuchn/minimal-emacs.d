@@ -64,9 +64,9 @@ consumed by evolution cycle.")
 (defun my/gptel--agent-task-note-write-region-activity (_start _end filename &rest _args)
   "Treat direct worktree writes to FILENAME as executor activity."
   (when-let* ((path (and (stringp filename)
-                         (ignore-errors (expand-file-name filename))))
-              ((fboundp 'my/gptel--agent-task-note-context-activity)))
-    (my/gptel--agent-task-note-context-activity path nil)))
+                         (ignore-errors (expand-file-name filename)))))
+    (when (fboundp 'my/gptel--agent-task-note-context-activity)
+      (my/gptel--agent-task-note-context-activity path nil))))
 
 (while (advice-member-p #'my/gptel--agent-task-note-write-region-activity 'write-region)
   (advice-remove 'write-region #'my/gptel--agent-task-note-write-region-activity))

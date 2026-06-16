@@ -349,7 +349,9 @@ auto-accepts without prompting.  Otherwise shows the standard confirmation
 with an additional `p' option to permit and remember a tool."
   ;; Fast path: if all tools are already permitted, auto-accept
   (if (and (bound-and-true-p my/gptel-permitted-tools)
-           (cl-every (lambda (tc) (my/gptel-tool-permitted-p (my/gptel--tool-spec-name (car tc))))
+           (cl-every (lambda (tc)
+                       (and (fboundp 'my/gptel-tool-permitted-p)
+                            (my/gptel-tool-permitted-p (my/gptel--tool-spec-name (car tc)))))
                      tool-calls))
       (gptel--accept-tool-calls tool-calls nil)
     ;; Slow path: show confirmation UI
