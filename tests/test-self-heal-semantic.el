@@ -218,7 +218,7 @@ legitimate subagent work. Set to nil to disable.\")")
 
 (ert-deftest test-self-heal-semantic/audit-checks-variable-defined ()
   "The audit checks alist is defined with all checks."
-  (should (= (length gptel-auto-workflow--semantic-audit-checks) 20))
+  (should (= (length gptel-auto-workflow--semantic-audit-checks) 21))
   (should (assq 'let-binding-function gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'hardcoded-limit gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'score-zero-bug gptel-auto-workflow--semantic-audit-checks))
@@ -234,7 +234,8 @@ legitimate subagent work. Set to nil to disable.\")")
   (should (assq 'nil-hash-table gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'unbound-declared-function-call gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'daemon-server-start gptel-auto-workflow--semantic-audit-checks))
-  (should (assq 'daemon-launcher-env gptel-auto-workflow--semantic-audit-checks)))
+  (should (assq 'daemon-launcher-env gptel-auto-workflow--semantic-audit-checks))
+  (should (assq 'subagent-timeout gptel-auto-workflow--semantic-audit-checks)))
 
 ;; ── Test 10: Missing provide detection ──
 
@@ -566,6 +567,31 @@ After fix: catches ALL errors via (error ...)."
             (make-directory (file-name-directory target) t)
             (rename-file file target t)
             (let ((issues (gptel-auto-workflow--audit-daemon-launcher-env target)))
+              (should (>= issues 1)))
+            (setq file target)))
+      (when (and file (file-exists-p file))
+        (delete-file file)))))
+
+(ert-deftest test-self-heal-semantic/subagent-timeout-in-checks ()
+  "New audit check is registered in `gptel-auto-workflow--semantic-audit-checks'."
+  (should (assq 'subagent-timeout gptel-auto-workflow--semantic-audit-checks)))
+
+(ert-deftest test-self-heal-semantic/subagent-timeout-in-fixers ()
+  "New fixer is registered in `gptel-auto-workflow--semantic-fixer-alist'."
+  (should (assq 'subagent-timeout gptel-auto-workflow--semantic-fixer-alist)))
+
+(ert-deftest test-self-heal-semantic/subagent-timeout-detects-missing-slow-start ()
+  "Audit flags subagent file without slow-start bonus."
+  (let* ((content "(defun my/gptel--run-agent-tool-with-timeout (timeout callback ...)\n  (let ((adjusted-timeout timeout))\n    (setq my/gptel-agent-task-timeout adjusted-timeout)\n    ...))\n")
+         (file (concat (make-temp-file "ov5-test-subagent-") ".el")))
+    (unwind-protect
+        (progn
+          (with-temp-file file (insert content))
+          (let ((target (expand-file-name "lisp/modules/gptel-tools-agent-subagent.el"
+                                          (file-name-directory file))))
+            (make-directory (file-name-directory target) t)
+            (rename-file file target t)
+            (let ((issues (gptel-auto-workflow--audit-subagent-timeout target)))
               (should (>= issues 1)))
             (setq file target)))
       (when (and file (file-exists-p file))

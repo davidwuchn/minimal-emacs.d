@@ -1095,6 +1095,42 @@ Returns number of issues fixed."
                fixed (file-name-nondirectory file)))
     fixed))
 
+;; ── Check 21: Subagent timeout too aggressive for slow-start agents ──
+
+(defun gptel-auto-workflow--audit-subagent-timeout (file)
+  "Audit FILE for subagent timeout configurations that lack slow-start bonus.
+First-dispatch analyzer/researcher/executor runs must load modules and warm
+large caches; a fixed 300s idle timeout causes spurious timeouts.  Returns
+count of issues found."
+  (let ((issues 0))
+    (when (string-match-p "gptel-tools-agent-subagent\\.el$" file)
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        ;; Look for run-agent-tool-with-timeout that binds my/gptel-agent-task-timeout
+        ;; without consulting a slow-start bonus.
+        (when (and (re-search-forward "(defun my/gptel--run-agent-tool-with-timeout" nil t)
+                   (not (re-search-forward "slow-start" (save-excursion
+                                                           (end-of-defun)
+                                                           (point))
+                                           t)))
+          (setq issues 1)
+          (gptel-auto-workflow--semantic-audit-record
+           file (line-number-at-pos (match-beginning 0))
+           'subagent-timeout
+           "Subagent timeout wrapper lacks slow-start bonus — analyzer/executor first dispatches may time out during module/cache warmup"))))
+    issues))
+
+(defun gptel-auto-workflow--fix-subagent-timeout (file)
+  "Stub fixer for subagent-timeout audit.
+The actual fix requires adding a slow-start timeout bonus to
+`my/gptel--run-agent-tool-with-timeout' in `gptel-tools-agent-subagent.el'.
+This fixer records a reminder and returns 0 so the issue is surfaced but not
+auto-patched (the patch is too structural for a regex rewrite)."
+  (message "[self-heal-semantic] Subagent timeout audit: ensure %s applies slow-start bonus to analyzer/researcher/executor"
+           (file-name-nondirectory file))
+  0)
+
 (defun gptel-auto-workflow--extract-function-symbol (arg)
   "Extract a function symbol from ARG which may be SYM, (function SYM), or (quote
 SYM)."
@@ -1279,7 +1315,8 @@ is loaded.  Returns count of issues found."
     (score-fabrication . gptel-auto-workflow--audit-score-fabrication)
      (unbound-declared-function-call . gptel-auto-workflow--audit-unbound-declared-function-calls)
      (daemon-server-start . gptel-auto-workflow--audit-daemon-server-start)
-     (daemon-launcher-env . gptel-auto-workflow--audit-daemon-launcher-env))
+     (daemon-launcher-env . gptel-auto-workflow--audit-daemon-launcher-env)
+     (subagent-timeout . gptel-auto-workflow--audit-subagent-timeout))
   "Alist of audit check name (symbol) to audit function.")
 
 ;; ── Check 8: condition-case with unbound err ──
@@ -2325,7 +2362,8 @@ is safe for side-effect-only helpers.  Returns number of calls fixed."
     (orphaned-curl-process . gptel-auto-workflow--fix-orphaned-curl-processes)
      (unbound-declared-function-call . gptel-auto-workflow--fix-unbound-declared-function-calls)
      (daemon-server-start . gptel-auto-workflow--fix-daemon-server-start)
-     (daemon-launcher-env . gptel-auto-workflow--fix-daemon-launcher-env))
+     (daemon-launcher-env . gptel-auto-workflow--fix-daemon-launcher-env)
+     (subagent-timeout . gptel-auto-workflow--fix-subagent-timeout))
   "Alist mapping audit issue type (symbol) to its auto-fixer function.
 Adding a new auto-fixer is now a one-line change to this alist.
 Each fixer must take FILE as argument and return fix count (0 = no-op).")

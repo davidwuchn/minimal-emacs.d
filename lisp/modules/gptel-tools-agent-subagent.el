@@ -61,6 +61,23 @@ consumed by evolution cycle.")
 (declare-function gptel-auto-workflow--experiment-suffix "gptel-tools-agent-main")
 (declare-function gptel-auto-workflow--shared-remote "gptel-tools-agent-worktree")
 
+(defvar gptel-auto-workflow--subagent-dispatch-counts
+  (make-hash-table :test 'equal)
+  "Hash table mapping (run-id . agent-name) → dispatch count.
+Used to detect the first dispatch of a given agent in a run so we can
+apply a slow-start timeout bonus.")
+
+(defun gptel-auto-workflow--agent-slow-start-p (agent-name)
+  "Return t if this is the first dispatch of AGENT-NAME in the current run.
+Updates the dispatch-count table as a side effect."
+  (let* ((run-id (and (boundp 'gptel-auto-workflow--run-id)
+                      (stringp gptel-auto-workflow--run-id)
+                      gptel-auto-workflow--run-id))
+         (key (cons (or run-id "unknown") agent-name))
+         (count (gethash key gptel-auto-workflow--subagent-dispatch-counts 0)))
+    (puthash key (1+ count) gptel-auto-workflow--subagent-dispatch-counts)
+    (= count 0)))
+
 (defun my/gptel--agent-task-note-write-region-activity (_start _end filename &rest _args)
   "Treat direct worktree writes to FILENAME as executor activity."
   (when-let* ((path (and (stringp filename)
@@ -691,16 +708,31 @@ Logs subagent dispatch to ontology for self-evolution tracking."
             timeout))
          ;; Context sandbox: per-agent-type result limits reduce token cost.
          ;; Hot path (executor/grader) gets more context; analysis gets less.
-         (my/gptel-subagent-result-limit
-          (pcase agent-name
-            ("executor"   5000)     ; need edit output for downstream grading
-            ("grader"     8000)     ; need full score + reasoning
-            ("analyzer"   2000)     ; just target list, not analysis
-            ("researcher" 2000)     ; just findings, not search results
-            ("reviewer"   3000)     ; review comments
-            ("comparator" 2000)     ; comparison result
-            (_           4000)))    ; default conservative
-         ;; Update workflow progress on every subagent dispatch so the watchdog
+          (my/gptel-subagent-result-limit
+           (pcase agent-name
+             ("executor"   5000)     ; need edit output for downstream grading
+             ("grader"     8000)     ; need full score + reasoning
+             ("analyzer"   4000)     ; target list + brief reasoning (was 2000)
+             ("researcher" 4000)     ; findings may be verbose (was 2000)
+             ("reviewer"   3000)     ; review comments
+             ("comparator" 2000)     ; comparison result
+             (_           4000)))    ; default conservative
+          ;; Slow-start compensation: first dispatch of a given agent in a run
+          ;; is more likely to time out because the subagent must load modules,
+          ;; warm caches, and (for research) hydrate large findings.  Give the
+          ;; first analyzer/executor/researcher a longer leash without permanently
+          ;; inflating budgets.
+          (slow-start-bonus
+           (and (boundp 'gptel-auto-workflow--run-id)
+                gptel-auto-workflow--run-id
+                (fboundp 'gptel-auto-workflow--agent-slow-start-p)
+                (gptel-auto-workflow--agent-slow-start-p agent-name)
+                (pcase agent-name
+                  ((or "analyzer" "researcher") 180)
+                  ("executor" 120)
+                  (_ 0))))
+          (effective-timeout (+ adjusted-timeout (or slow-start-bonus 0)))
+          ;; Update workflow progress on every subagent dispatch so the watchdog
          ;; sees activity even during long-running experiments (which use direct
          ;; gptel-request, not subagent tasks, so active-tasks remains 0).
          (progress-time (and (fboundp 'gptel-auto-workflow--update-progress)
@@ -722,12 +754,12 @@ Logs subagent dispatch to ontology for self-evolution tracking."
                      log)))))
     (unwind-protect
         (progn
-          (setq my/gptel-agent-task-timeout timeout)
+          (setq my/gptel-agent-task-timeout effective-timeout)
           (setq my/gptel-agent-task-hard-timeout
                 (and (equal agent-name "executor")
-                     (integerp timeout) (> timeout 0)
+                     (integerp effective-timeout) (> effective-timeout 0)
                      (integerp grace) (> grace 0)
-                     (+ timeout grace)))
+                     (+ effective-timeout grace)))
           (my/gptel--run-agent-tool callback agent-name description prompt
                                     files include-history include-diff))
       (setq my/gptel-agent-task-timeout previous-timeout
