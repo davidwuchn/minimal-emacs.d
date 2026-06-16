@@ -6,8 +6,8 @@
 >
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
-> **Status**: ⚒ ⊘ **DAEMON ENVIRONMENT AND SELF-HEAL COVERAGE HARDENED** — PATH passed to spawned daemons, gpg/authinfo now loads; added semantic audits for `server-start` in daemon init and daemon launcher env vars.
-> **Latest**: Pushed `096175ac6` — self-heal audit + fix for explicit `server-start` in daemon init files.
+> **Status**: ⚒ ⊘ **PRE-COMMIT HOOK INFINITE LOOP FIXED** — `save-match-data` around `looking-at` in section 4b (top-level def check). TDD test that timed out at 30s now passes in <1s.
+> **Latest**: Pushed `b07c928a3` — `💡` memory: `save-excursion` does NOT preserve match-data.
 
 ---
 
