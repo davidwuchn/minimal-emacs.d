@@ -93,6 +93,21 @@
    - `mementum/knowledge/ljg-skills-vs-ov5-gaps.md` — full gap analysis
    - `mementum/memories/insight-ljg-skills-cognitive-frameworks.md` — key insights
 
+6. **Implementation started**
+   - Created `assistant/skills/paper-storytelling/SKILL.md` — 7-beat narrative spine for research papers
+   - Created `assistant/skills/research-paper-flow/SKILL.md` — workflow chain (researcher → paper-storytelling)
+   - Updated `assistant/skills/researcher-prompt/SKILL.md` — added paper analysis section with detection triggers
+   - Committed as `4ac0541ac`
+   - Skills auto-loaded by skill-graph from assistant/skills/
+   - Researcher detects paper URLs (arxiv, PDF, conference links) and invokes paper-storytelling
+   - Stories stored in mementum/memories/paper-{title}.md
+   - Actionable insights feed into experiment hypothesis generation
+
+### Next steps
+- Monitor researcher to verify paper detection works
+- Track story keep-rate in experiments
+- Consider adding other ljg cognitive frameworks (concept-anatomy, deep-drill, citation-tracing)
+
 ---
 
 ## Session Note (2026-06-16 — OpenRouter Fusion study)
