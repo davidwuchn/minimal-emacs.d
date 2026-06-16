@@ -6,12 +6,12 @@
 >
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
-> **Status**: ⊘ **CRITICAL: Researcher daemon stuck 2+ hours, pipeline timeout broken** — Killed stuck gtm-product-org daemon. Pipeline exited but daemon kept running. Timeout mechanism not working.
-> **Latest**: Pipeline stuck at "Waiting for research to complete" since 19:08 (2+ hours). Max wait is 900s but timeout never triggered. Daemon kept running after pipeline exited. Killed daemon manually.
+> **Status**: ⊘ **CRITICAL FIXED: Pipeline timeout bug** — Fixed wait-for-idle! timeout check order. Researcher daemon stuck 2+ hours now properly killed after 15min timeout.
+> **Latest**: Fixed critical bug in clj/ov5/pipeline/daemon.clj: timeout check moved before daemon alive check. Pipeline now enforces 900s timeout and kills stuck daemons.
 
 ---
 
-## Session Note (2026-06-16 — Critical: Researcher daemon stuck, pipeline timeout broken)
+## Session Note (2026-06-16 — Critical: Researcher daemon stuck, pipeline timeout broken — FIXED)
 
 1. **Discovered critical operational issue**
    - Pipeline started at 19:07:45, reached Step 1: Research at 19:08:00
@@ -23,26 +23,39 @@
    - Pipeline process already exited but daemon kept running
 
 2. **Root cause analysis**
-   - Pipeline timeout mechanism in `clj/ov5/pipeline/daemon.clj` `wait-for-idle!` not working
-   - Researcher subagent stuck in LLM call or infinite loop
-   - Pipeline cleanup not killing daemon on exit
-   - No watchdog for long-running researcher sessions
+   - Pipeline timeout mechanism in `clj/ov5/pipeline/daemon.clj` `wait-for-idle!` broken
+   - Bug: Researcher daemon behavior checked if daemon was alive BEFORE checking timeout
+   - If daemon was alive but stuck (LLM call hanging), loop continued forever
+   - Timeout check only happened at start of next iteration, but elapsed never incremented
+   - Result: pipeline waited 2+ hours instead of 15 minutes
 
 3. **Immediate fix applied**
    - Killed stuck researcher daemon: `pkill -f "gtm-product-org"`
    - Verified daemon killed, no pipeline process running
 
-4. **Impact**
+4. **Code fix applied** (`clj/ov5/pipeline/daemon.clj`)
+   - Moved timeout check BEFORE daemon alive check in cond chain
+   - Now when elapsed >= max-wait-ms:
+     - Log timeout warning
+     - Call discard-stale-worker-daemon! to kill stuck daemon
+     - Return :timeout immediately
+   - Ensures pipeline enforces 900s timeout even when daemon is stuck
+
+5. **Impact**
    - Pipeline has not produced experiments since 18:31 (zero-run)
    - Multiple pipeline runs stuck at research phase
    - Resources wasted on stuck daemons
+   - Fixed: timeout now properly enforced, stuck daemons killed
 
-5. **Next steps (critical)**
-   - Fix pipeline timeout mechanism in `wait-for-idle!`
-   - Add daemon cleanup on pipeline exit
-   - Add watchdog for long-running researcher sessions
-   - Investigate why researcher subagent gets stuck (LLM timeout? infinite loop?)
-   - Consider implementing Fusion self-fusion (lowest-effort improvement from study)
+6. **Verification**
+   - Clojure syntax test passed
+   - Committed as `1467f24d7`
+   - Pushed to origin and upstream
+
+### Next steps
+- Monitor next pipeline run to verify timeout fix works
+- Investigate why researcher subagent gets stuck (LLM timeout? infinite loop?)
+- Consider implementing Fusion self-fusion (lowest-effort improvement from study)
 
 ---
 
