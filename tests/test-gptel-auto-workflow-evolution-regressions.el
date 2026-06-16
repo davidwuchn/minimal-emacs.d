@@ -824,6 +824,14 @@ Regression test: deeply nested lambda after refactor should not confuse the eval
                 (should (string= (plist-get r :effort-level) "high"))))))
       (delete-directory tmpdir t))))
 
+(ert-deftest regression/auto-workflow-evolution/parse-all-results-guards-garbage-edn ()
+  "parse-all-results must not crash when brepl returns a non-list scalar."
+  (let ((gptel-auto-workflow--results-cache nil))
+    (cl-letf (((symbol-function 'ov5-world-store--brepl-eval)
+               (lambda (_) "99")))
+      (should (listp (gptel-auto-workflow--parse-all-results)))
+      (should (null (gptel-auto-workflow--parse-all-results))))))
+
 (ert-deftest regression/auto-workflow-evolution/allium-read-quality-missing-file ()
   "allium-read-quality returns nil when issue file doesn't exist."
   (let ((tmpdir (make-temp-file "arq2-" t)))

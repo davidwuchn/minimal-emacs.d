@@ -317,11 +317,14 @@ Caches when MAX-AGE-DAYS is nil for cycle-local reuse."
              (store-results (when (and edn-str (not (string-empty-p edn-str)))
                               (ignore-errors
                                 (parseedn-read-str edn-str)))))
-          (when store-results
-            (unless (listp store-results)
-              (setq store-results (append store-results nil)))
-            (dolist (raw-entity store-results)   ;; each entity is a plist vector
-              (let* ((entity (append raw-entity nil))
+           (when store-results
+             (unless (listp store-results)
+               (setq store-results (if (sequencep store-results)
+                                       (append store-results nil)
+                                     nil)))
+             (dolist (raw-entity store-results)   ;; each entity is a plist vector
+               (when (sequencep raw-entity)
+                 (let* ((entity (append raw-entity nil))
                     (id (plist-get entity :id))
                    (target (plist-get entity :target))
                    ;; Extract run-id from experiment/id prefix
@@ -392,7 +395,7 @@ Caches when MAX-AGE-DAYS is nil for cycle-local reuse."
                               :candidate-validation (or (plist-get entity :candidate-scores) "")
                               :research-context (or (plist-get entity :research-context) nil)
                               :run-dir (or run-dir ""))
-                        records)))))
+                        records))))))
           (message "[parse-all-results] Loaded %d records from World Store"
                    (length records))
           (let ((result (nreverse records)))

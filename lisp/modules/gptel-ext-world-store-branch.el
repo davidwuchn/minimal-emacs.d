@@ -111,7 +111,7 @@ Returns the count of new entities transacted (number)."
 (defun ov5-world-store-branch-promote (branch-id)
   "Promote BRANCH-ID to become the new main branch.
 Old main is archived as main-@<timestamp>.
-Returns t on success."
+Returns t on success, signals an error on failure."
   (unless ov5-world-store--connected
     (ov5-world-store-connect))
   (ov5-world-store-branch--set-directory)
@@ -120,7 +120,8 @@ Returns t on success."
                 (or (promote-branch \"%s\")
                     (throw (Exception. \"Branch promotion failed\")))"
                branch-id)))
-    (ov5-world-store--brepl-eval code))
+    (unless (ov5-world-store--brepl-eval code)
+      (error "Branch promotion failed")))
   t)
 
 ;;;###autoload
@@ -135,7 +136,7 @@ Returns t on success."
 ;;;###autoload
 (defun ov5-world-store-branch-delete (branch-id)
   "Delete BRANCH-ID. Refuses to delete \"main\".
-Returns t on success."
+Returns t on success, signals an error on failure."
   (unless ov5-world-store--connected
     (ov5-world-store-connect))
   (ov5-world-store-branch--set-directory)
@@ -144,7 +145,8 @@ Returns t on success."
                 (or (delete-branch \"%s\")
                     (throw (Exception. \"Branch delete failed\")))"
                branch-id)))
-    (ov5-world-store--brepl-eval code))
+    (unless (ov5-world-store--brepl-eval code)
+      (error "Branch delete failed")))
   t)
 
 ;;;###autoload
