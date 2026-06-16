@@ -1332,6 +1332,7 @@ SPECS is a list of (backend decision days-ago ...) triples."
          '(("DeepSeek" . "deepseek-v4-flash")
            ("MiniMax" . "minimax-m2.7-highspeed")))
 
+
         (gptel-auto-workflow--lambda-strike-count (make-hash-table :test 'equal))
         (gptel-auto-workflow--lambda-dead-until (make-hash-table :test 'equal))
         (gptel-auto-workflow--lambda-verification-results (make-hash-table :test 'equal))

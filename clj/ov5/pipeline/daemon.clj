@@ -94,19 +94,26 @@
 
 (defn check-worker-daemon
   "Check if the worker daemon is reachable via emacsclient.
-   Returns :alive, :timeout, or :dead."
+   Returns :alive, :timeout, or :dead.
+   Optional `timeout-ms` sets the per-attempt ping timeout — use a larger
+   value (e.g. 10000) for readiness polls, where the daemon is alive but
+   briefly too busy (baseline warm / research-cache load) to answer a 1s
+   ping.  The daemon's heartbeat timer yields the event loop every ~30s,
+   so a 10s ping reliably catches a live-but-busy daemon."
   ([server-name]
    (check-worker-daemon server-name (or (resolve-emacsclient) "emacsclient")))
   ([server-name emacsclient-path]
-   (letfn [(try-check [timeout]
+   (check-worker-daemon server-name emacsclient-path 1000))
+  ([server-name emacsclient-path timeout-ms]
+   (letfn [(try-check [t]
              (try
                (let [result (p/shell {:out :string :err :string
                                       :continue true
-                                      :timeout timeout}
-                                     emacsclient-path
-                                     "-a" "false"
-                                     "-s" server-name
-                                     "--eval" "t")]
+                                      :timeout t}
+                                      emacsclient-path
+                                      "-a" "false"
+                                      "-s" server-name
+                                      "--eval" "t")]
                  (if (and (= 0 (:exit result)) (str/includes? (:out result) "t"))
                    :alive
                    :dead))
@@ -117,10 +124,10 @@
                            (str/includes? (str msg) "timeout"))
                      :timeout
                      :dead)))))]
-     (let [first-check (try-check 1000)]
+     (let [first-check (try-check timeout-ms)]
        (if (= :alive first-check)
          :alive
-         (let [second-check (try-check 3000)]
+         (let [second-check (try-check (* timeout-ms 3))]
            second-check))))))
 
 (defn- worker-daemon-pids
@@ -326,7 +333,11 @@
       ;;    slower hosts and returned a false :failed even though the daemon
       ;;    was alive seconds later.
       (loop [i 0]
-        (let [state (check-worker-daemon server-name emacsclient-path)]
+        ;; Use a 10s ping: the daemon is alive but briefly too busy (baseline
+        ;; warm / research-cache hydration) to answer a 1s ping.  Its
+        ;; heartbeat timer yields the event loop ~every 30s, so a 10s ping
+        ;; catches it instead of falsely returning :dead for the whole window.
+        (let [state (check-worker-daemon server-name emacsclient-path 10000)]
           (if (= :alive state)
             :started
             (if (< i 300)
