@@ -252,106 +252,108 @@
     :as opts}]
   (let [emacs-path (or (:emacs-path opts) (resolve-emacs) "emacs")
         emacsclient-path (or (:emacsclient-path opts) (resolve-emacsclient) "emacsclient")]
-    ;; 1. Check if already alive
+    ;; 1. Check if already alive — return early if so
     (let [state (check-worker-daemon server-name emacsclient-path)]
-      (when (= :alive state)
-        :already-running))
-    ;; 2. Kill stale PIDs
-    (let [stale-pids (worker-daemon-pids server-name)]
-      (when (seq stale-pids)
-        (log/logf "Killing stale daemon: %s (pids: %s)" server-name (str/join " " stale-pids))
-        (discard-stale-worker-daemon! server-name)
-        (Thread/sleep 1000)))
-    ;; 3. Clean orphaned sockets
-    (clean-stale-socket server-name)
-    ;; Verify socket is gone (up to 60 retries)
-    (loop [i 0]
-      (let [sock (find-server-socket server-name)]
-        (when (and sock (< i 60))
-          (Thread/sleep 200)
-          (recur (inc i)))))
-    ;; Force-remove if still present
-    (let [sock (find-server-socket server-name)]
-      (when sock
-        (log/logf "WARNING: Socket for %s still present after cleanup. Force-removing..." server-name)
-        (let [uid-val (uid*)]
-          (try (io/delete-file (io/file (str "/tmp/emacs" uid-val "/" server-name)) true)
-               (catch Exception _ nil))
-          (try (io/delete-file (io/file (str (System/getenv "TMPDIR") "/emacs" uid-val "/" server-name)) true)
-               (catch Exception _ nil))
-          (when-let [xdg (System/getenv "XDG_RUNTIME_DIR")]
-            (try (io/delete-file (io/file (str xdg "/emacs/" server-name)) true)
-                 (catch Exception _ nil))))))
-    ;; 4. Clear stale eln cache
-    (let [eln-dir (io/file repo-path "var/eln-cache")]
-      (when (.exists eln-dir)
-        (doseq [f (file-seq eln-dir)]
-          (when (and (.isFile f) (str/ends-with? (.getName f) ".eln"))
-            (try (io/delete-file f true) (catch Exception _ nil))))))
-    ;; 5. Hydrate submodules
-    (hydrate-missing-worktree-submodules repo-path)
-    ;; 6. Seed shared var
-    (seed-worker-daemon-var repo-path)
-    ;; 7. Launch daemon
-    (let [daemon-log-file (io/file daemon-log)]
-      (.mkdirs (.getParentFile daemon-log-file))
-      (let [inner-cmd (str
-                       "ulimit -s 65532 2>/dev/null; "
-                       "ulimit -v 4194304 2>/dev/null; "
-                       "exec '" emacs-path "' --init-directory='" repo-path "' "
-                       "--daemon='" server-name "' "
-                       "--eval \"(setq native-comp-jit-compilation nil gc-cons-threshold (* 50 1024 1024))\" "
-                       "</dev/null >>'" daemon-log "' 2>&1")
-             env-opts (merge {"EMACSNATIVELOADPATH" ""
-                              "TMPDIR" "/tmp"
-                              "PATH" (or (System/getenv "PATH") "")
-                              "AUTO_WORKFLOW_EMACS_SERVER" server-name
-                              "MINIMAL_EMACS_WORKFLOW_ROLE" (or action "")
-                              "MINIMAL_EMACS_ALLOW_SECOND_DAEMON" "1"
-                              "MINIMAL_EMACS_WORKFLOW_DAEMON" "1"})
-            launch-cmd [emacs-path
-                        "--init-directory" repo-path
-                        (str "--daemon=" server-name)
-                        "--eval" "(setq native-comp-jit-compilation nil gc-cons-threshold (* 50 1024 1024))"]]
-        ;; Try setsid for session isolation
-        (if (sh-ok? "bash" "-c" "command -v setsid")
-          (let [setsid-cmd ["setsid" "env"
-                            "-u" "DISPLAY" "-u" "WAYLAND_DISPLAY"
-                            "-u" "WAYLAND_SOCKET" "-u" "XAUTHORITY"
-                            "bash" "-c" inner-cmd]]
-            (try
-              ;; Start as background process (not waited)
-              (apply p/process {:out :inherit :err :inherit :env env-opts} setsid-cmd)
-              (catch Exception e
-                (log/logf "ERROR launching daemon via setsid: %s" (.getMessage e))
-                ;; Fallback: launch directly
-                (apply p/process {:out :inherit :err :inherit :env env-opts} launch-cmd))))
-          (apply p/process {:out :inherit :err :inherit :env env-opts} launch-cmd)))
-      ;; 8. Poll up to 300*0.2s (60s) for daemon to respond.  Research
-      ;;    daemons (gtm-product-org) settle later than the workflow daemon
-      ;;    — post-init runs a "Restarting server" cycle and research-cache
-      ;;    hydration.  30s (the old 150-iteration cap) raced the verify on
-      ;;    slower hosts and returned a false :failed even though the daemon
-      ;;    was alive seconds later.
-      (loop [i 0]
-        ;; Use a 10s ping: the daemon is alive but briefly too busy (baseline
-        ;; warm / research-cache hydration) to answer a 1s ping.  Its
-        ;; heartbeat timer yields the event loop ~every 30s, so a 10s ping
-        ;; catches it instead of falsely returning :dead for the whole window.
-        (let [state (check-worker-daemon server-name emacsclient-path 10000)]
-          (if (= :alive state)
-            :started
-            (if (< i 300)
-              (do (Thread/sleep 200) (recur (inc i)))
-              (do
-                (log/logf "failed to start worker daemon: %s" server-name)
-                (log/logf "Last 40 lines of daemon log:")
-                (try
-                  (let [log-content (slurp daemon-log-file)]
-                    (doseq [line (take-last 40 (str/split-lines log-content))]
-                      (log/log line)))
-                  (catch Exception _ nil))
-                :failed))))))))
+      (if (= :alive state)
+        (do (log/logf "Daemon %s already running" server-name)
+            :already-running)
+        (do
+          ;; 2. Kill stale PIDs
+          (let [stale-pids (worker-daemon-pids server-name)]
+            (when (seq stale-pids)
+              (log/logf "Killing stale daemon: %s (pids: %s)" server-name (str/join " " stale-pids))
+              (discard-stale-worker-daemon! server-name)
+              (Thread/sleep 1000)))
+          ;; 3. Clean orphaned sockets
+          (clean-stale-socket server-name)
+          ;; Verify socket is gone (up to 60 retries)
+          (loop [i 0]
+            (let [sock (find-server-socket server-name)]
+              (when (and sock (< i 60))
+                (Thread/sleep 200)
+                (recur (inc i)))))
+          ;; Force-remove if still present
+          (let [sock (find-server-socket server-name)]
+            (when sock
+              (log/logf "WARNING: Socket for %s still present after cleanup. Force-removing..." server-name)
+              (let [uid-val (uid*)]
+                (try (io/delete-file (io/file (str "/tmp/emacs" uid-val "/" server-name)) true)
+                     (catch Exception _ nil))
+                (try (io/delete-file (io/file (str (System/getenv "TMPDIR") "/emacs" uid-val "/" server-name)) true)
+                     (catch Exception _ nil))
+                (when-let [xdg (System/getenv "XDG_RUNTIME_DIR")]
+                  (try (io/delete-file (io/file (str xdg "/emacs/" server-name)) true)
+                       (catch Exception _ nil))))))
+          ;; 4. Clear stale eln cache
+          (let [eln-dir (io/file repo-path "var/eln-cache")]
+            (when (.exists eln-dir)
+              (doseq [f (file-seq eln-dir)]
+                (when (and (.isFile f) (str/ends-with? (.getName f) ".eln"))
+                  (try (io/delete-file f true) (catch Exception _ nil))))))
+          ;; 5. Hydrate submodules
+          (hydrate-missing-worktree-submodules repo-path)
+          ;; 6. Seed shared var
+          (seed-worker-daemon-var repo-path)
+          ;; 7. Launch daemon
+          (let [daemon-log-file (io/file daemon-log)]
+            (.mkdirs (.getParentFile daemon-log-file))
+            (let [inner-cmd (str
+                             "ulimit -s 65532 2>/dev/null; "
+                             "ulimit -v 4194304 2>/dev/null; "
+                             "exec '" emacs-path "' --init-directory='" repo-path "' "
+                             "--daemon='" server-name "' "
+                             "--eval \"(setq native-comp-jit-compilation nil gc-cons-threshold (* 50 1024 1024))\" "
+                             "</dev/null >>'" daemon-log "' 2>&1")
+                   env-opts (merge {"EMACSNATIVELOADPATH" ""
+                                    "TMPDIR" "/tmp"
+                                    "PATH" (or (System/getenv "PATH") "")
+                                    "AUTO_WORKFLOW_EMACS_SERVER" server-name
+                                    "MINIMAL_EMACS_WORKFLOW_ROLE" (or action "")
+                                    "MINIMAL_EMACS_ALLOW_SECOND_DAEMON" "1"
+                                    "MINIMAL_EMACS_WORKFLOW_DAEMON" "1"})
+                  launch-cmd [emacs-path
+                              "--init-directory" repo-path
+                              (str "--daemon=" server-name)
+                              "--eval" "(setq native-comp-jit-compilation nil gc-cons-threshold (* 50 1024 1024))"]]
+              ;; Try setsid for session isolation
+              (if (sh-ok? "bash" "-c" "command -v setsid")
+                (let [setsid-cmd ["setsid" "env"
+                                  "-u" "DISPLAY" "-u" "WAYLAND_DISPLAY"
+                                  "-u" "WAYLAND_SOCKET" "-u" "XAUTHORITY"
+                                  "bash" "-c" inner-cmd]]
+                  (try
+                    ;; Start as background process (not waited)
+                    (apply p/process {:out :inherit :err :inherit :env env-opts} setsid-cmd)
+                    (catch Exception e
+                      (log/logf "ERROR launching daemon via setsid: %s" (.getMessage e))
+                      ;; Fallback: launch directly
+                      (apply p/process {:out :inherit :err :inherit :env env-opts} launch-cmd))))
+                (apply p/process {:out :inherit :err :inherit :env env-opts} launch-cmd)))
+            ;; 8. Poll up to 300*0.2s (60s) for daemon to respond.  Research
+            ;;    daemons (gtm-product-org) settle later than the workflow daemon
+            ;;    — post-init runs a "Restarting server" cycle and research-cache
+            ;;    hydration.  30s (the old 150-iteration cap) raced the verify on
+            ;;    slower hosts and returned a false :failed even though the daemon
+            ;;    was alive seconds later.
+            (loop [i 0]
+              ;; Use a 10s ping: the daemon is alive but briefly too busy (baseline
+              ;; warm / research-cache hydration) to answer a 1s ping.  Its
+              ;; heartbeat timer yields the event loop ~every 30s, so a 10s ping
+              ;; catches it instead of falsely returning :dead for the whole window.
+              (let [state (check-worker-daemon server-name emacsclient-path 10000)]
+                (if (= :alive state)
+                  :started
+                  (if (< i 300)
+                    (do (Thread/sleep 200) (recur (inc i)))
+                    (do
+                      (log/logf "failed to start worker daemon: %s" server-name)
+                      (log/logf "Last 40 lines of daemon log:")
+                      (try
+                        (let [log-content (slurp daemon-log-file)]
+                          (doseq [line (take-last 40 (str/split-lines log-content))]
+                            (log/log line)))
+                        (catch Exception _ nil))
+                      :failed)))))))))))
 
 ;; ═══════════════════════════════════════════════════════════════════════════════
 ;; Elisp generation helpers (ported from lines 710-829)
