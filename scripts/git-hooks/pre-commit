@@ -73,7 +73,8 @@ if [[ -n "$staged_el_files" ]]; then
             fi
 
             # 4b. Ensure every defun/cl-defun/defmacro/defconst/defvar/defcustom/defgroup/defsubst/defface is at top level.
-            # This catches misplaced parens that swallow later definitions (e.g. defun inside defun).
+            # This catches misplaced parens that swallow later definitions (e.g. defun inside defun),
+            # but allows defs inside top-level conditionals such as (when (daemonp) ...).
             check_script='/tmp/pre-commit-top-level-def-check.el'
             cat > "$check_script" <<'CHECK_EOF'
 (let ((file (car command-line-args-left))
@@ -86,8 +87,27 @@ if [[ -n "$staged_el_files" ]]; then
       (let ((name (match-string 2))
             (pos (match-beginning 0)))
         (goto-char pos)
-        (when (> (car (syntax-ppss)) 0)
-          (push (format "%s:%d: %s is nested (not top-level)" file pos name) errors))
+        (let* ((state (syntax-ppss))
+               (depth (car state))
+               (stringp (nth 3 state))
+               (commentp (nth 4 state))
+               (outer-start (nth 1 state))
+               outer-head)
+          (when (and (> depth 0)
+                     (not stringp)
+                     (not commentp)
+                     outer-start
+                     (save-excursion
+                       (goto-char outer-start)
+                       (looking-at "(\\s-*\\(\\(?:cl-\\)?defun\\|defmacro\\|defsubst\\)\\_>")))
+            (push (format "%s:%d: %s is nested inside %s (not top-level)"
+                          file pos name
+                          (progn
+                            (goto-char outer-start)
+                            (forward-char)
+                            (skip-syntax-forward " ")
+                            (symbol-name (read (current-buffer)))))
+                  errors)))
         (goto-char (match-end 0))))
     (if errors
         (progn

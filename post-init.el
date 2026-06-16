@@ -214,14 +214,12 @@ Only reloads for top-level frames (not Corfu child frames) and only once per fra
 ;; in-progress experiment work), recreate the socket in-process every 30s.
 ;; Also ensure server-start is called initially if not already done.
 (when (daemonp)
-  ;; Ensure server is started (daemon should do this automatically, but be explicit)
-  (unless (and (boundp 'server-process) server-process (process-live-p server-process))
-    (condition-case err
-        (progn
-          (server-start)
-          (message "[server] Explicitly started server: %s" server-name))
-      (error
-       (message "[server] Failed to start server: %s" (error-message-string err)))))
+  ;; The --daemon flag already starts the server after init files load.
+  ;; Do NOT call `server-start' here: at this point `server-process' is not
+  ;; yet bound, so `server-start' sees a stale/external server, stops it,
+  ;; and restarts, which reloads init files and can race itself into an
+  ;; "End of file during parsing" loop on macOS.
+  (message "[server] Daemon server will be started by --daemon flag after init")
 
   ;; Start the heartbeat timer at daemon init so it ALWAYS runs while the
   ;; daemon lives (not only during an active workflow).  The external

@@ -296,6 +296,7 @@
                        "--eval \"(setq native-comp-jit-compilation nil gc-cons-threshold (* 50 1024 1024))\" "
                        "</dev/null >>'" daemon-log "' 2>&1")
             env-opts (merge {"EMACSNATIVELOADPATH" ""
+                             "TMPDIR" "/tmp"
                              "AUTO_WORKFLOW_EMACS_SERVER" server-name
                              "MINIMAL_EMACS_WORKFLOW_ROLE" (or action "")
                              "MINIMAL_EMACS_ALLOW_SECOND_DAEMON" "1"
