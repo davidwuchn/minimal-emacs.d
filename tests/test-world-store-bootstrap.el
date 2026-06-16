@@ -177,4 +177,31 @@ Binds `ov5-world-store-directory' and `ov5-world-store-nrepl-port' uniquely."
   (require 'gptel-ext-world-store)
   (should (memq (ov5-world-store--datahike-pod-available-p) '(t nil))))
 
+;; ── Regression: default directory must not double "var/" ──
+;; pre-early-init.el redirects user-emacs-directory to <root>/var/ so Emacs's
+;; own generated files stay out of the repo root.  The world-store default
+;; must account for that — using user-emacs-directory directly produced
+;; ".../.emacs.d/var/var/world-store", which mismatched the babashka
+;; pipeline's "<root>/var/world-store" and caused Datahike
+;; "Store identity mismatch: connecting to wrong database" (zero experiments).
+
+(ert-deftest test-world-store-bootstrap/default-directory-no-double-var ()
+  "The default ov5-world-store-directory must be <root>/var/world-store,
+not <root>/var/var/world-store.  user-emacs-directory is redirected to
+<root>/var/ by pre-early-init, so the default must derive the project
+root (parent of var/), not append var/ onto the redirected dir."
+  (require 'gptel-ext-world-store)
+  (let* ((default (default-value 'ov5-world-store-directory))
+         ;; The expected project root is the parent of user-emacs-directory
+         ;; (which pre-early-init redirects to <root>/var/).
+         (project-root (file-name-directory
+                        (directory-file-name user-emacs-directory)))
+         (expected (expand-file-name "var/world-store" project-root)))
+    (should (stringp default))
+    ;; Must end in var/world-store and resolve to the project-root path.
+    (should (string-suffix-p "var/world-store" default))
+    (should (string= expected (expand-file-name default)))
+    ;; The double-var regression:
+    (should-not (string-match-p "var/var/world-store" default))))
+
 ;;; test-world-store-bootstrap.el ends here

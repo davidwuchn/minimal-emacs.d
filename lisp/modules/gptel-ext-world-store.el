@@ -43,7 +43,15 @@
   :group 'gptel)
 
 (defcustom ov5-world-store-directory
-  (expand-file-name "var/world-store" user-emacs-directory)
+  (expand-file-name
+   "var/world-store"
+   ;; pre-early-init.el redirects user-emacs-directory to <root>/var/ so
+   ;; Emacs's generated files stay out of the repo root.  Derive the actual
+   ;; project root (parent of that var/ dir); appending "var/world-store"
+   ;; directly onto user-emacs-directory would produce <root>/var/var/world-store
+   ;; and mismatch the babashka pipeline's <root>/var/world-store path, causing
+   ;; Datahike "Store identity mismatch" and zero recorded experiments.
+   (file-name-directory (directory-file-name user-emacs-directory)))
   "Directory for the World Store database files."
   :type 'directory
   :group 'ov5-world-store)
