@@ -558,8 +558,8 @@ Extracted from `gptel-auto-experiment--validate-diff-content' for testability."
    ((string-match-p
      "\\+```\\(emacs-lisp\\|lisp\\|elisp\\)?" diff-text)
     (format "Cheap check: LLM markdown artifacts in diff (``` blocks)"))
-    ;; Check for debug artifacts: print/insert at top level
-    ((gptel-auto-experiment--diff-text-debug-artifact diff-text))
+   ;; Check for debug artifacts: print/insert at top level
+   ((gptel-auto-experiment--diff-text-debug-artifact diff-text))
    ;; Check for vandalism: removal of error handling patterns
     ((string-match-p
       "^-.*condition-case\\|^-.*ignore-errors\\|^-.*noninteractive"

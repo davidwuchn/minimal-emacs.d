@@ -121,7 +121,7 @@ Returns t on success, signals an error on failure."
                     (throw (Exception. \"Branch promotion failed\")))"
                branch-id)))
     (unless (ov5-world-store--brepl-eval code)
-      (error "Branch promotion failed")))
+      (error "Branch promotion failed: %s" branch-id)))
   t)
 
 ;;;###autoload
@@ -146,7 +146,7 @@ Returns t on success, signals an error on failure."
                     (throw (Exception. \"Branch delete failed\")))"
                branch-id)))
     (unless (ov5-world-store--brepl-eval code)
-      (error "Branch delete failed")))
+      (error "Branch delete failed: %s" branch-id)))
   t)
 
 ;;;###autoload
