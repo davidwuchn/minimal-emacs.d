@@ -95,14 +95,15 @@ Falls back to CLI brepl when nil.")
                                (buffer-string))))))
       7888))  ;; default bb nREPL port
 
-(defvar ov5-world-store--datahike-pod-available nil
-  "Cached result of Datahike pod availability check.")
+(defvar ov5-world-store--datahike-pod-available :uninit
+  "Cached result of Datahike pod availability check.
+`:uninit' means not yet probed; t means bb loaded the pod; nil means it failed.")
 
 (defun ov5-world-store--datahike-pod-available-p ()
   "Return non-nil if the Datahike pod can be loaded by bb.
 Caches the result in `ov5-world-store--datahike-pod-available'.
 Uses `bb -e' to load the pod declared in bb.edn."
-  (unless (booleanp ov5-world-store--datahike-pod-available)
+  (when (eq ov5-world-store--datahike-pod-available :uninit)
     (setq ov5-world-store--datahike-pod-available
           (condition-case nil
               (zerop (call-process "bb" nil nil nil

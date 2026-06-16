@@ -205,3 +205,36 @@ root (parent of var/), not append var/ onto the redirected dir."
     (should-not (string-match-p "var/var/world-store" default))))
 
 ;;; test-world-store-bootstrap.el ends here
+
+;; ── TDD: pod availability check must call-process and cache correctly ──
+;; Bug: (defvar ov5-world-store--datahike-pod-available nil) shadows the 
+;; "uninitialized" state with nil. (booleanp nil) is t, so the function 
+;; returns nil forever without calling bb.
+;; Fix: use a non-boolean sentinel for the uninitialized state, or change
+;; the check to (null (memq ... '(t nil :uninit))).
+
+(ert-deftest test-world-store-bootstrap/pod-available-returns-t-when-bb-succeeds ()
+  "When `bb -e' succeeds, the availability check must return t.
+Mocks call-process to return 0 (success), resets the cache to :uninit,
+and verifies the function actually probes bb and returns t.
+Catches the bug where (defvar VAR nil) makes (booleanp nil) return t,
+short-circuiting the check."
+  (require 'gptel-ext-world-store)
+  (setq ov5-world-store--datahike-pod-available :uninit)
+  (cl-letf (((symbol-function 'call-process)
+             (lambda (_program &rest _)
+               (declare (ignore _program _))
+               0)))  ; simulate bb -e exit 0
+    (should (eq t (ov5-world-store--datahike-pod-available-p)))))
+
+(ert-deftest test-world-store-bootstrap/pod-available-returns-nil-when-bb-fails ()
+  "When `bb -e' fails, the availability check must return nil.
+Mocks call-process to return 1 (failure), resets the cache to :uninit,
+and verifies the function returns nil."
+  (require 'gptel-ext-world-store)
+  (setq ov5-world-store--datahike-pod-available :uninit)
+  (cl-letf (((symbol-function 'call-process)
+             (lambda (_program &rest _)
+               (declare (ignore _program _))
+               1)))  ; simulate bb -e exit 1
+    (should (eq nil (ov5-world-store--datahike-pod-available-p)))))
