@@ -21812,9 +21812,63 @@ cl-reduce with #'max would signal wrong-type-argument without the fix."
               ((symbol-function 'message)
                (lambda (&rest _) nil)))
       (setq result (gptel-auto-workflow-run-async)))
-    (should (null result))
-    (should-not magit-called)
-    (should (equal (plist-get gptel-auto-workflow--stats :phase) "blocked"))))
+     (should (null result))
+     (should-not magit-called)
+     (should (equal (plist-get gptel-auto-workflow--stats :phase) "blocked"))))
+
+(ert-deftest regression/autotts/edn-to-plist-normalizes-json-null-symbol ()
+  "`gptel-auto-workflow--edn-to-plist' must convert JSON `null' to Elisp nil.
+The controller-evolution-history.edn file is written by
+`gptel-auto-workflow--save-evolution-history' via json-encode.  When HISTORY
+is nil, json-encode emits the string \"null\".  parseedn reads that as the
+symbol `null', which is not a sequence and therefore crashes `length' and
+other sequence-consuming functions.  The converter should treat it as nil."
+  (should (null (gptel-auto-workflow--edn-to-plist 'null)))
+  (should (null (gptel-auto-workflow--edn-to-plist nil)))
+  ;; Nested null values should also be normalized.
+  (let ((result (gptel-auto-workflow--edn-to-plist
+                 (parseedn-read-str "{:best-topic null :rate 0.5}"))))
+    (should (plistp result))
+    (should (null (plist-get result :best-topic)))
+    (should (= 0.5 (plist-get result :rate)))))
+
+(ert-deftest regression/autotts/save-evolution-history-writes-empty-array-for-nil ()
+  "Saving nil history must write \"[]\" instead of \"null\".
+This prevents the next load from returning the symbol `null' and crashing
+strategy evolution."
+  (let* ((temp-root (file-name-as-directory (make-temp-file "aw-evol" t)))
+         (gptel-auto-workflow--run-project-root temp-root)
+         (gptel-auto-workflow--current-project nil))
+    (unwind-protect
+        (progn
+          (gptel-auto-workflow--save-evolution-history nil)
+          (let ((file (expand-file-name "var/tmp/controller-evolution-history.edn"
+                                        temp-root)))
+            (should (file-exists-p file))
+            (should (string= "[]" (string-trim (with-temp-buffer
+                                                  (insert-file-contents file)
+                                                  (buffer-string)))))
+            ;; Loading the file back should yield nil, not the symbol null.
+            (should (null (gptel-auto-workflow--load-evolution-history)))))
+      (delete-directory temp-root t))))
+
+(ert-deftest regression/autotts/load-evolution-history-handles-legacy-null-file ()
+  "A legacy controller-evolution-history.edn containing \"null\" must load as nil.
+This repairs existing installations that were written before the
+save-evolution-history fix."
+  (let* ((temp-root (file-name-as-directory (make-temp-file "aw-evol" t)))
+         (file (expand-file-name "var/tmp/controller-evolution-history.edn" temp-root))
+         (gptel-auto-workflow--run-project-root temp-root)
+         (gptel-auto-workflow--current-project nil))
+    (unwind-protect
+        (progn
+          (make-directory (file-name-directory file) t)
+          (with-temp-file file
+            (insert "null"))
+          (should (null (gptel-auto-workflow--load-evolution-history)))
+          ;; And `length' on the result must not signal.
+          (should (= 0 (length (gptel-auto-workflow--load-evolution-history)))))
+      (delete-directory temp-root t))))
 
 (provide 'test-gptel-tools-agent-regressions)
 

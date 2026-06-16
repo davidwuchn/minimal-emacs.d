@@ -503,7 +503,12 @@ Returns list of evolution records."
                                         (gptel-auto-workflow--worktree-base-root))))
     (make-directory (file-name-directory history-file) t)
     (with-temp-file history-file
-      (insert (gptel-auto-workflow--json-encode-plist history)))
+      ;; JSON-encoded empty history must be "[]", not "null", so that
+      ;; parseedn reads it back as an empty vector (which edn-to-plist
+      ;; converts to nil) rather than the symbol `null'.
+      (insert (if (null history)
+                  "[]"
+                (gptel-auto-workflow--json-encode-plist history))))
     (message "[autotts] Saved evolution history: %d generations" (length history))))
 
 (defun gptel-auto-workflow--count-actionable-patterns (findings)

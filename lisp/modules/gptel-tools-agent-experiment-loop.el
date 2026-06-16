@@ -1015,8 +1015,12 @@ Relative paths are resolved from the project root."
        nil))))
 
 (defun gptel-auto-workflow--edn-to-plist (data)
-  "Recursively convert parsed EDN DATA (hash-tables, vectors) into plists/lists."
+  "Recursively convert parsed EDN DATA (hash-tables, vectors) into plists/lists.
+JSON-encoded files (saved by `gptel-auto-workflow--save-evolution-history')
+use the symbol `null' for nil; normalize that to Elisp nil so callers
+that expect sequences do not crash with `sequencep, null'."
   (cond
+   ((eq data 'null) nil)
    ((hash-table-p data)
     (let (plist)
       (maphash (lambda (k v)
