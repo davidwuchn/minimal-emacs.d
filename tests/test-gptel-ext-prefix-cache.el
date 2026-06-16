@@ -735,5 +735,140 @@
         (delete-directory metrics-dir t))
     (test-prefix-cache--restore-state)))
 
+;; ─── Response Cache Tests (Helium-Inspired) ───
+
+(ert-deftest test-response-cache-compute-key ()
+  "Test that response cache key is computed correctly."
+  (let ((key (gptel-prefix-cache--compute-response-key 'DeepSeek 'deepseek-v4-pro "test prompt")))
+    (should (stringp key))
+    (should (string-match-p "DeepSeek:deepseek-v4-pro:" key))
+    ;; Same inputs should produce same key
+    (should (equal key (gptel-prefix-cache--compute-response-key 'DeepSeek 'deepseek-v4-pro "test prompt")))
+    ;; Different prompt should produce different key
+    (should-not (equal key (gptel-prefix-cache--compute-response-key 'DeepSeek 'deepseek-v4-pro "different prompt")))
+    ;; Different backend should produce different key
+    (should-not (equal key (gptel-prefix-cache--compute-response-key 'OpenAI 'deepseek-v4-pro "test prompt")))))
+
+(ert-deftest test-response-cache-store-and-lookup ()
+  "Test storing and retrieving responses from cache."
+  (gptel-prefix-cache--response-cache-clear)
+  (let ((key "test-backend:test-model:abc123")
+        (response "cached response content"))
+    ;; Store response
+    (gptel-prefix-cache--response-cache-store key response "test-agent")
+    ;; Lookup should return stored response
+    (should (equal (gptel-prefix-cache--response-cache-lookup key) response))
+    ;; Miss counter should be 1 (from store)
+    (should (= gptel-prefix-cache--response-cache-misses 1))
+    ;; Hit counter should be 1 (from lookup)
+    (should (= gptel-prefix-cache--response-cache-hits 1))
+    ;; Lookup again should increment hit counter
+    (gptel-prefix-cache--response-cache-lookup key)
+    (should (= gptel-prefix-cache--response-cache-hits 2))
+    ;; Cleanup
+    (gptel-prefix-cache--response-cache-clear)))
+
+(ert-deftest test-response-cache-miss ()
+  "Test that missing key returns nil."
+  (gptel-prefix-cache--response-cache-clear)
+  (should (null (gptel-prefix-cache--response-cache-lookup "nonexistent-key")))
+  (gptel-prefix-cache--response-cache-clear))
+
+(ert-deftest test-response-cache-clear ()
+  "Test that clear resets cache and counters."
+  ;; Store something
+  (gptel-prefix-cache--response-cache-store "key1" "response1" "agent1")
+  (gptel-prefix-cache--response-cache-lookup "key1")
+  ;; Verify non-empty
+  (should (> (hash-table-count gptel-prefix-cache--response-cache) 0))
+  (should (or (> gptel-prefix-cache--response-cache-hits 0)
+              (> gptel-prefix-cache--response-cache-misses 0)))
+  ;; Clear
+  (gptel-prefix-cache--response-cache-clear)
+  ;; Verify empty
+  (should (= (hash-table-count gptel-prefix-cache--response-cache) 0))
+  (should (= gptel-prefix-cache--response-cache-hits 0))
+  (should (= gptel-prefix-cache--response-cache-misses 0)))
+
+(ert-deftest test-response-cache-lru-eviction ()
+  "Test that LRU eviction works when cache exceeds max size."
+  (gptel-prefix-cache--response-cache-clear)
+  (let ((gptel-prefix-cache-response-cache-max-size 3))
+    ;; Fill cache to capacity
+    (gptel-prefix-cache--response-cache-store "key1" "response1" "agent1")
+    (sleep-for 0.01)  ; Ensure different timestamps
+    (gptel-prefix-cache--response-cache-store "key2" "response2" "agent2")
+    (sleep-for 0.01)
+    (gptel-prefix-cache--response-cache-store "key3" "response3" "agent3")
+    (should (= (hash-table-count gptel-prefix-cache--response-cache) 3))
+    ;; Add one more — should evict oldest (key1)
+    (sleep-for 0.01)
+    (gptel-prefix-cache--response-cache-store "key4" "response4" "agent4")
+    (should (= (hash-table-count gptel-prefix-cache--response-cache) 3))
+    ;; key1 should be evicted
+    (should (null (gptel-prefix-cache--response-cache-lookup "key1")))
+    ;; key4 should be present
+    (should (equal (gptel-prefix-cache--response-cache-lookup "key4") "response4"))))
+
+(ert-deftest test-response-cache-with-response-cache-hit ()
+  "Test with-response-cache serves from cache on hit."
+  (gptel-prefix-cache--response-cache-clear)
+  (let* ((callback-called nil)
+         (callback-result nil)
+         (callback (lambda (result)
+                     (setq callback-called t
+                           callback-result result))))
+    ;; Pre-populate cache
+    (let ((key (gptel-prefix-cache--compute-response-key 'TestBackend 'test-model "test prompt")))
+      (gptel-prefix-cache--response-cache-store key "cached result" "test-agent"))
+    ;; Call with-response-cache — should serve from cache
+    (let ((served (gptel-prefix-cache-with-response-cache
+                   'TestBackend 'test-model "test prompt" "test-agent" callback)))
+      (should served)
+      (should callback-called)
+      (should (equal callback-result "cached result"))))
+  (gptel-prefix-cache--response-cache-clear))
+
+(ert-deftest test-response-cache-with-response-cache-miss ()
+  "Test with-response-cache wraps callback on miss."
+  (gptel-prefix-cache--response-cache-clear)
+  (let* ((callback-called nil)
+         (callback-result nil)
+         (callback (lambda (result)
+                     (setq callback-called t
+                           callback-result result))))
+    ;; Call with-response-cache — should NOT serve from cache (miss)
+    (let ((served (gptel-prefix-cache-with-response-cache
+                   'TestBackend 'test-model "new prompt" "test-agent" callback)))
+      (should-not served)
+      ;; Callback should not be called immediately on miss
+      (should-not callback-called)))
+  (gptel-prefix-cache--response-cache-clear))
+
+(ert-deftest test-response-cache-stats ()
+  "Test response cache stats reporting."
+  (gptel-prefix-cache--response-cache-clear)
+  ;; Store and lookup to generate stats
+  (gptel-prefix-cache--response-cache-store "key1" "response1" "agent1")
+  (gptel-prefix-cache--response-cache-lookup "key1")
+  (gptel-prefix-cache--response-cache-lookup "key1")
+  (let ((stats (gptel-prefix-cache--response-cache-stats)))
+    (should (stringp stats))
+    (should (string-match-p "hits=2" stats))
+    (should (string-match-p "misses=1" stats))
+    (should (string-match-p "hit-rate=66" stats)))  ; 2/3 ≈ 66%
+  (gptel-prefix-cache--response-cache-clear))
+
+(ert-deftest test-response-cache-disabled ()
+  "Test that response cache respects enabled flag."
+  (gptel-prefix-cache--response-cache-clear)
+  (let ((gptel-prefix-cache-response-cache-enabled nil))
+    ;; Store should be no-op when disabled
+    (gptel-prefix-cache--response-cache-store "key1" "response1" "agent1")
+    (should (= (hash-table-count gptel-prefix-cache--response-cache) 0))
+    ;; Lookup should return nil when disabled
+    (should (null (gptel-prefix-cache--response-cache-lookup "key1"))))
+  (gptel-prefix-cache--response-cache-clear))
+
 (provide 'test-gptel-ext-prefix-cache)
 ;;; test-gptel-ext-prefix-cache.el ends here

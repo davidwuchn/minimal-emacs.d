@@ -321,3 +321,24 @@
 5. **Memory stored**
    - `mementum/knowledge/helium-vs-ov5-gaps.md`
    - `mementum/memories/insight-helium-workflow-optimization-gaps.md`
+
+## Session Note (2026-06-16 — Response cache implementation)
+
+1. **Implemented result-level caching for subagent LLM calls** (Helium-inspired)
+   - Added response cache to `gptel-ext-prefix-cache.el`: hash table keyed by `(backend . model . prompt-hash)`, LRU eviction, per-run isolation
+   - Wired cache into `my/gptel--run-agent-tool-with-timeout` in `gptel-tools-agent-subagent.el`
+   - Cache hit serves response immediately (no API call); cache miss wraps callback to store response
+   - Executor subagent excluded (produces unique edits per call)
+   - Cache cleared on run start/end; stats exported to metrics
+
+2. **Test coverage**: Added 9 new tests to `test-gptel-ext-prefix-cache.el`
+   - All 41 prefix-cache tests pass
+   - All 50 subagent tests pass
+
+3. **Expected impact**:
+   - Token savings: identical prompts skip API calls
+   - Latency reduction: cache hits return immediately
+   - Cost reduction: fewer API calls per run
+
+4. **Memory stored**
+   - `mementum/memories/insight-response-cache-implementation.md`

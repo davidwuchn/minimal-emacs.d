@@ -28,6 +28,13 @@ consumed by evolution cycle.")
 (defvar gptel-agent--todos nil)
 (defvar gptel-auto-workflow--current-validation-retry-active-grace nil)
 (defvar gptel-auto-experiment-delay-between)
+
+;; Forward declarations for prefix-cache response caching
+(declare-function gptel-prefix-cache--get-current-backend-model "gptel-ext-prefix-cache")
+(declare-function gptel-prefix-cache-with-response-cache "gptel-ext-prefix-cache"
+                  (backend model prompt agent-name callback))
+(declare-function gptel-prefix-cache--response-cache-clear "gptel-ext-prefix-cache")
+(declare-function gptel-prefix-cache--response-cache-stats "gptel-ext-prefix-cache")
 (defvar gptel-auto-experiment-auto-push)
 
 ;; Forward declarations for prefix-cache role separation (Gap 4)
@@ -695,6 +702,26 @@ Logs subagent dispatch to ontology for self-evolution tracking."
     (setq callback (lambda (result)
                      (message "[nucleus] %s callback (nil): %s" agent-name
                               (if (stringp result) (truncate-string-to-width result 80) "non-string")))))
+  ;; Response cache: serve identical prompts from cache within a run (Helium-inspired).
+  ;; Only cache for deterministic subagents (not executor which produces unique edits).
+  (when (and (fboundp 'gptel-prefix-cache--get-current-backend-model)
+             (fboundp 'gptel-prefix-cache-with-response-cache)
+             gptel-prefix-cache-response-cache-enabled
+             (not (equal agent-name "executor")))  ; executor produces unique edits
+    (let* ((bm (gptel-prefix-cache--get-current-backend-model))
+           (backend (car bm))
+           (model (cdr bm)))
+      (when (and backend model)
+        (let ((cache-served-p nil))
+          (gptel-prefix-cache-with-response-cache
+           backend model prompt agent-name
+           (lambda (cached-response)
+             (setq cache-served-p t)
+             (message "[subagent] %s served from response cache (%d chars)"
+                      agent-name (length cached-response))
+             (funcall callback cached-response)))
+          (when cache-served-p
+            (cl-return-from my/gptel--run-agent-tool-with-timeout))))))
   (let* ((adjusted-timeout
           ;; Dynamic timeout: reduce for backends with strikes (verbum health ladder)
           (if (and (fboundp 'gptel-auto-workflow--backend-health-level)

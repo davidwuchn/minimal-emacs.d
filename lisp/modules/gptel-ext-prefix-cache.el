@@ -92,6 +92,25 @@ Set to a string (or nil) by `gptel-prefix-cache-compute'.")
 (defvar gptel-prefix-cache--stats nil
   "Plist of cache statistics: (:size :sections :compute-time-ms).")
 
+;; ─── Response Cache State (Helium-Inspired) ───
+
+(defvar gptel-prefix-cache--response-cache (make-hash-table :test 'equal)
+  "Hash table mapping prompt signatures to cached LLM responses.
+Keys are strings: (backend-name . model . prompt-hash).
+Values are plists: (:response :timestamp :agent-name).
+Invalidated on run end.")
+
+(defvar gptel-prefix-cache--response-cache-hits 0
+  "Counter for response cache hits in current run.")
+
+(defvar gptel-prefix-cache--response-cache-misses 0
+  "Counter for response cache misses in current run.")
+
+(defvar gptel-prefix-cache--cross-run-stats nil
+  "Plist of aggregated statistics across runs.
+Keys: :runs :total-hits :total-misses :total-compactions
+      :avg-prefix-size :avg-compute-time-ms :last-tune-timestamp")
+
 ;; ─── Core Functions ───
 
 (defun gptel-prefix-cache-compute (&optional run-id force-recompute)
@@ -877,11 +896,6 @@ Returns t if state was restored, nil otherwise."
 
 ;; ─── Cross-Run Statistics (Phase 3) ───
 
-(defvar gptel-prefix-cache--cross-run-stats nil
-  "Plist of aggregated statistics across runs.
-Keys: :runs :total-hits :total-misses :total-compactions
-      :avg-prefix-size :avg-compute-time-ms :last-tune-timestamp")
-
 (defvar gptel-prefix-cache--hit-counter 0
   "Counter for cache hits in current run.
 Incremented each time `gptel-prefix-cache-get' returns cached content.")
@@ -1002,6 +1016,8 @@ Returns the metrics file path."
          (metrics-file (expand-file-name "prefix-cache-stats.json" metrics-dir))
          (current (gptel-prefix-cache-stats-current-run))
          (cross gptel-prefix-cache--cross-run-stats)
+         (response-total (+ gptel-prefix-cache--response-cache-hits
+                            gptel-prefix-cache--response-cache-misses))
          (entry `((timestamp . ,(format-time-string "%Y-%m-%dT%H:%M:%S"))
                   (run-id . ,(or gptel-prefix-cache--run-id "unknown"))
                   (hits . ,(plist-get current :hits))
@@ -1014,7 +1030,14 @@ Returns the metrics file path."
                   (auto-tune-enabled . ,gptel-prefix-cache--auto-tune-enabled)
                   (cross-run-runs . ,(or (plist-get cross :runs) 0))
                   (cross-run-total-hits . ,(or (plist-get cross :total-hits) 0))
-                  (cross-run-total-compactions . ,(or (plist-get cross :total-compactions) 0)))))
+                  (cross-run-total-compactions . ,(or (plist-get cross :total-compactions) 0))
+                  (response-cache-hits . ,gptel-prefix-cache--response-cache-hits)
+                  (response-cache-misses . ,gptel-prefix-cache--response-cache-misses)
+                  (response-cache-hit-rate . ,(if (> response-total 0)
+                                                  (/ (float gptel-prefix-cache--response-cache-hits)
+                                                     response-total)
+                                                0.0))
+                  (response-cache-size . ,(hash-table-count gptel-prefix-cache--response-cache)))))
     (make-directory metrics-dir t)
     (let ((existing
            (if (file-exists-p metrics-file)
@@ -1044,6 +1067,8 @@ Resets per-run counters."
         gptel-prefix-cache--hit-counter 0
         gptel-prefix-cache--miss-counter 0
         gptel-prefix-cache--compaction-counter 0)
+  ;; Clear response cache for fresh run
+  (gptel-prefix-cache--response-cache-clear)
   ;; Try to load persisted state first
   (unless (gptel-prefix-cache-load-from-file)
     ;; Fall back to computing fresh
@@ -1053,6 +1078,8 @@ Resets per-run counters."
   "Hook to call when run ends.
 Saves prefix cache state, aggregates statistics, auto-tunes threshold,
 then invalidates in-memory cache."
+  ;; Log response cache stats before clearing
+  (message "[prefix-cache] Run end: %s" (gptel-prefix-cache--response-cache-stats))
   ;; Aggregate cross-run statistics
   (let ((current (gptel-prefix-cache-stats-current-run)))
     (setq gptel-prefix-cache--cross-run-stats
@@ -1075,7 +1102,133 @@ then invalidates in-memory cache."
         (gptel-prefix-cache-export-metrics)
       (error nil)))
   (gptel-prefix-cache-invalidate)
+  (gptel-prefix-cache--response-cache-clear)
   (setq gptel-prefix-cache--compaction-archive nil))
+
+;; ─── Response Cache (Helium-Inspired Result-Level Caching) ───
+
+(defcustom gptel-prefix-cache-response-cache-enabled t
+  "When non-nil, cache LLM responses for identical prompts within a run.
+Only caches for deterministic (temperature==0) calls.
+Inspired by Helium's three-level caching strategy."
+  :type 'boolean
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-prefix-cache-response-cache-max-size 500
+  "Maximum number of responses to cache per run.
+When exceeded, oldest entries are evicted (LRU)."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
+(defun gptel-prefix-cache--compute-response-key (backend model prompt)
+  "Compute cache key for BACKEND/MODEL/PROMPT combination.
+Returns string key or nil if caching not applicable."
+  (when (and backend model prompt
+             (not (string-empty-p prompt)))
+    (let* ((backend-name (if (symbolp backend)
+                             (symbol-name backend)
+                           (format "%s" backend)))
+           (model-name (if (symbolp model)
+                           (symbol-name model)
+                         (format "%s" model)))
+           (prompt-hash (substring (sha1 (string-to-unibyte prompt)) 0 16)))
+      (format "%s:%s:%s" backend-name model-name prompt-hash))))
+
+(defun gptel-prefix-cache--response-cache-lookup (key)
+  "Look up cached response for KEY.
+Returns response string or nil if not found."
+  (when (and gptel-prefix-cache-response-cache-enabled key)
+    (let ((entry (gethash key gptel-prefix-cache--response-cache)))
+      (when entry
+        (cl-incf gptel-prefix-cache--response-cache-hits)
+        (message "[prefix-cache] Response cache HIT: %s (agent=%s)"
+                 key (plist-get entry :agent-name))
+        (plist-get entry :response)))))
+
+(defun gptel-prefix-cache--response-cache-store (key response agent-name)
+  "Store RESPONSE for KEY with AGENT-NAME metadata.
+Evicts oldest entry if cache exceeds max size."
+  (when (and gptel-prefix-cache-response-cache-enabled key response)
+    ;; Evict oldest if at capacity
+    (when (>= (hash-table-count gptel-prefix-cache--response-cache)
+              gptel-prefix-cache-response-cache-max-size)
+      (gptel-prefix-cache--response-cache-evict-oldest))
+    ;; Store new entry
+    (puthash key
+             (list :response response
+                   :timestamp (current-time)
+                   :agent-name agent-name)
+             gptel-prefix-cache--response-cache)
+    (cl-incf gptel-prefix-cache--response-cache-misses)
+    (message "[prefix-cache] Response cache STORE: %s (agent=%s, size=%d)"
+             key agent-name (hash-table-count gptel-prefix-cache--response-cache))))
+
+(defun gptel-prefix-cache--response-cache-evict-oldest ()
+  "Evict the oldest entry from the response cache (LRU)."
+  (let ((oldest-key nil)
+        (oldest-time (current-time)))
+    (maphash
+     (lambda (key entry)
+       (let ((timestamp (plist-get entry :timestamp)))
+         (when (time-less-p timestamp oldest-time)
+           (setq oldest-time timestamp
+                 oldest-key key))))
+     gptel-prefix-cache--response-cache)
+    (when oldest-key
+      (remhash oldest-key gptel-prefix-cache--response-cache)
+      (message "[prefix-cache] Response cache LRU evict: %s" oldest-key))))
+
+(defun gptel-prefix-cache--response-cache-clear ()
+  "Clear the response cache and reset counters."
+  (clrhash gptel-prefix-cache--response-cache)
+  (setq gptel-prefix-cache--response-cache-hits 0
+        gptel-prefix-cache--response-cache-misses 0)
+  (message "[prefix-cache] Response cache cleared"))
+
+(defun gptel-prefix-cache--response-cache-stats ()
+  "Return response cache statistics as human-readable string."
+  (let ((total (+ gptel-prefix-cache--response-cache-hits
+                  gptel-prefix-cache--response-cache-misses)))
+    (format "[prefix-cache] Response cache: hits=%d misses=%d hit-rate=%.1f%% size=%d/%d"
+            gptel-prefix-cache--response-cache-hits
+            gptel-prefix-cache--response-cache-misses
+            (if (> total 0)
+                (* 100.0 (/ (float gptel-prefix-cache--response-cache-hits) total))
+              0.0)
+            (hash-table-count gptel-prefix-cache--response-cache)
+            gptel-prefix-cache-response-cache-max-size)))
+
+(defun gptel-prefix-cache--get-current-backend-model ()
+  "Get current backend and model as (backend . model) cons.
+Returns nil if not available."
+  (when (and (boundp 'gptel-backend) gptel-backend
+             (fboundp 'gptel-backend-name))
+    (let ((backend (gptel-backend-name gptel-backend))
+          (model (and (boundp 'gptel-model) gptel-model)))
+      (when (and backend model)
+        (cons backend model)))))
+
+(defun gptel-prefix-cache-with-response-cache (backend model prompt agent-name callback)
+  "Execute CALLBACK with response caching for BACKEND/MODEL/PROMPT.
+If cache hit, calls CALLBACK immediately with cached response.
+If cache miss, wraps CALLBACK to cache response before returning.
+Returns t if cache hit was served, nil otherwise."
+  (let* ((key (gptel-prefix-cache--compute-response-key backend model prompt))
+         (cached (gptel-prefix-cache--response-cache-lookup key)))
+    (if cached
+        ;; Cache hit: serve immediately
+        (progn
+          (funcall callback cached)
+          t)
+      ;; Cache miss: wrap callback to store response
+      (when key
+        (let ((original-callback callback))
+          (setq callback
+                (lambda (response)
+                  ;; Cache the response before passing to original callback
+                  (gptel-prefix-cache--response-cache-store key response agent-name)
+                  (funcall original-callback response)))))
+      nil)))
 
 ;; ─── Provide ───
 
