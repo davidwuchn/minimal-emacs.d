@@ -538,3 +538,55 @@ with all gates listed."
                          '((:bottleneck . nil) (:bottlenecks))))))
     (let ((report (gptel-auto-workflow--statechart-report)))
       (should-not (string-match-p "Bottleneck gate:" report)))))
+
+;;; ─── TDD coverage for statechart-show (interactive command) ───
+;;;
+;;; Behavior: creates a buffer "*Pipeline Statechart*", inserts the
+;;; report and drift check, makes it visible.
+
+(ert-deftest test-pipeline-statechart/statechart-show-creates-buffer ()
+  "statechart-show creates a *Pipeline Statechart* buffer with content."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--statechart-report)
+             (lambda () "Mock statechart report\n"))
+            ((symbol-function 'gptel-auto-workflow--statechart-drift-check)
+             (lambda () (list :drifted nil :drifted-gates nil
+                              :report nil :computed-at (float-time))))
+            ((symbol-function 'pop-to-buffer)
+             (lambda (buf) (message "pop-to-buffer: %s" (buffer-name buf)))))
+    (gptel-auto-workflow-statechart-show)
+    (let ((buf (get-buffer "*Pipeline Statechart*")))
+      (should buf)
+      (with-current-buffer buf
+        (should (string-match-p "Mock statechart report" (buffer-string)))
+        (should (string-match-p "Drift Check" (buffer-string)))))))
+
+;;; ─── TDD coverage for statechart-rebuild-and-persist ───
+;;;
+;;; Behavior: builds a statechart, persists it, and reports success.
+;;; Errors are caught and reported, never raised.
+
+(ert-deftest test-pipeline-statechart/statechart-rebuild-and-persist-calls-persist ()
+  "rebuild-and-persist calls build-statechart, then statechart-persist
+with the result."
+  (let* ((sc (list :gates '(g1 g2) :total 5 :kept 3 :discarded 2
+                   :keep-rate 0.6 :transition-matrix (make-hash-table :test 'eq)
+                   :records nil :computed-at (float-time)))
+         (persist-called-with nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--build-statechart)
+               (lambda () sc))
+              ((symbol-function 'gptel-auto-workflow--statechart-persist)
+               (lambda (statechart) (setq persist-called-with statechart)
+                   "/tmp/mock.edn")))
+      (let ((result (gptel-auto-workflow--statechart-rebuild-and-persist)))
+        (should (equal persist-called-with sc))))))
+
+(ert-deftest test-pipeline-statechart/statechart-rebuild-and-persist-handles-errors ()
+  "If build-statechart throws, the error is caught (not raised) and
+the result string indicates failure."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--build-statechart)
+             (lambda () (error "simulated build failure")))
+            ((symbol-function 'gptel-auto-workflow--statechart-persist)
+             (lambda (_) (error "should not be called"))))
+    (let ((result (gptel-auto-workflow--statechart-rebuild-and-persist)))
+      (should (stringp result))
+      (should (string-match-p "error" result)))))
