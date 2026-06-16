@@ -6,8 +6,43 @@
 >
 > **Bootstrapped**: 2026-06-06
 > **Session**: Dual REPL Architecture (daemon-repl + Clojure brepl)
-> **Status**: 💡 **FUSION + AUTO-RESEARCH STUDIES COMPLETE** — Analyzed OpenRouter Fusion multi-model research and auto_research paper writing skill. Identified 6+5 highest-leverage gaps for OV5 researcher.
-> **Latest**: Full ERT suite green (3343 tests, 0 unexpected). Fixed `_prefix` corruption. Studied Fusion (self-fusion = 6.7pt boost) and auto_research (5 sub-skills, 4 quality gates).
+> **Status**: ⊘ **CRITICAL: Researcher daemon stuck 2+ hours, pipeline timeout broken** — Killed stuck gtm-product-org daemon. Pipeline exited but daemon kept running. Timeout mechanism not working.
+> **Latest**: Pipeline stuck at "Waiting for research to complete" since 19:08 (2+ hours). Max wait is 900s but timeout never triggered. Daemon kept running after pipeline exited. Killed daemon manually.
+
+---
+
+## Session Note (2026-06-16 — Critical: Researcher daemon stuck, pipeline timeout broken)
+
+1. **Discovered critical operational issue**
+   - Pipeline started at 19:07:45, reached Step 1: Research at 19:08:00
+   - Pipeline log shows "Waiting for research to complete (max 900s)..."
+   - Current time: 21:22 — pipeline has been "waiting" for 2+ hours
+   - Max wait is 900s (15 minutes) but timeout never triggered
+   - Researcher daemon (gtm-product-org, PID 48789) running for 2h14m
+   - No research findings produced, no research traces generated
+   - Pipeline process already exited but daemon kept running
+
+2. **Root cause analysis**
+   - Pipeline timeout mechanism in `clj/ov5/pipeline/daemon.clj` `wait-for-idle!` not working
+   - Researcher subagent stuck in LLM call or infinite loop
+   - Pipeline cleanup not killing daemon on exit
+   - No watchdog for long-running researcher sessions
+
+3. **Immediate fix applied**
+   - Killed stuck researcher daemon: `pkill -f "gtm-product-org"`
+   - Verified daemon killed, no pipeline process running
+
+4. **Impact**
+   - Pipeline has not produced experiments since 18:31 (zero-run)
+   - Multiple pipeline runs stuck at research phase
+   - Resources wasted on stuck daemons
+
+5. **Next steps (critical)**
+   - Fix pipeline timeout mechanism in `wait-for-idle!`
+   - Add daemon cleanup on pipeline exit
+   - Add watchdog for long-running researcher sessions
+   - Investigate why researcher subagent gets stuck (LLM timeout? infinite loop?)
+   - Consider implementing Fusion self-fusion (lowest-effort improvement from study)
 
 ---
 
