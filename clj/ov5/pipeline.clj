@@ -197,11 +197,9 @@
     (when (and (not (str/blank? head-before))
                (not= head-before head-after))
       (log/log "Bootstrap: HEAD updated, re-execing with latest code")
-      (let [args (into-array String
-                             (concat ["bb" "-m" "ov5.pipeline"]
-                                     *command-line-args*))]
+      (let [args (concat ["bb" "-m" "ov5.pipeline"] *command-line-args*)]
         (try
-          (p/exec {:inherit true} args)
+          (apply p/exec {:inherit true} args)
           (catch Exception e
             (log/logf "Bootstrap: re-exec failed: %s" (.getMessage e))))
         (System/exit 0)))))
