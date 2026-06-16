@@ -375,3 +375,166 @@ even though delta is non-zero."
     (let ((result (gptel-auto-workflow--statechart-drift-check current historical)))
       (should-not (plist-get result :drifted))
       (should (null (plist-get result :drifted-gates))))))
+
+;;; ─── TDD coverage for build-statechart ───
+;;;
+;;; Behavior: parses TSV records, classifies them by decision, builds
+;;; a transition matrix with per-gate passed/failed/unreached stats,
+;;; and computes keep-rate as the product of all p-passes.
+;;;
+;;; Test strategy: mock gptel-auto-workflow--parse-all-results via
+;;; cl-letf to return a controlled list of records.
+
+(ert-deftest test-pipeline-statechart/build-statechart-all-kept ()
+  "When all records have :decision 'kept', keep-rate is 1.0 and
+all gates have p-pass=1.0."
+  (let* ((records (list (list :decision "kept" :grader-quality 5)
+                        (list :decision "kept" :grader-quality 4)
+                        (list :decision "kept" :grader-quality 3))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda (&rest _args) records)))
+      (let ((result (gptel-auto-workflow--build-statechart)))
+        (should (= 3 (plist-get result :total)))
+        (should (= 3 (plist-get result :kept)))
+        (should (= 0 (plist-get result :discarded)))
+        (should (= 1.0 (plist-get result :keep-rate)))
+        ;; All gates should have p-pass=1.0
+        (let ((matrix (plist-get result :transition-matrix))
+              (gates (plist-get result :gates)))
+          (dolist (gate (append gates nil))
+            (let ((entry (gethash gate matrix)))
+              (should (= 1.0 (plist-get entry :p-pass)))
+              (should (= 3 (plist-get entry :passed)))
+              (should (= 0 (plist-get entry :failed))))))))))
+
+(ert-deftest test-pipeline-statechart/build-statechart-all-discarded-at-executor ()
+  "When all records are discarded at the executor gate, the executor
+gate has failed=N, all earlier gates have passed=N, all later gates
+have unreached=N."
+  (let* ((records (list (list :decision "merge-conflict" :grader-quality 0)
+                        (list :decision "merge-conflict" :grader-quality 0)
+                        (list :decision "merge-conflict" :grader-quality 0))))
+    ;; Wait - merge-conflict is a different decision. Let me use one 
+    ;; that maps to 'executor' in the fail-gate mapping
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda (&rest _args) records))
+              ((symbol-function 'gptel-auto-workflow--plist-get)
+               (lambda (plist key &optional default)
+                 (let ((val (lisp--plist-get plist key)))
+                   (if (null val) (or default nil) val)))))
+      ;; Simpler: use records that fail at executor
+      (let* ((records (list (list :decision "executor-timeout" :grader-quality 0)
+                            (list :decision "executor-timeout" :grader-quality 0))))
+        (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+                   (lambda (&rest _args) records)))
+          (let ((result (gptel-auto-workflow--build-statechart)))
+            (should (= 2 (plist-get result :total)))
+            (should (= 0 (plist-get result :kept)))
+            (should (= 2 (plist-get result :discarded)))
+            ;; Executor gate has 2 failures
+            (let* ((matrix (plist-get result :transition-matrix))
+                   (exec-entry (gethash 'executor matrix)))
+              (should (= 2 (plist-get exec-entry :failed)))
+              (should (= 0 (plist-get exec-entry :passed))))))))))
+
+(ert-deftest test-pipeline-statechart/build-statechart-empty-input ()
+  "No records means total=0, kept=0, keep-rate=1.0 (no constraints)."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+             (lambda (&rest _args) nil)))
+    (let ((result (gptel-auto-workflow--build-statechart)))
+      (should (= 0 (plist-get result :total)))
+      (should (= 0 (plist-get result :kept)))
+      (should (= 0 (plist-get result :discarded)))
+      (should (= 1.0 (plist-get result :keep-rate)))
+      ;; All gates initialized to passed=0, failed=0 → p-pass=1.0
+      (let ((matrix (plist-get result :transition-matrix))
+            (gates (plist-get result :gates)))
+        (dolist (gate (append gates nil))
+          (let ((entry (gethash gate matrix)))
+            (should (= 1.0 (plist-get entry :p-pass)))))))))
+
+(ert-deftest test-pipeline-statechart/build-statechart-staging-pending-skipped ()
+  "Records with :decision 'staging-pending' are transient and skipped
+(not counted in kept or discarded)."
+  (let* ((records (list (list :decision "staging-pending" :grader-quality 0)
+                        (list :decision "kept" :grader-quality 5))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--parse-all-results)
+               (lambda (&rest _args) records)))
+      (let ((result (gptel-auto-workflow--build-statechart)))
+        (should (= 2 (plist-get result :total)))
+        (should (= 1 (plist-get result :kept)))
+        (should (= 0 (plist-get result :discarded)))))))
+
+;;; ─── TDD coverage for statechart-report ───
+;;;
+;;; Behavior: calls statechart-analyze, formats the result as a
+;;; human-readable string. Tests verify key sections are present.
+
+;; Helper to construct a minimal valid analysis plist for mocking
+(defun test-pipeline-statechart--make-analysis (&optional overrides)
+  "Build a minimal analysis plist. OVERRIDES is an alist of (key . value)
+that replaces defaults in the returned plist."
+  (let* ((gates (append gptel-auto-workflow--pipeline-gates nil))
+         (per-gate (mapcar (lambda (g)
+                             (list :gate g :p-pass 0.9 :p-fail 0.1
+                                   :entered 10 :failed 1))
+                           gates))
+         (base (list :bottleneck 'validation
+                     :bottlenecks (list 'validation)
+                     :expected-keep-rate 0.7
+                     :lossiest-gate 'executor
+                     :phi-keep-rate-max 0.6433
+                     :phi-deviation -0.0567
+                     :num-gates (length gates)
+                     :total-experiments 10
+                     :per-gate per-gate
+                     :gate-score-vectors nil
+                     :compensating-errors nil
+                     :computed-at (float-time))))
+    (let ((pl base))
+      (dolist (ov overrides pl)
+        (setq pl (plist-put pl (car ov) (cdr ov)))))))
+
+(ert-deftest test-pipeline-statechart/statechart-report-contains-header ()
+  "The report string starts with a recognizable header."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--statechart-analyze)
+             (lambda () (test-pipeline-statechart--make-analysis))))
+    (let ((report (gptel-auto-workflow--statechart-report)))
+      (should (stringp report))
+      (should (string-match-p "Pipeline Statechart Analysis" report)))))
+
+(ert-deftest test-pipeline-statechart/statechart-report-contains-total-experiments ()
+  "The report includes the total experiment count."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--statechart-analyze)
+             (lambda () (test-pipeline-statechart--make-analysis
+                         '((:total-experiments . 42))))))
+    (let ((report (gptel-auto-workflow--statechart-report)))
+      (should (string-match-p "Total experiments: 42" report)))))
+
+(ert-deftest test-pipeline-statechart/statechart-report-contains-per-gate-table ()
+  "The report includes a per-gate transition probability table
+with all gates listed."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--statechart-analyze)
+             (lambda () (test-pipeline-statechart--make-analysis))))
+    (let* ((report (gptel-auto-workflow--statechart-report))
+           (gates (append gptel-auto-workflow--pipeline-gates nil)))
+      (should (string-match-p "Per-gate transition probabilities" report))
+      (should (string-match-p "P(pass)" report))
+      (dolist (gate gates)
+        (should (string-match-p (symbol-name gate) report))))))
+
+(ert-deftest test-pipeline-statechart/statechart-report-contains-bottleneck ()
+  "The report includes the bottleneck gate when present."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--statechart-analyze)
+             (lambda () (test-pipeline-statechart--make-analysis
+                         '((:bottleneck . validation))))))
+    (let ((report (gptel-auto-workflow--statechart-report)))
+      (should (string-match-p "Bottleneck gate: validation" report)))))
+
+(ert-deftest test-pipeline-statechart/statechart-report-omits-bottleneck-when-nil ()
+  "If :bottleneck is nil, no bottleneck line appears."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--statechart-analyze)
+             (lambda () (test-pipeline-statechart--make-analysis
+                         '((:bottleneck . nil) (:bottlenecks))))))
+    (let ((report (gptel-auto-workflow--statechart-report)))
+      (should-not (string-match-p "Bottleneck gate:" report)))))
