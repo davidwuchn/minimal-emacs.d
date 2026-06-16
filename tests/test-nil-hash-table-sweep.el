@@ -13,7 +13,8 @@
 
 (defvar tdd-sweep--known-false-positives
   '("gptel-prefix-cache--run-id"
-    "gptel-auto-workflow--memory-schema-code-links")
+    "gptel-auto-workflow--memory-schema-code-links"
+    "file") ; intentionally dynamic special; sweep regex matches it in cons/puthash key position
   "List of defvar names that the audit flags but are NOT hash tables.
 `gptel-prefix-cache--run-id' is a string run-id, not a hash table.
 The audit matches it because the word \"cache\" appears in nearby

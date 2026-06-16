@@ -159,8 +159,8 @@ SIGNALS an error if TOPIC is a non-string, non-nil value."
               (error "Project root must not be nil; check `gptel-tools-memory--project-root'")))
          (mem-dir (expand-file-name gptel-tools-memory-dir _root))
          (know-dir (expand-file-name gptel-tools-memory-knowledge-dir _root))
-         (results (append (gptel-tools-memory--collect-dir mem-dir "memory" root topic)
-                          (gptel-tools-memory--collect-dir know-dir "knowledge" root topic))))
+         (results (append (gptel-tools-memory--collect-dir mem-dir "memory" _root topic)
+                          (gptel-tools-memory--collect-dir know-dir "knowledge" _root topic))))
     (if results
         (format "Available memories (%d):\n%s"
                 (length results)

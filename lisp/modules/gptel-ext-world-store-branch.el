@@ -23,6 +23,7 @@
 
 ;; Soft-require the parent bridge (no error if absent)
 (require 'gptel-ext-world-store nil t)
+(require 'subr-x)
 
 ;; -----------------------------------------------------------------------------
 ;; Internal helpers
@@ -54,6 +55,15 @@
          (code (format "(ns ov5.world-store.branch) (%s %s)" fn-name args-str)))
     (ov5-world-store--brepl-eval code)))
 
+(defun ov5-world-store-branch--check-ok (result operation)
+  "Signal an error if RESULT from a branch OPERATION is nil, empty, or \"nil\".
+Returns t on success."
+  (if (or (null result)
+          (string-empty-p result)
+          (string= result "nil"))
+      (error "World Store branch %s failed" operation)
+    t))
+
 ;; -----------------------------------------------------------------------------
 ;; Public API
 
@@ -62,7 +72,7 @@
   "Create a new World Store branch named BRANCH-ID.
 PARENT-BRANCH defaults to \"main\".
 METADATA is an optional plist merged into the registry entry.
-Returns t on success, signals error on failure."
+Signals an error on failure, returns t on success."
   (unless ov5-world-store--connected
     (ov5-world-store-connect))
   (ov5-world-store-branch--set-directory)
@@ -70,28 +80,23 @@ Returns t on success, signals error on failure."
          (meta-edn (if metadata
                        (ov5-world-store--plist-to-edn metadata)
                      "nil"))
-         (code (format
-                "(ns ov5.world-store.branch)
-                 (or (create-branch \"%s\" \"%s\" %s)
-                     (throw (Exception. \"Branch creation failed\")))"
-                branch-id parent meta-edn)))
-    (ov5-world-store--brepl-eval code))
-  t)
+         (result (ov5-world-store--brepl-eval
+                  (format "(ns ov5.world-store.branch) (create-branch \"%s\" \"%s\" %s)"
+                          branch-id parent meta-edn))))
+    (ov5-world-store-branch--check-ok result (format "create %s" branch-id))))
 
 ;;;###autoload
 (defun ov5-world-store-branch-switch (branch-id)
   "Switch the active World Store connection to BRANCH-ID.
-Returns BRANCH-ID on success."
+Returns BRANCH-ID on success, signals error on failure."
   (unless ov5-world-store--connected
     (ov5-world-store-connect))
   (ov5-world-store-branch--set-directory)
-  (let ((code (format
-               "(ns ov5.world-store.branch)
-                (or (switch-branch \"%s\")
-                    (throw (Exception. \"Branch switch failed\")))"
-               branch-id)))
-    (ov5-world-store--brepl-eval code))
-  branch-id)
+  (let ((result (ov5-world-store--brepl-eval
+                 (format "(ns ov5.world-store.branch) (switch-branch \"%s\")"
+                         branch-id))))
+    (ov5-world-store-branch--check-ok result (format "switch %s" branch-id))
+    branch-id))
 
 ;;;###autoload
 (defun ov5-world-store-branch-merge (source-branch target-branch)
@@ -111,18 +116,14 @@ Returns the count of new entities transacted (number)."
 (defun ov5-world-store-branch-promote (branch-id)
   "Promote BRANCH-ID to become the new main branch.
 Old main is archived as main-@<timestamp>.
-Returns t on success, signals an error on failure."
+Signals an error on failure, returns t on success."
   (unless ov5-world-store--connected
     (ov5-world-store-connect))
   (ov5-world-store-branch--set-directory)
-  (let ((code (format
-               "(ns ov5.world-store.branch)
-                (or (promote-branch \"%s\")
-                    (throw (Exception. \"Branch promotion failed\")))"
-               branch-id)))
-    (unless (ov5-world-store--brepl-eval code)
-      (error "Branch promotion failed: %s" branch-id)))
-  t)
+  (let ((result (ov5-world-store--brepl-eval
+                 (format "(ns ov5.world-store.branch) (promote-branch \"%s\")"
+                         branch-id))))
+    (ov5-world-store-branch--check-ok result (format "promote %s" branch-id))))
 
 ;;;###autoload
 (defun ov5-world-store-branch-list ()
@@ -136,18 +137,14 @@ Returns t on success, signals an error on failure."
 ;;;###autoload
 (defun ov5-world-store-branch-delete (branch-id)
   "Delete BRANCH-ID. Refuses to delete \"main\".
-Returns t on success, signals an error on failure."
+Signals an error on failure, returns t on success."
   (unless ov5-world-store--connected
     (ov5-world-store-connect))
   (ov5-world-store-branch--set-directory)
-  (let ((code (format
-               "(ns ov5.world-store.branch)
-                (or (delete-branch \"%s\")
-                    (throw (Exception. \"Branch delete failed\")))"
-               branch-id)))
-    (unless (ov5-world-store--brepl-eval code)
-      (error "Branch delete failed: %s" branch-id)))
-  t)
+  (let ((result (ov5-world-store--brepl-eval
+                 (format "(ns ov5.world-store.branch) (delete-branch \"%s\")"
+                         branch-id))))
+    (ov5-world-store-branch--check-ok result (format "delete %s" branch-id))))
 
 ;;;###autoload
 (defun ov5-world-store-branch-current ()

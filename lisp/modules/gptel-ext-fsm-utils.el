@@ -25,7 +25,6 @@
 
 (require 'gptel nil t)
 (require 'cl-lib)
-
 ;;; FSM ID Registry
 
 (defvar my/gptel--fsm-registry (make-hash-table :test 'equal :weakness 'value)
@@ -264,11 +263,11 @@ Returns FSM struct or nil if not found."
                       (let ((id (my/gptel--fsm-get-id fsm)))
                         (and id (equal id context-id)))))
                 (coerce-id (id)
-                  (let ((fsm (and (stringp id)
+                  (let ((_fsm (and (stringp id)
                                   (my/gptel--fsm-get-by-id id))))
-                    (and (my/gptel--fsm-p fsm)
-                         (matches-context-p fsm)
-                           fsm)))
+                    (and (my/gptel--fsm-p _fsm)
+                         (matches-context-p _fsm)
+                           _fsm)))
                  (resolve-fsm (obj)
                    (cond
                     ((null obj) nil)
