@@ -204,7 +204,7 @@ legitimate subagent work. Set to nil to disable.\")")
 
 (ert-deftest test-self-heal-semantic/audit-checks-variable-defined ()
   "The audit checks alist is defined with all checks."
-  (should (= (length gptel-auto-workflow--semantic-audit-checks) 19))
+  (should (= (length gptel-auto-workflow--semantic-audit-checks) 20))
   (should (assq 'let-binding-function gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'hardcoded-limit gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'score-zero-bug gptel-auto-workflow--semantic-audit-checks))
@@ -219,7 +219,8 @@ legitimate subagent work. Set to nil to disable.\")")
   (should (assq 'daemon-hang gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'nil-hash-table gptel-auto-workflow--semantic-audit-checks))
   (should (assq 'unbound-declared-function-call gptel-auto-workflow--semantic-audit-checks))
-  (should (assq 'daemon-server-start gptel-auto-workflow--semantic-audit-checks)))
+  (should (assq 'daemon-server-start gptel-auto-workflow--semantic-audit-checks))
+  (should (assq 'daemon-launcher-env gptel-auto-workflow--semantic-audit-checks)))
 
 ;; ── Test 10: Missing provide detection ──
 
@@ -520,6 +521,41 @@ After fix: catches ALL errors via (error ...)."
         (let ((issues (gptel-auto-workflow--audit-daemon-server-start file)))
           (should (= issues 0)))
       (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/daemon-launcher-env-in-checks ()
+  "New audit check is registered in `gptel-auto-workflow--semantic-audit-checks'."
+  (should (assq 'daemon-launcher-env gptel-auto-workflow--semantic-audit-checks)))
+
+(ert-deftest test-self-heal-semantic/daemon-launcher-env-in-fixers ()
+  "New fixer is registered in `gptel-auto-workflow--semantic-fixer-alist'."
+  (should (assq 'daemon-launcher-env gptel-auto-workflow--semantic-fixer-alist)))
+
+(ert-deftest test-self-heal-semantic/skips-daemon-launcher-env-for-non-daemon-file ()
+  "Audit only applies to clj/ov5/pipeline/daemon.clj."
+  (let* ((content "(def env-opts (merge {}))\n")
+         (file (test-self-heal-semantic--tmp-file content)))
+    (unwind-protect
+        (let ((issues (gptel-auto-workflow--audit-daemon-launcher-env file)))
+          (should (= issues 0)))
+      (test-self-heal-semantic--cleanup file))))
+
+(ert-deftest test-self-heal-semantic/detects-missing-path-in-daemon-clj ()
+  "Audit flags daemon.clj env-opts missing PATH."
+  (let* ((content "(let [env-opts (merge {\"EMACSNATIVELOADPATH\" \"\"\n                                \"TMPDIR\" \"/tmp\"})]\n  ...)\n")
+         (file (concat (make-temp-file "ov5-test-daemon-") ".clj")))
+    (unwind-protect
+        (progn
+          (with-temp-file file (insert content))
+          ;; Rename file to match pipeline/daemon.clj pattern
+          (let ((target (expand-file-name "clj/ov5/pipeline/daemon.clj"
+                                          (file-name-directory file))))
+            (make-directory (file-name-directory target) t)
+            (rename-file file target t)
+            (let ((issues (gptel-auto-workflow--audit-daemon-launcher-env target)))
+              (should (>= issues 1)))
+            (setq file target)))
+      (when (and file (file-exists-p file))
+        (delete-file file)))))
 
 ;; ── Test 8: Excessive blank line detection ──
 

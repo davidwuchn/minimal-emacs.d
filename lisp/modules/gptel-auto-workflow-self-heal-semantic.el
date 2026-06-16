@@ -1033,6 +1033,68 @@ handles server startup."
                fixed (file-name-nondirectory file)))
     fixed))
 
+;; ── Check 20: Daemon launcher environment variables ──
+
+(defun gptel-auto-workflow--audit-daemon-launcher-env (file)
+  "Audit FILE (clj/ov5/pipeline/daemon.clj) for missing env vars in env-opts.
+The Babashka daemon launcher replaces the child process environment entirely.
+If PATH or TMPDIR are omitted, the spawned Emacs daemon cannot find external
+binaries such as gpg or its own emacsclient socket.  Returns count of issues."
+  (let ((issues 0))
+    (when (and (stringp file)
+               (string-match-p "pipeline/daemon\\.clj$" file))
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        (let ((content (buffer-string))
+              (required '("TMPDIR" "PATH")))
+          (dolist (var required)
+            (unless (string-match-p
+                     (format "\\\"%s\\\"[ \t\n]+" (regexp-quote var))
+                     content)
+              (setq issues (1+ issues))
+              (gptel-auto-workflow--semantic-audit-record
+               file 0 'daemon-launcher-env
+               (format "daemon.clj env-opts missing %s — spawned Emacs daemon may lack environment" var)))))))
+    issues))
+
+(defun gptel-auto-workflow--fix-daemon-launcher-env (file)
+  "Add missing PATH and TMPDIR entries to env-opts in FILE.
+Returns number of issues fixed."
+  (let ((fixed 0)
+        (original-content (with-temp-buffer
+                            (insert-file-contents file)
+                            (buffer-string))))
+    (with-temp-buffer
+      (insert original-content)
+      (goto-char (point-min))
+      ;; Find env-opts form: (merge {"EMACSNATIVELOADPATH" "" ...})
+      (while (re-search-forward "(env-opts[ \t\n]+(merge[ \t\n]+{\"EMACSNATIVELOADPATH\"[ \t\n]+\"\"" nil t)
+        (let ((block-start (match-beginning 0))
+              (map-start (match-end 0)))
+          (condition-case nil
+              (let* ((map-end (save-excursion
+                                (goto-char (1- map-start))
+                                (forward-sexp 1)
+                                (point)))
+                     (block-content (buffer-substring map-start map-end)))
+                (goto-char map-start)
+                (unless (string-match-p "\"PATH\"" block-content)
+                  (insert "\n                             \"PATH\" (or (System/getenv \"PATH\") \"\")")
+                  (cl-incf fixed))
+                (unless (string-match-p "\"TMPDIR\"" block-content)
+                  (insert "\n                             \"TMPDIR\" \"/tmp\"")
+                  (cl-incf fixed)))
+            (error nil))))
+      (when (> fixed 0)
+        (gptel-auto-workflow--fix-validate-and-write
+         (current-buffer) file original-content
+         :no-load-check t :no-subprocess-check t)))
+    (when (> fixed 0)
+      (message "[self-heal-semantic] Added %d env var(s) to daemon launcher in %s"
+               fixed (file-name-nondirectory file)))
+    fixed))
+
 (defun gptel-auto-workflow--extract-function-symbol (arg)
   "Extract a function symbol from ARG which may be SYM, (function SYM), or (quote
 SYM)."
@@ -1216,7 +1278,8 @@ is loaded.  Returns count of issues found."
     (toxic-commit-subject . gptel-auto-workflow--audit-toxic-commit-subject)
     (score-fabrication . gptel-auto-workflow--audit-score-fabrication)
      (unbound-declared-function-call . gptel-auto-workflow--audit-unbound-declared-function-calls)
-     (daemon-server-start . gptel-auto-workflow--audit-daemon-server-start))
+     (daemon-server-start . gptel-auto-workflow--audit-daemon-server-start)
+     (daemon-launcher-env . gptel-auto-workflow--audit-daemon-launcher-env))
   "Alist of audit check name (symbol) to audit function.")
 
 ;; ── Check 8: condition-case with unbound err ──
@@ -2261,7 +2324,8 @@ is safe for side-effect-only helpers.  Returns number of calls fixed."
     (nil-hash-table . gptel-auto-workflow--fix-nil-hash-tables)
     (orphaned-curl-process . gptel-auto-workflow--fix-orphaned-curl-processes)
      (unbound-declared-function-call . gptel-auto-workflow--fix-unbound-declared-function-calls)
-     (daemon-server-start . gptel-auto-workflow--fix-daemon-server-start))
+     (daemon-server-start . gptel-auto-workflow--fix-daemon-server-start)
+     (daemon-launcher-env . gptel-auto-workflow--fix-daemon-launcher-env))
   "Alist mapping audit issue type (symbol) to its auto-fixer function.
 Adding a new auto-fixer is now a one-line change to this alist.
 Each fixer must take FILE as argument and return fix count (0 = no-op).")
