@@ -16,6 +16,17 @@
    "assistant/skills/"
    "assistant/strategies/"])
 
+(def auto-gen-files
+  "Individual auto-generated files. Treated like `auto-gen-dirs` for
+   stash/clear/conflict handling."
+  ["mementum/state.md"])
+
+(defn- auto-gen-path?
+  "Return true if PATH is inside an auto-generated dir or is an auto-generated file."
+  [path]
+  (or (some #(str/starts-with? path %) auto-gen-dirs)
+      (some #(= path %) auto-gen-files)))
+
 (defn- default-repo
   "Default repo path from project root. Can be overridden."
   []
@@ -56,11 +67,9 @@
   (boolean (seq (raw-unmerged-paths repo))))
 
 (defn only-auto-gen-paths?
-  "Return true if all given paths are inside auto-generated directories."
+  "Return true if all given paths are auto-generated (dirs or files)."
   [paths]
-  (every? (fn [p]
-            (some #(str/starts-with? p %) auto-gen-dirs))
-          paths))
+  (every? auto-gen-path? paths))
 
 (defn clear-auto-generated-unmerged-paths!
   "Clear unmerged paths that belong to auto-generated directories.
@@ -74,13 +83,15 @@
        (empty? unmerged)
        true
 
-       ;; All conflicts are in auto-gen dirs — safe to clear
+       ;; All conflicts are in auto-gen dirs/files — safe to clear
        (only-auto-gen-paths? unmerged)
        (do
          (log/log "Clearing auto-generated merge conflicts before git sync")
          (git repo "merge" "--abort")
          (doseq [d auto-gen-dirs]
            (git-out repo "checkout" "HEAD" "--" d))
+         (doseq [f auto-gen-files]
+           (git-out repo "checkout" "HEAD" "--" f))
          (apply git repo "clean" "-fd" "--" auto-gen-dirs)
          (not (has-unmerged-paths? repo)))
 
@@ -100,9 +111,10 @@
   ([repo label]
    (let [ts (System/currentTimeMillis)
          stash-msg (str label "-" ts)
+         paths (concat auto-gen-dirs auto-gen-files)
          args (into ["git" "-C" repo "stash" "push" "--include-untracked"
                      "-m" stash-msg "--"]
-                    auto-gen-dirs)
+                    paths)
          result (apply proc/sh args)
          out (str/trim (:out result))
          err (str/trim (:err result))
@@ -152,9 +164,11 @@
        (log/logf "%s" (:output stash-result)))
      ;; Abort any lingering merge, then pull --rebase
      (git repo "merge" "--abort")
-     ;; Reset auto-gen dirs to HEAD before pull (defensive)
+     ;; Reset auto-gen dirs/files to HEAD before pull (defensive)
      (doseq [d auto-gen-dirs]
        (git-out repo "checkout" "HEAD" "--" d))
+     (doseq [f auto-gen-files]
+       (git-out repo "checkout" "HEAD" "--" f))
      (doseq [d auto-gen-dirs]
        (git-out repo "clean" "-fd" "--" d))
      ;; Pull
@@ -181,9 +195,11 @@
      (git repo "fetch" "origin" "main")
      ;; Stash auto-gen
      (git-out repo "stash" "-q")
-     ;; Reset auto-gen dirs
+     ;; Reset auto-gen dirs/files
      (doseq [d auto-gen-dirs]
        (git-out repo "checkout" "HEAD" "--" d))
+     (doseq [f auto-gen-files]
+       (git-out repo "checkout" "HEAD" "--" f))
      ;; Rebase
      (git repo "rebase" "origin/main")
      ;; Pop stash

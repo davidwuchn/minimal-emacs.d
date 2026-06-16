@@ -26,3 +26,11 @@
   (testing "All paths in auto-gen dirs returns true"
     (is (true? (g/only-auto-gen-paths? ["mementum/knowledge/a.md" "mementum/memories/b.md"
                                           "assistant/skills/c.md"])))))
+
+(deftest only-auto-gen-paths-includes-state-md
+  (testing "mementum/state.md is recognized as auto-generated"
+    (is (true? (g/only-auto-gen-paths? ["mementum/state.md"])))))
+
+(deftest only-auto-gen-paths-state-md-mixed-with-code-false
+  (testing "state.md mixed with code file is not only auto-gen"
+    (is (false? (g/only-auto-gen-paths? ["mementum/state.md" "lisp/modules/foo.el"])))))
