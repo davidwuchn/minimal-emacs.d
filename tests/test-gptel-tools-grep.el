@@ -21,6 +21,7 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'gptel-tools-agent-base)
+(require 'gptel-tools-grep)
 
 ;;; Mock File Content
 

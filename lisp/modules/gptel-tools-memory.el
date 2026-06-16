@@ -33,13 +33,13 @@ SIGNALS an error if no valid root can be determined."
                     (and (fboundp 'project-root)
                          (project-root (project-current)))
                     default-directory)))
-      (unless (stringp root)
+      (unless (stringp _root)
         (error "gptel-tools-memory: Could not determine project root; all fallback methods
 returned nil"))
-      (when (string= root "")
+      (when (string= _root "")
         (error "gptel-tools-memory: Project root resolved to empty string"))
-      (setq gptel-tools-memory--cached-root root)
-      root)))
+      (setq gptel-tools-memory--cached-root _root)
+      _root)))
 
 (defun gptel-tools-memory--invalidate-cache ()
   "Invalidate cached project root. Call when project changes."
@@ -67,13 +67,13 @@ SIGNALS an error if SLUG contains path traversal or invalid characters."
             (string-prefix-p "\\" slug))
     (error "Slug must not start with a path separator"))
   (let* ((_root (gptel-tools-memory--project-root))
-         (_ (when (null root)
+         (_ (when (null _root)
               (error "Project root must not be nil; check `gptel-tools-memory--project-root'")))
          (base-dir (expand-file-name
                     (if knowledge-p
                         gptel-tools-memory-knowledge-dir
                       gptel-tools-memory-dir)
-                    root))
+                    _root))
          (filename (if (string-suffix-p ".md" slug) slug (concat slug ".md")))
          (resolved (expand-file-name filename base-dir)))
     ;; DEFENSE: Verify resolved path is contained within base-dir
@@ -153,10 +153,10 @@ SIGNALS an error if TOPIC is a non-string, non-nil value."
 (defun gptel-tools-memory--list (&optional topic)
   "List available memories, optionally filtered by TOPIC."
   (let* ((_root (gptel-tools-memory--project-root))
-         (_ (when (null root)
+         (_ (when (null _root)
               (error "Project root must not be nil; check `gptel-tools-memory--project-root'")))
-         (mem-dir (expand-file-name gptel-tools-memory-dir root))
-         (know-dir (expand-file-name gptel-tools-memory-knowledge-dir root))
+         (mem-dir (expand-file-name gptel-tools-memory-dir _root))
+         (know-dir (expand-file-name gptel-tools-memory-knowledge-dir _root))
          (results (append (gptel-tools-memory--collect-dir mem-dir "memory" root topic)
                           (gptel-tools-memory--collect-dir know-dir "knowledge" root topic))))
     (if results

@@ -23,9 +23,6 @@
 
 ;;; Code:
 
-(defvar fsm nil)
-(defvar fsm-or-id nil)
-(defvar fsm-via-id nil)
 (require 'gptel nil t)
 (require 'cl-lib)
 
@@ -89,15 +86,15 @@ TEST: Second call with same FSM returns same ID.
 BUILDS ON DISCOVERY: Idempotent registration prevents duplicate IDs
 in scenarios where FSM may be registered multiple times during
 nested agent calls."
-  (when (and fsm (my/gptel--fsm-p fsm))
-    (let ((existing-id (gethash fsm my/gptel--fsm-registry)))
+  (when (and _fsm (my/gptel--fsm-p _fsm))
+    (let ((existing-id (gethash _fsm my/gptel--fsm-registry)))
       (or existing-id
           (let ((id (my/gptel--fsm-generate-id)))
-            (puthash fsm id my/gptel--fsm-registry)
-            (puthash id fsm my/gptel--fsm-registry)
+            (puthash _fsm id my/gptel--fsm-registry)
+            (puthash id _fsm my/gptel--fsm-registry)
             id)))))
 
-(defun my/gptel--fsm-unregister (_fsm-or-id)
+(defun my/gptel--fsm-unregister (fsm-or-id)
   "Remove FSM from registry by FSM struct or ID.
 
 ASSUMPTION: Input is either FSM struct or ID string.
@@ -114,11 +111,11 @@ TEST: (my/gptel--fsm-unregister unknown-id) => nil (no error)
 ADAPTS TO: Dual input types (FSM struct or ID string) for flexible cleanup
 in various call contexts (parent agent vs child agent cleanup)."
   (when fsm-or-id
-    (if (stringp fsm-or-id)
-        (let* ((_fsm (gethash fsm-or-id my/gptel--fsm-registry)))
-          (when fsm
-            (remhash fsm my/gptel--fsm-registry)
-            (remhash fsm-or-id my/gptel--fsm-registry)))
+      (if (stringp fsm-or-id)
+          (let ((fsm (gethash fsm-or-id my/gptel--fsm-registry)))
+            (when fsm
+              (remhash fsm my/gptel--fsm-registry)
+              (remhash fsm-or-id my/gptel--fsm-registry)))
       (let ((id (gethash fsm-or-id my/gptel--fsm-registry)))
         (when id
           (remhash fsm-or-id my/gptel--fsm-registry)
@@ -161,8 +158,8 @@ duplication across coerce-fsm and other functions.
 
 PROACTIVE MITIGATION: Centralizes FSM→ID lookup logic, preventing
 inconsistent lookups if registry structure changes."
-  (and (my/gptel--fsm-p fsm)
-       (gethash fsm my/gptel--fsm-registry)))
+  (and (my/gptel--fsm-p _fsm)
+       (gethash _fsm my/gptel--fsm-registry)))
 
 ;;; FSM Predicates and Coercion
 
@@ -266,11 +263,11 @@ Returns FSM struct or nil if not found."
                       (let ((id (my/gptel--fsm-get-id fsm)))
                         (and id (equal id context-id)))))
                 (coerce-id (id)
-                  (let ((_fsm (and (stringp id)
+                  (let ((fsm (and (stringp id)
                                   (my/gptel--fsm-get-by-id id))))
                     (and (my/gptel--fsm-p fsm)
                          (matches-context-p fsm)
-                          fsm)))
+                           fsm)))
                  (resolve-fsm (obj)
                    (cond
                     ((null obj) nil)
@@ -517,8 +514,8 @@ Returns t on success, signals error on failure."
                      (unless (my/gptel--fsm-id-valid-p id)
                        (error "FSM registry invariant violated: invalid ID format in FSM→ID mapping: %s" id))
                      (let* ((_fsm-via-id (gethash id my/gptel--fsm-registry)))
-                       (unless (eq fsm-via-id key)
-                         (error "FSM registry invariant violated: FSM→ID bidirectional mismatch for FSM %S (expected ID %S, got %S)" key id fsm-via-id)))
+                       (unless (eq _fsm-via-id key)
+                         (error "FSM registry invariant violated: FSM→ID bidirectional mismatch for FSM %S (expected ID %S, got %S)" key id _fsm-via-id)))
                      (let ((count (gethash key fsm-counts 0)))
                        (puthash key (1+ count) fsm-counts))))
                   (t

@@ -12,6 +12,16 @@
 (require 'nucleus-tools)
 (require 'gptel-tools-agent-base)
 
+(defmacro _let (bindings &rest body)
+  "Compatibility alias for `let'."
+  (declare (indent 1))
+  `(let ,bindings ,@body))
+
+(defmacro _let* (bindings &rest body)
+  "Compatibility alias for `let*'."
+  (declare (indent 1))
+  `(let* ,bindings ,@body))
+
 ;;; Customization
 
 (defgroup gptel-tools-grep nil

@@ -290,7 +290,7 @@ buffer."
   (let (result)
     (dolist (file files (reverse result))
       (when (and (file-exists-p file)
-                 (let ((line-count (_if (executable-find "wc")
+                 (let ((line-count (if (executable-find "wc")
                                        (with-temp-buffer
                                          (condition-case err (call-process "wc" nil t nil "-l" file))
                                          (string-to-number (string-trim (buffer-string))))
@@ -777,7 +777,7 @@ and timeout-heavy targets for the researcher to investigate."
       (maphash
        (lambda (target counts)
          (when (> (car counts) 10)
-           (let ((keep-rate (_if (> (car counts) 0)
+            (let ((keep-rate (if (> (car counts) 0)
                                 (/ (float (cdr counts)) (car counts)) 0.0)))
              (push (cons target (list :total (car counts) :kept (cdr counts)
                                       :rate keep-rate))
@@ -1105,10 +1105,10 @@ Returns plist with beta, own-priority, etc, or nil if not found."
                     (format "%s" gptel-auto-workflow--current-experiment-axis)))
          (axis-file (when axis
                       (expand-file-name (format "strategy-guidance-%s.json"
-                                                (string-remove-prefix ":" axis)) data-dir)))
+                                                (string-remove-prefix ":" axis)) _data-dir)))
          (file (if (and axis-file (file-exists-p axis-file))
                    axis-file
-                 (expand-file-name "strategy-guidance.json" data-dir))))
+                 (expand-file-name "strategy-guidance.json" _data-dir))))
     (when (file-exists-p file)
       (condition-case err
           (let ((json-object-type 'plist)
@@ -1301,7 +1301,7 @@ no tree-sitter)
                (lambda (response _info)
                  (unless called
                    (setq called t)
-                   (let* ((candidate (_if (stringp response)
+                    (let* ((candidate (if (stringp response)
                                          response
                                        (format "%s" response)))
                           (trimmed (string-trim candidate))
@@ -1641,7 +1641,7 @@ analyzer-time-budget govern."
                                               gptel-auto-workflow--analyzer-failed-backends)))
                         (push failed-backend
                               gptel-auto-workflow--analyzer-failed-backends))
-                      (_if-let* ((candidate
+                       (if-let* ((candidate
                                  (and (< attempt 2)        ; max 3 total attempts
                                       (null targets)
                                       (or gptel-auto-workflow--analyzer-quota-exhausted
@@ -1683,7 +1683,7 @@ Returns updated targets list."
    ((not (gptel-auto-workflow--nonempty-string-p file)) targets)
    ((not (and (stringp proj-root) (not (string-empty-p proj-root)))) targets)
    (t
-    (let ((abs-path (_if (file-name-absolute-p file)
+     (let ((abs-path (if (file-name-absolute-p file)
                         file
                       (expand-file-name file proj-root)))
           (root-prefix (if (string-suffix-p "/" proj-root)
@@ -2671,7 +2671,7 @@ Uses topic-specific model if available and topic detected."
                      (plist-get topic-model :n-traces)
                    (plist-get controller-config :model-n-traces)) 0))
     (when (and intercept weights)
-      (let* ((has-urls (_if (string-match-p "https?://" (or output-text "")) 1 0))
+       (let* ((has-urls (if (string-match-p "https?://" (or output-text "")) 1 0))
              (has-structure (if (string-match-p "## .*\n" (or output-text "")) 1 0))
              (has-code (if (string-match-p "```" (or output-text "")) 1 0))
              (source-own 1) ;; Assume own-repo for current context
