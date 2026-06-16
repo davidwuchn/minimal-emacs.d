@@ -311,3 +311,67 @@ silently dropped (not an error)."
       (should (equal v1 (nth 0 result)))
       (should (equal v2 (nth 1 result)))
       (should (equal v3 (nth 2 result))))))
+
+;;; ─── TDD coverage for statechart-drift-check ───
+;;;
+;;; Behavior: compares current and historical statecharts, flags any
+;;; gate whose p-pass has dropped by more than the drift threshold
+;;; (default 0.1).
+
+(ert-deftest test-pipeline-statechart/drift-check-identical-no-drift ()
+  "When current and historical are identical, no drift is reported."
+  (let* ((gates (append gptel-auto-workflow--pipeline-gates nil))
+         (matrix (make-hash-table :test 'eq))
+         (sc (list :gates gates :total 10 :kept 7 :discarded 3
+                   :keep-rate 0.7 :transition-matrix matrix
+                   :records nil :computed-at (float-time))))
+    (dolist (gate (append gates nil))
+      (puthash gate (list :p-pass 0.9 :p-fail 0.1 :entered 10 :failed 1)
+               matrix))
+    (let ((result (gptel-auto-workflow--statechart-drift-check sc sc)))
+      (should-not (plist-get result :drifted))
+      (should (null (plist-get result :drifted-gates))))))
+
+(ert-deftest test-pipeline-statechart/drift-check-drops-above-threshold ()
+  "A drop in p-pass larger than the threshold flags a drift."
+  (let* ((gates (append gptel-auto-workflow--pipeline-gates nil))
+         (current-matrix (make-hash-table :test 'eq))
+         (historical-matrix (make-hash-table :test 'eq))
+         (current (list :gates gates :total 10 :kept 5 :discarded 5
+                        :keep-rate 0.5 :transition-matrix current-matrix
+                        :records nil :computed-at (float-time)))
+         (historical (list :gates gates :total 10 :kept 9 :discarded 1
+                           :keep-rate 0.9 :transition-matrix historical-matrix
+                           :records nil :computed-at (float-time)))
+         (threshold gptel-auto-workflow-statechart-drift-threshold))
+    (dolist (gate (append gates nil))
+      (puthash gate (list :p-pass 0.5 :p-fail 0.5 :entered 10 :failed 5)
+               current-matrix)
+      (puthash gate (list :p-pass 0.95 :p-fail 0.05 :entered 10 :failed 1)
+               historical-matrix))
+    ;; Override threshold to a tight value for the test
+    (let ((result (let ((gptel-auto-workflow-statechart-drift-threshold 0.1))
+                    (gptel-auto-workflow--statechart-drift-check current historical))))
+      (should (plist-get result :drifted))
+      (should (> (length (plist-get result :drifted-gates)) 0)))))
+
+(ert-deftest test-pipeline-statechart/drift-check-improvement-no-alert ()
+  "When current p-pass is BETTER than historical, no drift alert
+even though delta is non-zero."
+  (let* ((gates (append gptel-auto-workflow--pipeline-gates nil))
+         (current-matrix (make-hash-table :test 'eq))
+         (historical-matrix (make-hash-table :test 'eq))
+         (current (list :gates gates :total 10 :kept 9 :discarded 1
+                        :keep-rate 0.9 :transition-matrix current-matrix
+                        :records nil :computed-at (float-time)))
+         (historical (list :gates gates :total 10 :kept 5 :discarded 5
+                           :keep-rate 0.5 :transition-matrix historical-matrix
+                           :records nil :computed-at (float-time))))
+    (dolist (gate (append gates nil))
+      (puthash gate (list :p-pass 0.95 :p-fail 0.05 :entered 10 :failed 1)
+               current-matrix)
+      (puthash gate (list :p-pass 0.5 :p-fail 0.5 :entered 10 :failed 5)
+               historical-matrix))
+    (let ((result (gptel-auto-workflow--statechart-drift-check current historical)))
+      (should-not (plist-get result :drifted))
+      (should (null (plist-get result :drifted-gates))))))
