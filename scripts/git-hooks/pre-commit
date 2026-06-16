@@ -97,9 +97,10 @@ if [[ -n "$staged_el_files" ]]; then
                      (not stringp)
                      (not commentp)
                      outer-start
-                     (save-excursion
-                       (goto-char outer-start)
-                       (looking-at "(\\s-*\\(\\(?:cl-\\)?defun\\|defmacro\\|defsubst\\)\\_>")))
+                     (save-match-data
+                       (save-excursion
+                         (goto-char outer-start)
+                         (looking-at "(\\s-*\\(\\(?:cl-\\)?defun\\|defmacro\\|defsubst\\)\\_>"))))
             (push (format "%s:%d: %s is nested inside %s (not top-level)"
                           file pos name
                           (progn
