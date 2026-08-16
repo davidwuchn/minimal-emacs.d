@@ -5,7 +5,7 @@
 
 ## Introduction
 
-The **minimal-emacs.d** project is a **fast and lightweight** minimal Emacs starter kit (`init.el` and `early-init.el`) that **gives you full control over your configuration**. It provides better defaults, an optimized startup, and a clean foundation for building your own vanilla Emacs setup.
+The [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) project is a **fast and lightweight** minimal Emacs starter kit (`init.el` and `early-init.el`) that **gives you full control over your configuration**. It provides better defaults, an optimized startup, and a clean foundation for building your own vanilla Emacs setup.
 
 Each setting in minimal-emacs.d is carefully chosen to answer this question: does it provide a better default that modernizes Emacs while keeping it lightweight, fast and stable?
 
@@ -2842,6 +2842,8 @@ This configuration intentionally disables the ability to copy and paste rich-tex
 - [zendo: Emacs literate configuration](https://github.com/zendo/nsworld/blob/main/dotfiles/org/all-emacs.org)
 
 - [ZforCandY minimal-emacs.d configuration](https://codeberg.org/ZforCandY/priv-conf/src/branch/main/minimal-emacs.d)
+
+- [mgd/mgd-emacs](https://codeberg.org/mgd/mgd-emacs)
 
 ## Features
 
