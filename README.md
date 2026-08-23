@@ -330,9 +330,7 @@ The recentf, savehist, saveplace, and auto-revert built-in packages are already 
   (save-place-mode 1))
 ```
 
-### Safety: Auto-Save
-
-#### auto-save-mode (Prevent data loss in case of crashes)
+### auto-save-mode (Prevent data loss in case of crashes)
 
 Enabling `auto-save-mode` mitigates the risk of data loss in the event of a crash. Auto-saved data can be recovered using the `recover-file` or `recover-session` functions.
 
@@ -348,26 +346,6 @@ To enable autosave, add the following to `~/.emacs.d/post-init.el`:
 
 ;; Trigger an auto-save 30 seconds of idle time.
 (setq auto-save-timeout 30)
-```
-
-#### auto-save-visited-mode (Save file buffers after a few seconds of inactivity)
-
-When `auto-save-visited-mode` is enabled, Emacs will auto-save file-visiting buffers after a certain amount of idle time if the user forgets to save it with `save-buffer` or `C-x s` for example.
-
-This is different from `auto-save-mode`: `auto-save-mode` periodically saves all modified buffers, creating backup files, including those not associated with a file, while `auto-save-visited-mode` only saves file-visiting buffers after a period of idle time, directly saving to the file itself without creating backup files.
-
-``` emacs-lisp
-;; When auto-save-visited-mode is enabled, Emacs will auto-save file-visiting
-;; buffers after a certain amount of idle time if the user forgets to save it
-;; with save-buffer or C-x s for example.
-;;
-;; This is different from auto-save-mode: auto-save-mode periodically saves
-;; all modified buffers, creating backup files, including those not associated
-;; with a file, while auto-save-visited-mode only saves file-visiting buffers
-;; after a period of idle time, directly saving to the file itself without
-;; creating backup files.
-(setq auto-save-visited-interval 5)   ; Save after 5 seconds if inactivity
-(auto-save-visited-mode 1)
 ```
 
 ### Completion System (Corfu, Vertico, Consult)
@@ -2350,44 +2328,7 @@ The *straight.el* package is a declarative package manager for Emacs that aims t
 
 ### Why minimal-emacs.d uses `setq` instead of `setopt`
 
-The *minimal-emacs.d* configuration prioritizes an optimized, fast startup. Using `setopt` introduces overhead due to its type checking and function execution. For the vast majority of variables, this overhead is unnecessary during the initial startup phase.
-
-Here is the distinction between the two Emacs Lisp functions:
-
-* `setopt`: Assigns a value, but also validates the data type against the package's definition and executes the `:set` function associated with the customizable variable. The `:set` function specifies a function that must execute whenever the variable's value is changed. This function is responsible for handling required side-effects, such as rebuilding internal data structures, updating hooks, toggling related minor modes, or redrawing user interface elements based on the new value.
-* `setq`: Directly assigns a value to a variable. It is extremely fast because it bypasses type validation and ignores any `:set` side-effect functions defined in the package's `defcustom` declaration.
-
-Here is an example of how a package author might write a `defcustom` with an expensive `:set` property:
-
-```elisp
-;; -------------------------------------------------------------------
-;; EXAMPLE: Why minimal-emacs.d uses `setq' instead of `setopt'
-;; -------------------------------------------------------------------
-;; NOTE: DO NOT ADD THIS CODE SNIPPET TO YOUR CONFIGURATION
-;; -------------------------------------------------------------------
-(defcustom my-global-visual-indicator t
-  "Toggle a heavy visual indicator across all open buffers."
-  :type 'boolean
-  :group 'my-ui-package
-  :set (lambda (symbol value)
-         ;; Update the variable's value
-         (set-default symbol value)
-
-         ;; The slow part: Iterate through every open buffer
-         ;; and trigger a costly visual update or cache rebuild.
-         (dolist (buffer (buffer-list))
-           (with-current-buffer buffer
-             ;; This simulated function might parse the buffer,
-             ;; apply text properties, or query a language server.
-             (my-heavy-visual-update-function value)))
-
-         ;; Force Emacs to immediately redraw all frames
-         (redraw-display)))
-```
-
-If you use `setopt` to configure `my-global-visual-indicator` within your `init.el`, Emacs will execute the associated lambda function during the startup sequence. The function loops through all open buffers (including hidden or internal buffers created during initialization), runs the heavy update function, and forces a display redraw. This introduces significant latency to your load time.
-
-When using `setq`, Emacs simply updates the boolean value to `t` or `nil` in memory and bypasses the lambda entirely. The entire operation takes a fraction of a millisecond.
+The *minimal-emacs.d* configuration prioritizes an optimized, fast startup. Using `setopt` introduces overhead due to its type checking and function execution. For the vast majority of variables, this overhead is unnecessary during the initial startup phase. Read: [Emacs startup: Why setq beats setopt, customize-set-variable, and use-package :custom?](https://www.jamescherti.com/emacs-why-use-setq-instead-setopt/)
 
 ### How to debug my configuration?
 
@@ -2746,7 +2687,7 @@ This will ensure that the *minimal-emacs.d* configuration loads `post-early-init
 
 Keep in mind that if you change the `minimal-emacs-user-directory`, *minimal-emacs.d* will attempt to load the rest of the configuration from that directory (e.g., `~/.config/minimal-emacs/post-early-init.el`, `~/.config/minimal-emacs/pre-init.el` and `~/.config/minimal-emacs/post-init.el`, etc.).
 
-### How to make *minimal-emacs.d* install packages in the early-init phase instead of the init phase?
+### How to make minimal-emacs.d install packages in the early-init phase instead of the init phase?
 
 NOTE: Running package initialization and installation during the early-init phase is **NOT RECOMMENDED** because this stage occurs before the GUI system, windowing, and comprehensive error-handling buffers are fully initialized. When package-install or `package-refresh-contents` triggers a failure-such as a TLS handshake error or a lost network connection-Emacs cannot yet render a graphical window to display the backtrace or warning. This results in a "silent" hang or a crash that provides no visual feedback to the user, forcing a pivot to a terminal to inspect standard output. Furthermore, many packages expect a fully functional frame and loaded user environment to configure themselves correctly; forcing them to load during early-init bypasses the intentional separation designed to let you set up UI-independent variables before the package system and GUI logic complicate the startup sequence.
 
