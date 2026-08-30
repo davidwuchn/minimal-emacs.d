@@ -1266,6 +1266,10 @@ Here is an example of how to configure Eglot to enable or disable certain option
                          :rope_autoimport (:enabled :json-false)))))
 ```
 
+Related articles:
+- [Configuring Emacs Eglot for Better Performance and Latency](https://www.jamescherti.com/emacs-eglot-performance/)
+- [Configuring Eglot for Python Development in Emacs: Integrating python-lsp-server (pylsp) with Linters and Formatters](https://www.jamescherti.com/emacs-python-dev-using-eglot-pylsp-ruff-pylint-flake8/)
+
 ### Safely terminating unused buffers
 
 The [buffer-terminator](https://github.com/jamescherti/buffer-terminator.el) Emacs package *automatically and safely kills buffers*, ensuring a clean and efficient workspace while *enhancing the performance of Emacs* by reducing open buffers, which minimizes active modes, timers, processes...
@@ -1862,7 +1866,7 @@ In Emacs, customization variables modified via the UI (e.g., `M-x customize`) ar
 ;; Hide files from dired
 (setq dired-omit-files (concat "\\`[.]\\'"
                                "\\|\\(?:\\.js\\)?\\.meta\\'"
-                               "\\|\\.\\(?:elc|a\\|o\\|pyc\\|pyo\\|swp\\|class\\)\\'"
+                               "\\|\\.\\(?:elc\\|a\\|o\\|pyc\\|pyo\\|swp\\|class\\)\\'"
                                "\\|^\\.DS_Store\\'"
                                "\\|^\\.\\(?:svn\\|git\\)\\'"
                                "\\|^\\.ccls-cache\\'"
@@ -2299,23 +2303,8 @@ A value of `101` minimizes screen movement and maintains point visibility with m
 
 The main drawback of `101` is that Emacs will avoid recentering almost entirely, only adjusting the window just enough to keep point visible at the very top or very bottom of the screen. Point can stick to the top or bottom edge of the window, giving you very little context above or below, which can make editing harder if you want surrounding lines visible.
 
-### How to display Emacs startup duration?
-
-To measure and display the time taken for Emacs to start, you can use the following Emacs Lisp function. This function will report both the startup duration and the number of garbage collections that occurred during initialization.
-
-Add the following to your `~/.emacs.d/pre-early-init.el` file:
-```emacs-lisp
-(defun display-startup-time ()
-  "Display the startup time and number of garbage collections."
-  (message "Emacs init loaded in %.2f seconds (Full emacs-startup: %.2fs) with %d garbage collections."
-           (float-time (time-subtract after-init-time before-init-time))
-           (time-to-seconds (time-since before-init-time))
-           gcs-done))
-
-(add-hook 'emacs-startup-hook #'display-startup-time 100)
-```
-
-(Alternatively, you may use the built-in `M-x emacs-init-time` command to obtain the startup duration. However, `emacs-init-time` does not account for the portion of the startup process that occurs after `after-init-time`.)
+Related articles:
+- [Configuring Emacs Scrolling for Better Usability](https://www.jamescherti.com/emacs-scrolling-better-performance-usability/)
 
 ### Optimization: Disabling `site-run-file` and `inhibit-default-init`
 
@@ -2356,6 +2345,40 @@ To prevent any system configuration from executing after the user initialization
 ```
 
 Disabling both `site-run-file` and `default.el` removes system-level interference, reduces startup variability, and establishes a fully controlled initialization environment suitable for minimal and reproducible configurations.
+
+### Splitting your configuration into multiple files
+
+As your configuration grows, your `post-init.el` might become difficult to navigate. A standard practice in Elisp development is to split a large configuration into smaller, modular files organized by topic (e.g., UI, programming languages, Org mode).
+
+Here is how you can organize your custom Elisp files:
+
+**Step 1:** Create a directory to store your modular configuration files, for example, `~/.emacs.d/lisp/`.
+
+**Step 2:** Create your individual configuration files inside the `~/.emacs.d/lisp/` directory. For example, create a file named ``~/.emacs.d/lisp/my-ui-config.el`.
+
+**Step 3:** At the end of `my-ui-config.el`, add the `provide` function so Emacs knows the feature has been loaded:
+
+```elisp
+;;; my-ui-config.el --- UI customizations -*- no-byte-compile: t; lexical-binding: t; -*-
+
+;; Your UI configuration goes here...
+(setq display-line-numbers-type 'relative)
+
+(provide 'my-ui-config)
+```
+
+**Step 4:** Add this new directory to your Emacs `load-path`. You can do this by adding the following line to the top of your `~/.emacs.d/post-init.el` (or `pre-init.el`):
+```elisp
+(add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+```
+
+**Step 5:** Finally, load this file in your `~/.emacs.d/post-init.el` using `require`:
+
+```elisp
+(require 'my-ui-config)
+```
+
+This keeps your `post-init.el` clean and makes it much easier to maintain your setup.
 
 ### How to get the latest version of all packages? (unstable)
 
@@ -2619,6 +2642,13 @@ To ensure the *minimal-emacs.d* configuration loads `post-early-init.el`, `pre-i
 This will ensure that the *minimal-emacs.d* configuration loads `post-early-init.el`, `pre-init.el`, and `post-init.el` from `~/.config/minimal-emacs.d/`.
 
 Keep in mind that if you change the `minimal-emacs-user-directory`, *minimal-emacs.d* will attempt to load the rest of the configuration from that directory (e.g., `~/.config/minimal-emacs/post-early-init.el`, `~/.config/minimal-emacs/pre-init.el` and `~/.config/minimal-emacs/post-init.el`, etc.).
+
+### How to display Emacs startup duration?
+
+As an Emacs configuration grows, startup time can gradually increase. Measuring that increase accurately makes it easier to identify regressions. However, the built-in emacs-init-time function does not measure the entire startup sequence.
+
+Here is how to accurately measure your total Emacs startup time:
+**[Measuring Emacs Startup Time More Accurately Than the Built-in emacs-init-time Function](https://www.jamescherti.com/measuring-emacs-startup-time/)**
 
 ### How to make minimal-emacs.d install packages in the early-init phase instead of the init phase?
 
